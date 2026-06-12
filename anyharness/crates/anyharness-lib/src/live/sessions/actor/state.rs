@@ -1,77 +1,72 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
-use anyharness_contract::v1::SessionEventEnvelope;
-use tokio::sync::broadcast;
+use anyharness_contract::v1::{SessionActionCapabilities, SessionEventEnvelope};
+use tokio::sync::{broadcast, oneshot, Mutex};
 
-use crate::domains::agents::model::ResolvedAgent;
-use crate::domains::plans::service::PlanService;
-use crate::domains::reviews::service::ReviewService;
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_config::SessionModelOption;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
-use crate::domains::sessions::model::SessionRecord;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::selection::find_select_option_by_purpose;
-use crate::live::sessions::actor::config::types::ConfigPurpose;
-use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
+use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
+use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::driver::types::NativeSessionStartupState;
-use crate::live::sessions::interactions::broker::InteractionBroker;
-use crate::observability::latency::LatencyRequestContext;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionStartupStrategy {
-    Fresh,
-    ResumeSeqFreshNative,
-    LoadNative(String),
-    LoadNativeNoFallback(String),
-    ForkFromNative { parent_native_session_id: String },
-}
-
-impl SessionStartupStrategy {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Fresh => "fresh",
-            Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
-            Self::LoadNative(_) => "load_native",
-            Self::LoadNativeNoFallback(_) => "load_native_no_fallback",
-            Self::ForkFromNative { .. } => "fork_from_native",
-        }
-    }
-
-    pub fn resumes_durable_history(&self) -> bool {
-        !matches!(self, Self::Fresh)
-    }
-
-    pub(in crate::live::sessions) fn allows_missing_load_fallback(&self) -> bool {
-        matches!(self, Self::LoadNative(_))
-    }
-}
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::{
+    ActorCapabilities, SessionHooks, SessionLaunch, SystemPromptAppends,
+};
+use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
+use crate::live::sessions::sink::SessionEventSink;
 
 pub struct SessionActorConfig {
-    pub session: SessionRecord,
-    pub agent: ResolvedAgent,
-    pub workspace_path: std::path::PathBuf,
-    pub workspace_env: std::collections::BTreeMap<String, String>,
-    pub session_launch_env: std::collections::BTreeMap<String, String>,
-    pub agent_auth_env: std::collections::BTreeMap<String, String>,
-    pub protected_agent_auth_env: std::collections::BTreeMap<String, String>,
-    pub interaction_broker: Arc<InteractionBroker>,
-    pub plan_service: Arc<PlanService>,
-    pub review_service: Option<Arc<ReviewService>>,
+    /// Everything describing THIS launch (session row, agent, env, startup).
+    pub launch: SessionLaunch,
+    /// The never-varies durable capabilities + product reactors.
+    pub caps: ActorCapabilities,
+    /// Per-call powers (turn-finish callback, exit callback).
+    pub hooks: SessionHooks,
+    pub interaction_broker: Arc<InteractionRendezvous>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
-    pub session_store: SessionStore,
-    pub attachment_storage: PromptAttachmentStorage,
-    pub mcp_servers: Vec<SessionMcpServer>,
-    pub startup_strategy: SessionStartupStrategy,
-    pub last_seq: i64,
-    pub system_prompt_append: Option<String>,
-    pub first_prompt_system_prompt_append: Option<String>,
-    pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
-    pub latency: Option<LatencyRequestContext>,
-    /// Called after the actor loop exits (normal or error). The bool indicates
-    /// whether the actor exited with an error (true = errored).
-    pub on_exit: Option<Box<dyn FnOnce(bool) + Send + 'static>>,
+}
+
+/// The session actor: one running agent process, its ACP connection, and all
+/// loop-owned conversation state. Constructed by [`SessionActor::start`]
+/// (startup.rs) and driven by [`SessionActor::run`] (run.rs). The three
+/// receivers (commands, notifications, background work) deliberately stay OUT
+/// of the struct — they are threaded through `run`/`run_idle`/`run_turn` as
+/// parameters so the inner selects can borrow them alongside `&mut self`.
+pub(in crate::live::sessions::actor) struct SessionActor {
+    // ── identity (from launch, immutable) ──
+    pub(in crate::live::sessions::actor) session_id: String,
+    pub(in crate::live::sessions::actor) workspace_id: String,
+    pub(in crate::live::sessions::actor) agent_kind: String,
+    pub(in crate::live::sessions::actor) workspace_path: PathBuf,
+    pub(in crate::live::sessions::actor) mcp_servers: Vec<SessionMcpServer>,
+    pub(in crate::live::sessions::actor) prompts: SystemPromptAppends,
+
+    // ── conversation state (loop-owned) ──
+    // KEEP Arc<Mutex<…>>: the inbound door (driver/inbound) shares this sink.
+    pub(in crate::live::sessions::actor) event_sink: Arc<Mutex<SessionEventSink>>,
+    pub(in crate::live::sessions::actor) background_work_registry: BackgroundWorkRegistry,
+    pub(in crate::live::sessions::actor) resume_replay_filter: ResumeReplayFilter,
+    pub(in crate::live::sessions::actor) persisted_config_state: PersistedSessionConfigState,
+    pub(in crate::live::sessions::actor) startup_state: SessionStartupState,
+    pub(in crate::live::sessions::actor) native_session_id: String,
+    pub(in crate::live::sessions::actor) action_capabilities: SessionActionCapabilities,
+    pub(in crate::live::sessions::actor) supports_native_close: bool,
+
+    // ── wiring (set at spawn/startup, never reassigned) ──
+    pub(in crate::live::sessions::actor) conn: acp::ConnectionTo<acp::Agent>,
+    pub(in crate::live::sessions::actor) caps: ActorCapabilities,
+    pub(in crate::live::sessions::actor) hooks: SessionHooks,
+    pub(in crate::live::sessions::actor) interaction_broker: Arc<InteractionRendezvous>,
+    pub(in crate::live::sessions::actor) handle: Arc<LiveSessionHandle>,
+    /// Dropping this shuts down the ACP connection task.
+    #[allow(dead_code)]
+    pub(in crate::live::sessions::actor) _acp_shutdown: oneshot::Sender<()>,
+    /// The agent process guard; dropped last when the actor exits.
+    pub(in crate::live::sessions::actor) child: tokio::process::Child,
 }
 
 #[derive(Debug, Clone)]

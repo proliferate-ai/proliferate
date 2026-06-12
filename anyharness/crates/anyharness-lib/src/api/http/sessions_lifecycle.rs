@@ -14,7 +14,8 @@ use super::sessions_errors::map_session_lifecycle_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 #[utoipa::path(
     post,
@@ -105,39 +106,34 @@ pub async fn restore_dismissed_session(
     Path(workspace_id): Path<String>,
 ) -> Result<Json<Option<Session>>, ApiError> {
     assert_workspace_auth_scope(&auth, &workspace_id)?;
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    tracing::info!(
-        workspace_id = %workspace_id,
-        flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] session.http.restore.request_received"
-    );
-    let _lease = state
-        .workspace_operation_gate
-        .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionResume)
-        .await;
-    let restored = state
-        .session_runtime
-        .restore_dismissed_session(&workspace_id, latency.as_ref())
-        .await
-        .map_err(map_session_lifecycle_error)?;
-    tracing::info!(
-        workspace_id = %workspace_id,
-        restored = restored.is_some(),
-        elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] session.http.restore.completed"
-    );
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        tracing::info!(
+            workspace_id = %workspace_id,
+            "[workspace-latency] session.http.restore.request_received"
+        );
+        let _lease = state
+            .workspace_operation_gate
+            .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionResume)
+            .await;
+        let restored = state
+            .session_runtime
+            .restore_dismissed_session(&workspace_id)
+            .await
+            .map_err(map_session_lifecycle_error)?;
+        tracing::info!(
+            workspace_id = %workspace_id,
+            restored = restored.is_some(),
+            elapsed_ms = started.elapsed().as_millis(),
+            "[workspace-latency] session.http.restore.completed"
+        );
 
-    match restored {
-        Some(record) => Ok(Json(Some(session_to_contract(&state, &record).await?))),
-        None => Ok(Json(None)),
+        match restored {
+            Some(record) => Ok(Json(Some(session_to_contract(&state, &record).await?))),
+            None => Ok(Json(None)),
+        }
     }
+    .instrument(span)
+    .await
 }

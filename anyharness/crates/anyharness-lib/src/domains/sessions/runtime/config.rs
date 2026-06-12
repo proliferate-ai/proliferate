@@ -41,7 +41,7 @@ impl SessionRuntime {
         // Config mutations go through the live ACP actor. If the actor is not
         // running yet, start or resume it and return its control handle.
         let handle = self
-            .ensure_live_session_handle(&record, None, None)
+            .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| match error {
                 StartSessionError::WorkspaceNotFound => SetSessionConfigOptionError::Internal(

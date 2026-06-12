@@ -22,16 +22,17 @@ use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
 mod config;
-pub(crate) mod contract;
 mod creation;
 mod fork;
 mod interactions;
 mod launch_env;
+mod launch_policy;
 mod lifecycle;
 mod pending_prompts;
 mod prompt;
 mod replay;
 mod startup;
+pub(crate) mod view;
 #[cfg(test)]
 mod tests;
 
@@ -167,7 +168,7 @@ pub enum InteractionPermissionDecision {
 }
 
 #[derive(Clone)]
-pub enum InteractionResolutionRequest {
+pub enum ResolutionRequest {
     Decision(InteractionPermissionDecision),
     OptionId(String),
     Submitted {
@@ -181,7 +182,7 @@ pub enum InteractionResolutionRequest {
     Dismissed,
 }
 
-impl fmt::Debug for InteractionResolutionRequest {
+impl fmt::Debug for ResolutionRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Decision(decision) => f.debug_tuple("Decision").field(decision).finish(),

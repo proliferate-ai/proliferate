@@ -47,6 +47,33 @@ impl SessionStore {
         })
     }
 
+    /// Batched form of [`Self::find_live_config_snapshot`] for list
+    /// endpoints: one query for the whole page, keyed by session id.
+    pub fn find_live_config_snapshots(
+        &self,
+        session_ids: &[String],
+    ) -> anyhow::Result<std::collections::HashMap<String, SessionLiveConfigSnapshotRecord>> {
+        if session_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        self.db.with_conn(|conn| {
+            let placeholders = vec!["?"; session_ids.len()].join(", ");
+            let mut stmt = conn.prepare(&format!(
+                "SELECT * FROM session_live_config_snapshots WHERE session_id IN ({placeholders})"
+            ))?;
+            let rows = stmt.query_map(
+                rusqlite::params_from_iter(session_ids.iter()),
+                map_live_config_snapshot,
+            )?;
+            let mut snapshots = std::collections::HashMap::new();
+            for row in rows {
+                let record = row?;
+                snapshots.insert(record.session_id.clone(), record);
+            }
+            Ok(snapshots)
+        })
+    }
+
     pub fn upsert_pending_config_change(
         &self,
         record: &PendingConfigChangeRecord,

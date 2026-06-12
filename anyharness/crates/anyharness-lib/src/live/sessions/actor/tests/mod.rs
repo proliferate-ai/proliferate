@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::command::{InteractionResolution, SessionCommand};
+use super::command::{Resolution, SessionCommand};
 use super::config::apply::{
     select_option_current_value_matches, should_apply_model_via_direct_setter,
 };
@@ -18,27 +18,24 @@ use super::interactions::cleanup::resolve_pending_interactions;
 use super::notifications::handle::{
     handle_notification, handle_notification_with_resume_replay_filter,
 };
-use super::notifications::plans::{extract_tagged_proposed_plan, title_from_markdown};
 use super::notifications::replay_filter::{ResumeReplayFilter, IDLE_RESUME_REPLAY_QUIET_WINDOW};
 use super::shutdown::handle::finalize_established_actor_exit;
 use super::shutdown::types::ActorExitDisposition;
 use super::state::SessionStartupState;
 use super::turn::diagnostics::PromptDiagnostics;
 use super::turn::finish::should_emit_empty_turn_error;
-use super::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
-use super::turn::start::prepend_system_prompt_append_to_acp_blocks;
+use super::turn::start::first_prompt_system_prompt_append_for_codex_prompt;
 use crate::app::test_support;
 use crate::domains::agents::model::AgentKind;
-use crate::domains::plans::{service::PlanService, store::PlanStore};
 use crate::domains::sessions::live_config::{
     normalized_key_rank, snapshot_to_record, NormalizedControlKind, SessionModelOption,
 };
 use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use crate::live::sessions::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
+use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
-use crate::live::sessions::interactions::broker::{InteractionBroker, PermissionOutcome};
+use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, PermissionOutcome};
 use crate::persistence::Db;
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
@@ -50,20 +47,17 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
 mod config;
+mod domain_ops;
 mod notifications;
 mod prompt;
 mod shutdown;
-
-fn test_plan_service(db: &Db) -> Arc<PlanService> {
-    Arc::new(PlanService::new(PlanStore::new(db.clone())))
-}
 
 async fn actor_exit_test_context(
     pending_interaction: Option<PendingInteractionSummary>,
 ) -> (
     SessionStore,
     Arc<Mutex<SessionEventSink>>,
-    Arc<InteractionBroker>,
+    Arc<InteractionRendezvous>,
     Arc<LiveSessionHandle>,
 ) {
     let db = Db::open_in_memory().expect("open db");
@@ -110,7 +104,7 @@ async fn actor_exit_test_context(
         SessionExecutionPhase::Running
     };
     let mut execution = LiveSessionExecutionSnapshot::new(phase);
-    let interaction_broker = Arc::new(InteractionBroker::new());
+    let interaction_broker = Arc::new(InteractionRendezvous::new());
     if let Some(pending_interaction) = pending_interaction {
         let request_id = pending_interaction.request_id.clone();
         execution.pending_interactions.push(pending_interaction);
@@ -141,7 +135,7 @@ async fn actor_exit_test_context(
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         event_tx,
-        store.clone(),
+        Arc::new(store.clone()),
     )));
 
     (store, event_sink, interaction_broker, handle)
@@ -175,7 +169,7 @@ fn test_background_work_registry(store: &SessionStore) -> BackgroundWorkRegistry
     BackgroundWorkRegistry::new(
         "session-1".to_string(),
         "claude".to_string(),
-        store.clone(),
+        Arc::new(store.clone()),
         updates_tx,
         BackgroundWorkOptions::default(),
     )

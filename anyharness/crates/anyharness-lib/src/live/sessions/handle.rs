@@ -2,25 +2,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, PendingInteractionSummary, ProposedPlanDecisionState, SessionEventEnvelope,
+    ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope,
     SessionExecutionPhase, SessionExecutionSummary,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 
 pub use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, ForkSessionCommandResult, InteractionResolution, PromptAcceptError,
+    ForkSessionCommandError, ForkSessionCommandResult, Resolution, PromptAcceptError,
     PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
     SetConfigOptionCommandError,
 };
 
-use crate::domains::plans::model::PlanRecord;
-use crate::domains::plans::service::PlanDecisionError;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::actor::command::SessionCommand;
-use crate::observability::latency::LatencyRequestContext;
 
 #[derive(Debug)]
 pub enum LiveSessionCommandError<E> {
@@ -109,12 +106,6 @@ impl LiveSessionHandle {
         self.event_tx.subscribe()
     }
 
-    pub(in crate::live::sessions) fn try_begin_prompt(&self) -> bool {
-        self.busy
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    }
-
     pub fn is_busy(&self) -> bool {
         self.busy.load(Ordering::Acquire)
     }
@@ -149,7 +140,10 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub(in crate::live::sessions) async fn link_pending_interaction_to_plan(
+    /// Mirror a plan linkage into the pending-interaction snapshot. Safe to
+    /// call after resolution (no-op when the interaction is gone); used by
+    /// the plans runtime after a decision op reports a (re)link.
+    pub async fn link_pending_interaction_to_plan(
         &self,
         request_id: &str,
         plan_id: &str,
@@ -216,13 +210,11 @@ impl LiveSessionHandle {
         &self,
         payload: PromptPayload,
         prompt_id: Option<String>,
-        latency: Option<LatencyRequestContext>,
         from_queue_seq: Option<i64>,
     ) -> Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>> {
         self.send_request(|respond_to| SessionCommand::Prompt {
             payload,
             prompt_id,
-            latency,
             from_queue_seq,
             respond_to,
         })
@@ -233,9 +225,8 @@ impl LiveSessionHandle {
         &self,
         payload: PromptPayload,
         prompt_id: Option<String>,
-        latency: Option<LatencyRequestContext>,
     ) -> Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>> {
-        self.send_prompt_with_queue_marker(payload, prompt_id, latency, None)
+        self.send_prompt_with_queue_marker(payload, prompt_id, None)
             .await
     }
 
@@ -244,7 +235,7 @@ impl LiveSessionHandle {
         payload: PromptPayload,
         seq: i64,
     ) -> Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>> {
-        self.send_prompt_with_queue_marker(payload, None, None, Some(seq))
+        self.send_prompt_with_queue_marker(payload, None, Some(seq))
             .await
     }
 
@@ -285,7 +276,7 @@ impl LiveSessionHandle {
     pub async fn resolve_interaction(
         &self,
         request_id: String,
-        resolution: InteractionResolution,
+        resolution: Resolution,
     ) -> Result<(), ResolveInteractionCommandError> {
         self.send_request(|respond_to| SessionCommand::ResolveInteraction {
             request_id,
@@ -300,19 +291,19 @@ impl LiveSessionHandle {
         })
     }
 
-    pub async fn apply_plan_decision(
+    /// Submit a [`SessionDomainOp`](crate::live::sessions::model::SessionDomainOp)
+    /// to run serialized through the actor loop. The caller downcasts the
+    /// boxed reply to the op's concrete output type.
+    pub async fn run_domain_op(
         &self,
-        plan_id: String,
-        expected_version: i64,
-        decision: ProposedPlanDecisionState,
-    ) -> Result<PlanRecord, LiveSessionCommandError<PlanDecisionError>> {
-        self.send_request(|respond_to| SessionCommand::ApplyPlanDecision {
-            plan_id,
-            expected_version,
-            decision,
-            respond_to,
-        })
-        .await
+        op: Box<dyn crate::live::sessions::model::SessionDomainOp>,
+    ) -> Result<Box<dyn std::any::Any + Send>, LiveSessionCommandError<std::convert::Infallible>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.command_tx
+            .send(SessionCommand::RunDomainOp { op, respond_to: tx })
+            .await
+            .map_err(|_| LiveSessionCommandError::ActorUnavailable)?;
+        rx.await.map_err(|_| LiveSessionCommandError::ResponseDropped)
     }
 
     pub async fn verify_fork_ready(

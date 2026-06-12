@@ -8,16 +8,15 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::{broadcast, mpsc};
 
-use crate::domains::plans::service::PlanDecisionError;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::{EventPersist, SessionStateDurable};
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
     SessionCommand, SetConfigOptionCommandError,
 };
 use crate::live::sessions::actor::spawn::ActorReadyResult;
-use crate::live::sessions::event_sink::publish::publish_session_event;
+use crate::live::sessions::sink::publish::publish_session_event;
 use crate::live::sessions::handle::LiveSessionHandle;
 
 const MAX_REPLAY_GAP: Duration = Duration::from_millis(1500);
@@ -27,7 +26,8 @@ pub struct ReplayActorConfig {
     pub events: Vec<SessionEventEnvelope>,
     pub speed: f32,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
-    pub session_store: SessionStore,
+    pub state: std::sync::Arc<dyn SessionStateDurable>,
+    pub event_persist: std::sync::Arc<dyn EventPersist>,
     pub last_seq: i64,
     pub on_exit: Option<Box<dyn FnOnce(bool) + Send + 'static>>,
 }
@@ -106,7 +106,8 @@ async fn run_replay_actor(
     native_session_id: String,
 ) -> anyhow::Result<()> {
     let session_id = config.session.id.clone();
-    let store = config.session_store.clone();
+    let store = config.state.clone();
+    let event_persist = config.event_persist.clone();
     let mut next_seq = config.last_seq + 1;
     let mut first_turn_started = false;
     let mut previous_recorded_timestamp: Option<chrono::DateTime<chrono::FixedOffset>> = None;
@@ -166,7 +167,7 @@ async fn run_replay_actor(
             &session_id,
             &mut next_seq,
             &config.event_tx,
-            &store,
+            event_persist.as_ref(),
             event.clone(),
             recorded.turn_id,
             recorded.item_id,
@@ -235,7 +236,7 @@ async fn run_replay_actor(
             &session_id,
             &mut next_seq,
             &config.event_tx,
-            &store,
+            event_persist.as_ref(),
             SessionEvent::SessionEnded(SessionEndedEvent {
                 reason: SessionEndReason::Closed,
             }),
@@ -368,8 +369,10 @@ async fn handle_non_replay_command(
             let _ = respond_to.send(Err(ResolveInteractionCommandError::NotFound));
             None
         }
-        SessionCommand::ApplyPlanDecision { respond_to, .. } => {
-            let _ = respond_to.send(Err(PlanDecisionError::NotFound));
+        SessionCommand::RunDomainOp { respond_to, .. } => {
+            // Replay sessions carry no live domain state; dropping the
+            // responder surfaces ResponseDropped to the submitter.
+            drop(respond_to);
             None
         }
         SessionCommand::VerifyForkReady { respond_to } => {

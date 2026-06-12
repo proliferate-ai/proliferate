@@ -3,52 +3,88 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::command::{
-    InteractionResolution, ResolveInteractionCommandError,
+    Resolution, ResolveInteractionCommandError,
 };
 use crate::live::sessions::actor::interactions::outcomes::{
     broker_outcome_to_interaction_event, map_resolve_interaction_error,
 };
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::interactions::broker::{
-    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome,
+use crate::live::sessions::model::{SessionDomainOp, SessionOpEmitter, SessionOpStep};
+use crate::live::sessions::sink::SessionEventSink;
+use crate::live::sessions::rendezvous::broker::{
+    InteractionRendezvous, InteractionRendezvousOutcome, InteractionCancelOutcome,
 };
+
+impl SessionActor {
+    pub(in crate::live::sessions::actor) async fn resolve_interaction(
+        &self,
+        request_id: String,
+        resolution: Resolution,
+    ) -> Result<(), ResolveInteractionCommandError> {
+        handle_resolve_interaction(
+            &self.handle,
+            &self.event_sink,
+            &self.interaction_broker,
+            &self.session_id,
+            request_id,
+            resolution,
+        )
+        .await
+    }
+
+    pub(in crate::live::sessions::actor) async fn run_domain_op_cmd(
+        &self,
+        op: Box<dyn SessionDomainOp>,
+    ) -> Box<dyn std::any::Any + Send> {
+        run_domain_op(
+            &self.handle,
+            &self.event_sink,
+            &self.interaction_broker,
+            &self.session_id,
+            &self.workspace_id,
+            &self.agent_kind,
+            op,
+        )
+        .await
+    }
+}
 
 pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,
-    interaction_broker: &Arc<InteractionBroker>,
+    interaction_broker: &Arc<InteractionRendezvous>,
     session_id: &str,
     request_id: String,
-    resolution: InteractionResolution,
+    resolution: Resolution,
 ) -> Result<(), ResolveInteractionCommandError> {
     let outcome = match resolution {
-        InteractionResolution::Selected { option_id } => interaction_broker
+        Resolution::Selected { option_id } => interaction_broker
             .resolve_with_option_id(session_id, &request_id, &option_id)
             .await
-            .map(InteractionBrokerOutcome::Permission),
-        InteractionResolution::Decision(decision) => interaction_broker
+            .map(InteractionRendezvousOutcome::Permission),
+        Resolution::Decision(decision) => interaction_broker
             .resolve_with_decision(session_id, &request_id, decision)
             .await
-            .map(InteractionBrokerOutcome::Permission),
-        InteractionResolution::Submitted { answers } => interaction_broker
+            .map(InteractionRendezvousOutcome::Permission),
+        Resolution::Submitted { answers } => interaction_broker
             .submit_user_input(session_id, &request_id, answers)
             .await
-            .map(InteractionBrokerOutcome::UserInput),
-        InteractionResolution::Accepted { fields } => interaction_broker
+            .map(InteractionRendezvousOutcome::UserInput),
+        Resolution::Accepted { fields } => interaction_broker
             .accept_mcp_elicitation(session_id, &request_id, fields)
             .await
-            .map(InteractionBrokerOutcome::McpElicitation),
-        InteractionResolution::Declined => interaction_broker
+            .map(InteractionRendezvousOutcome::McpElicitation),
+        Resolution::Declined => interaction_broker
             .decline_mcp_elicitation(session_id, &request_id)
             .await
-            .map(InteractionBrokerOutcome::McpElicitation),
-        InteractionResolution::Cancelled => {
+            .map(InteractionRendezvousOutcome::McpElicitation),
+        Resolution::Cancelled => {
             interaction_broker
                 .cancel(session_id, &request_id, InteractionCancelOutcome::Cancelled)
                 .await
         }
-        InteractionResolution::Dismissed => {
+        Resolution::Dismissed => {
             interaction_broker
                 .cancel(session_id, &request_id, InteractionCancelOutcome::Dismissed)
                 .await
@@ -64,4 +100,47 @@ pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     }
     handle.remove_pending_interaction(&request_id).await;
     Ok(())
+}
+
+/// Drives a [`SessionDomainOp`] through its synchronous two-step protocol:
+/// phase 1 (`begin`) under the sink lock; if it requests an interaction
+/// resolution, the actor performs it with the sink lock RELEASED (the
+/// rendezvous + handle snapshot take their own locks), then phase 2
+/// (`finish`) under the sink lock again.
+pub(in crate::live::sessions::actor) async fn run_domain_op(
+    handle: &Arc<LiveSessionHandle>,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    interaction_broker: &Arc<InteractionRendezvous>,
+    session_id: &str,
+    workspace_id: &str,
+    agent_kind: &str,
+    op: Box<dyn SessionDomainOp>,
+) -> Box<dyn std::any::Any + Send> {
+    let step = {
+        let mut sink = event_sink.lock().await;
+        let mut emitter = SessionOpEmitter::new(&mut sink, session_id, workspace_id, agent_kind);
+        op.begin(&mut emitter)
+    };
+    match step {
+        SessionOpStep::Done(value) => value,
+        SessionOpStep::ResolveInteraction {
+            request_id,
+            resolution,
+            then,
+        } => {
+            let outcome = handle_resolve_interaction(
+                handle,
+                event_sink,
+                interaction_broker,
+                session_id,
+                request_id,
+                resolution,
+            )
+            .await;
+            let mut sink = event_sink.lock().await;
+            let mut emitter =
+                SessionOpEmitter::new(&mut sink, session_id, workspace_id, agent_kind);
+            then.finish(&mut emitter, outcome)
+        }
+    }
 }

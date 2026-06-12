@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -7,51 +6,28 @@ use anyharness_contract::v1::SessionEventEnvelope;
 use tokio::sync::{broadcast, watch, RwLock};
 
 use super::{LiveSessionManager, StartupReadinessState};
-use crate::domains::agents::model::ResolvedAgent;
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
-use crate::domains::sessions::model::SessionRecord;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::spawn::{
     spawn_session_actor_pending, ActorReadyResult, PendingSessionActor,
 };
-use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupStrategy};
-use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::actor::state::SessionActorConfig;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::live::sessions::model::{SessionHooks, SessionLaunch};
 
 impl LiveSessionManager {
+    #[tracing::instrument(skip_all, fields(session_id = %launch.session.id))]
     pub async fn start_session(
         &self,
-        session: SessionRecord,
-        agent: ResolvedAgent,
-        workspace_path: PathBuf,
-        workspace_env: std::collections::BTreeMap<String, String>,
-        session_launch_env: std::collections::BTreeMap<String, String>,
-        agent_auth_env: std::collections::BTreeMap<String, String>,
-        protected_agent_auth_env: std::collections::BTreeMap<String, String>,
-        session_store: SessionStore,
-        attachment_storage: PromptAttachmentStorage,
-        mcp_servers: Vec<SessionMcpServer>,
-        startup_strategy: SessionStartupStrategy,
-        system_prompt_append: Option<String>,
-        first_prompt_system_prompt_append: Option<String>,
-        on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
-        latency: Option<LatencyRequestContext>,
+        mut launch: SessionLaunch,
+        mut hooks: SessionHooks,
     ) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
-        let session_id = session.id.clone();
+        let session_id = launch.session.id.clone();
         let started = Instant::now();
-        let latency_fields = latency_trace_fields(latency.as_ref());
-        let startup_strategy_label = startup_strategy.as_str();
+        let startup_strategy_label = launch.startup.as_str();
         tracing::info!(
             session_id = %session_id,
-            workspace_id = %session.workspace_id,
-            agent_kind = %session.agent_kind,
+            workspace_id = %launch.session.workspace_id,
+            agent_kind = %launch.session.agent_kind,
             startup_strategy = startup_strategy_label,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.acp_manager.start.start"
         );
 
@@ -63,10 +39,6 @@ impl LiveSessionManager {
             tracing::info!(
                 session_id = %session_id,
                 elapsed_ms = started.elapsed().as_millis(),
-                flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
                 "[workspace-latency] session.acp_manager.start.reused_existing_handle"
             );
             if let Some(native_session_id) = ready_native_session_id {
@@ -79,7 +51,7 @@ impl LiveSessionManager {
                 return Ok((existing, ready));
             }
 
-            if let Some(native_session_id) = session.native_session_id {
+            if let Some(native_session_id) = launch.session.native_session_id {
                 return Ok((existing, ActorReadyResult { native_session_id }));
             }
 
@@ -88,13 +60,17 @@ impl LiveSessionManager {
             );
         }
 
-        let last_seq = session_store.last_event_seq(&session_id)?;
+        // The manager owns the last-seq read: it must happen under the
+        // live-sessions write lock (start/inject critical section), so any
+        // caller-provided value is overwritten here.
+        launch.last_seq = self.caps.events.last_event_seq(&session_id)?;
 
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4096);
 
         let live_sessions = self.live_sessions.clone();
         let exit_session_id = session_id.clone();
-        let exit_store = session_store.clone();
+        let exit_state = self.caps.state.clone();
+        let caller_on_exit = hooks.on_exit.take();
         let on_exit: Box<dyn FnOnce(bool) + Send + 'static> = Box::new(move |errored| {
             // Remove the dead handle from the live map so future callers do not
             // get a stale reference after the actor thread exits.
@@ -103,37 +79,20 @@ impl LiveSessionManager {
             live.blocking_write().remove(&sid);
             if errored {
                 let now = chrono::Utc::now().to_rfc3339();
-                let _ = exit_store.update_status(&sid, "errored", &now);
+                let _ = exit_state.update_status(&sid, "errored", &now);
+            }
+            if let Some(caller_on_exit) = caller_on_exit {
+                caller_on_exit(errored);
             }
         });
+        hooks.on_exit = Some(on_exit);
 
-        let actor_latency = latency.clone();
         let config = SessionActorConfig {
-            session,
-            agent,
-            workspace_path,
-            workspace_env,
-            session_launch_env,
-            agent_auth_env,
-            protected_agent_auth_env,
+            launch,
+            caps: self.caps.clone(),
+            hooks,
             interaction_broker: self.interaction_broker.clone(),
-            plan_service: self.plan_service.clone(),
-            review_service: self
-                .review_service
-                .read()
-                .ok()
-                .and_then(|guard| guard.clone()),
             event_tx,
-            session_store,
-            attachment_storage,
-            mcp_servers,
-            startup_strategy,
-            last_seq,
-            system_prompt_append,
-            first_prompt_system_prompt_append,
-            on_turn_finish,
-            latency,
-            on_exit: Some(on_exit),
         };
 
         // Make the live handle visible before waiting on ACP new_session so
@@ -158,7 +117,6 @@ impl LiveSessionManager {
             startup_strategy_label.to_string(),
             actor_start_started,
             started,
-            actor_latency,
         )
         .await?;
 
@@ -175,7 +133,6 @@ async fn wait_for_new_startup_readiness(
     startup_strategy_label: String,
     actor_start_started: Instant,
     manager_started: Instant,
-    latency: Option<LatencyRequestContext>,
 ) -> anyhow::Result<ActorReadyResult> {
     let session_id = handle.session_id.clone();
     tokio::task::spawn_blocking(move || {
@@ -183,17 +140,12 @@ async fn wait_for_new_startup_readiness(
 
         match &ready_result {
             Ok(ready) => {
-                let latency_fields = latency_trace_fields(latency.as_ref());
                 tracing::info!(
                     session_id = %session_id,
                     native_session_id = %ready.native_session_id.as_str(),
                     startup_strategy = %startup_strategy_label,
                     elapsed_ms = actor_start_started.elapsed().as_millis(),
                     total_elapsed_ms = manager_started.elapsed().as_millis(),
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
-                    prompt_id = latency_fields.prompt_id,
                     "[workspace-latency] session.acp_manager.start.actor_ready"
                 );
 

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use anyharness_contract::v1::{PromptInputBlock, ProposedPlanDecisionState, ProposedPlanDetail};
 
+use super::decision_op::{PendingPermissionCandidate, PlanDecisionOp, PlanDecisionOpOutput};
 use super::document;
 use super::model::{
     PlanDecisionOutcome, PlanDocument, PlanHandoffInput, PlanHandoffOutcome,
@@ -186,15 +187,15 @@ impl PlanRuntime {
                     None,
                     None,
                     origin,
-                    None,
                 )
                 .await
                 .map_err(HandoffPlanError::CreateSession)?;
             let session = self
                 .session_runtime
-                .session_to_contract(&record)
+                .session_view(&record)
                 .await
-                .map_err(HandoffPlanError::Store)?;
+                .map_err(HandoffPlanError::Store)?
+                .into_contract();
             (record.id, Some(session))
         };
         let instruction = input
@@ -210,7 +211,6 @@ impl PlanRuntime {
             .send_prompt(
                 &target_session_id,
                 vec![PromptInputBlock::Text { text: prompt }],
-                None,
                 None,
             )
             .await
@@ -280,18 +280,40 @@ impl PlanRuntime {
             .map_err(|error| PlanDecisionError::Store(anyhow::anyhow!(error.to_string())))?;
 
         if let Some(handle) = self.acp_manager.get_handle(&plan.session_id).await {
-            return handle
-                .apply_plan_decision(plan_id.to_string(), expected_version, decision)
-                .await
-                .map_err(|error| match error {
-                    LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
-                        anyhow::anyhow!("session actor is not available for plan decision"),
-                    ),
-                    LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
-                        anyhow::anyhow!("session actor dropped plan decision response"),
-                    ),
-                    LiveSessionCommandError::Rejected(error) => error,
-                });
+            // Snapshot pending native permissions as plain data: the op runs
+            // inside the actor and must not touch the handle itself.
+            let pending_permissions = PendingPermissionCandidate::from_pending_interactions(
+                &handle.execution_snapshot().await.pending_interactions,
+            );
+            let op = Box::new(PlanDecisionOp {
+                plan_service: self.plan_service.clone(),
+                plan_id: plan_id.to_string(),
+                expected_version,
+                decision,
+                pending_permissions,
+            });
+            let reply = handle.run_domain_op(op).await.map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
+                    anyhow::anyhow!("session actor is not available for plan decision"),
+                ),
+                LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
+                    anyhow::anyhow!("session actor dropped plan decision response"),
+                ),
+                LiveSessionCommandError::Rejected(infallible) => match infallible {},
+            })?;
+            let output = reply.downcast::<PlanDecisionOpOutput>().map_err(|_| {
+                PlanDecisionError::Store(anyhow::anyhow!(
+                    "plan decision op returned an unexpected reply type"
+                ))
+            })?;
+            // Mirror the (re)link into the handle's pending-interaction
+            // snapshot; a no-op if the interaction was already resolved.
+            if let Some(request_id) = output.linked_request_id.as_deref() {
+                handle
+                    .link_pending_interaction_to_plan(request_id, plan_id)
+                    .await;
+            }
+            return output.result;
         }
 
         let (plan, _) =

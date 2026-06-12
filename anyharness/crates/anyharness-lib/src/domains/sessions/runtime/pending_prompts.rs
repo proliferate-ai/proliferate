@@ -31,7 +31,7 @@ impl SessionRuntime {
                 }
             })?;
         let handle = self
-            .ensure_live_session_handle(&record, None, None)
+            .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| {
                 PendingPromptMutationError::Internal(anyhow::anyhow!(
@@ -116,7 +116,7 @@ impl SessionRuntime {
                 }
             })?;
         let handle = self
-            .ensure_live_session_handle(&record, None, None)
+            .ensure_live_session_handle(&record, None)
             .await
             .map_err(|error| {
                 PendingPromptMutationError::Internal(anyhow::anyhow!(

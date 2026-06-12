@@ -80,9 +80,9 @@ api/http/sessions
     -> live/sessions::LiveSessionManager
       -> LiveSessionHandle
         -> SessionActor
-          -> AcpClient
+          -> driver (ACP connection; InboundDoor for inbound traffic)
           -> SessionEventSink
-          -> InteractionBroker
+          -> InteractionRendezvous
 ```
 
 It owns these workflows:
@@ -103,9 +103,11 @@ Role boundaries:
 - `SessionStore` owns SQL for session data.
 - `LiveSessionManager` owns the live session registry and startup de-dupe.
 - `SessionActor` owns one running session command loop.
-- `AcpClient` owns low-level ACP request/notification I/O.
-- `SessionEventSink` owns ACP notification normalization and persistence.
-- `InteractionBroker` owns pending live interaction rendezvous.
+- The driver owns the ACP process/connection; its `InboundDoor` receives
+  agent-initiated requests and notifications.
+- `SessionEventSink` owns ACP notification normalization and persistence
+  (one ingestion entry: `sink.ingest`).
+- `InteractionRendezvous` owns pending live interaction rendezvous.
 
 ### Runtime Capabilities Around The Engine
 
@@ -171,7 +173,7 @@ domains/<feature>/mcp
 integrations/mcp
   shared JSON-RPC, tool formatting, and capability-token scaffolding
 
-live/sessions/interactions/mcp_elicitation
+live/sessions/rendezvous/mcp_elicitation
   live ACP interaction state
 
 api/http
@@ -223,7 +225,7 @@ Guides:
 - [guides/domains.md](guides/domains.md) for durable domains, the
   `model/store/service/runtime` shape, and product surface domains.
 - [guides/live-runtime.md](guides/live-runtime.md) for managers, handles,
-  actors, drivers, event sinks, interaction brokers, and long-lived
+  actors, drivers, event sinks, interaction rendezvous, and long-lived
   in-memory state.
 - [guides/adapters.md](guides/adapters.md) for files, git, hosting, and
   process capabilities.
@@ -244,8 +246,8 @@ verification for specific runtime flows.
 Specs:
 
 - [specs/session-engine.md](specs/session-engine.md) for the core session
-  engine: `SessionRuntime`, live session manager, actor, ACP client, event
-  sink, and interaction broker.
+  engine: `SessionRuntime`, live session manager, actor, driver, event
+  sink, and interaction rendezvous.
 - [specs/session-actor.md](specs/session-actor.md) for the target
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
@@ -396,7 +398,7 @@ focused guide that owns the layer.
 - `app/` wires dependencies. `AppState` is not a place for business logic.
 - `domains/` owns product concepts and durable business rules.
 - `live/` owns long-lived in-memory managers, handles, actors, drivers,
-  streams, subprocesses, and interaction brokers.
+  streams, subprocesses, and interaction rendezvous.
 - `adapters/` owns local workspace/machine capabilities such as file, git,
   hosting, and process operations.
 - `integrations/` owns external protocol/vendor mechanics such as MCP, ACP

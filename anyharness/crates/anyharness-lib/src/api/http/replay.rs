@@ -8,6 +8,7 @@ use axum::{
 };
 
 use super::error::ApiError;
+use super::sessions_contract::session_to_contract;
 use crate::app::AppState;
 use crate::domains::sessions::replay::ReplayError;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
@@ -78,11 +79,7 @@ pub async fn create_replay_session(
         .create_and_start_replay_session(&req.workspace_id, &req.recording_id, req.speed)
         .await
         .map_err(map_replay_error)?;
-    let session = state
-        .session_runtime
-        .session_to_contract(&record)
-        .await
-        .map_err(|error| ApiError::internal(error.to_string()))?;
+    let session = session_to_contract(&state, &record).await?;
     Ok(Json(CreateReplaySessionResponse { session }))
 }
 

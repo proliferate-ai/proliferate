@@ -10,26 +10,19 @@ use crate::domains::sessions::extensions::{
 };
 use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::LiveSessionManager;
 
 #[derive(Clone)]
 pub struct SubagentSessionHooks {
     service: Arc<SubagentService>,
     acp_manager: LiveSessionManager,
-    session_store: SessionStore,
 }
 
 impl SubagentSessionHooks {
-    pub fn new(
-        service: Arc<SubagentService>,
-        acp_manager: LiveSessionManager,
-        session_store: SessionStore,
-    ) -> Self {
+    pub fn new(service: Arc<SubagentService>, acp_manager: LiveSessionManager) -> Self {
         Self {
             service,
             acp_manager,
-            session_store,
         }
     }
 }
@@ -38,11 +31,8 @@ impl SessionExtension for SubagentSessionHooks {
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
         let service = self.service.clone();
         let acp_manager = self.acp_manager.clone();
-        let session_store = self.session_store.clone();
         tokio::spawn(async move {
-            if let Err(error) =
-                deliver_subagent_completion(service, acp_manager, session_store, ctx).await
-            {
+            if let Err(error) = deliver_subagent_completion(service, acp_manager, ctx).await {
                 tracing::warn!(error = %error, "failed to process subagent completion");
             }
         });
@@ -52,7 +42,6 @@ impl SessionExtension for SubagentSessionHooks {
 async fn deliver_subagent_completion(
     service: Arc<SubagentService>,
     acp_manager: LiveSessionManager,
-    session_store: SessionStore,
     ctx: SessionTurnFinishedContext,
 ) -> anyhow::Result<()> {
     if ctx.turn_id.trim().is_empty() {
@@ -107,7 +96,6 @@ async fn deliver_subagent_completion(
     match acp_manager
         .emit_runtime_event(
             &link.parent_session_id,
-            session_store.clone(),
             RuntimeInjectedSessionEvent::SubagentTurnCompleted(payload),
         )
         .await

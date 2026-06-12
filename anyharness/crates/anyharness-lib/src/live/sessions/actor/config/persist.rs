@@ -11,12 +11,12 @@ use crate::domains::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, snapshot_from_record, snapshot_to_record,
     NormalizedControlKind,
 };
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
 use crate::live::sessions::actor::state::SessionStartupState;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::model::SessionStateDurable;
+use crate::live::sessions::sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn persist_session_config_state_if_changed(
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     state: &mut PersistedSessionConfigState,
@@ -58,7 +58,7 @@ pub(in crate::live::sessions::actor) async fn persist_session_config_state_if_ch
 }
 
 pub(in crate::live::sessions::actor) async fn persist_requested_config_value_if_changed(
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     state: &mut PersistedSessionConfigState,
@@ -81,7 +81,7 @@ pub(in crate::live::sessions::actor) async fn persist_requested_config_value_if_
 }
 
 pub(in crate::live::sessions::actor) async fn persist_current_config_state_from_startup(
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     state: &mut PersistedSessionConfigState,
@@ -99,7 +99,7 @@ pub(in crate::live::sessions::actor) async fn persist_current_config_state_from_
 pub(in crate::live::sessions::actor) async fn emit_live_config_update(
     source_agent_kind: &str,
     session_id: &str,
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
@@ -155,7 +155,7 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
 }
 
 pub(in crate::live::sessions::actor) fn load_startup_restore_snapshot(
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     session_id: &str,
     source_agent_kind: &str,
     resumes_durable_history: bool,

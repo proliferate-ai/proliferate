@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
 use crate::domains::sessions::extensions::SessionTurnFinishedContext;
@@ -17,72 +16,56 @@ use crate::domains::sessions::mcp_bindings::summaries::{
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::SessionHooks;
 use crate::live::sessions::SessionStartupStrategy;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
+use super::launch_policy::{
+    assemble_session_launch, choose_startup_strategy, session_is_closed, SessionLaunchContext,
+    SessionStartupFacts,
+};
 use super::{
     launch_env::build_session_launch_env, CreateAndStartSessionError, EnsureLiveSessionError,
     SessionLifecycleError, SessionMcpRefresh, SessionRuntime, StartSessionError,
 };
 
+/// Resolve steps only — gather the durable facts, then let the pure policy in
+/// `launch_policy` pick the strategy. The parent lookup keeps today's gating
+/// (only fork children without their own native id pay for it).
 pub(super) fn choose_session_startup_strategy(
     record: &SessionRecord,
     session_store: &SessionStore,
 ) -> anyhow::Result<SessionStartupStrategy> {
-    if session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)? {
-        if let Some(native_session_id) = record.native_session_id.clone() {
-            return Ok(SessionStartupStrategy::LoadNativeNoFallback(
-                native_session_id,
-            ));
-        }
-        let parent = session_store
+    let is_fork_child =
+        session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?;
+    let fork_parent_native_session_id = if is_fork_child && record.native_session_id.is_none() {
+        session_store
             .find_parent_by_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?
-            .ok_or_else(|| anyhow::anyhow!("fork child is missing its parent link"))?;
-        let parent_native_session_id = parent
-            .native_session_id
-            .clone()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("fork parent is missing native session id"))?;
-        return Ok(SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id,
-        });
-    }
-
-    let Some(native_session_id) = record.native_session_id.clone() else {
-        if session_store.has_turn_started_event(&record.id)? {
-            return Ok(SessionStartupStrategy::ResumeSeqFreshNative);
-        }
-        return Ok(SessionStartupStrategy::Fresh);
+            .map(|parent| parent.native_session_id)
+    } else {
+        None
     };
-
-    if record.agent_kind != AgentKind::Claude.as_str() {
-        return Ok(SessionStartupStrategy::LoadNative(native_session_id));
-    }
-
-    // A durable `turn_started` protects the narrow crash window where the sink
-    // has already persisted a real turn but `last_prompt_at` has not been
-    // updated yet. Outside that window, `last_prompt_at` is the fast path.
-    if record.last_prompt_at.is_some() || session_store.has_turn_started_event(&record.id)? {
-        return Ok(SessionStartupStrategy::LoadNative(native_session_id));
-    }
-
-    Ok(SessionStartupStrategy::ResumeSeqFreshNative)
+    choose_startup_strategy(&SessionStartupFacts {
+        is_fork_child,
+        native_session_id: record.native_session_id.clone(),
+        fork_parent_native_session_id,
+        agent_kind: record.agent_kind.clone(),
+        has_last_prompt_at: record.last_prompt_at.is_some(),
+        has_turn_started_event: session_store.has_turn_started_event(&record.id)?,
+    })
 }
 
 impl SessionRuntime {
+    #[tracing::instrument(skip_all, fields(session_id = %record.id))]
     pub async fn start_persisted_session(
         &self,
         record: &SessionRecord,
-        latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let live_start_started = Instant::now();
-        let latency_fields = latency_trace_fields(latency);
         let (_handle, native_session_id) = match self
             .start_live_session(
                 record,
                 SessionStartupStrategy::Fresh,
                 record.system_prompt_append.clone(),
-                latency,
             )
             .await
         {
@@ -92,10 +75,6 @@ impl SessionRuntime {
                     session_id = %record.id,
                     native_session_id = %result.1,
                     elapsed_ms = live_start_started.elapsed().as_millis(),
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
-                    prompt_id = latency_fields.prompt_id,
                     "[workspace-latency] session.runtime.live_session_started"
                 );
                 result
@@ -107,10 +86,6 @@ impl SessionRuntime {
                     session_id = %record.id,
                     elapsed_ms = live_start_started.elapsed().as_millis(),
                     error = ?error,
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
-                    prompt_id = latency_fields.prompt_id,
                     "[workspace-latency] session.runtime.live_session_failed"
                 );
                 return Err(map_start_session_error_to_create(error));
@@ -134,20 +109,16 @@ impl SessionRuntime {
             session_id = %updated.id,
             native_session_id = %updated.native_session_id.as_deref().unwrap_or_default(),
             elapsed_ms = persist_started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.live_session_persisted"
         );
         Ok(updated)
     }
 
+    #[tracing::instrument(skip_all, fields(session_id = %session_id))]
     pub async fn ensure_live_session(
         &self,
         session_id: &str,
         mcp_refresh: Option<SessionMcpRefresh>,
-        latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, EnsureLiveSessionError> {
         self.access_gate
             .assert_can_start_live_session(session_id)
@@ -163,7 +134,7 @@ impl SessionRuntime {
                 SessionLifecycleError::Internal(error) => EnsureLiveSessionError::Internal(error),
             })?;
 
-        self.ensure_live_session_handle(&record, mcp_refresh, latency)
+        self.ensure_live_session_handle(&record, mcp_refresh)
             .await
             .map_err(|error| match error {
                 StartSessionError::WorkspaceNotFound => EnsureLiveSessionError::Internal(
@@ -197,25 +168,19 @@ impl SessionRuntime {
         &self,
         record: &SessionRecord,
         mcp_refresh: Option<SessionMcpRefresh>,
-        latency: Option<&LatencyRequestContext>,
     ) -> Result<Arc<LiveSessionHandle>, StartSessionError> {
         self.access_gate
             .assert_can_start_live_session(&record.id)
             .map_err(|error| StartSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
-        if record.closed_at.is_some() || record.status == "closed" {
+        if session_is_closed(record) {
             return Err(StartSessionError::Closed);
         }
         let started = Instant::now();
-        let latency_fields = latency_trace_fields(latency);
         if let Some(handle) = self.acp_manager.get_handle(&record.id).await {
             tracing::info!(
                 session_id = %record.id,
                 workspace_id = %record.workspace_id,
                 elapsed_ms = started.elapsed().as_millis(),
-                flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
                 "[workspace-latency] session.runtime.ensure_live_handle.reused"
             );
             return Ok(handle);
@@ -279,7 +244,6 @@ impl SessionRuntime {
                 &record,
                 startup_strategy,
                 record.system_prompt_append.clone(),
-                latency,
             )
             .await?;
 
@@ -289,10 +253,6 @@ impl SessionRuntime {
             workspace_id = %record.workspace_id,
             native_session_id = %native_session_id,
             elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.ensure_live_handle.live_started"
         );
         Ok(handle)
@@ -303,10 +263,8 @@ impl SessionRuntime {
         record: &SessionRecord,
         startup_strategy: SessionStartupStrategy,
         system_prompt_append: Option<String>,
-        latency: Option<&LatencyRequestContext>,
     ) -> Result<(Arc<LiveSessionHandle>, String), StartSessionError> {
         let started = Instant::now();
-        let latency_fields = latency_trace_fields(latency);
         let startup_strategy_label = startup_strategy.as_str();
         tracing::info!(
             session_id = %record.id,
@@ -314,10 +272,6 @@ impl SessionRuntime {
             agent_kind = %record.agent_kind,
             startup_strategy = startup_strategy_label,
             has_system_prompt_append = system_prompt_append.is_some(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.start_live_session.start"
         );
 
@@ -331,10 +285,6 @@ impl SessionRuntime {
             session_id = %record.id,
             workspace_id = %record.workspace_id,
             elapsed_ms = workspace_lookup_started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.start_live_session.workspace_loaded"
         );
 
@@ -345,10 +295,6 @@ impl SessionRuntime {
             session_id = %record.id,
             agent_kind = %record.agent_kind,
             elapsed_ms = descriptor_lookup_started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.start_live_session.agent_descriptor_found"
         );
 
@@ -374,10 +320,6 @@ impl SessionRuntime {
             session_id = %record.id,
             agent_kind = %record.agent_kind,
             elapsed_ms = agent_resolution_started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.start_live_session.agent_resolved"
         );
         let session_launch_env = build_session_launch_env(
@@ -387,8 +329,6 @@ impl SessionRuntime {
             record.requested_model_id.as_deref(),
         )
         .map_err(StartSessionError::Internal)?;
-        let session_store = self.session_service.store().clone();
-        let attachment_storage = self.session_service.attachment_storage().clone();
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
@@ -405,41 +345,42 @@ impl SessionRuntime {
                 .map_err(StartSessionError::Internal)?;
         }
         let acp_start_started = Instant::now();
+        let launch = assemble_session_launch(SessionLaunchContext {
+            record: record.clone(),
+            agent: resolved_agent,
+            workspace_path,
+            workspace_env,
+            session_env: session_launch_env,
+            auth_support_env: agent_auth_overlay.support_env,
+            auth_protected_env: agent_auth_overlay.protected_env,
+            mcp_servers: mcp_launch.mcp_servers,
+            startup: startup_strategy,
+            every_prompt_append: mcp_launch.system_prompt_append,
+            first_prompt_append: mcp_launch.first_prompt_system_prompt_append,
+        });
+        let hooks = SessionHooks {
+            on_turn_finish: Some(Arc::new({
+                let extensions = self.session_extensions.clone();
+                let workspace = workspace.clone();
+                move |result| {
+                    for extension in &extensions {
+                        extension.on_turn_finished(SessionTurnFinishedContext {
+                            workspace: workspace.clone(),
+                            session_id: result.session_id.clone(),
+                            turn_id: result.turn_id.clone(),
+                            outcome: result.outcome,
+                            stop_reason: result.stop_reason.clone(),
+                            last_event_seq: result.last_event_seq,
+                            error_details: result.error_details.clone(),
+                        });
+                    }
+                }
+            })),
+            on_exit: None,
+        };
         let (handle, ready) = self
             .acp_manager
-            .start_session(
-                record.clone(),
-                resolved_agent,
-                workspace_path,
-                workspace_env,
-                session_launch_env,
-                agent_auth_overlay.support_env,
-                agent_auth_overlay.protected_env,
-                session_store,
-                attachment_storage,
-                mcp_launch.mcp_servers,
-                startup_strategy,
-                mcp_launch.system_prompt_append,
-                mcp_launch.first_prompt_system_prompt_append,
-                Some(Arc::new({
-                    let extensions = self.session_extensions.clone();
-                    let workspace = workspace.clone();
-                    move |result| {
-                        for extension in &extensions {
-                            extension.on_turn_finished(SessionTurnFinishedContext {
-                                workspace: workspace.clone(),
-                                session_id: result.session_id.clone(),
-                                turn_id: result.turn_id.clone(),
-                                outcome: result.outcome,
-                                stop_reason: result.stop_reason.clone(),
-                                last_event_seq: result.last_event_seq,
-                                error_details: result.error_details.clone(),
-                            });
-                        }
-                    }
-                })),
-                latency.cloned(),
-            )
+            .start_session(launch, hooks)
             .await
             .map_err(StartSessionError::AcpStart)?;
         tracing::info!(
@@ -449,10 +390,6 @@ impl SessionRuntime {
             startup_strategy = startup_strategy_label,
             elapsed_ms = acp_start_started.elapsed().as_millis(),
             total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.start_live_session.acp_started"
         );
 

@@ -140,7 +140,7 @@ async fn cleanup_resolves_pending_permission_immediately_and_finalizes_once() {
         &event_sink,
         &interaction_broker,
         "session-1",
-        InteractionResolution::Cancelled,
+        Resolution::Cancelled,
     )
     .await;
 
@@ -194,7 +194,7 @@ async fn cleanup_cancels_registered_permission_not_yet_in_summary() {
         &event_sink,
         &interaction_broker,
         "session-1",
-        InteractionResolution::Cancelled,
+        Resolution::Cancelled,
     )
     .await;
 

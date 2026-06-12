@@ -113,9 +113,10 @@ pub async fn set_session_config_option(
     Ok(Json(SetSessionConfigOptionResponse {
         session: state
             .session_runtime
-            .session_to_contract_with_live_config(&session, live_config.clone())
+            .session_view_with_live_config(&session, live_config.clone())
             .await
-            .map_err(|error| ApiError::internal(error.to_string()))?,
+            .map_err(|error| ApiError::internal(error.to_string()))?
+            .into_contract(),
         live_config,
         apply_state,
     }))

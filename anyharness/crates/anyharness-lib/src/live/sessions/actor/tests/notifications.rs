@@ -1,27 +1,6 @@
 use super::*;
 use crate::app::test_support;
 
-#[test]
-fn title_from_markdown_uses_first_heading_without_marker() {
-    assert_eq!(
-        title_from_markdown("# Repo Issue Investigation\n\n## Goal\nFind issues"),
-        Some("Repo Issue Investigation".to_string())
-    );
-}
-
-#[test]
-fn extract_tagged_proposed_plan_requires_complete_wrapper() {
-    assert_eq!(
-        extract_tagged_proposed_plan(
-            "\n<proposed_plan>\n# Plan: Tighten review\n\nDo the work.\n</proposed_plan>\n"
-        )
-        .as_deref(),
-        Some("# Plan: Tighten review\n\nDo the work.")
-    );
-    assert!(extract_tagged_proposed_plan("# Plan\n\nNo wrapper").is_none());
-    assert!(extract_tagged_proposed_plan("<proposed_plan># Plan").is_none());
-}
-
 #[tokio::test]
 async fn handle_notification_persists_raw_acp_notifications() {
     let db = Db::open_in_memory().expect("open db");
@@ -66,7 +45,7 @@ async fn handle_notification_persists_raw_acp_notifications() {
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         event_tx,
-        store.clone(),
+        Arc::new(store.clone()),
     )));
     let mut startup_state = SessionStartupState {
         current_mode_id: None,
@@ -82,6 +61,7 @@ async fn handle_notification_persists_raw_acp_notifications() {
         requested_mode_id: None,
         current_mode_id: None,
     };
+    let caps = test_support::actor_capabilities_for_store(&store);
     let mut background_work_registry = test_background_work_registry(&store);
 
     let notif = acp::schema::SessionNotification::new(
@@ -93,12 +73,10 @@ async fn handle_notification_persists_raw_acp_notifications() {
         &notif,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -258,7 +236,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         event_tx,
-        store.clone(),
+        Arc::new(store.clone()),
     )));
     let mut startup_state = SessionStartupState {
         current_mode_id: None,
@@ -279,6 +257,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         NativeSessionStartupDisposition::LoadedExisting,
         "idle",
     );
+    let caps = test_support::actor_capabilities_for_store(&store);
     let mut background_work_registry = test_background_work_registry(&store);
 
     let replay_user = acp::schema::SessionNotification::new(
@@ -290,12 +269,10 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         &mut replay_filter,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -319,12 +296,10 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         &mut replay_filter,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -351,12 +326,10 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         &mut replay_filter,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
         &mut persisted_config_state,
         &mut startup_state,
     )

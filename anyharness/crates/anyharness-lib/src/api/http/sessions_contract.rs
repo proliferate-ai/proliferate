@@ -2,7 +2,13 @@ use anyharness_contract::v1::Session;
 
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::sessions::runtime::view::SessionView;
 use crate::origin::OriginContext;
+
+/// Dep-less mapper: domain [`SessionView`] → wire `Session`. No IO, no state.
+pub(super) fn session_view_to_contract(view: SessionView) -> Session {
+    view.into_contract()
+}
 
 pub(super) async fn session_to_contract(
     state: &AppState,
@@ -10,8 +16,9 @@ pub(super) async fn session_to_contract(
 ) -> Result<Session, ApiError> {
     state
         .session_runtime
-        .session_to_contract(record)
+        .session_view(record)
         .await
+        .map(session_view_to_contract)
         .map_err(|error| ApiError::internal(error.to_string()))
 }
 

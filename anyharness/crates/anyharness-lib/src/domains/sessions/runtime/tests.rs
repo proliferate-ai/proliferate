@@ -104,7 +104,7 @@ fn seed_workspace(db: &Db) {
     test_support::seed_workspace_with_repo_root(db, "workspace-1", "local", "/tmp/workspace");
 }
 
-fn session_record(agent_kind: &str) -> SessionRecord {
+pub(super) fn session_record(agent_kind: &str) -> SessionRecord {
     SessionRecord {
         id: "session-1".to_string(),
         workspace_id: "workspace-1".to_string(),

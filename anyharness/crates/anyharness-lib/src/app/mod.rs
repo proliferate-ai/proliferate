@@ -1,4 +1,5 @@
 mod product_mcp;
+mod sessions;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -220,7 +221,6 @@ impl AppState {
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
-        let acp_manager = LiveSessionManager::new(plan_service.clone());
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
@@ -248,6 +248,19 @@ impl AppState {
             SessionLinkStore::new(db.clone()),
             SessionStore::new(db.clone()),
         );
+        let review_service = Arc::new(ReviewService::new(
+            ReviewStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            session_delete_workflow.clone(),
+            session_link_service.clone(),
+            plan_service.clone(),
+        ));
+        let acp_manager = sessions::wire_live_sessions(&sessions::LiveSessionsWiringDeps {
+            db: db.clone(),
+            runtime_home: runtime_home.clone(),
+            plan_service: plan_service.clone(),
+            review_service: review_service.clone(),
+        });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
             SessionStore::new(db.clone()),
@@ -259,7 +272,6 @@ impl AppState {
         let cowork_session_hooks = Arc::new(CoworkSessionHooks::new(
             cowork_delegation_service.clone(),
             acp_manager.clone(),
-            SessionStore::new(db.clone()),
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
@@ -269,20 +281,11 @@ impl AppState {
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
         ));
-        let review_service = Arc::new(ReviewService::new(
-            ReviewStore::new(db.clone()),
-            SessionStore::new(db.clone()),
-            session_delete_workflow.clone(),
-            session_link_service.clone(),
-            plan_service.clone(),
-        ));
-        acp_manager.set_review_service(review_service.clone());
         let (review_hook_event_tx, review_hook_event_rx) = tokio::sync::mpsc::channel(256);
         let subagent_mcp_auth = Arc::new(SubagentMcpAuth::new(runtime_home.clone()));
         let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
             subagent_service.clone(),
             acp_manager.clone(),
-            SessionStore::new(db.clone()),
         ));
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
         let review_session_hooks = Arc::new(ReviewSessionHooks::new(

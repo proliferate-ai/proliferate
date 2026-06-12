@@ -1,4 +1,3 @@
-use crate::live::sessions::actor::event_loop::run_actor;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
@@ -7,9 +6,8 @@ use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::live::sessions::actor::command::SessionCommand;
-use crate::live::sessions::actor::state::SessionActorConfig;
+use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 pub struct ActorReadyResult {
     pub native_session_id: String,
@@ -22,7 +20,6 @@ pub struct PendingSessionActor {
     workspace_id: String,
     startup_strategy: String,
     started: Instant,
-    latency: Option<LatencyRequestContext>,
 }
 
 impl PendingSessionActor {
@@ -47,17 +44,12 @@ impl PendingSessionActor {
             .expect("native session id lock poisoned")
             .replace(native_session_id.clone());
 
-        let latency_fields = latency_trace_fields(self.latency.as_ref());
         tracing::info!(
             session_id = %self.session_id,
             workspace_id = %self.workspace_id,
             native_session_id = %native_session_id,
             startup_strategy = %self.startup_strategy,
             elapsed_ms = self.started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.actor.spawn.ready"
         );
 
@@ -65,34 +57,20 @@ impl PendingSessionActor {
     }
 }
 
-pub fn spawn_session_actor(
-    config: SessionActorConfig,
-) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
-    let pending = spawn_session_actor_pending(config)?;
-    let handle = pending.handle.clone();
-    let ready = pending.wait_ready()?;
-    Ok((handle, ready))
-}
 
 pub fn spawn_session_actor_pending(
     mut config: SessionActorConfig,
 ) -> anyhow::Result<PendingSessionActor> {
-    let session_id = config.session.id.clone();
-    let workspace_id = config.session.workspace_id.clone();
-    let agent_kind = config.session.agent_kind.clone();
-    let startup_strategy = config.startup_strategy.as_str().to_string();
-    let actor_latency = config.latency.clone();
-    let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
+    let session_id = config.launch.session.id.clone();
+    let workspace_id = config.launch.session.workspace_id.clone();
+    let agent_kind = config.launch.session.agent_kind.clone();
+    let startup_strategy = config.launch.startup.as_str().to_string();
     let started = Instant::now();
     tracing::info!(
         session_id = %session_id,
         workspace_id = %workspace_id,
         agent_kind = %agent_kind,
         startup_strategy,
-        flow_id = actor_latency_fields.flow_id,
-        flow_kind = actor_latency_fields.flow_kind,
-        flow_source = actor_latency_fields.flow_source,
-        prompt_id = actor_latency_fields.prompt_id,
         "[workspace-latency] session.actor.spawn.start"
     );
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
@@ -114,7 +92,7 @@ pub fn spawn_session_actor_pending(
 
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
 
-    let on_exit = config.on_exit.take();
+    let on_exit = config.hooks.on_exit.take();
 
     std::thread::Builder::new()
         .name(format!(
@@ -128,7 +106,15 @@ pub fn spawn_session_actor_pending(
                 .expect("build per-session tokio runtime");
             let local = tokio::task::LocalSet::new();
             let errored = local.block_on(&rt, async move {
-                match run_actor(config, command_rx, ready_tx, actor_handle).await {
+                let run_result = async {
+                    let (actor, notification_rx, background_work_rx) =
+                        SessionActor::start(config, ready_tx, actor_handle).await?;
+                    actor
+                        .run(command_rx, notification_rx, background_work_rx)
+                        .await
+                }
+                .await;
+                match run_result {
                     Ok(()) => false,
                     Err(e) => {
                         tracing::error!(error = %e, "session actor failed");
@@ -148,6 +134,5 @@ pub fn spawn_session_actor_pending(
         workspace_id,
         startup_strategy,
         started,
-        latency: actor_latency,
     })
 }

@@ -21,7 +21,8 @@ use crate::adapters::git::GitService;
 use crate::app::AppState;
 use crate::domains::repo_roots::model::RepoRootRecord;
 use crate::domains::workspaces::types::ResolveRepoRootError;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 #[utoipa::path(
     get,
@@ -33,52 +34,38 @@ pub async fn list_repo_roots(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<RepoRoot>>, ApiError> {
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    tracing::info!(
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] repo_root.http.list.request_received"
-    );
-    let repo_root_service = state.repo_root_service.clone();
-    let records_started = Instant::now();
-    let repo_roots = run_blocking("list repo roots", move || {
-        repo_root_service.list_repo_roots()
-    })
-    .await?
-    .map_err(|error| ApiError::internal(error.to_string()))?;
-    tracing::info!(
-        repo_root_count = repo_roots.len(),
-        elapsed_ms = records_started.elapsed().as_millis(),
-        total_elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] repo_root.http.list.records_loaded"
-    );
-    let response_started = Instant::now();
-    let response = repo_roots
-        .into_iter()
-        .map(repo_root_to_contract)
-        .collect::<Vec<_>>();
-    tracing::info!(
-        repo_root_count = response.len(),
-        elapsed_ms = response_started.elapsed().as_millis(),
-        total_elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] repo_root.http.list.response_built"
-    );
-    Ok(Json(response))
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        tracing::info!("[anyharness-latency] repo_root.http.list.request_received");
+        let repo_root_service = state.repo_root_service.clone();
+        let records_started = Instant::now();
+        let repo_roots = run_blocking("list repo roots", move || {
+            repo_root_service.list_repo_roots()
+        })
+        .await?
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+        tracing::info!(
+            repo_root_count = repo_roots.len(),
+            elapsed_ms = records_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] repo_root.http.list.records_loaded"
+        );
+        let response_started = Instant::now();
+        let response = repo_roots
+            .into_iter()
+            .map(repo_root_to_contract)
+            .collect::<Vec<_>>();
+        tracing::info!(
+            repo_root_count = response.len(),
+            elapsed_ms = response_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] repo_root.http.list.response_built"
+        );
+        Ok(Json(response))
+    }
+    .instrument(span)
+    .await
 }
 
 #[utoipa::path(

@@ -13,6 +13,21 @@ impl SessionService {
             .transpose()
     }
 
+    /// Batched form of [`Self::get_live_config_snapshot`] for list endpoints:
+    /// one store query for the whole page, keyed by session id.
+    pub fn get_live_config_snapshots(
+        &self,
+        session_ids: &[String],
+    ) -> anyhow::Result<
+        std::collections::HashMap<String, anyharness_contract::v1::SessionLiveConfigSnapshot>,
+    > {
+        self.session_store
+            .find_live_config_snapshots(session_ids)?
+            .into_iter()
+            .map(|(session_id, record)| Ok((session_id, snapshot_from_record(&record)?)))
+            .collect()
+    }
+
     pub fn get_live_config_snapshot_checked(
         &self,
         session_id: &str,

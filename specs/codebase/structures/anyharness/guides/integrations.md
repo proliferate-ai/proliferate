@@ -451,15 +451,16 @@ But session-stateful ACP code belongs under live session roles:
 ```text
 live/sessions/driver/
   process.rs
-  runtime_client.rs
-  start.rs
+  connection.rs
+  inbound/            # the InboundDoor (agent-initiated traffic)
+  session_lifecycle.rs
   native_session.rs
   shutdown.rs
 
-live/sessions/event_sink/
+live/sessions/sink/
   ACP notification -> AnyHarness event normalization
 
-live/sessions/interactions/
+live/sessions/rendezvous/
   permission/user-input/MCP elicitation rendezvous
 ```
 

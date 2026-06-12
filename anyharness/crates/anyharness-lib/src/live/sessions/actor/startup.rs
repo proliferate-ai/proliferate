@@ -4,11 +4,9 @@ use std::time::Instant;
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
 use tokio::sync::{mpsc, oneshot, Mutex};
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use crate::domains::sessions::model::serialize_action_capabilities;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::apply_requested_session_preferences;
@@ -17,396 +15,339 @@ use crate::live::sessions::actor::config::persist::{
 };
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
-use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupState};
+use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig, SessionStartupState};
 use crate::live::sessions::background_work::{
     BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate,
 };
+use crate::live::sessions::driver::connection::establish_connection;
 use crate::live::sessions::driver::native_session::{
     has_anyharness_targeted_fork_extension, start_native_session,
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
-use crate::live::sessions::driver::runtime_client::RuntimeClient;
-use crate::live::sessions::driver::start::initialize_connection;
+use crate::live::sessions::driver::inbound::InboundDoor;
+use crate::live::sessions::driver::session_lifecycle::initialize_connection;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::model::{QueueDurable, SessionStateDurable};
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::observability::latency::latency_trace_fields;
 
-pub(in crate::live::sessions::actor) struct StartedActor {
-    pub child: tokio::process::Child,
-    pub conn: acp::ConnectionTo<acp::Agent>,
-    /// Dropping this shuts down the ACP connection task.
-    #[allow(dead_code)]
-    pub _acp_shutdown: oneshot::Sender<()>,
-    pub notification_rx: mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
-    pub background_work_rx: mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
-    pub background_work_registry: BackgroundWorkRegistry,
-    pub event_sink: Arc<Mutex<SessionEventSink>>,
-    pub native_session_id: String,
-    pub startup_state: SessionStartupState,
-    pub persisted_config_state: PersistedSessionConfigState,
-    pub action_capabilities: SessionActionCapabilities,
-    pub supports_native_close: bool,
-    pub resume_replay_filter: ResumeReplayFilter,
-}
+impl SessionActor {
+    /// Spawns the agent process, establishes the ACP connection, starts the
+    /// native session, and runs the startup config-restore sequence — in
+    /// exactly the same order as before this became a constructor. Returns
+    /// the constructed actor plus the notification/background-work receivers,
+    /// which stay out of the struct (they are threaded through the run loop
+    /// as parameters).
+    pub(in crate::live::sessions::actor) async fn start(
+        config: SessionActorConfig,
+        ready_tx: std::sync::mpsc::Sender<anyhow::Result<String>>,
+        handle: Arc<LiveSessionHandle>,
+    ) -> anyhow::Result<(
+        SessionActor,
+        mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
+        mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
+    )> {
+        let session_id = config.launch.session.id.clone();
+        let source_agent_kind = config.launch.session.agent_kind.clone();
+        let workspace_id = config.launch.session.workspace_id.clone();
+        let startup_strategy = config.launch.startup.clone();
+        let startup_strategy_label = startup_strategy.as_str();
+        let startup_started = Instant::now();
 
-pub(in crate::live::sessions::actor) async fn start_actor(
-    config: &SessionActorConfig,
-    ready_tx: std::sync::mpsc::Sender<anyhow::Result<String>>,
-    handle: &Arc<LiveSessionHandle>,
-) -> anyhow::Result<StartedActor> {
-    let session_id = config.session.id.clone();
-    let source_agent_kind = config.session.agent_kind.clone();
-    let workspace_id = config.session.workspace_id.clone();
-    let startup_strategy = config.startup_strategy.clone();
-    let startup_strategy_label = startup_strategy.as_str();
-    let actor_latency = config.latency.clone();
-    let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
-    let startup_started = Instant::now();
+        let spawned = spawn_agent_process(
+            &config.launch.agent,
+            &config.launch.workspace_path,
+            &config.launch.env.workspace,
+            &config.launch.env.session,
+            &config.launch.env.auth_support,
+            &config.launch.env.auth_protected,
+            &session_id,
+            &workspace_id,
+            &source_agent_kind,
+            &ready_tx,
+        )?;
+        let child = spawned.child;
+        let stdin = spawned.stdin;
+        let stdout = spawned.stdout;
 
-    let spawned = spawn_agent_process(
-        &config.agent,
-        &config.workspace_path,
-        &config.workspace_env,
-        &config.session_launch_env,
-        &config.agent_auth_env,
-        &config.protected_agent_auth_env,
-        &session_id,
-        &workspace_id,
-        &source_agent_kind,
-        actor_latency.as_ref(),
-        &ready_tx,
-    )?;
-    let child = spawned.child;
-    let stdin = spawned.stdin;
-    let stdout = spawned.stdout;
+        let (notification_tx, notification_rx) =
+            mpsc::unbounded_channel::<acp::schema::SessionNotification>();
 
-    let (notification_tx, notification_rx) = mpsc::unbounded_channel::<acp::schema::SessionNotification>();
-    let store = config.session_store.clone();
-
-    let event_sink = Arc::new(Mutex::new(if startup_strategy.resumes_durable_history() {
-        SessionEventSink::resume_from_seq(
+        let event_sink = Arc::new(Mutex::new(if startup_strategy.resumes_durable_history() {
+            SessionEventSink::resume_from_seq(
+                session_id.clone(),
+                source_agent_kind.clone(),
+                config.launch.workspace_path.clone(),
+                config.launch.last_seq,
+                config.event_tx.clone(),
+                config.caps.events.clone(),
+            )
+        } else {
+            SessionEventSink::new(
+                session_id.clone(),
+                source_agent_kind.clone(),
+                config.launch.workspace_path.clone(),
+                config.event_tx.clone(),
+                config.caps.events.clone(),
+            )
+        }));
+        let (background_work_tx, background_work_rx) =
+            mpsc::unbounded_channel::<BackgroundWorkUpdate>();
+        let mut background_work_registry = BackgroundWorkRegistry::new(
             session_id.clone(),
             source_agent_kind.clone(),
-            config.workspace_path.clone(),
-            config.last_seq,
-            config.event_tx.clone(),
-            config.session_store.clone(),
-        )
-    } else {
-        SessionEventSink::new(
+            config.caps.background.clone(),
+            background_work_tx,
+            BackgroundWorkOptions::default(),
+        );
+
+        let client = Arc::new(InboundDoor::new(
             session_id.clone(),
-            source_agent_kind.clone(),
-            config.workspace_path.clone(),
-            config.event_tx.clone(),
-            config.session_store.clone(),
+            notification_tx,
+            config.interaction_broker.clone(),
+            event_sink.clone(),
+            handle.clone(),
+            config.launch.session.workspace_id.clone(),
+            config.launch.session.agent_kind.clone(),
+            config.caps.permission_advisor.clone(),
+        ));
+
+        let (conn, shutdown_tx) = establish_connection(client, stdin, stdout).await?;
+        let init_response = initialize_connection(
+            &conn,
+            &source_agent_kind,
+            &config.launch.agent,
+            &session_id,
+            &workspace_id,
+            &ready_tx,
         )
-    }));
-    let (background_work_tx, background_work_rx) =
-        mpsc::unbounded_channel::<BackgroundWorkUpdate>();
-    let mut background_work_registry = BackgroundWorkRegistry::new(
-        session_id.clone(),
-        source_agent_kind.clone(),
-        config.session_store.clone(),
-        background_work_tx,
-        BackgroundWorkOptions::default(),
-    );
+        .await?;
 
-    let client = Arc::new(RuntimeClient::new(
-        session_id.clone(),
-        notification_tx,
-        config.interaction_broker.clone(),
-        event_sink.clone(),
-        handle.clone(),
-        config.plan_service.clone(),
-    ));
+        persist_session_action_capabilities(
+            config.caps.state.as_ref(),
+            &session_id,
+            &init_response.agent_capabilities,
+        );
+        let action_capabilities = action_capabilities_from_acp(&init_response.agent_capabilities);
+        let supports_native_close = init_response
+            .agent_capabilities
+            .session_capabilities
+            .close
+            .is_some();
 
-    // Channel to extract ConnectionTo<Agent> from within the builder closure.
-    let (cx_tx, cx_rx) = oneshot::channel::<acp::ConnectionTo<acp::Agent>>();
-    // Shutdown channel: sender is returned as part of StartedActor and dropped
-    // when the actor shuts down, causing the connect_with closure to exit.
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-
-    let transport = acp::ByteStreams::new(stdin.compat_write(), stdout.compat());
-
-    let client_for_notif = client.clone();
-    let client_for_perm = client.clone();
-    let client_for_ext = client.clone();
-    let client_for_elicitation = client.clone();
-
-    let connect_future = acp::Client
-        .builder()
-        .on_receive_notification(
-            async move |notif: acp::schema::SessionNotification, _cx| {
-                client_for_notif.handle_session_notification(notif).await
-            },
-            acp::on_receive_notification!(),
+        let (native_session_id, native_startup_state, startup_disposition) = start_native_session(
+            &conn,
+            &config.launch.workspace_path,
+            &config.launch.mcp_servers,
+            config.launch.prompts.every_prompt.as_deref(),
+            &startup_strategy,
+            action_capabilities,
+            &session_id,
+            &workspace_id,
+            &ready_tx,
         )
-        .on_receive_request(
-            async move |req: acp::schema::RequestPermissionRequest, responder: acp::Responder<acp::schema::RequestPermissionResponse>, _cx| {
-                let result = client_for_perm.handle_request_permission(req).await;
-                responder.respond_with_result(result)
-            },
-            acp::on_receive_request!(),
-        )
-        .on_receive_request(
-            async move |req: acp::schema::CreateElicitationRequest, responder: acp::Responder<acp::schema::CreateElicitationResponse>, _cx| {
-                let result = client_for_elicitation.standard_mcp_elicitation(req).await;
-                responder.respond_with_result(result)
-            },
-            acp::on_receive_request!(),
-        )
-        .on_receive_request(
-            async move |req: acp::AgentRequest, responder: acp::Responder<serde_json::Value>, _cx| {
-                match req {
-                    acp::AgentRequest::ExtMethodRequest(ext_req) => {
-                        let result = client_for_ext.handle_ext_request(ext_req).await;
-                        match result {
-                            Ok(ext_resp) => {
-                                let json = serde_json::to_value(&ext_resp.0)
-                                    .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
-                                responder.respond(json)
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    _ => Err(acp::Error::method_not_found()),
-                }
-            },
-            acp::on_receive_request!(),
-        )
-        .connect_with(transport, move |cx: acp::ConnectionTo<acp::Agent>| async move {
-            let _ = cx_tx.send(cx);
-            // Keep the connection alive until the actor shuts down (shutdown_tx dropped).
-            let _ = shutdown_rx.await;
-            Ok(())
-        });
+        .await?;
+        let mut startup_state: SessionStartupState = native_startup_state.into();
+        startup_state.prompt_capabilities =
+            capabilities_from_acp(Some(&init_response.agent_capabilities.prompt_capabilities));
 
-    tokio::task::spawn_local(async move {
-        if let Err(e) = connect_future.await {
-            tracing::warn!(error = %e, "ACP connection ended");
+        tracing::info!(
+            session_id = %session_id,
+            native_session_id = %native_session_id,
+            startup_strategy = startup_strategy_label,
+            native_startup_disposition = startup_disposition.as_str(),
+            "ACP session established"
+        );
+
+        let mut persisted_config_state =
+            PersistedSessionConfigState::from_session(&config.launch.session);
+        let startup_restore_snapshot = load_startup_restore_snapshot(
+            config.caps.state.as_ref(),
+            &session_id,
+            &source_agent_kind,
+            startup_strategy.resumes_durable_history(),
+        )?;
+
+        {
+            let mut sink = event_sink.lock().await;
+            if startup_disposition == NativeSessionStartupDisposition::CreatedFresh {
+                sink.session_started(native_session_id.to_string());
+            }
+            emit_startup_state(&mut sink, &startup_state);
         }
-    });
 
-    let conn = cx_rx
+        let initial_live_config_started = Instant::now();
+        if let Err(error) = emit_live_config_update(
+            &source_agent_kind,
+            &session_id,
+            config.caps.state.as_ref(),
+            &event_sink,
+            &mut persisted_config_state,
+            &mut startup_state,
+            chrono::Utc::now().to_rfc3339(),
+        )
         .await
-        .map_err(|_| anyhow::anyhow!("ACP connection closed before sending context"))?;
-    let init_response = initialize_connection(
-        &conn,
-        &source_agent_kind,
-        &config.agent,
-        &session_id,
-        &workspace_id,
-        &ready_tx,
-    )
-    .await?;
-
-    persist_session_action_capabilities(&store, &session_id, &init_response.agent_capabilities);
-    let action_capabilities = action_capabilities_from_acp(&init_response.agent_capabilities);
-    let supports_native_close = init_response
-        .agent_capabilities
-        .session_capabilities
-        .close
-        .is_some();
-
-    let (native_session_id, native_startup_state, startup_disposition) = start_native_session(
-        &conn,
-        &config.workspace_path,
-        &config.mcp_servers,
-        config.system_prompt_append.as_deref(),
-        &startup_strategy,
-        action_capabilities,
-        &session_id,
-        &workspace_id,
-        &ready_tx,
-    )
-    .await?;
-    let mut startup_state: SessionStartupState = native_startup_state.into();
-    startup_state.prompt_capabilities =
-        capabilities_from_acp(Some(&init_response.agent_capabilities.prompt_capabilities));
-
-    tracing::info!(
-        session_id = %session_id,
-        native_session_id = %native_session_id,
-        startup_strategy = startup_strategy_label,
-        native_startup_disposition = startup_disposition.as_str(),
-        "ACP session established"
-    );
-
-    let mut persisted_config_state = PersistedSessionConfigState::from_session(&config.session);
-    let startup_restore_snapshot = load_startup_restore_snapshot(
-        &store,
-        &session_id,
-        &source_agent_kind,
-        startup_strategy.resumes_durable_history(),
-    )?;
-
-    {
-        let mut sink = event_sink.lock().await;
-        if startup_disposition == NativeSessionStartupDisposition::CreatedFresh {
-            sink.session_started(native_session_id.to_string());
+        {
+            tracing::warn!(session_id = %session_id, error = %error, "failed to persist initial live config snapshot");
+            tracing::warn!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                error = %error,
+                elapsed_ms = initial_live_config_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.initial_live_config.failed"
+            );
+        } else {
+            tracing::info!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                elapsed_ms = initial_live_config_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.initial_live_config.completed"
+            );
         }
-        emit_startup_state(&mut sink, &startup_state);
-    }
 
-    let initial_live_config_started = Instant::now();
-    if let Err(error) = emit_live_config_update(
-        &source_agent_kind,
-        &session_id,
-        &store,
-        &event_sink,
-        &mut persisted_config_state,
-        &mut startup_state,
-        chrono::Utc::now().to_rfc3339(),
-    )
-    .await
-    {
-        tracing::warn!(session_id = %session_id, error = %error, "failed to persist initial live config snapshot");
-        tracing::warn!(
-            session_id = %session_id,
-            workspace_id = %workspace_id,
-            error = %error,
-            elapsed_ms = initial_live_config_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.initial_live_config.failed"
-        );
-    } else {
+        let apply_preferences_started = Instant::now();
+        if let Err(error) = apply_requested_session_preferences(
+            &conn,
+            &native_session_id,
+            &config.launch.session,
+            &mut startup_state,
+        )
+        .await
+        {
+            tracing::warn!(session_id = %session_id, error = %error, "failed to apply session preferences");
+            tracing::warn!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                error = %error,
+                elapsed_ms = apply_preferences_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.apply_preferences.failed"
+            );
+        } else {
+            tracing::info!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                elapsed_ms = apply_preferences_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.apply_preferences.completed"
+            );
+        }
+        let restore_live_config_started = Instant::now();
+        if let Err(error) = restore_persisted_live_config_if_needed(
+            &conn,
+            &native_session_id,
+            &source_agent_kind,
+            &session_id,
+            config.caps.state.as_ref(),
+            &event_sink,
+            &mut persisted_config_state,
+            &mut startup_state,
+            startup_restore_snapshot.as_ref(),
+        )
+        .await
+        {
+            tracing::warn!(session_id = %session_id, error = %error, "failed to restore persisted live config");
+            tracing::warn!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                error = %error,
+                elapsed_ms = restore_live_config_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.restore_live_config.failed"
+            );
+        } else {
+            tracing::info!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                elapsed_ms = restore_live_config_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.restore_live_config.completed"
+            );
+        }
+        let post_preferences_live_config_started = Instant::now();
+        if let Err(error) = emit_live_config_update(
+            &source_agent_kind,
+            &session_id,
+            config.caps.state.as_ref(),
+            &event_sink,
+            &mut persisted_config_state,
+            &mut startup_state,
+            chrono::Utc::now().to_rfc3339(),
+        )
+        .await
+        {
+            tracing::warn!(session_id = %session_id, error = %error, "failed to persist post-preference live config snapshot");
+            tracing::warn!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                error = %error,
+                elapsed_ms = post_preferences_live_config_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.post_preferences_live_config.failed"
+            );
+        } else {
+            tracing::info!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                elapsed_ms = post_preferences_live_config_started.elapsed().as_millis(),
+                "[workspace-latency] session.actor.post_preferences_live_config.completed"
+            );
+        }
+
+        let _ = ready_tx.send(Ok(native_session_id.to_string()));
+        handle
+            .set_execution_phase(SessionExecutionPhase::Idle)
+            .await;
+        background_work_registry.rehydrate_pending().await;
         tracing::info!(
             session_id = %session_id,
             workspace_id = %workspace_id,
-            elapsed_ms = initial_live_config_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.initial_live_config.completed"
+            native_session_id = %native_session_id,
+            startup_strategy = startup_strategy_label,
+            native_startup_disposition = startup_disposition.as_str(),
+            total_elapsed_ms = startup_started.elapsed().as_millis(),
+            "[workspace-latency] session.actor.startup_ready"
         );
-    }
+        let resume_replay_filter = ResumeReplayFilter::new(
+            &source_agent_kind,
+            startup_disposition,
+            &config.launch.session.status,
+        );
 
-    let apply_preferences_started = Instant::now();
-    if let Err(error) = apply_requested_session_preferences(
-        &conn,
-        &native_session_id,
-        &config.session,
-        &mut startup_state,
-    )
-    .await
-    {
-        tracing::warn!(session_id = %session_id, error = %error, "failed to apply session preferences");
-        tracing::warn!(
-            session_id = %session_id,
-            workspace_id = %workspace_id,
-            error = %error,
-            elapsed_ms = apply_preferences_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.apply_preferences.failed"
-        );
-    } else {
-        tracing::info!(
-            session_id = %session_id,
-            workspace_id = %workspace_id,
-            elapsed_ms = apply_preferences_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.apply_preferences.completed"
-        );
-    }
-    let restore_live_config_started = Instant::now();
-    if let Err(error) = restore_persisted_live_config_if_needed(
-        &conn,
-        &native_session_id,
-        &source_agent_kind,
-        &session_id,
-        &store,
-        &event_sink,
-        &mut persisted_config_state,
-        &mut startup_state,
-        startup_restore_snapshot.as_ref(),
-    )
-    .await
-    {
-        tracing::warn!(session_id = %session_id, error = %error, "failed to restore persisted live config");
-        tracing::warn!(
-            session_id = %session_id,
-            workspace_id = %workspace_id,
-            error = %error,
-            elapsed_ms = restore_live_config_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.restore_live_config.failed"
-        );
-    } else {
-        tracing::info!(
-            session_id = %session_id,
-            workspace_id = %workspace_id,
-            elapsed_ms = restore_live_config_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.restore_live_config.completed"
-        );
-    }
-    let post_preferences_live_config_started = Instant::now();
-    if let Err(error) = emit_live_config_update(
-        &source_agent_kind,
-        &session_id,
-        &store,
-        &event_sink,
-        &mut persisted_config_state,
-        &mut startup_state,
-        chrono::Utc::now().to_rfc3339(),
-    )
-    .await
-    {
-        tracing::warn!(session_id = %session_id, error = %error, "failed to persist post-preference live config snapshot");
-        tracing::warn!(
-            session_id = %session_id,
-            workspace_id = %workspace_id,
-            error = %error,
-            elapsed_ms = post_preferences_live_config_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.post_preferences_live_config.failed"
-        );
-    } else {
-        tracing::info!(
-            session_id = %session_id,
-            workspace_id = %workspace_id,
-            elapsed_ms = post_preferences_live_config_started.elapsed().as_millis(),
-            "[workspace-latency] session.actor.post_preferences_live_config.completed"
-        );
-    }
+        dispatch_startup_drain(config.caps.queue.as_ref(), &session_id, &handle).await;
 
-    let _ = ready_tx.send(Ok(native_session_id.to_string()));
-    handle
-        .set_execution_phase(SessionExecutionPhase::Idle)
-        .await;
-    background_work_registry.rehydrate_pending().await;
-    tracing::info!(
-        session_id = %session_id,
-        workspace_id = %workspace_id,
-        native_session_id = %native_session_id,
-        startup_strategy = startup_strategy_label,
-        native_startup_disposition = startup_disposition.as_str(),
-        total_elapsed_ms = startup_started.elapsed().as_millis(),
-        flow_id = actor_latency_fields.flow_id,
-        flow_kind = actor_latency_fields.flow_kind,
-        flow_source = actor_latency_fields.flow_source,
-        prompt_id = actor_latency_fields.prompt_id,
-        "[workspace-latency] session.actor.startup_ready"
-    );
-    let resume_replay_filter = ResumeReplayFilter::new(
-        &source_agent_kind,
-        startup_disposition,
-        &config.session.status,
-    );
+        let SessionActorConfig {
+            launch,
+            caps,
+            hooks,
+            interaction_broker,
+            event_tx: _,
+        } = config;
 
-    dispatch_startup_drain(&store, &session_id, handle).await;
-
-    Ok(StartedActor {
-        child,
-        conn,
-        _acp_shutdown: shutdown_tx,
-        notification_rx,
-        background_work_rx,
-        background_work_registry,
-        event_sink,
-        native_session_id,
-        startup_state,
-        persisted_config_state,
-        action_capabilities,
-        supports_native_close,
-        resume_replay_filter,
-    })
+        let actor = SessionActor {
+            session_id,
+            workspace_id,
+            agent_kind: source_agent_kind,
+            workspace_path: launch.workspace_path,
+            mcp_servers: launch.mcp_servers,
+            prompts: launch.prompts,
+            event_sink,
+            background_work_registry,
+            resume_replay_filter,
+            persisted_config_state,
+            startup_state,
+            native_session_id,
+            action_capabilities,
+            supports_native_close,
+            conn,
+            caps,
+            hooks,
+            interaction_broker,
+            handle,
+            _acp_shutdown: shutdown_tx,
+            child,
+        };
+        Ok((actor, notification_rx, background_work_rx))
+    }
 }
 
 async fn dispatch_startup_drain(
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     session_id: &str,
     handle: &Arc<LiveSessionHandle>,
 ) {
@@ -424,7 +365,6 @@ async fn dispatch_startup_drain(
                 .send(SessionCommand::Prompt {
                     payload: head.prompt_payload(),
                     prompt_id: head.prompt_id,
-                    latency: None,
                     from_queue_seq: Some(head.seq),
                     respond_to: drain_respond_tx,
                 })
@@ -454,7 +394,7 @@ async fn dispatch_startup_drain(
     }
 }
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     session_id: &str,
     agent_capabilities: &acp::schema::AgentCapabilities,
 ) {

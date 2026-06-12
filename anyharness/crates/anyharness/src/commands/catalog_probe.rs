@@ -77,7 +77,7 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
     // the harness config seeded to select it. Accepted = the harness lists
     // or selects the id; the menu-read in `snapshot` is unaffected.
     for trial_id in &args.trial_models {
-        let mut trial_env =
+        let trial_env =
             auth_env_for_context(&secrets, &agent_kind, &args.auth_context, &mut isolation_dirs)?;
         let config_dir = trial_env
             .get("CLAUDE_CONFIG_DIR")

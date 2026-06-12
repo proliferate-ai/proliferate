@@ -298,23 +298,29 @@ textbook small domain   domains/repo_roots
 Known violations, named per the specs convention. The rule above is the law;
 these are the debt:
 
-- `LatencyRequestContext` threaded as a parameter through ~13 functions across
-  api -> domains -> live (sessions startup/prompt paths). Target: span
-  propagation.
-- `domains/sessions/runtime/contract.rs` is a fetching mapper (store reads +
-  live lookups inside `to_contract`), called per-record on list paths. Target:
-  a `SessionView` composed by the runtime + a dep-less mapper.
 - ~81 `anyharness_contract` import lines inside `domains/**`; worst:
   `runtime_config` persists wire types as rows, `agents/auth` uses
   contract structs as its domain model. Target: domain twins minted at the
   seams.
-- `live/sessions` receives concrete `SessionStore`/`PromptAttachmentStorage`
-  per call and `LiveSessionManager::start_session` takes 15+ positional params
-  including four adjacent env maps. Target: launch bundle + capability traits.
-- `api/http/agents_model_registry.rs` carries a second error mechanism
-  (`ProblemResponse`) alongside `ApiError`. Target: one mechanism.
+- `api/http/agents_model_registry.rs` (with `agents_errors.rs`) carries a
+  second error mechanism (`ProblemResponse`) alongside `ApiError`. Target: one
+  mechanism.
 - `api/http/workspaces_lifecycle.rs` implements the retire state machine in
   the handler (three copies including retention). Target: a lifecycle service
   in `domains/workspaces`.
 - `WorkspaceService` and `WorkspaceRuntime` carry duplicated, diverged method
   bodies. Target: one entry surface.
+
+Resolved (the rule now holds; listed for traceability):
+
+- Latency context threading (a request-context struct through ~13 signatures
+  across api -> domains -> live) — resolved by the latency-to-spans migration;
+  flow context propagates through `#[tracing::instrument]` spans only.
+- The sessions runtime's fetching response mapper (store reads + live lookups
+  inside the domain-side contract builder) — resolved by
+  `domains/sessions/runtime/view.rs`: the runtime composes `SessionView`; the
+  API maps it with a dep-less mapper.
+- `live/sessions` receiving concrete stores per call and a 15+-positional-param
+  `start_session` — resolved by the `SessionLaunch`/`LaunchEnv` bundle,
+  `ActorCapabilities` (capability traits wired once at manager construction),
+  and per-call `SessionHooks`.

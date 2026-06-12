@@ -59,7 +59,7 @@ serve."
 api/            edges — HTTP/ACP surface. Translates wire ↔ runtime, nothing more.
 app/            composition root — wires deps, mounts SessionExtensions, registers product MCPs.
 domains/        DURABLE product meaning — sessions, agents, runtime_config, plugins, reviews, …
-live/           EPHEMERAL coordination — running sessions: the ACP actors, event sinks, interactions.
+live/           EPHEMERAL coordination — running sessions: the ACP actors, event sinks, rendezvous.
 adapters/       translate between a domain's types and an integration's types.
 integrations/   leaf I/O — talk to the outside (ACP processes, MCP protocol, filesystem).
 persistence/    durable storage substrate (SQLite) — how domains/ actually save.
@@ -78,7 +78,7 @@ The spine walks durable → live → external:
 ```text
 SessionRuntime → SessionService → SessionStore →          [DURABLE: domains/]
    LiveSessionManager → LiveSessionHandle → SessionActor → [LIVE: live/]
-      AcpClient / SessionEventSink / InteractionBroker      [EXTERNAL + ordering]
+      driver (ACP conn + InboundDoor) / SessionEventSink / InteractionRendezvous   [EXTERNAL + ordering]
 ```
 
 The handoff `SessionStore → LiveSessionManager` is exactly the durable/live
@@ -109,7 +109,7 @@ The one feature that cuts through every layer:
 domains/sessions/mcp_bindings    durable: which MCPs a session/workspace has + binding policy
 domains/<feature>/mcp            durable: a feature's product MCP tools (meaning)
 integrations/mcp                 leaf: protocol mechanics (JSON-RPC, capability tokens)
-live/.../interactions/mcp_elicitation   live: a pending elicitation rendezvous
+live/.../rendezvous/mcp_elicitation     live: a pending elicitation rendezvous
 api/http/product_mcp.rs          edge: the one HTTP route product MCPs are served on
 ```
 
@@ -159,17 +159,17 @@ launch: SessionExtensions resolve launch extras
 ```text
 handle.send_prompt → SessionCommand::Prompt → actor begins turn
   → sink.begin_turn (TurnStarted + User item) → conn.prompt(req)   [the long-lived ACP future]
-  → ACP streams session/update notifications → RuntimeClient → notification_rx
-  → normalize_notification → sink.* (ItemStarted/ItemDelta/ToolCall…), each seq'd + persisted + broadcast
+  → ACP streams session/update notifications → InboundDoor → actor channel
+  → sink.ingest normalizes (ItemStarted/ItemDelta/ToolCall…), each seq'd + persisted + broadcast
   → PromptResponse{stop_reason} → finish: sink.turn_ended → phase Idle → apply pending config → drain queue
 ```
 
 **Mid-turn interactions (one rendezvous, many askers):**
 ```text
 agent asks permission OR a product MCP tool elicits
-  → broker registers a parked oneshot + handle.add_pending_interaction + sink.interaction_requested
+  → rendezvous registers a parked oneshot + handle.add_pending_interaction + sink.interaction_requested
   → user answers → SessionCommand::ResolveInteraction (handled on the same actor)
-  → broker resolves the oneshot → the parked ACP callback returns → sink.interaction_resolved
+  → rendezvous resolves the oneshot → the parked ACP callback returns → sink.interaction_resolved
 ```
 
 **Config sync / reconcile (driven by the worker):**
@@ -220,7 +220,7 @@ SetConfigOption(model) → set_session_model on the existing native session (sam
   `sink` owns ordering. Outside `live/<resource>/`, only `manager` + `handle` +
   public types are visible.
 - Dependency rules: `live → domains/integrations/adapters/observability` OK; AVOID
-  `live → api/app`, `driver → domain services`, `event_sink → access-control`,
+  `live → api/app`, `driver → domain services`, `sink → access-control`,
   `integrations → live`.
 - The sink is the single source of event order: assign `seq`, persist, then
   broadcast — in that order.
@@ -247,8 +247,8 @@ files on disk; the manifest pins per session in `runtime_config_session_context`
 - Register once in `app/product_mcp.rs`: a **launch-catalog** entry (selector
   closure decides which sessions attach it + a token minter) and an
   **endpoint-registry** entry (slug → handler + mutating list).
-- Reuse the **interactions broker** for any mid-call user prompt (elicitation) —
-  do not invent a second rendezvous.
+- Reuse the **interaction rendezvous** for any mid-call user prompt (elicitation) —
+  do not invent a second one.
 
 **Synced config & auth notes**
 - Materialize secrets **once** at session create; fail loud (`MissingCredentials`)
@@ -266,7 +266,7 @@ files on disk; the manifest pins per session in `runtime_config_session_context`
 **AnyHarness is a single-sandbox session engine split by one axis — durable meaning
 (`domains/` + `persistence/`) vs the running instance (`live/`) — with edges
 (`api`/`app`) on top and leaves (`adapters`/`integrations`) underneath.** The role
-chain (`SessionRuntime → … → SessionActor → AcpClient/Sink/Broker`) walks that axis;
+chain (`SessionRuntime → … → SessionActor → driver/Sink/Rendezvous`) walks that axis;
 the live grammar (manager/handle/actor/driver/sink) governs the concurrency at the
 bottom; one event sink owns `seq`/turn/item order (persist-before-broadcast); MCP is
 the one vertical cutting through all layers; and two revision-pinned synced bundles

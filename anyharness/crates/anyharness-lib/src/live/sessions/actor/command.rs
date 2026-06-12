@@ -1,19 +1,17 @@
 use std::fmt;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, McpElicitationSubmittedField, ProposedPlanDecisionState,
+    ConfigApplyState, McpElicitationSubmittedField,
     UserInputSubmittedAnswer,
 };
 use tokio::sync::oneshot;
 
-use crate::domains::plans::model::PlanRecord;
-use crate::domains::plans::service::PlanDecisionError;
 use crate::domains::sessions::prompt::PromptPayload;
+use crate::live::sessions::model::SessionDomainOp;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
-use crate::live::sessions::interactions::broker::PermissionDecision;
-use crate::observability::latency::LatencyRequestContext;
+use crate::live::sessions::rendezvous::broker::PermissionDecision;
 #[derive(Debug)]
 pub enum PromptAcceptError {
     EnqueueFailed(String),
@@ -49,7 +47,7 @@ pub enum ForkSessionCommandError {
 }
 
 #[derive(Clone, PartialEq)]
-pub enum InteractionResolution {
+pub enum Resolution {
     Selected {
         option_id: String,
     },
@@ -65,7 +63,7 @@ pub enum InteractionResolution {
     Dismissed,
 }
 
-impl fmt::Debug for InteractionResolution {
+impl fmt::Debug for Resolution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Selected { option_id } => f
@@ -123,7 +121,6 @@ pub(in crate::live::sessions) enum SessionCommand {
     Prompt {
         payload: PromptPayload,
         prompt_id: Option<String>,
-        latency: Option<LatencyRequestContext>,
         /// Set by the actor's own startup-drain path when self-dispatching a
         /// queue head. External callers pass `None` unless they have already
         /// durably inserted a queue row and only need the actor to drain it.
@@ -149,14 +146,15 @@ pub(in crate::live::sessions) enum SessionCommand {
     },
     ResolveInteraction {
         request_id: String,
-        resolution: InteractionResolution,
+        resolution: Resolution,
         respond_to: oneshot::Sender<Result<(), ResolveInteractionCommandError>>,
     },
-    ApplyPlanDecision {
-        plan_id: String,
-        expected_version: i64,
-        decision: ProposedPlanDecisionState,
-        respond_to: oneshot::Sender<Result<PlanRecord, PlanDecisionError>>,
+    /// Run a [`SessionDomainOp`] serialized through the actor loop. The boxed
+    /// `Any` reply is downcast by the submitting domain runtime to its own
+    /// concrete output type.
+    RunDomainOp {
+        op: Box<dyn SessionDomainOp>,
+        respond_to: oneshot::Sender<Box<dyn std::any::Any + Send>>,
     },
     VerifyForkReady {
         respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,

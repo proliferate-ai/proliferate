@@ -3,7 +3,6 @@ use std::path::Path;
 
 use super::*;
 use crate::live::sessions::driver::stderr::spawn_agent_stderr_logger;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::process_env::remove_runtime_private_env;
 
 pub(in crate::live::sessions) struct SpawnedAgentProcess {
@@ -47,7 +46,6 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
-    latency: Option<&LatencyRequestContext>,
     ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
 ) -> anyhow::Result<SpawnedAgentProcess> {
     let resolved_path = agent
@@ -75,8 +73,6 @@ pub(in crate::live::sessions) fn spawn_agent_process(
         spawn_spec.map(|spec| &spec.env),
         protected_agent_auth_env,
     );
-    let latency_fields = latency_trace_fields(latency);
-
     if let Err(error) = validate_spawn_cwd(spawn_cwd, spawn_cwd_source) {
         tracing::warn!(
             session_id = %session_id,
@@ -87,10 +83,6 @@ pub(in crate::live::sessions) fn spawn_agent_process(
             spawn_cwd = %spawn_cwd.display(),
             spawn_cwd_source,
             error = %error,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.actor.process_spawn_cwd_invalid"
         );
         let _ = ready_tx.send(Err(anyhow::anyhow!(error.clone())));
@@ -119,10 +111,6 @@ pub(in crate::live::sessions) fn spawn_agent_process(
             spawn_cwd_source,
             elapsed_ms = process_spawn_started.elapsed().as_millis(),
             error = %e,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.actor.process_spawn_failed"
         );
         let _ = ready_tx.send(Err(anyhow::anyhow!("spawn failed: {e}")));
@@ -133,10 +121,6 @@ pub(in crate::live::sessions) fn spawn_agent_process(
         workspace_id = %workspace_id,
         agent_kind = %source_agent_kind,
         elapsed_ms = process_spawn_started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
         "[workspace-latency] session.actor.process_spawned"
     );
 
@@ -238,7 +222,6 @@ mod tests {
             "session-1",
             "workspace-1",
             AgentKind::Codex.as_str(),
-            None,
             &ready_tx,
         );
         let error = match result {

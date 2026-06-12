@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
@@ -7,8 +8,8 @@ use tokio::task::JoinHandle;
 use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
 };
-use crate::domains::sessions::store::SessionStore;
-use crate::live::sessions::event_sink::AcpToolPayload;
+use crate::live::sessions::model::BackgroundWorkDurable;
+use crate::live::sessions::sink::AcpToolPayload;
 
 mod claude;
 
@@ -40,7 +41,7 @@ impl Default for BackgroundWorkOptions {
 pub struct BackgroundWorkRegistry {
     session_id: String,
     source_agent_kind: String,
-    store: SessionStore,
+    store: Arc<dyn BackgroundWorkDurable>,
     updates_tx: mpsc::UnboundedSender<BackgroundWorkUpdate>,
     options: BackgroundWorkOptions,
     trackers: HashMap<String, JoinHandle<()>>,
@@ -51,7 +52,7 @@ impl BackgroundWorkRegistry {
     pub fn new(
         session_id: String,
         source_agent_kind: String,
-        store: SessionStore,
+        store: Arc<dyn BackgroundWorkDurable>,
         updates_tx: mpsc::UnboundedSender<BackgroundWorkUpdate>,
         options: BackgroundWorkOptions,
     ) -> Self {
@@ -116,6 +117,24 @@ impl BackgroundWorkRegistry {
                 );
             }
         }
+    }
+
+    /// Marks a background tool call terminal in the durable store. The
+    /// registry is the sole owner of durable background-work transitions
+    /// (registration, activity, terminal); the sink only renders the
+    /// transcript AFTER this persisted. Returns whether this call performed
+    /// the pending → terminal transition.
+    pub fn mark_terminal(
+        &self,
+        update: &BackgroundWorkUpdate,
+        completed_at: &str,
+    ) -> anyhow::Result<bool> {
+        self.store.mark_background_work_terminal(
+            &self.session_id,
+            &update.tool_call_id,
+            update.state,
+            completed_at,
+        )
     }
 
     pub fn shutdown(&mut self) {
@@ -212,7 +231,7 @@ mod tests {
     use crate::app::test_support;
     use crate::domains::sessions::model::SessionRecord;
     use crate::domains::sessions::store::SessionStore;
-    use crate::live::sessions::event_sink::AcpToolPayload;
+    use crate::live::sessions::sink::AcpToolPayload;
     use crate::persistence::Db;
 
     #[tokio::test(flavor = "current_thread")]
@@ -225,7 +244,7 @@ mod tests {
                 let mut registry = BackgroundWorkRegistry::new(
                     "session-1".to_string(),
                     "claude".to_string(),
-                    store.clone(),
+                    std::sync::Arc::new(store.clone()),
                     updates_tx,
                     BackgroundWorkOptions {
                         poll_interval: Duration::from_secs(60),
