@@ -3,7 +3,7 @@
 Status: authoritative for long-lived in-memory runtime systems under
 `anyharness-lib/src/live/**`.
 
-Session manager, handle, actor, driver, event sink, interaction broker,
+Session manager, handle, actor, driver, sink, interaction rendezvous,
 background work, and replay live under `live/sessions/**`. Remaining `acp/**`
 files are shared permission, payload, and provider-error helpers, not
 live-session owners. Treat this guide as the grammar for new work and cleanup
@@ -72,21 +72,51 @@ Default target shape:
 ```text
 live/<resource>/
   mod.rs
+  model.rs          # the live vocabulary file (see below)
   manager.rs or manager/
   handle.rs
   actor/
   driver/
-  event_sink/       # or output_sink/ for terminal-style streams
-  interactions/
+  sink/             # or output_sink/ for terminal-style streams
+  rendezvous/
   background_work/
   snapshot/
   replay/
 ```
 
-Only `manager`, `handle`, and intentionally public live result/snapshot/event
-types should be visible outside `live/<resource>`. Actor commands, driver
-clients, sink internals, and interaction waiters are private implementation
-details.
+Only `model`, `manager`, `handle`, and intentionally public live
+result/snapshot/event types should be visible outside `live/<resource>`. Actor
+commands, driver clients, sink internals, and rendezvous waiters are private
+implementation details.
+
+## The Live Vocabulary File
+
+`live/<area>/model.rs` is the live layer's job-1 file: it declares every shape
+that crosses the live boundary, in live's own vocabulary. For sessions it
+holds:
+
+```text
+launch bundles      SessionLaunch, LaunchEnv (named env layers — never four
+                    adjacent maps), SystemPromptAppends, SessionStartupStrategy
+
+capability traits   the durable powers the actor needs, mirroring store
+                    signatures 1:1: EventPersist, QueueDurable,
+                    BackgroundWorkDurable, SessionStateDurable,
+                    AttachmentSource
+
+capability bundle   ActorCapabilities — the never-varies set (traits +
+                    observers + advisor), built once and owned by the manager
+
+per-call powers     SessionHooks (on_turn_finish, on_exit)
+
+product-hook ports  SessionEventObserver, PermissionAdvisor, SessionDomainOp
+                    (+ ObserverEffects, PermissionAdvice, SessionOpEmitter)
+```
+
+Live defines these traits; domains implement them
+(`domains/sessions/live_ports.rs` for the durable capabilities,
+`domains/plans/` and `domains/reviews/` for the product hooks); `app/` wires
+the implementations in. Live never imports domain services or stores.
 
 ## Manager
 
@@ -114,13 +144,21 @@ only to coordinate instances of this live resource. If a broker or service is
 used independently by other domains/resources, `app/` should compose it and
 pass it in as a dependency.
 
-Prefer explicit dependency bundles when a manager has many collaborators:
+The capability-wiring law: the wiring family (`app/sessions.rs`) builds the
+never-varies capability bundle exactly once; the manager owns it and hands it
+to every actor it starts.
 
 ```rust
-pub struct LiveSessionManagerDeps {
-    pub interaction_broker: Arc<InteractionBroker>,
-    pub actor_deps: Arc<LiveSessionActorDeps>,
-}
+// app/sessions.rs — composition only, no behavior
+let caps = ActorCapabilities { events, queue, background, state, attachments,
+                               observers, permission_advisor };
+let manager = LiveSessionManager::new(caps);
+```
+
+Per-call data rides the launch bundle; per-call powers ride beside it:
+
+```rust
+manager.start_session(launch /* SessionLaunch */, hooks /* SessionHooks */)
 ```
 
 ## Handle
@@ -148,9 +186,7 @@ private actor commands or send directly on the actor mailbox.
 Good boundary:
 
 ```rust
-handle
-    .send_prompt(LivePromptCommand { payload, prompt_id, latency })
-    .await?;
+handle.send_prompt(payload, prompt_id).await?;
 ```
 
 Bad boundary:
@@ -174,7 +210,7 @@ Actor responsibilities:
 - own authoritative live mutation for one instance
 - serialize commands, external notifications, timeouts, and shutdown
 - enforce live phase rules such as idle/busy/closing
-- decide ordering and delegate work to driver, sink, interactions, and
+- decide ordering and delegate work to driver, sink, rendezvous, and
   background-work helpers
 - update actor-owned snapshot state
 
@@ -192,7 +228,7 @@ The actor has gravity. Keep handlers thin:
 receive event
 validate current live phase
 update actor-owned state
-call driver/sink/interactions/background_work helper
+call driver/sink/rendezvous/background_work helper
 return accepted/queued/rejected outcome
 ```
 
@@ -236,11 +272,18 @@ protocol clients, browser drivers, and remote providers.
 A sink is the sequenced write path from external/runtime events into the
 internal live stream.
 
-For sessions, this is an event sink:
+For sessions, this is an event sink with one ingestion entry — `sink.ingest`
+takes one ACP `SessionNotification` and owns its whole transcript consequence:
 
 ```text
-ACP notifications -> normalized session events -> persist -> broadcast
+ACP notification -> sink.ingest -> normalize -> persist -> broadcast
+                                -> SinkObservations (for the observer pass)
+                                -> ActorBoundUpdate (arms only the actor may
+                                   finish: config/mode/session-info)
 ```
+
+The sink stays meaning-blind: it never touches durable session-row state or
+product reactors. What it cannot finish it parses and hands back to the actor.
 
 For terminals, this is more naturally an output sink:
 
@@ -271,12 +314,13 @@ actor decides when something happened
 sink decides how that becomes ordered output/events
 ```
 
-Avoid a generic `events/` folder. Use `event_sink/`, `output_sink/`,
+Avoid a generic `events/` folder. Use `sink/`, `output_sink/`,
 `projection/`, or a more specific name that says what the folder writes.
 
-## Interactions
+## Rendezvous
 
-`interactions/**` owns pending live rendezvous.
+`rendezvous/**` owns pending live rendezvous. For sessions the broker type is
+`InteractionRendezvous` (`live/sessions/rendezvous/broker.rs`).
 
 Examples:
 
@@ -324,7 +368,7 @@ Bad examples:
 - delayed UI notifications
 
 Those belong under the role they serve: `driver/retry.rs`,
-`actor/shutdown/cleanup.rs`, `event_sink/publish.rs`, or
+`actor/shutdown/cleanup.rs`, `sink/publish.rs`, or
 `manager/cleanup.rs`.
 
 ## Snapshots And Replay
@@ -349,7 +393,7 @@ Use `replay/**` when replay is more than a tiny helper:
 
 Do not call something `replay_actor` unless it truly has its own mailbox,
 serialized state, independent task, and lifecycle. Otherwise prefer
-`replay/stream.rs` or `event_sink/replay.rs`.
+`replay/stream.rs` or `sink/replay.rs`.
 
 ## Folder Composition
 
@@ -362,7 +406,7 @@ actor/
   mod.rs
   command.rs
   state.rs
-  event_loop.rs
+  run.rs
   spawn.rs
   startup.rs
 
@@ -386,10 +430,11 @@ command.rs
   private actor mailbox protocol
 
 state.rs
-  actor-owned mutable state and phase tracking
+  the actor struct: actor-owned mutable state and phase tracking
 
-event_loop.rs
-  select/receive loop and top-level dispatch
+run.rs
+  select/receive loop and top-level dispatch — `&mut self` methods on the
+  actor struct; receivers threaded as parameters, never stored on the struct
 
 spawn.rs/startup.rs
   task creation and initial live setup
@@ -458,12 +503,20 @@ files are:
 
 ```text
 driver/types.rs
-driver/start.rs
-driver/process.rs
-driver/native_session.rs
+driver/process.rs            # spawn and wire the agent process
+driver/connection.rs         # establish the ACP connection, register inbound handlers
+driver/session_lifecycle.rs  # initialize the connection
+driver/native_session.rs     # new/load/fork native session calls
+driver/inbound/              # InboundDoor — see below
 driver/stderr.rs
 driver/shutdown.rs
 ```
+
+`driver/inbound/` is the **inbound door**: everything the agent-initiated
+direction of the connection may touch. Handlers registered in `connection.rs`
+clone an `Arc<InboundDoor>`, which routes notifications to the actor's channel
+and inbound requests (permission, user input, MCP elicitation) through the
+rendezvous broker, rendering pending-interaction state via the shared sink.
 
 For terminals, target driver files would likely be:
 
@@ -475,14 +528,15 @@ live/terminals/driver/
   shutdown.rs
 ```
 
-### `event_sink/**` Or `output_sink/**`
+### `sink/**` Or `output_sink/**`
 
 Target event sink shape:
 
 ```text
-event_sink/
+sink/
   mod.rs
   state.rs
+  ingest.rs        # the one ingestion entry for ACP notifications
   publish.rs
   lifecycle.rs
   turns.rs
@@ -495,29 +549,29 @@ event_sink/
   pending_prompts.rs
   background_work.rs
   runtime_events.rs
+  metadata.rs
   normalization/
 ```
 
 Split by event/output family and sequencing responsibility. Keep the sink as
-the one ordered write path.
+the one ordered write path, with `ingest` as its one inbound entry.
 
-### `interactions/**`
+### `rendezvous/**`
 
 Target shape:
 
 ```text
-interactions/
+rendezvous/
   mod.rs
-  broker.rs
-  validation.rs
-  permission.rs
-  user_input.rs
-  cleanup.rs
+  broker.rs            # InteractionRendezvous
+  broker/validation.rs
   mcp_elicitation/
 ```
 
 Use subfolders when the rendezvous kind has several protocol or normalization
-steps.
+steps. The protocol-side creation of pending requests lives in
+`driver/inbound/` (permission, user input, MCP elicitation); the broker owns
+the waiters.
 
 ### `background_work/**`
 
@@ -535,75 +589,61 @@ Split provider-specific long-running work from generic registry/update logic.
 
 ## Live Sessions
 
-Target session shape:
+Current session shape:
 
 ```text
 live/sessions/
   mod.rs
-  manager.rs or manager/
+  model.rs           # the live vocabulary file
+  manager/           # surface, startup, replay, runtime-event injection
   handle.rs
+  probe.rs
 
   actor/
     command.rs
-    state.rs
-    event_loop.rs
+    state.rs         # struct SessionActor
+    run.rs
     spawn.rs
     startup.rs
     background_work.rs
     turn/
     config/
-    notifications/
+    notifications/   # dispatch, replay_filter, observations
     interactions/
     fork/
     shutdown/
+    tests/
 
   driver/
     types.rs
-    start.rs
     process.rs
+    connection.rs
+    session_lifecycle.rs
     native_session.rs
+    inbound/         # InboundDoor: permission, user_input, mcp_elicitation
     stderr.rs
     shutdown.rs
 
-  event_sink/
-  interactions/
+  sink/              # ingest.rs is the one ingestion entry
+  rendezvous/        # InteractionRendezvous broker + mcp_elicitation
   background_work/
   replay/
 ```
 
-Current mapping:
+Path mapping notes:
 
 ```text
-live/sessions/handle.rs
-  target handle
+live/sessions/rendezvous/**
+  permission, user-input, and MCP elicitation rendezvous (formerly
+  interactions/; the broker is InteractionRendezvous)
 
-live/sessions/actor/**
-  target actor
+live/sessions/sink/**
+  the session event sink (formerly event_sink/)
 
-live/sessions/driver/**
-  current and target session driver
-
-live/sessions/manager/**
-  current LiveSessionManager split by manager surface, startup, replay, and
-  runtime-event injection
-
-live/sessions/driver/runtime_client/**
-  current low-level ACP client name inside the driver role; reusable protocol
-  pieces belong under integrations/acp only when they are genuinely
-  protocol-neutral
-
-live/sessions/event_sink/**
-  current and target session event sink
-
-live/sessions/interactions/**
-  current and target permission, user-input, and MCP elicitation rendezvous
-
-live/sessions/background_work/**
-  current and target provider-reported long-running work registry
-
-live/sessions/replay/**
-  current replay actor support; target replay role unless it truly remains an
-  independent actor
+live/sessions/driver/inbound/**
+  the agent-initiated direction of the ACP connection (formerly the
+  runtime_client folder); reusable protocol pieces belong under
+  integrations/acp only when they are genuinely protocol-neutral
 
 acp/permission_context.rs
 acp/permission_payload.rs
@@ -616,11 +656,12 @@ The end-to-end session mental model:
 
 ```text
 SessionRuntime
-  loads durable session/workspace/agent state
-  prepares product-owned prompt/config/start data
-  calls LiveSessionManager
+  loads durable session/workspace/agent state (startup.rs resolves)
+  launch_policy (pure) decides strategy and assembles SessionLaunch
+  calls manager.start_session(launch, hooks)
 
 LiveSessionManager
+  owns ActorCapabilities (wired once in app/sessions.rs)
   starts or finds the live session
   returns LiveSessionHandle
 
@@ -631,15 +672,67 @@ LiveSessionHandle
 SessionActor
   serializes live mutation
   delegates external I/O to driver
-  delegates event persistence/broadcast to event_sink
-  delegates live rendezvous to interactions
+  delegates event persistence/broadcast to sink (sink.ingest)
+  delegates live rendezvous to the InteractionRendezvous broker
+  runs the observer dispatch pass and serialized domain ops
 
 Driver
-  owns ACP process/client lifecycle
+  owns ACP process/connection lifecycle; the InboundDoor receives
+  agent-initiated traffic
 
-EventSink
+Sink
   normalizes ACP notifications into durable/broadcast session events
 ```
+
+## Product Hooks
+
+Product domains react to a live session through four mechanisms, all declared
+in `live/sessions/model.rs` and wired in `app/`. The actor's pockets are
+empty: it never imports plan or review services.
+
+The mechanism decision table:
+
+| Mechanism | Timing | Task / thread | May emit events | May block |
+| --- | --- | --- | --- | --- |
+| `SessionExtension` | launch / turn-finish / session-close lifecycle | main tokio runtime (hooks may spawn) | no — use the runtime-event injection paths | no |
+| `SessionEventObserver` | each special observation in the dispatch pass | per-session thread, in-loop, sink lock held | yes — committed rows returned in `ObserverEffects` | sqlite tx only |
+| `PermissionAdvisor` | inbound permission arrival, before parking | inbound-door task, sink lock held by the caller | yes — committed rows returned in `Predecided` | sqlite tx only |
+| `SessionDomainOp` | product-initiated write needing command ordering | actor loop via the mailbox, sink lock per phase | yes — via `SessionOpEmitter::publish` | sqlite tx only (sync per phase) |
+
+Current implementors: `domains/plans/session_observer.rs` (plan sniffing),
+`domains/reviews/session_observer.rs` (candidate plans),
+`domains/plans/permission_advisor.rs` (plan-linked permissions),
+`domains/plans/decision_op.rs` (approve/reject via
+`SessionCommand::RunDomainOp`).
+
+## Event-Emission Serialization
+
+Session-event emission rests on two nested guarantees:
+
+1. **The per-session `current_thread` runtime** — nothing in one session is
+   ever parallel.
+2. **The sink lock** — every `next_seq` read, every domain tx persisting event
+   rows, and every publish happens while the sink mutex is held.
+
+The actor loop adds *ordering* on top: domain writes that must not interleave
+with `Cancel`/`Close`/other commands ride the mailbox as a `SessionDomainOp`
+(two locked phases, lock released only for an interaction resolution between
+them).
+
+Observers run **in-loop in a single ordered pass**, in registration order,
+under one sink lock hold. Observer `i`'s returned envelopes are published
+immediately and fed forward only to observers `j > i` — never backward, never
+a second pass. The partial-failure seq contract: a hook either fails WITHOUT
+committing event rows, or commits and returns EVERY committed envelope; the
+sink advances `next_seq` only by returned envelopes, so an unreturned row
+collides loudly (unique-seq violation), never a silent gap.
+
+The advisor runs on the **inbound-door task** with the sink lock held by the
+caller — exactly where the inline logic it replaced ran.
+
+Anything event-emitting is synchronous under the sink lock. Side effects that
+emit nothing may hand off to a main-runtime `Handle` captured at app wiring —
+the per-session runtime dies with the session; never spawn lasting work on it.
 
 ## Live Terminals
 
@@ -762,11 +855,11 @@ How product code hands work to a live resource, and what live may know back
   (multiple env maps) are a silent-swap hazard and must be named struct
   fields.
 
-Migration exceptions: `LiveSessionManager::start_session` takes 15+ positional
-parameters including four adjacent env maps, and receives concrete
-`SessionStore`/`PromptAttachmentStorage` per call; `SessionActorConfig` holds
-concrete domain stores/services. Target: a `SessionLaunch` bundle plus
-capability traits wired at construction.
+Sessions are the in-repo exemplar of this boundary:
+`manager.start_session(launch: SessionLaunch, hooks: SessionHooks)` is the
+whole per-call surface; the durable powers are the capability traits in
+`ActorCapabilities`, implemented by `domains/sessions/live_ports.rs` (pure
+1:1 delegation over `SessionStore`) and wired once in `app/sessions.rs`.
 
 ## Dependency Rules
 
@@ -785,7 +878,7 @@ Avoid:
 live -> api
 live -> app
 driver -> product domain services
-event_sink -> product access-control decisions
+sink -> product access-control decisions
 integrations -> live
 ```
 
@@ -793,13 +886,15 @@ Recommended module visibility:
 
 ```rust
 pub mod sessions {
+    pub mod model; // the boundary vocabulary is public
+
     pub use handle::LiveSessionHandle;
     pub use manager::LiveSessionManager;
 
     mod actor;
     mod driver;
-    mod event_sink;
-    mod interactions;
+    mod sink;
+    mod rendezvous;
     mod background_work;
 }
 ```

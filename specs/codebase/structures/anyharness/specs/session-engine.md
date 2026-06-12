@@ -8,35 +8,43 @@ Status: authoritative for the core AnyHarness session engine mental model.
 api/http/sessions
   -> SessionRuntime
     -> SessionService / SessionStore
-    -> LiveSessionManager
+    -> launch_policy (pure) -> SessionLaunch + SessionHooks
+    -> LiveSessionManager.start_session(launch, hooks)
       -> LiveSessionHandle
         -> SessionActor
-          -> AcpClient
-          -> SessionEventSink
-          -> InteractionBroker
+          -> driver (ACP connection; InboundDoor for inbound traffic)
+          -> SessionEventSink (sink.ingest)
+          -> InteractionRendezvous
 ```
 
 Current names:
 
 ```text
-SessionRuntime      anyharness-lib/src/domains/sessions/runtime/
-SessionService      anyharness-lib/src/domains/sessions/service/
-SessionStore        anyharness-lib/src/domains/sessions/store/**
-LiveSessionManager  live/sessions/manager/**
-LiveSessionHandle   live/sessions/handle.rs
-SessionActor        live/sessions/actor/**
-RuntimeClient       live/sessions/driver/runtime_client/**; current low-level ACP client name; target role: AcpClient
-SessionEventSink    live/sessions/event_sink/**
-InteractionBroker   live/sessions/interactions/broker.rs
+SessionRuntime         anyharness-lib/src/domains/sessions/runtime/
+SessionService         anyharness-lib/src/domains/sessions/service/
+SessionStore           anyharness-lib/src/domains/sessions/store/**
+SessionView            domains/sessions/runtime/view.rs
+SessionLaunch et al.   live/sessions/model.rs (the live vocabulary file)
+LiveSessionManager     live/sessions/manager/**
+LiveSessionHandle      live/sessions/handle.rs
+SessionActor           live/sessions/actor/** (struct in actor/state.rs)
+InboundDoor            live/sessions/driver/inbound/**
+SessionEventSink       live/sessions/sink/**
+InteractionRendezvous  live/sessions/rendezvous/broker.rs
 ```
 
-Implementation reality after the completed migration phases:
+Implementation reality:
 
 - session MCP assembly lives under `domains/sessions/mcp_bindings/**`.
 - `SessionStore` is split under `domains/sessions/store/**`.
 - `SessionService` is split under `domains/sessions/service/**`.
-- `SessionRuntime` is split under `domains/sessions/runtime/**`.
-- `SessionEventSink` is split under `live/sessions/event_sink/**`.
+- `SessionRuntime` is split under `domains/sessions/runtime/**`; pure launch
+  decisions are `runtime/launch_policy.rs`, read-side assembly is
+  `runtime/view.rs`.
+- The live capability traits the actor needs are implemented by
+  `domains/sessions/live_ports.rs` (pure 1:1 delegation over the store) and
+  wired once as `ActorCapabilities` in `app/sessions.rs`.
+- `SessionEventSink` is split under `live/sessions/sink/**`.
 - `SessionActor` is split under `live/sessions/actor/**`; driver mechanics are
   split under `live/sessions/driver/**`.
 
@@ -87,6 +95,17 @@ This is the bridge between durable sessions and live execution. The
 implementation is split under `domains/sessions/runtime/**` by API-facing operation
 family; callers should continue to use the public `SessionRuntime` type.
 
+Two files carry special roles:
+
+- `runtime/launch_policy.rs` — pure launch decisions: data-in/data-out, no
+  store, no clock, no `&self`. `startup.rs` resolves (record loads, link
+  lookups, env/MCP assembly) and feeds gathered facts in; the policy chooses
+  the startup strategy and assembles the final `SessionLaunch`.
+- `runtime/view.rs` — `SessionView`, the read-side aggregate (record +
+  live-config snapshot + execution summary + pending prompts) composed by the
+  runtime with batched queries. HTTP maps it via the dep-less
+  `SessionView::into_contract`; nothing fetches inside a mapper.
+
 ### LiveSessionManager
 
 Live registry:
@@ -94,9 +113,12 @@ Live registry:
 - session id to live handle map
 - startup de-dupe
 - pending startup waiters
-- shared interaction broker
+- owns the shared `InteractionRendezvous` broker
+- owns `ActorCapabilities` (wired once in `app/sessions.rs`) and hands it to
+  every actor it starts
 
-Current path: `live/sessions/manager/**`.
+Current path: `live/sessions/manager/**`. The whole per-call surface is
+`start_session(launch: SessionLaunch, hooks: SessionHooks)`.
 
 ### LiveSessionHandle
 
@@ -127,13 +149,18 @@ One running agent session state machine:
 The actor implementation is split under `live/sessions/actor/**`; the detailed
 folder contract is specified in `specs/session-actor.md`.
 
-### AcpClient
+### Driver / InboundDoor
 
-Low-level ACP client wrapper. Current name: `RuntimeClient`, under
-`live/sessions/driver/runtime_client/**`.
+`live/sessions/driver/**` owns the ACP process and connection mechanics:
+process spawn (`process.rs`), connection establishment (`connection.rs`),
+initialization (`session_lifecycle.rs`), and native new/load/fork calls
+(`native_session.rs`).
 
-It sends ACP requests to the subprocess and receives ACP notifications. It does
-not own session business rules.
+`driver/inbound/**` is the `InboundDoor` — the agent-initiated direction of
+the connection. It routes notifications to the actor's channel and inbound
+requests (permission, user input, MCP elicitation) through the rendezvous
+broker; the permission path consults the `PermissionAdvisor` before parking.
+The driver does not own session business rules.
 
 ### SessionEventSink
 
@@ -147,16 +174,17 @@ ACP notification to AnyHarness event normalizer:
 
 This is core runtime logic, not a helper.
 
-### InteractionBroker
+### InteractionRendezvous
 
-Pending interaction rendezvous:
+Pending interaction rendezvous (`live/sessions/rendezvous/broker.rs`):
 
 - permission decisions
 - user-input questions
 - MCP elicitation forms
 - MCP URL reveal
 
-The actor registers a pending request. The API later resolves it.
+The inbound door parks a pending request. The API later resolves it; the actor
+cleans up on shutdown.
 
 ### Prompt Preparation
 
@@ -169,6 +197,29 @@ Prompt preparation turns user intent into a protocol-safe prompt payload:
 - provenance
 - validation
 
+The pipeline is split pure/IO: `AttachmentSource::load` (the live capability,
+implemented over store + attachment storage) loads every referenced part;
+`domains/sessions/prompt/render.rs` is the pure half — `ResolvedParts` in,
+ACP content blocks out, no IO, base64 and UTF-8 validation only.
+
+### Plans And Reviews Hooks
+
+Plans and reviews never appear inside the actor. They hook in through the
+ports declared in `live/sessions/model.rs` and wired in `app/sessions.rs`:
+
+- `domains/plans/session_observer.rs` / `domains/reviews/session_observer.rs`
+  — `SessionEventObserver`s run in one ordered in-loop pass (plans before
+  reviews; reviews consumes the plan envelopes via feed-forward).
+- `domains/plans/permission_advisor.rs` — `PermissionAdvisor` consulted by the
+  inbound door before parking a permission request (plan linking, predecided
+  answers).
+- `domains/plans/decision_op.rs` — the approve/reject decision as a
+  `SessionDomainOp` serialized through the actor mailbox
+  (`SessionCommand::RunDomainOp`).
+
+See `guides/live-runtime.md` for the mechanism decision table and the
+serialization/seq contracts.
+
 ## Prompt Flow
 
 ```text
@@ -178,9 +229,10 @@ API handler
     -> prepare prompt payload
     -> ensure live handle exists
     -> send actor command
-    -> actor sends ACP prompt via AcpClient
-    -> ACP notifications return
-    -> SessionEventSink persists and broadcasts events
+    -> actor renders the payload (pure render.rs) and sends the ACP prompt
+       over the driver connection
+    -> ACP notifications return through the InboundDoor
+    -> sink.ingest persists and broadcasts events
 ```
 
 Prompt submission and transcript streaming are separate interfaces:
@@ -210,9 +262,10 @@ API handler
     -> WorkspaceRuntime resolves workspace path/env
     -> SessionExtension registry resolves launch extras
     -> user MCP bindings + internal MCP servers are combined
-    -> LiveSessionManager starts actor
-    -> actor starts ACP client/subprocess
-    -> SessionEventSink emits normalized events
+    -> launch_policy assembles SessionLaunch (pure); runtime builds SessionHooks
+    -> LiveSessionManager.start_session(launch, hooks) starts the actor
+    -> actor startup spawns the process and establishes the ACP connection
+    -> sink emits normalized events
 ```
 
 ## Session Actor Shape
@@ -225,20 +278,24 @@ The actor should not own prompt attachment validation, transcript rendering,
 MCP schemas, plan product semantics, raw SQL query families, or API
 request/response mapping. It should call the modules that own those concerns.
 
-High-level target actor files:
+High-level actor files:
 
 ```text
 live/sessions/actor/
   mod.rs
   command.rs
-  state.rs
-  event_loop.rs
+  state.rs          # struct SessionActor
+  run.rs            # &mut-self select loop; receivers threaded as parameters
+  spawn.rs
+  startup.rs        # constructor: driver/connection.rs + session_lifecycle.rs
+  background_work.rs
   turn/
   config/
   notifications/
   fork/
   interactions/
   shutdown/
+  tests/
 ```
 
 See `specs/session-actor.md` for the concern-folder grammar and migration
@@ -286,12 +343,13 @@ Core actor invariants:
 happened; the sink decides how that becomes durable `SessionEventEnvelope`
 records.
 
-Target sink files:
+Sink files:
 
 ```text
-live/sessions/event_sink/
+live/sessions/sink/
   mod.rs
   state.rs
+  ingest.rs         # the one ingestion entry for ACP notifications
   publish.rs
   turns.rs
   assistant.rs
@@ -304,36 +362,44 @@ live/sessions/event_sink/
   background_work.rs
   lifecycle.rs
   runtime_events.rs
+  metadata.rs
   normalization/
+  tests/
 ```
 
 The sink may assign sequence numbers, persist normalized events, and broadcast
 them. It should not decide actor lifecycle, prompt queueing, config timing, or
-pending interaction waits.
+pending interaction waits. The sink is meaning-blind: arms that need durable
+session-row state or product reactors are parsed in `ingest.rs` and returned
+to the actor as `ActorBoundUpdate`; special observations are collected for the
+actor's observer pass.
 
-## Target File Shape
+## File Shape
 
 ```text
 domains/sessions/
   model.rs
+  live_ports.rs     # implements live's capability traits over the store
   store/
   service/
-  runtime/
-  prompt/
-  events/
+  runtime/          # incl. launch_policy.rs (pure) and view.rs (SessionView)
+  prompt/           # incl. render.rs (pure)
   mcp_bindings/
-  extensions/
+  extensions.rs
+  live_config/
   links/
   subagents/
   workspace_naming/
 
 live/sessions/
-  manager.rs
+  model.rs          # launch bundles, capability traits, hook ports
+  manager/
   handle.rs
+  probe.rs
   actor/
-  driver/
-  event_sink/
-  interactions/
+  driver/           # incl. inbound/ (InboundDoor)
+  sink/
+  rendezvous/
   background_work/
   replay/
 ```
