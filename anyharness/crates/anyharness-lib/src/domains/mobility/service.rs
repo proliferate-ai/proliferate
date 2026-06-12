@@ -1234,25 +1234,23 @@ fn validate_clean_repo_for_mobility(
 }
 
 fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
+    use MobilityError::Invalid;
+
     match error {
         WorkspaceAccessError::WorkspaceNotFound(id) => MobilityError::WorkspaceNotFound(id),
-        WorkspaceAccessError::SessionNotFound(id) => MobilityError::Invalid(id),
-        WorkspaceAccessError::TerminalNotFound(id) => MobilityError::Invalid(id),
-        WorkspaceAccessError::MutationBlocked { workspace_id, mode } => {
-            MobilityError::Invalid(format!(
-                "workspace {workspace_id} is not writable while mode={}",
-                mode.as_str()
-            ))
+        WorkspaceAccessError::SessionNotFound(id) | WorkspaceAccessError::TerminalNotFound(id) => {
+            Invalid(id)
         }
-        WorkspaceAccessError::LiveSessionStartBlocked { workspace_id, mode } => {
-            MobilityError::Invalid(format!(
-                "workspace {workspace_id} cannot start live sessions while mode={}",
-                mode.as_str()
-            ))
-        }
-        WorkspaceAccessError::WorkspaceRetired(workspace_id) => {
-            MobilityError::Invalid(format!("workspace {workspace_id} is retired"))
-        }
+        WorkspaceAccessError::MutationBlocked { workspace_id, mode } => Invalid(format!(
+            "workspace {workspace_id} is not writable while mode={}",
+            mode.as_str()
+        )),
+        WorkspaceAccessError::LiveSessionStartBlocked { workspace_id, mode } => Invalid(format!(
+            "workspace {workspace_id} cannot start live sessions while mode={}",
+            mode.as_str()
+        )),
+        WorkspaceAccessError::WorkspaceRetired(id) => Invalid(format!("workspace {id} is retired")),
+        WorkspaceAccessError::Unexpected(error) => MobilityError::Internal(error),
     }
 }
 

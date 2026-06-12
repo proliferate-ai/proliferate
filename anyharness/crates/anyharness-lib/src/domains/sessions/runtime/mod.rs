@@ -17,7 +17,7 @@ use super::service::SessionService;
 use crate::domains::agents::auth::{AgentAuthSelectionRequired, AgentAuthService};
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::sessions::extensions::SessionExtension;
-use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
@@ -232,6 +232,7 @@ pub enum ResolveInteractionError {
     MissingMcpField(String),
     InvalidMcpFieldValue(String),
     NotMcpUrlElicitation(String),
+    Access(WorkspaceAccessError),
     Internal(anyhow::Error),
 }
 
