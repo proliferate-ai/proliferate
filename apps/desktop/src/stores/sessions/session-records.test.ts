@@ -145,6 +145,18 @@ describe("session records facade invariants", () => {
     expect(record.sessionRelationship).toEqual({ kind: "pending" });
   });
 
+  it("defaults hasAttemptedPrompt to false and patches it through the directory", () => {
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-a",
+    }));
+
+    expect(getSessionRecord("session-a")?.hasAttemptedPrompt).toBe(false);
+
+    patchSessionRecord("session-a", { hasAttemptedPrompt: true });
+
+    expect(getSessionRecord("session-a")?.hasAttemptedPrompt).toBe(true);
+  });
+
   it("applies and prunes relationship hints when records mount later", () => {
     useSessionDirectoryStore.getState().recordRelationshipHint("child-session", {
       kind: "subagent_child",

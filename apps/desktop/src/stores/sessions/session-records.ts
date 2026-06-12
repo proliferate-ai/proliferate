@@ -42,6 +42,7 @@ export function createEmptySessionRecord(
     executionSummary?: SessionExecutionSummary | null;
     mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
     lastPromptAt?: string | null;
+    hasAttemptedPrompt?: boolean;
     optimisticPrompt?: PendingPromptEntry | null;
     pendingConfigChanges?: PendingSessionConfigChanges;
     sessionRelationship?: SessionRelationship;
@@ -76,6 +77,7 @@ export function createEmptySessionRecord(
     mcpBindingSummaries: config?.mcpBindingSummaries ?? null,
     pendingConfigChanges: config?.pendingConfigChanges ?? {},
     lastPromptAt: config?.lastPromptAt ?? null,
+    hasAttemptedPrompt: config?.hasAttemptedPrompt ?? false,
     sessionRelationship: config?.sessionRelationship ?? { kind: "pending" },
     activity: activityFromTranscript(transcript),
   });
@@ -169,6 +171,9 @@ export function patchSessionRecord(
     }
     if ("status" in patch) directoryPatch.status = patch.status ?? null;
     if ("lastPromptAt" in patch) directoryPatch.lastPromptAt = patch.lastPromptAt ?? null;
+    if ("hasAttemptedPrompt" in patch && patch.hasAttemptedPrompt !== undefined) {
+      directoryPatch.hasAttemptedPrompt = patch.hasAttemptedPrompt;
+    }
     if ("streamConnectionState" in patch && patch.streamConnectionState) {
       directoryPatch.streamConnectionState = patch.streamConnectionState;
     }

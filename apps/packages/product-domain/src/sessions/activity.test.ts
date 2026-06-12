@@ -4,7 +4,9 @@ import {
   collectWorkspaceSidebarActivityStates,
   collectSessionActivityReconciliationIds,
   collectWorkspaceSessionViewStates,
+  isSessionSlotBusy,
   resolveSessionErrorAttentionKey,
+  resolveSessionExecutionPhase,
   resolveSessionSidebarActivityState,
   resolveSessionViewState,
   shouldSkipColdIdleSessionStream,
@@ -444,6 +446,124 @@ describe("session activity", () => {
       idleCount: 0,
       erroredCount: 0,
     })).toBe("needs_input");
+  });
+
+  it("presents never-prompted starting sessions as idle", () => {
+    const slot = {
+      status: "starting" as const,
+      executionSummary: null,
+      streamConnectionState: "disconnected" as const,
+      hasPromptActivity: false,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("idle");
+    expect(resolveSessionViewState(slot)).toBe("idle");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("idle");
+    expect(isSessionSlotBusy(slot)).toBe(false);
+  });
+
+  it("keeps starting sessions busy when a prompt is in flight", () => {
+    const slot = {
+      status: "starting" as const,
+      executionSummary: null,
+      streamConnectionState: "disconnected" as const,
+      hasPromptActivity: true,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("starting");
+    expect(resolveSessionViewState(slot)).toBe("working");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("iterating");
+  });
+
+  it("gates the starting execution summary phase on prompt activity", () => {
+    const slot = (hasPromptActivity: boolean) => ({
+      status: null,
+      executionSummary: {
+        phase: "starting" as const,
+        hasLiveHandle: false,
+        pendingInteractions: [],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "disconnected" as const,
+      hasPromptActivity,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    });
+
+    expect(resolveSessionExecutionPhase(slot(false))).toBe("idle");
+    expect(resolveSessionExecutionPhase(slot(true))).toBe("starting");
+  });
+
+  it("preserves legacy starting behavior when prompt activity is unknown", () => {
+    expect(resolveSessionExecutionPhase({
+      status: "starting",
+      executionSummary: null,
+      streamConnectionState: "disconnected",
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    })).toBe("starting");
+  });
+
+  it("does not suppress non-starting phases without prompt activity", () => {
+    expect(resolveSessionExecutionPhase({
+      status: "running",
+      executionSummary: null,
+      streamConnectionState: "open",
+      hasPromptActivity: false,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    })).toBe("running");
+
+    expect(resolveSessionExecutionPhase({
+      status: "errored",
+      executionSummary: executionSummary("errored"),
+      streamConnectionState: "ended",
+      hasPromptActivity: false,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    })).toBe("errored");
+
+    const awaitingSlot = {
+      status: "running" as const,
+      executionSummary: {
+        phase: "awaiting_interaction" as const,
+        hasLiveHandle: true,
+        pendingInteractions: [{
+          requestId: "request-1",
+          kind: "permission",
+          title: "Approve",
+          description: null,
+          source: { toolCallId: "tool-1", toolKind: "exec", toolStatus: null },
+          payload: { type: "permission", options: [] },
+        }],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "open" as const,
+      hasPromptActivity: false,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [{ requestId: "request-1" }],
+      },
+    };
+    expect(resolveSessionExecutionPhase(awaitingSlot)).toBe("awaiting_interaction");
+    expect(resolveSessionViewState(awaitingSlot)).toBe("needs_input");
+    expect(resolveSessionSidebarActivityState(awaitingSlot)).toBe("waiting_input");
   });
 
   it("skips the initial restore stream only for cold idle sessions", () => {

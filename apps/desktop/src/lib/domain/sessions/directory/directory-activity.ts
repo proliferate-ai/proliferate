@@ -39,6 +39,7 @@ export function activitySnapshotFromDirectoryEntry(
       status: entry.status,
       executionSummary: entry.executionSummary,
       streamConnectionState: entry.streamConnectionState,
+      hasPromptActivity: entry.lastPromptAt !== null || entry.hasAttemptedPrompt,
       transcript: {
         isStreaming: entry.activity.isStreaming,
         pendingInteractions: entry.activity.pendingInteractions,

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getSessionRecord: vi.fn(),
   logLatency: vi.fn(),
   mutateAsync: vi.fn(),
+  patchSessionRecord: vi.fn(),
   promptAttachmentSnapshotsToBlocks: vi.fn(),
   rehydrateSessionSlotFromHistory: vi.fn(),
   sendCloudPromptCommand: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock("@/hooks/sessions/workflows/session-materialization-deps", () => ({
 
 vi.mock("@/stores/sessions/session-records", () => ({
   getSessionRecord: mocks.getSessionRecord,
+  patchSessionRecord: mocks.patchSessionRecord,
 }));
 
 describe("dispatchPromptIntent", () => {

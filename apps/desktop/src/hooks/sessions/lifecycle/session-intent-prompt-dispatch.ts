@@ -31,6 +31,7 @@ import {
 } from "@/hooks/sessions/workflows/session-materialization-deps";
 import {
   getSessionRecord,
+  patchSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
@@ -68,6 +69,8 @@ export async function dispatchPromptIntent(
   if (!current || current.kind !== "send_prompt" || current.deliveryState !== "waiting_for_session") {
     return;
   }
+
+  patchSessionRecord(entry.clientSessionId, { hasAttemptedPrompt: true });
 
   let requestStarted = false;
   let requestHeaders: HeadersInit | null = null;

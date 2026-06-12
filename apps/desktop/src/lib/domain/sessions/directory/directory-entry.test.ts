@@ -63,6 +63,45 @@ describe("session directory entry model", () => {
     });
   });
 
+  it("keeps hasAttemptedPrompt sticky across upserts", () => {
+    const initial = createDirectoryEntry({
+      sessionId: "session-a",
+      agentKind: "proliferate",
+    });
+    expect(initial.hasAttemptedPrompt).toBe(false);
+
+    const prompted = normalizeDirectoryEntryInput(
+      {
+        sessionId: "session-a",
+        agentKind: "proliferate",
+        hasAttemptedPrompt: true,
+      },
+      initial,
+    );
+    expect(prompted.hasAttemptedPrompt).toBe(true);
+
+    expect(normalizeDirectoryEntryInput(
+      {
+        sessionId: "session-a",
+        agentKind: "proliferate",
+      },
+      prompted,
+    ).hasAttemptedPrompt).toBe(true);
+    expect(normalizeDirectoryEntryInput(
+      {
+        sessionId: "session-a",
+        agentKind: "proliferate",
+        hasAttemptedPrompt: false,
+      },
+      prompted,
+    ).hasAttemptedPrompt).toBe(true);
+
+    expect(directoryEntryEqual(prompted, {
+      ...prompted,
+      hasAttemptedPrompt: false,
+    })).toBe(false);
+  });
+
   it("merges activity patches and compares relationship values structurally", () => {
     const entry = createDirectoryEntry({
       sessionId: "session-a",

@@ -29,7 +29,7 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import { getSessionRecord, patchSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
@@ -112,6 +112,7 @@ export function useSessionIntentActions() {
       });
     };
     enqueuePrompt();
+    patchSessionRecord(sessionId, { hasAttemptedPrompt: true });
     logLatency("session.intent.prompt.enqueue", {
       clientPromptId,
       clientSessionId: sessionId,

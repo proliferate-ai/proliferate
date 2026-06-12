@@ -171,6 +171,7 @@ export function getKnownSessionViewState(known: KnownHeaderSession): SessionView
     status: known.session.status,
     executionSummary: known.session.executionSummary ?? null,
     streamConnectionState: "disconnected",
+    hasPromptActivity: known.session.lastPromptAt != null,
     transcript: { isStreaming: false, pendingInteractions: [] },
   });
 }
