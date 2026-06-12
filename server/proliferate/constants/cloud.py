@@ -511,6 +511,7 @@ class CloudCommandKind(StrEnum):
     prune_workspace_worktree = "prune_workspace_worktree"
     materialize_environment = "materialize_environment"
     refresh_agent_auth_config = "refresh_agent_auth_config"
+    reconcile_agents = "reconcile_agents"
     send_prompt = "send_prompt"
     decide_plan = "decide_plan"
     resolve_interaction = "resolve_interaction"
@@ -558,6 +559,7 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.prune_workspace_worktree.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.refresh_agent_auth_config.value,
+    CloudCommandKind.reconcile_agents.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.decide_plan.value,
     CloudCommandKind.resolve_interaction.value,

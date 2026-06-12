@@ -1268,6 +1268,9 @@ async fn dispatch_anyharness(
                 .await
         }
         AnyHarnessCommand::CancelTurn { session_id } => anyharness.cancel_turn(session_id).await,
+        AnyHarnessCommand::ReconcileAgents { reinstall } => {
+            anyharness.reconcile_agents(*reinstall).await
+        }
         AnyHarnessCommand::CloseSession { session_id } => {
             anyharness.close_session(session_id).await
         }
@@ -1473,7 +1476,8 @@ fn register_session_for_sync(
             .get("id")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
-        AnyHarnessCommand::MaterializeWorkspace { .. } => None,
+        AnyHarnessCommand::MaterializeWorkspace { .. }
+        | AnyHarnessCommand::ReconcileAgents { .. } => None,
         AnyHarnessCommand::SendPrompt { session_id, .. }
         | AnyHarnessCommand::ResolveInteraction { session_id, .. }
         | AnyHarnessCommand::UpdateSessionConfig { session_id, .. }
