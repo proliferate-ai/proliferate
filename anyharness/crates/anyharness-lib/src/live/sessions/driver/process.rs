@@ -2,13 +2,16 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use super::*;
-use crate::live::sessions::driver::stderr::spawn_agent_stderr_logger;
+use crate::live::sessions::driver::stderr::{spawn_agent_stderr_logger, AgentStderrTail};
 use crate::process_env::remove_runtime_private_env;
 
 pub(in crate::live::sessions) struct SpawnedAgentProcess {
     pub child: tokio::process::Child,
     pub stdin: tokio::process::ChildStdin,
     pub stdout: tokio::process::ChildStdout,
+    pub stderr_tail: AgentStderrTail,
+    /// Completes when the stderr pipe reaches EOF (shortly after child exit).
+    pub stderr_done: Option<tokio::task::JoinHandle<()>>,
 }
 
 pub(in crate::live::sessions) fn merge_spawn_env(
@@ -132,14 +135,24 @@ pub(in crate::live::sessions) fn spawn_agent_process(
         .stdout
         .take()
         .ok_or_else(|| anyhow::anyhow!("no stdout"))?;
-    if let Some(stderr) = child.stderr.take() {
-        spawn_agent_stderr_logger(stderr, session_id.to_owned(), source_agent_kind.to_owned());
-    }
+    let (stderr_tail, stderr_done) = match child.stderr.take() {
+        Some(stderr) => {
+            let (tail, reader_task) = spawn_agent_stderr_logger(
+                stderr,
+                session_id.to_owned(),
+                source_agent_kind.to_owned(),
+            );
+            (tail, Some(reader_task))
+        }
+        None => (AgentStderrTail::default(), None),
+    };
 
     Ok(SpawnedAgentProcess {
         child,
         stdin,
         stdout,
+        stderr_tail,
+        stderr_done,
     })
 }
 

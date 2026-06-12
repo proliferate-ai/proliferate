@@ -29,6 +29,11 @@ impl PendingSessionActor {
             .recv_timeout(std::time::Duration::from_secs(60))
             .map_err(|e| match e {
                 std::sync::mpsc::RecvTimeoutError::Timeout => {
+                    // Agent-process exits during the handshake fail fast in
+                    // SessionActor::start, so this is reached only for an
+                    // agent that is alive but unresponsive (e.g. a genuine
+                    // auth wait). TODO: thread the AgentStderrTail up here so
+                    // the residual timeout cases are equally diagnosable.
                     anyhow::anyhow!(
                         "ACP session startup timed out after 60s. \
                          The agent may be waiting for authentication or is unresponsive."
