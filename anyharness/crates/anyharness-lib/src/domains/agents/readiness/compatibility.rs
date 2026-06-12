@@ -3,8 +3,8 @@ use std::process::Command;
 
 use super::artifacts::managed_npm_executable_relpath;
 use super::paths::artifact_root;
-use crate::domains::agents::model::*;
 use crate::domains::agents::installer::seed;
+use crate::domains::agents::model::*;
 use crate::integrations::agent_cli::executable::find_in_path;
 
 pub(super) fn detect_runtime_compatibility_issue(

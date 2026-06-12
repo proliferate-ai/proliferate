@@ -151,7 +151,7 @@ impl SessionRuntime {
         workspace_id: &str,
     ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
         self.session_service
-            .resolved_workspace_launch_options(workspace_id)
+            .resolved_workspace_launch_options(Some(workspace_id))
     }
 
     pub fn live_config_snapshot(

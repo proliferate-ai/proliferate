@@ -3,7 +3,9 @@ use anyharness_contract::v1::{
     RawSessionConfigOption, RawSessionConfigValue, SessionConfigOptionType,
 };
 
-pub(super) fn into_raw_option(option: &acp::schema::SessionConfigOption) -> Option<RawSessionConfigOption> {
+pub(super) fn into_raw_option(
+    option: &acp::schema::SessionConfigOption,
+) -> Option<RawSessionConfigOption> {
     let acp::schema::SessionConfigKind::Select(select) = &option.kind else {
         return None;
     };
@@ -19,7 +21,9 @@ pub(super) fn into_raw_option(option: &acp::schema::SessionConfigOption) -> Opti
     })
 }
 
-fn flatten_select_options(options: &acp::schema::SessionConfigSelectOptions) -> Vec<RawSessionConfigValue> {
+fn flatten_select_options(
+    options: &acp::schema::SessionConfigSelectOptions,
+) -> Vec<RawSessionConfigValue> {
     match options {
         acp::schema::SessionConfigSelectOptions::Ungrouped(options) => {
             options.iter().map(into_raw_value).collect()

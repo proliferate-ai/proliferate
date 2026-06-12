@@ -6,7 +6,11 @@ from typing import Any
 
 import httpx
 
-from proliferate.integrations.anyharness.client import auth_headers, response_preview
+from proliferate.integrations.anyharness.client import (
+    auth_headers,
+    rejected_response_message,
+    response_preview,
+)
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import (
     RemoteAgentInstallResult,
@@ -97,10 +101,18 @@ async def list_runtime_agents(
                 f"{runtime_url}/v1/agents",
                 headers=auth_headers(access_token),
             )
-            response.raise_for_status()
-            payload = response.json()
     except httpx.HTTPError as exc:
         raise CloudRuntimeReconnectError("Failed to list cloud runtime agents.") from exc
+    if not response.is_success:
+        raise CloudRuntimeReconnectError(
+            rejected_response_message("list cloud runtime agents", response.status_code, response.text)
+        )
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime returned invalid JSON when listing cloud runtime agents."
+        ) from exc
     if not isinstance(payload, list):
         raise CloudRuntimeReconnectError("Cloud runtime did not return a valid agent list.")
     return [summary for item in payload if (summary := _parse_agent_summary(item)) is not None]
@@ -118,14 +130,26 @@ async def install_runtime_agent(
                 headers=auth_headers(access_token),
                 json={},
             )
-            response.raise_for_status()
-            payload: Any = response.json()
     except httpx.ReadTimeout as exc:
         raise CloudRuntimeReconnectError(
             f"Timed out while preparing cloud agent '{kind}'."
         ) from exc
     except httpx.HTTPError as exc:
         raise CloudRuntimeReconnectError(f"Failed to prepare cloud agent '{kind}': {exc}") from exc
+    if not response.is_success:
+        raise CloudRuntimeReconnectError(
+            rejected_response_message(
+                f"prepare cloud agent '{kind}'",
+                response.status_code,
+                response.text,
+            )
+        )
+    try:
+        payload: Any = response.json()
+    except ValueError as exc:
+        raise CloudRuntimeReconnectError(
+            f"Cloud runtime returned invalid JSON after installing '{kind}'."
+        ) from exc
 
     if not isinstance(payload, dict):
         raise CloudRuntimeReconnectError(

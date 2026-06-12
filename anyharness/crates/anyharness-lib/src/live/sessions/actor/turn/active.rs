@@ -198,8 +198,15 @@ impl SessionActor {
                                 let result = self.inject_runtime_event(event).await;
                                 let _ = respond_to.send(result);
                             }
-                            Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
-                                let result = self.handle_busy_config_command(&config_id, &value).await;
+                            Some(SessionCommand::SetConfigOption {
+                                config_id,
+                                value,
+                                catalog_authorized_model,
+                                respond_to,
+                            }) => {
+                                let result = self
+                                    .handle_busy_config_command(&config_id, &value, catalog_authorized_model)
+                                    .await;
                                 let _ = respond_to.send(result);
                             }
                             Some(SessionCommand::Close { respond_to }) => {

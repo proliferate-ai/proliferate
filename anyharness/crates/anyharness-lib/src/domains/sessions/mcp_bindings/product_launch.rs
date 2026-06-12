@@ -15,7 +15,8 @@ pub struct ProductMcpSelectionContext<'a> {
 #[derive(Clone)]
 pub struct ProductMcpLaunchRegistration {
     definition: &'static ProductMcpDefinition,
-    selector: Arc<dyn for<'a> Fn(ProductMcpSelectionContext<'a>) -> anyhow::Result<bool> + Send + Sync>,
+    selector:
+        Arc<dyn for<'a> Fn(ProductMcpSelectionContext<'a>) -> anyhow::Result<bool> + Send + Sync>,
     token_minter: Arc<dyn Fn(&str, &str) -> anyhow::Result<String> + Send + Sync>,
     launch_extras: SessionLaunchExtras,
 }
@@ -23,7 +24,9 @@ pub struct ProductMcpLaunchRegistration {
 impl ProductMcpLaunchRegistration {
     pub fn new(
         definition: &'static ProductMcpDefinition,
-        selector: Arc<dyn for<'a> Fn(ProductMcpSelectionContext<'a>) -> anyhow::Result<bool> + Send + Sync>,
+        selector: Arc<
+            dyn for<'a> Fn(ProductMcpSelectionContext<'a>) -> anyhow::Result<bool> + Send + Sync,
+        >,
         token_minter: Arc<dyn Fn(&str, &str) -> anyhow::Result<String> + Send + Sync>,
     ) -> Self {
         Self {

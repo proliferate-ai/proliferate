@@ -45,10 +45,6 @@ function launchAgent(
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,
     defaultModelId: overrides.defaultModelId ?? "default-model",
-    defaultModeId: null,
-    dynamicModels: overrides.dynamicModels ?? false,
-    modelDisplayPolicy: overrides.modelDisplayPolicy ?? null,
-    promptCapabilities: null,
     models: overrides.models ?? [
       {
         id: "default-model",
@@ -56,8 +52,6 @@ function launchAgent(
         aliases: [],
         status: "active",
         isDefault: true,
-        tags: [],
-        launchRemediation: null,
       },
     ],
     launchControls: [],
@@ -163,8 +157,6 @@ describe("resolveConfiguredLaunchSelection", () => {
             aliases: [],
             status: "active",
             isDefault: true,
-            tags: [],
-            launchRemediation: null,
           }],
         }),
       ],
@@ -195,8 +187,6 @@ describe("resolveConfiguredLaunchSelection", () => {
             aliases: [],
             status: "active",
             isDefault: true,
-            tags: [],
-            launchRemediation: null,
           }],
         }),
       ],
@@ -218,27 +208,52 @@ describe("resolveConfiguredLaunchSelection", () => {
     });
   });
 
-  it("accepts a configured OpenCode dynamic model before live ACP model truth is available", () => {
+  it("resolves a variant-suffixed stored model id onto its catalog base model", () => {
+    const result = resolveConfiguredLaunchSelection(
+      [
+        launchAgent({
+          kind: "codex",
+          defaultModelId: "gpt-5.5",
+          models: [{
+            id: "gpt-5.5",
+            displayName: "GPT-5.5",
+            aliases: [],
+            status: "active",
+            isDefault: true,
+          }],
+        }),
+      ],
+      {
+        defaultChatAgentKind: "codex",
+        defaultChatModelIdByAgentKind: {
+          codex: "gpt-5.5/high",
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      selection: {
+        kind: "codex",
+        modelId: "gpt-5.5",
+      },
+      displayName: "GPT-5.5",
+      status: "ready",
+    });
+  });
+
+  it("falls back to the catalog default when a stored dynamic id no longer resolves", () => {
     const result = resolveConfiguredLaunchSelection(
       [
         launchAgent({
           kind: "opencode",
           displayName: "OpenCode",
           defaultModelId: "opencode/big-pickle",
-          dynamicModels: true,
-          modelDisplayPolicy: {
-            defaultVisibleModelIds: ["opencode/big-pickle"],
-            allowUserVisibleModelSelection: true,
-            moreModelsSource: "lastKnownLiveSnapshot",
-          },
           models: [{
             id: "opencode/big-pickle",
             displayName: "OpenCode Zen/Big Pickle",
             aliases: [],
             status: "active",
             isDefault: true,
-            tags: [],
-            launchRemediation: null,
           }],
         }),
       ],
@@ -253,9 +268,9 @@ describe("resolveConfiguredLaunchSelection", () => {
     expect(result).toMatchObject({
       selection: {
         kind: "opencode",
-        modelId: "anthropic/claude-sonnet-4-6",
+        modelId: "opencode/big-pickle",
       },
-      displayName: "anthropic/claude-sonnet-4-6",
+      displayName: "OpenCode Zen/Big Pickle",
       status: "ready",
     });
   });

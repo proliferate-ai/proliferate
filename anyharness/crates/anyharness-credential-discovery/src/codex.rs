@@ -120,9 +120,7 @@ fn has_codex_oauth_tokens(data: &Value) -> bool {
 /// distinguish — `OPENAI_API_KEY` → `codex-auth-json-api-key`,
 /// `tokens.access_token` → `codex-auth-json-oauth` (both may be present);
 /// a usable keychain entry → `codex-keychain`.
-pub(crate) fn discovery_fact_kinds(
-    home_dir: &Path,
-) -> Result<Vec<&'static str>, DiscoveryError> {
+pub(crate) fn discovery_fact_kinds(home_dir: &Path) -> Result<Vec<&'static str>, DiscoveryError> {
     let mut kinds = Vec::new();
 
     if let Some(data) = read_json_file(&local_codex_auth_path(home_dir))? {
@@ -269,9 +267,7 @@ mod tests {
         fs::write(home.join(CODEX_AUTH_PATH), r#"{"OPENAI_API_KEY":""}"#)
             .expect("write codex auth");
 
-        assert!(discovery_fact_kinds(&home)
-            .expect("fact kinds")
-            .is_empty());
+        assert!(discovery_fact_kinds(&home).expect("fact kinds").is_empty());
 
         let _ = fs::remove_dir_all(home);
     }

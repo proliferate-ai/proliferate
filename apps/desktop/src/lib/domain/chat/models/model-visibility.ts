@@ -6,19 +6,16 @@ import type {
 } from "@/lib/domain/agents/cloud-launch-catalog";
 import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
 
+/**
+ * v2 catalogs carry no per-model opt-in flag: every model that survives the
+ * projection/runtime merge is already part of the menu (`defaultVisible` ∩
+ * `status == "active"` ∩ availability), so it defaults to visible. User
+ * overrides can still hide individual models.
+ */
 export function resolveCatalogDefaultOptIn(
-  agent: Pick<DesktopAgentLaunchAgent, "modelDisplayPolicy">,
-  model: Pick<DesktopAgentLaunchModel, "id" | "isDefault" | "defaultOptIn" | "tags">,
+  _model?: Pick<DesktopAgentLaunchModel, "id" | "isDefault">,
 ): boolean {
-  if (typeof model.defaultOptIn === "boolean") {
-    return model.defaultOptIn;
-  }
-
-  return Boolean(
-    agent.modelDisplayPolicy?.defaultVisibleModelIds?.includes(model.id)
-    || model.isDefault
-    || model.tags.includes("recommended"),
-  );
+  return true;
 }
 
 export function isModelVisibleByPreference(
@@ -44,12 +41,9 @@ export function filterVisibleLaunchModels({
 }
 
 export function resolveRegistryModelCatalogDefaultOptIn(
-  model: DesktopLaunchModelRegistryModel,
+  _model?: DesktopLaunchModelRegistryModel,
 ): boolean {
-  if (typeof model.defaultOptIn === "boolean") {
-    return model.defaultOptIn;
-  }
-  return model.isDefault;
+  return resolveCatalogDefaultOptIn();
 }
 
 export function filterVisibleRegistryModels({
@@ -134,7 +128,7 @@ function resolveVisibleLaunchModelIds({
       || isModelVisibleByPreference(
         agent.kind,
         model.id,
-        resolveCatalogDefaultOptIn(agent, model),
+        resolveCatalogDefaultOptIn(model),
         overrides,
       )
     ) {

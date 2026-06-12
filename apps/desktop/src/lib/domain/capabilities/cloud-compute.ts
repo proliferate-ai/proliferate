@@ -6,4 +6,4 @@
  *
  * Flip to false to restore cloud compute.
  */
-export const CLOUD_COMPUTE_TEMPORARILY_DISABLED = true;
+export const CLOUD_COMPUTE_TEMPORARILY_DISABLED = false;

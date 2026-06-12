@@ -10,8 +10,8 @@ use super::summaries::serialize_binding_summaries;
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras,
 };
-use crate::domains::sessions::response_formatting;
 use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::response_formatting;
 use crate::domains::workspaces::model::WorkspaceRecord;
 
 pub const SESSION_RESTART_REQUIRED_DETAIL: &str =

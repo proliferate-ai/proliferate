@@ -2,7 +2,9 @@ use std::path::Path;
 
 pub mod execution;
 
-use crate::domains::agents::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
+use crate::domains::agents::installer::{
+    self, InstallError, InstallOptions, InstalledArtifactResult,
+};
 use crate::domains::agents::model::{AgentDescriptor, AgentKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

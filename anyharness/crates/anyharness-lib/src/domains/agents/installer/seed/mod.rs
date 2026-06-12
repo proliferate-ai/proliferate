@@ -367,16 +367,17 @@ fn apply_seed_payload(
                 )));
             }
             wrote += 1;
-            install_manifest_entries.entry(artifact.kind.clone()).or_default().push(
-                installer::manifest::ManifestArtifact {
+            install_manifest_entries
+                .entry(artifact.kind.clone())
+                .or_default()
+                .push(installer::manifest::ManifestArtifact {
                     role: artifact.role.clone(),
                     version: Some(manifest.seed_version.clone()),
                     sha256: Some(artifact.sha256.clone()),
                     source: "seed".into(),
                     installed_at: hydrated_at.clone(),
                     path: dest.display().to_string(),
-                },
-            );
+                });
         }
 
         let observed = checksum_path(&dest).ok();

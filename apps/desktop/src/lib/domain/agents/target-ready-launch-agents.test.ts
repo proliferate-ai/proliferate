@@ -28,10 +28,6 @@ function launchAgent(kind: string, modelId: string | null): DesktopAgentLaunchAg
     kind,
     displayName: kind,
     defaultModelId: modelId,
-    defaultModeId: null,
-    dynamicModels: false,
-    modelDisplayPolicy: null,
-    promptCapabilities: null,
     models: modelId
       ? [{
         id: modelId,
@@ -39,8 +35,6 @@ function launchAgent(kind: string, modelId: string | null): DesktopAgentLaunchAg
         aliases: [],
         status: "active",
         isDefault: true,
-        tags: [],
-        launchRemediation: null,
       }]
       : [],
     launchControls: [],

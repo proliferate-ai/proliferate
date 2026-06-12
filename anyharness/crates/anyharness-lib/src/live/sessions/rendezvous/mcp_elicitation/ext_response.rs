@@ -35,9 +35,7 @@ pub enum ClaudeMcpElicitationExtAction {
 pub fn standard_elicitation_response_from_outcome(
     outcome: McpElicitationOutcome,
 ) -> acp::schema::CreateElicitationResponse {
-    use acp::schema::{
-        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
-    };
+    use acp::schema::{ElicitationAcceptAction, ElicitationAction, ElicitationContentValue};
 
     match outcome {
         McpElicitationOutcome::Accepted { content, .. } => {

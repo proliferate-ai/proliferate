@@ -1,7 +1,7 @@
 pub mod bundled;
-pub mod service;
 pub mod projection;
 pub mod schema;
+pub mod service;
 pub mod validation;
 
 use super::model::AgentDescriptor;

@@ -5,7 +5,7 @@ use super::validation::validate_agent_registry_document;
 
 const BUNDLED_AGENT_REGISTRY: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../../catalogs/agents/v1/registry.json"
+    "/../../../catalogs/agents/registry.json"
 ));
 
 static BUNDLED_AGENT_REGISTRY_DOCUMENT: OnceLock<AgentRegistryDocument> = OnceLock::new();

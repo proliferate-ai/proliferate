@@ -1,11 +1,10 @@
 //! Catalog sync: validated, atomic replacement of the ACTIVE agent catalog.
 //!
 //! The runtime always holds *some* valid catalog: it boots from the bundled
-//! document and every replacement is parsed (dual-read v1/v2), fully
-//! validated, and only then swapped in — consumers never observe a partial
-//! update. A successful swap fires the injected `on_catalog_applied`
-//! capability (wired in `app/` to the reconcile engine) so installs converge
-//! on the new pins.
+//! document and every replacement is parsed, fully validated, and only then
+//! swapped in — consumers never observe a partial update. A successful swap
+//! fires the injected `on_catalog_applied` capability (wired in `app/` to
+//! the reconcile engine) so installs converge on the new pins.
 //!
 //! CONVERGE-TO-SERVER semantics: a fetched document is applied whenever its
 //! `catalogVersion` DIFFERS from the active one — older is fine. The server
@@ -32,7 +31,8 @@
 use std::sync::{Arc, RwLock};
 
 use super::bundled::bundled_agent_catalog_document;
-use super::loader::{parse_agent_catalog_json, AgentCatalog};
+use super::loader::parse_agent_catalog_json;
+use super::schema::AgentCatalogDocument;
 
 /// Where the active catalog came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,11 +43,12 @@ pub enum CatalogSource {
     Fetched,
 }
 
-/// Snapshot of the active catalog. The document rides an `Arc` so snapshots
-/// are cheap and readers keep a consistent document across a swap.
+/// Snapshot of the applied catalog: the document plus its sync provenance.
+/// The document rides an `Arc` so snapshots are cheap and readers keep a
+/// consistent document across a swap.
 #[derive(Debug, Clone)]
-pub struct ActiveCatalog {
-    pub document: Arc<AgentCatalog>,
+pub struct AppliedCatalog {
+    pub document: Arc<AgentCatalogDocument>,
     pub version: String,
     pub etag: Option<String>,
     pub source: CatalogSource,
@@ -71,10 +72,10 @@ pub enum SyncError {
 }
 
 /// Holds the ACTIVE catalog document and owns its replacement. Constructed
-/// at wiring (`app/mod.rs`) from the bundled document; all consumers will
-/// read through this service (PR-7b).
+/// at wiring (`app/mod.rs`) from the bundled document; all consumers read
+/// through [`super::service::AgentCatalogService`].
 pub struct CatalogSyncService {
-    active: RwLock<ActiveCatalog>,
+    active: RwLock<AppliedCatalog>,
     /// Capability, not a service dependency: fired after a successful swap;
     /// `app/` wires it to the reconcile engine.
     on_catalog_applied: std::sync::RwLock<Option<Arc<dyn Fn() + Send + Sync>>>,
@@ -82,21 +83,11 @@ pub struct CatalogSyncService {
 
 impl CatalogSyncService {
     pub fn from_bundled() -> Self {
-        Self::from_bundled_inner()
-    }
-
-    /// Late-bind the reconcile poke (breaks the wiring cycle: the runtime
-    /// holds the catalog service, and the poke holds the runtime).
-    pub fn set_catalog_applied_poke(&self, on_catalog_applied: Arc<dyn Fn() + Send + Sync>) {
-        *self.on_catalog_applied.write().expect("poke lock") = Some(on_catalog_applied);
-    }
-
-    fn from_bundled_inner() -> Self {
         let document = bundled_agent_catalog_document().clone();
         let version = document.catalog_version.clone();
         Self {
-            active: RwLock::new(ActiveCatalog {
-                document: Arc::new(AgentCatalog::V1(document)),
+            active: RwLock::new(AppliedCatalog {
+                document: Arc::new(document),
                 version,
                 etag: None,
                 source: CatalogSource::Bundled,
@@ -105,8 +96,14 @@ impl CatalogSyncService {
         }
     }
 
+    /// Late-bind the reconcile poke (breaks the wiring cycle: the runtime
+    /// holds the catalog service, and the poke holds the runtime).
+    pub fn set_catalog_applied_poke(&self, on_catalog_applied: Arc<dyn Fn() + Send + Sync>) {
+        *self.on_catalog_applied.write().expect("poke lock") = Some(on_catalog_applied);
+    }
+
     /// Cheap snapshot of the active catalog.
-    pub fn active(&self) -> ActiveCatalog {
+    pub fn active(&self) -> AppliedCatalog {
         self.active
             .read()
             .expect("agent catalog lock poisoned")
@@ -128,8 +125,8 @@ impl CatalogSyncService {
         version != self.catalog_version()
     }
 
-    /// Parse (dual-read) -> validate (full; any error leaves the active
-    /// catalog untouched) -> atomic swap when the version differs.
+    /// Parse -> validate (full; any error leaves the active catalog
+    /// untouched) -> atomic swap when the version differs.
     #[tracing::instrument(skip(self, bytes), fields(payload_bytes = bytes.len()))]
     pub fn apply_fetched(
         &self,
@@ -138,7 +135,7 @@ impl CatalogSyncService {
     ) -> Result<SyncOutcome, SyncError> {
         let json = std::str::from_utf8(bytes)?;
         let document = parse_agent_catalog_json(json).map_err(SyncError::InvalidCatalog)?;
-        let to_version = catalog_document_version(&document).to_owned();
+        let to_version = document.catalog_version.clone();
 
         let outcome = {
             let mut active = self.active.write().expect("agent catalog lock poisoned");
@@ -146,7 +143,7 @@ impl CatalogSyncService {
                 return Ok(SyncOutcome::AlreadyCurrent);
             }
             let from_version = active.version.clone();
-            *active = ActiveCatalog {
+            *active = AppliedCatalog {
                 document: Arc::new(document),
                 version: to_version.clone(),
                 etag,
@@ -172,19 +169,11 @@ impl CatalogSyncService {
     }
 }
 
-pub fn catalog_document_version(catalog: &AgentCatalog) -> &str {
-    match catalog {
-        AgentCatalog::V1(document) => &document.catalog_version,
-        AgentCatalog::V2(document) => &document.catalog_version,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
-    use crate::domains::agents::catalog::schema_v2::draft_catalog_v2_json;
 
     fn service_with_counter() -> (CatalogSyncService, Arc<AtomicUsize>) {
         let counter = Arc::new(AtomicUsize::new(0));
@@ -196,15 +185,15 @@ mod tests {
         (service, counter)
     }
 
-    fn bundled_v1_json() -> String {
+    fn bundled_json() -> String {
         serde_json::to_string(bundled_agent_catalog_document()).expect("serialize bundled")
     }
 
-    fn draft_with_version(version: &str) -> String {
+    fn bundled_with_version(version: &str) -> String {
         let mut raw: serde_json::Value =
-            serde_json::from_str(draft_catalog_v2_json()).expect("draft must parse");
+            serde_json::from_str(&bundled_json()).expect("bundled must parse");
         raw["catalogVersion"] = serde_json::Value::String(version.to_string());
-        serde_json::to_string(&raw).expect("serialize draft")
+        serde_json::to_string(&raw).expect("serialize bundled")
     }
 
     #[test]
@@ -218,7 +207,7 @@ mod tests {
             bundled_agent_catalog_document().catalog_version
         );
         assert_eq!(active.etag, None);
-        assert!(matches!(active.document.as_ref(), AgentCatalog::V1(_)));
+        assert_eq!(active.document.schema_version, 2);
         assert_eq!(service.catalog_version(), active.version);
         assert_eq!(counter.load(Ordering::SeqCst), 0);
     }
@@ -228,7 +217,7 @@ mod tests {
         let (service, counter) = service_with_counter();
 
         let outcome = service
-            .apply_fetched(bundled_v1_json().as_bytes(), Some("\"etag-1\"".into()))
+            .apply_fetched(bundled_json().as_bytes(), Some("\"etag-1\"".into()))
             .expect("same-version apply must succeed");
 
         assert_eq!(outcome, SyncOutcome::AlreadyCurrent);
@@ -239,29 +228,28 @@ mod tests {
     }
 
     #[test]
-    fn apply_newer_version_swaps_and_pokes_reconcile() {
+    fn apply_different_version_swaps_and_pokes_reconcile() {
         let (service, counter) = service_with_counter();
         let from_version = service.catalog_version();
 
         let outcome = service
             .apply_fetched(
-                draft_catalog_v2_json().as_bytes(),
+                bundled_with_version("2099-01-01.1").as_bytes(),
                 Some("\"etag-2\"".into()),
             )
-            .expect("newer apply must succeed");
+            .expect("apply must succeed");
 
         assert_eq!(
             outcome,
             SyncOutcome::Applied {
                 from_version,
-                to_version: draft_catalog_version().as_str().into(),
+                to_version: "2099-01-01.1".into(),
             }
         );
         let active = service.active();
         assert_eq!(active.source, CatalogSource::Fetched);
-        assert_eq!(active.version, draft_catalog_version().as_str());
+        assert_eq!(active.version, "2099-01-01.1");
         assert_eq!(active.etag, Some("\"etag-2\"".into()));
-        assert!(matches!(active.document.as_ref(), AgentCatalog::V2(_)));
         assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
 
@@ -269,17 +257,17 @@ mod tests {
     fn apply_older_version_swaps_too_the_rollback_story() {
         let (service, counter) = service_with_counter();
         service
-            .apply_fetched(draft_catalog_v2_json().as_bytes(), None)
+            .apply_fetched(bundled_with_version("2099-01-01.1").as_bytes(), None)
             .expect("newer apply must succeed");
 
         let outcome = service
-            .apply_fetched(draft_with_version("2020-01-01.1").as_bytes(), None)
+            .apply_fetched(bundled_with_version("2020-01-01.1").as_bytes(), None)
             .expect("older apply must succeed (rollback)");
 
         assert_eq!(
             outcome,
             SyncOutcome::Applied {
-                from_version: draft_catalog_version().as_str().into(),
+                from_version: "2099-01-01.1".into(),
                 to_version: "2020-01-01.1".into(),
             }
         );
@@ -298,7 +286,7 @@ mod tests {
         let not_json = service.apply_fetched(b"{ not json", None);
         assert!(matches!(not_json, Err(SyncError::InvalidCatalog(_))));
 
-        let fails_validation = service.apply_fetched(draft_with_version(" ").as_bytes(), None);
+        let fails_validation = service.apply_fetched(bundled_with_version(" ").as_bytes(), None);
         assert!(matches!(
             fails_validation,
             Err(SyncError::InvalidCatalog(_))
@@ -316,18 +304,6 @@ mod tests {
         let active_version = service.catalog_version();
 
         assert!(!service.ingest_advertised_version(&active_version));
-        assert!(service.ingest_advertised_version(draft_catalog_version().as_str()));
         assert!(service.ingest_advertised_version("2020-01-01.1"));
-    }
-
-    fn draft_catalog_version() -> String {
-        let text = std::fs::read_to_string(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../../../scripts/agent-catalog/catalog.draft.json"),
-        )
-        .expect("read draft catalog");
-        serde_json::from_str::<serde_json::Value>(&text).expect("parse draft")["catalogVersion"]
-            .as_str()
-            .expect("catalogVersion")
-            .to_string()
     }
 }

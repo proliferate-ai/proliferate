@@ -20,9 +20,7 @@
 use anyharness_credential_discovery::CredentialFact;
 use serde::Serialize;
 
-use crate::domains::agents::catalog::schema_v2::{
-    AgentCatalogAuthSignal, AgentCatalogV2AuthContext,
-};
+use crate::domains::agents::catalog::schema::{AgentCatalogAuthContext, AgentCatalogAuthSignal};
 use crate::domains::agents::model::{AgentDescriptor, AuthSpec, CredentialState};
 
 /// Reserved catalog context id meaning "no credentials at all".
@@ -36,11 +34,19 @@ pub struct ActiveAuthContexts {
 }
 
 impl ActiveAuthContexts {
-    #[cfg(test)]
-    pub fn test_from_ids<I: Into<String>>(ids: impl IntoIterator<Item = I>) -> Self {
+    /// Rehydrate classified contexts from recorded provenance (the session
+    /// record's `agent_auth_contexts` ids). Classification itself only ever
+    /// happens in [`classify`]; this constructor exists for replaying an
+    /// earlier classification, never for synthesizing one.
+    pub fn from_ids<I: Into<String>>(ids: impl IntoIterator<Item = I>) -> Self {
         Self {
             ids: ids.into_iter().map(Into::into).collect(),
         }
+    }
+
+    #[cfg(test)]
+    pub fn test_from_ids<I: Into<String>>(ids: impl IntoIterator<Item = I>) -> Self {
+        Self::from_ids(ids)
     }
 
     pub fn ids(&self) -> &[String] {
@@ -88,7 +94,7 @@ pub struct AuthContextSyncSummary {
 /// validation and are likewise skipped here.
 pub fn classify(
     descriptor: &AgentDescriptor,
-    contexts: &[AgentCatalogV2AuthContext],
+    contexts: &[AgentCatalogAuthContext],
     facts: &[CredentialFact],
 ) -> ActiveAuthContexts {
     let mut winners: Vec<String> = Vec::new();

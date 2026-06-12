@@ -26,6 +26,13 @@ pub(super) fn build_session_launch_env(
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match resolved_agent.descriptor.kind {
         AgentKind::Claude => build_claude_session_launch_env(resolved_agent, requested_model_id),
+        // Gemini exposes no ACP config options: GEMINI_MODEL at spawn is its
+        // only model mechanism (model switches relaunch the process).
+        AgentKind::Gemini => Ok(requested_model_id
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+            .map(|model_id| BTreeMap::from([("GEMINI_MODEL".to_string(), model_id.to_string())]))
+            .unwrap_or_default()),
         AgentKind::Codex => {
             if protected_agent_auth_env.contains_key("CODEX_HOME") {
                 return Ok(BTreeMap::new());

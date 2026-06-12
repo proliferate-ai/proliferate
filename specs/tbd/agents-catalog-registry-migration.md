@@ -336,9 +336,12 @@ LIVE SWITCHING (hard rule):
    build-time overlay in the document, not consumer code.
 2. **Heartbeat-carried versions** (`catalogVersion`, `registryVersion`) drive
    fleet convergence; fetch only on mismatch.
-3. **Dual-read v1/v2** by `schemaVersion`; two files during transition
-   (`catalogs/agents/v2/` beside `v1/`); versioned server endpoints; v1 path
-   deleted only after all consumers are on v2.
+3. **v2-only hard cutover** (SUPERSEDED dual-read, 2026-06-10: few users,
+   no gradual migration needed). One document at `catalogs/agents/catalog.json`
+   (registry beside it at `catalogs/agents/registry.json`); the v1 schema,
+   the v1 file tree, the loader's dual-read arm, and the `model_registry`
+   domain (incl. its runtime endpoints) are deleted in PR-9. The server
+   serves schemaVersion 2 only.
 4. **Pin what we own, attest what we don't** (agent process strict; native CLI
    attested with drift warnings).
 5. **In-place swap**; running sessions unaffected; install lock serializes.
@@ -350,7 +353,7 @@ LIVE SWITCHING (hard rule):
 9. **Optimistic menus = catalog × known contexts + gated unlocks**; no
    unknown-state UI.
 10. **Same-harness model switch never recreates a session.**
-11. **model_registry demoted in PR-7**, untouched before then.
+11. **model_registry deleted in PR-9** (was: demoted in PR-7).
 12. **AWS chain: three passive sources only** (env pair, shared-credentials
     profile, SSO cache); the exotic tail (IMDS, process creds) is proven by
     launch/trial, not detection — "menus lie, inference proves."
@@ -402,6 +405,14 @@ PR-7b  feat(catalog): v2 consumption
 PR-8   ci(catalog): probe job + auto-PR; probe matrix extension
          (bedrock/vertex contexts, deliberate precedence experiments).
          GATE: dry-run PR with viewer diff.
+PR-9   refactor(catalog)!: v2-only hard cutover
+         delete v1 schema/validation/projection + loader dual-read; delete
+         model_registry domain + its runtime endpoints; promote the draft to
+         catalogs/agents/catalog.json (registry beside it); launch-options
+         derived from catalog × readiness × classified contexts; server
+         serves schemaVersion 2 only; desktop parses v2 + wires gated menus
+         and saved-model-intent. GATE: workspace tests green; server tests
+         green; desktop typecheck/tests green; live boot e2e.
 
 Dependency shape: 2→3 chain; 4→5→7b chain; 6 needs 3; 7a needs 4;
 the chains join at 7b. After PR-1, the two chains proceed IN PARALLEL.

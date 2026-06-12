@@ -6,7 +6,6 @@ import {
 import type {
   InstallAgentRequest,
   ReconcileAgentsRequest,
-  RefreshAgentModelRegistryRequest,
 } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
@@ -15,7 +14,6 @@ import {
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentLaunchOptionsKey,
   anyHarnessAgentLaunchOptionsPrefixKey,
-  anyHarnessAgentModelRegistryKey,
   anyHarnessAgentsKey,
   anyHarnessReconcileAgentsMutationKey,
 } from "../lib/query-keys.js";
@@ -54,57 +52,6 @@ export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
         workspaceId,
         requestOptionsWithSignal(undefined, signal),
       );
-    },
-  });
-}
-
-export function useAgentModelRegistryQuery(options: RuntimeQueryOptions & {
-  kind: string;
-  workspaceId?: string | null;
-}) {
-  const runtime = useAnyHarnessRuntimeContext();
-  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
-  const workspaceId = options.workspaceId ?? null;
-
-  return useQuery({
-    queryKey: anyHarnessAgentModelRegistryKey(runtimeUrl, options.kind, workspaceId),
-    enabled: (options.enabled ?? true) && runtimeUrl.length > 0 && options.kind.trim().length > 0,
-    queryFn: async ({ signal }) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.agents.getModelRegistry(
-        options.kind,
-        workspaceId,
-        requestOptionsWithSignal(undefined, signal),
-      );
-    },
-  });
-}
-
-export function useRefreshAgentModelRegistryMutation() {
-  const runtime = useAnyHarnessRuntimeContext();
-  const queryClient = useQueryClient();
-  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
-
-  return useMutation({
-    mutationFn: async (input: {
-      kind: string;
-      request?: RefreshAgentModelRegistryRequest;
-    }) => {
-      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.agents.refreshModelRegistry(input.kind, input.request ?? {});
-    },
-    onSuccess: async (response, input) => {
-      const workspaceId = response.snapshot.workspaceId ?? input.request?.workspaceId ?? null;
-      queryClient.setQueryData(
-        anyHarnessAgentModelRegistryKey(runtimeUrl, input.kind, workspaceId),
-        response.snapshot,
-      );
-      await queryClient.invalidateQueries({
-        queryKey: input.request?.workspaceId
-          ? anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId)
-          : anyHarnessAgentLaunchOptionsPrefixKey(runtimeUrl),
-      });
-      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
     },
   });
 }

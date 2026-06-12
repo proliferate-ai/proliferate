@@ -196,8 +196,11 @@ mod tests {
             r#"{"claudeAiOauth":{"accessToken":"token"}}"#,
         )
         .expect("write oauth creds");
-        fs::write(home.join(".claude.json"), r#"{"primaryApiKey":"sk-ant-123"}"#)
-            .expect("write claude config");
+        fs::write(
+            home.join(".claude.json"),
+            r#"{"primaryApiKey":"sk-ant-123"}"#,
+        )
+        .expect("write claude config");
 
         let facts = collect_facts(&home, &BTreeSet::new(), &BTreeMap::new());
 

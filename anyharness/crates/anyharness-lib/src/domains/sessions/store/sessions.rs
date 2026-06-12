@@ -209,6 +209,21 @@ impl SessionStore {
         })
     }
 
+    pub fn update_model_selection(
+        &self,
+        id: &str,
+        model_id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE sessions SET requested_model_id = ?1, current_model_id = ?1, updated_at = ?2 WHERE id = ?3",
+                params![model_id, now, id],
+            )?;
+            Ok(())
+        })
+    }
+
     pub fn update_last_prompt_at(&self, id: &str, now: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(

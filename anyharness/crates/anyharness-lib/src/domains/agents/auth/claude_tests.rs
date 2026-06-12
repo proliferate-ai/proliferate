@@ -5,7 +5,7 @@ use anyharness_contract::v1::AgentAuthSelectionConfig;
 use crate::domains::sessions::mcp_bindings::crypto::SessionDataCipher;
 use crate::persistence::Db;
 
-use super::{AgentAuthConfigInput, AgentAuthService, AgentAuthConfigStore};
+use super::{AgentAuthConfigInput, AgentAuthConfigStore, AgentAuthService};
 
 fn cipher() -> SessionDataCipher {
     SessionDataCipher::from_env_value("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")

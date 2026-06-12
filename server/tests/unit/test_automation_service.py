@@ -101,7 +101,7 @@ async def _create_agent_run_config(
         name="Automation test config",
         agent_kind=agent_kind,
         model_id=model_id,
-        control_values_json=control_values or {"mode": "auto", "effort": "medium"},
+        control_values_json=control_values or {"mode": "auto", "reasoning_effort": "medium"},
         usable_in_personal_sandboxes=True,
         usable_in_shared_sandboxes=False,
         seed_key=None,

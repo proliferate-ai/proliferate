@@ -499,11 +499,18 @@ export type CloudAgentCatalogResponse = components["schemas"]["AgentCatalogRespo
 export type CloudAgentCatalogAgent = components["schemas"]["AgentCatalogAgent"];
 export type CloudAgentCatalogSession = components["schemas"]["AgentCatalogSession"];
 export type CloudAgentCatalogModel = components["schemas"]["AgentCatalogModel"];
-export type CloudAgentCatalogControl = components["schemas"]["AgentCatalogControl"];
-export type CloudAgentCatalogControlValue =
-  components["schemas"]["AgentCatalogControlValue"];
-export type CloudAgentCatalogLaunchRemediation =
-  components["schemas"]["AgentCatalogLaunchRemediation"];
+export type CloudAgentCatalogModelControl =
+  components["schemas"]["AgentCatalogModelControl"];
+export type CloudAgentCatalogSessionControl =
+  components["schemas"]["AgentCatalogSessionControl"];
+export type CloudAgentCatalogControlMapping =
+  components["schemas"]["AgentCatalogControlMapping"];
+export type CloudAgentCatalogAuthContext =
+  components["schemas"]["AgentCatalogAuthContext"];
+export type CloudAgentCatalogAvailability =
+  components["schemas"]["AgentCatalogAvailability"];
+export type CloudAgentCatalogHarnessPins =
+  components["schemas"]["AgentCatalogHarnessPins"];
 export type CloudTargetConfig = components["schemas"]["CloudTargetConfigResponse"];
 export type TargetConfigSummary = components["schemas"]["TargetConfigSummaryModel"];
 export type MaterializeTargetConfigRequest =

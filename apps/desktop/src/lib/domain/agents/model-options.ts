@@ -28,7 +28,6 @@ export interface AgentModelRegistryModel {
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
-  defaultOptIn?: boolean | null;
 }
 
 export interface AgentModelRegistry {

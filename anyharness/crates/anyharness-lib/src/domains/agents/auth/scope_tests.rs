@@ -6,7 +6,7 @@ use crate::domains::sessions::mcp_bindings::crypto::SessionDataCipher;
 use crate::persistence::Db;
 
 use super::{
-    AgentAuthConfigInput, AgentAuthService, AgentAuthConfigStore, AgentAuthLaunchOverlayError,
+    AgentAuthConfigInput, AgentAuthConfigStore, AgentAuthLaunchOverlayError, AgentAuthService,
 };
 
 fn cipher() -> SessionDataCipher {

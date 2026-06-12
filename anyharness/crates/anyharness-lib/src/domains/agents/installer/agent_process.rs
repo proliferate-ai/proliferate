@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 
 use super::npm::install_managed_npm_package;
 use super::{InstallError, InstallOptions, InstalledArtifactResult};
+use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
 use crate::domains::agents::readiness::paths::{
     artifact_root, has_managed_registry_binary_for_names,
 };
 use crate::domains::agents::registry::built_in_registry;
-use crate::domains::agents::installer::seed;
 use crate::integrations::agent_cli::acp_registry::{self, ResolvedRegistryDistribution};
 use crate::integrations::agent_cli::executable::{find_real_binary_in_path, is_valid_executable};
 use crate::integrations::agent_cli::launcher::generate_launcher_script;

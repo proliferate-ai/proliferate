@@ -23,14 +23,6 @@ export function anyHarnessAgentLaunchOptionsPrefixKey(
   return [...anyHarnessAgentsKey(runtimeUrl), "launch-options"] as const;
 }
 
-export function anyHarnessAgentModelRegistryKey(
-  runtimeUrl: string | null | undefined,
-  kind: string | null | undefined,
-  workspaceId?: string | null,
-) {
-  return [...anyHarnessAgentsKey(runtimeUrl), kind ?? "", "model-registry", workspaceId ?? null] as const;
-}
-
 export function anyHarnessAgentReconcileStatusKey(
   runtimeUrl: string | null | undefined,
 ) {

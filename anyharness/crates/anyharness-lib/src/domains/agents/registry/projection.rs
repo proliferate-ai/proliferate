@@ -293,6 +293,9 @@ mod tests {
             .iter()
             .map(|slot| slot.id.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(slot_ids, vec!["openai", "anthropic", "gemini"]);
+        assert_eq!(
+            slot_ids,
+            vec!["openai", "anthropic", "gemini", "opencode-zen"]
+        );
     }
 }

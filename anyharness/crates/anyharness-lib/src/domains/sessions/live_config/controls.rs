@@ -138,9 +138,13 @@ pub(crate) fn option_matches_key(
                 || option.id == "collaboration_mode"
         }
         NormalizedControlKind::Mode => {
+            // "model" CONTAINS "mode": anything that classifies as a model
+            // option must never double-classify as a mode option, or model
+            // values get judged against the mode vocabulary.
             (option.category.as_deref() == Some("mode")
                 || label.contains("mode")
                 || label.contains("approval"))
+                && !(option.category.as_deref() == Some("model") || label.contains("model"))
                 && option.category.as_deref() != Some("collaboration_mode")
                 && option.category.as_deref() != Some("fast_mode")
                 && option.id != "collaboration_mode"

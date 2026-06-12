@@ -12,7 +12,8 @@ import {
   unavailableLaunchComposerControls,
 } from "./composer-launch-control-builders";
 import {
-  isLaunchComposerControl,
+  defaultLaunchModel,
+  launchComposerControls,
   launchableCatalogAgents,
   selectLaunchAgent,
   selectLaunchModel,
@@ -63,8 +64,7 @@ export function buildCloudLaunchComposerControls(input: {
     onSelect: input.onAgentModelSelect,
   });
   const configControls = selectedAgent
-    ? selectedAgent.session.controls
-      .filter((control) => isLaunchComposerControl(control) && control.apply?.createField !== "modelId")
+    ? launchComposerControls(selectedAgent)
       .map((control) => buildLaunchConfigControl({
         agent: selectedAgent,
         control,
@@ -105,11 +105,11 @@ export function resolveCloudLaunchSelection(input: {
     };
   }
   const modelId = selectLaunchModel(agent, input.selection.modelId)?.id
-    ?? agent.session.defaultModelId
+    ?? defaultLaunchModel(agent)?.id
     ?? agent.session.models[0]?.id
     ?? null;
-  const modeControl = agent.session.controls.find((control) =>
-    control.apply?.createField === "modeId"
+  const modeControl = launchComposerControls(agent).find((control) =>
+    control.createField === "modeId"
   );
   const defaultModeId = modeControl
     ? selectedLaunchControlValue(agent, modeControl, input.selection)
@@ -138,12 +138,12 @@ export function buildLaunchSessionConfigUpdates(input: {
   if (!agent) {
     return [];
   }
-  return agent.session.controls.flatMap((control) => {
-    if (!isLaunchComposerControl(control) || control.apply?.createField || !control.apply?.liveConfigId) {
+  return launchComposerControls(agent).flatMap((control) => {
+    if (control.createField || !control.liveConfigId) {
       return [];
     }
     const value = selectedLaunchControlValue(agent, control, input.selection);
-    return value ? [{ configId: control.apply.liveConfigId, value }] : [];
+    return value ? [{ configId: control.liveConfigId, value }] : [];
   });
 }
 
@@ -163,10 +163,7 @@ export function buildLaunchRunConfigControlValues(input: {
     return {};
   }
   const controlValues: Record<string, string> = {};
-  for (const control of agent.session.controls) {
-    if (!isLaunchComposerControl(control) || control.apply?.createField === "modelId") {
-      continue;
-    }
+  for (const control of launchComposerControls(agent)) {
     const value = selectedLaunchControlValue(agent, control, input.selection);
     if (value) {
       controlValues[control.key] = value;

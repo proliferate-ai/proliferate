@@ -13,10 +13,6 @@ function launchAgent(
     kind,
     displayName: kind === "claude" ? "Claude" : "Codex",
     defaultModelId: models[0]?.id ?? null,
-    defaultModeId: null,
-    dynamicModels: false,
-    modelDisplayPolicy: null,
-    promptCapabilities: null,
     models,
     launchControls: [],
     ...overrides,
@@ -35,8 +31,6 @@ function model(
     aliases: [],
     status: "active" as const,
     isDefault,
-    tags: [],
-    launchRemediation: null,
     ...overrides,
   };
 }
@@ -48,8 +42,8 @@ describe("buildModelSelectorGroups dynamic models", () => {
         launchAgent(
           "cursor",
           [
-            model("cursor/auto", "Auto", true, { defaultOptIn: true }),
-            model("cursor/gpt-5.4", "GPT 5.4", false, { defaultOptIn: true }),
+            model("cursor/auto", "Auto", true),
+            model("cursor/gpt-5.4", "GPT 5.4", false),
           ],
           {
             displayName: "Cursor",
@@ -85,11 +79,9 @@ describe("buildModelSelectorGroups dynamic models", () => {
           [
             model("cursor/auto", "Auto", true, {
               aliases: ["auto"],
-              defaultOptIn: true,
             }),
             model("cursor/gpt-5.4", "GPT 5.4", false, {
               aliases: ["gpt-5.4"],
-              defaultOptIn: true,
             }),
           ],
           {
@@ -126,11 +118,9 @@ describe("buildModelSelectorGroups dynamic models", () => {
           [
             model("cursor/auto", "Auto", true, {
               aliases: ["auto"],
-              defaultOptIn: true,
             }),
             model("cursor/gpt-5.4", "GPT 5.4", false, {
               aliases: ["gpt-5.4"],
-              defaultOptIn: true,
             }),
           ],
           {
@@ -180,17 +170,10 @@ describe("buildModelSelectorGroups dynamic models", () => {
           [
             model("cursor/auto", "Auto", true, {
               aliases: ["auto"],
-              defaultOptIn: true,
             }),
           ],
           {
             displayName: "Cursor",
-            dynamicModels: true,
-            modelDisplayPolicy: {
-              defaultVisibleModelIds: ["cursor/auto"],
-              allowUserVisibleModelSelection: true,
-              moreModelsSource: "lastKnownLiveSnapshot",
-            },
           },
         ),
       ],
@@ -219,17 +202,10 @@ describe("buildModelSelectorGroups dynamic models", () => {
           [
             model("cursor/auto", "Auto", true, {
               aliases: ["auto"],
-              defaultOptIn: true,
             }),
           ],
           {
             displayName: "Cursor",
-            dynamicModels: true,
-            modelDisplayPolicy: {
-              defaultVisibleModelIds: ["cursor/auto"],
-              allowUserVisibleModelSelection: true,
-              moreModelsSource: "lastKnownLiveSnapshot",
-            },
           },
         ),
       ],
@@ -257,20 +233,13 @@ describe("buildModelSelectorGroups dynamic models", () => {
         launchAgent(
           "cursor",
           [
-            model("auto", "Auto", true, { defaultOptIn: true }),
+            model("auto", "Auto", true),
             model("composer-2.5", "Composer 2.5", false, {
               aliases: ["composer-2"],
-              defaultOptIn: true,
             }),
           ],
           {
             displayName: "Cursor",
-            dynamicModels: true,
-            modelDisplayPolicy: {
-              defaultVisibleModelIds: ["auto", "composer-2.5"],
-              allowUserVisibleModelSelection: true,
-              moreModelsSource: "lastKnownLiveSnapshot",
-            },
           },
         ),
       ],
@@ -311,24 +280,14 @@ describe("buildModelSelectorGroups dynamic models", () => {
           [
             model("auto", "Auto", true, {
               aliases: ["default[]"],
-              defaultOptIn: true,
             }),
-            model("composer-2.5", "Composer 2.5", false, {
-              defaultOptIn: true,
-            }),
+            model("composer-2.5", "Composer 2.5", false),
             model("composer-2.5-fast", "Composer 2.5 Fast", false, {
               aliases: ["composer-2[fast=true]"],
-              defaultOptIn: true,
             }),
           ],
           {
             displayName: "Cursor",
-            dynamicModels: true,
-            modelDisplayPolicy: {
-              defaultVisibleModelIds: ["auto", "composer-2.5", "composer-2.5-fast"],
-              allowUserVisibleModelSelection: true,
-              moreModelsSource: "lastKnownLiveSnapshot",
-            },
           },
         ),
       ],
@@ -362,7 +321,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         kind: "cursor",
         modelId: "composer-2.5",
         displayName: "Composer 2.5",
-        actionKind: "open_new_chat",
+        actionKind: "update_current_chat",
         isSelected: false,
       },
     ]);
@@ -374,15 +333,9 @@ describe("buildModelSelectorGroups dynamic models", () => {
         launchAgent(
           "gemini",
           [
-            model("auto-gemini-3", "Auto (Gemini 3)", true, {
-              defaultOptIn: true,
-            }),
-            model("gemini-3-flash", "Gemini 3 Flash", false, {
-              defaultOptIn: true,
-            }),
-            model("gemini-3-pro", "Gemini 3 Pro", false, {
-              defaultOptIn: true,
-            }),
+            model("auto-gemini-3", "Auto (Gemini 3)", true),
+            model("gemini-3-flash", "Gemini 3 Flash", false),
+            model("gemini-3-pro", "Gemini 3 Pro", false),
           ],
           {
             displayName: "Gemini",
@@ -399,7 +352,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         kind: "gemini",
         modelId: "auto-gemini-3",
         displayName: "Auto (Gemini 3)",
-        actionKind: "open_new_chat",
+        actionKind: "update_current_chat",
         isSelected: false,
       },
       {
@@ -413,7 +366,7 @@ describe("buildModelSelectorGroups dynamic models", () => {
         kind: "gemini",
         modelId: "gemini-3-pro",
         displayName: "Gemini 3 Pro",
-        actionKind: "open_new_chat",
+        actionKind: "update_current_chat",
         isSelected: false,
       },
     ]);

@@ -185,9 +185,7 @@ fn detects_versions_from_pinned_package_specs() {
     );
     assert_eq!(npm_package_version("example-acp"), None);
     assert_eq!(
-        npm_package_version(
-            "git+https://github.com/proliferate-ai/claude-agent-acp.git#48cc672"
-        ),
+        npm_package_version("git+https://github.com/proliferate-ai/claude-agent-acp.git#48cc672"),
         Some("48cc672".into())
     );
 }

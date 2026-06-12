@@ -2,9 +2,9 @@
 //! no IO. The only file that sees both vocabularies for the agents family.
 
 use anyharness_contract::v1::{
-    AgentCredentialState, AgentInstallState, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
-    AgentReadinessState,
-    AgentSummary, ArtifactStatus, InstallAgentRequest, ReconcileAgentResult,
+    AgentCredentialState, AgentInstallState, AgentLaunchModelOption, AgentLaunchOption,
+    AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
+    AgentReadinessState, AgentSummary, ArtifactStatus, InstallAgentRequest, ReconcileAgentResult,
     ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
 
@@ -228,5 +228,34 @@ pub(super) fn to_installed_artifact_status(artifact: &InstalledArtifactResult) -
         version: artifact.version.clone(),
         path: Some(artifact.path.display().to_string()),
         message: None,
+    }
+}
+
+pub(super) fn launch_options_response(
+    workspace_id: Option<String>,
+    options: crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions,
+) -> AgentLaunchOptionsResponse {
+    AgentLaunchOptionsResponse {
+        workspace_id,
+        agents: options
+            .agents
+            .into_iter()
+            .map(|agent| AgentLaunchOption {
+                kind: agent.kind,
+                display_name: agent.display_name,
+                default_model_id: agent.default_model_id,
+                models: agent
+                    .models
+                    .into_iter()
+                    .map(|model| AgentLaunchModelOption {
+                        id: model.id,
+                        display_name: model.display_name,
+                        aliases: model.aliases,
+                        is_default: model.is_default,
+                        default_opt_in: model.default_opt_in,
+                    })
+                    .collect(),
+            })
+            .collect(),
     }
 }

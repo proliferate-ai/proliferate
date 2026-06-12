@@ -2,15 +2,12 @@ import type {
   AgentSummary,
   AgentAuthConfigStatusResponse,
   AgentLaunchOptionsResponse,
-  AgentModelRegistrySnapshotResponse,
   ApplyAgentAuthConfigRequest,
   ApplyAgentAuthConfigResponse,
   InstallAgentRequest,
   InstallAgentResponse,
   ReconcileAgentsRequest,
   ReconcileAgentsResponse,
-  RefreshAgentModelRegistryRequest,
-  RefreshAgentModelRegistryResponse,
   AgentLoginTerminalRecord,
   StartAgentLoginResponse,
   StartAgentLoginTerminalResponse,
@@ -56,27 +53,6 @@ export class AgentsClient {
     return this.transport.get<AgentLaunchOptionsResponse>(
       `/v1/agents/launch-options${workspaceQuery(workspaceId)}`,
       options,
-    );
-  }
-
-  async getModelRegistry(
-    kind: string,
-    workspaceId?: string | null,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<AgentModelRegistrySnapshotResponse> {
-    return this.transport.get<AgentModelRegistrySnapshotResponse>(
-      `/v1/agents/${encodeURIComponent(kind)}/model-registry${workspaceQuery(workspaceId)}`,
-      options,
-    );
-  }
-
-  async refreshModelRegistry(
-    kind: string,
-    request: RefreshAgentModelRegistryRequest = {},
-  ): Promise<RefreshAgentModelRegistryResponse> {
-    return this.transport.post<RefreshAgentModelRegistryResponse>(
-      `/v1/agents/${encodeURIComponent(kind)}/model-registry/refresh`,
-      request,
     );
   }
 

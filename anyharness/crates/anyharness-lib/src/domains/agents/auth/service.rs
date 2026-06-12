@@ -206,7 +206,9 @@ impl AgentAuthService {
             agent_kind,
             scope,
             required_revision,
-            decrypted.as_ref().map(|(revision, config)| (*revision, config)),
+            decrypted
+                .as_ref()
+                .map(|(revision, config)| (*revision, config)),
             chrono::Utc::now(),
         )?;
         self.materialize(plan)

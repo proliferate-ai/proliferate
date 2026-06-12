@@ -36,7 +36,11 @@ pub(super) fn plan(
     let scoped_launch = scope.is_some() || required_revision.is_some();
     let Some((revision, config)) = decrypted else {
         if scoped_launch {
-            return Err(selection_required_error(scope.cloned(), agent_kind, "missing"));
+            return Err(selection_required_error(
+                scope.cloned(),
+                agent_kind,
+                "missing",
+            ));
         }
         return Ok(EnvOverlayPlan::default());
     };
@@ -56,7 +60,11 @@ pub(super) fn plan(
     }
     if selections.is_empty() {
         if scoped_launch {
-            return Err(selection_required_error(scope.cloned(), agent_kind, "missing"));
+            return Err(selection_required_error(
+                scope.cloned(),
+                agent_kind,
+                "missing",
+            ));
         }
         return Ok(EnvOverlayPlan::default());
     }

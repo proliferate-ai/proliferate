@@ -26,7 +26,6 @@ export {
   anyHarnessAgentsKey,
   anyHarnessAgentLaunchOptionsKey,
   anyHarnessAgentLaunchOptionsPrefixKey,
-  anyHarnessAgentModelRegistryKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessRuntimeWorkspacesKey,
@@ -81,9 +80,7 @@ export {
 export {
   useAgentsQuery,
   useAgentLaunchOptionsQuery,
-  useAgentModelRegistryQuery,
   useAgentReconcileStatusQuery,
-  useRefreshAgentModelRegistryMutation,
   useInstallAgentMutation,
   useStartAgentLoginMutation,
   useStartAgentLoginTerminalMutation,

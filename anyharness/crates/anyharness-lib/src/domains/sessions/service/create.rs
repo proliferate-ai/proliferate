@@ -1,24 +1,18 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::time::Instant;
 
 use anyharness_contract::v1::AgentAuthExternalScope;
-use anyharness_credential_discovery::CredentialFact;
 use uuid::Uuid;
 
 use super::{CreateSessionError, SessionService};
 use crate::domains::agents::auth::context::classify;
+use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
 use crate::domains::agents::auth::AgentAuthLaunchOverlayError;
-use crate::domains::agents::catalog::projection::models::bundled_create_mode_ids;
-use crate::domains::agents::catalog::service::{ActiveV2Catalog, SelectionUnsupported};
+use crate::domains::agents::catalog::service::{ActiveCatalog, SelectionUnsupported};
 use crate::domains::agents::model::{AgentDescriptor, ResolvedAgentStatus};
-use crate::domains::agents::model_registry::resolution::{
-    resolve_launch_model_id, ModelResolutionError,
-};
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
-use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
-use crate::domains::agents::registry::schema::AgentRegistryEnvVarKind;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::workspaces::env::read_materialized_session_env;
 use crate::domains::workspaces::model::WorkspaceSurface;
@@ -142,58 +136,20 @@ impl SessionService {
         );
 
         let model_resolution_started = Instant::now();
-        // Dual-era gate: the v2 path activates only when the ACTIVE catalog
-        // is a v2 document that knows this agent kind; otherwise the v1
-        // resolution below runs unchanged.
-        let v2_catalog = self
-            .catalog_service
-            .active_v2()
-            .filter(|catalog| catalog.agent(agent_kind).is_some());
-        let (resolved_model_id, resolved_mode_id, agent_auth_contexts) = match &v2_catalog {
-            Some(catalog) => resolve_selection_v2(
-                catalog,
-                &descriptor,
-                agent_kind,
-                model_id,
-                mode_id,
-                &readiness_env,
-            )?,
-            None => {
-                let resolved_model_id = resolve_launch_model_id(
-                    &self.dynamic_model_registry_store,
-                    agent_kind,
-                    Some(workspace_id),
-                    model_id,
-                )
-                .map_err(CreateSessionError::Internal)?
-                .map_err(|error| match error {
-                    ModelResolutionError::Unsupported(model_id) => {
-                        CreateSessionError::ModelUnsupported {
-                            agent_kind: agent_kind.to_string(),
-                            model_id,
-                        }
-                    }
-                    ModelResolutionError::Invalid(detail) => CreateSessionError::Invalid(detail),
-                })?;
-                let resolved_mode_id =
-                    resolve_mode_id(agent_kind, mode_id).map_err(|error| match error {
-                        ModeResolutionError::Unsupported(mode_id) => {
-                            CreateSessionError::ModeUnsupported {
-                                agent_kind: agent_kind.to_string(),
-                                mode_id,
-                            }
-                        }
-                        ModeResolutionError::Invalid(detail) => CreateSessionError::Invalid(detail),
-                    })?;
-                (resolved_model_id, resolved_mode_id, None)
-            }
-        };
+        let catalog = self.catalog_service.active_catalog();
+        let (resolved_model_id, resolved_mode_id, agent_auth_contexts) = resolve_selection(
+            &catalog,
+            &descriptor,
+            agent_kind,
+            model_id,
+            mode_id,
+            &readiness_env,
+        )?;
         tracing::info!(
             workspace_id = %workspace_id,
             agent_kind = %agent_kind,
             resolved_model_id = ?resolved_model_id,
             resolved_mode_id = ?resolved_mode_id,
-            catalog_era = if v2_catalog.is_some() { "v2" } else { "v1" },
             agent_auth_contexts = ?agent_auth_contexts,
             elapsed_ms = model_resolution_started.elapsed().as_millis(),
             "[workspace-latency] session.create.model_resolved"
@@ -243,13 +199,13 @@ impl SessionService {
     }
 }
 
-/// The v2-era launch resolution (migration §5.5 T2): classify auth contexts
-/// over the COMPOSED readiness env, then validate the selection through the
-/// catalog read surface. Returns `(launch_model_id, mode_id, provenance)` —
-/// provenance is the classified context ids as a JSON array, recorded on
-/// the session ("why this menu").
-fn resolve_selection_v2(
-    catalog: &ActiveV2Catalog,
+/// Launch resolution: classify auth contexts over the COMPOSED readiness
+/// env, then validate the selection through the catalog read surface.
+/// Returns `(launch_model_id, mode_id, provenance)` — provenance is the
+/// classified context ids as a JSON array, recorded on the session ("why
+/// this menu").
+fn resolve_selection(
+    catalog: &ActiveCatalog,
     descriptor: &AgentDescriptor,
     agent_kind: &str,
     model_id: Option<&str>,
@@ -262,43 +218,13 @@ fn resolve_selection_v2(
     let selection = catalog
         .validate_launch(agent_kind, &active, model_id, mode_id)
         .map_err(|unsupported| map_selection_unsupported(agent_kind, unsupported))?;
-    let provenance =
-        serde_json::to_string(active.ids()).map_err(|error| CreateSessionError::Internal(error.into()))?;
+    let provenance = serde_json::to_string(active.ids())
+        .map_err(|error| CreateSessionError::Internal(error.into()))?;
     Ok((
         selection.launch_model_id,
         selection.mode_id,
         Some(provenance),
     ))
-}
-
-/// Credential facts for classification, sourced from the composed launch
-/// env — never the ambient process env (decisions ledger 8): env presence is
-/// the readiness env key set; values are read only for registry-declared
-/// flag vars.
-fn collect_launch_env_facts(
-    agent_kind: &str,
-    readiness_env: &BTreeMap<String, String>,
-) -> Vec<CredentialFact> {
-    let env_keys: BTreeSet<String> = readiness_env.keys().cloned().collect();
-    let mut flag_values: BTreeMap<String, String> = BTreeMap::new();
-    if let Some(agent) = bundled_agent_registry_document()
-        .agents
-        .iter()
-        .find(|agent| agent.kind == agent_kind)
-    {
-        for slot in &agent.auth.slots {
-            for env_var in &slot.env_vars {
-                if env_var.kind() != AgentRegistryEnvVarKind::Flag {
-                    continue;
-                }
-                if let Some(value) = readiness_env.get(env_var.name()) {
-                    flag_values.insert(env_var.name().to_string(), value.clone());
-                }
-            }
-        }
-    }
-    let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-    anyharness_credential_discovery::collect_facts(&home_dir, &env_keys, &flag_values)
 }
 
 fn map_selection_unsupported(
@@ -341,50 +267,5 @@ fn map_agent_auth_launch_error_to_create(error: AgentAuthLaunchOverlayError) -> 
             CreateSessionError::AgentAuthSelectionRequired(required)
         }
         AgentAuthLaunchOverlayError::Internal(error) => CreateSessionError::Internal(error),
-    }
-}
-
-#[derive(Debug)]
-enum ModeResolutionError {
-    Unsupported(String),
-    Invalid(String),
-}
-
-fn resolve_mode_id(
-    agent_kind: &str,
-    provided_mode_id: Option<&str>,
-) -> Result<Option<String>, ModeResolutionError> {
-    let Some(mode_id) = provided_mode_id
-        .map(str::trim)
-        .filter(|mode_id| !mode_id.is_empty())
-    else {
-        return Ok(None);
-    };
-    let valid_ids = bundled_create_mode_ids(agent_kind).ok_or_else(|| {
-        ModeResolutionError::Invalid(format!("mode catalog not found for agent '{agent_kind}'"))
-    })?;
-    if valid_ids.iter().any(|valid_id| valid_id == mode_id) {
-        Ok(Some(mode_id.to_string()))
-    } else {
-        Err(ModeResolutionError::Unsupported(mode_id.to_string()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validates_create_session_mode_ids_against_bundled_catalog() {
-        let resolved =
-            resolve_mode_id("codex", Some("full-access")).expect("valid codex mode should resolve");
-        assert_eq!(resolved.as_deref(), Some("full-access"));
-
-        let error =
-            resolve_mode_id("codex", Some("not-a-mode")).expect_err("invalid mode should fail");
-        assert!(matches!(
-            error,
-            ModeResolutionError::Unsupported(mode_id) if mode_id == "not-a-mode"
-        ));
     }
 }

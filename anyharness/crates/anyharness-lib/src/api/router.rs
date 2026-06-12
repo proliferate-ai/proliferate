@@ -11,12 +11,11 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth_config, agents, agents_model_registry, auth as http_auth, catalogs, cowork, files,
-    git, health, hosting, mobility, plans, processes, product_mcp, replay, repo_roots, reviews,
-    runtime_config, sessions, sessions_config, sessions_events, sessions_fork,
-    sessions_interactions, sessions_lifecycle, sessions_pending, sessions_prompt, sessions_resume,
-    subagents, terminals, workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup,
-    workspaces_worktrees, worktrees,
+    agent_auth_config, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
+    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, runtime_config, sessions,
+    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
+    sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
+    workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
@@ -31,7 +30,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/agents", get(agents::list_agents))
         .route(
             "/agents/launch-options",
-            get(agents_model_registry::get_agent_launch_options),
+            get(agents::get_agent_launch_options),
         )
         .route(
             "/agents/reconcile",
@@ -46,14 +45,6 @@ pub fn build_router(state: AppState) -> Router {
             get(ws_agent_login_terminals::agent_login_terminal_ws),
         )
         .route("/agents/{kind}", get(agents::get_agent))
-        .route(
-            "/agents/{kind}/model-registry",
-            get(agents_model_registry::get_agent_model_registry),
-        )
-        .route(
-            "/agents/{kind}/model-registry/refresh",
-            post(agents_model_registry::refresh_agent_model_registry),
-        )
         .route("/agents/{kind}/install", post(agents::install_agent))
         .route(
             "/agents/{kind}/login/start",

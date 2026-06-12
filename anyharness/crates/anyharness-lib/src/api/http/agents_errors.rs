@@ -101,3 +101,10 @@ fn install_error_to_api(error: InstallError) -> ApiError {
     };
     ApiError::new(status, title, Some(detail), Some(code))
 }
+
+pub(super) fn map_launch_options_error(error: anyhow::Error) -> ApiError {
+    if error.to_string().starts_with("workspace not found") {
+        return ApiError::not_found(error.to_string(), "WORKSPACE_NOT_FOUND");
+    }
+    ApiError::internal(format!("Launch options failed: {error:#}"))
+}

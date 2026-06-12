@@ -1,4 +1,4 @@
-import bundledAgentCatalogJson from "../../../../../../catalogs/agents/v1/catalog.json?raw";
+import bundledAgentCatalogJson from "../../../../../../catalogs/agents/catalog.json?raw";
 import {
   projectCloudAgentCatalogToDesktopLaunchCatalog,
   type DesktopAgentLaunchCatalog,

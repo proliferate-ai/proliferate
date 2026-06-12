@@ -8,24 +8,11 @@ import {
 function launchAgent(
   kind: string,
   models: DesktopAgentLaunchAgent["models"],
-  options?: {
-    dynamicModels?: boolean;
-  },
 ): DesktopAgentLaunchAgent {
   return {
     kind,
     displayName: kind === "claude" ? "Claude" : "Codex",
     defaultModelId: models[0]?.id ?? null,
-    defaultModeId: null,
-    dynamicModels: options?.dynamicModels ?? false,
-    modelDisplayPolicy: options?.dynamicModels
-      ? {
-        defaultVisibleModelIds: models.map((candidate) => candidate.id),
-        allowUserVisibleModelSelection: true,
-        moreModelsSource: "lastKnownLiveSnapshot",
-      }
-      : null,
-    promptCapabilities: null,
     models,
     launchControls: [],
   };
@@ -43,8 +30,6 @@ function model(
     aliases,
     status: "active" as const,
     isDefault,
-    tags: [],
-    launchRemediation: null,
   };
 }
 
@@ -91,7 +76,6 @@ describe("launch selection availability", () => {
           model("composer-2.5", "Composer 2.5", false),
           model("composer-2.5-fast", "Composer 2.5 Fast", true),
         ],
-        { dynamicModels: true },
       ),
     ];
 
@@ -109,12 +93,11 @@ describe("launch selection availability", () => {
     });
   });
 
-  it("keeps truly dynamic model ids only when they do not map to the catalog", () => {
+  it("rejects model ids that do not map to the catalog menu", () => {
     const agents = [
       launchAgent(
         "cursor",
         [model("composer-2.5-fast", "Composer 2.5 Fast", true)],
-        { dynamicModels: true },
       ),
     ];
 
@@ -122,10 +105,7 @@ describe("launch selection availability", () => {
       agents,
       { kind: "cursor", modelId: "custom-local-model" },
       null,
-    )).toEqual({
-      kind: "cursor",
-      modelId: "custom-local-model",
-    });
+    )).toBeNull();
   });
 
   it("keeps Claude Opus 4.8 base and 1M aliases on separate launch rows", () => {

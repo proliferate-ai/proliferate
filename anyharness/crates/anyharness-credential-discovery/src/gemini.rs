@@ -49,9 +49,7 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
 /// `gemini-settings-api-key` is deliberately NOT emitted: the existing
 /// parser never reads API keys from settings.json, so the kind is not
 /// distinguishable today.
-pub(crate) fn discovery_fact_kinds(
-    home_dir: &Path,
-) -> Result<Vec<&'static str>, DiscoveryError> {
+pub(crate) fn discovery_fact_kinds(home_dir: &Path) -> Result<Vec<&'static str>, DiscoveryError> {
     let mut kinds = Vec::new();
 
     if let Some(data) = read_json_file(&local_gemini_oauth_path(home_dir))? {

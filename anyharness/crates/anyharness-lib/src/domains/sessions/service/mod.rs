@@ -3,9 +3,8 @@ use std::sync::Arc;
 use super::attachment_storage::PromptAttachmentStorage;
 use super::deletion::SessionDeleteWorkflow;
 use super::store::SessionStore;
+use crate::domains::agents::auth::{AgentAuthSelectionRequired, AgentAuthService};
 use crate::domains::agents::catalog::service::AgentCatalogService;
-use crate::domains::agents::auth::{AgentAuthService, AgentAuthSelectionRequired};
-use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::workspaces::store::WorkspaceStore;
 
 pub(crate) mod attachments;
@@ -21,7 +20,6 @@ pub struct SessionService {
     delete_workflow: SessionDeleteWorkflow,
     attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
-    dynamic_model_registry_store: DynamicModelRegistryStore,
     agent_auth_service: Arc<AgentAuthService>,
     catalog_service: AgentCatalogService,
     runtime_home: std::path::PathBuf,
@@ -66,7 +64,6 @@ impl SessionService {
         session_store: SessionStore,
         delete_workflow: SessionDeleteWorkflow,
         workspace_store: WorkspaceStore,
-        dynamic_model_registry_store: DynamicModelRegistryStore,
         agent_auth_service: Arc<AgentAuthService>,
         catalog_service: AgentCatalogService,
         runtime_home: std::path::PathBuf,
@@ -76,7 +73,6 @@ impl SessionService {
             delete_workflow,
             attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
-            dynamic_model_registry_store,
             agent_auth_service,
             catalog_service,
             runtime_home,

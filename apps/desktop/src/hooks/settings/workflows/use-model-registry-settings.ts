@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import {
-  useAgentLaunchOptionsQuery,
-  useRefreshAgentModelRegistryMutation,
-} from "@anyharness/sdk-react";
+import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
@@ -31,7 +28,6 @@ export function useModelRegistrySettings() {
   const runtimeLaunchOptions = useAgentLaunchOptionsQuery({
     enabled: connectionState !== "failed",
   });
-  const refreshModelRegistry = useRefreshAgentModelRegistryMutation();
   const {
     agents,
     agentsNeedingSetup,
@@ -85,7 +81,6 @@ export function useModelRegistrySettings() {
     modelRegistries,
     modelRegistriesLoading,
     runtimeLaunchOptions,
-    refreshModelRegistry,
     preferences,
     agentDefaultRows,
     orderedAgentDefaultRows,

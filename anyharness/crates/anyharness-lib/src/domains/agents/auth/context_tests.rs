@@ -10,9 +10,7 @@ use anyharness_credential_discovery::{collect_facts, CredentialFact};
 
 use super::context::{classify, project_credential_state, BASELINE_CONTEXT_ID};
 use super::credentials::detect_auth_slots_with_env;
-use crate::domains::agents::catalog::schema_v2::{
-    AgentCatalogAuthSignal, AgentCatalogV2AuthContext,
-};
+use crate::domains::agents::catalog::schema::{AgentCatalogAuthContext, AgentCatalogAuthSignal};
 use crate::domains::agents::model::{
     AgentDescriptor, AgentKind, AuthMaterializationSpec, AuthReadinessPolicy, AuthSlotSpec,
     AuthSpec, CommandSpec, CredentialDiscoveryKind, CredentialState, LoginSpec,
@@ -56,8 +54,8 @@ fn context(
     id: &str,
     slot_id: &str,
     signals: Option<AgentCatalogAuthSignal>,
-) -> AgentCatalogV2AuthContext {
-    AgentCatalogV2AuthContext {
+) -> AgentCatalogAuthContext {
+    AgentCatalogAuthContext {
         id: id.to_string(),
         auth_slot_id: Some(slot_id.to_string()),
         description: None,
@@ -92,7 +90,7 @@ fn discovery_fact(kind: &str) -> CredentialFact {
     }
 }
 
-fn claude_style_contexts() -> Vec<AgentCatalogV2AuthContext> {
+fn claude_style_contexts() -> Vec<AgentCatalogAuthContext> {
     vec![
         context("anthropic-api", "default", Some(env(TEST_API_KEY_VAR))),
         context(
@@ -290,7 +288,10 @@ fn signal_less_context_never_matches() {
     let active = classify(
         &descriptor,
         &contexts,
-        &[env_fact(TEST_API_KEY_VAR), discovery_fact("claude-oauth-creds")],
+        &[
+            env_fact(TEST_API_KEY_VAR),
+            discovery_fact("claude-oauth-creds"),
+        ],
     );
 
     assert_eq!(active.ids(), [BASELINE_CONTEXT_ID]);
@@ -419,4 +420,144 @@ fn projection_nothing_without_login_is_missing_env_like_legacy() {
     assert_eq!(slots[0].credential_state, projected);
 
     let _ = std::fs::remove_dir_all(home);
+}
+
+// --- Shipped-documents detection net -----------------------------------
+//
+// The scenarios above use synthetic contexts; these run the classifier
+// against the REAL bundled catalog + the REAL registry descriptors. They are
+// the tripwire for the failure mode where the shipped documents drift from
+// the classifier's expectations (missing signals, unknown slot ids) and
+// every agent silently classifies to baseline — menus would lie wholesale.
+
+fn bundled_contexts(kind: &str) -> Vec<AgentCatalogAuthContext> {
+    crate::domains::agents::catalog::bundled::bundled_agent_catalog_document()
+        .agents
+        .iter()
+        .find(|agent| agent.kind == kind)
+        .unwrap_or_else(|| panic!("bundled catalog must carry agent '{kind}'"))
+        .auth_contexts
+        .clone()
+}
+
+fn bundled_descriptor(kind: &str) -> AgentDescriptor {
+    crate::domains::agents::registry::descriptor(kind)
+        .unwrap_or_else(|| panic!("registry must carry agent '{kind}'"))
+}
+
+fn classify_bundled(kind: &str, facts: &[CredentialFact]) -> Vec<String> {
+    classify(&bundled_descriptor(kind), &bundled_contexts(kind), facts)
+        .ids()
+        .to_vec()
+}
+
+#[test]
+fn bundled_docs_every_signaled_context_is_classifiable() {
+    // Every context with signals must reference a slot its descriptor
+    // declares — otherwise the classifier skips it and the context can
+    // never activate no matter what facts exist.
+    let catalog = crate::domains::agents::catalog::bundled::bundled_agent_catalog_document();
+    for agent in &catalog.agents {
+        let descriptor = bundled_descriptor(&agent.kind);
+        for context in &agent.auth_contexts {
+            if context.id == BASELINE_CONTEXT_ID || context.signals.is_none() {
+                continue;
+            }
+            let slot_id = context
+                .auth_slot_id
+                .as_deref()
+                .unwrap_or_else(|| panic!("{}/{} has no slot", agent.kind, context.id));
+            assert!(
+                descriptor.auth.slot(slot_id).is_some(),
+                "{}/{} references slot '{slot_id}' unknown to the descriptor — \
+                 the classifier would silently skip it",
+                agent.kind,
+                context.id
+            );
+        }
+    }
+}
+
+#[test]
+fn bundled_docs_classify_api_key_contexts() {
+    assert_eq!(
+        classify_bundled("claude", &[env_fact("ANTHROPIC_API_KEY")]),
+        vec!["anthropic-api"]
+    );
+    assert_eq!(
+        classify_bundled("codex", &[env_fact("OPENAI_API_KEY")]),
+        vec!["openai-api"]
+    );
+    assert_eq!(
+        classify_bundled("gemini", &[env_fact("GEMINI_API_KEY")]),
+        vec!["gemini-api"]
+    );
+}
+
+#[test]
+fn bundled_docs_classify_oauth_discovery_contexts() {
+    assert_eq!(
+        classify_bundled("claude", &[discovery_fact("claude-oauth-creds")]),
+        vec!["anthropic-oauth"]
+    );
+    assert_eq!(
+        classify_bundled("codex", &[discovery_fact("codex-auth-json-oauth")]),
+        vec!["openai-oauth"]
+    );
+    assert_eq!(
+        classify_bundled("gemini", &[discovery_fact("gemini-oauth-creds")]),
+        vec!["google-oauth"]
+    );
+    assert_eq!(
+        classify_bundled("cursor", &[discovery_fact("cursor-keychain")]),
+        vec!["cursor-login"]
+    );
+}
+
+#[test]
+fn bundled_docs_bedrock_flag_beats_api_key_for_claude() {
+    // The flag deliberately forces the bedrock route in the harness, so when
+    // set (with aws creds present) it must win the slot even if an API key
+    // is also in the composed env.
+    let facts = [
+        flag_fact("CLAUDE_CODE_USE_BEDROCK", "1"),
+        discovery_fact("aws-credential-chain"),
+        env_fact("ANTHROPIC_API_KEY"),
+    ];
+    assert_eq!(classify_bundled("claude", &facts), vec!["bedrock"]);
+
+    // Flag without aws credentials is not a bedrock context.
+    let flag_only = [flag_fact("CLAUDE_CODE_USE_BEDROCK", "1")];
+    assert_eq!(classify_bundled("claude", &flag_only), vec!["baseline"]);
+}
+
+#[test]
+fn bundled_docs_codex_oauth_beats_api_key() {
+    // ChatGPT login is the codex harness default when auth.json exists,
+    // even with an API key in the env — document order encodes that.
+    let facts = [
+        env_fact("OPENAI_API_KEY"),
+        discovery_fact("codex-auth-json-oauth"),
+    ];
+    assert_eq!(classify_bundled("codex", &facts), vec!["openai-oauth"]);
+}
+
+#[test]
+fn bundled_docs_opencode_unions_across_slots() {
+    let facts = [
+        env_fact("OPENAI_API_KEY"),
+        discovery_fact("opencode-auth-json/anthropic"),
+        discovery_fact("opencode-auth-json/opencode"),
+    ];
+    assert_eq!(
+        classify_bundled("opencode", &facts),
+        vec!["anthropic-api", "openai-api", "opencode-zen"]
+    );
+}
+
+#[test]
+fn bundled_docs_no_facts_is_baseline() {
+    for kind in ["claude", "codex", "gemini", "cursor", "opencode"] {
+        assert_eq!(classify_bundled(kind, &[]), vec![BASELINE_CONTEXT_ID]);
+    }
 }

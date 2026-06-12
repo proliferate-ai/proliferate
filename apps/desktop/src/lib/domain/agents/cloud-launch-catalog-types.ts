@@ -1,14 +1,6 @@
+import type { ModelAvailability } from "./model-availability";
+
 export type DesktopAgentCatalogStatus = "candidate" | "active" | "deprecated" | "hidden";
-
-export type DesktopAgentLaunchRemediationKind =
-  | "managed_reinstall"
-  | "external_update"
-  | "restart";
-
-export interface DesktopAgentLaunchRemediation {
-  kind: DesktopAgentLaunchRemediationKind;
-  message: string;
-}
 
 export interface DesktopAgentLaunchControlSurfaces {
   start: boolean;
@@ -77,28 +69,14 @@ export interface DesktopLaunchModelRegistryModel {
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
-  defaultOptIn?: boolean | null;
-  launchRemediation?: DesktopAgentLaunchRemediation | null;
+  /** v2 availability gate (`anyOf` auth context ids); null when unknown. */
+  availability?: ModelAvailability | null;
   sessionDefaultControls?: DesktopSessionDefaultControl[];
 }
 
 export interface DesktopAgentLaunchModel extends DesktopLaunchModelRegistryModel {
   aliases: string[];
   status: DesktopAgentCatalogStatus;
-  provider?: string | null;
-  tags: string[];
-}
-
-export interface DesktopAgentModelDisplayPolicy {
-  defaultVisibleModelIds: string[];
-  allowUserVisibleModelSelection: boolean;
-  moreModelsSource?: "none" | "lastKnownLiveSnapshot" | "liveSnapshotOnly" | null;
-}
-
-export interface DesktopAgentPromptCapabilities {
-  image: boolean;
-  audio: boolean;
-  embeddedContext: boolean;
 }
 
 export interface DesktopAgentLaunchAgent {
@@ -106,16 +84,12 @@ export interface DesktopAgentLaunchAgent {
   displayName: string;
   description?: string | null;
   defaultModelId: string | null;
-  defaultModeId?: string | null;
-  dynamicModels: boolean;
-  modelDisplayPolicy?: DesktopAgentModelDisplayPolicy | null;
-  promptCapabilities?: DesktopAgentPromptCapabilities | null;
   models: DesktopAgentLaunchModel[];
   launchControls: DesktopAgentLaunchControl[];
 }
 
 export interface DesktopAgentLaunchCatalog {
-  schemaVersion: 1;
+  schemaVersion: 2;
   catalogVersion: string;
   generatedAt: string;
   workspaceId: string | null;
@@ -142,11 +116,17 @@ export interface RuntimeAgentLaunchOptions {
   }>;
 }
 
+/**
+ * The raw schemaVersion-2 agent catalog document
+ * (`catalogs/agents/catalog.json`, also served by the cloud catalog
+ * endpoint). Mirrors the runtime read surface in
+ * `anyharness-lib/src/domains/agents/catalog/schema.rs`.
+ */
 export interface CloudAgentCatalogResponseInput {
-  schemaVersion: 1;
+  schemaVersion: 2;
   catalogVersion: string;
   generatedAt: string;
-  compatibility?: Record<string, unknown> | null;
+  probedAgainst?: Record<string, unknown> | null;
   agents: CloudAgentCatalogAgentInput[];
 }
 
@@ -154,18 +134,45 @@ export interface CloudAgentCatalogAgentInput {
   kind: string;
   displayName: string;
   description?: string | null;
+  harness?: Record<string, unknown> | null;
+  authContexts?: CloudAgentCatalogAuthContextInput[];
   session: CloudAgentCatalogSessionInput;
+  provenance?: Record<string, unknown> | null;
+}
+
+export interface CloudAgentCatalogAuthContextInput {
+  id: string;
+  authSlotId?: string | null;
+  description?: string | null;
+  signals?: unknown;
 }
 
 export interface CloudAgentCatalogSessionInput {
-  defaultModelId: string;
-  defaultModeId?: string | null;
-  dynamicModels: boolean;
-  modelDisplayPolicy?: DesktopAgentModelDisplayPolicy | null;
-  promptCapabilities?: DesktopAgentPromptCapabilities | null;
-  compatibility?: Record<string, unknown> | null;
+  controls?: CloudAgentCatalogControlInput[];
   models: CloudAgentCatalogModelInput[];
-  controls: CloudAgentCatalogControlInput[];
+  /** Curation default per auth context id (contextId -> modelId). */
+  defaults?: Record<string, string> | null;
+  observedDefaults?: Record<string, string> | null;
+}
+
+export interface CloudAgentCatalogControlMappingInput {
+  createField?: "modelId" | "modeId" | null;
+  switchVia?: string | null;
+  liveConfigId?: string | null;
+  variantSyntax?: string | null;
+}
+
+export interface CloudAgentCatalogControlInput {
+  key: string;
+  label?: string | null;
+  values?: string[];
+  mapping?: CloudAgentCatalogControlMappingInput | null;
+}
+
+export interface CloudAgentCatalogModelControlInput {
+  values?: string[];
+  default?: string | null;
+  observedValue?: string | null;
 }
 
 export interface CloudAgentCatalogModelInput {
@@ -173,38 +180,12 @@ export interface CloudAgentCatalogModelInput {
   displayName: string;
   description?: string | null;
   aliases?: string[];
-  status: DesktopAgentCatalogStatus;
-  isDefault: boolean;
-  defaultOptIn?: boolean | null;
-  provider?: string | null;
-  tags?: string[];
-  capabilities?: Record<string, unknown> | null;
-  compatibility?: Record<string, unknown> | null;
-  launchRemediation?: DesktopAgentLaunchRemediation | null;
-}
-
-export interface CloudAgentCatalogControlInput {
-  key: string;
-  label: string;
-  description?: string | null;
-  type: "select";
-  category?: string | null;
-  defaultValue: string | null;
-  surfaces: DesktopAgentLaunchControlSurfaces;
-  apply: DesktopAgentLaunchControlApply;
-  missingLiveConfigPolicy: DesktopAgentLaunchControl["missingLiveConfigPolicy"];
-  valueSource: DesktopAgentLaunchControl["valueSource"];
-  values: CloudAgentCatalogControlValueInput[];
-  queueWhileMaterializing: boolean;
-  mutableAfterMaterialized: boolean;
-}
-
-export interface CloudAgentCatalogControlValueInput {
-  value: string;
-  label: string;
-  description?: string | null;
-  isDefault: boolean;
-  status?: DesktopAgentCatalogStatus | null;
+  family?: string | null;
+  availability?: { anyOf?: string[] } | null;
+  defaultVisible?: boolean;
+  controls?: Record<string, CloudAgentCatalogModelControlInput> | null;
+  status?: DesktopAgentCatalogStatus;
+  provenance?: Record<string, unknown> | null;
 }
 
 export interface ProjectCloudAgentCatalogOptions {

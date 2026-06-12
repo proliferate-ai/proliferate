@@ -12,8 +12,6 @@ use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
-use crate::domains::agents::model_registry::service::DynamicModelRegistryService;
-use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
@@ -102,7 +100,6 @@ pub struct AppState {
     pub catalog_sync_service: Arc<CatalogSyncService>,
     pub agent_auth_service: Arc<AgentAuthService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
-    pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
     pub runtime_config_service: Arc<RuntimeConfigService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -186,11 +183,6 @@ impl AppState {
             session_data_cipher.clone(),
             runtime_home.clone(),
         ));
-        let dynamic_model_registry_service = Arc::new(DynamicModelRegistryService::new(
-            DynamicModelRegistryStore::new(db.clone()),
-            WorkspaceStore::new(db.clone()),
-            runtime_home.clone(),
-        ));
         let runtime_config_service = Arc::new(RuntimeConfigService::new(RuntimeConfigStore::new(
             db.clone(),
         )));
@@ -223,7 +215,6 @@ impl AppState {
             SessionStore::new(db.clone()),
             session_delete_workflow.clone(),
             WorkspaceStore::new(db.clone()),
-            DynamicModelRegistryStore::new(db.clone()),
             agent_auth_service.clone(),
             AgentCatalogService::new(catalog_sync_service.clone()),
             runtime_home.clone(),
@@ -446,7 +437,6 @@ impl AppState {
             catalog_sync_service,
             agent_auth_service,
             agent_reconcile_service,
-            dynamic_model_registry_service,
             runtime_config_service,
             repo_root_service,
             workspace_runtime,
