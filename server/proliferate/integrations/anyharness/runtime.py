@@ -105,7 +105,9 @@ async def list_runtime_agents(
         raise CloudRuntimeReconnectError("Failed to list cloud runtime agents.") from exc
     if not response.is_success:
         raise CloudRuntimeReconnectError(
-            rejected_response_message("list cloud runtime agents", response.status_code, response.text)
+            rejected_response_message(
+                "list cloud runtime agents", response.status_code, response.text
+            )
         )
     try:
         payload = response.json()
