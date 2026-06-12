@@ -46,6 +46,7 @@ export function ComposerModelConfigMenu({
   submenuPosition,
   submenuRef,
   onAddProviderOpenChange,
+  onMenuMouseEnter,
   onMenuMouseLeave,
   onOpenSubmenu,
   onSearchChange,
@@ -67,6 +68,7 @@ export function ComposerModelConfigMenu({
   submenuPosition: ComposerSubmenuPosition | null;
   submenuRef: RefObject<HTMLDivElement | null>;
   onAddProviderOpenChange: Dispatch<SetStateAction<boolean>>;
+  onMenuMouseEnter: () => void;
   onMenuMouseLeave: () => void;
   onOpenSubmenu: (submenu: ComposerConfigSubmenu, anchorElement: HTMLElement) => void;
   onSearchChange: (search: string) => void;
@@ -84,6 +86,7 @@ export function ComposerModelConfigMenu({
     <div
       ref={menuRootRef}
       className="relative w-72 max-w-[calc(100vw-1rem)]"
+      onMouseEnter={onMenuMouseEnter}
       onMouseLeave={onMenuMouseLeave}
     >
       <ComposerPopoverSurface className="w-72 max-w-[calc(100vw-1rem)] p-1">
