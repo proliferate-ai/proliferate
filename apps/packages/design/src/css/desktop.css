@@ -134,7 +134,9 @@
 
   /* -- Surface roles (ladder: under < background < card < control-opaque) -- */
   --color-surface: var(--color-background);
-  --color-surface-under: hsl(25 16% 6%);
+  /* Settings/overlay base layer: saturation runs higher here because warmth
+     is barely perceptible at this lightness. */
+  --color-surface-under: hsl(25 22% 7%);
   --color-surface-control: hsl(25 14% 15% / 0.96);
   --color-surface-control-opaque: hsl(25 14% 16%);
   --color-surface-elevated: var(--color-card);
