@@ -84,87 +84,88 @@
   --color-scrollbar-thumb-active: rgba(255, 255, 255, 0.16);
 
   /* ====================================================================
-   * SHIP PRESET (default) — warm-tinted dark palette
+   * SHIP PRESET ("Dominic", default) — Claude-style warm palette:
+   * warm-gray surfaces, ivory ink, terracotta #cc7d5e accent. Dark values
+   * lifted from Codex's runtime Claude preset (reference/codex/copied.css).
    * ==================================================================== */
 
   /* -- Core --
-     Espresso warm. The saturation here (~25-30%) is the identity of the
-     preset: below ~20% at these lightness levels the theme is visually
-     indistinguishable from a neutral gray (mono) theme. */
-  --color-background: hsl(26 28% 9%);
-  --color-foreground: hsl(33 30% 92%);
+     Claude theme, lifted verbatim from Codex's runtime Claude preset
+     (reference/codex/copied.css ROOT block): warm-gray surfaces a full
+     step lighter than mono, ivory ink #f9f9f7, terracotta accent
+     #cc7d5e with #e0b09d for text/icons. */
+  --color-background: #2d2d2b;
+  --color-foreground: #f9f9f7;
   --color-overlay: hsl(0 0% 0%);
 
   /* -- Primary -- */
-  --color-primary: hsl(33 35% 95%);
-  --color-primary-foreground: hsl(26 24% 15%);
+  --color-primary: #f9f9f7;
+  --color-primary-foreground: #191918;
 
   /* -- Secondary -- */
-  --color-secondary: hsl(26 24% 14%);
-  --color-secondary-foreground: hsl(33 35% 95%);
+  --color-secondary: #373735;
+  --color-secondary-foreground: #f9f9f7;
 
   /* -- Accent / Muted --
-     Hover/selection states are translucent warm-white overlays (not opaque
+     Hover/selection states are translucent ivory overlays (not opaque
      panel grays) so elevation reads consistently on any surface. */
-  --color-accent: hsl(35 70% 88% / 0.08);
-  --color-accent-foreground: hsl(33 35% 95%);
-  --color-muted: hsl(26 24% 14%);
-  --color-muted-foreground: hsl(33 40% 94% / 0.64);
-  --color-faint: hsl(33 40% 94% / 0.46);
-  --color-helper: hsl(33 40% 94% / 0.64);
+  --color-accent: rgb(249 249 247 / 0.052);
+  --color-accent-foreground: #f9f9f7;
+  --color-muted: #373735;
+  --color-muted-foreground: rgb(249 249 247 / 0.71);
+  --color-faint: rgb(249 249 247 / 0.5);
+  --color-helper: rgb(249 249 247 / 0.71);
 
   /* -- Card -- */
-  --color-card: hsl(26 24% 15%);
-  --color-card-foreground: hsl(33 35% 95%);
+  --color-card: #373735;
+  --color-card-foreground: #f9f9f7;
 
-  /* -- Popover -- */
-  --color-popover: hsl(26 24% 15%);
-  --color-popover-foreground: hsl(33 30% 92%);
-  --color-popover-accent: hsl(35 70% 88% / 0.08);
-  --color-popover-ring: hsl(35 45% 80% / 0.11);
+  /* -- Popover (Codex elevated-primary) -- */
+  --color-popover: #474745;
+  --color-popover-foreground: #f9f9f7;
+  --color-popover-accent: rgb(249 249 247 / 0.052);
+  --color-popover-ring: rgb(249 249 247 / 0.084);
 
-  /* -- Border & Input (warm-tinted, not pure white) -- */
-  --color-border: hsl(35 45% 80% / 0.12);
-  --color-input: hsl(35 45% 80% / 0.18);
-  --color-input-border: hsl(35 45% 80% / 0.18);
-  --color-separator: hsl(35 45% 80% / 0.08);
-  --color-ring: hsl(28 25% 72%);
-  --color-border-light: hsl(35 45% 80% / 0.06);
-  --color-border-heavy: hsl(35 45% 80% / 0.16);
+  /* -- Border & Input (ivory-tinted) -- */
+  --color-border: rgb(249 249 247 / 0.084);
+  --color-input: rgb(249 249 247 / 0.15);
+  --color-input-border: rgb(249 249 247 / 0.15);
+  --color-separator: rgb(249 249 247 / 0.06);
+  --color-ring: rgb(224 176 157 / 0.76);
+  --color-border-light: rgb(249 249 247 / 0.042);
+  --color-border-heavy: rgb(249 249 247 / 0.156);
 
-  /* -- Surface roles (ladder: under < background < card < control-opaque) -- */
+  /* -- Surface roles (ladder: under < background < card < elevated) -- */
   --color-surface: var(--color-background);
-  /* Settings/overlay base layer: saturation runs higher because warmth is
-     barely perceptible at this lightness. */
-  --color-surface-under: hsl(26 32% 7%);
-  --color-surface-control: hsl(26 24% 16% / 0.96);
-  --color-surface-control-opaque: hsl(26 24% 17%);
+  --color-surface-under: #262624;
+  --color-surface-control: rgb(63 63 61 / 0.96);
+  --color-surface-control-opaque: #3f3f3d;
   --color-surface-elevated: var(--color-card);
-  --color-surface-elevated-secondary: hsl(35 70% 88% / 0.06);
-  --color-surface-editor: hsl(26 26% 12%);
+  --color-surface-elevated-secondary: rgb(249 249 247 / 0.032);
+  --color-surface-editor: #3b3b39;
   --color-list-hover: var(--color-accent);
   --color-foreground-secondary: var(--color-muted-foreground);
   --color-foreground-tertiary: var(--color-faint);
 
   /* -- Highlight / Unread / Special --
-     One terracotta accent, applied as translucent washes instead of opaque
-     brown panels. */
-  --color-highlight: hsl(19 40% 70% / 0.13);
-  --color-highlight-foreground: hsl(24 33% 93%);
-  --color-highlight-muted: hsl(22 39% 78%);
-  --color-border-highlight: hsl(19 35% 69%);
-  --color-unread: hsl(19 35% 69%);
-  --color-special: hsl(19 35% 69%);
+     One terracotta accent (#cc7d5e solid, #e0b09d for text/icons),
+     applied as translucent washes. */
+  --color-highlight: rgb(204 125 94 / 0.16);
+  --color-highlight-foreground: #f9f9f7;
+  --color-highlight-muted: rgb(224 176 157);
+  --color-border-highlight: #cc7d5e;
+  --color-unread: #cc7d5e;
+  --color-special: #cc7d5e;
 
   /* -- Destructive / Success / Warning / Info -- */
   --color-destructive: hsl(0 91% 71%);
   --color-destructive-foreground: hsl(0 86% 97%);
   --color-success: hsl(142 69% 58%);
   --color-success-foreground: hsl(138 76% 97%);
-  --color-warning: hsl(40 90% 60% / 0.13);
-  --color-warning-foreground: hsl(40 90% 68%);
-  --color-warning-foreground-secondary: hsl(40 90% 68% / 0.6);
-  --color-warning-border: hsl(40 90% 60% / 0.25);
+  --color-warning: rgb(255 133 73 / 0.13);
+  --color-warning-foreground: #ff8549;
+  --color-warning-foreground-secondary: rgb(255 133 73 / 0.6);
+  --color-warning-border: rgb(255 133 73 / 0.3);
   --color-info: hsl(217 91% 60%);
   --color-info-foreground: hsl(217 91% 95%);
   --color-positive: hsl(142 69% 58%);
@@ -172,25 +173,25 @@
   --color-positive-foreground: hsl(138 76% 97%);
 
   /* -- Link -- */
-  --color-link: hsl(19 40% 70% / 0.12);
-  --color-link-foreground: hsl(19 45% 72%);
-  --color-link-elevated: hsl(19 40% 70% / 0.2);
+  --color-link: rgb(204 125 94 / 0.14);
+  --color-link-foreground: rgb(224 176 157);
+  --color-link-elevated: rgb(204 125 94 / 0.24);
 
   /* -- Tip / Plan -- */
-  --color-tip: hsl(19 40% 70% / 0.12);
-  --color-tip-border: hsl(19 40% 70% / 0.25);
-  --color-tip-secondary: hsl(19 40% 70% / 0.4);
-  --color-tip-secondary-border: hsl(19 40% 70% / 0.5);
-  --color-tip-muted: hsl(22 39% 78%);
-  --color-tip-foreground: hsl(58 100% 100%);
-  --color-plan-border: hsl(19 40% 70% / 0.45);
+  --color-tip: rgb(204 125 94 / 0.14);
+  --color-tip-border: rgb(204 125 94 / 0.3);
+  --color-tip-secondary: rgb(204 125 94 / 0.4);
+  --color-tip-secondary-border: rgb(204 125 94 / 0.5);
+  --color-tip-muted: rgb(224 176 157);
+  --color-tip-foreground: #f9f9f7;
+  --color-plan-border: rgb(204 125 94 / 0.5);
 
   /* -- Switch -- */
-  --color-switch-background: hsl(33 30% 92%);
-  --color-switch-foreground: hsl(26 24% 15%);
+  --color-switch-background: #f9f9f7;
+  --color-switch-foreground: #191918;
 
   /* -- Composer -- */
-  --color-composer-background: hsl(26 24% 14%);
+  --color-composer-background: #373735;
   --color-composer-border: var(--color-border);
   --color-composer-control-foreground: var(--color-muted-foreground);
   --color-composer-control-active-foreground: var(--color-foreground);
@@ -202,21 +203,20 @@
   --color-composer-backdrop-filter: none;
 
   /* -- Prose -- */
-  --color-prose-border: hsl(35 45% 80% / 0.14);
+  --color-prose-border: rgb(249 249 247 / 0.12);
 
-  /* -- Sidebar (warm to match the main surfaces — was neutral-gray mono
-     leftovers that clashed in hue with the workspace panel) -- */
-  --color-sidebar: hsl(26 26% 11%);
-  --color-sidebar-background: hsl(26 28% 9%);
-  --color-sidebar-foreground: hsl(33 35% 95%);
-  --color-sidebar-primary: hsl(33 35% 95%);
-  --color-sidebar-primary-foreground: hsl(33 35% 95%);
-  --color-sidebar-muted-foreground: hsl(33 40% 94% / 0.5);
-  --color-sidebar-accent: hsl(35 70% 88% / 0.09);
-  --color-sidebar-accent-foreground: hsl(33 35% 95%);
-  --color-sidebar-border: hsl(35 45% 80% / 0.1);
-  --color-sidebar-ring: hsl(213 100% 75% / 0.75);
-  --color-sidebar-blue: hsl(213 94% 68%);
+  /* -- Sidebar (Claude-style: one step darker than the content surface) -- */
+  --color-sidebar: #262624;
+  --color-sidebar-background: #2d2d2b;
+  --color-sidebar-foreground: #f9f9f7;
+  --color-sidebar-primary: #f9f9f7;
+  --color-sidebar-primary-foreground: #f9f9f7;
+  --color-sidebar-muted-foreground: rgb(249 249 247 / 0.5);
+  --color-sidebar-accent: rgb(249 249 247 / 0.07);
+  --color-sidebar-accent-foreground: #f9f9f7;
+  --color-sidebar-border: rgb(249 249 247 / 0.08);
+  --color-sidebar-ring: rgb(224 176 157 / 0.76);
+  --color-sidebar-blue: #cc7d5e;
 
   /* -- Status -- */
   --color-status-backlog: hsl(22 4% 54%);
@@ -225,8 +225,8 @@
   --color-status-in-progress-hover: hsl(50 100% 69%);
   --color-status-in-review: hsl(142 69% 58%);
   --color-status-in-review-hover: hsl(142 77% 73%);
-  --color-status-done: hsl(19 35% 69%);
-  --color-status-done-hover: hsl(22 39% 78%);
+  --color-status-done: #cc7d5e;
+  --color-status-done-hover: rgb(224 176 157);
   --color-status-canceled: hsl(23 5% 63%);
   --color-status-canceled-hover: hsl(20 6% 72%);
 
@@ -933,7 +933,8 @@ mark.codex-thread-find-active {
   --color-scrollbar-thumb: rgba(0, 0, 0, 0.08);
   --color-scrollbar-thumb-active: rgba(0, 0, 0, 0.16);
 
-  --color-background: hsl(44 0% 100%);
+  /* Claude-style oat paper instead of pure white. */
+  --color-background: #faf9f5;
   --color-foreground: hsl(39 8% 16%);
   --color-overlay: hsl(0 0% 0%);
 
@@ -976,12 +977,14 @@ mark.codex-thread-find-active {
   --color-foreground-secondary: hsl(18 14% 7% / 0.7);
   --color-foreground-tertiary: hsl(18 14% 7% / 0.5);
 
-  --color-highlight: hsl(23 40% 50% / 0.12);
+  /* Terracotta accent family anchored at #cc7d5e = hsl(17 52% 58%);
+     darkened cuts for text contrast on paper. */
+  --color-highlight: hsl(17 52% 58% / 0.14);
   --color-highlight-foreground: hsl(14 13% 31%);
-  --color-highlight-muted: hsl(25 30% 50%);
-  --color-border-highlight: hsl(23 25% 50%);
-  --color-unread: hsl(21 35% 45%);
-  --color-special: hsl(25 30% 50%);
+  --color-highlight-muted: hsl(17 52% 58%);
+  --color-border-highlight: hsl(17 52% 58%);
+  --color-unread: hsl(17 52% 46%);
+  --color-special: hsl(17 52% 58%);
 
   --color-destructive: hsl(0 72% 51%);
   --color-destructive-foreground: hsl(0 86% 97%);
@@ -997,17 +1000,17 @@ mark.codex-thread-find-active {
   --color-positive-muted: hsl(138 76% 97%);
   --color-positive-foreground: hsl(138 76% 97%);
 
-  --color-link: hsl(23 40% 50% / 0.1);
-  --color-link-foreground: hsl(21 35% 40%);
-  --color-link-elevated: hsl(23 40% 50% / 0.18);
+  --color-link: hsl(17 52% 58% / 0.12);
+  --color-link-foreground: hsl(17 52% 44%);
+  --color-link-elevated: hsl(17 52% 58% / 0.2);
 
-  --color-tip: hsl(23 40% 50% / 0.08);
-  --color-tip-border: hsl(23 40% 50% / 0.2);
-  --color-tip-secondary: hsl(23 40% 50% / 0.14);
-  --color-tip-secondary-border: hsl(23 40% 50% / 0.3);
-  --color-tip-muted: hsl(21 35% 40%);
+  --color-tip: hsl(17 52% 58% / 0.1);
+  --color-tip-border: hsl(17 52% 58% / 0.25);
+  --color-tip-secondary: hsl(17 52% 58% / 0.16);
+  --color-tip-secondary-border: hsl(17 52% 58% / 0.35);
+  --color-tip-muted: hsl(17 52% 44%);
   --color-tip-foreground: hsl(14 15% 22%);
-  --color-plan-border: hsl(23 40% 50% / 0.45);
+  --color-plan-border: hsl(17 52% 58% / 0.5);
 
   --color-switch-background: hsl(39 8% 16%);
   --color-switch-foreground: hsl(44 0% 100%);
@@ -1034,8 +1037,8 @@ mark.codex-thread-find-active {
   --color-status-in-progress-hover: hsl(50 100% 36%);
   --color-status-in-review: hsl(142 76% 36%);
   --color-status-in-review-hover: hsl(142 72% 29%);
-  --color-status-done: hsl(23 25% 50%);
-  --color-status-done-hover: hsl(23 30% 42%);
+  --color-status-done: hsl(17 52% 50%);
+  --color-status-done-hover: hsl(17 52% 42%);
   --color-status-canceled: hsl(37 5% 63%);
   --color-status-canceled-hover: hsl(36 4% 54%);
 
