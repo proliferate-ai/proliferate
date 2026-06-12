@@ -20,7 +20,7 @@ import { createWebCloudClient } from "../../../lib/access/cloud/client";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 export function AuthScreen() {
-  const { setToken, setSession } = useAuthToken();
+  const { setToken, setSession, connectionFailed } = useAuthToken();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [manualToken, setManualToken] = useState("");
@@ -30,6 +30,10 @@ export function AuthScreen() {
   const [providerError, setProviderError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const busy = Boolean(loadingProvider) || passwordSubmitting;
+  // In local development the API often isn't running yet. When the session
+  // bootstrap can't reach it, explain that instead of leaving a bare sign-in
+  // screen. Production builds never surface this developer hint.
+  const showApiUnreachableNotice = import.meta.env.DEV && connectionFailed;
 
   async function signIn(provider: AuthProviderName) {
     if (busy) {
@@ -76,6 +80,15 @@ export function AuthScreen() {
       title={AUTH_SIGN_IN_COPY.title}
       subtitle={AUTH_SIGN_IN_COPY.subtitle}
       footer={<span className="block text-faint">{AUTH_SIGN_IN_COPY.footer}</span>}
+      notice={showApiUnreachableNotice ? (
+        <span className="block">
+          Couldn&apos;t reach the Proliferate API at{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">{webEnv.apiBaseUrl}</code>.
+          Start the local API, or set{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">VITE_PROLIFERATE_API_BASE_URL</code>{" "}
+          to point at a running instance.
+        </span>
+      ) : null}
       credentialForm={(
         <PasswordCredentialForm
           email={email}

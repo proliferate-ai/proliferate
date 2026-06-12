@@ -19,6 +19,7 @@ interface AuthStartPanelProps {
   footer: ReactNode;
   providers: AuthProviderActionView[];
   credentialForm?: ReactNode;
+  notice?: ReactNode;
   note?: ReactNode;
   error?: ReactNode;
   devAccess?: ReactNode;
@@ -31,12 +32,21 @@ export function AuthStartPanel({
   footer,
   providers,
   credentialForm,
+  notice,
   note,
   error,
   devAccess,
 }: AuthStartPanelProps) {
   return (
     <AuthLayout mark={mark} title={title} subtitle={subtitle} footer={footer}>
+      {notice ? (
+        <div
+          className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm leading-5 text-muted-foreground"
+          role="status"
+        >
+          {notice}
+        </div>
+      ) : null}
       {credentialForm}
       {credentialForm ? <AuthDivider /> : null}
       {providers.map((provider) => (

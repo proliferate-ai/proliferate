@@ -28,6 +28,7 @@ interface AuthTokenContextValue {
   token: string | null;
   user: AuthUser | null;
   bootstrapping: boolean;
+  connectionFailed: boolean;
   setToken: (token: string) => void;
   setSession: (session: AuthSessionResponse) => void;
   clearToken: () => Promise<void>;
@@ -35,6 +36,10 @@ interface AuthTokenContextValue {
 
 const AuthTokenContext = createContext<AuthTokenContextValue | null>(null);
 const queryClient = new QueryClient();
+
+// Stop waiting on the bootstrap request if the API never answers, so the
+// sign-in screen can render (and, in development, explain why).
+const BOOTSTRAP_SESSION_TIMEOUT_MS = 8000;
 
 export function WebCloudProvider({ children }: { children: ReactNode }) {
   const initialTokenRef = useRef<string | null | undefined>(undefined);
@@ -44,6 +49,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(initialTokenRef.current);
   const [user, setUserState] = useState<AuthUser | null>(null);
   const [bootstrapping, setBootstrapping] = useState(initialTokenRef.current === null);
+  const [connectionFailed, setConnectionFailed] = useState(false);
   const authEpochRef = useRef(0);
   const client = useMemo(() => createWebCloudClient(webEnv.apiBaseUrl, token), [token]);
 
@@ -55,27 +61,34 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const bootstrapEpoch = authEpochRef.current;
     const bootstrapClient = createWebCloudClient(webEnv.apiBaseUrl, null);
-    bootstrapWebSession(bootstrapClient)
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), BOOTSTRAP_SESSION_TIMEOUT_MS);
+    bootstrapWebSession(bootstrapClient, { signal: controller.signal })
       .then((session) => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           queryClient.clear();
+          setConnectionFailed(false);
           setTokenState(session.accessToken);
           setUserState(session.user);
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
+          setConnectionFailed(isApiUnreachableError(error));
           setTokenState(null);
           setUserState(null);
         }
       })
       .finally(() => {
+        window.clearTimeout(timeoutId);
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           setBootstrapping(false);
         }
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, []);
 
@@ -84,6 +97,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
       token,
       user,
       bootstrapping,
+      connectionFailed,
       setToken(nextToken) {
         authEpochRef.current += 1;
         queryClient.clear();
@@ -118,7 +132,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         setUserState(null);
       },
     }),
-    [bootstrapping, token, user],
+    [bootstrapping, connectionFailed, token, user],
   );
 
   return (
@@ -138,6 +152,16 @@ export function useAuthToken() {
     throw new Error("useAuthToken must be used within WebCloudProvider.");
   }
   return value;
+}
+
+// Distinguishes "the API could not be reached" (request aborted by our timeout,
+// or fetch failing to connect at all) from genuine auth responses such as a 401.
+function isApiUnreachableError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+  // fetch() rejects with a TypeError when it cannot establish a connection.
+  return error instanceof TypeError;
 }
 
 function readCookie(name: string): string | null {
