@@ -24,7 +24,7 @@ use crate::live::sessions::driver::native_session::{
     has_anyharness_targeted_fork_extension, start_native_session,
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
-use crate::live::sessions::driver::inbound::RuntimeClient;
+use crate::live::sessions::driver::inbound::InboundDoor;
 use crate::live::sessions::driver::session_lifecycle::initialize_connection;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::model::{QueueDurable, SessionStateDurable};
@@ -101,7 +101,7 @@ impl SessionActor {
             BackgroundWorkOptions::default(),
         );
 
-        let client = Arc::new(RuntimeClient::new(
+        let client = Arc::new(InboundDoor::new(
             session_id.clone(),
             notification_tx,
             config.interaction_broker.clone(),

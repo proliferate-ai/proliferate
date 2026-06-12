@@ -18,7 +18,12 @@ const CODEX_REQUEST_USER_INPUT_METHOD: &str = "experimental/codex/requestUserInp
 const CLAUDE_REQUEST_USER_INPUT_METHOD: &str = "experimental/claude/requestUserInput";
 const CLAUDE_MCP_ELICITATION_METHOD: &str = "experimental/claude/mcpElicitation";
 
-pub struct RuntimeClient {
+/// The inbound door: everything the agent-initiated direction of the ACP
+/// connection may touch. Handlers registered in `driver/connection.rs` clone
+/// an `Arc<InboundDoor>` and route notifications to the actor's channel and
+/// requests (permission, user input, MCP elicitation) through the rendezvous
+/// broker while rendering pending-interaction state via the shared sink.
+pub(in crate::live::sessions) struct InboundDoor {
     pub session_id: String,
     pub notification_tx: mpsc::UnboundedSender<acp::schema::SessionNotification>,
     pub interaction_broker: Arc<InteractionRendezvous>,
@@ -29,7 +34,7 @@ pub struct RuntimeClient {
     pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
 }
 
-impl RuntimeClient {
+impl InboundDoor {
     pub fn new(
         session_id: String,
         notification_tx: mpsc::UnboundedSender<acp::schema::SessionNotification>,

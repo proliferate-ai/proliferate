@@ -4,7 +4,7 @@ use agent_client_protocol as acp;
 use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use crate::live::sessions::driver::inbound::RuntimeClient;
+use crate::live::sessions::driver::inbound::InboundDoor;
 
 /// Establishes the ACP client connection over the agent's stdio: registers the
 /// four inbound handlers, spawns the connect future on the per-session
@@ -12,7 +12,7 @@ use crate::live::sessions::driver::inbound::RuntimeClient;
 /// sender keeps the connection alive; dropping it ends the connect_with
 /// closure and shuts the connection task down.
 pub(in crate::live::sessions) async fn establish_connection(
-    client: Arc<RuntimeClient>,
+    client: Arc<InboundDoor>,
     stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
 ) -> anyhow::Result<(acp::ConnectionTo<acp::Agent>, oneshot::Sender<()>)> {
