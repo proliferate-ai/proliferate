@@ -135,7 +135,7 @@ fn write_manifest_atomic(
 
 /// Content hash for file artifacts; directories and unreadable paths read as
 /// None (the launcher/binary the result points at is what gets hashed).
-fn sha256_of_file(path: &Path) -> Option<String> {
+pub(super) fn sha256_of_file(path: &Path) -> Option<String> {
     let bytes = std::fs::read(path).ok()?;
     let mut hasher = Sha256::new();
     hasher.update(&bytes);
