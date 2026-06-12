@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
@@ -12,12 +12,10 @@ import {
   type CreateWorktreeWorkspaceInput,
 } from "@/lib/domain/workspaces/creation/workspace-creation";
 import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
-import {
-  ensureRepoGroupExpanded,
-} from "@/stores/preferences/workspace-ui-store";
+import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceActions } from "./use-workspace-actions";
 import { useWorkspaceEntryFlow } from "./use-workspace-entry-flow";
-import { useWorkspaceSelection } from "./selection/use-workspace-selection";
+import { useWorkspaceEntrySelectionDeps } from "./use-workspace-entry-selection-deps";
 import {
   elapsedMs,
   elapsedSince,
@@ -28,10 +26,6 @@ import {
   annotateLatencyFlow,
   failLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import {
-  usePendingWorkspaceSessionMaterialization,
-} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
-import { getSessionRecord } from "@/stores/sessions/session-records";
 import {
   buildMaterializedWorktreePendingEntry,
   normalizeWorktreeInput,
@@ -70,28 +64,7 @@ export function useWorkspaceEntryActions() {
     isCreatingWorktreeWorkspace,
   } = useWorkspaceActions();
   const { beginPendingWorkspace, selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
-  const { selectWorkspace } = useWorkspaceSelection();
-  const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
-  const setPendingWorkspaceEntry = useSessionSelectionStore(
-    (state) => state.setPendingWorkspaceEntry,
-  );
-  const setWorkspaceArrivalEvent = useSessionSelectionStore(
-    (state) => state.setWorkspaceArrivalEvent,
-  );
-  const entrySelectionDeps = useMemo(() => ({
-    expandRepoGroup: ensureRepoGroupExpanded,
-    getSelectionState: useSessionSelectionStore.getState,
-    getSessionRecord,
-    materializePendingWorkspaceSessions,
-    selectWorkspace,
-    setPendingWorkspaceEntry,
-    setWorkspaceArrivalEvent,
-  }), [
-    materializePendingWorkspaceSessions,
-    selectWorkspace,
-    setPendingWorkspaceEntry,
-    setWorkspaceArrivalEvent,
-  ]);
+  const entrySelectionDeps = useWorkspaceEntrySelectionDeps();
 
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,

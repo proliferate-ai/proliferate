@@ -45,6 +45,7 @@ export interface SessionDirectoryEntry {
   pendingConfigChanges: PendingSessionConfigChanges;
   status: SessionStatus | null;
   lastPromptAt: string | null;
+  hasAttemptedPrompt: boolean;
   streamConnectionState: SessionStreamConnectionState;
   transcriptHydrated: boolean;
   sessionRelationship: SessionRelationship;
@@ -67,6 +68,7 @@ export interface DirectoryEntryInput {
   pendingConfigChanges?: PendingSessionConfigChanges;
   status?: SessionStatus | null;
   lastPromptAt?: string | null;
+  hasAttemptedPrompt?: boolean;
   streamConnectionState?: SessionStreamConnectionState;
   transcriptHydrated?: boolean;
   sessionRelationship?: SessionRelationship;
@@ -123,6 +125,8 @@ export function normalizeDirectoryEntryInput(
     pendingConfigChanges: input.pendingConfigChanges ?? existing?.pendingConfigChanges ?? {},
     status: input.status ?? existing?.status ?? null,
     lastPromptAt: input.lastPromptAt ?? existing?.lastPromptAt ?? null,
+    hasAttemptedPrompt:
+      input.hasAttemptedPrompt === true || existing?.hasAttemptedPrompt === true,
     streamConnectionState:
       input.streamConnectionState
       ?? existing?.streamConnectionState
@@ -176,6 +180,7 @@ export function directoryEntryEqual(
     && a.pendingConfigChanges === b.pendingConfigChanges
     && a.status === b.status
     && a.lastPromptAt === b.lastPromptAt
+    && a.hasAttemptedPrompt === b.hasAttemptedPrompt
     && a.streamConnectionState === b.streamConnectionState
     && a.transcriptHydrated === b.transcriptHydrated
     && sessionRelationshipEqual(a.sessionRelationship, b.sessionRelationship)

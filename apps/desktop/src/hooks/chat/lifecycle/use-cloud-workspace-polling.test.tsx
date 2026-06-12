@@ -20,10 +20,19 @@ const mocks = vi.hoisted(() => ({
   refreshCloudWorkspace: vi.fn(),
   selectWorkspace: vi.fn(),
   materializePendingWorkspaceSessions: vi.fn(),
+  trackWorkspaceInteraction: vi.fn(),
   workspaceCollections: {
     cloudWorkspaces: [] as CloudWorkspaceSummary[],
   },
 }));
+
+vi.mock("@/stores/preferences/workspace-ui-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/stores/preferences/workspace-ui-store")>();
+  return {
+    ...actual,
+    trackWorkspaceInteraction: mocks.trackWorkspaceInteraction,
+  };
+});
 
 vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
@@ -59,6 +68,7 @@ describe("useCloudWorkspacePolling", () => {
     mocks.refreshCloudWorkspace.mockReset();
     mocks.selectWorkspace.mockReset();
     mocks.materializePendingWorkspaceSessions.mockReset();
+    mocks.trackWorkspaceInteraction.mockReset();
     mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "pending" })];
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
@@ -118,6 +128,10 @@ describe("useCloudWorkspacePolling", () => {
       projectedSessionCount: 1,
       projectedSessionIds: [projectedSessionId],
     });
+    let pendingEntryAtInteraction: unknown = null;
+    mocks.trackWorkspaceInteraction.mockImplementation(() => {
+      pendingEntryAtInteraction = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+    });
 
     renderHook(() => useCloudWorkspacePolling());
 
@@ -133,6 +147,14 @@ describe("useCloudWorkspacePolling", () => {
       workspaceId,
       { eventPrefix: "workspace.cloud_polling" },
     );
+    await waitFor(() => {
+      expect(mocks.trackWorkspaceInteraction).toHaveBeenCalledWith(
+        workspaceId,
+        expect.any(String),
+      );
+    });
+    expect(pendingEntryAtInteraction).toMatchObject({ attemptId: "attempt-1" });
+    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
   });
 
   it("marks the current awaiting cloud workspace as failed when polling returns error", async () => {

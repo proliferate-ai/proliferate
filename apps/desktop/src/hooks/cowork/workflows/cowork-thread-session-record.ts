@@ -49,6 +49,8 @@ function materializedCoworkSessionRecord(
       executionSummary: input.session.executionSummary ?? null,
       mcpBindingSummaries: input.session.mcpBindingSummaries ?? null,
       lastPromptAt: input.session.lastPromptAt ?? null,
+      hasAttemptedPrompt:
+        getSessionRecord(input.clientSessionId)?.hasAttemptedPrompt ?? false,
       optimisticPrompt: null,
       sessionRelationship: { kind: "root" },
     },

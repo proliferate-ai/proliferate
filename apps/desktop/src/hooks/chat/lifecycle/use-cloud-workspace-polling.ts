@@ -16,6 +16,7 @@ import {
   shouldShowCloudWorkspaceStatusScreen,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-store";
 import {
   elapsedMs,
   elapsedSince,
@@ -189,6 +190,7 @@ export function useCloudWorkspacePolling() {
               selectedWorkspaceId,
               { eventPrefix: "workspace.cloud_polling" },
             );
+            trackWorkspaceInteraction(selectedWorkspaceId, new Date().toISOString());
             setPendingWorkspaceEntry(null);
             setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
               workspaceId: selectedWorkspaceId,

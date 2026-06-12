@@ -17,6 +17,7 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cl
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   createEmptySessionRecord,
+  getSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
@@ -224,6 +225,7 @@ export async function materializeSessionCreation({
       executionSummary: launchedSession.executionSummary ?? null,
       mcpBindingSummaries: launchedSession.mcpBindingSummaries ?? null,
       lastPromptAt: launchedSession.lastPromptAt ?? null,
+      hasAttemptedPrompt: getSessionRecord(pendingSessionId)?.hasAttemptedPrompt ?? false,
       optimisticPrompt: null,
       pendingConfigChanges: {},
       sessionRelationship: { kind: "root" },
@@ -370,6 +372,7 @@ function materializedRecordFromExistingSession({
       executionSummary: session.executionSummary ?? null,
       mcpBindingSummaries: session.mcpBindingSummaries ?? null,
       lastPromptAt: session.lastPromptAt ?? null,
+      hasAttemptedPrompt: getSessionRecord(clientSessionId)?.hasAttemptedPrompt ?? false,
       optimisticPrompt: null,
       pendingConfigChanges,
       sessionRelationship: { kind: "root" },

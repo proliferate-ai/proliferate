@@ -82,6 +82,8 @@ function buildWorkspaceSidebarActivitySignature(
       entry.status ?? "",
       entry.executionSummary?.phase ?? "",
       pendingInteractionSignature(entry.executionSummary?.pendingInteractions),
+      entry.lastPromptAt ?? "",
+      entry.hasAttemptedPrompt ? "prompted" : "",
       entry.streamConnectionState,
       entry.activity.isStreaming ? "streaming" : "idle",
       pendingInteractionSignature(entry.activity.pendingInteractions),

@@ -145,6 +145,7 @@ describe("useWorkspaceEntryActions", () => {
       recentlyHiddenChatSessionIdsByWorkspace: {},
       collapsedChatGroupsByWorkspace: {},
       manualChatGroupsByWorkspace: {},
+      workspaceLastInteracted: {},
     });
   });
 
@@ -231,11 +232,29 @@ describe("useWorkspaceEntryActions", () => {
       useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace[pendingWorkspaceUiKey],
     ).toBe(chatWorkspaceShellTabKey(projectedSessionId!));
 
+    let pendingEntryAtInteraction: unknown = null;
+    const unsubscribe = useWorkspaceUiStore.subscribe((state, previousState) => {
+      if (
+        state.workspaceLastInteracted["workspace-created"]
+        && !previousState.workspaceLastInteracted["workspace-created"]
+      ) {
+        pendingEntryAtInteraction = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+      }
+    });
+
     finishCreate({
       workspace: worktreeWorkspace("workspace-created"),
       setupScript: null,
     });
     await expect(actionPromise).resolves.toMatchObject({
+      workspaceId: "workspace-created",
+    });
+    unsubscribe();
+    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+    expect(useWorkspaceUiStore.getState().workspaceLastInteracted["workspace-created"])
+      .toEqual(expect.any(String));
+    expect(pendingEntryAtInteraction).toMatchObject({
+      source: "worktree-created",
       workspaceId: "workspace-created",
     });
   });

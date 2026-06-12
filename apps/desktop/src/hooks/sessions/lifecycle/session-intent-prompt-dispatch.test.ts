@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getSessionRecord: vi.fn(),
   logLatency: vi.fn(),
   mutateAsync: vi.fn(),
+  patchSessionRecord: vi.fn(),
   promptAttachmentSnapshotsToBlocks: vi.fn(),
   rehydrateSessionSlotFromHistory: vi.fn(),
   sendCloudPromptCommand: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock("@/hooks/sessions/workflows/session-materialization-deps", () => ({
 
 vi.mock("@/stores/sessions/session-records", () => ({
   getSessionRecord: mocks.getSessionRecord,
+  patchSessionRecord: mocks.patchSessionRecord,
 }));
 
 describe("dispatchPromptIntent", () => {
@@ -65,6 +67,30 @@ describe("dispatchPromptIntent", () => {
     });
     mocks.getSessionRecord.mockReturnValue({ lastPromptAt: "2026-06-04T09:00:00Z" });
     mocks.waitForSessionMaterialization.mockResolvedValue("session-1");
+  });
+
+  it("marks the prompt attempt on the session record before dispatching the request", async () => {
+    const entry = useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "client-session-1",
+      workspaceId: "workspace-1",
+      text: "Build please",
+      blocks: [{ type: "text", text: "Build please" }],
+    });
+    mocks.mutateAsync.mockResolvedValue({
+      session: { id: "session-1" },
+      status: "queued",
+      queuedSeq: 4,
+    });
+
+    await dispatchPromptIntent(entry, createDeps());
+
+    expect(mocks.patchSessionRecord).toHaveBeenCalledWith(
+      "client-session-1",
+      { hasAttemptedPrompt: true },
+    );
+    expect(mocks.patchSessionRecord.mock.invocationCallOrder[0]!)
+      .toBeLessThan(mocks.mutateAsync.mock.invocationCallOrder[0]!);
   });
 
   it("does not overwrite a reconciled prompt when a late dispatch failure arrives", async () => {

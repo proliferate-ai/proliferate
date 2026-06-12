@@ -104,6 +104,13 @@ export function resolveSessionExecutionPhase(
   }
 
   if (slot.executionSummary?.phase) {
+    if (
+      slot.executionSummary.phase === "starting"
+      && slot.hasPromptActivity === false
+      && !isSessionEffectivelyStreaming(slot)
+    ) {
+      return "idle";
+    }
     return slot.executionSummary.phase;
   }
 
@@ -117,7 +124,9 @@ export function resolveSessionExecutionPhase(
     return "awaiting_interaction";
   }
   if (slot.status === "starting") {
-    return "starting";
+    return slot.hasPromptActivity === false && !isSessionEffectivelyStreaming(slot)
+      ? "idle"
+      : "starting";
   }
   if (slot.status === "running" || isSessionEffectivelyStreaming(slot)) {
     return "running";

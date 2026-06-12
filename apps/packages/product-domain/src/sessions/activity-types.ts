@@ -24,6 +24,11 @@ export interface SessionActivitySnapshot {
   status: SessionStatus | null;
   executionSummary?: SessionExecutionSummary | null;
   streamConnectionState?: StreamConnectionState;
+  /**
+   * False when the session has never been prompted and no prompt is in
+   * flight; undefined preserves legacy behavior.
+   */
+  hasPromptActivity?: boolean;
   transcript: {
     isStreaming: boolean;
     pendingInteractions: PendingInteractionLike[];

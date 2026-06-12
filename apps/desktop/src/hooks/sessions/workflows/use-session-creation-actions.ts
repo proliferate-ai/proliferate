@@ -182,6 +182,7 @@ export function useSessionCreationActions() {
         requestedModelId: options.modelId,
         modeId: resolvedModeId ?? null,
         title: existingProjectedRecord?.title ?? null,
+        hasAttemptedPrompt: existingProjectedRecord?.hasAttemptedPrompt ?? false,
         optimisticPrompt: null,
         pendingConfigChanges: {},
         sessionRelationship: { kind: "root" },

@@ -141,6 +141,7 @@ describe("session directory store invariants", () => {
       status: null,
       executionSummary: null,
       streamConnectionState: "disconnected",
+      hasPromptActivity: false,
       transcript: {
         isStreaming: true,
         pendingInteractions,
