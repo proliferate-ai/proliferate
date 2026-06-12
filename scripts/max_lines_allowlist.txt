@@ -10,11 +10,11 @@
 anyharness/crates/anyharness-contract/src/v1/events.rs 949 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 802 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-lib/src/api/openapi.rs 862 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/api/router_tests.rs 1247 existing AnyHarness oversized test file
+anyharness/crates/anyharness-lib/src/api/router_tests.rs 1172 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1897 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1524 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1511 existing AnyHarness oversized test file
+anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1512 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs 1057 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 617 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1112 custom migration with legacy schema coverage
@@ -46,3 +46,5 @@ server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized 
 server/tests/unit/test_cloud_mobility_service.py 800 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_ensure_running.py 872 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_provision.py 1823 existing server oversized unit test
+apps/desktop/src-tauri/src/commands/keychain.rs 686 existing desktop oversized file
+apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 632 existing desktop oversized test file

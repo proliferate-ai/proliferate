@@ -107,6 +107,9 @@ impl SessionRuntime {
                 .map(|forked| forked.native_session_id.clone()),
             agent_auth_scope: parent.agent_auth_scope.clone(),
             required_agent_auth_revision: parent.required_agent_auth_revision,
+            // Forks inherit the parent's launch selection wholesale; the
+            // classified-context provenance rides along with it.
+            agent_auth_contexts: parent.agent_auth_contexts.clone(),
             requested_model_id: parent.requested_model_id.clone(),
             current_model_id: parent.current_model_id.clone(),
             requested_mode_id: parent.requested_mode_id.clone(),

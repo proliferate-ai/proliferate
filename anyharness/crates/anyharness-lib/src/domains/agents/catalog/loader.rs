@@ -59,7 +59,7 @@ mod tests {
         match catalog {
             AgentCatalog::V2(document) => {
                 assert_eq!(document.schema_version, 2);
-                assert_eq!(document.catalog_version, "2026-06-10.6");
+                assert_eq!(document.catalog_version, draft_catalog_version().as_str());
             }
             AgentCatalog::V1(_) => panic!("draft catalog must be read as v2"),
         }
@@ -105,5 +105,16 @@ mod tests {
             error.to_string().contains("catalog version is empty"),
             "unexpected error: {error}"
         );
+    }
+
+    fn draft_catalog_version() -> String {
+        let text = std::fs::read_to_string(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../../scripts/agent-catalog/catalog.draft.json"),
+        )
+        .expect("read draft catalog");
+        serde_json::from_str::<serde_json::Value>(&text).expect("parse draft")["catalogVersion"]
+            .as_str()
+            .expect("catalogVersion")
+            .to_string()
     }
 }

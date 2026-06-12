@@ -7,7 +7,8 @@ use crate::{
     config::WorkerConfig,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
-    lifecycle::self_update,
+    lifecycle::{catalog_sync, self_update},
+    store::WorkerStore,
     versions,
 };
 
@@ -25,6 +26,7 @@ pub async fn send_once(
     config: &WorkerConfig,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
+    store: &WorkerStore,
 ) -> Result<(), WorkerError> {
     let health = runtime_health(config).await;
     let anyharness_version = health.anyharness_version.clone();
@@ -36,6 +38,7 @@ pub async fn send_once(
         worker_version.clone(),
         anyharness_version.clone(),
         supervisor_version.clone(),
+        catalog_sync::reported_version(store),
     );
     let response = cloud.heartbeat(&identity.worker_token, &request).await?;
     crate::observability::heartbeat_ack(&response);
@@ -54,6 +57,13 @@ pub async fn send_once(
     .await
     {
         warn!(?error, "worker update reconciliation failed");
+    }
+    // At most one convergence attempt per heartbeat cycle; failures retry on
+    // the next heartbeat.
+    if let Err(error) =
+        catalog_sync::converge_once(config, cloud, store, response.catalog_version.as_deref()).await
+    {
+        warn!(?error, "agent catalog convergence failed");
     }
     Ok(())
 }

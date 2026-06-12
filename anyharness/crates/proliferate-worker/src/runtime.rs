@@ -32,7 +32,7 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     if let Err(error) = upload_inventory(&cloud, &identity, &health).await {
         warn!(?error, "worker inventory upload failed");
     }
-    if let Err(error) = lifecycle::heartbeat::send_once(&config, &cloud, &identity).await {
+    if let Err(error) = lifecycle::heartbeat::send_once(&config, &cloud, &identity, &store).await {
         warn!(?error, "worker heartbeat failed");
     }
     if once {
@@ -67,7 +67,9 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     });
     loop {
         sleep(lifecycle::heartbeat::interval(&config)).await;
-        if let Err(error) = lifecycle::heartbeat::send_once(&config, &cloud, &identity).await {
+        if let Err(error) =
+            lifecycle::heartbeat::send_once(&config, &cloud, &identity, &store).await
+        {
             warn!(?error, "worker heartbeat failed");
         }
     }

@@ -18,6 +18,7 @@ pub struct AgentRuntime {
     runtime_home: PathBuf,
     reconcile_service: Arc<AgentReconcileService>,
     seed_store: AgentSeedStore,
+    catalog_service: super::catalog::service::AgentCatalogService,
 }
 
 #[derive(Debug, Clone)]
@@ -79,11 +80,13 @@ impl AgentRuntime {
         runtime_home: PathBuf,
         reconcile_service: Arc<AgentReconcileService>,
         seed_store: AgentSeedStore,
+        catalog_service: super::catalog::service::AgentCatalogService,
     ) -> Self {
         Self {
             runtime_home,
             reconcile_service,
             seed_store,
+            catalog_service,
         }
     }
 
@@ -130,8 +133,14 @@ impl AgentRuntime {
 
         let install_runtime_home = self.runtime_home.clone();
         let install_descriptor = descriptor.clone();
+        let catalog_pins = self.catalog_service.pin_overrides(kind);
         let installed_artifacts = tokio::task::spawn_blocking(move || {
-            installer::install_agent(&install_descriptor, &install_runtime_home, &options)
+            installer::install_agent_with_pins(
+                &install_descriptor,
+                &install_runtime_home,
+                &options,
+                catalog_pins.as_ref(),
+            )
         })
         .await
         .map_err(AgentRuntimeError::InstallTaskFailed)??;
@@ -210,6 +219,7 @@ impl AgentRuntime {
                 self.runtime_home.clone(),
                 reinstall,
                 Some(self.seed_store.clone()),
+                Some(self.catalog_service.clone()),
             )
             .await
     }

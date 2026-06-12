@@ -24,6 +24,7 @@ fn session_record() -> SessionRecord {
         native_session_id: Some("native-1".to_string()),
         agent_auth_scope: None,
         required_agent_auth_revision: None,
+        agent_auth_contexts: None,
         requested_model_id: Some("default".to_string()),
         current_model_id: Some("default".to_string()),
         requested_mode_id: Some("default".to_string()),

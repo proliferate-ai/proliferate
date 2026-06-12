@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -8,7 +9,16 @@ from fastapi.testclient import TestClient
 from proliferate.constants.cloud import RESERVED_CLOUD_REPO_ENV_VARS
 from proliferate.server.catalogs.api import router
 from proliferate.server.catalogs.domain.schema import agent_catalog_schema_version_is_supported
-from proliferate.server.catalogs.service import CATALOG_PATH, read_agent_catalog
+from proliferate.server.catalogs.service import (
+    CATALOG_PATH,
+    read_agent_catalog,
+    served_agent_catalog_version,
+)
+from proliferate.server.cloud.worker.models import (
+    WorkerDesiredVersionsResponse,
+    WorkerHeartbeatRequest,
+    WorkerHeartbeatResponse,
+)
 from proliferate.server.cloud.agent_auth.registry import (
     REGISTRY_PATH,
     _resolve_registry_path,
@@ -55,6 +65,80 @@ def test_agent_catalog_schema_version_policy() -> None:
 
 def test_agent_catalog_file_is_available_from_source_checkout() -> None:
     assert CATALOG_PATH.is_file()
+
+
+def test_served_agent_catalog_version_matches_served_document() -> None:
+    assert served_agent_catalog_version() == read_agent_catalog().catalog.catalogVersion
+
+
+def test_served_agent_catalog_version_is_generation_agnostic(tmp_path: Path) -> None:
+    document = tmp_path / "catalog.json"
+    document.write_text(
+        '{"schemaVersion": 2, "catalogVersion": "2026-07-01.1"}',
+        encoding="utf-8",
+    )
+
+    assert served_agent_catalog_version(document) == "2026-07-01.1"
+
+
+def test_served_agent_catalog_version_caches_until_mtime_changes(tmp_path: Path) -> None:
+    document = tmp_path / "catalog.json"
+    document.write_text('{"catalogVersion": "2026-06-10.6"}', encoding="utf-8")
+    mtime_ns = document.stat().st_mtime_ns
+
+    assert served_agent_catalog_version(document) == "2026-06-10.6"
+
+    document.write_text('{"catalogVersion": "2026-06-10.7"}', encoding="utf-8")
+    os.utime(document, ns=(mtime_ns, mtime_ns))
+    assert served_agent_catalog_version(document) == "2026-06-10.6"
+
+    os.utime(document, ns=(mtime_ns + 1, mtime_ns + 1))
+    assert served_agent_catalog_version(document) == "2026-06-10.7"
+
+
+def test_served_agent_catalog_version_handles_missing_or_invalid_document(
+    tmp_path: Path,
+) -> None:
+    assert served_agent_catalog_version(tmp_path / "absent.json") is None
+
+    broken = tmp_path / "broken.json"
+    broken.write_text("not json", encoding="utf-8")
+    assert served_agent_catalog_version(broken) is None
+
+    versionless = tmp_path / "versionless.json"
+    versionless.write_text('{"schemaVersion": 1}', encoding="utf-8")
+    assert served_agent_catalog_version(versionless) is None
+
+
+def test_worker_heartbeat_response_advertises_catalog_version() -> None:
+    response = WorkerHeartbeatResponse(
+        target_id="target",
+        worker_id="worker",
+        status="online",
+        server_time="2026-06-10T00:00:00Z",
+        desired_versions=WorkerDesiredVersionsResponse(
+            should_update=False,
+            update_channel="stable",
+            update_generation=0,
+        ),
+        catalog_version="2026-06-10.6",
+    )
+
+    payload = response.model_dump(by_alias=True)
+    assert payload["catalogVersion"] == "2026-06-10.6"
+
+    # Pre-convergence behavior: the field defaults to null.
+    assert WorkerHeartbeatResponse.model_fields["catalog_version"].default is None
+
+
+def test_worker_heartbeat_request_accepts_catalog_version() -> None:
+    request = WorkerHeartbeatRequest.model_validate(
+        {"status": "online", "catalogVersion": "2026-06-10.6"}
+    )
+    assert request.catalog_version == "2026-06-10.6"
+
+    legacy = WorkerHeartbeatRequest.model_validate({"status": "online"})
+    assert legacy.catalog_version is None
 
 
 def test_agent_registry_file_is_available_from_source_checkout() -> None:

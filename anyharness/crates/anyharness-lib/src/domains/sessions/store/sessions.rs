@@ -472,6 +472,7 @@ pub(super) fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord
             _ => None,
         },
         required_agent_auth_revision: row.get("required_agent_auth_revision")?,
+        agent_auth_contexts: row.get("agent_auth_contexts")?,
         requested_model_id: row.get("requested_model_id")?,
         current_model_id: row.get("current_model_id")?,
         requested_mode_id: row.get("requested_mode_id")?,
@@ -505,13 +506,13 @@ pub(super) fn insert_session_row(
     conn.execute(
         "INSERT INTO sessions (id, workspace_id, agent_kind, native_session_id,
          agent_auth_scope_provider, agent_auth_scope_id, agent_auth_scope_target_id,
-         required_agent_auth_revision,
+         required_agent_auth_revision, agent_auth_contexts,
          requested_model_id, current_model_id, requested_mode_id, current_mode_id,
          title, thinking_level_id, thinking_budget_tokens, status, created_at,
          updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
          mcp_binding_summaries_json, mcp_binding_policy, system_prompt_append,
          subagents_enabled, action_capabilities_json, origin_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
         params![
             record.id,
             record.workspace_id,
@@ -524,6 +525,7 @@ pub(super) fn insert_session_row(
                 .as_ref()
                 .and_then(|scope| scope.target_id.as_deref()),
             record.required_agent_auth_revision,
+            record.agent_auth_contexts,
             record.requested_model_id,
             record.current_model_id,
             record.requested_mode_id,

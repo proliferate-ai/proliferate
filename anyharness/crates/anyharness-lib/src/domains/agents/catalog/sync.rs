@@ -77,11 +77,21 @@ pub struct CatalogSyncService {
     active: RwLock<ActiveCatalog>,
     /// Capability, not a service dependency: fired after a successful swap;
     /// `app/` wires it to the reconcile engine.
-    on_catalog_applied: Arc<dyn Fn() + Send + Sync>,
+    on_catalog_applied: std::sync::RwLock<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 impl CatalogSyncService {
-    pub fn from_bundled(on_catalog_applied: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn from_bundled() -> Self {
+        Self::from_bundled_inner()
+    }
+
+    /// Late-bind the reconcile poke (breaks the wiring cycle: the runtime
+    /// holds the catalog service, and the poke holds the runtime).
+    pub fn set_catalog_applied_poke(&self, on_catalog_applied: Arc<dyn Fn() + Send + Sync>) {
+        *self.on_catalog_applied.write().expect("poke lock") = Some(on_catalog_applied);
+    }
+
+    fn from_bundled_inner() -> Self {
         let document = bundled_agent_catalog_document().clone();
         let version = document.catalog_version.clone();
         Self {
@@ -91,7 +101,7 @@ impl CatalogSyncService {
                 etag: None,
                 source: CatalogSource::Bundled,
             }),
-            on_catalog_applied,
+            on_catalog_applied: std::sync::RwLock::new(None),
         }
     }
 
@@ -154,7 +164,9 @@ impl CatalogSyncService {
         } = &outcome
         {
             tracing::info!(%from_version, %to_version, "agent catalog applied");
-            (self.on_catalog_applied)();
+            if let Some(poke) = self.on_catalog_applied.read().expect("poke lock").clone() {
+                poke();
+            }
         }
         Ok(outcome)
     }
@@ -177,7 +189,8 @@ mod tests {
     fn service_with_counter() -> (CatalogSyncService, Arc<AtomicUsize>) {
         let counter = Arc::new(AtomicUsize::new(0));
         let poke_counter = counter.clone();
-        let service = CatalogSyncService::from_bundled(Arc::new(move || {
+        let service = CatalogSyncService::from_bundled();
+        service.set_catalog_applied_poke(Arc::new(move || {
             poke_counter.fetch_add(1, Ordering::SeqCst);
         }));
         (service, counter)
@@ -241,12 +254,12 @@ mod tests {
             outcome,
             SyncOutcome::Applied {
                 from_version,
-                to_version: "2026-06-10.6".into(),
+                to_version: draft_catalog_version().as_str().into(),
             }
         );
         let active = service.active();
         assert_eq!(active.source, CatalogSource::Fetched);
-        assert_eq!(active.version, "2026-06-10.6");
+        assert_eq!(active.version, draft_catalog_version().as_str());
         assert_eq!(active.etag, Some("\"etag-2\"".into()));
         assert!(matches!(active.document.as_ref(), AgentCatalog::V2(_)));
         assert_eq!(counter.load(Ordering::SeqCst), 1);
@@ -266,7 +279,7 @@ mod tests {
         assert_eq!(
             outcome,
             SyncOutcome::Applied {
-                from_version: "2026-06-10.6".into(),
+                from_version: draft_catalog_version().as_str().into(),
                 to_version: "2020-01-01.1".into(),
             }
         );
@@ -303,7 +316,18 @@ mod tests {
         let active_version = service.catalog_version();
 
         assert!(!service.ingest_advertised_version(&active_version));
-        assert!(service.ingest_advertised_version("2026-06-10.6"));
+        assert!(service.ingest_advertised_version(draft_catalog_version().as_str()));
         assert!(service.ingest_advertised_version("2020-01-01.1"));
+    }
+
+    fn draft_catalog_version() -> String {
+        let text = std::fs::read_to_string(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../../scripts/agent-catalog/catalog.draft.json"),
+        )
+        .expect("read draft catalog");
+        serde_json::from_str::<serde_json::Value>(&text).expect("parse draft")["catalogVersion"]
+            .as_str()
+            .expect("catalogVersion")
+            .to_string()
     }
 }

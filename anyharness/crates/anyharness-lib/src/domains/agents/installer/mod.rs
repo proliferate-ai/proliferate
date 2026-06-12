@@ -16,4 +16,7 @@ mod tests;
 
 pub use lock::AgentInstallLock;
 pub(crate) use service::regenerate_seeded_agent_launchers;
-pub use service::{install_agent, InstallError, InstallOptions, InstalledArtifactResult};
+pub use service::{
+    install_agent, install_agent_with_pins, InstallError, InstallOptions,
+    InstalledArtifactResult,
+};

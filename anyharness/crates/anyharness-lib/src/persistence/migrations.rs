@@ -181,6 +181,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0048_runtime_config",
         include_str!("sql/0048_runtime_config.sql"),
     ),
+    (
+        "0049_session_agent_auth_contexts",
+        include_str!("sql/0049_session_agent_auth_contexts.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
