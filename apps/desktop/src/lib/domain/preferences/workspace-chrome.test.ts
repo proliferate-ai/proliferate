@@ -13,8 +13,8 @@ describe("workspace chrome classes", () => {
       sidebarOpen: true,
     })).toEqual({
       root: "bg-transparent",
-      contentShell: "bg-transparent",
-      header: "flex h-16 shrink-0 items-center bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20 border-b border-foreground/10",
+      contentShell: "bg-background",
+      header: "flex h-16 shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-b border-foreground/10",
     });
 
     expect(resolveStandardWorkspaceChromeClasses({
@@ -29,7 +29,7 @@ describe("workspace chrome classes", () => {
     expect(resolveStandardWorkspaceChromeClasses({
       transparent: true,
       sidebarOpen: false,
-    }).contentShell).toBe("bg-transparent");
+    }).contentShell).toBe("bg-background");
     expect(resolveStandardWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: false,
@@ -40,7 +40,7 @@ describe("workspace chrome classes", () => {
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: true,
       sidebarOpen: true,
-    }).contentShell).toBe("bg-transparent");
+    }).contentShell).toBe("bg-background");
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: false,
@@ -48,7 +48,7 @@ describe("workspace chrome classes", () => {
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: true,
       sidebarOpen: false,
-    }).contentShell).toBe("bg-transparent");
+    }).contentShell).toBe("bg-background");
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: true,
@@ -57,7 +57,7 @@ describe("workspace chrome classes", () => {
 
   it("preserves editor tab classes", () => {
     expect(resolveEditorTabChromeClasses(true)).toEqual({
-      tablist: "flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b border-foreground/10 bg-card/25 px-1 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-card/20",
+      tablist: "flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b border-foreground/10 bg-background/60 px-1 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-background/50",
       shape: "-mb-px rounded-t-md",
       active: "border-foreground/10 border-b-background bg-background/85 text-foreground shadow-subtle backdrop-blur-xl",
     });
@@ -70,7 +70,7 @@ describe("workspace chrome classes", () => {
 
   it("preserves terminal tab classes", () => {
     expect(resolveTerminalTabChromeClasses(true)).toEqual({
-      rail: "relative flex shrink-0 items-center gap-1 overflow-hidden border-b border-foreground/10 bg-card/25 pr-1 backdrop-blur-md supports-[backdrop-filter]:bg-card/20",
+      rail: "relative flex shrink-0 items-center gap-1 overflow-hidden border-b border-foreground/10 bg-background/60 pr-1 backdrop-blur-md supports-[backdrop-filter]:bg-background/50",
       active: "bg-background/85 text-foreground backdrop-blur-xl",
       inactive: "bg-transparent text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
     });

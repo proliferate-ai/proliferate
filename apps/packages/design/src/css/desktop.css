@@ -84,78 +84,88 @@
   --color-scrollbar-thumb-active: rgba(255, 255, 255, 0.16);
 
   /* ====================================================================
-   * SHIP PRESET (default) — warm-tinted dark palette
+   * SHIP PRESET ("Dominic", default) — Claude-style warm palette:
+   * warm-gray surfaces, ivory ink, terracotta #cc7d5e accent. Dark values
+   * lifted from Codex's runtime Claude preset (reference/codex/copied.css).
    * ==================================================================== */
 
-  /* -- Core -- */
-  --color-background: hsl(24 10% 7%);
-  --color-foreground: hsl(30 8% 91%);
+  /* -- Core --
+     Claude theme, lifted verbatim from Codex's runtime Claude preset
+     (reference/codex/copied.css ROOT block): warm-gray surfaces a full
+     step lighter than mono, ivory ink #f9f9f7, terracotta accent
+     #cc7d5e with #e0b09d for text/icons. */
+  --color-background: #2d2d2b;
+  --color-foreground: #f9f9f7;
   --color-overlay: hsl(0 0% 0%);
 
   /* -- Primary -- */
-  --color-primary: hsl(30 9% 95%);
-  --color-primary-foreground: hsl(25 8% 16%);
+  --color-primary: #f9f9f7;
+  --color-primary-foreground: #191918;
 
   /* -- Secondary -- */
-  --color-secondary: hsl(24 9% 12%);
-  --color-secondary-foreground: hsl(30 9% 95%);
+  --color-secondary: #373735;
+  --color-secondary-foreground: #f9f9f7;
 
-  /* -- Accent / Muted -- */
-  --color-accent: hsl(25 8% 16%);
-  --color-accent-foreground: hsl(30 9% 95%);
-  --color-muted: hsl(24 9% 12%);
-  --color-muted-foreground: hsl(23 5% 63%);
-  --color-faint: hsl(23 5% 44%);
-  --color-helper: hsl(23 5% 63%);
+  /* -- Accent / Muted --
+     Hover/selection states are translucent ivory overlays (not opaque
+     panel grays) so elevation reads consistently on any surface. */
+  --color-accent: rgb(249 249 247 / 0.052);
+  --color-accent-foreground: #f9f9f7;
+  --color-muted: #373735;
+  --color-muted-foreground: rgb(249 249 247 / 0.71);
+  --color-faint: rgb(249 249 247 / 0.5);
+  --color-helper: rgb(249 249 247 / 0.71);
 
   /* -- Card -- */
-  --color-card: hsl(25 8% 16%);
-  --color-card-foreground: hsl(30 9% 95%);
+  --color-card: #373735;
+  --color-card-foreground: #f9f9f7;
 
-  /* -- Popover -- */
-  --color-popover: hsl(25 8% 16%);
-  --color-popover-foreground: hsl(30 8% 91%);
-  --color-popover-accent: hsl(0 0% 100% / 0.05);
-  --color-popover-ring: hsl(0 0% 100% / 0.1);
+  /* -- Popover (Codex elevated-primary) -- */
+  --color-popover: #474745;
+  --color-popover-foreground: #f9f9f7;
+  --color-popover-accent: rgb(249 249 247 / 0.052);
+  --color-popover-ring: rgb(249 249 247 / 0.084);
 
-  /* -- Border & Input -- */
-  --color-border: hsl(0 0% 100% / 0.1);
-  --color-input: hsl(0 0% 100% / 0.2);
-  --color-input-border: hsl(0 0% 100% / 0.2);
-  --color-separator: hsl(25 8% 16%);
-  --color-ring: hsl(20 6% 72%);
-  --color-border-light: hsl(0 0% 100% / 0.05);
-  --color-border-heavy: hsl(0 0% 100% / 0.14);
+  /* -- Border & Input (ivory-tinted) -- */
+  --color-border: rgb(249 249 247 / 0.084);
+  --color-input: rgb(249 249 247 / 0.15);
+  --color-input-border: rgb(249 249 247 / 0.15);
+  --color-separator: rgb(249 249 247 / 0.06);
+  --color-ring: rgb(224 176 157 / 0.76);
+  --color-border-light: rgb(249 249 247 / 0.042);
+  --color-border-heavy: rgb(249 249 247 / 0.156);
 
-  /* -- Surface roles -- */
+  /* -- Surface roles (ladder: under < background < card < elevated) -- */
   --color-surface: var(--color-background);
-  --color-surface-under: var(--color-background);
-  --color-surface-control: var(--color-muted);
-  --color-surface-control-opaque: var(--color-card);
+  --color-surface-under: #262624;
+  --color-surface-control: rgb(63 63 61 / 0.96);
+  --color-surface-control-opaque: #3f3f3d;
   --color-surface-elevated: var(--color-card);
-  --color-surface-elevated-secondary: hsl(0 0% 100% / 0.03);
-  --color-surface-editor: var(--color-background);
+  --color-surface-elevated-secondary: rgb(249 249 247 / 0.032);
+  --color-surface-editor: #3b3b39;
   --color-list-hover: var(--color-accent);
   --color-foreground-secondary: var(--color-muted-foreground);
   --color-foreground-tertiary: var(--color-faint);
 
-  /* -- Highlight / Unread / Special -- */
-  --color-highlight: hsl(5 19% 14%);
-  --color-highlight-foreground: hsl(24 33% 93%);
-  --color-highlight-muted: hsl(22 39% 78%);
-  --color-border-highlight: hsl(19 35% 69%);
-  --color-unread: hsl(19 35% 69%);
-  --color-special: hsl(19 35% 69%);
+  /* -- Highlight / Unread / Special --
+     One terracotta accent (#cc7d5e solid, #e0b09d for text/icons),
+     applied as translucent washes. */
+  --color-highlight: rgb(204 125 94 / 0.16);
+  --color-highlight-foreground: #f9f9f7;
+  --color-highlight-muted: rgb(224 176 157);
+  --color-border-highlight: #cc7d5e;
+  --color-unread: #cc7d5e;
+  --color-special: #cc7d5e;
 
   /* -- Destructive / Success / Warning / Info -- */
   --color-destructive: hsl(0 91% 71%);
   --color-destructive-foreground: hsl(0 86% 97%);
   --color-success: hsl(142 69% 58%);
   --color-success-foreground: hsl(138 76% 97%);
-  --color-warning: hsl(360 15% 22%);
-  --color-warning-foreground: hsl(24 33% 93%);
-  --color-warning-foreground-secondary: hsl(22 39% 78%);
-  --color-warning-border: hsl(360 13% 31%);
+  --color-warning: rgb(255 133 73 / 0.13);
+  --color-warning-foreground: #ff8549;
+  --color-warning-foreground-secondary: rgb(255 133 73 / 0.6);
+  --color-warning-border: rgb(255 133 73 / 0.3);
   --color-info: hsl(217 91% 60%);
   --color-info-foreground: hsl(217 91% 95%);
   --color-positive: hsl(142 69% 58%);
@@ -163,25 +173,25 @@
   --color-positive-foreground: hsl(138 76% 97%);
 
   /* -- Link -- */
-  --color-link: hsl(5 19% 14%);
-  --color-link-foreground: hsl(19 35% 69%);
-  --color-link-elevated: hsl(360 15% 22%);
+  --color-link: rgb(204 125 94 / 0.14);
+  --color-link-foreground: rgb(224 176 157);
+  --color-link-elevated: rgb(204 125 94 / 0.24);
 
   /* -- Tip / Plan -- */
-  --color-tip: hsl(360 15% 22%);
-  --color-tip-border: hsl(360 13% 31%);
-  --color-tip-secondary: hsl(4 12% 46%);
-  --color-tip-secondary-border: hsl(9 17% 57%);
-  --color-tip-muted: hsl(22 39% 78%);
-  --color-tip-foreground: hsl(58 100% 100%);
-  --color-plan-border: hsl(4 12% 46%);
+  --color-tip: rgb(204 125 94 / 0.14);
+  --color-tip-border: rgb(204 125 94 / 0.3);
+  --color-tip-secondary: rgb(204 125 94 / 0.4);
+  --color-tip-secondary-border: rgb(204 125 94 / 0.5);
+  --color-tip-muted: rgb(224 176 157);
+  --color-tip-foreground: #f9f9f7;
+  --color-plan-border: rgb(204 125 94 / 0.5);
 
   /* -- Switch -- */
-  --color-switch-background: hsl(30 8% 91%);
-  --color-switch-foreground: hsl(25 8% 16%);
+  --color-switch-background: #f9f9f7;
+  --color-switch-foreground: #191918;
 
   /* -- Composer -- */
-  --color-composer-background: hsl(24 9% 12%);
+  --color-composer-background: #373735;
   --color-composer-border: var(--color-border);
   --color-composer-control-foreground: var(--color-muted-foreground);
   --color-composer-control-active-foreground: var(--color-foreground);
@@ -193,20 +203,20 @@
   --color-composer-backdrop-filter: none;
 
   /* -- Prose -- */
-  --color-prose-border: hsl(25 7% 26%);
+  --color-prose-border: rgb(249 249 247 / 0.12);
 
-  /* -- Sidebar -- */
-  --color-sidebar: #1d1d1d;
-  --color-sidebar-background: #181818;
-  --color-sidebar-foreground: #ffffff;
-  --color-sidebar-primary: #ffffff;
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
-  --color-sidebar-accent: rgba(255, 255, 255, 0.074);
-  --color-sidebar-accent-foreground: #ffffff;
-  --color-sidebar-border: rgba(255, 255, 255, 0.079);
-  --color-sidebar-ring: rgba(127, 193, 255, 0.747);
-  --color-sidebar-blue: hsl(213 94% 68%);
+  /* -- Sidebar (Claude-style: one step darker than the content surface) -- */
+  --color-sidebar: #262624;
+  --color-sidebar-background: #2d2d2b;
+  --color-sidebar-foreground: #f9f9f7;
+  --color-sidebar-primary: #f9f9f7;
+  --color-sidebar-primary-foreground: #f9f9f7;
+  --color-sidebar-muted-foreground: rgb(249 249 247 / 0.5);
+  --color-sidebar-accent: rgb(249 249 247 / 0.07);
+  --color-sidebar-accent-foreground: #f9f9f7;
+  --color-sidebar-border: rgb(249 249 247 / 0.08);
+  --color-sidebar-ring: rgb(224 176 157 / 0.76);
+  --color-sidebar-blue: #cc7d5e;
 
   /* -- Status -- */
   --color-status-backlog: hsl(22 4% 54%);
@@ -215,8 +225,8 @@
   --color-status-in-progress-hover: hsl(50 100% 69%);
   --color-status-in-review: hsl(142 69% 58%);
   --color-status-in-review-hover: hsl(142 77% 73%);
-  --color-status-done: hsl(19 35% 69%);
-  --color-status-done-hover: hsl(22 39% 78%);
+  --color-status-done: #cc7d5e;
+  --color-status-done-hover: rgb(224 176 157);
   --color-status-canceled: hsl(23 5% 63%);
   --color-status-canceled-hover: hsl(20 6% 72%);
 
@@ -297,7 +307,9 @@
   --color-diff-chat-inline-tool-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground));
   --color-diff-sidebar-file-header-surface: var(--color-diff-chat-inline-tool-header-surface);
   --color-diff-sidebar-file-header-hover-surface: color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground));
-  --color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-foreground));
+  /* Codex parity: the diff file header has no band of its own — it sits
+     flat on the diff surface (94% + 6% foreground) with a hover tint. */
+  --color-diff-chat-file-header-surface: var(--color-diff-surface);
   --color-diff-chat-file-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground));
   --color-code-block-background: var(--color-diff-surface);
   --color-diff-added: var(--color-git-new-line);
@@ -612,8 +624,10 @@ mark.codex-thread-find-active {
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
-/* Mono dark tracks Codex Electron dark while `original` keeps the legacy dark preset above. */
-:root[data-theme="mono"] {
+/* Mono + original dark track Codex Electron dark; `original` keeps only its
+   Manrope typography + sharper composer as identity (see below). */
+:root[data-theme="mono"],
+:root[data-theme="original"] {
   --color-background: #181818;
   --color-foreground: #ffffff;
 
@@ -695,10 +709,13 @@ mark.codex-thread-find-active {
   --color-diff-deleted: #e02e2a;
   --diffs-fg: #fcfcfc;
   --diffs-mixer: #fcfcfc;
-  --diffs-bg-addition-override: color-mix(in srgb, #181818 86%, #00a240);
-  --diffs-bg-deletion-override: color-mix(in srgb, #181818 86%, #e02e2a);
-  --diffs-bg-addition-number-override: color-mix(in srgb, #181818 89%, #00a240);
-  --diffs-bg-deletion-number-override: color-mix(in srgb, #181818 89%, #e02e2a);
+  /* Derive from --color-diff-main-surface (same #181818 in dark) so these
+     do not leak Codex-dark gutter colors into light mode — this selector
+     has no mode qualifier and the light blocks don't re-override them. */
+  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #00a240);
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #e02e2a);
+  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #00a240);
+  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #e02e2a);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -921,100 +938,106 @@ mark.codex-thread-find-active {
   --color-scrollbar-thumb: rgba(0, 0, 0, 0.08);
   --color-scrollbar-thumb-active: rgba(0, 0, 0, 0.16);
 
-  --color-background: hsl(44 0% 100%);
-  --color-foreground: hsl(39 8% 16%);
+  /* Claude-style light: oat paper, white cards, warm near-black ink,
+     ink-alpha overlay states. Derived from the claude.ai light aesthetic;
+     provisional until a Codex Claude+light capture replaces it. */
+  --color-background: #faf9f5;
+  --color-foreground: #21201c;
   --color-overlay: hsl(0 0% 0%);
 
-  --color-primary: hsl(14 15% 22%);
-  --color-primary-foreground: hsl(44 9% 95%);
+  --color-primary: #21201c;
+  --color-primary-foreground: #faf9f5;
 
-  --color-secondary: hsl(44 10% 98%);
-  --color-secondary-foreground: hsl(39 8% 16%);
+  --color-secondary: #f1efe7;
+  --color-secondary-foreground: #21201c;
 
-  --color-accent: hsl(44 10% 98%);
-  --color-accent-foreground: hsl(39 8% 16%);
-  --color-muted: hsl(44 10% 98%);
-  --color-muted-foreground: hsl(36 4% 54%);
-  --color-faint: hsl(37 5% 63%);
-  --color-helper: hsl(37 5% 63%);
+  --color-accent: rgb(33 32 28 / 0.05);
+  --color-accent-foreground: #21201c;
+  --color-muted: #f1efe7;
+  --color-muted-foreground: rgb(33 32 28 / 0.62);
+  --color-faint: rgb(33 32 28 / 0.46);
+  --color-helper: rgb(33 32 28 / 0.62);
 
-  --color-card: hsl(44 0% 100%);
-  --color-card-foreground: hsl(38 9% 12%);
+  --color-card: #ffffff;
+  --color-card-foreground: #21201c;
 
-  --color-popover: hsl(44 0% 100%);
-  --color-popover-foreground: hsl(38 9% 12%);
-  --color-popover-accent: hsl(18 14% 7% / 0.05);
-  --color-popover-ring: hsl(38 9% 12% / 0.05);
+  --color-popover: #ffffff;
+  --color-popover-foreground: #21201c;
+  --color-popover-accent: rgb(33 32 28 / 0.05);
+  --color-popover-ring: rgb(33 32 28 / 0.08);
 
-  --color-border: hsl(44 8% 91%);
-  --color-input: hsl(18 14% 7% / 0.1);
-  --color-input-border: hsl(18 14% 7% / 0.1);
-  --color-separator: hsl(44 8% 91%);
-  --color-ring: hsl(39 8% 16%);
-  --color-border-light: hsl(18 14% 7% / 0.05);
-  --color-border-heavy: hsl(18 14% 7% / 0.12);
-  --color-surface: hsl(44 0% 100%);
-  --color-surface-under: hsl(44 10% 98%);
-  --color-surface-control: hsl(44 10% 96%);
-  --color-surface-control-opaque: hsl(44 10% 96%);
-  --color-surface-elevated: hsl(44 0% 100%);
-  --color-surface-elevated-secondary: hsl(18 14% 7% / 0.03);
-  --color-surface-editor: hsl(44 10% 97%);
-  --color-list-hover: hsl(18 14% 7% / 0.05);
-  --color-foreground-secondary: hsl(18 14% 7% / 0.7);
-  --color-foreground-tertiary: hsl(18 14% 7% / 0.5);
+  --color-border: rgb(33 32 28 / 0.09);
+  --color-input: rgb(33 32 28 / 0.1);
+  --color-input-border: rgb(33 32 28 / 0.1);
+  --color-separator: rgb(33 32 28 / 0.07);
+  --color-ring: hsl(17 52% 50%);
+  --color-border-light: rgb(33 32 28 / 0.05);
+  --color-border-heavy: rgb(33 32 28 / 0.13);
+  --color-surface: #faf9f5;
+  --color-surface-under: #f3f1ea;
+  --color-surface-control: #f0eee6;
+  --color-surface-control-opaque: #f0eee6;
+  --color-surface-elevated: #ffffff;
+  --color-surface-elevated-secondary: rgb(33 32 28 / 0.03);
+  --color-surface-editor: #f5f4ee;
+  --color-list-hover: rgb(33 32 28 / 0.05);
+  --color-foreground-secondary: rgb(33 32 28 / 0.7);
+  --color-foreground-tertiary: rgb(33 32 28 / 0.5);
 
-  --color-highlight: hsl(42 33% 97%);
+  /* Terracotta accent family anchored at #cc7d5e = hsl(17 52% 58%);
+     darkened cuts for text contrast on paper. */
+  --color-highlight: hsl(17 52% 58% / 0.14);
   --color-highlight-foreground: hsl(14 13% 31%);
-  --color-highlight-muted: hsl(33 35% 69%);
-  --color-border-highlight: hsl(23 17% 57%);
-  --color-unread: hsl(23 17% 57%);
-  --color-special: hsl(33 35% 69%);
+  --color-highlight-muted: hsl(17 52% 58%);
+  --color-border-highlight: hsl(17 52% 58%);
+  --color-unread: hsl(17 52% 46%);
+  --color-special: hsl(17 52% 58%);
 
   --color-destructive: hsl(0 72% 51%);
   --color-destructive-foreground: hsl(0 86% 97%);
   --color-success: hsl(142 76% 36%);
   --color-success-foreground: hsl(138 76% 97%);
-  --color-warning: hsl(42 33% 97%);
-  --color-warning-foreground: hsl(14 13% 31%);
-  --color-warning-foreground-secondary: hsl(23 17% 57%);
-  --color-warning-border: hsl(39 38% 86%);
+  --color-warning: hsl(40 90% 45% / 0.1);
+  --color-warning-foreground: hsl(32 75% 28%);
+  --color-warning-foreground-secondary: hsl(32 75% 28% / 0.65);
+  --color-warning-border: hsl(40 90% 45% / 0.25);
   --color-info: hsl(199 89% 48%);
   --color-info-foreground: hsl(199 89% 95%);
   --color-positive: hsl(142 76% 36%);
   --color-positive-muted: hsl(138 76% 97%);
   --color-positive-foreground: hsl(138 76% 97%);
 
-  --color-link: hsl(42 33% 97%);
-  --color-link-foreground: hsl(23 17% 57%);
-  --color-link-elevated: hsl(38 33% 93%);
+  --color-link: hsl(17 52% 58% / 0.12);
+  --color-link-foreground: hsl(17 52% 44%);
+  --color-link-elevated: hsl(17 52% 58% / 0.2);
 
-  --color-tip: hsl(58 100% 100%);
-  --color-tip-border: hsl(42 33% 97%);
-  --color-tip-secondary: hsl(58 100% 100%);
-  --color-tip-secondary-border: hsl(42 33% 97%);
-  --color-tip-muted: hsl(23 17% 57%);
+  --color-tip: hsl(17 52% 58% / 0.1);
+  --color-tip-border: hsl(17 52% 58% / 0.25);
+  --color-tip-secondary: hsl(17 52% 58% / 0.16);
+  --color-tip-secondary-border: hsl(17 52% 58% / 0.35);
+  --color-tip-muted: hsl(17 52% 44%);
   --color-tip-foreground: hsl(14 15% 22%);
-  --color-plan-border: hsl(33 35% 69%);
+  --color-plan-border: hsl(17 52% 58% / 0.5);
 
-  --color-switch-background: hsl(39 8% 16%);
-  --color-switch-foreground: hsl(44 0% 100%);
+  --color-switch-background: #21201c;
+  --color-switch-foreground: #faf9f5;
 
-  --color-composer-background: hsl(44 10% 98% / 0.82);
+  --color-composer-background: rgb(255 255 255 / 0.85);
 
-  --color-prose-border: hsl(38 7% 81%);
+  --color-prose-border: rgb(33 32 28 / 0.14);
 
-  --color-sidebar: hsl(44 10% 98%);
-  --color-sidebar-background: hsl(44 10% 98%);
-  --color-sidebar-foreground: hsl(18 14% 7% / 0.62);
-  --color-sidebar-primary: hsl(39 8% 16%);
-  --color-sidebar-primary-foreground: hsl(44 9% 95%);
-  --color-sidebar-muted-foreground: hsl(18 14% 7% / 0.4);
-  --color-sidebar-accent: hsl(18 14% 7% / 0.035);
-  --color-sidebar-accent-foreground: hsl(18 14% 7% / 0.8);
-  --color-sidebar-border: hsl(18 14% 7% / 0.08);
-  --color-sidebar-ring: hsl(37 5% 63%);
-  --color-sidebar-blue: hsl(221 83% 53%);
+  /* Sidebar: darker oat than the content paper, mirroring dark mode. */
+  --color-sidebar: #f3f1ea;
+  --color-sidebar-background: #faf9f5;
+  --color-sidebar-foreground: rgb(33 32 28 / 0.8);
+  --color-sidebar-primary: #21201c;
+  --color-sidebar-primary-foreground: #faf9f5;
+  --color-sidebar-muted-foreground: rgb(33 32 28 / 0.45);
+  --color-sidebar-accent: rgb(33 32 28 / 0.05);
+  --color-sidebar-accent-foreground: rgb(33 32 28 / 0.88);
+  --color-sidebar-border: rgb(33 32 28 / 0.08);
+  --color-sidebar-ring: hsl(17 52% 50%);
+  --color-sidebar-blue: hsl(17 52% 48%);
 
   --color-status-backlog: hsl(36 4% 54%);
   --color-status-backlog-hover: hsl(38 6% 35%);
@@ -1022,8 +1045,8 @@ mark.codex-thread-find-active {
   --color-status-in-progress-hover: hsl(50 100% 36%);
   --color-status-in-review: hsl(142 76% 36%);
   --color-status-in-review-hover: hsl(142 72% 29%);
-  --color-status-done: hsl(33 35% 69%);
-  --color-status-done-hover: hsl(23 17% 57%);
+  --color-status-done: hsl(17 52% 50%);
+  --color-status-done-hover: hsl(17 52% 42%);
   --color-status-canceled: hsl(37 5% 63%);
   --color-status-canceled-hover: hsl(36 4% 54%);
 
@@ -1087,6 +1110,12 @@ mark.codex-thread-find-active {
   --color-diff-deleted: hsl(0 100% 45%);
   --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
   --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  /* Chat diff headers: the root 14% foreground mixes are tuned for dark
+     mode, where that much white is a subtle lift; the same share of ink
+     in light mode reads as a heavy gray slab. (The file header itself is
+     flat on the diff surface at root level — Codex parity.) */
+  --color-diff-chat-turn-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
+  --color-diff-chat-inline-tool-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -1258,8 +1287,9 @@ mark.codex-thread-find-active {
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
-/* Mono light tracks Codex Electron light without changing the original preset. */
-:root[data-theme="mono"][data-mode="light"] {
+/* Mono + original light track Codex Electron light. */
+:root[data-theme="mono"][data-mode="light"],
+:root[data-theme="original"][data-mode="light"] {
   --color-scrollbar-thumb: rgba(13, 13, 13, 0.08);
   --color-scrollbar-thumb-active: rgba(13, 13, 13, 0.16);
 
@@ -1290,7 +1320,9 @@ mark.codex-thread-find-active {
   --color-card: var(--color-surface-elevated);
   --color-card-foreground: var(--color-foreground);
 
-  --color-popover: var(--color-surface-control-opaque);
+  /* Codex electron-light popovers are white glass (elevated-primary),
+     not control gray. */
+  --color-popover: #ffffff;
   --color-popover-foreground: var(--color-foreground);
   --color-popover-accent: var(--color-list-hover);
   --color-popover-ring: var(--color-border);
@@ -1301,12 +1333,14 @@ mark.codex-thread-find-active {
   --color-separator: var(--color-border-light);
   --color-ring: #339cff;
 
+  /* Codex electron-light accent is blue-300 #339cff even on white
+     (text-accent/icon-accent/border-focus all use it). */
   --color-highlight: #e5f3ff;
   --color-highlight-foreground: var(--color-foreground);
-  --color-highlight-muted: #0169cc;
-  --color-border-highlight: #0169cc;
-  --color-unread: #0169cc;
-  --color-special: #0169cc;
+  --color-highlight-muted: #339cff;
+  --color-border-highlight: #339cff;
+  --color-unread: #339cff;
+  --color-special: #339cff;
 
   --color-destructive: #e02e2a;
   --color-destructive-foreground: #ffffff;
@@ -1316,35 +1350,35 @@ mark.codex-thread-find-active {
   --color-warning-foreground: var(--color-foreground);
   --color-warning-foreground-secondary: var(--color-foreground-tertiary);
   --color-warning-border: var(--color-border);
-  --color-info: #0169cc;
+  --color-info: #0285ff;
   --color-info-foreground: #ffffff;
   --color-positive: #00a240;
   --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;
 
   --color-link: #e5f3ff;
-  --color-link-foreground: #0169cc;
+  --color-link-foreground: #339cff;
   --color-link-elevated: #d8e8f7;
 
   --color-tip: #e5f3ff;
   --color-tip-border: var(--color-border);
   --color-tip-secondary: #d8e8f7;
   --color-tip-secondary-border: var(--color-border);
-  --color-tip-muted: #0169cc;
+  --color-tip-muted: #339cff;
   --color-tip-foreground: var(--color-foreground);
-  --color-plan-border: #0169cc;
+  --color-plan-border: #339cff;
 
   --color-switch-background: var(--color-primary);
   --color-switch-foreground: #ffffff;
 
   --color-composer-background: rgba(255, 255, 255, 0.864);
   --color-composer-border: rgba(0, 0, 0, 0.1);
-  --color-composer-control-foreground: rgba(13, 13, 13, 0.5);
-  --color-composer-control-active-foreground: #0d0d0d;
-  --color-composer-control-muted-foreground: rgba(13, 13, 13, 0.5);
-  --color-composer-control-hover: rgba(13, 13, 13, 0.055);
-  --color-composer-send-background: #0d0d0d;
-  --color-composer-send-foreground: #ffffff;
+  --color-composer-control-foreground: color-mix(in oklab, var(--color-foreground) 55%, transparent);
+  --color-composer-control-active-foreground: var(--color-foreground);
+  --color-composer-control-muted-foreground: color-mix(in oklab, var(--color-foreground) 50%, transparent);
+  --color-composer-control-hover: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+  --color-composer-send-background: var(--color-primary);
+  --color-composer-send-foreground: var(--color-primary-foreground);
   --color-composer-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.05);
   --color-composer-backdrop-filter: blur(16px);
 
@@ -1360,22 +1394,22 @@ mark.codex-thread-find-active {
   --color-sidebar-accent-foreground: var(--color-foreground);
   --color-sidebar-border: var(--color-border);
   --color-sidebar-ring: var(--color-ring);
-  --color-sidebar-blue: #0169cc;
+  --color-sidebar-blue: #339cff;
 
-  --color-status-backlog: rgba(13, 13, 13, 0.5);
-  --color-status-backlog-hover: rgba(13, 13, 13, 0.7);
+  --color-status-backlog: var(--color-foreground-tertiary);
+  --color-status-backlog-hover: var(--color-foreground-secondary);
   --color-status-in-progress: #bd5800;
   --color-status-in-progress-hover: #9a4600;
   --color-status-in-review: #00a240;
   --color-status-in-review-hover: #008833;
-  --color-status-done: #0169cc;
-  --color-status-done-hover: #0057aa;
-  --color-status-canceled: rgba(13, 13, 13, 0.5);
-  --color-status-canceled-hover: rgba(13, 13, 13, 0.7);
+  --color-status-done: #339cff;
+  --color-status-done-hover: #0285ff;
+  --color-status-canceled: var(--color-foreground-tertiary);
+  --color-status-canceled-hover: var(--color-foreground-secondary);
 
-  --color-todo-in-progress: #0169cc;
+  --color-todo-in-progress: #339cff;
   --color-todo-completed: #00a240;
-  --color-todo-pending: rgba(13, 13, 13, 0.5);
+  --color-todo-pending: var(--color-foreground-tertiary);
 
   --color-app-switcher-bg: rgba(13, 13, 13, 0.1);
 
@@ -2156,7 +2190,8 @@ body {
   --workspace-shell-action-hover-foreground: var(--color-foreground);
 }
 
-:root[data-theme="mono"][data-mode="light"] {
+:root[data-theme="mono"][data-mode="light"],
+:root[data-theme="original"][data-mode="light"] {
   --workspace-shell-tab-inactive-background: transparent;
   --workspace-shell-tab-inactive-border: transparent;
   --workspace-shell-tab-hover-background: color-mix(in oklab, var(--color-foreground) 5%, transparent);
@@ -2334,7 +2369,8 @@ body {
   border-bottom: 1px solid var(--right-panel-tab-outer-border);
 }
 
-:root[data-theme="mono"][data-mode="light"] .right-panel-tab-system {
+:root[data-theme="mono"][data-mode="light"] .right-panel-tab-system,
+:root[data-theme="original"][data-mode="light"] .right-panel-tab-system {
   --right-panel-tab-surface: var(--color-surface);
   --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-surface) 88%, transparent);
   --right-panel-tab-hover-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
