@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
@@ -7,7 +8,7 @@ use tokio::task::JoinHandle;
 use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
 };
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::BackgroundWorkDurable;
 use crate::live::sessions::sink::AcpToolPayload;
 
 mod claude;
@@ -40,7 +41,7 @@ impl Default for BackgroundWorkOptions {
 pub struct BackgroundWorkRegistry {
     session_id: String,
     source_agent_kind: String,
-    store: SessionStore,
+    store: Arc<dyn BackgroundWorkDurable>,
     updates_tx: mpsc::UnboundedSender<BackgroundWorkUpdate>,
     options: BackgroundWorkOptions,
     trackers: HashMap<String, JoinHandle<()>>,
@@ -51,7 +52,7 @@ impl BackgroundWorkRegistry {
     pub fn new(
         session_id: String,
         source_agent_kind: String,
-        store: SessionStore,
+        store: Arc<dyn BackgroundWorkDurable>,
         updates_tx: mpsc::UnboundedSender<BackgroundWorkUpdate>,
         options: BackgroundWorkOptions,
     ) -> Self {
@@ -225,7 +226,7 @@ mod tests {
                 let mut registry = BackgroundWorkRegistry::new(
                     "session-1".to_string(),
                     "claude".to_string(),
-                    store.clone(),
+                    std::sync::Arc::new(store.clone()),
                     updates_tx,
                     BackgroundWorkOptions {
                         poll_interval: Duration::from_secs(60),

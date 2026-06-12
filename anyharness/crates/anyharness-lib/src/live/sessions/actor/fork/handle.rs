@@ -6,19 +6,19 @@ use tokio::sync::oneshot;
 
 use crate::domains::sessions::mcp_bindings::acp::to_acp_servers;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, ForkSessionCommandResult, SessionCommand,
 };
 use crate::live::sessions::driver::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::QueueDurable;
 pub(in crate::live::sessions::actor) async fn fork_native_session(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
     handle: &Arc<LiveSessionHandle>,
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     session_id: &str,
     action_capabilities: SessionActionCapabilities,
     supports_close: bool,
@@ -48,7 +48,7 @@ pub(in crate::live::sessions::actor) async fn handle_idle_fork_lifecycle_command
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
     handle: &Arc<LiveSessionHandle>,
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     session_id: &str,
     action_capabilities: SessionActionCapabilities,
     supports_close: bool,
@@ -86,7 +86,7 @@ pub(in crate::live::sessions::actor) async fn handle_idle_fork_lifecycle_command
 
 pub(in crate::live::sessions::actor) async fn verify_fork_ready(
     handle: &Arc<LiveSessionHandle>,
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     session_id: &str,
     action_capabilities: SessionActionCapabilities,
 ) -> Result<(), ForkSessionCommandError> {

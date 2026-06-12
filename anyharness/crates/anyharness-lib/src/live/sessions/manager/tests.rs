@@ -14,13 +14,14 @@ use crate::domains::agents::model::{
     AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus, ResolvedArtifact,
 };
 use crate::domains::agents::registry::built_in_registry;
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::model::{SessionEventRecord, SessionRecord};
 use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
-use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::{
+    LaunchEnv, SessionHooks, SessionLaunch, SessionStartupStrategy, SystemPromptAppends,
+};
 use crate::persistence::Db;
 
 fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
@@ -93,10 +94,21 @@ fn seeded_session_store() -> SessionStore {
     store
 }
 
-fn test_attachment_storage() -> PromptAttachmentStorage {
-    PromptAttachmentStorage::new(
-        std::env::temp_dir().join(format!("anyharness-test-{}", uuid::Uuid::new_v4())),
-    )
+fn manager_for_store(store: &SessionStore) -> LiveSessionManager {
+    LiveSessionManager::new(test_support::actor_capabilities_for_store(store))
+}
+
+fn test_launch(startup: SessionStartupStrategy) -> SessionLaunch {
+    SessionLaunch {
+        session: session_record(),
+        agent: resolved_agent(AgentKind::Claude),
+        workspace_path: PathBuf::from("/tmp/workspace"),
+        env: LaunchEnv::default(),
+        mcp_servers: vec![],
+        startup,
+        prompts: SystemPromptAppends::default(),
+        last_seq: 0,
+    }
 }
 
 fn subagent_turn_completed_event() -> RuntimeInjectedSessionEvent {
@@ -114,7 +126,7 @@ fn subagent_turn_completed_event() -> RuntimeInjectedSessionEvent {
 
 #[tokio::test]
 async fn reused_live_handle_reports_the_live_native_session_id() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
+    let manager = manager_for_store(&SessionStore::new(Db::open_in_memory().expect("open db")));
     let (command_tx, _command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -132,21 +144,8 @@ async fn reused_live_handle_reports_the_live_native_session_id() {
 
     let (returned_handle, ready) = manager
         .start_session(
-            session_record(),
-            resolved_agent(AgentKind::Claude),
-            PathBuf::from("/tmp/workspace"),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            SessionStore::new(Db::open_in_memory().expect("open db")),
-            test_attachment_storage(),
-            vec![],
-            SessionStartupStrategy::ResumeSeqFreshNative,
-            None,
-            None,
-            None,
-            None,
+            test_launch(SessionStartupStrategy::ResumeSeqFreshNative),
+            SessionHooks::default(),
         )
         .await
         .expect("reuse existing handle");
@@ -157,7 +156,7 @@ async fn reused_live_handle_reports_the_live_native_session_id() {
 
 #[tokio::test]
 async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
+    let manager = manager_for_store(&SessionStore::new(Db::open_in_memory().expect("open db")));
     let (command_tx, _command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -183,21 +182,8 @@ async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
     let mut start = tokio::spawn(async move {
         manager_for_start
             .start_session(
-                session_record(),
-                resolved_agent(AgentKind::Claude),
-                PathBuf::from("/tmp/workspace"),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                SessionStore::new(Db::open_in_memory().expect("open db")),
-                test_attachment_storage(),
-                vec![],
-                SessionStartupStrategy::ResumeSeqFreshNative,
-                None,
-                None,
-                None,
-                None,
+                test_launch(SessionStartupStrategy::ResumeSeqFreshNative),
+                SessionHooks::default(),
             )
             .await
     });
@@ -221,7 +207,7 @@ async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
 
 #[tokio::test]
 async fn blocking_remove_discards_live_and_pending_handles() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
+    let manager = manager_for_store(&SessionStore::new(Db::open_in_memory().expect("open db")));
     let (command_tx, _command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -266,8 +252,8 @@ async fn blocking_remove_discards_live_and_pending_handles() {
 
 #[tokio::test]
 async fn offline_runtime_event_injection_appends_with_next_sequence() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
+    let manager = manager_for_store(&store);
     store
         .append_event(&SessionEventRecord {
             id: 0,
@@ -284,7 +270,6 @@ async fn offline_runtime_event_injection_appends_with_next_sequence() {
     let envelope = manager
         .emit_runtime_event(
             "session-1",
-            store.clone(),
             RuntimeInjectedSessionEvent::SessionInfoUpdate {
                 title: Some("Renamed".to_string()),
                 updated_at: Some("2026-03-25T00:02:00Z".to_string()),
@@ -309,11 +294,11 @@ async fn offline_runtime_event_injection_appends_with_next_sequence() {
 
 #[tokio::test]
 async fn offline_runtime_activity_event_touches_session_updated_at() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
+    let manager = manager_for_store(&store);
 
     let envelope = manager
-        .emit_runtime_event("session-1", store.clone(), subagent_turn_completed_event())
+        .emit_runtime_event("session-1", subagent_turn_completed_event())
         .await
         .expect("emit runtime event");
 
@@ -329,12 +314,11 @@ async fn offline_runtime_activity_event_touches_session_updated_at() {
 
 #[tokio::test]
 async fn offline_runtime_event_injection_serializes_concurrent_appends() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
+    let manager = manager_for_store(&store);
 
     let first = manager.emit_runtime_event(
         "session-1",
-        store.clone(),
         RuntimeInjectedSessionEvent::SessionInfoUpdate {
             title: Some("First".to_string()),
             updated_at: None,
@@ -342,7 +326,6 @@ async fn offline_runtime_event_injection_serializes_concurrent_appends() {
     );
     let second = manager.emit_runtime_event(
         "session-1",
-        store.clone(),
         RuntimeInjectedSessionEvent::SessionInfoUpdate {
             title: Some("Second".to_string()),
             updated_at: None,
@@ -366,8 +349,8 @@ async fn offline_runtime_event_injection_serializes_concurrent_appends() {
 
 #[tokio::test]
 async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
+    let manager = manager_for_store(&store);
     let (command_tx, command_rx) = mpsc::channel(1);
     drop(command_rx);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
@@ -387,7 +370,6 @@ async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
     let envelope = manager
         .emit_runtime_event(
             "session-1",
-            store.clone(),
             RuntimeInjectedSessionEvent::SessionInfoUpdate {
                 title: Some("Renamed".to_string()),
                 updated_at: None,
@@ -410,8 +392,8 @@ async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
 
 #[tokio::test]
 async fn live_runtime_event_injection_routes_through_actor_command() {
-    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
+    let manager = manager_for_store(&store);
     let (command_tx, mut command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -448,7 +430,6 @@ async fn live_runtime_event_injection_routes_through_actor_command() {
     let envelope = manager
         .emit_runtime_event(
             "session-1",
-            store,
             RuntimeInjectedSessionEvent::SessionInfoUpdate {
                 title: Some("Renamed".to_string()),
                 updated_at: None,

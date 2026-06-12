@@ -16,7 +16,7 @@ impl SessionEventSink {
             &self.session_id,
             &mut self.next_seq,
             &self.event_tx,
-            &self.store,
+            self.store.as_ref(),
             event.into_session_event(),
             None,
             None,

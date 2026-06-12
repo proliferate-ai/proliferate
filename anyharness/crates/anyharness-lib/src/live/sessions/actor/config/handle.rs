@@ -5,7 +5,6 @@ use anyharness_contract::v1::ConfigApplyState;
 use tokio::sync::Mutex;
 
 use crate::domains::sessions::model::SessionRecord;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::apply::{
     apply_mode_via_direct_setter_legacy, apply_specific_config_option, try_apply_config_option,
     try_apply_model_preference,
@@ -19,6 +18,7 @@ use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
 };
 use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn apply_requested_session_preferences(
     conn: &acp::ConnectionTo<acp::Agent>,
@@ -102,7 +102,7 @@ pub(in crate::live::sessions::actor) async fn handle_idle_config_command(
     native_session_id: &str,
     source_agent_kind: &str,
     session_id: &str,
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
@@ -125,7 +125,7 @@ pub(in crate::live::sessions::actor) async fn handle_idle_config_command(
 }
 
 pub(in crate::live::sessions::actor) async fn handle_busy_config_command(
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     persisted_config_state: &mut PersistedSessionConfigState,

@@ -4,8 +4,6 @@ use agent_client_protocol as acp;
 use tokio::sync::{mpsc, Mutex};
 
 use crate::domains::agents::model::AgentKind;
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
@@ -31,8 +29,6 @@ pub(in crate::live::sessions::actor) struct IdlePromptContext<'a> {
     pub startup_state: &'a mut SessionStartupState,
     pub resume_replay_filter: &'a mut ResumeReplayFilter,
     pub handle: &'a Arc<LiveSessionHandle>,
-    pub store: &'a SessionStore,
-    pub attachment_storage: &'a PromptAttachmentStorage,
 }
 
 pub(in crate::live::sessions::actor) async fn handle_idle_prompt_command(
@@ -52,8 +48,6 @@ pub(in crate::live::sessions::actor) async fn handle_idle_prompt_command(
         startup_state,
         resume_replay_filter,
         handle,
-        store,
-        attachment_storage,
     } = context;
 
     handle_active_prompt(
@@ -70,8 +64,6 @@ pub(in crate::live::sessions::actor) async fn handle_idle_prompt_command(
             startup_state,
             resume_replay_filter,
             handle,
-            store,
-            attachment_storage,
         },
         request,
     )

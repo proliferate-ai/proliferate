@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tokio::sync::broadcast;
 
 use self::state::{PlanItemState, StreamingItemState, ToolItemState};
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::EventPersist;
 use crate::observability::transcript_phase::TranscriptPhaseDebugState;
 use anyharness_contract::v1::SessionEventEnvelope;
 
@@ -37,7 +38,7 @@ pub struct SessionEventSink {
     workspace_root: PathBuf,
     next_seq: i64,
     event_tx: broadcast::Sender<SessionEventEnvelope>,
-    store: SessionStore,
+    store: Arc<dyn EventPersist>,
 
     current_turn_id: Option<String>,
     open_assistant_item: Option<StreamingItemState>,
@@ -53,7 +54,7 @@ impl SessionEventSink {
         source_agent_kind: String,
         workspace_root: PathBuf,
         event_tx: broadcast::Sender<SessionEventEnvelope>,
-        store: SessionStore,
+        store: Arc<dyn EventPersist>,
     ) -> Self {
         Self {
             session_id,
@@ -77,7 +78,7 @@ impl SessionEventSink {
         workspace_root: PathBuf,
         last_seq: i64,
         event_tx: broadcast::Sender<SessionEventEnvelope>,
-        store: SessionStore,
+        store: Arc<dyn EventPersist>,
     ) -> Self {
         Self {
             session_id,

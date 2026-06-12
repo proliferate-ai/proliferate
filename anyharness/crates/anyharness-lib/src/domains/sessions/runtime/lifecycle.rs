@@ -266,9 +266,7 @@ impl SessionRuntime {
         session_id: &str,
         event: RuntimeInjectedSessionEvent,
     ) -> RuntimeEventInjectionResult {
-        self.acp_manager
-            .emit_runtime_event(session_id, self.session_service.store().clone(), event)
-            .await
+        self.acp_manager.emit_runtime_event(session_id, event).await
     }
 
     pub(super) fn get_session_or_not_found(

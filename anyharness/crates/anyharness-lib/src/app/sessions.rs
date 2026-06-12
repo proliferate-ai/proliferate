@@ -1,7 +1,9 @@
-//! Wiring family for the live-session manager: builds the product reactors
-//! (observers, permission advisor) and constructs the manager. Composition
-//! only — no behavior.
+//! Wiring family for the live-session manager: builds the durable
+//! capabilities (event/queue/background/state stores + attachment source) and
+//! the product reactors (observers, permission advisor), then constructs the
+//! manager. Composition only — no behavior.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::domains::plans::permission_advisor::PlanPermissionAdvisor;
@@ -9,10 +11,16 @@ use crate::domains::plans::service::PlanService;
 use crate::domains::plans::session_observer::PlanSessionObserver;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::session_observer::ReviewSessionObserver;
-use crate::live::sessions::model::{PermissionAdvisor, SessionEventObserver};
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::live_ports::SessionAttachmentSource;
+use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
 use crate::live::sessions::LiveSessionManager;
+use crate::persistence::Db;
 
 pub(super) struct LiveSessionsWiringDeps {
+    pub db: Db,
+    pub runtime_home: PathBuf,
     pub plan_service: Arc<PlanService>,
     pub review_service: Arc<ReviewService>,
 }
@@ -31,5 +39,17 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
     let permission_advisor: Option<Arc<dyn PermissionAdvisor>> = Some(Arc::new(
         PlanPermissionAdvisor::new(deps.plan_service.clone()),
     ));
-    LiveSessionManager::new(observers, permission_advisor)
+
+    let store = SessionStore::new(deps.db.clone());
+    let attachment_storage = PromptAttachmentStorage::new(deps.runtime_home.clone());
+    let caps = ActorCapabilities {
+        events: Arc::new(store.clone()),
+        queue: Arc::new(store.clone()),
+        background: Arc::new(store.clone()),
+        state: Arc::new(store.clone()),
+        attachments: Arc::new(SessionAttachmentSource::new(store, attachment_storage)),
+        observers,
+        permission_advisor,
+    };
+    LiveSessionManager::new(caps)
 }
