@@ -8,8 +8,8 @@ import {
   Archive,
   Folder,
   GitBranch,
-  GitMerge,
   Pencil,
+  Trash,
 } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -212,7 +212,7 @@ export function WorkspaceItem({
                 </div>
               </div>
               <PopoverMenuItem
-                icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
+                icon={<Trash className="size-3.5 shrink-0 text-muted-foreground" />}
                 label="Delete workspace"
                 variant="sidebar"
                 onClick={() => {
@@ -279,7 +279,7 @@ export function WorkspaceItem({
               )}
               {onMarkDone && (
                 <PopoverMenuItem
-                  icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
+                  icon={<Trash className="size-3.5 shrink-0 text-muted-foreground" />}
                   label="Delete workspace..."
                   variant="sidebar"
                   onClick={() => {

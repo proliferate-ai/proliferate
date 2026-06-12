@@ -26,6 +26,7 @@ low-level runtime contracts.
 | Agent features / product MCPs | Product MCP server pattern and concrete agent-feature MCP definitions for reviews, workspace naming, subagents, artifacts, cowork, and prompt/skill policy. | [agent-features/servers.md](agent-features/servers.md), [agent-features/definitions/README.md](agent-features/definitions/README.md) |
 | Settings and admin IA | Settings/admin information architecture, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings-admin-ia.md](settings-admin-ia.md) |
 | Support reporting | Desktop support report uploads, sanitization, diagnostics, and support-submitted issue handoff. | [support-reporting.md](support-reporting.md) |
+| Terminals | Workspace terminal pane UX, terminal record actions, and the creation grid contract for new terminals. | [terminals.md](terminals.md) |
 | Workspace migration | Workspace migration flows, user attestation, durability, queue state, and completion/error semantics. | [workspace-migration.md](workspace-migration.md) |
 
 ## Outline Coverage
@@ -37,7 +38,7 @@ Use this map before creating a new spec:
 | --- | --- |
 | Onboarding | [onboarding.md](onboarding.md), with lower-level slices in [product-auth.md](product-auth.md), [../primitives/agent-auth-bifrost-byok.md](../primitives/agent-auth-bifrost-byok.md), [../primitives/billing.md](../primitives/billing.md), [../primitives/workspace-provisioning.md](../primitives/workspace-provisioning.md), and [settings-admin-ia.md](settings-admin-ia.md). |
 | Browsers | No dedicated browser feature spec yet. Product MCP ownership is in [agent-features/servers.md](agent-features/servers.md); runtime/domain ownership remains under [../structures/anyharness/README.md](../structures/anyharness/README.md). Create a browser feature spec before adding user-visible browser workflows. |
-| Terminals | No dedicated terminal feature spec yet. Runtime ownership remains under [../structures/anyharness/README.md](../structures/anyharness/README.md). Create a terminal feature spec before adding user-visible terminal workflows or terminal-specific QA gates. |
+| Terminals | [terminals.md](terminals.md) owns terminal pane UX and the creation grid contract. Runtime ownership remains under [../structures/anyharness/README.md](../structures/anyharness/README.md). |
 | Computer Use | No dedicated computer-use feature spec yet. Product MCP ownership is in [agent-features/servers.md](agent-features/servers.md); create a feature spec before adding user-visible Computer Use workflow, permissions, or QA behavior. |
 | Plugins | Runtime/config ownership lives in [../primitives/mcp-skills.md](../primitives/mcp-skills.md). Create a plugins feature spec only for user-facing catalog/install/manage workflows that exceed the primitive contract. |
 | Product MCP Structure | Covered by [agent-features/servers.md](agent-features/servers.md) and concrete definitions under [agent-features/definitions/](agent-features/definitions/). |

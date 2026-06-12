@@ -9,6 +9,13 @@ import {
 import {
   clearTerminal,
 } from "@/lib/infra/terminals/terminal-stream-registry";
+import { measureWorkspaceTerminalGrid } from "@/lib/infra/terminals/terminal-grid-probe";
+import {
+  DEFAULT_TERMINAL_GRID,
+  type TerminalGrid,
+} from "@/lib/domain/terminals/terminal-grid";
+import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   closeTerminal,
   createWorkspaceTerminal,
@@ -54,16 +61,27 @@ export function useTerminalActions() {
     setWorkspaceTerminalRecords,
   ]);
 
+  // The shell prints its first prompt at creation size; a grid that differs
+  // from the renderer leaves zsh's PROMPT_SP "%" mark visible. Measure the
+  // real pane and only fall back to the default grid when nothing is laid out.
+  const resolveCreateGrid = useCallback(async (
+    workspaceId: string,
+  ): Promise<TerminalGrid> => {
+    const { readableCodeFontSizeId } = useUserPreferencesStore.getState();
+    const fontSize = resolveReadableCodeFontScale(readableCodeFontSizeId).monacoFontSize;
+    const measured = await measureWorkspaceTerminalGrid(workspaceId, { fontSize });
+    return measured ?? DEFAULT_TERMINAL_GRID;
+  }, []);
+
   const createTabForWorkspace = useCallback(async (
     workspaceId: string,
-    cols: number,
-    rows: number,
     options?: { title?: string; purpose?: TerminalPurpose },
   ) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
       throw new Error(blockedReason);
     }
+    const { cols, rows } = await resolveCreateGrid(workspaceId);
     const connection = await resolveTerminalWorkspaceConnection(workspaceId);
     const record = await createWorkspaceTerminal(connection, {
       cols,
@@ -76,20 +94,24 @@ export function useTerminalActions() {
   }, [
     getWorkspaceRuntimeBlockReason,
     invalidateWorkspaceTerminals,
+    resolveCreateGrid,
     resolveTerminalWorkspaceConnection,
   ]);
 
   const createRunTabForWorkspace = useCallback(async (
     workspaceId: string,
     command: string,
-    cols = 120,
-    rows = 40,
+    cols?: number,
+    rows?: number,
   ) => {
+    const grid = cols !== undefined && rows !== undefined
+      ? { cols, rows }
+      : await resolveCreateGrid(workspaceId);
     return createRunTerminalTabWorkflow({
       workspaceId,
       command,
-      cols,
-      rows,
+      cols: grid.cols,
+      rows: grid.rows,
     }, {
       getWorkspaceRuntimeBlockReason,
       resolveWorkspaceConnection: resolveTerminalWorkspaceConnection,
@@ -101,6 +123,7 @@ export function useTerminalActions() {
   }, [
     getWorkspaceRuntimeBlockReason,
     invalidateWorkspaceTerminals,
+    resolveCreateGrid,
     resolveTerminalWorkspaceConnection,
     setWorkspaceTerminalRecords,
   ]);

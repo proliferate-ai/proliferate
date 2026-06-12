@@ -3,6 +3,7 @@ import {
   findReusableRunTerminalId,
   RUN_TERMINAL_TITLE,
 } from "@/lib/domain/terminals/run-terminal";
+import { DEFAULT_TERMINAL_GRID } from "@/lib/domain/terminals/terminal-grid";
 
 export type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 
@@ -52,8 +53,8 @@ export async function createRunTerminalTabWorkflow<Connection>(
   }
 
   const record = await deps.createWorkspaceTerminal(connection, {
-    cols: input.cols ?? 120,
-    rows: input.rows ?? 40,
+    cols: input.cols ?? DEFAULT_TERMINAL_GRID.cols,
+    rows: input.rows ?? DEFAULT_TERMINAL_GRID.rows,
     title: RUN_TERMINAL_TITLE,
     purpose: "run",
     startupCommand: input.command,

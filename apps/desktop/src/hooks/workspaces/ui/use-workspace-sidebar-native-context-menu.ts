@@ -99,7 +99,6 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       id: "copy-workspace-location",
       label: copyWorkspaceLocationLabel,
       accelerator: getShortcutNativeAccelerator(SHORTCUTS.copyWorkspacePath) ?? undefined,
-      icon: { kind: "native", name: "copy" },
       onSelect: onCopyWorkspaceLocation,
     });
   }
@@ -109,7 +108,6 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       id: "copy-branch-name",
       label: "Copy branch name",
       accelerator: getShortcutNativeAccelerator(SHORTCUTS.copyBranchName) ?? undefined,
-      icon: { kind: "native", name: "copy" },
       onSelect: onCopyBranchName,
     });
   }
