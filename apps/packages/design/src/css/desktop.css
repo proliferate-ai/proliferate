@@ -707,10 +707,13 @@ mark.codex-thread-find-active {
   --color-diff-deleted: #e02e2a;
   --diffs-fg: #fcfcfc;
   --diffs-mixer: #fcfcfc;
-  --diffs-bg-addition-override: color-mix(in srgb, #181818 86%, #00a240);
-  --diffs-bg-deletion-override: color-mix(in srgb, #181818 86%, #e02e2a);
-  --diffs-bg-addition-number-override: color-mix(in srgb, #181818 89%, #00a240);
-  --diffs-bg-deletion-number-override: color-mix(in srgb, #181818 89%, #e02e2a);
+  /* Derive from --color-diff-main-surface (same #181818 in dark) so these
+     do not leak Codex-dark gutter colors into light mode — this selector
+     has no mode qualifier and the light blocks don't re-override them. */
+  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #00a240);
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #e02e2a);
+  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #00a240);
+  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #e02e2a);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -1105,6 +1108,12 @@ mark.codex-thread-find-active {
   --color-diff-deleted: hsl(0 100% 45%);
   --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
   --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  /* Chat diff headers: the root mixes (14-18% foreground) are tuned for
+     dark mode, where that much white is a subtle lift; the same share of
+     ink in light mode reads as a heavy gray slab. */
+  --color-diff-chat-turn-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
+  --color-diff-chat-inline-tool-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
+  --color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 92%, var(--color-foreground));
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
