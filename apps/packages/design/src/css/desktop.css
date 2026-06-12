@@ -88,60 +88,60 @@
    * ==================================================================== */
 
   /* -- Core --
-     Espresso warm: saturation is deliberately high enough to read as warm
-     on real displays — at ~10% the preset was indistinguishable from a
-     neutral gray theme. */
-  --color-background: hsl(25 16% 8%);
-  --color-foreground: hsl(33 20% 92%);
+     Espresso warm. The saturation here (~25-30%) is the identity of the
+     preset: below ~20% at these lightness levels the theme is visually
+     indistinguishable from a neutral gray (mono) theme. */
+  --color-background: hsl(26 28% 9%);
+  --color-foreground: hsl(33 30% 92%);
   --color-overlay: hsl(0 0% 0%);
 
   /* -- Primary -- */
-  --color-primary: hsl(33 25% 95%);
-  --color-primary-foreground: hsl(25 14% 15%);
+  --color-primary: hsl(33 35% 95%);
+  --color-primary-foreground: hsl(26 24% 15%);
 
   /* -- Secondary -- */
-  --color-secondary: hsl(25 14% 13%);
-  --color-secondary-foreground: hsl(33 25% 95%);
+  --color-secondary: hsl(26 24% 14%);
+  --color-secondary-foreground: hsl(33 35% 95%);
 
   /* -- Accent / Muted --
      Hover/selection states are translucent warm-white overlays (not opaque
      panel grays) so elevation reads consistently on any surface. */
-  --color-accent: hsl(35 60% 90% / 0.07);
-  --color-accent-foreground: hsl(33 25% 95%);
-  --color-muted: hsl(25 14% 13%);
-  --color-muted-foreground: hsl(33 30% 95% / 0.64);
-  --color-faint: hsl(33 30% 95% / 0.46);
-  --color-helper: hsl(33 30% 95% / 0.64);
+  --color-accent: hsl(35 70% 88% / 0.08);
+  --color-accent-foreground: hsl(33 35% 95%);
+  --color-muted: hsl(26 24% 14%);
+  --color-muted-foreground: hsl(33 40% 94% / 0.64);
+  --color-faint: hsl(33 40% 94% / 0.46);
+  --color-helper: hsl(33 40% 94% / 0.64);
 
   /* -- Card -- */
-  --color-card: hsl(25 14% 14%);
-  --color-card-foreground: hsl(33 25% 95%);
+  --color-card: hsl(26 24% 15%);
+  --color-card-foreground: hsl(33 35% 95%);
 
   /* -- Popover -- */
-  --color-popover: hsl(25 14% 14%);
-  --color-popover-foreground: hsl(33 20% 92%);
-  --color-popover-accent: hsl(35 60% 90% / 0.07);
-  --color-popover-ring: hsl(35 35% 85% / 0.1);
+  --color-popover: hsl(26 24% 15%);
+  --color-popover-foreground: hsl(33 30% 92%);
+  --color-popover-accent: hsl(35 70% 88% / 0.08);
+  --color-popover-ring: hsl(35 45% 80% / 0.11);
 
   /* -- Border & Input (warm-tinted, not pure white) -- */
-  --color-border: hsl(35 35% 85% / 0.11);
-  --color-input: hsl(35 35% 85% / 0.17);
-  --color-input-border: hsl(35 35% 85% / 0.17);
-  --color-separator: hsl(35 35% 85% / 0.07);
-  --color-ring: hsl(28 18% 72%);
-  --color-border-light: hsl(35 35% 85% / 0.055);
-  --color-border-heavy: hsl(35 35% 85% / 0.15);
+  --color-border: hsl(35 45% 80% / 0.12);
+  --color-input: hsl(35 45% 80% / 0.18);
+  --color-input-border: hsl(35 45% 80% / 0.18);
+  --color-separator: hsl(35 45% 80% / 0.08);
+  --color-ring: hsl(28 25% 72%);
+  --color-border-light: hsl(35 45% 80% / 0.06);
+  --color-border-heavy: hsl(35 45% 80% / 0.16);
 
   /* -- Surface roles (ladder: under < background < card < control-opaque) -- */
   --color-surface: var(--color-background);
-  /* Settings/overlay base layer: saturation runs higher here because warmth
-     is barely perceptible at this lightness. */
-  --color-surface-under: hsl(25 22% 7%);
-  --color-surface-control: hsl(25 14% 15% / 0.96);
-  --color-surface-control-opaque: hsl(25 14% 16%);
+  /* Settings/overlay base layer: saturation runs higher because warmth is
+     barely perceptible at this lightness. */
+  --color-surface-under: hsl(26 32% 7%);
+  --color-surface-control: hsl(26 24% 16% / 0.96);
+  --color-surface-control-opaque: hsl(26 24% 17%);
   --color-surface-elevated: var(--color-card);
-  --color-surface-elevated-secondary: hsl(35 60% 90% / 0.05);
-  --color-surface-editor: hsl(25 15% 11%);
+  --color-surface-elevated-secondary: hsl(35 70% 88% / 0.06);
+  --color-surface-editor: hsl(26 26% 12%);
   --color-list-hover: var(--color-accent);
   --color-foreground-secondary: var(--color-muted-foreground);
   --color-foreground-tertiary: var(--color-faint);
@@ -186,11 +186,11 @@
   --color-plan-border: hsl(19 40% 70% / 0.45);
 
   /* -- Switch -- */
-  --color-switch-background: hsl(33 20% 92%);
-  --color-switch-foreground: hsl(25 14% 15%);
+  --color-switch-background: hsl(33 30% 92%);
+  --color-switch-foreground: hsl(26 24% 15%);
 
   /* -- Composer -- */
-  --color-composer-background: hsl(25 14% 13%);
+  --color-composer-background: hsl(26 24% 14%);
   --color-composer-border: var(--color-border);
   --color-composer-control-foreground: var(--color-muted-foreground);
   --color-composer-control-active-foreground: var(--color-foreground);
@@ -202,19 +202,19 @@
   --color-composer-backdrop-filter: none;
 
   /* -- Prose -- */
-  --color-prose-border: hsl(35 35% 85% / 0.13);
+  --color-prose-border: hsl(35 45% 80% / 0.14);
 
   /* -- Sidebar (warm to match the main surfaces — was neutral-gray mono
      leftovers that clashed in hue with the workspace panel) -- */
-  --color-sidebar: hsl(25 15% 10%);
-  --color-sidebar-background: hsl(25 16% 8%);
-  --color-sidebar-foreground: hsl(33 25% 95%);
-  --color-sidebar-primary: hsl(33 25% 95%);
-  --color-sidebar-primary-foreground: hsl(33 25% 95%);
-  --color-sidebar-muted-foreground: hsl(33 30% 95% / 0.5);
-  --color-sidebar-accent: hsl(35 60% 90% / 0.08);
-  --color-sidebar-accent-foreground: hsl(33 25% 95%);
-  --color-sidebar-border: hsl(35 35% 85% / 0.09);
+  --color-sidebar: hsl(26 26% 11%);
+  --color-sidebar-background: hsl(26 28% 9%);
+  --color-sidebar-foreground: hsl(33 35% 95%);
+  --color-sidebar-primary: hsl(33 35% 95%);
+  --color-sidebar-primary-foreground: hsl(33 35% 95%);
+  --color-sidebar-muted-foreground: hsl(33 40% 94% / 0.5);
+  --color-sidebar-accent: hsl(35 70% 88% / 0.09);
+  --color-sidebar-accent-foreground: hsl(33 35% 95%);
+  --color-sidebar-border: hsl(35 45% 80% / 0.1);
   --color-sidebar-ring: hsl(213 100% 75% / 0.75);
   --color-sidebar-blue: hsl(213 94% 68%);
 
