@@ -1,11 +1,16 @@
+mod aws;
 mod claude;
 mod codex;
+mod cursor;
+mod facts;
 mod gemini;
+mod opencode;
 mod types;
 mod util;
 
 use std::path::Path;
 
+pub use facts::{collect_facts, fact_kinds, CredentialFact};
 pub use types::{
     ConfigMarkerKind, LocalAuthSource, LocalAuthState, PortableAuthExport, PortableAuthFile,
     PortableRelativePath, ProviderId,

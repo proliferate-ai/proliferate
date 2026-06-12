@@ -1,7 +1,9 @@
-//! Agent auth: encrypted selection config, local credential detection, and
-//! interactive login. One concern, one service surface.
+//! Agent auth: encrypted selection config, local credential detection,
+//! pure auth-context classification, and interactive login. One concern,
+//! one service surface.
 
 mod codex_config;
+pub mod context;
 pub mod credentials;
 mod launch;
 pub mod login;
@@ -22,6 +24,9 @@ pub use store::AgentAuthConfigStore;
 
 #[cfg(test)]
 mod claude_tests;
+
+#[cfg(test)]
+mod context_tests;
 
 #[cfg(test)]
 mod scope_tests;

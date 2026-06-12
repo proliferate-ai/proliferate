@@ -1,6 +1,7 @@
 mod agent_process;
 mod downloads;
 mod lock;
+pub mod manifest;
 pub(crate) mod managed_npm;
 mod native;
 mod npm;

@@ -62,7 +62,11 @@ fn agent_registry_agent_to_descriptor(
                         label: slot.label.clone(),
                         credential_provider_ids: slot.credential_provider_ids.clone(),
                         required_for_readiness: slot.required_for_readiness,
-                        env_vars: slot.env_vars.clone(),
+                        env_vars: slot
+                            .env_vars
+                            .iter()
+                            .map(|env_var| env_var.name().to_string())
+                            .collect(),
                         login: slot.login.as_ref().map(|login| LoginSpec {
                             label: login.label.clone(),
                             command: CommandSpec {

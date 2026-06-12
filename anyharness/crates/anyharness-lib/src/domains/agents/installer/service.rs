@@ -117,6 +117,15 @@ pub fn install_agent(
     }
 
     seed::mark_installed_artifacts_user_modified(runtime_home, &descriptor.kind, &installed);
+    if let Err(error) =
+        super::manifest::record_artifacts(runtime_home, descriptor.kind.as_str(), &installed)
+    {
+        tracing::warn!(
+            agent = descriptor.kind.as_str(),
+            error = %error,
+            "failed to write install manifest"
+        );
+    }
 
     Ok(installed)
 }
