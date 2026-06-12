@@ -46,4 +46,3 @@ server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized 
 server/tests/unit/test_cloud_mobility_service.py 800 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_ensure_running.py 872 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_provision.py 1823 existing server oversized unit test
-apps/desktop/src-tauri/src/commands/keychain.rs 686 existing desktop oversized file
