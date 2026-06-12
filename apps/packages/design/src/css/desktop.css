@@ -307,7 +307,9 @@
   --color-diff-chat-inline-tool-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground));
   --color-diff-sidebar-file-header-surface: var(--color-diff-chat-inline-tool-header-surface);
   --color-diff-sidebar-file-header-hover-surface: color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground));
-  --color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-foreground));
+  /* Codex parity: the diff file header has no band of its own — it sits
+     flat on the diff surface (94% + 6% foreground) with a hover tint. */
+  --color-diff-chat-file-header-surface: var(--color-diff-surface);
   --color-diff-chat-file-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground));
   --color-code-block-background: var(--color-diff-surface);
   --color-diff-added: var(--color-git-new-line);
@@ -1108,12 +1110,12 @@ mark.codex-thread-find-active {
   --color-diff-deleted: hsl(0 100% 45%);
   --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
   --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
-  /* Chat diff headers: the root mixes (14-18% foreground) are tuned for
-     dark mode, where that much white is a subtle lift; the same share of
-     ink in light mode reads as a heavy gray slab. */
+  /* Chat diff headers: the root 14% foreground mixes are tuned for dark
+     mode, where that much white is a subtle lift; the same share of ink
+     in light mode reads as a heavy gray slab. (The file header itself is
+     flat on the diff surface at root level — Codex parity.) */
   --color-diff-chat-turn-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
   --color-diff-chat-inline-tool-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
-  --color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 92%, var(--color-foreground));
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }

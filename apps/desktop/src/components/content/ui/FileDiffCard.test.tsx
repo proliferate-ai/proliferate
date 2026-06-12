@@ -59,7 +59,7 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(rootDiffVariables).not.toContain("#232323");
     expect(rootDiffVariables).not.toContain("#2b2b2b");
     expect(rootDiffVariables).toContain(
-      "--color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-foreground));",
+      "--color-diff-chat-file-header-surface: var(--color-diff-surface);",
     );
   });
 
