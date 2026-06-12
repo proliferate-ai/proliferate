@@ -16,7 +16,8 @@ use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::runtime::SendPromptOutcome;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 const PROMPT_ID_MAX_BYTES: usize = 256;
 
@@ -39,64 +40,65 @@ pub async fn prompt_session(
     Json(req): Json<PromptSessionRequest>,
 ) -> Result<Json<PromptSessionResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let prompt_id = request_prompt_id(req.prompt_id.as_deref(), latency_fields.prompt_id)?;
-    let prompt_id_for_trace = prompt_id.clone();
-    let started = Instant::now();
-    tracing::info!(
-        session_id = %session_id,
-        block_count = req.blocks.len(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
+    let flow = FlowHeaders::from_headers(&headers);
+    let span = flow.span();
+    let prompt_id = request_prompt_id(req.prompt_id.as_deref(), flow.prompt_id.as_deref())?;
+    async move {
+        let prompt_id_for_trace = prompt_id.clone();
+        let started = Instant::now();
+        tracing::info!(
+            session_id = %session_id,
+            block_count = req.blocks.len(),
             prompt_id = prompt_id_for_trace.as_deref(),
-        "[workspace-latency] session.http.prompt.request_received"
-    );
+            "[workspace-latency] session.http.prompt.request_received"
+        );
 
-    let _lease =
-        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
-            .await?;
-    if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
-        state
-            .runtime_config_service
-            .assert_session_context_matches(&session_id, expected)
-            .map_err(super::runtime_config::map_runtime_config_error)?;
+        let _lease = acquire_session_operation_lease(
+            &state,
+            &session_id,
+            WorkspaceOperationKind::SessionPrompt,
+        )
+        .await?;
+        if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
+            state
+                .runtime_config_service
+                .assert_session_context_matches(&session_id, expected)
+                .map_err(super::runtime_config::map_runtime_config_error)?;
+        }
+        let outcome = state
+            .session_runtime
+            .send_prompt(&session_id, req.blocks, prompt_id)
+            .await
+            .map_err(map_send_prompt_error)?;
+
+        tracing::info!(
+            session_id = %session_id,
+            elapsed_ms = started.elapsed().as_millis(),
+            prompt_id = prompt_id_for_trace.as_deref(),
+            "[workspace-latency] session.http.prompt.completed"
+        );
+
+        let (record, status, queued_seq) = match outcome {
+            SendPromptOutcome::Running { session, .. } => (
+                session,
+                anyharness_contract::v1::PromptSessionStatus::Running,
+                None,
+            ),
+            SendPromptOutcome::Queued { session, seq } => (
+                session,
+                anyharness_contract::v1::PromptSessionStatus::Queued,
+                Some(seq),
+            ),
+        };
+
+        Ok(Json(PromptSessionResponse {
+            session: session_to_contract(&state, &record).await?,
+            status,
+            queued_seq,
+        }))
     }
-    let outcome = state
-        .session_runtime
-        .send_prompt(&session_id, req.blocks, prompt_id, latency.as_ref())
-        .await
-        .map_err(map_send_prompt_error)?;
-
-    tracing::info!(
-        session_id = %session_id,
-        elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = prompt_id_for_trace.as_deref(),
-        "[workspace-latency] session.http.prompt.completed"
-    );
-
-    let (record, status, queued_seq) = match outcome {
-        SendPromptOutcome::Running { session, .. } => (
-            session,
-            anyharness_contract::v1::PromptSessionStatus::Running,
-            None,
-        ),
-        SendPromptOutcome::Queued { session, seq } => (
-            session,
-            anyharness_contract::v1::PromptSessionStatus::Queued,
-            Some(seq),
-        ),
-    };
-
-    Ok(Json(PromptSessionResponse {
-        session: session_to_contract(&state, &record).await?,
-        status,
-        queued_seq,
-    }))
+    .instrument(span)
+    .await
 }
 
 fn request_prompt_id(

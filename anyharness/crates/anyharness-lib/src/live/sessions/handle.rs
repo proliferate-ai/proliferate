@@ -18,7 +18,6 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::actor::command::SessionCommand;
-use crate::observability::latency::LatencyRequestContext;
 
 #[derive(Debug)]
 pub enum LiveSessionCommandError<E> {
@@ -217,13 +216,11 @@ impl LiveSessionHandle {
         &self,
         payload: PromptPayload,
         prompt_id: Option<String>,
-        latency: Option<LatencyRequestContext>,
         from_queue_seq: Option<i64>,
     ) -> Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>> {
         self.send_request(|respond_to| SessionCommand::Prompt {
             payload,
             prompt_id,
-            latency,
             from_queue_seq,
             respond_to,
         })
@@ -234,9 +231,8 @@ impl LiveSessionHandle {
         &self,
         payload: PromptPayload,
         prompt_id: Option<String>,
-        latency: Option<LatencyRequestContext>,
     ) -> Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>> {
-        self.send_prompt_with_queue_marker(payload, prompt_id, latency, None)
+        self.send_prompt_with_queue_marker(payload, prompt_id, None)
             .await
     }
 
@@ -245,7 +241,7 @@ impl LiveSessionHandle {
         payload: PromptPayload,
         seq: i64,
     ) -> Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>> {
-        self.send_prompt_with_queue_marker(payload, None, None, Some(seq))
+        self.send_prompt_with_queue_marker(payload, None, Some(seq))
             .await
     }
 

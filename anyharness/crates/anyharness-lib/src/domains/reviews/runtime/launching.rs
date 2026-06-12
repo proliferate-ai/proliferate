@@ -156,11 +156,7 @@ impl ReviewRuntime {
                 return Err(error);
             }
         };
-        let started = match self
-            .session_runtime
-            .start_persisted_session(&child, None)
-            .await
-        {
+        let started = match self.session_runtime.start_persisted_session(&child).await {
             Ok(started) => started,
             Err(error) => {
                 let detail = format!("{error:?}");
@@ -269,7 +265,6 @@ impl ReviewRuntime {
                                 snapshot_hash: snapshot_hash.to_string(),
                             },
                         ],
-                        None,
                         None,
                     )
                     .await

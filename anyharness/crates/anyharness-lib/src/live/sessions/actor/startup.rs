@@ -30,7 +30,6 @@ use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::model::{QueueDurable, SessionStateDurable};
 use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::observability::latency::latency_trace_fields;
 
 impl SessionActor {
     /// Spawns the agent process, establishes the ACP connection, starts the
@@ -53,8 +52,6 @@ impl SessionActor {
         let workspace_id = config.launch.session.workspace_id.clone();
         let startup_strategy = config.launch.startup.clone();
         let startup_strategy_label = startup_strategy.as_str();
-        let actor_latency = config.hooks.latency.clone();
-        let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
         let startup_started = Instant::now();
 
         let spawned = spawn_agent_process(
@@ -67,7 +64,6 @@ impl SessionActor {
             &session_id,
             &workspace_id,
             &source_agent_kind,
-            actor_latency.as_ref(),
             &ready_tx,
         )?;
         let child = spawned.child;
@@ -305,10 +301,6 @@ impl SessionActor {
             startup_strategy = startup_strategy_label,
             native_startup_disposition = startup_disposition.as_str(),
             total_elapsed_ms = startup_started.elapsed().as_millis(),
-            flow_id = actor_latency_fields.flow_id,
-            flow_kind = actor_latency_fields.flow_kind,
-            flow_source = actor_latency_fields.flow_source,
-            prompt_id = actor_latency_fields.prompt_id,
             "[workspace-latency] session.actor.startup_ready"
         );
         let resume_replay_filter = ResumeReplayFilter::new(
@@ -373,7 +365,6 @@ async fn dispatch_startup_drain(
                 .send(SessionCommand::Prompt {
                     payload: head.prompt_payload(),
                     prompt_id: head.prompt_id,
-                    latency: None,
                     from_queue_seq: Some(head.seq),
                     respond_to: drain_respond_tx,
                 })

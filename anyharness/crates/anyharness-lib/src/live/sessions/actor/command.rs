@@ -12,7 +12,6 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 use crate::live::sessions::rendezvous::broker::PermissionDecision;
-use crate::observability::latency::LatencyRequestContext;
 #[derive(Debug)]
 pub enum PromptAcceptError {
     EnqueueFailed(String),
@@ -122,7 +121,6 @@ pub(in crate::live::sessions) enum SessionCommand {
     Prompt {
         payload: PromptPayload,
         prompt_id: Option<String>,
-        latency: Option<LatencyRequestContext>,
         /// Set by the actor's own startup-drain path when self-dispatching a
         /// queue head. External callers pass `None` unless they have already
         /// durably inserted a queue row and only need the actor to drain it.

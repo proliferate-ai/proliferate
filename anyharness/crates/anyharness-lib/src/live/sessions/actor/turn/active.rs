@@ -15,12 +15,10 @@ use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
 use crate::live::sessions::actor::turn::start::StartedPromptTurn;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 pub(in crate::live::sessions::actor) struct ActivePromptRequest {
     pub payload: PromptPayload,
     pub prompt_id: Option<String>,
-    pub latency: Option<LatencyRequestContext>,
     pub from_queue_seq: Option<i64>,
     pub respond_to: oneshot::Sender<Result<PromptAcceptance, PromptAcceptError>>,
 }
@@ -40,7 +38,6 @@ impl SessionActor {
 
         let mut current_payload = request.payload;
         let mut current_prompt_id = request.prompt_id;
-        let mut current_latency = request.latency;
         let mut current_queue_seq = request.from_queue_seq;
         let mut current_respond_to = Some(request.respond_to);
         let mut exit_after_prompt: Option<ActorExitDisposition> = None;
@@ -50,13 +47,9 @@ impl SessionActor {
                 .await;
             self.resume_replay_filter.disable();
 
-            let latency_fields = latency_trace_fields(current_latency.as_ref());
             tracing::info!(
                 session_id = %self.session_id,
-                flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
+                prompt_id = current_prompt_id.as_deref(),
                 "[workspace-latency] session.actor.prompt.received"
             );
             let StartedPromptTurn {
@@ -98,10 +91,7 @@ impl SessionActor {
                 .update_last_prompt_at(&self.session_id, &now);
             tracing::info!(
                 session_id = %self.session_id,
-                flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
+                prompt_id = current_prompt_id.as_deref(),
                 "[workspace-latency] session.actor.prompt.accepted"
             );
 
@@ -111,10 +101,7 @@ impl SessionActor {
             let mut prompt_diagnostics = PromptDiagnostics::new(current_prompt_id.clone());
             tracing::info!(
                 session_id = %self.session_id,
-                flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
+                prompt_id = current_prompt_id.as_deref(),
                 "[workspace-latency] session.actor.prompt.dispatch_started"
             );
             // ConnectionTo is a cheap handle; the clone keeps the pinned
@@ -137,9 +124,6 @@ impl SessionActor {
                         let execution_snapshot = self.handle.execution_snapshot().await;
                         tracing::info!(
                             session_id = %self.session_id,
-                            flow_id = latency_fields.flow_id,
-                            flow_kind = latency_fields.flow_kind,
-                            flow_source = latency_fields.flow_source,
                             prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                             turn_id = ?sink_snapshot.current_turn_id,
                             pending_for_ms = prompt_diagnostics.prompt_started_at.elapsed().as_millis() as u64,
@@ -223,7 +207,7 @@ impl SessionActor {
                                 let _ = respond_to.send(Ok(()));
                                 exit_after_prompt = Some(ActorExitDisposition::Close);
                             }
-                            Some(SessionCommand::Prompt { payload: queued_payload, prompt_id: queued_prompt_id, latency: _, from_queue_seq, respond_to }) => {
+                            Some(SessionCommand::Prompt { payload: queued_payload, prompt_id: queued_prompt_id, from_queue_seq, respond_to }) => {
                                 let result = self.handle_busy_prompt_queue(
                                     queued_payload,
                                     queued_prompt_id,
@@ -255,7 +239,6 @@ impl SessionActor {
             let broken_session = self
                 .finish_prompt_result(
                     result,
-                    current_latency.as_ref(),
                     &mut prompt_diagnostics,
                     notification_rx,
                     background_work_rx,
@@ -263,10 +246,6 @@ impl SessionActor {
                 .await;
 
             self.resume_replay_filter.disable();
-
-            // Suppress reference-unused warnings on latency locals so the drain body
-            // behaves symmetrically across iterations.
-            let _ = current_prompt_id.take();
 
             if exit_after_prompt.is_some() || broken_session {
                 break 'drain;
@@ -279,7 +258,6 @@ impl SessionActor {
                 Some((next_payload, next_prompt_id, next_seq)) => {
                     current_payload = next_payload;
                     current_prompt_id = next_prompt_id;
-                    current_latency = None;
                     current_queue_seq = Some(next_seq);
                     continue 'drain;
                 }
