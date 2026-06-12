@@ -13,7 +13,7 @@ describe("workspace chrome classes", () => {
       sidebarOpen: true,
     })).toEqual({
       root: "bg-transparent",
-      contentShell: "bg-transparent",
+      contentShell: "bg-background",
       header: "flex h-16 shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 border-b border-foreground/10",
     });
 
@@ -29,7 +29,7 @@ describe("workspace chrome classes", () => {
     expect(resolveStandardWorkspaceChromeClasses({
       transparent: true,
       sidebarOpen: false,
-    }).contentShell).toBe("bg-transparent");
+    }).contentShell).toBe("bg-background");
     expect(resolveStandardWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: false,
@@ -40,7 +40,7 @@ describe("workspace chrome classes", () => {
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: true,
       sidebarOpen: true,
-    }).contentShell).toBe("bg-transparent");
+    }).contentShell).toBe("bg-background");
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: false,
@@ -48,7 +48,7 @@ describe("workspace chrome classes", () => {
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: true,
       sidebarOpen: false,
-    }).contentShell).toBe("bg-transparent");
+    }).contentShell).toBe("bg-background");
     expect(resolveCoworkWorkspaceChromeClasses({
       transparent: false,
       sidebarOpen: true,

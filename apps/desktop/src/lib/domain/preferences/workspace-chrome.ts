@@ -61,8 +61,12 @@ export function resolveStandardWorkspaceChromeClasses({
 
   return {
     root: transparent ? "bg-transparent" : "bg-sidebar",
+    // The content shell always paints opaque. The sidebar and chat center are
+    // opaque regardless of chrome mode, so a transparent shell only ever
+    // exposed window vibrancy through the header/footer/right-panel bands —
+    // rendering them as off-shade stripes on every theme.
     contentShell: [
-      transparent ? "bg-transparent" : "bg-background",
+      "bg-background",
       sidebarOpen && !transparent ? "rounded-tl-[22px] border-l border-sidebar-border" : "",
       sidebarOpen && !transparent && showContentTopBorder ? "border-t" : "",
     ].filter(Boolean).join(" "),
@@ -80,7 +84,7 @@ export function resolveCoworkWorkspaceChromeClasses({
   return {
     root: transparent ? "bg-transparent" : "bg-sidebar",
     contentShell: [
-      transparent ? "bg-transparent" : "bg-background",
+      "bg-background",
       sidebarOpen && !transparent ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : "",
     ].filter(Boolean).join(" "),
     header: transparent ? WORKSPACE_GLASS_HEADER_CLASS : WORKSPACE_SOLID_HEADER_CLASS,
