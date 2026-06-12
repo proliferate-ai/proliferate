@@ -60,6 +60,19 @@ pub fn install_agent(
     options: &InstallOptions,
 ) -> Result<Vec<InstalledArtifactResult>, InstallError> {
     let _install_lock = AgentInstallLock::acquire_agent(runtime_home, &descriptor.kind)?;
+    let plan = plan_for_descriptor(descriptor, runtime_home, options.reinstall);
+    if plan.has_reinstalls() {
+        for artifact in &plan.artifacts {
+            if let Some(reason) = &artifact.reinstall {
+                tracing::info!(
+                    agent = descriptor.kind.as_str(),
+                    role = super::manifest::role_name(&artifact.role),
+                    reason = %reason,
+                    "install plan forces reinstall"
+                );
+            }
+        }
+    }
     let mut installed = Vec::new();
     let mut has_installable = false;
 
@@ -75,9 +88,13 @@ pub fn install_agent(
     if let Some(native_spec) = &descriptor.native {
         if is_native_installable(&native_spec.install) {
             has_installable = true;
-            if let Some(result) =
-                install_native_artifact(native_spec, &descriptor.kind, runtime_home, options)?
-            {
+            let native_options = options_for_role(options, &plan, &ArtifactRole::NativeCli);
+            if let Some(result) = install_native_artifact(
+                native_spec,
+                &descriptor.kind,
+                runtime_home,
+                &native_options,
+            )? {
                 tracing::info!(
                     agent = descriptor.kind.as_str(),
                     role = "native_cli",
@@ -93,12 +110,13 @@ pub fn install_agent(
 
     if is_agent_process_installable(&descriptor.agent_process.install) {
         has_installable = true;
+        let process_options = options_for_role(options, &plan, &ArtifactRole::AgentProcess);
         if let Some(result) = install_agent_process_artifact(
             &descriptor.agent_process,
             &descriptor.kind,
             &descriptor.launch.default_args,
             runtime_home,
-            options,
+            &process_options,
         )? {
             tracing::info!(
                 agent = descriptor.kind.as_str(),
@@ -135,4 +153,60 @@ pub(crate) fn regenerate_seeded_agent_launchers(
     seeded_agents: &[String],
 ) -> Result<Vec<InstalledArtifactResult>, InstallError> {
     agent_process::regenerate_seeded_agent_launchers(runtime_home, seeded_agents)
+}
+
+/// Gather durable facts (manifest, pins, content hashes) and plan the agent's
+/// install. Pure judgment lives in install_policy; this gathers and executes.
+pub(crate) fn plan_for_descriptor(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    reinstall_requested: bool,
+) -> super::install_policy::InstallPlan {
+    use super::install_policy::{plan_artifact, pinned_version_for, ArtifactFacts, PlannedArtifact};
+
+    let manifest = super::manifest::read_manifest(runtime_home, descriptor.kind.as_str());
+    let mut roles = Vec::new();
+    if descriptor.native.is_some() {
+        roles.push(ArtifactRole::NativeCli);
+    }
+    roles.push(ArtifactRole::AgentProcess);
+
+    let artifacts = roles
+        .into_iter()
+        .map(|role| {
+            let entry = manifest.as_ref().and_then(|manifest| {
+                manifest
+                    .artifacts
+                    .iter()
+                    .find(|artifact| artifact.role == super::manifest::role_name(&role))
+            });
+            let checksum_matches = entry.and_then(|entry| {
+                let recorded = entry.sha256.as_ref()?;
+                let observed = super::manifest::sha256_of_file(Path::new(&entry.path))?;
+                Some(&observed == recorded)
+            });
+            let facts = ArtifactFacts {
+                pinned_version: pinned_version_for(descriptor, &role),
+                manifest_version: entry.and_then(|entry| entry.version.clone()),
+                checksum_matches,
+            };
+            PlannedArtifact {
+                reinstall: plan_artifact(&facts, reinstall_requested),
+                role,
+            }
+        })
+        .collect();
+    super::install_policy::InstallPlan { artifacts }
+}
+
+fn options_for_role(
+    options: &InstallOptions,
+    plan: &super::install_policy::InstallPlan,
+    role: &ArtifactRole,
+) -> InstallOptions {
+    InstallOptions {
+        reinstall: options.reinstall || plan.reinstall_for(role).is_some(),
+        native_version: options.native_version.clone(),
+        agent_process_version: options.agent_process_version.clone(),
+    }
 }

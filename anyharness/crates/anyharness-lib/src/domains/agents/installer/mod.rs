@@ -1,5 +1,6 @@
 mod agent_process;
 mod downloads;
+pub mod install_policy;
 mod lock;
 pub mod manifest;
 pub(crate) mod managed_npm;
