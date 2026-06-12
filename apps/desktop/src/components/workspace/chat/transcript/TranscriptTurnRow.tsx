@@ -7,10 +7,6 @@ import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
 import {
-  TranscriptActivityDensityProvider,
-  type TranscriptActivityDensity,
-} from "./TranscriptActivityBlock";
-import {
   TRAILING_STATUS_MIN_HEIGHT,
   TurnAssistantActionRow,
   TurnShell,
@@ -43,9 +39,6 @@ import type { SessionViewState } from "@proliferate/product-domain/sessions/acti
 import { useToastStore } from "@/stores/toast/toast-store";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
-
-const ACTIVITY_ADJACENCY_CLASSNAME =
-  "[&>[data-transcript-activity-shell]+[data-transcript-activity-shell]]:pt-0 [&>[data-transcript-activity-shell]+[data-transcript-activity-shell]_[data-transcript-activity-block]]:pt-0";
 
 export function TranscriptTurnRow({
   row,
@@ -92,7 +85,6 @@ export function TranscriptTurnRow({
     hasFileBadges: turn.fileBadges.length > 0,
   });
   const isLatestCompletedTurnRow = diffPanelKind === "current";
-  const activityDensity: TranscriptActivityDensity = isLatestTurnInProgress ? "compact" : "normal";
   const presentation = row.presentation;
   const renderPresentation = row.renderPresentation;
   const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
@@ -197,25 +189,20 @@ export function TranscriptTurnRow({
   ]);
 
   return (
-    <TurnShell
-      isFirst={rowIndex === 0}
-      density={activityDensity}
-    >
-      <div className={`flex flex-col ${isLatestTurnInProgress ? "gap-1" : "gap-2"} ${tailAssistantCopyContent ? "group/turn" : ""} ${ACTIVITY_ADJACENCY_CLASSNAME}`}>
-        <TranscriptActivityDensityProvider density={activityDensity}>
-          <TurnItemSequence
-            turn={turn}
-            transcript={transcript}
-            isTurnComplete={!!turn.completedAt}
-            presentation={renderPresentation}
-            autoFollowCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
-            tailAssistantProseRootId={tailAssistantProseRootId}
-            showCompletedArtifactFallback={row.isLastTurnRow}
-            workspaceId={selectedWorkspaceId}
-            onOpenArtifact={onOpenArtifact}
-            onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-          />
-        </TranscriptActivityDensityProvider>
+    <TurnShell isFirst={rowIndex === 0}>
+      <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+        <TurnItemSequence
+          turn={turn}
+          transcript={transcript}
+          isTurnComplete={!!turn.completedAt}
+          presentation={renderPresentation}
+          autoFollowCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
+          tailAssistantProseRootId={tailAssistantProseRootId}
+          showCompletedArtifactFallback={row.isLastTurnRow}
+          workspaceId={selectedWorkspaceId}
+          onOpenArtifact={onOpenArtifact}
+          onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+        />
         {diffPanelKind === "current" ? (
           <TurnDiffPanel
             turn={turn}

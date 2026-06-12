@@ -57,7 +57,63 @@ describe("FullTranscriptRowList", () => {
     fireEvent.scroll(viewport, { target: { scrollTop: 0 } });
     expect(onLoadOlderHistory).toHaveBeenCalledTimes(3);
   });
+
+  it("re-sticks to the bottom when content resizes while pinned", () => {
+    const notifyResize = stubCapturingResizeObserver();
+    const { container } = render(
+      <FullTranscriptRowList {...makeProps(vi.fn(), 50)} />,
+    );
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "scrollHeight", {
+      value: 500,
+      configurable: true,
+    });
+
+    notifyResize();
+
+    expect(viewport.scrollTop).toBe(500);
+  });
+
+  it("leaves the viewport alone on resize after scrolling away from the bottom", () => {
+    const notifyResize = stubCapturingResizeObserver();
+    const { container } = render(
+      <FullTranscriptRowList {...makeProps(vi.fn(), 50)} />,
+    );
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "scrollHeight", {
+      value: 1000,
+      configurable: true,
+    });
+    fireEvent.scroll(viewport, { target: { scrollTop: 600 } });
+
+    notifyResize();
+
+    expect(viewport.scrollTop).toBe(600);
+  });
 });
+
+function stubCapturingResizeObserver(): () => void {
+  const callbacks: ResizeObserverCallback[] = [];
+  class CapturingResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      callbacks.push(callback);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal("ResizeObserver", CapturingResizeObserver);
+  const observerStub = {
+    observe() {},
+    unobserve() {},
+    disconnect() {},
+  } as unknown as ResizeObserver;
+  return () => {
+    for (const callback of [...callbacks]) {
+      callback([], observerStub);
+    }
+  };
+}
 
 function makeProps(
   onLoadOlderHistory: () => void,

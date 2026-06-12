@@ -8,7 +8,6 @@ import {
   toolItem,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
 import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
-import { TranscriptActivityDensityProvider } from "./TranscriptActivityBlock";
 import { TranscriptItemBlock } from "./TranscriptItemBlock";
 
 vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
@@ -64,7 +63,7 @@ describe("TranscriptItemBlock", () => {
     expect(container.textContent).toContain("Fallback plan body");
   });
 
-  it("gives tool calls transcript activity spacing", () => {
+  it("renders tool calls in an activity block without external vertical padding", () => {
     const transcript = createTranscriptState("session-1");
     const item = genericToolCall();
     transcript.itemsById = { [item.itemId]: item };
@@ -82,11 +81,11 @@ describe("TranscriptItemBlock", () => {
 
     expect(container.innerHTML).toContain("data-transcript-activity-block");
     expect(container.innerHTML).toContain("data-transcript-activity-shell");
-    expect(container.innerHTML).toContain("pt-1 pb-2");
+    expect(activityBlockClassName(container)).toBe("");
     expect(container.textContent).toContain("Tool call");
   });
 
-  it("gives thinking blocks transcript activity spacing", () => {
+  it("renders thinking blocks in an activity block without external vertical padding", () => {
     const transcript = createTranscriptState("session-1");
     const item = genericThought();
     transcript.itemsById = { [item.itemId]: item };
@@ -104,33 +103,16 @@ describe("TranscriptItemBlock", () => {
 
     expect(container.innerHTML).toContain("data-transcript-activity-block");
     expect(container.innerHTML).toContain("data-transcript-activity-shell");
-    expect(container.innerHTML).toContain("pt-1 pb-2");
-    expect(container.textContent).toContain("Thinking");
-  });
-
-  it("keeps the same transcript activity spacing while the active turn is iterating", () => {
-    const transcript = createTranscriptState("session-1");
-    const item = genericThought();
-    transcript.itemsById = { [item.itemId]: item };
-
-    const { container } = render(
-      <ProposedPlanToolCallIdsProvider value={new Set()}>
-        <TranscriptActivityDensityProvider density="compact">
-          <TranscriptItemBlock
-            item={item}
-            transcript={transcript}
-            workspaceId={null}
-            onOpenArtifact={() => {}}
-          />
-        </TranscriptActivityDensityProvider>
-      </ProposedPlanToolCallIdsProvider>,
-    );
-
-    expect(container.innerHTML).toContain("data-transcript-activity-density=\"compact\"");
-    expect(container.innerHTML).toContain("pt-1 pb-2");
+    expect(activityBlockClassName(container)).toBe("");
     expect(container.textContent).toContain("Thinking");
   });
 });
+
+function activityBlockClassName(container: HTMLElement): string {
+  const block = container.querySelector("[data-transcript-activity-block]");
+  expect(block).toBeTruthy();
+  return block?.getAttribute("class") ?? "";
+}
 
 function claudeExitPlanFallback(): ToolCallItem {
   return {

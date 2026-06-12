@@ -152,6 +152,21 @@ Some layout dimensions are load-bearing. They are tuned together so specific
 UI transitions stay visually smooth. Changing one without the others can
 reintroduce scroll/layout bumps.
 
+### Spacing Rhythm
+
+Sibling spacing inside a turn comes solely from the turn container's `gap-2`,
+and turn rows are separated by `TurnShell`'s `pt-2 pb-2` (`pt-0` for the first
+row). Blocks must not carry external vertical padding of their own
+(`TranscriptActivityBlock` is a zero-padding marker wrapper), and spacing must
+not vary with streaming state: a turn completing is a zero-delta layout change
+for everything already rendered.
+
+Bottom pinning in the non-virtualized list is resize-driven: a
+`ResizeObserver` on the scroll content re-sticks the viewport whenever content
+grows after the React commit (image decode, async diff panels, highlight
+reflow) while the user is pinned. The virtualized list gets the same guarantee
+from measured `totalContentHeight`.
+
 ### Streaming Handoff
 
 When an assistant turn transitions from streaming state to its first line of

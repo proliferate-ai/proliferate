@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe("TurnShell", () => {
-  it("keeps normal completed rows roomy", () => {
+  it("uses one vertical rhythm for every row", () => {
     const { container } = render(
       <TurnShell>
         <div>row</div>
@@ -20,14 +20,14 @@ describe("TurnShell", () => {
     expect(container.innerHTML).toContain("pb-2");
   });
 
-  it("uses compact padding for active iteration rows", () => {
+  it("drops top padding on the first row only", () => {
     const { container } = render(
-      <TurnShell density="compact">
+      <TurnShell isFirst>
         <div>row</div>
       </TurnShell>,
     );
 
-    expect(container.innerHTML).toContain("pt-1");
-    expect(container.innerHTML).toContain("pb-1");
+    expect(container.innerHTML).toContain("pt-0");
+    expect(container.innerHTML).toContain("pb-2");
   });
 });
