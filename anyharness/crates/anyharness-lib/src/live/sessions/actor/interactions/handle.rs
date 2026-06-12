@@ -8,12 +8,47 @@ use crate::live::sessions::actor::command::{
 use crate::live::sessions::actor::interactions::outcomes::{
     broker_outcome_to_interaction_event, map_resolve_interaction_error,
 };
+use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{SessionDomainOp, SessionOpEmitter, SessionOpStep};
 use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::rendezvous::broker::{
     InteractionRendezvous, InteractionRendezvousOutcome, InteractionCancelOutcome,
 };
+
+impl SessionActor {
+    pub(in crate::live::sessions::actor) async fn resolve_interaction(
+        &self,
+        request_id: String,
+        resolution: Resolution,
+    ) -> Result<(), ResolveInteractionCommandError> {
+        handle_resolve_interaction(
+            &self.handle,
+            &self.event_sink,
+            &self.interaction_broker,
+            &self.session_id,
+            request_id,
+            resolution,
+        )
+        .await
+    }
+
+    pub(in crate::live::sessions::actor) async fn run_domain_op_cmd(
+        &self,
+        op: Box<dyn SessionDomainOp>,
+    ) -> Box<dyn std::any::Any + Send> {
+        run_domain_op(
+            &self.handle,
+            &self.event_sink,
+            &self.interaction_broker,
+            &self.session_id,
+            &self.workspace_id,
+            &self.agent_kind,
+            op,
+        )
+        .await
+    }
+}
 
 pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     handle: &Arc<LiveSessionHandle>,

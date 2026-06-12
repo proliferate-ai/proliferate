@@ -1,4 +1,3 @@
-use crate::live::sessions::actor::event_loop::run_actor;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
@@ -7,7 +6,7 @@ use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::live::sessions::actor::command::SessionCommand;
-use crate::live::sessions::actor::state::SessionActorConfig;
+use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
@@ -128,7 +127,15 @@ pub fn spawn_session_actor_pending(
                 .expect("build per-session tokio runtime");
             let local = tokio::task::LocalSet::new();
             let errored = local.block_on(&rt, async move {
-                match run_actor(config, command_rx, ready_tx, actor_handle).await {
+                let run_result = async {
+                    let (actor, notification_rx, background_work_rx) =
+                        SessionActor::start(config, ready_tx, actor_handle).await?;
+                    actor
+                        .run(command_rx, notification_rx, background_work_rx)
+                        .await
+                }
+                .await;
+                match run_result {
                     Ok(()) => false,
                     Err(e) => {
                         tracing::error!(error = %e, "session actor failed");

@@ -20,7 +20,7 @@ use crate::domains::agents::readiness::resolver::resolve_agent;
 use crate::domains::agents::registry::built_in_registry;
 
 use super::driver::process::spawn_agent_process;
-use super::driver::start::{initialize_connection, start_new_session};
+use super::driver::session_lifecycle::{initialize_connection, start_new_session};
 use super::driver::SessionMcpServer;
 
 const PROBE_SESSION_ID: &str = "catalog-probe";
