@@ -14,6 +14,7 @@ import {
 import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
 import {
   ensureRepoGroupExpanded,
+  trackWorkspaceInteraction,
 } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceActions } from "./use-workspace-actions";
 import { useWorkspaceEntryFlow } from "./use-workspace-entry-flow";
@@ -86,6 +87,7 @@ export function useWorkspaceEntryActions() {
     selectWorkspace,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
+    trackWorkspaceInteraction,
   }), [
     materializePendingWorkspaceSessions,
     selectWorkspace,

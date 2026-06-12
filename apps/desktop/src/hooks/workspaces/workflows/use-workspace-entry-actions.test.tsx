@@ -145,6 +145,7 @@ describe("useWorkspaceEntryActions", () => {
       recentlyHiddenChatSessionIdsByWorkspace: {},
       collapsedChatGroupsByWorkspace: {},
       manualChatGroupsByWorkspace: {},
+      workspaceLastInteracted: {},
     });
   });
 
@@ -238,6 +239,9 @@ describe("useWorkspaceEntryActions", () => {
     await expect(actionPromise).resolves.toMatchObject({
       workspaceId: "workspace-created",
     });
+    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+    expect(useWorkspaceUiStore.getState().workspaceLastInteracted["workspace-created"])
+      .toEqual(expect.any(String));
   });
 
   it("seeds a projected pending session from saved defaults when no initial session is passed", async () => {

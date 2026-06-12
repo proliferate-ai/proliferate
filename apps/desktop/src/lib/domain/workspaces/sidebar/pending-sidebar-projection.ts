@@ -93,7 +93,7 @@ export function buildPendingSidebarProjection(args: {
       branchName: null,
     },
     sortRecency: {
-      activityAt: null,
+      activityAt: createdAt,
       recordUpdatedAt: createdAt,
       sortAt: createdAt,
       displayAt: null,

@@ -38,6 +38,7 @@ export interface WorkspaceEntrySelectionDeps {
   ) => Promise<void>;
   setPendingWorkspaceEntry: (entry: PendingWorkspaceEntry | null) => void;
   setWorkspaceArrivalEvent: (event: ReturnType<typeof buildWorkspaceArrivalEvent>) => void;
+  trackWorkspaceInteraction: (workspaceId: string, timestamp: string) => void;
 }
 
 export async function finalizePendingWorkspaceSelection(
@@ -104,6 +105,7 @@ export async function finalizePendingWorkspaceSelection(
     setupScript: input.entry.setupScript,
     baseBranchName: input.entry.baseBranchName,
   }));
+  deps.trackWorkspaceInteraction(input.workspaceId, new Date().toISOString());
   deps.setPendingWorkspaceEntry(null);
   logLatency("workspace.entry.selection.success", {
     attemptId: input.entry.attemptId,

@@ -3,6 +3,7 @@ import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry,
 } from "@/lib/domain/workspaces/creation/pending-entry";
+import { buildPendingSidebarProjection } from "./pending-sidebar-projection";
 import {
   buildGroups,
   makeCloudLogicalWorkspace,
@@ -57,6 +58,100 @@ describe("pending sidebar projection", () => {
       renameSupported: false,
       lastInteracted: new Date(pendingWorkspaceEntry.createdAt).toISOString(),
     });
+  });
+
+  it("counts pending creation as activity in the sort recency", () => {
+    const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-1",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "gulch",
+      repoLabel: "landing",
+      baseBranchName: "main",
+      request: {
+        kind: "worktree",
+        input: {
+          repoRootId: "landing-root",
+          workspaceName: "gulch",
+          branchName: "gulch",
+          baseBranch: "main",
+          targetPath: "/tmp/landing/gulch",
+        },
+      },
+    });
+    const repoRoot = makeRepoRoot({
+      id: "landing-root",
+      repoName: "landing",
+      sourceRoot: "/tmp/landing",
+    });
+
+    const projection = buildPendingSidebarProjection({
+      entry: pendingWorkspaceEntry,
+      repoRootsById: new Map([[repoRoot.id, repoRoot]]),
+      selectedLogicalWorkspaceId: null,
+      selectedWorkspaceId: null,
+      activeSessionTitle: null,
+    });
+
+    const createdAt = new Date(pendingWorkspaceEntry.createdAt).toISOString();
+    expect(projection?.sortRecency).toEqual({
+      activityAt: createdAt,
+      recordUpdatedAt: createdAt,
+      sortAt: createdAt,
+      displayAt: null,
+    });
+  });
+
+  it("sorts a pending workspace in a new repo group above older-activity and no-activity groups", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "gulch",
+        repoLabel: "landing",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree" as const,
+          input: {
+            repoRootId: "landing-root",
+            workspaceName: "gulch",
+            branchName: "gulch",
+            baseBranch: "main",
+            targetPath: "/tmp/landing/gulch",
+          },
+        },
+      }),
+      createdAt: Date.parse("2026-04-13T12:00:00.000Z"),
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-workspace",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-workspace",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+        }),
+      ],
+      repoRoots: [
+        makeRepoRoot({
+          id: "landing-root",
+          repoName: "landing",
+          sourceRoot: "/tmp/landing",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      workspaceLastInteracted: {
+        "repo-a-workspace": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    expect(groups.map((group) => group.name)).toEqual(["landing", "repo-a", "repo-b"]);
   });
 
   it("uses the real logical id for a pending worktree during materialization handoff", () => {
