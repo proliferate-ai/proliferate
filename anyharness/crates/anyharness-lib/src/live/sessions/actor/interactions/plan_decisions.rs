@@ -180,9 +180,11 @@ pub(in crate::live::sessions::actor) fn plan_decision_native_resolution(
                         option_id: option_id.to_string(),
                     },
                 }),
-                None => Some(PlanNativeResolution::Resolve {
+                None => Some(PlanNativeResolution::FailAfterResolve {
                     request_id: link.request_id,
-                    resolution: InteractionResolution::Dismissed,
+                    resolution: InteractionResolution::Cancelled,
+                    error_message: "Rejected plan could not map to a native rejection option."
+                        .to_string(),
                 }),
             }
         }
@@ -400,6 +402,27 @@ mod tests {
                 resolution: InteractionResolution::Selected {
                     option_id: "reject-once".to_string(),
                 },
+            }),
+        );
+    }
+
+    #[test]
+    fn rejected_native_plan_fails_when_no_reject_mapping_exists() {
+        let (service, plan_id) = plan_service_with_link(json!({
+            "approve": "allow-once",
+        }));
+
+        assert_eq!(
+            plan_decision_native_resolution(
+                &service,
+                &plan_id,
+                &ProposedPlanDecisionState::Rejected,
+            ),
+            Some(PlanNativeResolution::FailAfterResolve {
+                request_id: "request-1".to_string(),
+                resolution: InteractionResolution::Cancelled,
+                error_message: "Rejected plan could not map to a native rejection option."
+                    .to_string(),
             }),
         );
     }
