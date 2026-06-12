@@ -155,12 +155,58 @@ pub struct AgentRegistryAuthSlot {
     pub credential_provider_ids: Vec<String>,
     pub required_for_readiness: bool,
     #[serde(default)]
-    pub env_vars: Vec<String>,
+    pub env_vars: Vec<AgentRegistryAuthSlotEnvVar>,
     pub discovery: String,
+    /// Named discovery fact kinds this slot's credentials may surface as
+    /// (e.g. `"claude-oauth-creds"`, `"aws-credential-chain"`). Optional
+    /// source vocabulary for catalog v2 auth-context signals; empty means
+    /// "not yet declared" and waives the subset check.
+    #[serde(default)]
+    pub discovery_kinds: Vec<String>,
     #[serde(default)]
     pub login: Option<AgentRegistryLogin>,
     #[serde(default)]
     pub materialization: AgentRegistryAuthMaterialization,
+}
+
+/// A credential env var declared by an auth slot. Backward compatible with
+/// the plain-string form in registry.json (`"ANTHROPIC_API_KEY"`, kind
+/// `secret`); the tagged form adds a `secret|flag` kind so catalog v2
+/// signals can be validated (flag values are readable, secrets are
+/// presence-only).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AgentRegistryAuthSlotEnvVar {
+    Name(String),
+    Tagged {
+        name: String,
+        #[serde(default)]
+        kind: AgentRegistryEnvVarKind,
+    },
+}
+
+impl AgentRegistryAuthSlotEnvVar {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Name(name) => name,
+            Self::Tagged { name, .. } => name,
+        }
+    }
+
+    pub fn kind(&self) -> AgentRegistryEnvVarKind {
+        match self {
+            Self::Name(_) => AgentRegistryEnvVarKind::default(),
+            Self::Tagged { kind, .. } => *kind,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentRegistryEnvVarKind {
+    #[default]
+    Secret,
+    Flag,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -209,4 +255,61 @@ pub struct AgentRegistryCommand {
     pub program: String,
     #[serde(default)]
     pub args: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
+
+    #[test]
+    fn bundled_registry_parses_and_validates_with_env_var_vocabulary() {
+        let registry = bundled_agent_registry_document();
+
+        let anthropic_slot = registry
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "claude")
+            .and_then(|agent| agent.auth.slots.iter().find(|slot| slot.id == "anthropic"))
+            .expect("claude anthropic slot");
+
+        // Plain-string entries keep working and default to secret.
+        assert_eq!(
+            anthropic_slot
+                .env_vars
+                .iter()
+                .map(|env_var| env_var.name())
+                .collect::<Vec<_>>(),
+            vec!["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"]
+        );
+        assert!(anthropic_slot
+            .env_vars
+            .iter()
+            .all(|env_var| env_var.kind() == AgentRegistryEnvVarKind::Secret));
+        assert!(anthropic_slot.discovery_kinds.is_empty());
+    }
+
+    #[test]
+    fn auth_slot_env_vars_accept_plain_and_tagged_forms() {
+        let env_vars: Vec<AgentRegistryAuthSlotEnvVar> =
+            serde_json::from_value(serde_json::json!([
+                "ANTHROPIC_API_KEY",
+                { "name": "CLAUDE_CODE_USE_BEDROCK", "kind": "flag" },
+                { "name": "ANTHROPIC_AUTH_TOKEN" }
+            ]))
+            .expect("env vars must parse");
+
+        assert_eq!(env_vars[0].name(), "ANTHROPIC_API_KEY");
+        assert_eq!(env_vars[0].kind(), AgentRegistryEnvVarKind::Secret);
+        assert_eq!(env_vars[1].name(), "CLAUDE_CODE_USE_BEDROCK");
+        assert_eq!(env_vars[1].kind(), AgentRegistryEnvVarKind::Flag);
+        assert_eq!(env_vars[2].kind(), AgentRegistryEnvVarKind::Secret);
+
+        // Plain-string entries serialize back to plain strings (registry.json
+        // round-trips byte-compatibly).
+        assert_eq!(
+            serde_json::to_value(&env_vars[0]).expect("serialize"),
+            serde_json::json!("ANTHROPIC_API_KEY")
+        );
+    }
 }

@@ -85,6 +85,18 @@ pub fn resolve_agent_with_env(
         compatibility_issue.as_ref(),
     );
 
+    let mut native = native;
+    let mut agent_process = agent_process;
+    super::versions::apply_manifest_versions(
+        crate::domains::agents::installer::manifest::read_manifest(
+            runtime_home,
+            descriptor.kind.as_str(),
+        )
+        .as_ref(),
+        &mut native,
+        &mut agent_process,
+    );
+
     ResolvedAgent {
         descriptor: descriptor.clone(),
         status,
@@ -95,6 +107,7 @@ pub fn resolve_agent_with_env(
         spawn,
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -540,4 +553,5 @@ mod tests {
 
         assert_eq!(status, ResolvedAgentStatus::InstallRequired);
     }
+
 }
