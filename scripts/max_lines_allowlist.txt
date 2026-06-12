@@ -47,4 +47,3 @@ server/tests/unit/test_cloud_mobility_service.py 800 existing server oversized u
 server/tests/unit/test_cloud_runtime_ensure_running.py 872 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_provision.py 1823 existing server oversized unit test
 apps/desktop/src-tauri/src/commands/keychain.rs 686 existing desktop oversized file
-apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 632 existing desktop oversized test file
