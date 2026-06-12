@@ -6,6 +6,8 @@ mod agents_errors;
 pub mod agents_model_registry;
 pub mod auth;
 pub mod blocking;
+pub mod catalogs;
+mod catalogs_errors;
 pub mod cowork;
 pub mod error;
 pub mod files;

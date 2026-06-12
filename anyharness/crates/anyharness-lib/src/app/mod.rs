@@ -7,12 +7,13 @@ use std::sync::Arc;
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
-use crate::domains::agents::auth::{AgentAuthService, AgentAuthConfigStore};
+use crate::domains::agents::auth::{AgentAuthConfigStore, AgentAuthService};
+use crate::domains::agents::catalog::sync::CatalogSyncService;
+use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
+use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::model_registry::service::DynamicModelRegistryService;
 use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
-use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::runtime::AgentRuntime;
-use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
@@ -97,6 +98,7 @@ pub struct AppState {
     pub auth_manager: AuthManager,
     pub agent_seed_store: AgentSeedStore,
     pub agent_runtime: Arc<AgentRuntime>,
+    pub catalog_sync_service: Arc<CatalogSyncService>,
     pub agent_auth_service: Arc<AgentAuthService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
@@ -173,6 +175,9 @@ impl AppState {
             runtime_home.clone(),
             agent_reconcile_service.clone(),
             agent_seed_store.clone(),
+        ));
+        let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled(
+            catalog_applied_reconcile_poke(agent_runtime.clone()),
         ));
         let agent_auth_service = Arc::new(AgentAuthService::new(
             AgentAuthConfigStore::new(db.clone()),
@@ -435,6 +440,7 @@ impl AppState {
             auth_manager,
             agent_seed_store,
             agent_runtime,
+            catalog_sync_service,
             agent_auth_service,
             agent_reconcile_service,
             dynamic_model_registry_service,
@@ -474,6 +480,18 @@ impl AppState {
             agent_login_terminal_service,
         })
     }
+}
+
+/// The reconcile poke: catalog sync stays free of any AgentRuntime
+/// dependency — it gets a capability that fire-and-forget kicks the one
+/// reconcile engine after a successful catalog swap.
+fn catalog_applied_reconcile_poke(agent_runtime: Arc<AgentRuntime>) -> Arc<dyn Fn() + Send + Sync> {
+    Arc::new(move || {
+        let agent_runtime = agent_runtime.clone();
+        tokio::spawn(async move {
+            agent_runtime.start_reconcile(false).await;
+        });
+    })
 }
 
 fn load_runtime_target_id() -> Option<String> {

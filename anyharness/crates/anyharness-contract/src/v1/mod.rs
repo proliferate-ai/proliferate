@@ -1,6 +1,7 @@
 pub mod agent_auth_config;
 pub mod agents;
 pub mod auth;
+pub mod catalogs;
 pub mod cowork;
 pub mod errors;
 pub mod events;
@@ -27,6 +28,7 @@ pub mod worktrees;
 pub use agent_auth_config::*;
 pub use agents::*;
 pub use auth::*;
+pub use catalogs::*;
 pub use cowork::*;
 pub use errors::*;
 pub use events::*;
