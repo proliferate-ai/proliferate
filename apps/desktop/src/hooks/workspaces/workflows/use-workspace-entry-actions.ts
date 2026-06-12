@@ -87,7 +87,8 @@ export function useWorkspaceEntryActions() {
     selectWorkspace,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
-    trackWorkspaceInteraction,
+    trackWorkspaceInteraction: (workspaceId: string) =>
+      trackWorkspaceInteraction(workspaceId, new Date().toISOString()),
   }), [
     materializePendingWorkspaceSessions,
     selectWorkspace,

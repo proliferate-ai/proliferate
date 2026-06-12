@@ -134,7 +134,12 @@ export function createSessionRecordFromSummary(
 }
 
 export function putSessionRecord(record: SessionRuntimeRecord): void {
-  useSessionDirectoryStore.getState().putEntry(record);
+  const existingEntry = useSessionDirectoryStore.getState().entriesById[record.sessionId];
+  useSessionDirectoryStore.getState().putEntry({
+    ...record,
+    hasAttemptedPrompt:
+      record.hasAttemptedPrompt || (existingEntry?.hasAttemptedPrompt ?? false),
+  });
   useSessionTranscriptStore.getState().putEntry({
     sessionId: record.sessionId,
     events: record.events,

@@ -342,7 +342,13 @@ When the real workspace id is known:
    Arrival panels use this event to show the final "new worktree/workspace"
    context and setup-script state.
 
-6. Clear pending workspace state after selection finalization.
+6. Stamp `workspaceLastInteracted` for the materialized workspace id
+   immediately before the pending entry is cleared. Both the finalization path
+   and the cloud-ready polling path do this, so the sidebar position holds
+   across the handoff instead of dropping when the pending projection's
+   creation-time activity disappears.
+
+7. Clear pending workspace state after selection finalization.
    Do not clear as soon as the real workspace appears in cache. That creates a
    visible gap between the pending projection and the real row.
 
@@ -398,6 +404,9 @@ projection path.
 ### Sidebar
 
 - Use `buildPendingSidebarProjection(entry)` for pending rows.
+- The pending projection counts the entry's creation time as activity
+  (`sortRecency.activityAt = createdAt`), so a new workspace sorts among
+  interacted workspaces from the first frame instead of below them.
 - Before materialization, the row id is `pending-workspace:<attemptId>`.
 - During materialization handoff, if the selected real logical workspace id is
   known and the selected workspace id matches the pending entry's workspace id,

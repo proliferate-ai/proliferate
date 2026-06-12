@@ -157,6 +157,21 @@ describe("session records facade invariants", () => {
     expect(getSessionRecord("session-a")?.hasAttemptedPrompt).toBe(true);
   });
 
+  it("keeps hasAttemptedPrompt sticky when a rebuilt record replaces the entry", () => {
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-a",
+      materializedSessionId: null,
+    }));
+    patchSessionRecord("session-a", { hasAttemptedPrompt: true });
+
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-a",
+      materializedSessionId: null,
+    }));
+
+    expect(getSessionRecord("session-a")?.hasAttemptedPrompt).toBe(true);
+  });
+
   it("applies and prunes relationship hints when records mount later", () => {
     useSessionDirectoryStore.getState().recordRelationshipHint("child-session", {
       kind: "subagent_child",

@@ -154,6 +154,82 @@ describe("pending sidebar projection", () => {
     expect(groups.map((group) => group.name)).toEqual(["landing", "repo-a", "repo-b"]);
   });
 
+  it("keeps the group order stable across the pending-to-materialized handoff", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "gulch",
+        repoLabel: "landing",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree" as const,
+          input: {
+            repoRootId: "landing-root",
+            workspaceName: "gulch",
+            branchName: "gulch",
+            baseBranch: "main",
+            targetPath: "/tmp/landing/gulch",
+          },
+        },
+      }),
+      createdAt: Date.parse("2026-04-13T12:00:00.000Z"),
+    };
+    const otherLogicalWorkspaces = [
+      makeLocalLogicalWorkspace({
+        id: "repo-a-workspace",
+        repoKey: "/tmp/repo-a",
+        repoName: "repo-a",
+      }),
+      makeLocalLogicalWorkspace({
+        id: "repo-b-workspace",
+        repoKey: "/tmp/repo-b",
+        repoName: "repo-b",
+      }),
+    ];
+    const repoRoots = [
+      makeRepoRoot({
+        id: "landing-root",
+        repoName: "landing",
+        sourceRoot: "/tmp/landing",
+      }),
+    ];
+
+    const pendingGroups = buildGroups({
+      logicalWorkspaces: otherLogicalWorkspaces,
+      repoRoots,
+      pendingWorkspaceEntry,
+      workspaceLastInteracted: {
+        "repo-a-workspace": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    const materializedGroups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "landing-gulch",
+          workspaceId: "workspace-gulch",
+          repoKey: "github:proliferate-ai:landing",
+          repoName: "landing",
+          kind: "worktree",
+          branch: "gulch",
+        }),
+        ...otherLogicalWorkspaces,
+      ],
+      repoRoots,
+      pendingWorkspaceEntry: null,
+      workspaceLastInteracted: {
+        "workspace-gulch": "2026-04-13T12:00:01.000Z",
+        "repo-a-workspace": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    expect(pendingGroups.map((group) => group.name)).toEqual(["landing", "repo-a", "repo-b"]);
+    expect(materializedGroups.map((group) => group.name))
+      .toEqual(pendingGroups.map((group) => group.name));
+  });
+
   it("uses the real logical id for a pending worktree during materialization handoff", () => {
     const pendingWorkspaceEntry = {
       ...buildSubmittingPendingWorkspaceEntry({

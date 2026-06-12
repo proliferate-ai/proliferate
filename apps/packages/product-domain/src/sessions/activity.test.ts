@@ -514,6 +514,50 @@ describe("session activity", () => {
         pendingInteractions: [],
       },
     })).toBe("starting");
+
+    expect(resolveSessionExecutionPhase({
+      status: null,
+      executionSummary: {
+        phase: "starting" as const,
+        hasLiveHandle: false,
+        pendingInteractions: [],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "disconnected",
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    })).toBe("starting");
+  });
+
+  it("never presents a streaming session as idle without prompt activity", () => {
+    expect(resolveSessionExecutionPhase({
+      status: "starting",
+      executionSummary: null,
+      streamConnectionState: "open",
+      hasPromptActivity: false,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+      },
+    })).toBe("starting");
+
+    expect(resolveSessionExecutionPhase({
+      status: "starting",
+      executionSummary: {
+        phase: "starting" as const,
+        hasLiveHandle: true,
+        pendingInteractions: [],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "open",
+      hasPromptActivity: false,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+      },
+    })).toBe("starting");
   });
 
   it("does not suppress non-starting phases without prompt activity", () => {
