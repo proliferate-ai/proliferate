@@ -1,4 +1,6 @@
 import {
+  useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -32,6 +34,9 @@ interface ComposerModelConfigSelectorProps {
 
 const COMPOSER_SUBMENU_GAP_PX = 4;
 const COMPOSER_SUBMENU_VIEWPORT_MARGIN_PX = 8;
+// Crossing the gap between the menu and its submenu briefly leaves both
+// elements; closing must survive that traversal.
+const COMPOSER_SUBMENU_CLOSE_GRACE_MS = 150;
 
 export function ComposerModelConfigSelector({
   modelSelectorProps,
@@ -46,6 +51,25 @@ export function ComposerModelConfigSelector({
   const [submenuAnchorTop, setSubmenuAnchorTop] = useState<number | null>(null);
   const [submenuPosition, setSubmenuPosition] = useState<ComposerSubmenuPosition | null>(null);
   const [setupAgent, setSetupAgent] = useState<ModelSelectorProps["notReadyAgents"][number] | null>(null);
+  const submenuCloseTimerRef = useRef<number | null>(null);
+
+  const cancelPendingSubmenuClose = useCallback(() => {
+    if (submenuCloseTimerRef.current !== null) {
+      window.clearTimeout(submenuCloseTimerRef.current);
+      submenuCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleSubmenuClose = useCallback(() => {
+    cancelPendingSubmenuClose();
+    submenuCloseTimerRef.current = window.setTimeout(() => {
+      submenuCloseTimerRef.current = null;
+      setActiveSubmenu(null);
+    }, COMPOSER_SUBMENU_CLOSE_GRACE_MS);
+  }, [cancelPendingSubmenuClose]);
+
+  useEffect(() => cancelPendingSubmenuClose, [cancelPendingSubmenuClose]);
+
   const {
     connectionState,
     currentModel,
@@ -182,6 +206,7 @@ export function ComposerModelConfigSelector({
         className="w-auto border-0 bg-transparent p-0 shadow-none"
         onOpenChange={(open) => {
           if (!open) {
+            cancelPendingSubmenuClose();
             resetMenuState({
               setActiveSubmenu,
               setAddProviderOpen,
@@ -209,8 +234,10 @@ export function ComposerModelConfigSelector({
             submenuRef={submenuRef}
             onAddProviderOpenChange={setAddProviderOpen}
             onClose={close}
-            onMenuMouseLeave={() => setActiveSubmenu(null)}
+            onMenuMouseEnter={cancelPendingSubmenuClose}
+            onMenuMouseLeave={scheduleSubmenuClose}
             onOpenSubmenu={(submenu, anchorElement) => {
+              cancelPendingSubmenuClose();
               setAddProviderOpen(false);
               setSubmenuPosition(null);
               setSubmenuAnchorTop(resolveSubmenuAnchorTop(menuRootRef.current, anchorElement));

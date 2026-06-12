@@ -31,6 +31,7 @@ export function ComposerModelPickerContent({
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder={CHAT_MODEL_SELECTOR_LABELS.searchPlaceholder}
+              autoFocus
               className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
             />
           </div>

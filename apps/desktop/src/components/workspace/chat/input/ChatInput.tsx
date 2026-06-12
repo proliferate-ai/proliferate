@@ -6,6 +6,7 @@ import {
   useState,
   type ChangeEvent,
   type ClipboardEvent,
+  type MouseEvent,
 } from "react";
 import type { PromptInputBlock } from "@anyharness/sdk";
 import {
@@ -254,7 +255,13 @@ export function ChatInput({
     }
   }, [attachments, canAcceptPastedAttachments]);
 
-  const handleComposerSurfaceClick = useCallback(() => {
+  const handleComposerSurfaceClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    // Portal-rendered popovers (model picker, etc.) bubble clicks through the
+    // React tree even though their DOM lives outside the surface — those
+    // clicks must not pull focus back into the chat editor.
+    if (!event.currentTarget.contains(event.target as Node)) {
+      return;
+    }
     if (effectiveIsEditingQueuedPrompt) {
       textareaRef.current?.focus();
       return;
