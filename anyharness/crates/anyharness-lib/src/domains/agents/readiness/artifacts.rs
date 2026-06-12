@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use super::paths::{artifact_root, has_managed_registry_binary_for_names};
-use crate::domains::agents::installer::managed_npm::managed_npm_install_issue;
+use crate::domains::agents::installer::managed_npm::{
+    managed_npm_install_issue, source_build_install_issue,
+};
 use crate::domains::agents::model::*;
 use crate::integrations::agent_cli::executable::{
     find_in_path, find_real_binary_in_path, is_valid_executable,
@@ -96,17 +98,20 @@ pub(super) fn resolve_agent_process_artifact(
                 managed_launcher_candidates(&managed_dir, kind, Some(executable_relpath.as_path()));
             for path in &managed_candidates {
                 if path.exists() {
-                    if source_build_binary_name.is_none() {
-                        if let Some(message) = managed_npm_install_issue(package, &managed_dir) {
-                            return ResolvedArtifact {
-                                role: ArtifactRole::AgentProcess,
-                                installed: false,
-                                source: Some("managed".into()),
-                                version: None,
-                                path: Some(path.clone()),
-                                message: Some(message),
-                            };
-                        }
+                    let install_issue = if source_build_binary_name.is_none() {
+                        managed_npm_install_issue(package, &managed_dir)
+                    } else {
+                        source_build_install_issue(package, &managed_dir)
+                    };
+                    if let Some(message) = install_issue {
+                        return ResolvedArtifact {
+                            role: ArtifactRole::AgentProcess,
+                            installed: false,
+                            source: Some("managed".into()),
+                            version: None,
+                            path: Some(path.clone()),
+                            message: Some(message),
+                        };
                     }
                     return found_artifact(ArtifactRole::AgentProcess, path.clone(), "managed");
                 }

@@ -24,6 +24,7 @@ use crate::live::sessions::driver::native_session::{
     has_anyharness_targeted_fork_extension, start_native_session,
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
+use crate::live::sessions::driver::stderr::AgentStderrTail;
 use crate::live::sessions::driver::inbound::InboundDoor;
 use crate::live::sessions::driver::session_lifecycle::initialize_connection;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
@@ -66,9 +67,11 @@ impl SessionActor {
             &source_agent_kind,
             &ready_tx,
         )?;
-        let child = spawned.child;
+        let mut child = spawned.child;
         let stdin = spawned.stdin;
         let stdout = spawned.stdout;
+        let stderr_tail = spawned.stderr_tail;
+        let mut stderr_done = spawned.stderr_done;
 
         let (notification_tx, notification_rx) =
             mpsc::unbounded_channel::<acp::schema::SessionNotification>();
@@ -113,40 +116,81 @@ impl SessionActor {
         ));
 
         let (conn, shutdown_tx) = establish_connection(client, stdin, stdout).await?;
-        let init_response = initialize_connection(
-            &conn,
-            &source_agent_kind,
-            &config.launch.agent,
-            &session_id,
-            &workspace_id,
-            &ready_tx,
-        )
-        .await?;
 
-        persist_session_action_capabilities(
-            config.caps.state.as_ref(),
-            &session_id,
-            &init_response.agent_capabilities,
-        );
-        let action_capabilities = action_capabilities_from_acp(&init_response.agent_capabilities);
+        // Race the initialize/new-session handshake against agent-process
+        // exit: an agent that dies before responding (bad install, crash on
+        // boot) should fail that phase immediately with its stderr instead of
+        // letting the caller burn the full ready timeout on a misleading
+        // "waiting for authentication" message.
+        let handshake = async {
+            let init_response = initialize_connection(
+                &conn,
+                &source_agent_kind,
+                &config.launch.agent,
+                &session_id,
+                &workspace_id,
+                &ready_tx,
+            )
+            .await?;
+
+            persist_session_action_capabilities(
+                config.caps.state.as_ref(),
+                &session_id,
+                &init_response.agent_capabilities,
+            );
+            let action_capabilities =
+                action_capabilities_from_acp(&init_response.agent_capabilities);
+
+            let native = start_native_session(
+                &conn,
+                &config.launch.workspace_path,
+                &config.launch.mcp_servers,
+                config.launch.prompts.every_prompt.as_deref(),
+                &startup_strategy,
+                action_capabilities,
+                &session_id,
+                &workspace_id,
+                &ready_tx,
+            )
+            .await?;
+            anyhow::Ok((init_response, action_capabilities, native))
+        };
+        let (init_response, action_capabilities, native_session) = tokio::select! {
+            // Biased so a handshake that completed on the same poll as the
+            // exit (agent answered and then died) is reported as the success
+            // it was; the exit arm only fires while it is genuinely pending.
+            biased;
+            result = handshake => result?,
+            exit_status = child.wait() => {
+                if let Some(reader_task) = stderr_done.take() {
+                    // The child held the only write end of the pipe, so EOF
+                    // arrives promptly after exit; give the reader a moment to
+                    // drain the final lines before snapshotting.
+                    let _ = tokio::time::timeout(
+                        std::time::Duration::from_millis(250),
+                        reader_task,
+                    )
+                    .await;
+                }
+                let error = agent_exited_during_startup_error(exit_status, &stderr_tail);
+                tracing::warn!(
+                    session_id = %session_id,
+                    workspace_id = %workspace_id,
+                    agent_kind = %source_agent_kind,
+                    error = %error.to_string().replace('\n', " | "),
+                    elapsed_ms = startup_started.elapsed().as_millis(),
+                    "[workspace-latency] session.actor.process_exited_during_startup"
+                );
+                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
+                return Err(error);
+            }
+        };
         let supports_native_close = init_response
             .agent_capabilities
             .session_capabilities
             .close
             .is_some();
-
-        let (native_session_id, native_startup_state, startup_disposition) = start_native_session(
-            &conn,
-            &config.launch.workspace_path,
-            &config.launch.mcp_servers,
-            config.launch.prompts.every_prompt.as_deref(),
-            &startup_strategy,
-            action_capabilities,
-            &session_id,
-            &workspace_id,
-            &ready_tx,
-        )
-        .await?;
+        let (native_session_id, native_startup_state, startup_disposition) = native_session;
         let mut startup_state: SessionStartupState = native_startup_state.into();
         startup_state.prompt_capabilities =
             capabilities_from_acp(Some(&init_response.agent_capabilities.prompt_capabilities));
@@ -346,6 +390,25 @@ impl SessionActor {
     }
 }
 
+fn agent_exited_during_startup_error(
+    exit_status: std::io::Result<std::process::ExitStatus>,
+    stderr_tail: &AgentStderrTail,
+) -> anyhow::Error {
+    let status = match exit_status {
+        Ok(status) => status.to_string(),
+        Err(error) => format!("wait failed: {error}"),
+    };
+    let tail = stderr_tail.snapshot();
+    if tail.is_empty() {
+        anyhow::anyhow!("agent process exited during ACP startup ({status})")
+    } else {
+        anyhow::anyhow!(
+            "agent process exited during ACP startup ({status}). Agent stderr:\n{}",
+            tail.join("\n")
+        )
+    }
+}
+
 async fn dispatch_startup_drain(
     store: &dyn QueueDurable,
     session_id: &str,
@@ -434,5 +497,34 @@ pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
     SessionActionCapabilities {
         fork,
         targeted_fork: false,
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::process::ExitStatusExt;
+
+    #[test]
+    fn agent_exit_error_reports_status_without_stderr() {
+        let tail = AgentStderrTail::default();
+        let exit_status = std::process::ExitStatus::from_raw(0x100); // exit code 1
+
+        let error = agent_exited_during_startup_error(Ok(exit_status), &tail);
+        let message = error.to_string();
+        assert!(message.contains("exited during ACP startup"));
+        assert!(!message.contains("Agent stderr"));
+    }
+
+    #[test]
+    fn agent_exit_error_includes_stderr_tail() {
+        let tail = AgentStderrTail::default();
+        tail.push("Failed to locate codex-acp binary");
+        let exit_status = std::process::ExitStatus::from_raw(0x100);
+
+        let error = agent_exited_during_startup_error(Ok(exit_status), &tail);
+        assert!(error
+            .to_string()
+            .contains("Failed to locate codex-acp binary"));
     }
 }

@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 
 use super::managed_npm::{
     apply_npm_version_override, installed_npm_package_version, managed_npm_install_issue,
-    npm_package_version, write_managed_npm_source_marker,
+    npm_package_version, source_build_install_issue, write_managed_npm_source_marker,
 };
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::ArtifactRole;
@@ -36,7 +36,7 @@ pub(super) fn install_managed_npm_package(
     let package_issue = if source_build_binary_name.is_none() {
         managed_npm_install_issue(&versioned_package, managed_dir)
     } else {
-        None
+        source_build_install_issue(&versioned_package, managed_dir)
     };
 
     if force_reinstall || !exec_path.exists() || !launcher_path.exists() || package_issue.is_some()
@@ -160,7 +160,11 @@ fn install_managed_source_build_binary(
 ) -> Result<(), InstallError> {
     let staging = TempDirGuard::new("source-build")?;
     let source_root = materialize_npm_package_source(package, staging.path())?;
-    build_cargo_binary_from_source(&source_root, binary_name, managed_dir)
+    build_cargo_binary_from_source(&source_root, binary_name, managed_dir)?;
+    // Source builds leave no npm metadata behind, so the marker is the only
+    // way staleness checks can detect a later git-pin bump and rebuild.
+    write_managed_npm_source_marker(package, managed_dir)?;
+    Ok(())
 }
 
 fn materialize_npm_package_source(
@@ -385,7 +389,7 @@ fn install_npm_package_into_prefix(package: &str, managed_dir: &Path) -> Result<
     .map(|_| ())
 }
 
-fn platform_binary_filename(binary_name: &str) -> PathBuf {
+pub(super) fn platform_binary_filename(binary_name: &str) -> PathBuf {
     if cfg!(windows) {
         PathBuf::from(format!("{binary_name}.exe"))
     } else {

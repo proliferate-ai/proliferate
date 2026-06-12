@@ -126,7 +126,7 @@
           "kind": "managed_npm_package",
           "package": "git+https://github.com/proliferate-ai/codex-acp.git#1fdb4661c2aef0815a6aab16be27ea70f4c2b94f",
           "packageSubdir": "npm",
-          "sourceBuildBinaryName": null,
+          "sourceBuildBinaryName": "codex-acp",
           "executableRelpath": "node_modules/.bin/codex-acp"
         }
       },

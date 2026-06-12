@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::npm::install_managed_npm_package;
+use super::npm::{install_managed_npm_package, platform_binary_filename};
 use super::{InstallError, InstallOptions, InstalledArtifactResult};
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
@@ -54,24 +54,40 @@ fn regenerate_agent_process_launcher(
     let path_prefixes = launcher_path_prefixes(runtime_home, kind);
     let env = managed_launcher_env(kind);
 
-    let executable_relpath = match &descriptor.agent_process.install {
+    let (executable_relpath, source_build_binary_name) = match &descriptor.agent_process.install {
         AgentProcessInstallSpec::ManagedNpmPackage {
-            executable_relpath, ..
-        } => executable_relpath,
+            executable_relpath,
+            source_build_binary_name,
+            ..
+        } => (executable_relpath, source_build_binary_name),
         AgentProcessInstallSpec::RegistryBacked {
             fallback:
                 AgentProcessFallback::NpmPackage {
-                    executable_relpath, ..
+                    executable_relpath,
+                    source_build_binary_name,
+                    ..
                 },
             ..
-        } => executable_relpath,
+        } => (executable_relpath, source_build_binary_name),
         _ => return Ok(None),
     };
 
-    let exec_path = managed_dir.join(executable_relpath);
-    if !exec_path.exists() {
-        return Err(InstallError::MissingManagedArtifact(exec_path));
+    // Mirror install_managed_npm_package's exec-path resolution: source-built
+    // binaries live at the managed dir root, not under node_modules. Seed
+    // payloads built before an agent switched to source build only contain
+    // the node_modules layout, so fall back to it rather than failing the
+    // whole seed apply; the next install pass rebuilds and re-points the
+    // launcher.
+    let mut exec_candidates = Vec::new();
+    if let Some(binary_name) = source_build_binary_name {
+        exec_candidates.push(managed_dir.join(platform_binary_filename(binary_name)));
     }
+    exec_candidates.push(managed_dir.join(executable_relpath));
+    let Some(exec_path) = exec_candidates.iter().find(|path| path.exists()).cloned() else {
+        return Err(InstallError::MissingManagedArtifact(
+            exec_candidates.remove(0),
+        ));
+    };
 
     generate_launcher_script(&launcher_path, &exec_path, &[], &env, &path_prefixes)?;
     Ok(Some(InstalledArtifactResult {
