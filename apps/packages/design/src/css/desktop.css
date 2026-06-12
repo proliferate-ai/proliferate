@@ -300,14 +300,14 @@
   --color-diff-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
   --color-diff-panel-surface: color-mix(in oklab, var(--color-foreground) 3%, transparent);
   --color-diff-header-surface: var(--color-diff-surface);
-  /* Codex parity: diff headers paint no band of their own — the turn
-     header ("Edited x" + Undo/Review), inline tool headers, and the
-     right-panel git file headers (sidebar variant derives below) all sit
-     flat on the diff surface with hover tints only. */
-  --color-diff-chat-turn-header-surface: var(--color-diff-surface);
+  /* Near-flat headers: the turn header ("Edited x" + Undo/Review), inline
+     tool headers, and the right-panel git file headers (sidebar variant
+     derives below) sit on the diff surface pulled darker than the body in
+     dark mode; light mode keeps them flat (overridden below). */
+  --color-diff-chat-turn-header-surface: color-mix(in srgb, var(--color-diff-surface) 86%, var(--color-overlay));
   --color-diff-chat-turn-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-turn-header-surface) 97%, var(--color-foreground));
   --color-diff-chat-turn-icon-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
-  --color-diff-chat-inline-tool-header-surface: var(--color-diff-surface);
+  --color-diff-chat-inline-tool-header-surface: color-mix(in srgb, var(--color-diff-surface) 86%, var(--color-overlay));
   --color-diff-chat-inline-tool-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground));
   --color-diff-sidebar-file-header-surface: var(--color-diff-chat-inline-tool-header-surface);
   --color-diff-sidebar-file-header-hover-surface: color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground));
@@ -1114,6 +1114,10 @@ mark.codex-thread-find-active {
   --color-diff-deleted: hsl(0 100% 45%);
   --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
   --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  /* The dark-mode header darkening above is a slab on light paper —
+     light mode keeps headers flat on the diff surface (Codex parity). */
+  --color-diff-chat-turn-header-surface: var(--color-diff-surface);
+  --color-diff-chat-inline-tool-header-surface: var(--color-diff-surface);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
