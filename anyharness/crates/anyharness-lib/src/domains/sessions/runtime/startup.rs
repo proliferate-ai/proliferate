@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::extensions::SessionTurnFinishedContext;
@@ -17,57 +16,43 @@ use crate::domains::sessions::mcp_bindings::summaries::{
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::model::{LaunchEnv, SessionHooks, SessionLaunch, SystemPromptAppends};
+use crate::live::sessions::model::SessionHooks;
 use crate::live::sessions::SessionStartupStrategy;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
+use super::launch_policy::{
+    assemble_session_launch, choose_startup_strategy, session_is_closed, SessionLaunchContext,
+    SessionStartupFacts,
+};
 use super::{
     launch_env::build_session_launch_env, CreateAndStartSessionError, EnsureLiveSessionError,
     SessionLifecycleError, SessionMcpRefresh, SessionRuntime, StartSessionError,
 };
 
+/// Resolve steps only — gather the durable facts, then let the pure policy in
+/// `launch_policy` pick the strategy. The parent lookup keeps today's gating
+/// (only fork children without their own native id pay for it).
 pub(super) fn choose_session_startup_strategy(
     record: &SessionRecord,
     session_store: &SessionStore,
 ) -> anyhow::Result<SessionStartupStrategy> {
-    if session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)? {
-        if let Some(native_session_id) = record.native_session_id.clone() {
-            return Ok(SessionStartupStrategy::LoadNativeNoFallback(
-                native_session_id,
-            ));
-        }
-        let parent = session_store
+    let is_fork_child =
+        session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?;
+    let fork_parent_native_session_id = if is_fork_child && record.native_session_id.is_none() {
+        session_store
             .find_parent_by_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?
-            .ok_or_else(|| anyhow::anyhow!("fork child is missing its parent link"))?;
-        let parent_native_session_id = parent
-            .native_session_id
-            .clone()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("fork parent is missing native session id"))?;
-        return Ok(SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id,
-        });
-    }
-
-    let Some(native_session_id) = record.native_session_id.clone() else {
-        if session_store.has_turn_started_event(&record.id)? {
-            return Ok(SessionStartupStrategy::ResumeSeqFreshNative);
-        }
-        return Ok(SessionStartupStrategy::Fresh);
+            .map(|parent| parent.native_session_id)
+    } else {
+        None
     };
-
-    if record.agent_kind != AgentKind::Claude.as_str() {
-        return Ok(SessionStartupStrategy::LoadNative(native_session_id));
-    }
-
-    // A durable `turn_started` protects the narrow crash window where the sink
-    // has already persisted a real turn but `last_prompt_at` has not been
-    // updated yet. Outside that window, `last_prompt_at` is the fast path.
-    if record.last_prompt_at.is_some() || session_store.has_turn_started_event(&record.id)? {
-        return Ok(SessionStartupStrategy::LoadNative(native_session_id));
-    }
-
-    Ok(SessionStartupStrategy::ResumeSeqFreshNative)
+    choose_startup_strategy(&SessionStartupFacts {
+        is_fork_child,
+        native_session_id: record.native_session_id.clone(),
+        fork_parent_native_session_id,
+        agent_kind: record.agent_kind.clone(),
+        has_last_prompt_at: record.last_prompt_at.is_some(),
+        has_turn_started_event: session_store.has_turn_started_event(&record.id)?,
+    })
 }
 
 impl SessionRuntime {
@@ -203,7 +188,7 @@ impl SessionRuntime {
         self.access_gate
             .assert_can_start_live_session(&record.id)
             .map_err(|error| StartSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
-        if record.closed_at.is_some() || record.status == "closed" {
+        if session_is_closed(record) {
             return Err(StartSessionError::Closed);
         }
         let started = Instant::now();
@@ -407,25 +392,19 @@ impl SessionRuntime {
                 .map_err(StartSessionError::Internal)?;
         }
         let acp_start_started = Instant::now();
-        let launch = SessionLaunch {
-            session: record.clone(),
+        let launch = assemble_session_launch(SessionLaunchContext {
+            record: record.clone(),
             agent: resolved_agent,
             workspace_path,
-            env: LaunchEnv {
-                workspace: workspace_env,
-                session: session_launch_env,
-                auth_support: agent_auth_overlay.support_env,
-                auth_protected: agent_auth_overlay.protected_env,
-            },
+            workspace_env,
+            session_env: session_launch_env,
+            auth_support_env: agent_auth_overlay.support_env,
+            auth_protected_env: agent_auth_overlay.protected_env,
             mcp_servers: mcp_launch.mcp_servers,
             startup: startup_strategy,
-            prompts: SystemPromptAppends {
-                every_prompt: mcp_launch.system_prompt_append,
-                first_prompt: mcp_launch.first_prompt_system_prompt_append,
-            },
-            // Overwritten by the manager under the start/inject critical section.
-            last_seq: 0,
-        };
+            every_prompt_append: mcp_launch.system_prompt_append,
+            first_prompt_append: mcp_launch.first_prompt_system_prompt_append,
+        });
         let hooks = SessionHooks {
             on_turn_finish: Some(Arc::new({
                 let extensions = self.session_extensions.clone();

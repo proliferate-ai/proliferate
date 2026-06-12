@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use anyharness_contract::v1::{
     ContentPart, PromptAttachmentSource as ContractPromptAttachmentSource, PromptCapabilities,
     PromptProvenance as PublicPromptProvenance,
@@ -7,12 +9,13 @@ use serde::{Deserialize, Serialize};
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::model::{PromptAttachmentRecord, PromptAttachmentState};
 use crate::domains::sessions::plan_references::PlanReferenceResolver;
+use crate::domains::sessions::service::attachments::read_prompt_attachment_content_with_legacy_fallback;
 use crate::domains::sessions::store::SessionStore;
 
-mod acp;
 pub(crate) mod capabilities;
 pub(crate) mod prepare;
 pub(crate) mod provenance;
+pub(crate) mod render;
 #[cfg(test)]
 mod tests;
 
@@ -373,6 +376,105 @@ impl PreparedPrompt {
         }
         Ok(())
     }
+}
+
+/// What a loaded attachment is used as by the payload block referencing it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolvedAttachmentKind {
+    Image,
+    TextResource,
+}
+
+/// One attachment's stored content, loaded ahead of the pure render step.
+#[derive(Debug, Clone)]
+pub struct ResolvedAttachment {
+    pub attachment_id: String,
+    pub kind: ResolvedAttachmentKind,
+    pub mime_type: Option<String>,
+    pub uri: Option<String>,
+    /// Raw stored bytes. UTF-8 validation for text resources is a render-time
+    /// (pure) concern, so loading never inspects the content.
+    pub bytes: Vec<u8>,
+}
+
+/// Every attachment a prompt payload references, keyed by attachment id.
+/// Produced by [`load_prompt_attachments`] (IO), consumed by
+/// [`render::render`] (pure).
+#[derive(Debug, Clone, Default)]
+pub struct ResolvedParts {
+    pub attachments: BTreeMap<String, ResolvedAttachment>,
+}
+
+/// IO half of the prompt pipeline: load the store row and stored bytes
+/// (including the legacy-content fallback) for every attachment the payload
+/// references. Error codes/details match the pre-split combined path.
+pub fn load_prompt_attachments(
+    store: &SessionStore,
+    attachment_storage: &PromptAttachmentStorage,
+    session_id: &str,
+    payload: &PromptPayload,
+) -> Result<ResolvedParts, PromptValidationError> {
+    let mut attachments = BTreeMap::new();
+    for block in &payload.blocks {
+        let (attachment_id, kind, mime_type, uri, noun) = match block {
+            StoredPromptBlock::Image {
+                attachment_id,
+                mime_type,
+                uri,
+                ..
+            } => (
+                attachment_id,
+                ResolvedAttachmentKind::Image,
+                Some(mime_type.clone()),
+                uri.clone(),
+                "image",
+            ),
+            StoredPromptBlock::Resource {
+                attachment_id: Some(attachment_id),
+                uri,
+                mime_type,
+                ..
+            } => (
+                attachment_id,
+                ResolvedAttachmentKind::TextResource,
+                mime_type.clone(),
+                Some(uri.clone()),
+                "resource",
+            ),
+            _ => continue,
+        };
+        let record = store
+            .find_prompt_attachment(session_id, attachment_id)
+            .map_err(|error| {
+                PromptValidationError::internal(format!(
+                    "failed to load {noun} attachment: {error}"
+                ))
+            })?
+            .ok_or_else(|| {
+                PromptValidationError::new(
+                    "PROMPT_ATTACHMENT_NOT_FOUND",
+                    format!("{noun} attachment not found"),
+                )
+            })?;
+        let bytes =
+            read_prompt_attachment_content_with_legacy_fallback(store, attachment_storage, &record)
+                .map_err(|error| {
+                    PromptValidationError::internal(format!(
+                        "failed to read {noun} attachment: {error}"
+                    ))
+                })?;
+        attachments.insert(
+            attachment_id.clone(),
+            ResolvedAttachment {
+                attachment_id: attachment_id.clone(),
+                kind,
+                mime_type,
+                uri,
+                bytes,
+            },
+        );
+    }
+    Ok(ResolvedParts { attachments })
 }
 
 #[derive(Debug, Clone)]
