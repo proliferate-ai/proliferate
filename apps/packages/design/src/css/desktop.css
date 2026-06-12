@@ -1309,7 +1309,9 @@ mark.codex-thread-find-active {
   --color-card: var(--color-surface-elevated);
   --color-card-foreground: var(--color-foreground);
 
-  --color-popover: var(--color-surface-control-opaque);
+  /* Codex electron-light popovers are white glass (elevated-primary),
+     not control gray. */
+  --color-popover: #ffffff;
   --color-popover-foreground: var(--color-foreground);
   --color-popover-accent: var(--color-list-hover);
   --color-popover-ring: var(--color-border);
@@ -1320,12 +1322,14 @@ mark.codex-thread-find-active {
   --color-separator: var(--color-border-light);
   --color-ring: #339cff;
 
+  /* Codex electron-light accent is blue-300 #339cff even on white
+     (text-accent/icon-accent/border-focus all use it). */
   --color-highlight: #e5f3ff;
   --color-highlight-foreground: var(--color-foreground);
-  --color-highlight-muted: #0169cc;
-  --color-border-highlight: #0169cc;
-  --color-unread: #0169cc;
-  --color-special: #0169cc;
+  --color-highlight-muted: #339cff;
+  --color-border-highlight: #339cff;
+  --color-unread: #339cff;
+  --color-special: #339cff;
 
   --color-destructive: #e02e2a;
   --color-destructive-foreground: #ffffff;
@@ -1335,23 +1339,23 @@ mark.codex-thread-find-active {
   --color-warning-foreground: var(--color-foreground);
   --color-warning-foreground-secondary: var(--color-foreground-tertiary);
   --color-warning-border: var(--color-border);
-  --color-info: #0169cc;
+  --color-info: #0285ff;
   --color-info-foreground: #ffffff;
   --color-positive: #00a240;
   --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;
 
   --color-link: #e5f3ff;
-  --color-link-foreground: #0169cc;
+  --color-link-foreground: #339cff;
   --color-link-elevated: #d8e8f7;
 
   --color-tip: #e5f3ff;
   --color-tip-border: var(--color-border);
   --color-tip-secondary: #d8e8f7;
   --color-tip-secondary-border: var(--color-border);
-  --color-tip-muted: #0169cc;
+  --color-tip-muted: #339cff;
   --color-tip-foreground: var(--color-foreground);
-  --color-plan-border: #0169cc;
+  --color-plan-border: #339cff;
 
   --color-switch-background: var(--color-primary);
   --color-switch-foreground: #ffffff;
@@ -1379,7 +1383,7 @@ mark.codex-thread-find-active {
   --color-sidebar-accent-foreground: var(--color-foreground);
   --color-sidebar-border: var(--color-border);
   --color-sidebar-ring: var(--color-ring);
-  --color-sidebar-blue: #0169cc;
+  --color-sidebar-blue: #339cff;
 
   --color-status-backlog: var(--color-foreground-tertiary);
   --color-status-backlog-hover: var(--color-foreground-secondary);
@@ -1387,12 +1391,12 @@ mark.codex-thread-find-active {
   --color-status-in-progress-hover: #9a4600;
   --color-status-in-review: #00a240;
   --color-status-in-review-hover: #008833;
-  --color-status-done: #0169cc;
-  --color-status-done-hover: #0057aa;
+  --color-status-done: #339cff;
+  --color-status-done-hover: #0285ff;
   --color-status-canceled: var(--color-foreground-tertiary);
   --color-status-canceled-hover: var(--color-foreground-secondary);
 
-  --color-todo-in-progress: #0169cc;
+  --color-todo-in-progress: #339cff;
   --color-todo-completed: #00a240;
   --color-todo-pending: var(--color-foreground-tertiary);
 
