@@ -7,8 +7,6 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::Mutex;
 
-use crate::domains::plans::service::PlanService;
-use crate::domains::reviews::service::ReviewService;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
@@ -18,10 +16,7 @@ use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, persist_current_config_state_from_startup,
 };
 use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
-use crate::live::sessions::actor::notifications::plans::{
-    maybe_ingest_claude_exit_plan, maybe_ingest_codex_completed_plan,
-    maybe_ingest_tagged_completed_plan,
-};
+use crate::live::sessions::actor::notifications::observations::CollectedObservation;
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
@@ -41,19 +36,20 @@ pub(in crate::live::sessions::actor) async fn inject_runtime_event(
     result
 }
 
+/// Normalizes one ACP notification into the sink (transcript emission,
+/// background-work observation, config/state effects) and returns the special
+/// observations the dispatch pass should offer to the registered observers.
 pub(in crate::live::sessions::actor) async fn normalize_notification(
     notif: &acp::schema::SessionNotification,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
     session_id: &str,
-    workspace_id: &str,
     source_agent_kind: &str,
-    plan_service: Arc<PlanService>,
-    review_service: Option<Arc<ReviewService>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
-) {
+) -> Vec<CollectedObservation> {
+    let mut observations: Vec<CollectedObservation> = Vec::new();
     use acp::schema::SessionUpdate::*;
     match &notif.update {
         AgentMessageChunk(chunk) => {
@@ -62,33 +58,19 @@ pub(in crate::live::sessions::actor) async fn normalize_notification(
                 meta: serialize_meta(chunk.meta.as_ref()),
                 message_id: chunk.message_id.as_ref().map(|id| id.to_string()),
             };
-            if maybe_ingest_codex_completed_plan(
-                event_sink,
-                plan_service.as_ref(),
-                review_service.as_deref(),
-                session_id,
-                workspace_id,
-                source_agent_kind,
-                &payload,
-            )
-            .await
-            {
-                return;
+            // Adapter-tagged chunks are protocol vocabulary that must stay
+            // out of the transcript; they are offered to observers instead.
+            if is_non_transcript_chunk(payload.meta.as_ref()) {
+                observations.push(CollectedObservation::NonTranscriptChunk(payload));
+                return observations;
             }
             let completed = {
                 let mut sink = event_sink.lock().await;
                 sink.agent_message_chunk(payload)
             };
-            maybe_ingest_tagged_completed_plan(
-                event_sink,
-                plan_service.as_ref(),
-                review_service.as_deref(),
-                session_id,
-                workspace_id,
-                source_agent_kind,
-                completed,
-            )
-            .await;
+            if let Some(completed) = completed {
+                observations.push(CollectedObservation::AssistantMessageCompleted(completed));
+            }
         }
         AgentThoughtChunk(chunk) => {
             let mut sink = event_sink.lock().await;
@@ -138,17 +120,7 @@ pub(in crate::live::sessions::actor) async fn normalize_notification(
             background_work_registry
                 .observe_tool_payload(turn_id.clone(), &payload)
                 .await;
-            maybe_ingest_claude_exit_plan(
-                event_sink,
-                plan_service.as_ref(),
-                review_service.as_deref(),
-                session_id,
-                workspace_id,
-                source_agent_kind,
-                turn_id,
-                &payload,
-            )
-            .await;
+            observations.push(CollectedObservation::ToolCall { turn_id, payload });
         }
         ToolCallUpdate(tcu) => {
             let payload = AcpToolPayload {
@@ -196,17 +168,7 @@ pub(in crate::live::sessions::actor) async fn normalize_notification(
             background_work_registry
                 .observe_tool_payload(turn_id.clone(), &payload)
                 .await;
-            maybe_ingest_claude_exit_plan(
-                event_sink,
-                plan_service.as_ref(),
-                review_service.as_deref(),
-                session_id,
-                workspace_id,
-                source_agent_kind,
-                turn_id,
-                &payload,
-            )
-            .await;
+            observations.push(CollectedObservation::ToolCall { turn_id, payload });
         }
         Plan(plan) => {
             let entries = plan
@@ -327,6 +289,19 @@ pub(in crate::live::sessions::actor) async fn normalize_notification(
             tracing::debug!("unrecognized ACP SessionUpdate variant: {other:?}");
         }
     }
+    observations
+}
+
+/// Adapter meta tags whose chunks must not become transcript items. These
+/// are anyharness protocol vocabulary (set by our own agent adapters), not
+/// product meaning — product interpretation happens in the observers.
+const NON_TRANSCRIPT_CHUNK_EVENTS: &[&str] = &["proposed_plan_delta", "proposed_plan_completed"];
+
+fn is_non_transcript_chunk(meta: Option<&serde_json::Value>) -> bool {
+    meta.and_then(|meta| meta.get("anyharness"))
+        .and_then(|anyharness| anyharness.get("transcriptEvent"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|event| NON_TRANSCRIPT_CHUNK_EVENTS.contains(&event))
 }
 
 pub(in crate::live::sessions::actor) fn persist_raw_notification(

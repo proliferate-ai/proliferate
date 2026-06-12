@@ -118,7 +118,9 @@ pub(in crate::live::sessions::actor) async fn start_actor(
         config.interaction_broker.clone(),
         event_sink.clone(),
         handle.clone(),
-        config.plan_service.clone(),
+        config.session.workspace_id.clone(),
+        config.session.agent_kind.clone(),
+        config.permission_advisor.clone(),
     ));
 
     // Channel to extract ConnectionTo<Agent> from within the builder closure.

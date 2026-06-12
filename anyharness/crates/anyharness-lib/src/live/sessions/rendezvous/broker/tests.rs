@@ -4,7 +4,6 @@ use agent_client_protocol::schema::{
     CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope,
 };
 use anyharness_contract::v1::{UserInputQuestionOption, UserInputSubmittedAnswer};
-use serde_json::json;
 
 fn option(id: &str, kind: acp::schema::PermissionOptionKind) -> acp::schema::PermissionOption {
     acp::schema::PermissionOption::new(id.to_string(), id.to_string(), kind)

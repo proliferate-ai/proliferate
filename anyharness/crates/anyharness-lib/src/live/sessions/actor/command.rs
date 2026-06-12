@@ -1,14 +1,13 @@
 use std::fmt;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, McpElicitationSubmittedField, ProposedPlanDecisionState,
+    ConfigApplyState, McpElicitationSubmittedField,
     UserInputSubmittedAnswer,
 };
 use tokio::sync::oneshot;
 
-use crate::domains::plans::model::PlanRecord;
-use crate::domains::plans::service::PlanDecisionError;
 use crate::domains::sessions::prompt::PromptPayload;
+use crate::live::sessions::model::SessionDomainOp;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
@@ -152,11 +151,12 @@ pub(in crate::live::sessions) enum SessionCommand {
         resolution: Resolution,
         respond_to: oneshot::Sender<Result<(), ResolveInteractionCommandError>>,
     },
-    ApplyPlanDecision {
-        plan_id: String,
-        expected_version: i64,
-        decision: ProposedPlanDecisionState,
-        respond_to: oneshot::Sender<Result<PlanRecord, PlanDecisionError>>,
+    /// Run a [`SessionDomainOp`] serialized through the actor loop. The boxed
+    /// `Any` reply is downcast by the submitting domain runtime to its own
+    /// concrete output type.
+    RunDomainOp {
+        op: Box<dyn SessionDomainOp>,
+        respond_to: oneshot::Sender<Box<dyn std::any::Any + Send>>,
     },
     VerifyForkReady {
         respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,

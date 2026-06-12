@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use tokio::sync::broadcast;
 
 use self::state::{PlanItemState, StreamingItemState, ToolItemState};
-use crate::domains::plans::service::PlanEventContext;
 use crate::domains::sessions::store::SessionStore;
 use crate::observability::transcript_phase::TranscriptPhaseDebugState;
 use anyharness_contract::v1::SessionEventEnvelope;
@@ -102,15 +101,6 @@ impl SessionEventSink {
 
     pub fn current_turn_id(&self) -> Option<String> {
         self.current_turn_id.clone()
-    }
-
-    pub fn plan_event_context(&self) -> PlanEventContext {
-        PlanEventContext {
-            session_id: self.session_id.clone(),
-            source_agent_kind: self.source_agent_kind.clone(),
-            turn_id: self.current_turn_id.clone(),
-            next_seq: self.next_seq,
-        }
     }
 
     pub fn close_open_transcript_items(&mut self) {

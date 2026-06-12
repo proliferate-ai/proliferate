@@ -5,8 +5,6 @@ use anyharness_contract::v1::SessionEventEnvelope;
 use tokio::sync::broadcast;
 
 use crate::domains::agents::model::ResolvedAgent;
-use crate::domains::plans::service::PlanService;
-use crate::domains::reviews::service::ReviewService;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_config::SessionModelOption;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
@@ -16,6 +14,7 @@ use crate::live::sessions::actor::config::selection::find_select_option_by_purpo
 use crate::live::sessions::actor::config::types::ConfigPurpose;
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::driver::types::NativeSessionStartupState;
+use crate::live::sessions::model::{PermissionAdvisor, SessionEventObserver};
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 use crate::observability::latency::LatencyRequestContext;
 
@@ -57,8 +56,11 @@ pub struct SessionActorConfig {
     pub agent_auth_env: std::collections::BTreeMap<String, String>,
     pub protected_agent_auth_env: std::collections::BTreeMap<String, String>,
     pub interaction_broker: Arc<InteractionRendezvous>,
-    pub plan_service: Arc<PlanService>,
-    pub review_service: Option<Arc<ReviewService>>,
+    /// Product reactors, registration order = dispatch order (plans before
+    /// reviews). See the dispatch contract in `live/sessions/model.rs`.
+    pub observers: Vec<Arc<dyn SessionEventObserver>>,
+    /// Consulted by the inbound permission door before parking.
+    pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub session_store: SessionStore,
     pub attachment_storage: PromptAttachmentStorage,

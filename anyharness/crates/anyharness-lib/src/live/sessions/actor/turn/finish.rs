@@ -111,8 +111,7 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
                     session_id,
                     workspace_id,
                     source_agent_kind,
-                    config.plan_service.clone(),
-                    config.review_service.clone(),
+                    &config.observers,
                     persisted_config_state,
                     startup_state,
                 )

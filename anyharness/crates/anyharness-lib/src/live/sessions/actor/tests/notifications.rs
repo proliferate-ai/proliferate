@@ -1,27 +1,6 @@
 use super::*;
 use crate::app::test_support;
 
-#[test]
-fn title_from_markdown_uses_first_heading_without_marker() {
-    assert_eq!(
-        title_from_markdown("# Repo Issue Investigation\n\n## Goal\nFind issues"),
-        Some("Repo Issue Investigation".to_string())
-    );
-}
-
-#[test]
-fn extract_tagged_proposed_plan_requires_complete_wrapper() {
-    assert_eq!(
-        extract_tagged_proposed_plan(
-            "\n<proposed_plan>\n# Plan: Tighten review\n\nDo the work.\n</proposed_plan>\n"
-        )
-        .as_deref(),
-        Some("# Plan: Tighten review\n\nDo the work.")
-    );
-    assert!(extract_tagged_proposed_plan("# Plan\n\nNo wrapper").is_none());
-    assert!(extract_tagged_proposed_plan("<proposed_plan># Plan").is_none());
-}
-
 #[tokio::test]
 async fn handle_notification_persists_raw_acp_notifications() {
     let db = Db::open_in_memory().expect("open db");
@@ -97,8 +76,7 @@ async fn handle_notification_persists_raw_acp_notifications() {
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
+        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -294,8 +272,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
+        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -323,8 +300,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
+        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -355,8 +331,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         "session-1",
         "workspace-1",
         "claude",
-        test_plan_service(&db),
-        None,
+        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )
