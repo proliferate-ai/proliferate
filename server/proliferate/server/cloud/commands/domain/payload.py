@@ -63,6 +63,9 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
     if kind == CloudCommandKind.refresh_agent_auth_config.value:
         _validate_refresh_agent_auth_config_payload(payload)
         return
+    if kind == CloudCommandKind.reconcile_agents.value:
+        _validate_reconcile_agents_payload(payload)
+        return
     if kind in {
         CloudCommandKind.start_session.value,
         CloudCommandKind.send_prompt.value,
@@ -283,6 +286,22 @@ def _validate_refresh_agent_auth_config_payload(payload: dict[str, object]) -> N
         raise CloudApiError(
             "cloud_command_refresh_agent_auth_force_restart_required",
             "refresh_agent_auth_config payload must contain boolean forceRestart.",
+            status_code=400,
+        )
+
+
+def _validate_reconcile_agents_payload(payload: dict[str, object]) -> None:
+    _reject_unknown_fields(
+        payload,
+        frozenset({"reinstall"}),
+        code="cloud_command_reconcile_agents_payload_unknown",
+        message_prefix="reconcile_agents payload contains unsupported field(s): ",
+    )
+    value = payload.get("reinstall")
+    if value is not None and not isinstance(value, bool):
+        raise CloudApiError(
+            "cloud_command_reconcile_agents_reinstall_invalid",
+            "reconcile_agents reinstall must be a boolean when provided.",
             status_code=400,
         )
 

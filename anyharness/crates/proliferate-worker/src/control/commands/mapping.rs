@@ -43,6 +43,9 @@ pub enum AnyHarnessCommand {
     CloseSession {
         session_id: String,
     },
+    ReconcileAgents {
+        reinstall: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -116,6 +119,13 @@ pub fn map_cloud_command(
         }
         "cancel_turn" => Ok(AnyHarnessCommand::CancelTurn {
             session_id: require_session_id(command)?,
+        }),
+        "reconcile_agents" => Ok(AnyHarnessCommand::ReconcileAgents {
+            reinstall: command
+                .payload
+                .get("reinstall")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         }),
         "close_session" => Ok(AnyHarnessCommand::CloseSession {
             session_id: require_session_id(command)?,
@@ -946,5 +956,24 @@ mod tests {
             lease_id: "lease-1".to_string(),
             lease_expires_at: "2026-05-14T00:00:00Z".to_string(),
         }
+    }
+
+    #[test]
+    fn maps_reconcile_agents_with_and_without_reinstall() {
+        let mut command = test_command(json!({ "reinstall": true }));
+        command.kind = "reconcile_agents".to_string();
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::ReconcileAgents { reinstall } = mapped else {
+            panic!("expected reconcile agents");
+        };
+        assert!(reinstall);
+
+        let mut command = test_command(json!({}));
+        command.kind = "reconcile_agents".to_string();
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::ReconcileAgents { reinstall } = mapped else {
+            panic!("expected reconcile agents");
+        };
+        assert!(!reinstall);
     }
 }
