@@ -9,6 +9,7 @@ WAKE_REQUIRED_CLOUD_COMMAND_KINDS: frozenset[str] = frozenset(
         CloudCommandKind.materialize_workspace.value,
         CloudCommandKind.materialize_environment.value,
         CloudCommandKind.refresh_agent_auth_config.value,
+        CloudCommandKind.reconcile_agents.value,
         CloudCommandKind.start_session.value,
         CloudCommandKind.send_prompt.value,
         CloudCommandKind.decide_plan.value,
