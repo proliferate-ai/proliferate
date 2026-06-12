@@ -17,10 +17,7 @@ pub enum ReinstallReason {
     /// Caller explicitly asked (the Reinstall button).
     Requested,
     /// The manifest's recorded version no longer matches the declared pin.
-    VersionDrift {
-        pinned: String,
-        recorded: String,
-    },
+    VersionDrift { pinned: String, recorded: String },
     /// The artifact on disk no longer matches the manifest's recorded hash.
     ChecksumMismatch,
 }
@@ -120,9 +117,9 @@ pub fn agent_process_pinned_version(spec: &AgentProcessInstallSpec) -> Option<St
     match spec {
         AgentProcessInstallSpec::ManagedNpmPackage { package, .. } => npm_package_version(package),
         AgentProcessInstallSpec::RegistryBacked { fallback, .. } => match fallback {
-            crate::domains::agents::model::AgentProcessFallback::NpmPackage {
-                package, ..
-            } => npm_package_version(package),
+            crate::domains::agents::model::AgentProcessFallback::NpmPackage { package, .. } => {
+                npm_package_version(package)
+            }
             _ => None,
         },
         _ => None,
@@ -176,9 +173,15 @@ mod tests {
     #[test]
     fn missing_manifest_or_pin_defers_to_the_mechanism() {
         // No manifest yet (fresh target): mechanisms decide install-vs-skip.
-        assert_eq!(plan_artifact(&facts(Some("0.25.0"), None, None), false), None);
+        assert_eq!(
+            plan_artifact(&facts(Some("0.25.0"), None, None), false),
+            None
+        );
         // No pin declared (unpinned native CLI): attested, never forced.
-        assert_eq!(plan_artifact(&facts(None, Some("1.2.3"), None), false), None);
+        assert_eq!(
+            plan_artifact(&facts(None, Some("1.2.3"), None), false),
+            None
+        );
     }
 
     #[test]

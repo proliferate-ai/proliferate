@@ -273,20 +273,30 @@ mod tests {
             .and_then(|agent| agent.auth.slots.iter().find(|slot| slot.id == "anthropic"))
             .expect("claude anthropic slot");
 
-        // Plain-string entries keep working and default to secret.
+        // Plain-string entries default to secret; tagged entries carry kind.
         assert_eq!(
             anthropic_slot
                 .env_vars
                 .iter()
-                .map(|env_var| env_var.name())
+                .map(|env_var| (env_var.name(), env_var.kind()))
                 .collect::<Vec<_>>(),
-            vec!["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"]
+            vec![
+                ("ANTHROPIC_AUTH_TOKEN", AgentRegistryEnvVarKind::Secret),
+                ("ANTHROPIC_API_KEY", AgentRegistryEnvVarKind::Secret),
+                ("CLAUDE_CODE_USE_BEDROCK", AgentRegistryEnvVarKind::Flag),
+                ("AWS_BEARER_TOKEN_BEDROCK", AgentRegistryEnvVarKind::Secret),
+            ]
         );
-        assert!(anthropic_slot
-            .env_vars
-            .iter()
-            .all(|env_var| env_var.kind() == AgentRegistryEnvVarKind::Secret));
-        assert!(anthropic_slot.discovery_kinds.is_empty());
+        assert_eq!(
+            anthropic_slot.discovery_kinds,
+            vec![
+                "claude-config-api-key",
+                "claude-oauth-creds",
+                "claude-keychain",
+                "claude-oauth-account",
+                "aws-credential-chain",
+            ]
+        );
     }
 
     #[test]

@@ -211,16 +211,20 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
             async move |_req: acp::schema::RequestPermissionRequest,
                         responder: acp::Responder<acp::schema::RequestPermissionResponse>,
                         _cx| {
-                responder.respond_with_result(Err(acp::Error::internal_error()
-                    .data("catalog probe does not grant permissions")))
+                responder
+                    .respond_with_result(Err(acp::Error::internal_error()
+                        .data("catalog probe does not grant permissions")))
             },
             acp::on_receive_request!(),
         )
-        .connect_with(transport, move |cx: acp::ConnectionTo<acp::Agent>| async move {
-            let _ = cx_tx.send(cx);
-            let _ = shutdown_rx.await;
-            Ok(())
-        });
+        .connect_with(
+            transport,
+            move |cx: acp::ConnectionTo<acp::Agent>| async move {
+                let _ = cx_tx.send(cx);
+                let _ = shutdown_rx.await;
+                Ok(())
+            },
+        );
 
     tokio::task::spawn_local(async move {
         if let Err(error) = connect_future.await {
@@ -312,9 +316,9 @@ async fn run_enumeration(
     if available.is_empty() {
         // Some harnesses (e.g. OpenCode) expose the model list as a `model`
         // config option instead of the ACP models block.
-        if let Some((config_id, entries)) =
-            model_entries_from_config_options(&new_session.config_options.clone().unwrap_or_default())
-        {
+        if let Some((config_id, entries)) = model_entries_from_config_options(
+            &new_session.config_options.clone().unwrap_or_default(),
+        ) {
             model_source = "modelConfigOption";
             model_config_id = Some(config_id);
             available = entries;
@@ -426,9 +430,7 @@ async fn run_enumeration(
     })
 }
 
-fn drain_pending(
-    notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
-) {
+fn drain_pending(notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>) {
     while notification_rx.try_recv().is_ok() {}
 }
 

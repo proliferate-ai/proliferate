@@ -22,7 +22,7 @@ Options:
   --raw                   Print raw OpenCode output after the summary
   --json                  Print parsed model records as JSON
   --limit <n>             Sample models per provider (default: 12)
-  --catalog <path>        Catalog to compare (default: catalogs/agents/v1/catalog.json)
+  --catalog <path>        Catalog to compare (default: catalogs/agents/catalog.json)
   --no-catalog            Skip catalog comparison
   -h, --help              Show this help
 
@@ -49,7 +49,7 @@ function parseArgs(argv) {
     raw: false,
     json: false,
     limit: 12,
-    catalog: path.join(repoRoot, "catalogs/agents/v1/catalog.json"),
+    catalog: path.join(repoRoot, "catalogs/agents/catalog.json"),
     compareCatalog: true,
   }
 

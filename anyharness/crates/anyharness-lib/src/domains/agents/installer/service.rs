@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use super::agent_process::{self, install_agent_process_artifact, is_agent_process_installable};
 use super::lock::AgentInstallLock;
 use super::native::{install_native_artifact, is_native_installable};
-use crate::domains::agents::model::*;
 use crate::domains::agents::installer::seed;
+use crate::domains::agents::model::*;
 use crate::integrations::agent_cli::launcher::LauncherError;
 
 #[derive(Debug, Clone)]

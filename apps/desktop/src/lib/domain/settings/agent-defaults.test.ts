@@ -87,14 +87,12 @@ describe("buildSettingsAgentDefaultRows", () => {
           displayName: "Auto",
           isDefault: true,
           status: "active",
-          defaultOptIn: false,
         },
         {
           id: "hidden",
           displayName: "Hidden",
           isDefault: false,
           status: "active",
-          defaultOptIn: false,
         },
       ],
     }];
@@ -105,7 +103,7 @@ describe("buildSettingsAgentDefaultRows", () => {
       preferences: {
         defaultChatAgentKind: "cursor",
         defaultChatModelIdByAgentKind: { cursor: "hidden" },
-        chatModelVisibilityOverridesByAgentKind: {},
+        chatModelVisibilityOverridesByAgentKind: { cursor: { hidden: false } },
         defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {},
       },
@@ -129,7 +127,6 @@ describe("buildSettingsAgentDefaultRows", () => {
         displayName: "Sonnet",
         isDefault: true,
         status: "active",
-        defaultOptIn: true,
       }],
     }];
 

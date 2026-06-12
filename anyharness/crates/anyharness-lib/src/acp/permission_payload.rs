@@ -3,7 +3,9 @@ use anyharness_contract::v1::{PermissionInteractionOption, PermissionInteraction
 
 const MAX_PERMISSION_RAW_JSON_BYTES: usize = 32 * 1024;
 
-pub fn permission_options(options: &[acp::schema::PermissionOption]) -> Vec<PermissionInteractionOption> {
+pub fn permission_options(
+    options: &[acp::schema::PermissionOption],
+) -> Vec<PermissionInteractionOption> {
     options
         .iter()
         .map(|option| PermissionInteractionOption {
@@ -83,12 +85,20 @@ pub fn bound_raw_json(value: serde_json::Value) -> serde_json::Value {
     })
 }
 
-fn permission_option_kind(kind: acp::schema::PermissionOptionKind) -> PermissionInteractionOptionKind {
+fn permission_option_kind(
+    kind: acp::schema::PermissionOptionKind,
+) -> PermissionInteractionOptionKind {
     match kind {
         acp::schema::PermissionOptionKind::AllowOnce => PermissionInteractionOptionKind::AllowOnce,
-        acp::schema::PermissionOptionKind::AllowAlways => PermissionInteractionOptionKind::AllowAlways,
-        acp::schema::PermissionOptionKind::RejectOnce => PermissionInteractionOptionKind::RejectOnce,
-        acp::schema::PermissionOptionKind::RejectAlways => PermissionInteractionOptionKind::RejectAlways,
+        acp::schema::PermissionOptionKind::AllowAlways => {
+            PermissionInteractionOptionKind::AllowAlways
+        }
+        acp::schema::PermissionOptionKind::RejectOnce => {
+            PermissionInteractionOptionKind::RejectOnce
+        }
+        acp::schema::PermissionOptionKind::RejectAlways => {
+            PermissionInteractionOptionKind::RejectAlways
+        }
         _ => PermissionInteractionOptionKind::Unknown,
     }
 }

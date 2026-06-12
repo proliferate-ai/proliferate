@@ -2,10 +2,7 @@ import {
   resolveModelDisplayName,
   shouldHideModel,
 } from "@/lib/domain/chat/models/model-display";
-import {
-  dynamicLaunchAgentAcceptsModel,
-  type DesktopAgentLaunchAgent,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 import { agentsWithVisibleModels } from "@/lib/domain/chat/models/launch-visible-agents";
 import {
   findLaunchModelByIdOrAlias,
@@ -147,11 +144,12 @@ function resolveActiveControlSelectorModels(
     const visibleModel = findLaunchModelByIdOrAlias(agent, value.value);
     const isFilteredByVisibility =
       Boolean(knownModel) && !visibleModel;
-    const isUnknownDynamicModel =
-      !knownModel && dynamicLaunchAgentAcceptsModel(sourceAgent);
+    // v2: the merged catalog menu is the model truth, so live-control values
+    // unknown to it stay hidden unless they are the active selection.
+    const isUnknownToCatalog = !knownModel;
     const isHiddenByProductPolicy = shouldHideSelectorModel(agent.kind, value);
     if (
-      (isFilteredByVisibility || isUnknownDynamicModel || isHiddenByProductPolicy)
+      (isFilteredByVisibility || isUnknownToCatalog || isHiddenByProductPolicy)
       && !isSelected
     ) {
       return [];
@@ -233,11 +231,10 @@ function resolveModelSelectionActionKindForModel(
   if (activeSelection.kind !== agentKind) {
     return "open_new_chat";
   }
-  if (!model.liveSwitchable) {
-    return modelSelectionMatchesModel(activeSelection, agent, agentKind, model.id)
-      ? "select"
-      : "open_new_chat";
-  }
+  // Same harness, different model -> the session is kept, always
+  // (decision 10). The runtime live-switches when the harness has a
+  // mechanism and relaunches the agent process under the same session when
+  // it does not (gemini exposes no config options at all).
   return modelSelectionMatchesModel(activeSelection, agent, agentKind, model.id)
     ? "select"
     : "update_current_chat";
@@ -269,6 +266,8 @@ function shouldHideCatalogSelectorModel(
   agentKind: string,
   modelId: string,
 ): boolean {
-  return shouldHideModel(agentKind, modelId)
-    || (agentKind === "claude" && modelId === "opus");
+  // The v2 catalog menu IS the pre-live menu: every advertised row renders
+  // until live options arrive (the merge dedupes live vs catalog rows by id
+  // and display name, so no special-casing of catalog ids).
+  return shouldHideModel(agentKind, modelId);
 }

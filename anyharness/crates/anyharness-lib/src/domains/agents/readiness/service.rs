@@ -108,7 +108,6 @@ pub fn resolve_agent_with_env(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,5 +552,4 @@ mod tests {
 
         assert_eq!(status, ResolvedAgentStatus::InstallRequired);
     }
-
 }

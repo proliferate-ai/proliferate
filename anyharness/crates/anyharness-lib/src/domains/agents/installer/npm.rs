@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::{InstallError, InstalledArtifactResult};
 use super::managed_npm::{
     apply_npm_version_override, installed_npm_package_version, managed_npm_install_issue,
     npm_package_version, write_managed_npm_source_marker,
 };
+use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::ArtifactRole;
 use crate::integrations::agent_cli::executable::make_executable;
 use crate::integrations::agent_cli::launcher::generate_launcher_script;

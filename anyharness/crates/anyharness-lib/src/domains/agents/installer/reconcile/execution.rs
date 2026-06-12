@@ -6,9 +6,9 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use super::{reconcile_agent, AgentReconcileOutcome, AgentReconcileResult};
+use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
 use crate::domains::agents::model::{AgentDescriptor, AgentKind};
-use crate::domains::agents::installer::seed::AgentSeedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {

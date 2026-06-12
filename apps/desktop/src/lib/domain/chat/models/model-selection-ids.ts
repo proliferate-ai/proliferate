@@ -2,6 +2,7 @@ import type {
   DesktopAgentLaunchAgent,
   DesktopAgentLaunchModel,
 } from "@/lib/domain/agents/cloud-launch-catalog";
+import { resolveSavedModelId } from "@/lib/domain/agents/saved-model-intent";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
 import {
   normalizeDefaultChatModelId,
@@ -83,6 +84,35 @@ export function findLaunchModelByIdOrAlias(
       model.id === candidate || model.aliases.includes(candidate)
     )
   ) ?? null;
+}
+
+/**
+ * Resolve a saved/preferred model id against the agent's catalog ids:
+ * exact > alias > variant-prefix (e.g. "gpt-x/high" lands on "gpt-x").
+ * Returns the canonical catalog id, or null when nothing equivalent exists.
+ */
+export function resolveSavedLaunchModelId(
+  agent: DesktopAgentLaunchAgent,
+  savedModelId: string,
+): string | null {
+  const aliases: Record<string, string> = {};
+  for (const model of agent.models) {
+    for (const alias of model.aliases) {
+      aliases[alias] ??= model.id;
+    }
+  }
+
+  for (const candidate of modelIdLookupCandidates(agent.kind, savedModelId)) {
+    const resolved = resolveSavedModelId(
+      candidate,
+      agent.models.map((model) => model.id),
+      aliases,
+    );
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return null;
 }
 
 export function selectedModelIdForVisibility(

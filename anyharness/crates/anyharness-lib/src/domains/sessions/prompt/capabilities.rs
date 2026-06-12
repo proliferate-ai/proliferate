@@ -1,7 +1,9 @@
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{PromptCapabilities, SessionLiveConfigSnapshot};
 
-pub fn capabilities_from_acp(capabilities: Option<&acp::schema::PromptCapabilities>) -> PromptCapabilities {
+pub fn capabilities_from_acp(
+    capabilities: Option<&acp::schema::PromptCapabilities>,
+) -> PromptCapabilities {
     capabilities
         .map(|capabilities| PromptCapabilities {
             image: capabilities.image,

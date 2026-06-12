@@ -7,212 +7,104 @@ import {
 
 function cloudCatalog(): Parameters<typeof projectCloudAgentCatalogToDesktopLaunchCatalog>[0] {
   return {
-    schemaVersion: 1,
-    catalogVersion: "2026-05-05.1",
-    generatedAt: "2026-05-05T00:00:00Z",
-    compatibility: null,
+    schemaVersion: 2,
+    catalogVersion: "2026-06-10.1",
+    generatedAt: "2026-06-10T00:00:00Z",
     agents: [{
       kind: "opencode",
       displayName: "OpenCode",
-      description: "OpenCode through ACP",
+      authContexts: [
+        { id: "opencode-zen" },
+        { id: "baseline" },
+      ],
       session: {
-        defaultModelId: "opencode/big-pickle",
-        defaultModeId: "build",
-        dynamicModels: true,
-        modelDisplayPolicy: {
-          defaultVisibleModelIds: ["opencode/big-pickle"],
-          allowUserVisibleModelSelection: true,
-          moreModelsSource: "lastKnownLiveSnapshot",
-        },
-        promptCapabilities: {
-          image: true,
-          audio: false,
-          embeddedContext: true,
-        },
-        compatibility: null,
+        controls: [
+          {
+            key: "model",
+            mapping: {
+              createField: "modelId",
+              switchVia: "configOption",
+              liveConfigId: "model",
+            },
+          },
+          {
+            key: "mode",
+            values: ["build", "plan"],
+            mapping: { createField: "modeId", liveConfigId: "mode" },
+          },
+          {
+            // No mapping: a probe-observed matrix dimension with no
+            // application path must NOT project as a launch control.
+            key: "effort",
+            values: ["medium", "high"],
+          },
+        ],
         models: [
           {
             id: "opencode/big-pickle",
             displayName: "OpenCode Zen/Big Pickle",
-            aliases: [],
+            availability: { anyOf: ["opencode-zen"] },
+            defaultVisible: true,
+            controls: {
+              effort: {
+                values: ["medium", "high"],
+                observedValue: "medium",
+              },
+            },
             status: "active",
-            isDefault: true,
-            provider: "opencode",
-            tags: ["recommended"],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
           },
           {
             id: "opencode/hidden",
             displayName: "Hidden",
-            aliases: [],
+            availability: { anyOf: ["opencode-zen"] },
+            defaultVisible: true,
             status: "hidden",
-            isDefault: false,
-            provider: "opencode",
-            tags: [],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
           },
           {
-            id: "opencode/candidate",
-            displayName: "Candidate",
-            aliases: [],
-            status: "candidate",
-            isDefault: false,
-            provider: "opencode",
-            tags: [],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
+            id: "opencode/extra",
+            displayName: "Extra",
+            availability: { anyOf: ["opencode-zen"] },
+            defaultVisible: false,
+            status: "active",
           },
           {
             id: "opencode/deprecated",
             displayName: "Deprecated",
-            aliases: [],
+            availability: { anyOf: ["opencode-zen"] },
+            defaultVisible: true,
             status: "deprecated",
-            isDefault: false,
-            provider: "opencode",
-            tags: [],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
           },
         ],
-        controls: [
-          {
-            key: "model",
-            label: "Model",
-            description: null,
-            type: "select",
-            category: "model",
-            defaultValue: "opencode/big-pickle",
-            surfaces: {
-              start: true,
-              session: true,
-              automation: true,
-              settings: true,
-            },
-            apply: {
-              createField: "modelId",
-              liveConfigId: "model",
-              liveSetter: "runtime_control",
-              queueBeforeMaterialized: true,
-            },
-            missingLiveConfigPolicy: "queue_then_conflict",
-            valueSource: "discoveredModels",
-            values: [],
-            queueWhileMaterializing: true,
-            mutableAfterMaterialized: true,
-          },
-          {
-            key: "mode",
-            label: "Session Mode",
-            description: null,
-            type: "select",
-            category: "mode",
-            defaultValue: "build",
-            surfaces: {
-              start: true,
-              session: true,
-              automation: true,
-              settings: true,
-            },
-            apply: {
-              createField: "modeId",
-              liveConfigId: "mode",
-              liveSetter: "runtime_control",
-              queueBeforeMaterialized: true,
-            },
-            missingLiveConfigPolicy: "queue_then_conflict",
-            valueSource: "inline",
-            values: [
-              {
-                value: "build",
-                label: "Build",
-                description: "Default mode",
-                isDefault: true,
-                status: "active",
-              },
-              {
-                value: "plan",
-                label: "Plan",
-                description: null,
-                isDefault: false,
-                status: "active",
-              },
-            ],
-            queueWhileMaterializing: true,
-            mutableAfterMaterialized: true,
-          },
-          {
-            key: "effort",
-            label: "Effort",
-            description: null,
-            type: "select",
-            category: "reasoning",
-            defaultValue: "medium",
-            surfaces: {
-              start: true,
-              session: true,
-              automation: false,
-              settings: true,
-            },
-            apply: {
-              createField: null,
-              liveConfigId: "effort",
-              liveSetter: "runtime_control",
-              queueBeforeMaterialized: true,
-            },
-            missingLiveConfigPolicy: "ignore_default",
-            valueSource: "inline",
-            values: [
-              {
-                value: "medium",
-                label: "Medium",
-                description: null,
-                isDefault: true,
-                status: "active",
-              },
-              {
-                value: "high",
-                label: "High",
-                description: null,
-                isDefault: false,
-                status: "active",
-              },
-            ],
-            queueWhileMaterializing: true,
-            mutableAfterMaterialized: true,
-          },
-        ],
+        defaults: { "opencode-zen": "opencode/big-pickle" },
       },
     }],
   };
 }
 
 describe("projectCloudAgentCatalogToDesktopLaunchCatalog", () => {
-  it("projects controls, launchable models, and defaults into desktop launch types", () => {
+  it("projects controls, menu models, and defaults into desktop launch types", () => {
     const projected = projectCloudAgentCatalogToDesktopLaunchCatalog(
       cloudCatalog(),
       { workspaceId: "workspace-1" },
     );
 
     expect(projected).toMatchObject({
-      catalogVersion: "2026-05-05.1",
+      schemaVersion: 2,
+      catalogVersion: "2026-06-10.1",
       workspaceId: "workspace-1",
       agents: [{
         kind: "opencode",
         displayName: "OpenCode",
         defaultModelId: "opencode/big-pickle",
-        defaultModeId: "build",
-        dynamicModels: true,
       }],
     });
+    // The menu: defaultVisible && status === "active" only.
     expect(projected.agents[0]?.models.map((model) => model.id)).toEqual([
       "opencode/big-pickle",
     ]);
+    expect(projected.agents[0]?.models[0]?.availability).toEqual({
+      anyOf: ["opencode-zen"],
+    });
     expect(projected.agents[0]?.launchControls.find((control) => control.key === "model"))
       .toBeUndefined();
     expect(projected.agents[0]?.launchControls.find((control) => control.key === "mode")
@@ -220,18 +112,35 @@ describe("projectCloudAgentCatalogToDesktopLaunchCatalog", () => {
         {
           value: "build",
           label: "Build",
-          description: "Default mode",
-          isDefault: true,
-          status: "active",
+          description: null,
+          isDefault: false,
+          status: null,
         },
         {
           value: "plan",
           label: "Plan",
           description: null,
           isDefault: false,
-          status: "active",
+          status: null,
         },
       ]);
+    expect(projected.agents[0]?.launchControls.find((control) => control.key === "mode")
+      ?.createField).toBe("modeId");
+  });
+
+  it("falls back to the first menu model when session defaults are absent", () => {
+    const base = cloudCatalog();
+    const baseAgent = base.agents[0]!;
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog({
+      ...base,
+      agents: [{
+        ...baseAgent,
+        session: { ...baseAgent.session, defaults: {} },
+      }],
+    });
+
+    expect(projected.agents[0]?.defaultModelId).toBe("opencode/big-pickle");
+    expect(projected.agents[0]?.models[0]?.isDefault).toBe(true);
   });
 
   it("keeps session default control metadata available for post-create live defaults", () => {
@@ -270,19 +179,15 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
         ...baseAgent,
         session: {
           ...baseAgent.session,
-          defaultModelId: "sonnet",
+          defaults: { "opencode-zen": "sonnet" },
           models: [{
             id: "sonnet",
             displayName: "Sonnet",
+            description: "Curated description",
             aliases: ["us.anthropic.claude-sonnet-4-6"],
+            availability: { anyOf: ["opencode-zen"] },
+            defaultVisible: true,
             status: "active",
-            isDefault: true,
-            defaultOptIn: true,
-            provider: "anthropic",
-            tags: ["recommended"],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
           }],
         },
       }],
@@ -306,11 +211,10 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
     expect(merged[0]?.models[0]).toMatchObject({
       id: "us.anthropic.claude-sonnet-4-6",
       displayName: "Claude Sonnet 4.6",
-      description: null,
+      description: "Curated description",
       aliases: ["sonnet"],
-      provider: "anthropic",
-      tags: ["recommended"],
-      defaultOptIn: true,
+      isDefault: true,
+      availability: { anyOf: ["opencode-zen"] },
     });
   });
 
@@ -325,19 +229,13 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
         displayName: "Cursor",
         session: {
           ...baseAgent.session,
-          defaultModelId: "composer-2.5",
+          defaults: {},
           models: [{
             id: "composer-2.5",
             displayName: "Composer 2.5",
-            aliases: [],
+            availability: { anyOf: ["cursor-login"] },
+            defaultVisible: true,
             status: "active",
-            isDefault: true,
-            defaultOptIn: true,
-            provider: "cursor",
-            tags: ["recommended"],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
           }],
         },
       }],
@@ -361,8 +259,6 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
     expect(merged[0]?.models[0]).toMatchObject({
       id: "composer-2.5",
       displayName: "Composer 2.5",
-      provider: "cursor",
-      tags: ["recommended"],
     });
   });
 
@@ -377,19 +273,14 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
         displayName: "Cursor",
         session: {
           ...baseAgent.session,
-          defaultModelId: "composer-2.5-fast",
+          defaults: {},
           models: [{
             id: "composer-2.5-fast",
             displayName: "Composer 2.5 Fast",
             aliases: ["composer-2[fast=true]"],
+            availability: { anyOf: ["cursor-login"] },
+            defaultVisible: true,
             status: "active",
-            isDefault: true,
-            defaultOptIn: true,
-            provider: "cursor",
-            tags: ["recommended"],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
           }],
         },
       }],
@@ -414,9 +305,34 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
       id: "composer-2.5[fast=true]",
       displayName: "Composer 2.5 Fast",
       aliases: ["composer-2.5-fast", "composer-2[fast=true]"],
-      provider: "cursor",
-      tags: ["recommended"],
-      defaultOptIn: true,
     });
+  });
+
+  it("drops gated catalog-only models when active auth contexts are known", () => {
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog(cloudCatalog());
+
+    const withoutContexts = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      null,
+    );
+    expect(withoutContexts[0]?.models.map((model) => model.id)).toEqual([
+      "opencode/big-pickle",
+    ]);
+
+    const gated = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      null,
+      { activeAuthContextIds: ["baseline"] },
+    );
+    expect(gated[0]?.models).toEqual([]);
+
+    const enabled = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      null,
+      { activeAuthContextIds: ["opencode-zen"] },
+    );
+    expect(enabled[0]?.models.map((model) => model.id)).toEqual([
+      "opencode/big-pickle",
+    ]);
   });
 });

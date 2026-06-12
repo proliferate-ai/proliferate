@@ -4,13 +4,18 @@ import { getCloudAgentCatalog } from "@proliferate/cloud-sdk/client/agent-catalo
 import {
   buildDesktopLaunchModelRegistries,
   projectCloudAgentCatalogToDesktopLaunchCatalog,
+  type CloudAgentCatalogResponseInput,
   type DesktopAgentLaunchCatalog,
 } from "@/lib/domain/agents/cloud-launch-catalog";
 import { getBundledDesktopAgentLaunchCatalog } from "@/lib/domain/agents/bundled-agent-catalog";
 import { cloudAgentCatalogKey } from "./query-keys";
 
 async function fetchCloudAgentCatalogProjection(): Promise<DesktopAgentLaunchCatalog> {
-  return projectCloudAgentCatalogToDesktopLaunchCatalog(await getCloudAgentCatalog());
+  // The cloud endpoint serves the raw schemaVersion-2 catalog document; the
+  // generated cloud-sdk response type lags the cutover, hence the assertion.
+  return projectCloudAgentCatalogToDesktopLaunchCatalog(
+    (await getCloudAgentCatalog()) as unknown as CloudAgentCatalogResponseInput,
+  );
 }
 
 export function useCloudAgentCatalog(enabled = true) {

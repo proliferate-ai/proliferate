@@ -283,8 +283,8 @@ mod tests {
 
     #[test]
     fn normalizes_schema_without_persisting_raw_names_or_values() {
-        let normalized =
-            normalize_standard_mcp_elicitation(standard_select_request()).expect("should normalize");
+        let normalized = normalize_standard_mcp_elicitation(standard_select_request())
+            .expect("should normalize");
 
         let public_json = serde_json::to_string(&normalized.payload).unwrap();
         assert!(!public_json.contains("account_id_secret"));
@@ -295,8 +295,8 @@ mod tests {
 
     #[test]
     fn accepted_select_maps_generated_option_to_raw_value() {
-        let normalized =
-            normalize_standard_mcp_elicitation(standard_select_request()).expect("should normalize");
+        let normalized = normalize_standard_mcp_elicitation(standard_select_request())
+            .expect("should normalize");
 
         let outcome = normalized
             .pending
@@ -364,8 +364,7 @@ mod tests {
             ),
             "Authorize",
         );
-        let normalized =
-            normalize_standard_mcp_elicitation(request).expect("url should normalize");
+        let normalized = normalize_standard_mcp_elicitation(request).expect("url should normalize");
 
         let public_json = serde_json::to_string(&normalized.payload).unwrap();
         assert!(public_json.contains("https://accounts.example.com"));
@@ -435,5 +434,4 @@ mod tests {
         assert!(!public_json.contains("calendar_secret_id"));
         assert!(!public_json.contains("cal_raw_1"));
     }
-
 }

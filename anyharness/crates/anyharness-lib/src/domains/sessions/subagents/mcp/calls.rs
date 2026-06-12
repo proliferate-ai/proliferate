@@ -236,9 +236,7 @@ async fn create_subagent(
     if prompt.trim().is_empty() {
         anyhow::bail!("prompt is required");
     }
-    let agent_kind = args
-        .harness_id
-        .unwrap_or_else(|| parent.agent_kind.clone());
+    let agent_kind = args.harness_id.unwrap_or_else(|| parent.agent_kind.clone());
     let model_id = initial_config_string(args.initial_config.as_ref(), &["modelId", "model"])
         .or(parent.current_model_id.clone())
         .or(parent.requested_model_id.clone());
@@ -379,18 +377,10 @@ async fn send_subagent_message(
     if prompt.trim().is_empty() {
         anyhow::bail!("prompt is required");
     }
-    let link = service.authorize_target(
-        parent_session_id,
-        args.subagent_id.as_deref(),
-        None,
-    )?;
+    let link = service.authorize_target(parent_session_id, args.subagent_id.as_deref(), None)?;
     let wake_scheduled = if args.wake_on_completion {
         service
-            .schedule_wake_for_target(
-                parent_session_id,
-                args.subagent_id.as_deref(),
-                None,
-            )?
+            .schedule_wake_for_target(parent_session_id, args.subagent_id.as_deref(), None)?
             .1
     } else {
         false
@@ -436,11 +426,8 @@ fn schedule_subagent_wake(
     parent_session_id: &str,
     args: ChildSessionArgs,
 ) -> anyhow::Result<Value> {
-    let (link, inserted) = service.schedule_wake_for_target(
-        parent_session_id,
-        args.subagent_id.as_deref(),
-        None,
-    )?;
+    let (link, inserted) =
+        service.schedule_wake_for_target(parent_session_id, args.subagent_id.as_deref(), None)?;
     Ok(json!({
         "subagentId": link.public_id,
         "sessionLinkId": link.id,

@@ -12,6 +12,7 @@ from proliferate.constants.automations import (
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
 )
 from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
+from proliferate.server.catalogs.models import AgentCatalogResponse
 from proliferate.server.catalogs.service import read_agent_catalog
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     ResolvedAgentRunConfig,
@@ -53,7 +54,7 @@ def _run_config_record(**overrides: object) -> CloudAgentRunConfigRecord:
         "created_by_user_id": uuid.uuid4(),
         "name": "Legacy config",
         "agent_kind": "cursor",
-        "model_id": "composer-2-fast",
+        "model_id": "composer-2.5",
         "control_values_json": {},
         "usable_in_personal_sandboxes": True,
         "usable_in_shared_sandboxes": False,
@@ -68,21 +69,79 @@ def _run_config_record(**overrides: object) -> CloudAgentRunConfigRecord:
     return CloudAgentRunConfigRecord(**values)  # type: ignore[arg-type]
 
 
-def test_model_aliases_validate_and_resolve_to_canonical_catalog_ids() -> None:
+def _alias_catalog() -> AgentCatalogResponse:
+    """Synthetic v2 catalog exercising alias resolution (the shipped document has none)."""
+    return AgentCatalogResponse.model_validate(
+        {
+            "schemaVersion": 2,
+            "catalogVersion": "2026-06-10.0",
+            "generatedAt": "2026-06-10T00:00:00Z",
+            "agents": [
+                {
+                    "kind": "cursor",
+                    "displayName": "Cursor",
+                    "harness": {"agentProcess": {"version": "1.0.0"}},
+                    "authContexts": [{"id": "cursor-login", "authSlotId": "cursor-login"}],
+                    "session": {
+                        "controls": [
+                            {"key": "model", "mapping": {"createField": "modelId"}},
+                            {"key": "mode", "values": ["agent", "plan"]},
+                        ],
+                        "models": [
+                            {
+                                "id": "composer-2.5",
+                                "displayName": "composer-2.5",
+                                "aliases": ["composer-2", "composer-2-fast"],
+                                "availability": {"anyOf": ["cursor-login"]},
+                                "defaultVisible": True,
+                                "controls": {
+                                    "mode": {"values": ["agent", "plan"], "default": "agent"}
+                                },
+                                "status": "active",
+                            }
+                        ],
+                    },
+                    "provenance": {"probedAt": "2026-06-10T00:00:00Z"},
+                }
+            ],
+        }
+    )
+
+
+def test_model_aliases_resolve_to_canonical_ids_and_fill_model_defaults() -> None:
+    catalog = _alias_catalog()
+
+    for alias in ("composer-2", "composer-2-fast"):
+        assert (
+            validate_config_values(
+                catalog,
+                agent_kind="cursor",
+                model_id=alias,
+                control_values={},
+            )
+            is None
+        )
+        assert (
+            canonical_model_id_for_config(catalog, agent_kind="cursor", model_id=alias)
+            == "composer-2.5"
+        )
+
+    resolved = resolve_runtime_values(
+        catalog,
+        _run_config_record(agent_kind="cursor", model_id="composer-2"),
+    )
+    assert isinstance(resolved, ResolvedAgentRunConfig)
+    assert resolved.model_id == "composer-2.5"
+    assert resolved.control_values == {"mode": "agent"}
+
+
+def test_model_ids_validate_and_resolve_against_served_catalog() -> None:
     catalog = read_agent_catalog().catalog
     cases = [
-        ("cursor", "default[]", "auto"),
-        ("cursor", "composer-2-fast", "composer-2.5-fast"),
-        ("cursor", "composer-2", "composer-2.5"),
-        (
-            "cursor",
-            "gpt-5.3-codex[reasoning=medium,fast=false]",
-            "gpt-5.3-codex",
-        ),
-        ("cursor", "gpt-5.3-codex-spark-preview-low", "gpt-5.3-codex-low"),
-        ("cursor", "gpt-5.3-codex-spark-preview", "gpt-5.3-codex"),
-        ("cursor", "gpt-5.3-codex-spark-preview-high", "gpt-5.3-codex-high"),
-        ("cursor", "gpt-5.3-codex-spark-preview-xhigh", "gpt-5.3-codex-xhigh"),
+        ("cursor", "composer-2.5", "composer-2.5"),
+        ("cursor", "gpt-5.3-codex", "gpt-5.3-codex"),
+        ("claude", "sonnet", "sonnet"),
+        ("codex", "gpt-5.5", "gpt-5.5"),
     ]
 
     for agent_kind, legacy_model_id, canonical_model_id in cases:
@@ -132,12 +191,12 @@ async def test_create_agent_run_config_stores_canonical_model_id(
             ownerScope=CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
             name="Cursor legacy",
             agentKind="cursor",
-            modelId="composer-2-fast",
+            modelId="composer-2.5",
             controlValues={},
         ),
     )
 
-    assert captured["model_id"] == "composer-2.5-fast"
+    assert captured["model_id"] == "composer-2.5"
 
 
 @pytest.mark.asyncio
@@ -151,7 +210,7 @@ async def test_update_agent_run_config_stores_canonical_model_id(
         owner_user_id=user_id,
         created_by_user_id=user_id,
         agent_kind="cursor",
-        model_id="composer-2.5-fast",
+        model_id="composer-2.5",
     )
     captured: dict[str, object] = {}
 
@@ -175,7 +234,7 @@ async def test_update_agent_run_config_stores_canonical_model_id(
         None,  # type: ignore[arg-type]
         SimpleNamespace(id=user_id),  # type: ignore[arg-type]
         config_id,
-        AgentRunConfigUpdateRequest(modelId="gpt-5.3-codex-spark-preview"),
+        AgentRunConfigUpdateRequest(modelId="gpt-5.3-codex"),
     )
 
     assert captured["model_id"] == "gpt-5.3-codex"

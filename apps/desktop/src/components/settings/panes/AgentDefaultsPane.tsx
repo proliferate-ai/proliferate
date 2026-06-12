@@ -48,7 +48,6 @@ export function AgentDefaultsPane() {
     modelRegistries,
     modelRegistriesLoading,
     runtimeLaunchOptions,
-    refreshModelRegistry,
     preferences,
     agentDefaultRows,
     orderedAgentDefaultRows,
@@ -260,24 +259,16 @@ export function AgentDefaultsPane() {
                 agentKind={row.kind}
                 models={row.visibilityModels}
                 refreshable={row.kind === "cursor" || row.kind === "opencode"}
-                refreshing={refreshModelRegistry.isPending}
+                refreshing={runtimeLaunchOptions.isRefetching}
                 onRefresh={() => {
-                  refreshModelRegistry.mutate({
-                    kind: row.kind,
-                    request: { forceProviderRefresh: true },
-                  }, {
-                    onSuccess: (response) => {
-                      if (response.snapshot.status !== "available") {
-                        showToast(
-                          response.snapshot.errorMessage
-                          ?? `Could not refresh ${row.displayName} models.`,
-                        );
-                      }
-                    },
-                    onError: (error) => {
-                      const message = error instanceof Error ? error.message : String(error);
-                      showToast(message);
-                    },
+                  void runtimeLaunchOptions.refetch().then((result) => {
+                    if (result.error) {
+                      showToast(
+                        result.error instanceof Error
+                          ? result.error.message
+                          : `Could not refresh ${row.displayName} models.`,
+                      );
+                    }
                   });
                 }}
                 onVisibilityChange={(modelId, visible, catalogDefaultOptIn) => {

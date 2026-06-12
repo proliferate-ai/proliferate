@@ -36,7 +36,7 @@ def test_agent_catalog_endpoint_returns_typed_catalog_with_etag() -> None:
     assert response.status_code == 200
     assert response.headers["etag"]
     payload = response.json()
-    assert payload["schemaVersion"] == 1
+    assert payload["schemaVersion"] == 2
     assert payload["catalogVersion"] == read_agent_catalog().catalog.catalogVersion
     assert payload["agents"]
 
@@ -52,15 +52,27 @@ def test_agent_catalog_rejects_unsupported_schema_version() -> None:
     app.include_router(router, prefix="/v1")
     client = TestClient(app)
 
-    response = client.get("/v1/catalogs/agents?schemaVersion=2")
+    response = client.get("/v1/catalogs/agents?schemaVersion=1")
 
     assert response.status_code == 400
 
 
+def test_agent_catalog_accepts_explicit_schema_version_two() -> None:
+    app = FastAPI()
+    app.include_router(router, prefix="/v1")
+    client = TestClient(app)
+
+    response = client.get("/v1/catalogs/agents?schemaVersion=2")
+
+    assert response.status_code == 200
+    assert response.json()["schemaVersion"] == 2
+
+
 def test_agent_catalog_schema_version_policy() -> None:
     assert agent_catalog_schema_version_is_supported(None)
-    assert agent_catalog_schema_version_is_supported(1)
-    assert not agent_catalog_schema_version_is_supported(2)
+    assert agent_catalog_schema_version_is_supported(2)
+    assert not agent_catalog_schema_version_is_supported(1)
+    assert not agent_catalog_schema_version_is_supported(3)
 
 
 def test_agent_catalog_file_is_available_from_source_checkout() -> None:
@@ -106,7 +118,7 @@ def test_served_agent_catalog_version_handles_missing_or_invalid_document(
     assert served_agent_catalog_version(broken) is None
 
     versionless = tmp_path / "versionless.json"
-    versionless.write_text('{"schemaVersion": 1}', encoding="utf-8")
+    versionless.write_text('{"schemaVersion": 2}', encoding="utf-8")
     assert served_agent_catalog_version(versionless) is None
 
 
@@ -158,7 +170,7 @@ def test_cloud_repo_env_reservations_cover_agent_auth_protected_env_keys() -> No
 
 def test_agent_registry_path_resolves_server_docker_layout(tmp_path: Path) -> None:
     app_root = tmp_path / "app"
-    packaged_registry = app_root / "catalogs" / "agents" / "v1" / "registry.json"
+    packaged_registry = app_root / "catalogs" / "agents" / "registry.json"
     packaged_registry.parent.mkdir(parents=True)
     packaged_registry.write_text("{}", encoding="utf-8")
     service_path = app_root / "proliferate" / "server" / "cloud" / "agent_auth" / "registry.py"

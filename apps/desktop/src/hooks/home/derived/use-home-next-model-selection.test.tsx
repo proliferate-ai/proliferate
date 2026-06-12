@@ -278,14 +278,12 @@ describe("useHomeNextModelSelection", () => {
           displayName: "Default Model",
           isDefault: true,
           status: "active",
-          defaultOptIn: true,
         },
         {
           id: "fast-model",
           displayName: "Fast Model",
           isDefault: false,
           status: "active",
-          defaultOptIn: true,
         },
       ], "default-model"),
     ];
@@ -320,7 +318,6 @@ describe("useHomeNextModelSelection", () => {
           displayName: "Auto",
           isDefault: true,
           status: "active",
-          defaultOptIn: true,
         },
       ], "auto"),
     ];

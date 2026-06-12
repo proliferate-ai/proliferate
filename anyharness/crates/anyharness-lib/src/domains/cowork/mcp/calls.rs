@@ -467,11 +467,7 @@ async fn get_coding_status(
     args: CodingSessionArgs,
 ) -> anyhow::Result<Value> {
     let status = cowork_runtime
-        .coding_status_for_target(
-            parent_session_id,
-            args.cowork_agent_id.as_deref(),
-            None,
-        )
+        .coding_status_for_target(parent_session_id, args.cowork_agent_id.as_deref(), None)
         .await?;
     Ok(json!({
         "coworkAgentId": status.session_link.public_id,
@@ -554,11 +550,7 @@ async fn close_cowork_agent(
     args: CodingSessionArgs,
 ) -> anyhow::Result<Value> {
     let (link, already_closed, closed_at) = cowork_runtime
-        .close_coding_session_for_target(
-            parent_session_id,
-            args.cowork_agent_id.as_deref(),
-            None,
-        )
+        .close_coding_session_for_target(parent_session_id, args.cowork_agent_id.as_deref(), None)
         .await?;
     Ok(json!({
         "coworkAgentId": link.public_id,

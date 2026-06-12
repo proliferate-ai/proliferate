@@ -67,13 +67,13 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     if (
       scopedActiveSessionId
       && scopedCurrentLaunchIdentity?.kind === selection.kind
-      && scopedCurrentModelConfigId
-      && (
-        !scopedModelControl
-        || scopedModelControl.values.some((value) => value.value === selection.modelId)
-      )
     ) {
-      void setActiveSessionConfigOption(scopedCurrentModelConfigId, selection.modelId)
+      // Same-harness switch always keeps the session (decision 10). The
+      // runtime accepts catalog-authorized values beyond the live option
+      // list and falls back to relaunching the agent process under the same
+      // session when the harness has no live mechanism (gemini). "model" is
+      // the generic model config id when the session exposes no control.
+      void setActiveSessionConfigOption(scopedCurrentModelConfigId ?? "model", selection.modelId)
         .then(() => {
           setWorkspaceArrivalEvent(null);
         })

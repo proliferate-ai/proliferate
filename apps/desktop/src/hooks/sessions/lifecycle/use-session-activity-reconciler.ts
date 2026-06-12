@@ -5,7 +5,6 @@ import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/direct
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
-import { isHotSessionClientId } from "@/lib/workflows/sessions/hot-session-ingest-manager";
 
 const ACTIVITY_RECONCILE_DELAY_MS = 5_000;
 const ACTIVITY_RECONCILE_MAX_SESSION_COUNT = 8;
@@ -94,9 +93,12 @@ function collectBoundedActivityReconciliationIds({
     ) {
       return;
     }
-    if (isHotSessionClientId(sessionId)) {
-      return;
-    }
+    // Hot client-keyed entries reconcile like any other once materialized —
+    // the summary fetch resolves client ids through the directory. Skipping
+    // them wholesale left finished background sessions spinning "iterating"
+    // until selected (their completion only ever arrived via the
+    // selection-connected stream). The materialized guard below still skips
+    // sessions that are genuinely starting.
     const entry = state.entriesById[sessionId];
     if (!entry?.materializedSessionId) {
       return;

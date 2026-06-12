@@ -22,10 +22,12 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
     startup_state: &SessionStartupState,
     config_id: &str,
     value: &str,
+    catalog_authorized_model: bool,
 ) -> Result<(), SetConfigOptionCommandError> {
     let option = find_select_option_for_request(&startup_state.config_options, config_id);
     let is_model_request = is_model_config_request(config_id, option);
     let is_mode_request = is_mode_config_request(config_id, option);
+    let model_value_authorized = is_model_request && catalog_authorized_model;
 
     if option.is_none() && !is_model_request && !is_mode_request {
         return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -35,6 +37,7 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
 
     if let Some(option) = option {
         if !select_option_contains_value(option, value)
+            && !model_value_authorized
             && (!is_mode_request || !startup_state.legacy_mode_contains_value(value))
         {
             return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -45,6 +48,7 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
 
     if is_model_request
         && option.is_none()
+        && !model_value_authorized
         && !should_apply_model_via_direct_setter(startup_state, value)
     {
         return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -100,6 +104,8 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
     pending.sort_by_key(|change| pending_config_rank(startup_state, &change.config_id));
 
     for change in pending {
+        // Policy was enforced when the change was queued (advertised value
+        // or catalog-authorized model), so replay re-authorizes it.
         let result = apply_specific_config_option(
             conn,
             native_session_id,
@@ -111,6 +117,7 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
             startup_state,
             &change.config_id,
             &change.value,
+            true,
         )
         .await;
 

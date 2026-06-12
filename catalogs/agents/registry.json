@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-05-31.1",
+  "registryVersion": "2026-06-10.1",
   "generatedAt": "2026-05-31T00:00:00Z",
   "agents": [
     {
@@ -47,7 +47,12 @@
             "requiredForReadiness": true,
             "envVars": [
               "ANTHROPIC_AUTH_TOKEN",
-              "ANTHROPIC_API_KEY"
+              "ANTHROPIC_API_KEY",
+              {
+                "name": "CLAUDE_CODE_USE_BEDROCK",
+                "kind": "flag"
+              },
+              "AWS_BEARER_TOKEN_BEDROCK"
             ],
             "discovery": "claude",
             "materialization": {
@@ -83,7 +88,14 @@
               },
               "reusesUserState": true,
               "message": null
-            }
+            },
+            "discoveryKinds": [
+              "claude-config-api-key",
+              "claude-oauth-creds",
+              "claude-keychain",
+              "claude-oauth-account",
+              "aws-credential-chain"
+            ]
           }
         ]
       },
@@ -178,7 +190,12 @@
               },
               "reusesUserState": true,
               "message": null
-            }
+            },
+            "discoveryKinds": [
+              "codex-auth-json-api-key",
+              "codex-auth-json-oauth",
+              "codex-keychain"
+            ]
           }
         ]
       },
@@ -256,7 +273,11 @@
               },
               "reusesUserState": true,
               "message": "When Gemini opens, choose Sign in with Google. If it opens into chat, type `/auth`."
-            }
+            },
+            "discoveryKinds": [
+              "gemini-oauth-creds",
+              "gemini-keychain"
+            ]
           }
         ]
       },
@@ -321,7 +342,10 @@
               },
               "reusesUserState": true,
               "message": null
-            }
+            },
+            "discoveryKinds": [
+              "cursor-keychain"
+            ]
           }
         ]
       },
@@ -381,7 +405,10 @@
                   ".config/opencode/auth.json"
                 ]
               }
-            }
+            },
+            "discoveryKinds": [
+              "opencode-auth-json/openai"
+            ]
           },
           {
             "id": "anthropic",
@@ -405,7 +432,10 @@
                 ],
                 "supportEnvKeys": []
               }
-            }
+            },
+            "discoveryKinds": [
+              "opencode-auth-json/anthropic"
+            ]
           },
           {
             "id": "gemini",
@@ -428,7 +458,22 @@
                 ],
                 "supportEnvKeys": []
               }
-            }
+            },
+            "discoveryKinds": [
+              "opencode-auth-json/google",
+              "opencode-auth-json/gemini"
+            ]
+          },
+          {
+            "id": "opencode-zen",
+            "label": "OpenCode Zen",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "opencode",
+            "discoveryKinds": [
+              "opencode-auth-json/opencode"
+            ]
           }
         ]
       },

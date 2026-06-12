@@ -18,184 +18,53 @@ type ChatControlsInput = Parameters<typeof buildCloudChatComposerControls>[0];
 
 function claudeCatalog(): Catalog {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     catalogVersion: "test",
-    generatedAt: "2026-05-23T00:00:00Z",
-    compatibility: null,
+    generatedAt: "2026-06-10T00:00:00Z",
     agents: [{
       kind: "claude",
       displayName: "Claude",
-      description: null,
+      authContexts: [{ id: "anthropic-api" }],
       session: {
-        defaultModelId: "us.anthropic.claude-opus-4-6",
-        defaultModeId: "default",
-        dynamicModels: false,
-        modelDisplayPolicy: null,
-        promptCapabilities: null,
-        compatibility: null,
+        controls: [
+          {
+            key: "model",
+            values: [],
+            mapping: {
+              createField: "modelId",
+              switchVia: "setSessionModel",
+              liveConfigId: "model",
+            },
+          },
+          {
+            key: "mode",
+            values: ["default", "plan"],
+          },
+          {
+            key: "effort",
+            values: ["medium", "high"],
+          },
+          {
+            key: "fast_mode",
+            values: ["off", "on"],
+          },
+        ],
         models: [
           {
             id: "us.anthropic.claude-opus-4-6",
             displayName: "Claude Opus 4.6",
-            description: null,
             aliases: [],
+            availability: { anyOf: ["anthropic-api"] },
+            defaultVisible: true,
+            controls: {
+              effort: { values: ["medium", "high"], observedValue: "high" },
+              fast_mode: { values: ["off", "on"], observedValue: "off" },
+            },
             status: "active",
-            isDefault: true,
-            defaultOptIn: null,
-            provider: "anthropic",
-            tags: [],
-            capabilities: null,
-            compatibility: null,
-            launchRemediation: null,
           },
         ],
-        controls: [
-          {
-            key: "model",
-            label: "Model",
-            description: null,
-            type: "select",
-            category: "model",
-            defaultValue: "us.anthropic.claude-opus-4-6",
-            surfaces: {
-              start: true,
-              session: true,
-              automation: true,
-              settings: true,
-            },
-            apply: {
-              createField: "modelId",
-              liveConfigId: "model",
-              liveSetter: "runtime_control",
-              queueBeforeMaterialized: true,
-            },
-            missingLiveConfigPolicy: "queue_then_conflict",
-            valueSource: "agentModels",
-            values: [],
-            queueWhileMaterializing: true,
-            mutableAfterMaterialized: true,
-          },
-          {
-            key: "mode",
-            label: "Mode",
-            description: null,
-            type: "select",
-            category: "mode",
-            defaultValue: "default",
-            surfaces: {
-              start: true,
-              session: true,
-              automation: true,
-              settings: true,
-            },
-            apply: {
-              createField: "modeId",
-              liveConfigId: "mode",
-              liveSetter: "runtime_control",
-              queueBeforeMaterialized: true,
-            },
-            missingLiveConfigPolicy: "queue_then_conflict",
-            valueSource: "inline",
-            values: [
-              {
-                value: "default",
-                label: "Default",
-                description: null,
-                isDefault: true,
-                status: "active",
-              },
-              {
-                value: "plan",
-                label: "Plan Mode",
-                description: null,
-                isDefault: false,
-                status: "active",
-              },
-            ],
-            queueWhileMaterializing: true,
-            mutableAfterMaterialized: true,
-          },
-          {
-            key: "effort",
-            label: "Effort",
-            description: null,
-            type: "select",
-            category: "reasoning",
-            defaultValue: "high",
-            surfaces: {
-              start: false,
-              session: true,
-              automation: false,
-              settings: true,
-            },
-            apply: {
-              createField: null,
-              liveConfigId: "effort",
-              liveSetter: "runtime_control",
-              queueBeforeMaterialized: true,
-            },
-            missingLiveConfigPolicy: "ignore_default",
-            valueSource: "inline",
-            values: [
-              {
-                value: "medium",
-                label: "Medium",
-                description: null,
-                isDefault: false,
-                status: "active",
-              },
-              {
-                value: "high",
-                label: "High",
-                description: null,
-                isDefault: true,
-                status: "active",
-              },
-            ],
-            queueWhileMaterializing: true,
-            mutableAfterMaterialized: true,
-          },
-          {
-            key: "fast_mode",
-            label: "Fast Mode",
-            description: null,
-            type: "select",
-            category: "speed",
-            defaultValue: "off",
-            surfaces: {
-              start: false,
-              session: true,
-              automation: false,
-              settings: true,
-            },
-            apply: {
-              createField: null,
-              liveConfigId: "fast_mode",
-              liveSetter: "runtime_control",
-              queueBeforeMaterialized: true,
-            },
-            missingLiveConfigPolicy: "ignore_default",
-            valueSource: "inline",
-            values: [
-              {
-                value: "off",
-                label: "Off",
-                description: null,
-                isDefault: true,
-                status: "active",
-              },
-              {
-                value: "on",
-                label: "On",
-                description: null,
-                isDefault: false,
-                status: "active",
-              },
-            ],
-            queueWhileMaterializing: true,
-            mutableAfterMaterialized: true,
-          },
-        ],
+        defaults: { "anthropic-api": "us.anthropic.claude-opus-4-6" },
+        observedDefaults: {},
       },
     }],
   } as unknown as Catalog;
@@ -203,80 +72,46 @@ function claudeCatalog(): Catalog {
 
 function multiAgentCatalog(): Catalog {
   const catalog = claudeCatalog() as unknown as {
-    agents: Array<{
-      session: {
-        modelDisplayPolicy: Catalog["agents"][number]["session"]["modelDisplayPolicy"];
-        models: unknown[];
-      };
-    }>;
+    agents: Array<{ session: { models: unknown[] } }>;
   };
 
-  if (catalog.agents[0]) {
-    catalog.agents[0].session.modelDisplayPolicy = {
-      defaultVisibleModelIds: [
-        "us.anthropic.claude-opus-4-6",
-        "us.anthropic.claude-sonnet-4-6",
-      ],
-      allowUserVisibleModelSelection: true,
-      moreModelsSource: "none",
-    };
-  }
   catalog.agents[0]?.session.models.push({
     id: "us.anthropic.claude-sonnet-4-6",
     displayName: "Claude Sonnet 4.6",
-    description: null,
     aliases: [],
+    availability: { anyOf: ["anthropic-api"] },
+    defaultVisible: true,
+    controls: {},
     status: "active",
-    isDefault: false,
-    defaultOptIn: null,
-    provider: "anthropic",
-    tags: [],
-    capabilities: null,
-    compatibility: null,
-    launchRemediation: null,
   });
   catalog.agents[0]?.session.models.push({
     id: "us.anthropic.claude-hidden-4-6",
     displayName: "Claude Hidden 4.6",
-    description: null,
     aliases: [],
+    availability: { anyOf: ["anthropic-api"] },
+    defaultVisible: false,
+    controls: {},
     status: "active",
-    isDefault: false,
-    defaultOptIn: false,
-    provider: "anthropic",
-    tags: [],
-    capabilities: null,
-    compatibility: null,
-    launchRemediation: null,
   });
   catalog.agents.push({
     kind: "codex",
     displayName: "Codex",
-    description: null,
+    authContexts: [{ id: "openai-api" }],
     session: {
-      defaultModelId: "gpt-5-codex",
-      defaultModeId: "default",
-      dynamicModels: false,
-      modelDisplayPolicy: null,
-      promptCapabilities: null,
-      compatibility: null,
+      controls: [],
       models: [
         {
           id: "gpt-5-codex",
           displayName: "GPT-5 Codex",
-          description: null,
           aliases: [],
+          availability: { anyOf: ["openai-api"] },
+          defaultVisible: true,
+          controls: {},
           status: "active",
-          isDefault: true,
-          defaultOptIn: null,
-          provider: "openai",
-          tags: [],
-          capabilities: null,
-          compatibility: null,
-          launchRemediation: null,
         },
       ],
-      controls: [],
+      defaults: { "openai-api": "gpt-5-codex" },
+      observedDefaults: {},
     },
   } as never);
 

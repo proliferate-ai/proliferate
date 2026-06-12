@@ -264,10 +264,12 @@ impl LiveSessionHandle {
         &self,
         config_id: String,
         value: String,
+        catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, LiveSessionCommandError<SetConfigOptionCommandError>> {
         self.send_request(|respond_to| SessionCommand::SetConfigOption {
             config_id,
             value,
+            catalog_authorized_model,
             respond_to,
         })
         .await

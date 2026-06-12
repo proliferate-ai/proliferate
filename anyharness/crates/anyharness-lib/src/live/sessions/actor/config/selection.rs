@@ -203,12 +203,14 @@ pub(in crate::live::sessions::actor) fn select_option_contains_value(
             acp::schema::SessionConfigSelectOptions::Ungrouped(options) => options
                 .iter()
                 .any(|candidate| candidate.value.to_string() == desired_value),
-            acp::schema::SessionConfigSelectOptions::Grouped(groups) => groups.iter().any(|group| {
-                group
-                    .options
-                    .iter()
-                    .any(|candidate| candidate.value.to_string() == desired_value)
-            }),
+            acp::schema::SessionConfigSelectOptions::Grouped(groups) => {
+                groups.iter().any(|group| {
+                    group
+                        .options
+                        .iter()
+                        .any(|candidate| candidate.value.to_string() == desired_value)
+                })
+            }
             _ => false,
         },
         _ => false,

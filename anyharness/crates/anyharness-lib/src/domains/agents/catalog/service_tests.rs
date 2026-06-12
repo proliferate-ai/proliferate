@@ -5,37 +5,30 @@
 use std::sync::Arc;
 
 use super::loader::parse_agent_catalog_json;
-use super::schema_v2::draft_catalog_v2_json;
-use super::service::{ActiveV2Catalog, ResolvedSelection, SelectionUnsupported};
+use super::schema::draft_catalog_json;
+use super::service::{ActiveCatalog, ResolvedSelection, SelectionUnsupported};
 use super::sync::CatalogSyncService;
 use crate::domains::agents::auth::context::ActiveAuthContexts;
 use crate::domains::agents::catalog::service::AgentCatalogService;
 
-fn draft_catalog() -> ActiveV2Catalog {
-    let document = parse_agent_catalog_json(draft_catalog_v2_json()).expect("draft must load");
-    ActiveV2Catalog::from_catalog(Arc::new(document)).expect("draft is v2")
+fn draft_catalog() -> ActiveCatalog {
+    let document = parse_agent_catalog_json(draft_catalog_json()).expect("draft must load");
+    ActiveCatalog::new(Arc::new(document))
 }
 
 fn contexts(ids: &[&str]) -> ActiveAuthContexts {
     ActiveAuthContexts::test_from_ids(ids.iter().copied())
 }
 
-fn model_ids(models: Vec<&super::schema_v2::AgentCatalogV2Model>) -> Vec<&str> {
+fn model_ids(models: Vec<&super::schema::AgentCatalogModel>) -> Vec<&str> {
     models.into_iter().map(|model| model.id.as_str()).collect()
 }
 
 #[test]
-fn service_gates_on_the_active_catalog_era() {
-    // Bundled boot catalog is v1: the v2 surface stays closed.
+fn service_reads_the_bundled_catalog_at_boot() {
     let sync = Arc::new(CatalogSyncService::from_bundled());
     let service = AgentCatalogService::new(sync.clone());
-    assert!(service.active_v2().is_none());
-
-    // Applying the v2 draft opens it.
-    sync.apply_fetched(draft_catalog_v2_json().as_bytes(), None)
-        .expect("draft applies");
-    let v2 = service.active_v2().expect("v2 active");
-    assert!(v2.agent("claude").is_some());
+    assert!(service.active_catalog().agent("claude").is_some());
 }
 
 #[test]
@@ -50,7 +43,11 @@ fn pins_surface_catalog_harness_versions() {
     );
 
     // Cursor has no native pin; unknown kinds have no pins at all.
-    assert!(catalog.pins("cursor").expect("cursor pins").native.is_none());
+    assert!(catalog
+        .pins("cursor")
+        .expect("cursor pins")
+        .native
+        .is_none());
     assert!(catalog.pins("not-an-agent").is_none());
 }
 
@@ -73,7 +70,9 @@ fn models_intersect_availability_with_active_contexts() {
         vec!["haiku", "claude-fable-5", "claude-opus-4-8", "opus"]
     );
     // No matching context, no models; unknown kind, no models.
-    assert!(catalog.models("claude", &contexts(&["baseline"])).is_empty());
+    assert!(catalog
+        .models("claude", &contexts(&["baseline"]))
+        .is_empty());
     assert!(catalog
         .models("not-an-agent", &contexts(&["anthropic-api"]))
         .is_empty());
@@ -100,13 +99,14 @@ fn baseline_counts_as_a_context_when_active() {
 fn visible_models_are_the_default_visible_subset_of_available() {
     let catalog = draft_catalog();
 
-    // claude-fable-5 and claude-opus-4-8 are available under oauth but not
-    // defaultVisible: in models(), out of visible_models().
+    // claude-opus-4-8 is available under oauth (trial-proven) but not
+    // defaultVisible: in models(), out of visible_models(). Fable 5 is the
+    // counter-case — trial-proven AND curation-advertised.
     let available = model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"])));
-    assert!(available.contains(&"claude-fable-5"));
+    assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
         model_ids(catalog.visible_models("claude", &contexts(&["anthropic-oauth"]))),
-        vec!["haiku", "opus"]
+        vec!["haiku", "claude-fable-5", "opus"]
     );
 }
 
@@ -150,18 +150,18 @@ fn validate_launch_accepts_an_available_model_and_mode() {
 fn validate_launch_availability_beats_visibility() {
     let catalog = draft_catalog();
 
-    // claude-fable-5 is NOT defaultVisible but IS available under oauth:
+    // claude-opus-4-8 is NOT defaultVisible but IS available under oauth:
     // launchable-but-unadvertised must be accepted.
     let selection = catalog
         .validate_launch(
             "claude",
             &contexts(&["anthropic-oauth"]),
-            Some("claude-fable-5"),
+            Some("claude-opus-4-8"),
             None,
         )
         .expect("unadvertised but available model must launch");
 
-    assert_eq!(selection.model_id.as_deref(), Some("claude-fable-5"));
+    assert_eq!(selection.model_id.as_deref(), Some("claude-opus-4-8"));
 }
 
 #[test]
@@ -170,7 +170,12 @@ fn validate_launch_rejects_gated_and_unknown_models() {
 
     // sonnet is api-only: gated under oauth, with the unlock condition.
     let gated = catalog
-        .validate_launch("claude", &contexts(&["anthropic-oauth"]), Some("sonnet"), None)
+        .validate_launch(
+            "claude",
+            &contexts(&["anthropic-oauth"]),
+            Some("sonnet"),
+            None,
+        )
         .expect_err("api-only model must be gated under oauth");
     assert_eq!(
         gated,
@@ -203,7 +208,15 @@ fn validate_launch_rejects_gated_and_unknown_models() {
 
 #[test]
 fn validate_launch_defaults_to_the_first_visible_available_model() {
-    let catalog = draft_catalog();
+    // Strip the curated defaults: this test pins the FALLBACK rung
+    // (first visible available in document order). The curated-default
+    // rung is pinned by validate_launch_honors_curation_defaults below.
+    let mut raw: serde_json::Value =
+        serde_json::from_str(draft_catalog_json()).expect("draft must parse");
+    raw["agents"][0]["session"]["defaults"] = serde_json::json!({});
+    let document = parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
+        .expect("doctored draft must load");
+    let catalog = ActiveCatalog::new(Arc::new(document));
 
     let selection = catalog
         .validate_launch("claude", &contexts(&["anthropic-oauth"]), None, None)
@@ -223,13 +236,11 @@ fn validate_launch_defaults_to_the_first_visible_available_model() {
 #[test]
 fn validate_launch_honors_curation_defaults_per_context() {
     let mut raw: serde_json::Value =
-        serde_json::from_str(draft_catalog_v2_json()).expect("draft must parse");
-    raw["agents"][0]["session"]["defaults"] =
-        serde_json::json!({ "anthropic-oauth": "opus" });
-    let document =
-        parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
-            .expect("doctored draft must load");
-    let catalog = ActiveV2Catalog::from_catalog(Arc::new(document)).expect("v2");
+        serde_json::from_str(draft_catalog_json()).expect("draft must parse");
+    raw["agents"][0]["session"]["defaults"] = serde_json::json!({ "anthropic-oauth": "opus" });
+    let document = parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
+        .expect("doctored draft must load");
+    let catalog = ActiveCatalog::new(Arc::new(document));
 
     let selection = catalog
         .validate_launch("claude", &contexts(&["anthropic-oauth"]), None, None)
@@ -308,7 +319,10 @@ fn validate_launch_composes_variants_by_declared_syntax() {
             None,
         )
         .expect_err("no variantSyntax, no composition");
-    assert!(matches!(no_syntax, SelectionUnsupported::UnknownModel { .. }));
+    assert!(matches!(
+        no_syntax,
+        SelectionUnsupported::UnknownModel { .. }
+    ));
 }
 
 #[test]
@@ -332,17 +346,23 @@ fn validate_launch_checks_mode_against_the_model_matrix() {
 
     // Mode is optional: None passes through untouched.
     let none_mode = catalog
-        .validate_launch("claude", &contexts(&["anthropic-api"]), Some("sonnet"), None)
+        .validate_launch(
+            "claude",
+            &contexts(&["anthropic-api"]),
+            Some("sonnet"),
+            None,
+        )
         .expect("no mode requested");
     assert_eq!(none_mode.mode_id, None);
 }
 
 #[test]
-fn validate_launch_falls_back_to_bundled_mode_ids_without_v2_mode_controls() {
-    // Strip codex's v2 mode controls (model-level and agent-level): the
-    // bundled v1 create-mode ids take over, exactly like today.
+fn validate_launch_rejects_mode_selection_without_mode_vocabulary() {
+    // Strip codex's mode controls (model-level and agent-level): with no
+    // vocabulary in the document, no mode selection is accepted — the
+    // catalog is the only mode authority.
     let mut raw: serde_json::Value =
-        serde_json::from_str(draft_catalog_v2_json()).expect("draft must parse");
+        serde_json::from_str(draft_catalog_json()).expect("draft must parse");
     let codex = &mut raw["agents"][1];
     let controls = codex["session"]["controls"]
         .as_array_mut()
@@ -357,33 +377,27 @@ fn validate_launch_falls_back_to_bundled_mode_ids_without_v2_mode_controls() {
             .expect("model controls")
             .remove("mode");
     }
-    let document =
-        parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
-            .expect("doctored draft must load");
-    let catalog = ActiveV2Catalog::from_catalog(Arc::new(document)).expect("v2");
-
-    let accepted = catalog
-        .validate_launch(
-            "codex",
-            &contexts(&["openai-api"]),
-            Some("gpt-5.5"),
-            Some("full-access"),
-        )
-        .expect("bundled codex mode id must pass via fallback");
-    assert_eq!(accepted.mode_id.as_deref(), Some("full-access"));
+    let document = parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
+        .expect("doctored draft must load");
+    let catalog = ActiveCatalog::new(Arc::new(document));
 
     let rejected = catalog
         .validate_launch(
             "codex",
             &contexts(&["openai-api"]),
             Some("gpt-5.5"),
-            Some("not-a-mode"),
+            Some("full-access"),
         )
-        .expect_err("unknown mode must fail the bundled fallback too");
+        .expect_err("mode selection without vocabulary must be rejected");
     assert_eq!(
         rejected,
         SelectionUnsupported::UnsupportedMode {
-            mode_id: "not-a-mode".into()
+            mode_id: "full-access".into()
         }
     );
+
+    let none_mode = catalog
+        .validate_launch("codex", &contexts(&["openai-api"]), Some("gpt-5.5"), None)
+        .expect("no mode selection is always fine");
+    assert_eq!(none_mode.mode_id, None);
 }

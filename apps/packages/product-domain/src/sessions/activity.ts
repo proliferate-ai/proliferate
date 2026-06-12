@@ -5,6 +5,7 @@ export type {
 export {
   isSessionEffectivelyStreaming,
   isSessionSlotBusy,
+  pendingInteractionsForActivity,
   resolveSessionErrorAttentionKey,
   resolveSessionExecutionPhase,
   resolveSessionSidebarActivityState,

@@ -31,12 +31,15 @@ pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
     {
         let config_id = option.id.to_string();
         let option_contains_desired = select_option_contains_value(option, desired_model_id);
-        let outcome = apply_select_config_option(
+        // Create validated this model via the catalog; the harness proved it
+        // launchable (probe trial), so an unadvertised id is still sent.
+        let outcome = apply_select_config_option_with_policy(
             conn,
             native_session_id,
             startup_state,
             &config_id,
             desired_model_id,
+            true,
         )
         .await?;
         if outcome == ConfigApplyOutcome::NotApplied && !option_contains_desired {
@@ -102,12 +105,36 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option(
     config_id: &str,
     desired_value: &str,
 ) -> anyhow::Result<ConfigApplyOutcome> {
+    apply_select_config_option_with_policy(
+        conn,
+        native_session_id,
+        startup_state,
+        config_id,
+        desired_value,
+        false,
+    )
+    .await
+}
+
+/// `allow_foreign_value`: send a value the option does not advertise (model
+/// switches authorized by the catalog, startup model preferences proven by
+/// the probe). The post-set verification below still decides the outcome —
+/// `AppliedAuthoritative` only when the harness confirms the value, so a
+/// refusing adapter degrades to `NotApplied`, never to a lie.
+pub(in crate::live::sessions::actor) async fn apply_select_config_option_with_policy(
+    conn: &acp::ConnectionTo<acp::Agent>,
+    native_session_id: &str,
+    startup_state: &mut SessionStartupState,
+    config_id: &str,
+    desired_value: &str,
+    allow_foreign_value: bool,
+) -> anyhow::Result<ConfigApplyOutcome> {
     let Some(option) = find_select_option_for_request(&startup_state.config_options, config_id)
     else {
         return Ok(ConfigApplyOutcome::NotApplied);
     };
 
-    if !select_option_contains_value(option, desired_value) {
+    if !select_option_contains_value(option, desired_value) && !allow_foreign_value {
         return Ok(ConfigApplyOutcome::NotApplied);
     }
 
@@ -145,11 +172,13 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     startup_state: &mut SessionStartupState,
     config_id: &str,
     desired_value: &str,
+    catalog_authorized_model: bool,
 ) -> Result<ConfigApplyState, SetConfigOptionCommandError> {
     let option = find_select_option_for_request(&startup_state.config_options, config_id);
     let is_model_request = is_model_config_request(config_id, option);
     let is_mode_request = is_mode_config_request(config_id, option);
     let tracked_purpose = tracked_config_purpose(config_id, option);
+    let model_value_authorized = is_model_request && catalog_authorized_model;
 
     if option.is_none() && !is_model_request && !is_mode_request {
         return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -159,6 +188,7 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
 
     if let Some(option) = option {
         if !select_option_contains_value(option, desired_value)
+            && !model_value_authorized
             && (!is_mode_request || !startup_state.legacy_mode_contains_value(desired_value))
         {
             return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -169,6 +199,7 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
 
     if is_model_request
         && option.is_none()
+        && !model_value_authorized
         && !should_apply_model_via_direct_setter(startup_state, desired_value)
     {
         return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -176,12 +207,13 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
         )));
     }
 
-    let outcome = apply_config_option_if_possible(
+    let outcome = apply_config_option_if_possible_with_policy(
         conn,
         native_session_id,
         startup_state,
         config_id,
         desired_value,
+        model_value_authorized,
     )
     .await
     .map_err(|error| {
@@ -313,6 +345,25 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible(
     config_id: &str,
     desired_value: &str,
 ) -> anyhow::Result<ConfigApplyOutcome> {
+    apply_config_option_if_possible_with_policy(
+        conn,
+        native_session_id,
+        startup_state,
+        config_id,
+        desired_value,
+        false,
+    )
+    .await
+}
+
+pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible_with_policy(
+    conn: &acp::ConnectionTo<acp::Agent>,
+    native_session_id: &str,
+    startup_state: &mut SessionStartupState,
+    config_id: &str,
+    desired_value: &str,
+    model_value_authorized: bool,
+) -> anyhow::Result<ConfigApplyOutcome> {
     let option = find_select_option_for_request(&startup_state.config_options, config_id);
     let is_model_request = is_model_config_request(config_id, option);
     let is_mode_request = is_mode_config_request(config_id, option);
@@ -327,16 +378,17 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible(
         }
 
         if is_model_request {
-            if !select_option_contains_value(option, desired_value) {
+            if !select_option_contains_value(option, desired_value) && !model_value_authorized {
                 return Ok(ConfigApplyOutcome::NotApplied);
             }
             let option_id = option.id.to_string();
-            return apply_select_config_option(
+            return apply_select_config_option_with_policy(
                 conn,
                 native_session_id,
                 startup_state,
                 &option_id,
                 desired_value,
+                model_value_authorized,
             )
             .await;
         }

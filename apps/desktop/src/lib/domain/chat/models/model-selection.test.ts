@@ -11,10 +11,6 @@ function launchAgent(
     kind,
     displayName: kind === "claude" ? "Claude" : "Codex",
     defaultModelId: models[0]?.id ?? null,
-    defaultModeId: null,
-    dynamicModels: false,
-    modelDisplayPolicy: null,
-    promptCapabilities: null,
     models,
     launchControls: [],
     ...overrides,
@@ -33,28 +29,18 @@ function model(
     aliases: [],
     status: "active" as const,
     isDefault,
-    tags: [],
-    launchRemediation: null,
     ...overrides,
   };
 }
 
 describe("resolveEffectiveLaunchSelection", () => {
-  it("keeps a preferred OpenCode dynamic model before live ACP model truth is available", () => {
+  it("falls back to the catalog default when a stored dynamic id no longer resolves", () => {
     const selection = resolveEffectiveLaunchSelection(
       [
         launchAgent(
           "opencode",
           [model("opencode/big-pickle", "OpenCode Zen/Big Pickle", true)],
-          {
-            displayName: "OpenCode",
-            dynamicModels: true,
-            modelDisplayPolicy: {
-              defaultVisibleModelIds: ["opencode/big-pickle"],
-              allowUserVisibleModelSelection: true,
-              moreModelsSource: "lastKnownLiveSnapshot",
-            },
-          },
+          { displayName: "OpenCode" },
         ),
       ],
       {
@@ -62,33 +48,52 @@ describe("resolveEffectiveLaunchSelection", () => {
         defaultChatModelIdByAgentKind: {
           opencode: "anthropic/claude-sonnet-4-6",
         },
+        chatModelVisibilityOverridesByAgentKind: {},
       },
     );
 
     expect(selection).toEqual({
       kind: "opencode",
-      modelId: "anthropic/claude-sonnet-4-6",
+      modelId: "opencode/big-pickle",
     });
   });
 
-  it("does not restore a hidden known model through dynamic fallback", () => {
+  it("resolves a variant-suffixed stored id onto its catalog base model", () => {
+    const selection = resolveEffectiveLaunchSelection(
+      [
+        launchAgent(
+          "codex",
+          [
+            model("gpt-5.5", "GPT-5.5", true),
+            model("gpt-5.5-codex", "GPT-5.5 Codex", false),
+          ],
+        ),
+      ],
+      {
+        defaultChatAgentKind: "codex",
+        defaultChatModelIdByAgentKind: {
+          codex: "gpt-5.5-codex/high",
+        },
+        chatModelVisibilityOverridesByAgentKind: {},
+      },
+    );
+
+    expect(selection).toEqual({
+      kind: "codex",
+      modelId: "gpt-5.5-codex",
+    });
+  });
+
+  it("does not restore a hidden known model through saved-id fallback", () => {
     const selection = resolveEffectiveLaunchSelection(
       [
         launchAgent(
           "cursor",
           [
             model("cursor/auto", "Auto", true),
-            model("cursor/gpt-5.4", "GPT 5.4", false, { defaultOptIn: true }),
+            model("cursor/gpt-5.4", "GPT 5.4", false),
           ],
-          {
-            displayName: "Cursor",
-            dynamicModels: true,
-            modelDisplayPolicy: {
-              defaultVisibleModelIds: ["cursor/auto", "cursor/gpt-5.4"],
-              allowUserVisibleModelSelection: true,
-              moreModelsSource: "lastKnownLiveSnapshot",
-            },
-          },
+          { displayName: "Cursor" },
         ),
       ],
       {

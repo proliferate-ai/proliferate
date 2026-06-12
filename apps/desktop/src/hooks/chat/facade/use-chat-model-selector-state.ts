@@ -189,9 +189,15 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
     currentModel: currentSelection
       ? {
         kind: currentSelection.kind,
+        // The configured-launch label may belong to a DIFFERENT agent than
+        // the active selection (it resolves the user's default agent); only
+        // borrow it when the kinds agree, else the badge mixes one agent's
+        // icon with another's model label.
         displayName:
           currentModelDisplayName
-          ?? configuredLaunch.displayName
+          ?? (configuredLaunch.configuredKind === currentSelection.kind
+            ? configuredLaunch.displayName
+            : null)
           ?? getProviderDisplayName(currentSelection.kind)
           ?? CHAT_MODEL_SELECTOR_LABELS.unknownModel,
         pendingState: pendingModelChange?.status ?? null,

@@ -2,20 +2,23 @@
 //! ride `?` through agents_errors.rs, wire mapping lives in agents_contract.rs.
 
 use anyharness_contract::v1::{
-    AgentLoginTerminalRecord, AgentSummary, InstallAgentRequest, InstallAgentResponse,
-    LoginCommand, ProblemDetails, ReconcileAgentsRequest, ReconcileAgentsResponse,
-    StartAgentLoginRequest, StartAgentLoginResponse, StartAgentLoginTerminalResponse,
+    AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentSummary, InstallAgentRequest,
+    InstallAgentResponse, LoginCommand, ProblemDetails, ReconcileAgentsRequest,
+    ReconcileAgentsResponse, StartAgentLoginRequest, StartAgentLoginResponse,
+    StartAgentLoginTerminalResponse,
 };
 use axum::{
+    extract::Query,
     extract::{Path, State},
     http::StatusCode,
     Json,
 };
 
 use super::agents_contract::{
-    agent_login_terminal_to_contract, install_request, reconcile_snapshot_to_contract,
-    to_installed_artifact_status, to_summary,
+    agent_login_terminal_to_contract, install_request, launch_options_response,
+    reconcile_snapshot_to_contract, to_installed_artifact_status, to_summary,
 };
+use super::agents_errors::map_launch_options_error;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::auth::login_terminal::{
@@ -174,8 +177,7 @@ pub async fn get_agent_login_terminal(
     Path(terminal_id): Path<String>,
 ) -> Result<Json<AgentLoginTerminalRecord>, ApiError> {
     let terminal =
-        get_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service)
-            .await?;
+        get_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service).await?;
     Ok(Json(agent_login_terminal_to_contract(terminal)))
 }
 
@@ -228,4 +230,29 @@ pub async fn reconcile_agents(
         StatusCode::ACCEPTED,
         Json(reconcile_snapshot_to_contract(&snapshot)),
     )
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct AgentLaunchOptionsQuery {
+    pub workspace_id: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/agents/launch-options",
+    params(("workspace_id" = Option<String>, Query, description = "Optional workspace scope: composes the workspace env into auth-context classification")),
+    responses(
+        (status = 200, description = "List launchable agents and model options", body = AgentLaunchOptionsResponse),
+    ),
+    tag = "agents"
+)]
+pub async fn get_agent_launch_options(
+    State(state): State<AppState>,
+    Query(query): Query<AgentLaunchOptionsQuery>,
+) -> Result<Json<AgentLaunchOptionsResponse>, ApiError> {
+    let options = state
+        .session_service
+        .resolved_workspace_launch_options(query.workspace_id.as_deref())
+        .map_err(map_launch_options_error)?;
+    Ok(Json(launch_options_response(query.workspace_id, options)))
 }

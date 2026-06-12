@@ -39,7 +39,7 @@ describe("withUpdatedModelVisibilityOverride", () => {
 });
 
 describe("visible model filters", () => {
-  it("keeps the catalog/default model visible when all dynamic rows default hidden", () => {
+  it("defaults every catalog menu model to visible and falls back when all are hidden", () => {
     const registry: DesktopLaunchModelRegistry = {
       kind: "cursor",
       displayName: "Cursor",
@@ -49,19 +49,27 @@ describe("visible model filters", () => {
           id: "auto",
           displayName: "Auto",
           isDefault: true,
-          defaultOptIn: false,
         },
         {
           id: "new-model",
           displayName: "New Model",
           isDefault: false,
-          defaultOptIn: false,
         },
       ],
     };
 
-    expect([...resolveVisibleRegistryModelIds({ registry, overrides: {} })]).toEqual(["auto"]);
-    expect(filterVisibleRegistryModels({ registry, overrides: {} }).map((model) => model.id))
+    expect([...resolveVisibleRegistryModelIds({ registry, overrides: {} })])
+      .toEqual(["auto", "new-model"]);
+
+    const allHidden = {
+      cursor: {
+        auto: false,
+        "new-model": false,
+      },
+    };
+    expect([...resolveVisibleRegistryModelIds({ registry, overrides: allHidden })])
+      .toEqual(["auto"]);
+    expect(filterVisibleRegistryModels({ registry, overrides: allHidden }).map((model) => model.id))
       .toEqual(["auto"]);
   });
 
@@ -70,7 +78,6 @@ describe("visible model filters", () => {
       kind: "opencode",
       displayName: "OpenCode",
       defaultModelId: "openai/gpt-5.5",
-      dynamicModels: true,
       models: [
         {
           id: "openai/gpt-5.5",
@@ -78,9 +85,6 @@ describe("visible model filters", () => {
           aliases: [],
           status: "active",
           isDefault: true,
-          defaultOptIn: true,
-          provider: "openai",
-          tags: [],
         },
       ],
       launchControls: [],

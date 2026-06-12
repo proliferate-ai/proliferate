@@ -1,10 +1,12 @@
-import {
-  dynamicLaunchAgentAcceptsModel,
-  type DesktopAgentLaunchAgent,
-  type DesktopAgentLaunchModel,
+import type {
+  DesktopAgentLaunchAgent,
+  DesktopAgentLaunchModel,
 } from "@/lib/domain/agents/cloud-launch-catalog";
 import { agentsWithVisibleModels, agentWithVisibleModels } from "@/lib/domain/chat/models/launch-visible-agents";
-import { findLaunchModelByIdOrAlias } from "@/lib/domain/chat/models/model-selection-ids";
+import {
+  findLaunchModelByIdOrAlias,
+  resolveSavedLaunchModelId,
+} from "@/lib/domain/chat/models/model-selection-ids";
 import type {
   ChatLaunchPreferences,
   ModelSelectorSelection,
@@ -18,25 +20,16 @@ export function resolveEffectiveLaunchSelection(
     selected: null,
     visibilityOverrides: preferences.chatModelVisibilityOverridesByAgentKind,
   });
-  const sourceAgentsByKind = new Map(agents.map((agent) => [agent.kind, agent]));
   const preferredAgent = visibleAgents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
   if (preferredAgent) {
-    const selection = resolveAgentLaunchSelection(
-      preferredAgent,
-      preferences,
-      sourceAgentsByKind.get(preferredAgent.kind),
-    );
+    const selection = resolveAgentLaunchSelection(preferredAgent, preferences);
     if (selection) {
       return selection;
     }
   }
 
   for (const agent of visibleAgents) {
-    const selection = resolveAgentLaunchSelection(
-      agent,
-      preferences,
-      sourceAgentsByKind.get(agent.kind),
-    );
+    const selection = resolveAgentLaunchSelection(agent, preferences);
     if (selection) {
       return selection;
     }
@@ -73,17 +66,13 @@ export function resolveLaunchableModelSelection(
     };
   }
 
-  if (dynamicLaunchAgentAcceptsModel(agent)) {
-    const modelId = selection.modelId.trim();
-    return modelId
-      ? {
-        kind: selection.kind,
-        modelId,
-      }
-      : null;
-  }
-
-  return null;
+  const resolvedModelId = resolveSavedLaunchModelId(agent, selection.modelId.trim());
+  return resolvedModelId
+    ? {
+      kind: selection.kind,
+      modelId: resolvedModelId,
+    }
+    : null;
 }
 
 export function resolveAvailableLaunchSelection(
@@ -111,7 +100,6 @@ export function resolveConfiguredLaunchAgentSelection(
         visibilityOverrides: preferences.chatModelVisibilityOverridesByAgentKind,
       }),
       preferences,
-      preferredAgent,
     );
   }
 
@@ -121,7 +109,6 @@ export function resolveConfiguredLaunchAgentSelection(
 function resolveAgentLaunchSelection(
   agent: DesktopAgentLaunchAgent,
   preferences: ChatLaunchPreferences,
-  sourceAgent: DesktopAgentLaunchAgent = agent,
 ): ModelSelectorSelection | null {
   const preferredModelId = preferences.defaultChatModelIdByAgentKind[agent.kind]?.trim();
   if (preferredModelId) {
@@ -132,11 +119,11 @@ function resolveAgentLaunchSelection(
         modelId: preferredModel.id,
       };
     }
-    const knownSourceModel = findLaunchModelByIdOrAlias(sourceAgent, preferredModelId);
-    if (!knownSourceModel && dynamicLaunchAgentAcceptsModel(agent)) {
+    const resolvedModelId = resolveSavedLaunchModelId(agent, preferredModelId);
+    if (resolvedModelId) {
       return {
         kind: agent.kind,
-        modelId: preferredModelId,
+        modelId: resolvedModelId,
       };
     }
   }

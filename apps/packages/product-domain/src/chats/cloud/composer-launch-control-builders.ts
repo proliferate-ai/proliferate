@@ -1,7 +1,4 @@
-import type {
-  CloudAgentCatalogAgent,
-  CloudAgentCatalogControl,
-} from "@proliferate/cloud-sdk";
+import type { CloudAgentCatalogAgent } from "@proliferate/cloud-sdk";
 import {
   inferSessionControlPresentation,
   isConfiguredSessionControlKey,
@@ -21,6 +18,7 @@ import {
   parseLaunchAgentModelOptionId,
   selectedLaunchControlValue,
   visibleComposerModels,
+  type ComposerLaunchControl,
 } from "./composer-launch-catalog";
 
 const CLOUD_MODEL_OPTIONS = [
@@ -158,7 +156,7 @@ export function buildLaunchAgentModelControl(input: {
       }).map((model) => ({
         id: launchAgentModelOptionId(agent.kind, model.id),
         label: `${agent.displayName} · ${model.displayName}`,
-        description: model.description ?? agent.description ?? null,
+        description: model.description ?? null,
         icon: agentModelIcon(agent.kind),
         selected: agent.kind === input.selectedAgentKind && model.id === input.selectedModelId,
       })),
@@ -174,7 +172,7 @@ export function buildLaunchAgentModelControl(input: {
 
 export function buildLaunchConfigControl(input: {
   agent: CloudAgentCatalogAgent;
-  control: CloudAgentCatalogControl;
+  control: ComposerLaunchControl;
   selection: CloudLaunchComposerSelection;
   onSelect: (selection: CloudLaunchComposerControlSelection) => void;
 }): CloudChatComposerControlView {
@@ -183,7 +181,7 @@ export function buildLaunchConfigControl(input: {
     ?? input.control.values.find((option) => option.isDefault)
     ?? input.control.values[0]
     ?? null;
-  const placement = input.control.apply?.createField === "modeId" ? "leading" : "trailing";
+  const placement = input.control.createField === "modeId" ? "leading" : "trailing";
   const configuredValues = launchControlToConfiguredSessionControlValues(input.agent.kind, input.control);
   const selectedConfiguredValue = configuredValues.find((option) => option.value === selectedValue) ?? null;
   const isConfiguredControl = isConfiguredSessionControlKey(input.control.key);
@@ -199,40 +197,29 @@ export function buildLaunchConfigControl(input: {
       {
         id: input.control.key,
         label: input.control.label,
-        options: input.control.values
-          .filter(isLaunchVisibleControlValue)
-          .map((option) => {
-            const configured = configuredValues.find((value) => value.value === option.value) ?? null;
-            return {
-              id: option.value,
-              label: isConfiguredControl
-                ? configured?.shortLabel ?? configured?.label ?? option.label
-                : option.label,
-              description: isConfiguredControl ? null : option.description ?? null,
-              icon: configured?.icon ?? (isConfiguredControl
-                ? inferSessionControlPresentation(option.value).icon
-                : null),
-              selected: option.value === selectedValue,
-              disabled: option.value === selectedValue,
-            };
-          }),
+        options: input.control.values.map((option) => {
+          const configured = configuredValues.find((value) => value.value === option.value) ?? null;
+          return {
+            id: option.value,
+            label: isConfiguredControl
+              ? configured?.shortLabel ?? configured?.label ?? option.label
+              : option.label,
+            description: isConfiguredControl ? null : configured?.description ?? null,
+            icon: configured?.icon ?? (isConfiguredControl
+              ? inferSessionControlPresentation(option.value).icon
+              : null),
+            selected: option.value === selectedValue,
+            disabled: option.value === selectedValue,
+          };
+        }),
       },
     ],
     onSelect: (value) => input.onSelect({ controlKey: input.control.key, value }),
   };
 }
 
-function isLaunchVisibleControlValue(
-  option: CloudAgentCatalogControl["values"][number],
-): boolean {
-  return option.status === undefined
-    || option.status === null
-    || option.status === "active"
-    || option.status === "candidate";
-}
-
 function launchControlIcon(
-  control: CloudAgentCatalogControl,
+  control: ComposerLaunchControl,
   placement: "leading" | "trailing",
 ): CloudChatComposerControlView["icon"] {
   switch (control.key) {
@@ -248,7 +235,7 @@ function launchControlIcon(
 }
 
 function isLaunchControlActive(
-  control: CloudAgentCatalogControl,
+  control: ComposerLaunchControl,
   selectedValue: string | null | undefined,
 ): boolean {
   if (control.key !== "fast_mode" && control.key !== "reasoning") {

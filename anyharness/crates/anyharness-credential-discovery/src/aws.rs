@@ -1,5 +1,6 @@
 //! AWS credential-chain detection: passive sources only (decisions ledger
-//! 12) — the env pair, a shared-credentials profile, or an SSO token cache.
+//! 12) — the env pair, the bedrock bearer token env var, a
+//! shared-credentials profile, or an SSO token cache.
 //! The exotic tail of the real AWS chain (IMDS, process credentials,
 //! container credentials) is deliberately NOT detected here: it is proven by
 //! launch/trial, never by detection — "menus lie, inference proves."
@@ -13,6 +14,7 @@ use crate::util::resolve_process_override_path;
 
 const AWS_ACCESS_KEY_ID: &str = "AWS_ACCESS_KEY_ID";
 const AWS_SECRET_ACCESS_KEY: &str = "AWS_SECRET_ACCESS_KEY";
+const AWS_BEARER_TOKEN_BEDROCK: &str = "AWS_BEARER_TOKEN_BEDROCK";
 const AWS_SHARED_CREDENTIALS_FILE: &str = "AWS_SHARED_CREDENTIALS_FILE";
 
 /// Emits `aws-credential-chain` iff any passive chain source is present.
@@ -56,6 +58,7 @@ impl AwsChainPaths {
 
 pub(crate) fn chain_present(env_keys: &BTreeSet<String>, paths: &AwsChainPaths) -> bool {
     env_pair_present(env_keys)
+        || env_keys.contains(AWS_BEARER_TOKEN_BEDROCK)
         || credentials_file_has_profile(&paths.credentials_file)
         || sso_cache_has_json(&paths.sso_cache_dir)
 }
@@ -117,7 +120,23 @@ mod tests {
             &paths
         ));
         assert!(!chain_present(&env_keys(&["AWS_ACCESS_KEY_ID"]), &paths));
-        assert!(!chain_present(&env_keys(&["AWS_SECRET_ACCESS_KEY"]), &paths));
+        assert!(!chain_present(
+            &env_keys(&["AWS_SECRET_ACCESS_KEY"]),
+            &paths
+        ));
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn detects_bedrock_bearer_token_env() {
+        let home = make_temp_home();
+        let paths = AwsChainPaths::resolve(&home);
+
+        assert!(chain_present(
+            &env_keys(&["AWS_BEARER_TOKEN_BEDROCK"]),
+            &paths
+        ));
 
         let _ = fs::remove_dir_all(home);
     }

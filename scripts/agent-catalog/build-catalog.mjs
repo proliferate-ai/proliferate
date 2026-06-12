@@ -25,7 +25,162 @@ const outPath = join(here, "catalog.draft.json");
 
 const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini", cursor: "Cursor", opencode: "OpenCode" };
 // Which registry auth slot satisfies each probe auth context (curation-owned).
-const AUTH_CONTEXT_SLOTS = { "anthropic-api": "anthropic" };
+// Per-agent context -> registry auth slot. Slot ids MUST be slots the
+// registry declares for that agent (the runtime classifier skips contexts
+// whose slot the descriptor does not know); alternative auth routes for one
+// credential mount share a slot — one winner per slot, document order is
+// harness precedence.
+const AUTH_CONTEXT_SLOTS = {
+  claude: { "anthropic-api": "anthropic", "anthropic-oauth": "anthropic", "bedrock": "anthropic" },
+  codex: { "openai-api": "openai", "openai-oauth": "openai", "bedrock": "openai" },
+  gemini: { "gemini-api": "gemini", "google-oauth": "gemini" },
+  cursor: { "cursor-login": "cursor" },
+  opencode: {
+    "anthropic-api": "anthropic",
+    "openai-api": "openai",
+    "gemini-api": "gemini",
+    "opencode-zen": "opencode-zen",
+  },
+};
+
+// Runtime-detection signals per context (the curation overlay): how the
+// runtime classifier recognizes each context over the composed launch env +
+// filesystem discovery facts (anyharness-credential-discovery fact kinds).
+// A context WITHOUT signals is probe-only: it never activates at runtime
+// (codex/bedrock until a detector exists). Vocabulary must stay a subset of
+// the registry slot's envVars/discoveryKinds (validation_pairing.rs).
+const AUTH_CONTEXT_SIGNALS = {
+  claude: {
+    "bedrock": { allOf: [{ envFlag: "CLAUDE_CODE_USE_BEDROCK=1" }, { discovery: "aws-credential-chain" }] },
+    "anthropic-api": { anyOf: [{ env: "ANTHROPIC_API_KEY" }, { env: "ANTHROPIC_AUTH_TOKEN" }] },
+    "anthropic-oauth": { anyOf: [{ discovery: "claude-oauth-creds" }, { discovery: "claude-keychain" }] },
+  },
+  codex: {
+    "openai-oauth": { anyOf: [{ discovery: "codex-auth-json-oauth" }, { discovery: "codex-keychain" }] },
+    "openai-api": { anyOf: [{ env: "OPENAI_API_KEY" }, { env: "CODEX_API_KEY" }, { discovery: "codex-auth-json-api-key" }] },
+  },
+  gemini: {
+    "gemini-api": { anyOf: [{ env: "GEMINI_API_KEY" }, { env: "GOOGLE_API_KEY" }] },
+    "google-oauth": { anyOf: [{ discovery: "gemini-oauth-creds" }, { discovery: "gemini-keychain" }] },
+  },
+  cursor: {
+    "cursor-login": { anyOf: [{ env: "CURSOR_API_KEY" }, { discovery: "cursor-keychain" }] },
+  },
+  opencode: {
+    "anthropic-api": { anyOf: [{ env: "ANTHROPIC_API_KEY" }, { env: "ANTHROPIC_AUTH_TOKEN" }, { discovery: "opencode-auth-json/anthropic" }] },
+    "openai-api": { anyOf: [{ env: "OPENAI_API_KEY" }, { discovery: "opencode-auth-json/openai" }] },
+    "gemini-api": { anyOf: [{ env: "GEMINI_API_KEY" }, { env: "GOOGLE_API_KEY" }, { discovery: "opencode-auth-json/google" }, { discovery: "opencode-auth-json/gemini" }] },
+    "opencode-zen": { discovery: "opencode-auth-json/opencode" },
+  },
+};
+
+// Curated per-context launch defaults (session.defaults): the classifier's
+// winning context picks its default; the runtime default ladder still
+// requires the model to be AVAILABLE under the active contexts, so a stale
+// entry degrades to the first-visible fallback instead of failing.
+const AGENT_SESSION_DEFAULTS = {
+  claude: {
+    "anthropic-api": "sonnet",
+    "anthropic-oauth": "opus",
+    "bedrock": "us.anthropic.claude-sonnet-4-6",
+  },
+  codex: {
+    "openai-api": "gpt-5.5",
+    "openai-oauth": "gpt-5.5",
+    "bedrock": "openai.gpt-5.4-cmb",
+  },
+  gemini: { "gemini-api": "auto", "google-oauth": "auto" },
+  cursor: { "cursor-login": "default" },
+  opencode: { "baseline": "opencode/big-pickle" },
+};
+
+// Display-name curation: probe snapshots carry pretty names for some models
+// and raw ids for others. When a display name has no uppercase at all we
+// title-case it with a brand-aware token map (matching the existing
+// "GPT-5.4-Mini" hyphenated style); provider-prefixed ids ("opencode-go/x")
+// keep the prefix as a parenthetical. Names the probe cased itself pass
+// through untouched.
+// Application paths for non-model session controls (curation, carried over
+// from the v1 catalog's hand-curated apply blocks): which create field or
+// live config id applies each control. A control WITHOUT a mapping is a
+// probe-observed matrix dimension only (e.g. cursor's bracket-param
+// effort/reasoning/thinking/context) — real data, but nothing the desktop
+// can apply, so consumers must not project it as a composer control.
+const CONTROL_MAPPINGS = {
+  claude: {
+    mode: { createField: "modeId", liveConfigId: "mode" },
+    effort: { liveConfigId: "effort" },
+    fast_mode: { liveConfigId: "fast_mode" },
+  },
+  codex: {
+    mode: { createField: "modeId", liveConfigId: "mode" },
+    collaboration_mode: { liveConfigId: "collaboration_mode" },
+    reasoning_effort: { liveConfigId: "reasoning_effort" },
+    fast_mode: { liveConfigId: "fast_mode" },
+  },
+  gemini: { mode: { createField: "modeId", liveConfigId: "mode" } },
+  cursor: { mode: { createField: "modeId", liveConfigId: "mode" } },
+  opencode: { mode: { createField: "modeId", liveConfigId: "mode" } },
+};
+
+// Visibility policy: every PROVEN model (harness menu or accepted trial)
+// is advertised by default — trial-proven models appear without waiting
+// for a curation PR. Opt-outs exist only to suppress duplicate ids for
+// the same underlying model. Availability itself is never curated — only
+// the probe can prove a model launches.
+const MODEL_VISIBILITY_OPT_OUTS = {
+  claude: [
+    // trial-id duplicate of menu id "opus" (Opus 4.8)
+    "claude-opus-4-8",
+    // global-region duplicate of us.anthropic.claude-fable-5 (bedrock)
+    "global.anthropic.claude-fable-5",
+  ],
+};
+
+// Explicit display overrides where prettifying alone is ambiguous (two
+// "GPT-5.4" rows when the bedrock CMB models sit beside the API ones).
+const MODEL_DISPLAY_OVERRIDES = {
+  codex: {
+    "openai.gpt-5.4-cmb": "GPT-5.4 on Bedrock",
+    "openai.gpt-5.4-cmb/xhigh": "GPT-5.4 (xhigh) on Bedrock",
+  },
+};
+
+const DISPLAY_TOKEN_MAP = {
+  gpt: "GPT", glm: "GLM", openai: "OpenAI", claude: "Claude", opus: "Opus",
+  sonnet: "Sonnet", haiku: "Haiku", codex: "Codex", gemini: "Gemini",
+  grok: "Grok", composer: "Composer", deepseek: "DeepSeek", qwen: "Qwen",
+  kimi: "Kimi", minimax: "MiniMax", mimo: "MiMo", nemotron: "Nemotron",
+};
+function prettifyToken(token) {
+  if (DISPLAY_TOKEN_MAP[token]) return DISPLAY_TOKEN_MAP[token];
+  if (/^[a-z]/.test(token)) return token.charAt(0).toUpperCase() + token.slice(1);
+  return token;
+}
+function prettifyDisplayName(name) {
+  if (/[A-Z]/.test(name)) return name;
+  const lastSlash = name.lastIndexOf("/");
+  const prefix = lastSlash === -1 ? null : name.slice(0, lastSlash);
+  const subject = lastSlash === -1 ? name : name.slice(lastSlash + 1);
+  const pretty = subject
+    .split(" ")
+    .map((word) =>
+      word.startsWith("(") ? word : word.split("-").map(prettifyToken).join("-"))
+    .join(" ");
+  return prefix ? `${pretty} (${prefix})` : pretty;
+}
+
+// Context order = harness auth precedence (first classifier match wins the
+// slot). bedrock first for claude: the flag deliberately forces the route,
+// so when set it must beat an ambient API key. codex: ChatGPT login is the
+// harness default when auth.json exists, even with OPENAI_API_KEY set.
+const AUTH_CONTEXT_PRECEDENCE = {
+  claude: ["bedrock", "anthropic-api", "anthropic-oauth"],
+  codex: ["bedrock", "openai-oauth", "openai-api"],
+  gemini: ["gemini-api", "google-oauth"],
+  cursor: ["cursor-login"],
+  opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline"],
+};
 
 const warnings = [];
 
@@ -283,12 +438,14 @@ for (const [kind, runs] of byAgent) {
     const contexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
     return {
       id: modelId,
-      displayName: versionedDisplayName(entry.name, entry.description, modelId),
+      displayName:
+        MODEL_DISPLAY_OVERRIDES[kind]?.[modelId] ??
+        prettifyDisplayName(versionedDisplayName(entry.name, entry.description, modelId)),
       ...(entry.description ? { description: entry.description } : {}),
       availability: { anyOf: contexts },
       // On a harness menu somewhere -> advertised; trial-only -> available
       // but hidden unless curation opts it in.
-      defaultVisible: entry.onMenu,
+      defaultVisible: !(MODEL_VISIBILITY_OPT_OUTS[kind] ?? []).includes(modelId),
       controls: matrix,
       status: "active",
       provenance: {
@@ -316,7 +473,13 @@ for (const [kind, runs] of byAgent) {
         createField: "modelId", switchVia, liveConfigId: "model",
         ...(variantSyntax ? { variantSyntax } : {}),
     } },
-    ...Object.entries(universe).map(([key, values]) => ({ key, values: [...values] })),
+    ...Object.entries(universe).map(([key, values]) => ({
+      key,
+      values: [...values],
+      ...(CONTROL_MAPPINGS[kind]?.[key]
+        ? { mapping: CONTROL_MAPPINGS[kind][key] }
+        : {}),
+    })),
   ];
 
   // observedDefaults per auth context: the model the harness had selected at
@@ -341,13 +504,28 @@ for (const [kind, runs] of byAgent) {
       agentProcess: { version: attestation?.version ?? "unknown" },
       ...(nativeVersion ? { native: { version: nativeVersion } } : {}),
     },
-    authContexts: runs.map((run) => ({
-      id: run.data.authContext,
-      ...(run.data.authContext === "baseline"
-        ? {}
-        : { authSlotId: AUTH_CONTEXT_SLOTS[run.data.authContext] ?? run.data.authContext }),
-    })),
-    session: { controls, models, observedDefaults },
+    authContexts: [...runs]
+      .sort((a, b) => {
+        const order = AUTH_CONTEXT_PRECEDENCE[kind] ?? [];
+        const rank = (run) => {
+          const index = order.indexOf(run.data.authContext);
+          return index === -1 ? order.length : index;
+        };
+        return rank(a) - rank(b);
+      })
+      .map((run) => ({
+        id: run.data.authContext,
+        ...(run.data.authContext === "baseline"
+          ? {}
+          : {
+              authSlotId:
+                AUTH_CONTEXT_SLOTS[kind]?.[run.data.authContext] ?? run.data.authContext,
+            }),
+        ...(AUTH_CONTEXT_SIGNALS[kind]?.[run.data.authContext]
+          ? { signals: AUTH_CONTEXT_SIGNALS[kind][run.data.authContext] }
+          : {}),
+      })),
+    session: { controls, models, defaults: AGENT_SESSION_DEFAULTS[kind] ?? {}, observedDefaults },
     provenance: {
       probedAt: runs.map((r) => r.data.probedAt).sort().at(-1),
       attestation,
@@ -358,7 +536,7 @@ for (const [kind, runs] of byAgent) {
 
 // Pair the catalog with the registry it was probed against (catalog owns
 // WHICH versions; registry owns HOW — see catalog-v2 spec).
-const registryPath = join(here, "..", "..", "catalogs", "agents", "v1", "registry.json");
+const registryPath = join(here, "..", "..", "catalogs", "agents", "registry.json");
 let registryVersion = null; // registry.json lands with PR #607; pairing activates then
 try { registryVersion = JSON.parse(readFileSync(registryPath, "utf8")).registryVersion; } catch {}
 

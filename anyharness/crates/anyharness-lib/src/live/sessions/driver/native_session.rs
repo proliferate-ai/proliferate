@@ -87,7 +87,9 @@ mod tests {
     }
 }
 
-pub(in crate::live::sessions) fn has_anyharness_targeted_fork_extension(meta: &acp::schema::Meta) -> bool {
+pub(in crate::live::sessions) fn has_anyharness_targeted_fork_extension(
+    meta: &acp::schema::Meta,
+) -> bool {
     let Some(anyharness) = meta.get("anyharness").and_then(|value| value.as_object()) else {
         return false;
     };

@@ -1,6 +1,6 @@
 import type {
   CloudAgentCatalogAgent,
-  CloudAgentCatalogControl,
+  CloudAgentCatalogModel,
   CloudAgentCatalogResponse,
 } from "@proliferate/cloud-sdk";
 import { modelMatchesSelectedValue } from "./composer-control-identity";
@@ -10,6 +10,31 @@ import {
 } from "./harness-availability";
 import { DEFAULT_DIRECT_PROMPT_AGENT_KIND } from "./composer-launch-defaults";
 import type { CloudLaunchComposerSelection } from "./composer-control-model";
+
+/**
+ * Launch control projected from a v2 catalog session control: raw string
+ * values become labelled options, `mapping.createField`/`liveConfigId`
+ * replace the v1 apply block, and the catalog default comes from the agent's
+ * default model option matrix (explicit `default`, else probe-observed).
+ */
+export interface ComposerLaunchControl {
+  key: string;
+  label: string;
+  createField: "modelId" | "modeId" | null;
+  liveConfigId: string;
+  defaultValue: string | null;
+  values: Array<{ value: string; label: string; isDefault: boolean }>;
+}
+
+/** Catalog control key -> composer control key (v1 vocabulary). */
+const COMPOSER_LAUNCH_CONTROL_KEYS: Readonly<Record<string, string>> = {
+  mode: "mode",
+  collaboration_mode: "collaboration_mode",
+  reasoning: "reasoning",
+  reasoning_effort: "effort",
+  effort: "effort",
+  fast_mode: "fast_mode",
+};
 
 export function launchableCatalogAgents(input: {
   agents: readonly CloudAgentCatalogAgent[];
@@ -50,36 +75,104 @@ export function selectLaunchAgent(
 export function selectLaunchModel(
   agent: CloudAgentCatalogAgent,
   modelId: string | null | undefined,
-) {
-  return agent.session.models.find((model) => model.id === modelId && isLaunchVisibleModel(model))
-    ?? agent.session.models.find((model) => model.id === agent.session.defaultModelId)
-    ?? agent.session.models.find(isLaunchVisibleModel)
-    ?? null;
+): CloudAgentCatalogModel | null {
+  return agent.session.models.find((model) =>
+    isLaunchVisibleModel(model)
+    && (model.id === modelId || (modelId ? model.aliases.includes(modelId) : false))
+  )
+    ?? defaultLaunchModel(agent);
+}
+
+/**
+ * Curation default (mirrors the runtime catalog service, sans active-context
+ * knowledge): first `session.defaults` entry in declared auth-context order
+ * resolving to a menu model, else the first menu model in document order.
+ */
+export function defaultLaunchModel(
+  agent: CloudAgentCatalogAgent,
+): CloudAgentCatalogModel | null {
+  for (const context of agent.authContexts) {
+    const defaultId = agent.session.defaults[context.id];
+    if (!defaultId) {
+      continue;
+    }
+    const model = agent.session.models.find((candidate) =>
+      isLaunchVisibleModel(candidate)
+      && (candidate.id === defaultId || candidate.aliases.includes(defaultId))
+    );
+    if (model) {
+      return model;
+    }
+  }
+  return agent.session.models.find(isLaunchVisibleModel) ?? null;
+}
+
+/**
+ * Project the agent's v2 session controls into composer launch controls.
+ * `model` never projects; unknown keys (e.g. cursor's bracket-param toggles)
+ * have no composer application path.
+ */
+export function launchComposerControls(
+  agent: CloudAgentCatalogAgent,
+): ComposerLaunchControl[] {
+  const defaultModel = defaultLaunchModel(agent);
+  return agent.session.controls.flatMap((control) => {
+    const composerKey = COMPOSER_LAUNCH_CONTROL_KEYS[control.key];
+    if (control.key === "model" || !composerKey || control.values.length === 0) {
+      return [];
+    }
+    const modelControl = defaultModel?.controls[control.key] ?? null;
+    const defaultValue = modelControl?.default ?? modelControl?.observedValue ?? null;
+    const createField = normalizeCreateField(control.mapping?.createField)
+      ?? (composerKey === "mode" ? "modeId" : null);
+    return [{
+      key: composerKey,
+      label: control.label ?? humanizeControlToken(composerKey),
+      createField,
+      liveConfigId: control.mapping?.liveConfigId ?? control.key,
+      defaultValue,
+      values: control.values.map((value) => ({
+        value,
+        label: humanizeControlToken(value),
+        isDefault: value === defaultValue,
+      })),
+    }];
+  });
 }
 
 export function selectedLaunchControlValue(
   agent: CloudAgentCatalogAgent,
-  control: CloudAgentCatalogControl,
+  control: ComposerLaunchControl,
   selection: CloudLaunchComposerSelection,
 ): string | null {
-  if (control.apply?.createField === "modeId" && selection.modeId) {
+  if (control.createField === "modeId" && selection.modeId) {
     return selection.modeId;
   }
   const explicit = selection.controlValues[control.key];
   if (explicit) {
     return explicit;
   }
-  if (control.apply?.createField === "modeId" && agent.session.defaultModeId) {
-    return agent.session.defaultModeId;
-  }
-  return control.defaultValue
+  const selectedModelDefault = selectedModelControlDefault(agent, control, selection);
+  return selectedModelDefault
+    ?? control.defaultValue
     ?? control.values.find((option) => option.isDefault)?.value
     ?? control.values[0]?.value
     ?? null;
 }
 
-export function isLaunchComposerControl(control: CloudAgentCatalogControl): boolean {
-  return isStartSurfaceControl(control) || isQueueableLaunchSessionControl(control);
+function selectedModelControlDefault(
+  agent: CloudAgentCatalogAgent,
+  control: ComposerLaunchControl,
+  selection: CloudLaunchComposerSelection,
+): string | null {
+  if (!selection.modelId) {
+    return null;
+  }
+  const model = selectLaunchModel(agent, selection.modelId);
+  const modelControl = model?.controls[control.liveConfigId]
+    ?? model?.controls[control.key]
+    ?? null;
+  return modelControl?.default ?? modelControl?.observedValue ?? null;
 }
 
 export function visibleComposerModels(input: {
@@ -87,30 +180,22 @@ export function visibleComposerModels(input: {
   selectedModelId?: string | null;
   selectedLabel?: string | null;
   selectedValue?: string | null;
-}): CloudAgentCatalogAgent["session"]["models"] {
+}): CloudAgentCatalogModel[] {
   const selectedModelId = input.selectedModelId ?? null;
   const selectedLabel = input.selectedLabel ?? null;
   const selectedValue = input.selectedValue ?? selectedModelId;
   const models = input.agent.session.models.filter((model) =>
     isLaunchVisibleModel(model)
-    && (
-      isCatalogDefaultVisibleModel(input.agent, model)
-      || modelMatchesSelectedValue({
-        displayName: model.displayName,
-        id: model.id,
-        selectedLabel,
-        selectedValue,
-      })
-    )
+    || modelMatchesSelectedValue({
+      displayName: model.displayName,
+      id: model.id,
+      selectedLabel,
+      selectedValue,
+    })
   );
   const fallback = input.agent.session.models.find((model) =>
-    isLaunchVisibleModel(model)
-    && (
-      model.id === selectedModelId
-      || model.id === input.agent.session.defaultModelId
-      || model.isDefault
-    )
-  ) ?? input.agent.session.models.find(isLaunchVisibleModel) ?? null;
+    model.id === selectedModelId && model.status === "active"
+  ) ?? defaultLaunchModel(input.agent);
   if (models.length === 0 && fallback) {
     return [fallback];
   }
@@ -134,33 +219,46 @@ export function parseLaunchAgentModelOptionId(
   };
 }
 
-function isStartSurfaceControl(control: CloudAgentCatalogControl): boolean {
-  return Boolean(control.surfaces?.start && control.values.length > 0);
+/**
+ * The v2 menu rule (mirrors the runtime catalog service): `defaultVisible` ∩
+ * `status == "active"`. Availability gating happens server-side before the
+ * cloud session launches.
+ */
+function isLaunchVisibleModel(model: CloudAgentCatalogModel): boolean {
+  return model.status === "active" && model.defaultVisible;
 }
 
-function isQueueableLaunchSessionControl(control: CloudAgentCatalogControl): boolean {
-  return Boolean(
-    control.surfaces?.session
-    && control.apply?.liveConfigId
-    && control.apply?.queueBeforeMaterialized
-    && control.values.length > 0
-  );
+function normalizeCreateField(
+  createField: string | null | undefined,
+): "modelId" | "modeId" | null {
+  return createField === "modelId" || createField === "modeId" ? createField : null;
 }
 
-function isLaunchVisibleModel(model: CloudAgentCatalogAgent["session"]["models"][number]): boolean {
-  return model.status === "active" || model.status === "candidate";
-}
+const CONTROL_TOKEN_LABELS: Readonly<Record<string, string>> = {
+  dontAsk: "Don't Ask",
+  xhigh: "Extra High",
+  yolo: "YOLO",
+  mode: "Mode",
+  collaboration_mode: "Collaboration Mode",
+  reasoning: "Reasoning",
+  effort: "Effort",
+  fast_mode: "Fast Mode",
+};
 
-function isCatalogDefaultVisibleModel(
-  agent: CloudAgentCatalogAgent,
-  model: CloudAgentCatalogAgent["session"]["models"][number],
-): boolean {
-  if (typeof model.defaultOptIn === "boolean") {
-    return model.defaultOptIn;
+function humanizeControlToken(token: string): string {
+  const known = CONTROL_TOKEN_LABELS[token];
+  if (known) {
+    return known;
   }
-  return Boolean(
-    agent.session.modelDisplayPolicy?.defaultVisibleModelIds.includes(model.id)
-    || model.isDefault
-    || model.tags.includes("recommended")
-  );
+  const spaced = token
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim();
+  if (!spaced) {
+    return token;
+  }
+  return spaced
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }

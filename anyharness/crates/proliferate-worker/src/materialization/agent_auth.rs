@@ -9,7 +9,7 @@ use super::files::{expand_home, materialization_error, safe_join, write_file};
 
 const BUNDLED_AGENT_REGISTRY: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../../catalogs/agents/v1/registry.json"
+    "/../../../catalogs/agents/registry.json"
 ));
 
 static AGENT_AUTH_REGISTRY: OnceLock<AgentAuthRegistryDocument> = OnceLock::new();

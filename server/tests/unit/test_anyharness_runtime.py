@@ -117,6 +117,20 @@ async def test_list_runtime_agents_normalizes_agent_summaries(
 
 
 @pytest.mark.asyncio
+async def test_list_runtime_agents_error_includes_response_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient([_response(500, text="runtime stack trace")])
+    monkeypatch.setattr(runtime.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(runtime.CloudRuntimeReconnectError) as exc_info:
+        await runtime.list_runtime_agents("https://runtime.invalid", "runtime-token")
+
+    assert "status 500" in str(exc_info.value)
+    assert "runtime stack trace" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
 async def test_install_runtime_agent_returns_install_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -170,3 +184,21 @@ async def test_install_runtime_agent_uses_requested_kind_when_agent_payload_omit
 
     assert result.agent.kind == "codex"
     assert result.agent.readiness == "ready"
+
+
+@pytest.mark.asyncio
+async def test_install_runtime_agent_error_includes_response_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient([_response(409, method="POST", text="install already running")])
+    monkeypatch.setattr(runtime.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(runtime.CloudRuntimeReconnectError) as exc_info:
+        await runtime.install_runtime_agent(
+            "https://runtime.invalid",
+            "runtime-token",
+            "codex",
+        )
+
+    assert "status 409" in str(exc_info.value)
+    assert "install already running" in str(exc_info.value)

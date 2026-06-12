@@ -17,10 +17,7 @@ import {
 import {
   resolveConfiguredLaunchAgentSelection,
 } from "@/lib/domain/chat/models/launch-selection-defaults";
-import {
-  dynamicLaunchAgentAcceptsModel,
-  type DesktopAgentLaunchAgent,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 
 export interface ChatDefaultPreferences {
   defaultChatAgentKind: string;
@@ -123,7 +120,7 @@ export function resolveConfiguredLaunchSelection(
   const displayName = launchModel?.displayName
     ?? (preferredModelId || null);
 
-  if (launchAgent && launchSelection && (launchModel || dynamicLaunchAgentAcceptsModel(launchAgent))) {
+  if (launchAgent && launchSelection && launchModel) {
     return {
       selection: {
         kind: launchAgent.kind,

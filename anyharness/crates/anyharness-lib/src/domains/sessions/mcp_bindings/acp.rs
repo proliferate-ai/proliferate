@@ -7,28 +7,38 @@ pub fn to_acp_servers(bindings: &[SessionMcpServer]) -> Vec<acp::schema::McpServ
         .iter()
         .map(|binding| match binding {
             SessionMcpServer::Http(server) => acp::schema::McpServer::Http(
-                acp::schema::McpServerHttp::new(server.server_name.clone(), server.url.clone()).headers(
-                    server
-                        .headers
-                        .iter()
-                        .map(|header| {
-                            acp::schema::HttpHeader::new(header.name.clone(), header.value.clone())
-                        })
-                        .collect(),
-                ),
-            ),
-            SessionMcpServer::Stdio(server) => acp::schema::McpServer::Stdio(
-                acp::schema::McpServerStdio::new(server.server_name.clone(), server.command.clone())
-                    .args(server.args.clone())
-                    .env(
+                acp::schema::McpServerHttp::new(server.server_name.clone(), server.url.clone())
+                    .headers(
                         server
-                            .env
+                            .headers
                             .iter()
-                            .map(|env_var| {
-                                acp::schema::EnvVariable::new(env_var.name.clone(), env_var.value.clone())
+                            .map(|header| {
+                                acp::schema::HttpHeader::new(
+                                    header.name.clone(),
+                                    header.value.clone(),
+                                )
                             })
                             .collect(),
                     ),
+            ),
+            SessionMcpServer::Stdio(server) => acp::schema::McpServer::Stdio(
+                acp::schema::McpServerStdio::new(
+                    server.server_name.clone(),
+                    server.command.clone(),
+                )
+                .args(server.args.clone())
+                .env(
+                    server
+                        .env
+                        .iter()
+                        .map(|env_var| {
+                            acp::schema::EnvVariable::new(
+                                env_var.name.clone(),
+                                env_var.value.clone(),
+                            )
+                        })
+                        .collect(),
+                ),
             ),
         })
         .collect()

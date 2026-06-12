@@ -164,10 +164,9 @@ impl AgentRuntime {
 
     pub async fn start_login(&self, kind: &str) -> Result<AgentLoginStart, AgentRuntimeError> {
         let descriptor = descriptor_for_kind(kind)?;
-        let login_spec = descriptor
-            .auth
-            .primary_login()
-            .ok_or_else(|| AgentRuntimeError::Login(AgentLoginError::NotSupported(kind.to_string())))?;
+        let login_spec = descriptor.auth.primary_login().ok_or_else(|| {
+            AgentRuntimeError::Login(AgentLoginError::NotSupported(kind.to_string()))
+        })?;
         let command = AgentLoginCommand {
             program: login_spec.command.program.clone(),
             args: login_spec.command.args.clone(),
@@ -190,10 +189,9 @@ impl AgentRuntime {
         kind: &str,
     ) -> Result<AgentLoginStart, AgentRuntimeError> {
         let descriptor = descriptor_for_kind(kind)?;
-        let login_spec = descriptor
-            .auth
-            .primary_login()
-            .ok_or_else(|| AgentRuntimeError::Login(AgentLoginError::NotSupported(kind.to_string())))?;
+        let login_spec = descriptor.auth.primary_login().ok_or_else(|| {
+            AgentRuntimeError::Login(AgentLoginError::NotSupported(kind.to_string()))
+        })?;
         let resolved = login::resolve_login_command(&descriptor, &self.runtime_home)?;
 
         Ok(AgentLoginStart {

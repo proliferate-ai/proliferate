@@ -290,8 +290,14 @@ fn direct_model_setter_is_permanently_disabled() {
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    assert!(!should_apply_model_via_direct_setter(&startup_state, "sonnet"));
-    assert!(!should_apply_model_via_direct_setter(&startup_state, "opus"));
+    assert!(!should_apply_model_via_direct_setter(
+        &startup_state,
+        "sonnet"
+    ));
+    assert!(!should_apply_model_via_direct_setter(
+        &startup_state,
+        "opus"
+    ));
 }
 
 #[test]
@@ -307,15 +313,101 @@ fn model_config_request_without_raw_option_rejects_values_outside_acp_models() {
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    let error =
-        queue_pending_config_change(&store, "session-1", &startup_state, "model", "opus[1m]")
-            .expect_err("unlisted model values should be rejected");
+    let error = queue_pending_config_change(
+        &store,
+        "session-1",
+        &startup_state,
+        "model",
+        "opus[1m]",
+        false,
+    )
+    .expect_err("unlisted model values should be rejected");
 
     assert!(matches!(
         error,
         crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(detail)
             if detail == "Value 'opus[1m]' is not valid for config option 'model'."
     ));
+}
+
+#[test]
+fn queue_accepts_catalog_authorized_model_value_outside_live_options() {
+    let db = Db::open_in_memory().expect("open db");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
+    let store = SessionStore::new(db.clone());
+    store
+        .insert(&SessionRecord {
+            id: "session-1".to_string(),
+            workspace_id: "workspace-1".to_string(),
+            agent_kind: AgentKind::Claude.as_str().to_string(),
+            native_session_id: Some("native-1".to_string()),
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
+            agent_auth_contexts: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+            updated_at: "2026-03-25T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            system_prompt_append: None,
+            subagents_enabled: true,
+            action_capabilities_json: None,
+            origin: None,
+        })
+        .expect("insert session");
+    let mut option = acp::schema::SessionConfigOption::select(
+        "model",
+        "Model",
+        "sonnet",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::schema::SessionConfigSelectOption::new("haiku", "Haiku"),
+        ],
+    );
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![option],
+        current_model_id: Some("sonnet".to_string()),
+        available_models: session_model_options(&["sonnet", "haiku"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    // Same value, same option list — the only difference is the catalog
+    // authorization computed at the runtime seam (decision 10: the catalog
+    // is the switch authority; the harness-advertised list is not a cage).
+    queue_pending_config_change(
+        &store,
+        "session-1",
+        &startup_state,
+        "model",
+        "claude-fable-5",
+        true,
+    )
+    .expect("catalog-authorized model value must queue");
+
+    queue_pending_config_change(
+        &store,
+        "session-1",
+        &startup_state,
+        "model",
+        "claude-fable-5",
+        false,
+    )
+    .expect_err("the same value without catalog authorization stays rejected");
 }
 
 #[test]
@@ -380,9 +472,15 @@ fn model_config_request_rejects_values_outside_live_select_options() {
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    let error =
-        queue_pending_config_change(&store, "session-1", &startup_state, "model", "opus[1m]")
-            .expect_err("unlisted model values should be rejected");
+    let error = queue_pending_config_change(
+        &store,
+        "session-1",
+        &startup_state,
+        "model",
+        "opus[1m]",
+        false,
+    )
+    .expect_err("unlisted model values should be rejected");
 
     assert!(matches!(
         error,
@@ -447,7 +545,9 @@ fn fast_mode_option_is_not_treated_as_mode_request() {
             acp::schema::SessionConfigSelectOption::new("on", "On"),
         ],
     );
-    option.category = Some(acp::schema::SessionConfigOptionCategory::Other("fast_mode".into()));
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Other(
+        "fast_mode".into(),
+    ));
 
     let options = [option];
     let resolved = find_select_option_for_request(&options, "fast_mode");

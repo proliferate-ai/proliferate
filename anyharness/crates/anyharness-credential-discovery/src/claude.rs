@@ -79,9 +79,7 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
 /// `has_claude_api_key` → `claude-config-api-key`, `has_claude_oauth_payload`
 /// → `claude-oauth-creds`, the keychain lookup → `claude-keychain`, and
 /// `has_oauth_account_marker` → `claude-oauth-account`.
-pub(crate) fn discovery_fact_kinds(
-    home_dir: &Path,
-) -> Result<Vec<&'static str>, DiscoveryError> {
+pub(crate) fn discovery_fact_kinds(home_dir: &Path) -> Result<Vec<&'static str>, DiscoveryError> {
     let mut kinds = Vec::new();
 
     let api_config_paths = [
@@ -429,9 +427,7 @@ mod tests {
         )
         .expect("write claude config");
 
-        assert!(discovery_fact_kinds(&home)
-            .expect("fact kinds")
-            .is_empty());
+        assert!(discovery_fact_kinds(&home).expect("fact kinds").is_empty());
 
         let _ = fs::remove_dir_all(home);
     }

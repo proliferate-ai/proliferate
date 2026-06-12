@@ -38,9 +38,9 @@ async def _create_run_config(session, user_id: uuid.UUID) -> CloudAgentRunConfig
         owner_user_id=user_id,
         organization_id=None,
         created_by_user_id=user_id,
-        name="Cursor alias config",
+        name="Cursor canonical config",
         agent_kind="cursor",
-        model_id="gpt-5.3-codex-spark-preview",
+        model_id="gpt-5.3-codex",
         control_values_json={},
         usable_in_personal_sandboxes=True,
         usable_in_shared_sandboxes=False,
@@ -54,7 +54,7 @@ async def _create_run_config(session, user_id: uuid.UUID) -> CloudAgentRunConfig
 
 
 @pytest.mark.asyncio
-async def test_manual_run_snapshot_canonicalizes_model_alias(
+async def test_manual_run_snapshot_resolves_canonical_model_id(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:

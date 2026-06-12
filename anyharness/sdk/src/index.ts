@@ -76,11 +76,6 @@ export type {
   ApplyAgentAuthConfigRequest,
   ApplyAgentAuthConfigResponse,
   AgentLaunchOptionsResponse,
-  AgentModelRegistryModel,
-  AgentModelRegistrySnapshotResponse,
-  ModelCatalogStatus,
-  ModelRegistrySource,
-  ModelRegistryStatus,
   ArtifactStatus,
   AgentSummary,
   InstallAgentRequest,
@@ -95,8 +90,6 @@ export type {
   ReconcileAgentsRequest,
   ReconcileAgentResult,
   ReconcileAgentsResponse,
-  RefreshAgentModelRegistryRequest,
-  RefreshAgentModelRegistryResponse,
 } from "./types/agents.js";
 
 export type {

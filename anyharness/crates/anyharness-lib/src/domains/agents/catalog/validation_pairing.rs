@@ -5,8 +5,8 @@
 //! registry revision will declare, so this is a separate entry rather than
 //! part of the loader path.
 
-use super::schema_v2::{AgentCatalogAuthSignal, AgentCatalogV2Document};
-use super::validation_v2::BASELINE_AUTH_CONTEXT_ID;
+use super::schema::{AgentCatalogAuthSignal, AgentCatalogDocument};
+use super::validation::BASELINE_AUTH_CONTEXT_ID;
 use crate::domains::agents::registry::schema::{
     AgentRegistryAuthSlot, AgentRegistryDocument, AgentRegistryEnvVarKind,
 };
@@ -20,8 +20,8 @@ use crate::domains::agents::registry::schema::{
 /// TODO(PR-7a): once registry.json carries the source vocabulary (flag tags
 /// on CLAUDE_CODE_USE_BEDROCK-style vars, named discovery kinds), pair this
 /// check with the pinned registry in the build pipeline and sync path.
-pub fn validate_agent_catalog_v2_registry_pairing(
-    catalog: &AgentCatalogV2Document,
+pub fn validate_agent_catalog_registry_pairing(
+    catalog: &AgentCatalogDocument,
     registry: &AgentRegistryDocument,
 ) -> anyhow::Result<()> {
     for agent in &catalog.agents {
@@ -122,13 +122,13 @@ fn declared_env_var_kind(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::catalog::schema_v2::draft_catalog_v2_json;
-    use crate::domains::agents::catalog::validation_v2::validate_agent_catalog_v2_document;
+    use crate::domains::agents::catalog::schema::draft_catalog_json;
+    use crate::domains::agents::catalog::validation::validate_agent_catalog_document;
     use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
     use crate::domains::agents::registry::schema::AgentRegistryAuthSlotEnvVar;
 
-    fn draft_catalog() -> AgentCatalogV2Document {
-        serde_json::from_str(draft_catalog_v2_json()).expect("draft catalog must parse")
+    fn draft_catalog() -> AgentCatalogDocument {
+        serde_json::from_str(draft_catalog_json()).expect("draft catalog must parse")
     }
 
     fn signal(json: serde_json::Value) -> AgentCatalogAuthSignal {
@@ -138,11 +138,13 @@ mod tests {
     /// Pairing fixture: the draft's auth contexts reference slots a future
     /// registry revision will declare, so pairing tests use a hand-trimmed
     /// catalog whose contexts resolve against the bundled registry.
-    fn pairing_catalog(signals: Option<serde_json::Value>) -> AgentCatalogV2Document {
+    fn pairing_catalog(signals: Option<serde_json::Value>) -> AgentCatalogDocument {
         let mut catalog = draft_catalog();
         catalog.agents.truncate(1);
         let claude = &mut catalog.agents[0];
-        claude.auth_contexts.truncate(1);
+        claude
+            .auth_contexts
+            .retain(|context| context.id == "anthropic-api");
         claude.auth_contexts[0].auth_slot_id = Some("anthropic".to_string());
         claude.auth_contexts[0].signals = signals.map(signal);
         claude.session.models.retain(|model| {
@@ -154,7 +156,7 @@ mod tests {
         for model in &mut claude.session.models {
             model.availability.any_of.retain(|id| id == "anthropic-api");
         }
-        validate_agent_catalog_v2_document(&catalog).expect("pairing fixture must validate");
+        validate_agent_catalog_document(&catalog).expect("pairing fixture must validate");
         catalog
     }
 
@@ -163,7 +165,7 @@ mod tests {
         let catalog = pairing_catalog(Some(serde_json::json!({ "env": "ANTHROPIC_API_KEY" })));
         let registry = bundled_agent_registry_document();
 
-        validate_agent_catalog_v2_registry_pairing(&catalog, registry)
+        validate_agent_catalog_registry_pairing(&catalog, registry)
             .expect("known slot + declared env var must pass");
     }
 
@@ -173,7 +175,7 @@ mod tests {
         catalog.agents[0].auth_contexts[0].auth_slot_id = Some("anthropic-vertex".to_string());
         let registry = bundled_agent_registry_document();
 
-        let error = validate_agent_catalog_v2_registry_pairing(&catalog, registry)
+        let error = validate_agent_catalog_registry_pairing(&catalog, registry)
             .expect_err("unknown slot must fail");
 
         assert!(
@@ -189,7 +191,7 @@ mod tests {
         let catalog = pairing_catalog(Some(serde_json::json!({ "env": "NOT_A_DECLARED_VAR" })));
         let registry = bundled_agent_registry_document();
 
-        let error = validate_agent_catalog_v2_registry_pairing(&catalog, registry)
+        let error = validate_agent_catalog_registry_pairing(&catalog, registry)
             .expect_err("undeclared env var must fail");
 
         assert!(
@@ -207,7 +209,7 @@ mod tests {
         ));
         let registry = bundled_agent_registry_document();
 
-        let error = validate_agent_catalog_v2_registry_pairing(&catalog, registry)
+        let error = validate_agent_catalog_registry_pairing(&catalog, registry)
             .expect_err("envFlag on a secret var must fail");
 
         assert!(
@@ -237,7 +239,7 @@ mod tests {
         });
         slot.discovery_kinds = vec!["aws-credential-chain".to_string()];
 
-        validate_agent_catalog_v2_registry_pairing(&catalog, &registry)
+        validate_agent_catalog_registry_pairing(&catalog, &registry)
             .expect("bedrock-style signature must pass against tagged vocabulary");
     }
 
@@ -255,7 +257,7 @@ mod tests {
             .expect("anthropic slot");
         slot.discovery_kinds = vec!["aws-credential-chain".to_string()];
 
-        let error = validate_agent_catalog_v2_registry_pairing(&catalog, &registry)
+        let error = validate_agent_catalog_registry_pairing(&catalog, &registry)
             .expect_err("undeclared discovery kind must fail");
 
         assert!(
@@ -275,7 +277,7 @@ mod tests {
         ));
         let registry = bundled_agent_registry_document();
 
-        validate_agent_catalog_v2_registry_pairing(&catalog, registry)
+        validate_agent_catalog_registry_pairing(&catalog, registry)
             .expect("undeclared vocabulary must waive the subset check");
     }
 }

@@ -75,9 +75,7 @@ def validate_config_values(
     ):
         return AgentRunConfigIssue("model_unavailable", "Model is not available for this agent.")
     allowed_controls = {
-        control.key: control
-        for control in agent.session.controls
-        if control.key != "model" and (control.surfaces.automation or control.surfaces.settings)
+        control.key: control for control in agent.session.controls if control.key != "model"
     }
     for key, value in control_values.items():
         control = allowed_controls.get(key)
@@ -86,13 +84,11 @@ def validate_config_values(
                 "control_unavailable",
                 f"Control '{key}' is not available for this agent.",
             )
-        if control.valueSource == "inline":
-            allowed_values = {option.value for option in control.values}
-            if str(value) not in allowed_values:
-                return AgentRunConfigIssue(
-                    "control_value_unavailable",
-                    f"Control '{key}' has an unsupported value.",
-                )
+        if control.values and str(value) not in control.values:
+            return AgentRunConfigIssue(
+                "control_value_unavailable",
+                f"Control '{key}' has an unsupported value.",
+            )
     return None
 
 
@@ -198,9 +194,7 @@ def resolve_runtime_values(
     if model_id is None:
         return AgentRunConfigIssue("model_unavailable", "Model is not available for this agent.")
     allowed_controls = {
-        control.key: control
-        for control in agent.session.controls
-        if control.key != "model" and (control.surfaces.automation or control.surfaces.settings)
+        control.key: control for control in agent.session.controls if control.key != "model"
     }
     resolved: dict[str, object] = {}
     ignored: list[str] = []
@@ -209,9 +203,11 @@ def resolve_runtime_values(
             resolved[key] = value
         else:
             ignored.append(key)
-    for key, control in allowed_controls.items():
-        if key not in resolved and control.defaultValue is not None:
-            resolved[key] = control.defaultValue
+    # Curation-owned per-model defaults fill controls the config leaves unset.
+    model = next(model for model in agent.session.models if model.id == model_id)
+    for key, model_control in model.controls.items():
+        if key in allowed_controls and key not in resolved and model_control.default is not None:
+            resolved[key] = model_control.default
     return ResolvedAgentRunConfig(
         config_id=str(config.id),
         config_name=config.name,

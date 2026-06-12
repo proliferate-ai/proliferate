@@ -89,9 +89,13 @@ fn validate_auth(agent_kind: &str, auth: &AgentRegistryAuth) -> anyhow::Result<(
                 slot.id
             );
         }
-        if slot.credential_provider_ids.is_empty() {
+        // Discovery-only slots (detectable local auth with no managed
+        // credential backing, e.g. opencode-zen) may declare no providers —
+        // but a slot REQUIRED for readiness must be satisfiable through
+        // managed credentials, so it must name at least one.
+        if slot.credential_provider_ids.is_empty() && slot.required_for_readiness {
             anyhow::bail!(
-                "agent registry agent '{}' auth slot '{}' has no credential providers",
+                "agent registry agent '{}' required auth slot '{}' has no credential providers",
                 agent_kind,
                 slot.id
             );

@@ -68,7 +68,8 @@ impl PromptDiagnostics {
                     self.last_transient_status = Some(preview);
                 }
             }
-            acp::schema::SessionUpdate::ToolCall(_) | acp::schema::SessionUpdate::ToolCallUpdate(_) => {
+            acp::schema::SessionUpdate::ToolCall(_)
+            | acp::schema::SessionUpdate::ToolCallUpdate(_) => {
                 self.last_tool_event_at = Some(now);
             }
             acp::schema::SessionUpdate::Plan(_) => {

@@ -97,6 +97,7 @@ impl SessionActor {
         &mut self,
         config_id: &str,
         value: &str,
+        catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
         apply_specific_config_option(
@@ -110,6 +111,7 @@ impl SessionActor {
             &mut self.startup_state,
             config_id,
             value,
+            catalog_authorized_model,
         )
         .await
     }
@@ -118,6 +120,7 @@ impl SessionActor {
         &mut self,
         config_id: &str,
         value: &str,
+        catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
         let option = find_select_option_for_request(&self.startup_state.config_options, config_id);
@@ -127,6 +130,7 @@ impl SessionActor {
             &self.startup_state,
             config_id,
             value,
+            catalog_authorized_model,
         )?;
 
         if let Err(error) = persist_requested_config_value_if_changed(

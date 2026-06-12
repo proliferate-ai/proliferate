@@ -3588,106 +3588,114 @@ export interface components {
             kind: "claude" | "codex" | "gemini" | "cursor" | "opencode";
             /** Displayname */
             displayName: string;
-            /** Description */
-            description?: string | null;
+            harness: components["schemas"]["AgentCatalogHarnessPins"];
+            /**
+             * Authcontexts
+             * @default []
+             */
+            authContexts: components["schemas"]["AgentCatalogAuthContext"][];
             session: components["schemas"]["AgentCatalogSession"];
+            provenance: components["schemas"]["AgentCatalogAgentProvenance"];
         };
-        /** AgentCatalogControl */
-        AgentCatalogControl: {
-            /** Key */
-            key: string;
-            /** Label */
-            label: string;
-            /** Description */
-            description?: string | null;
+        /** AgentCatalogAgentProvenance */
+        AgentCatalogAgentProvenance: {
+            /** Probedat */
+            probedAt: string;
+            attestation?: components["schemas"]["AgentCatalogAttestation"] | null;
             /**
-             * Type
-             * @constant
+             * Runs
+             * @default []
              */
-            type: "select";
-            /** Category */
-            category?: string | null;
-            /** Defaultvalue */
-            defaultValue: string | null;
-            surfaces: components["schemas"]["AgentCatalogControlSurfaces"];
-            apply: components["schemas"]["AgentCatalogControlApply"];
-            /**
-             * Missingliveconfigpolicy
-             * @enum {string}
-             */
-            missingLiveConfigPolicy: "ignore_default" | "queue_then_conflict" | "block_prompt" | "remediate";
-            /**
-             * Valuesource
-             * @enum {string}
-             */
-            valueSource: "inline" | "agentModels" | "discoveredModels";
-            /** Values */
-            values: components["schemas"]["AgentCatalogControlValue"][];
-            /**
-             * Queuewhilematerializing
-             * @default false
-             */
-            queueWhileMaterializing: boolean;
-            /**
-             * Mutableaftermaterialized
-             * @default true
-             */
-            mutableAfterMaterialized: boolean;
+            runs: components["schemas"]["AgentCatalogProbeRun"][];
         } & {
             [key: string]: unknown;
         };
-        /** AgentCatalogControlApply */
-        AgentCatalogControlApply: {
+        /** AgentCatalogArtifactPin */
+        AgentCatalogArtifactPin: {
+            /** Version */
+            version: string;
+            /** Sha256 */
+            sha256?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AgentCatalogAttestation */
+        AgentCatalogAttestation: {
+            /** Name */
+            name: string;
+            /** Version */
+            version: string;
+            /** Title */
+            title?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentCatalogAuthContext
+         * @description Ordered auth context; ``"baseline"`` is reserved and carries no auth slot.
+         *
+         *     ``signals`` is the externally tagged detection-signature algebra
+         *     (``env | envFlag | discovery | anyOf | allOf``); served opaquely.
+         */
+        AgentCatalogAuthContext: {
+            /** Id */
+            id: string;
+            /** Authslotid */
+            authSlotId?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Signals */
+            signals?: {
+                [key: string]: unknown;
+            } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentCatalogAvailability
+         * @description Observed-set availability: the auth contexts whose probe runs contained the model.
+         */
+        AgentCatalogAvailability: {
+            /** Anyof */
+            anyOf: string[];
+        };
+        /** AgentCatalogControlMapping */
+        AgentCatalogControlMapping: {
             /** Createfield */
-            createField?: ("modelId" | "modeId") | null;
+            createField?: string | null;
             /** Liveconfigid */
             liveConfigId?: string | null;
-            /** Livesetter */
-            liveSetter?: "runtime_control" | null;
-            /**
-             * Queuebeforematerialized
-             * @default false
-             */
-            queueBeforeMaterialized: boolean;
-        };
-        /** AgentCatalogControlSurfaces */
-        AgentCatalogControlSurfaces: {
-            /** Start */
-            start: boolean;
-            /** Session */
-            session: boolean;
-            /** Automation */
-            automation: boolean;
-            /** Settings */
-            settings: boolean;
-        };
-        /** AgentCatalogControlValue */
-        AgentCatalogControlValue: {
-            /** Value */
-            value: string;
-            /** Label */
-            label: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Isdefault
-             * @default false
-             */
-            isDefault: boolean;
-            /** Status */
-            status?: ("active" | "candidate" | "deprecated" | "hidden") | null;
+            /** Switchvia */
+            switchVia?: ("setSessionModel" | "configOption") | null;
+            /** Variantsyntax */
+            variantSyntax?: string | null;
+            /** Missingliveconfigpolicy */
+            missingLiveConfigPolicy?: string | null;
         } & {
             [key: string]: unknown;
         };
-        /** AgentCatalogLaunchRemediation */
-        AgentCatalogLaunchRemediation: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "managed_reinstall" | "external_update" | "restart";
-            /** Message */
-            message: string;
+        /**
+         * AgentCatalogDataPin
+         * @description Pinned data dependency that gates model lists (e.g. opencode models.dev).
+         */
+        AgentCatalogDataPin: {
+            /** Id */
+            id?: string | null;
+            /** Snapshotpath */
+            snapshotPath?: string | null;
+            /** Sha256 */
+            sha256?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentCatalogHarnessPins
+         * @description The pin block: exact versions the probe validated.
+         */
+        AgentCatalogHarnessPins: {
+            agentProcess: components["schemas"]["AgentCatalogArtifactPin"];
+            native?: components["schemas"]["AgentCatalogArtifactPin"] | null;
+            data?: components["schemas"]["AgentCatalogDataPin"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -3704,51 +3712,79 @@ export interface components {
              * @default []
              */
             aliases: string[];
+            /** Family */
+            family?: string | null;
+            availability: components["schemas"]["AgentCatalogAvailability"];
+            /**
+             * Defaultvisible
+             * @default false
+             */
+            defaultVisible: boolean;
+            /**
+             * Controls
+             * @default {}
+             */
+            controls: {
+                [key: string]: components["schemas"]["AgentCatalogModelControl"];
+            };
             /**
              * Status
              * @enum {string}
              */
             status: "active" | "candidate" | "deprecated" | "hidden";
-            /** Isdefault */
-            isDefault: boolean;
-            /** Defaultoptin */
-            defaultOptIn?: boolean | null;
-            /** Provider */
-            provider?: string | null;
-            /**
-             * Tags
-             * @default []
-             */
-            tags: string[];
-            /** Capabilities */
-            capabilities?: {
-                [key: string]: unknown;
-            } | null;
-            /** Compatibility */
-            compatibility?: {
-                [key: string]: unknown;
-            } | null;
-            launchRemediation?: components["schemas"]["AgentCatalogLaunchRemediation"] | null;
+            provenance?: components["schemas"]["AgentCatalogModelProvenance"] | null;
         } & {
             [key: string]: unknown;
         };
-        /** AgentCatalogModelDisplayPolicy */
-        AgentCatalogModelDisplayPolicy: {
-            /** Defaultvisiblemodelids */
-            defaultVisibleModelIds: string[];
-            /** Allowuservisiblemodelselection */
-            allowUserVisibleModelSelection: boolean;
-            /** Moremodelssource */
-            moreModelsSource?: ("none" | "lastKnownLiveSnapshot" | "liveSnapshotOnly") | null;
+        /**
+         * AgentCatalogModelControl
+         * @description Per-model option matrix entry: exactly the values this model supports.
+         */
+        AgentCatalogModelControl: {
+            /** Values */
+            values: string[];
+            /** Default */
+            default?: string | null;
+            /** Observedvalue */
+            observedValue?: string | null;
+        } & {
+            [key: string]: unknown;
         };
-        /** AgentCatalogPromptCapabilities */
-        AgentCatalogPromptCapabilities: {
-            /** Image */
-            image: boolean;
-            /** Audio */
-            audio: boolean;
-            /** Embeddedcontext */
-            embeddedContext: boolean;
+        /** AgentCatalogModelProvenance */
+        AgentCatalogModelProvenance: {
+            /**
+             * Observedin
+             * @default []
+             */
+            observedIn: string[];
+            /** Observedinallcontexts */
+            observedInAllContexts?: boolean | null;
+            /** Viatrialonly */
+            viaTrialOnly?: boolean | null;
+            /**
+             * Variantids
+             * @default []
+             */
+            variantIds: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** AgentCatalogProbeRun */
+        AgentCatalogProbeRun: {
+            /** Id */
+            id: string;
+            /** Snapshotpath */
+            snapshotPath?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentCatalogProbedAgainst
+         * @description Pairing with the registry document the probe ran against.
+         */
+        AgentCatalogProbedAgainst: {
+            /** Registryversion */
+            registryVersion?: string | null;
         };
         /** AgentCatalogResponse */
         AgentCatalogResponse: {
@@ -3756,39 +3792,59 @@ export interface components {
              * Schemaversion
              * @constant
              */
-            schemaVersion: 1;
+            schemaVersion: 2;
             /** Catalogversion */
             catalogVersion: string;
+            probedAgainst?: components["schemas"]["AgentCatalogProbedAgainst"] | null;
             /** Generatedat */
             generatedAt: string;
-            /** Compatibility */
-            compatibility?: {
-                [key: string]: unknown;
-            } | null;
             /** Agents */
             agents: components["schemas"]["AgentCatalogAgent"][];
         };
         /** AgentCatalogSession */
         AgentCatalogSession: {
-            /** Defaultmodelid */
-            defaultModelId: string;
-            /** Defaultmodeid */
-            defaultModeId?: string | null;
             /**
-             * Dynamicmodels
-             * @default false
+             * Controls
+             * @default []
              */
-            dynamicModels: boolean;
-            modelDisplayPolicy?: components["schemas"]["AgentCatalogModelDisplayPolicy"] | null;
-            promptCapabilities?: components["schemas"]["AgentCatalogPromptCapabilities"] | null;
-            /** Compatibility */
-            compatibility?: {
-                [key: string]: unknown;
-            } | null;
-            /** Models */
+            controls: components["schemas"]["AgentCatalogSessionControl"][];
+            /**
+             * Models
+             * @default []
+             */
             models: components["schemas"]["AgentCatalogModel"][];
-            /** Controls */
-            controls: components["schemas"]["AgentCatalogControl"][];
+            /**
+             * Defaults
+             * @default {}
+             */
+            defaults: {
+                [key: string]: string;
+            };
+            /**
+             * Observeddefaults
+             * @default {}
+             */
+            observedDefaults: {
+                [key: string]: string;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentCatalogSessionControl
+         * @description One key of the control universe; per-model matrices are subsets of this.
+         */
+        AgentCatalogSessionControl: {
+            /** Key */
+            key: string;
+            /** Label */
+            label?: string | null;
+            /**
+             * Values
+             * @default []
+             */
+            values: string[];
+            mapping?: components["schemas"]["AgentCatalogControlMapping"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -8411,6 +8467,8 @@ export interface components {
             anyharnessVersion?: string | null;
             /** Supervisorversion */
             supervisorVersion?: string | null;
+            /** Catalogversion */
+            catalogVersion?: string | null;
         };
         /** WorkerHeartbeatResponse */
         WorkerHeartbeatResponse: {
@@ -8425,6 +8483,8 @@ export interface components {
             /** Servertime */
             serverTime: string;
             desiredVersions: components["schemas"]["WorkerDesiredVersionsResponse"];
+            /** Catalogversion */
+            catalogVersion?: string | null;
         };
         /** WorkerInventoryPayload */
         WorkerInventoryPayload: {

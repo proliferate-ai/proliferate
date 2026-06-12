@@ -42,18 +42,12 @@ function launchAgent(
     kind,
     displayName,
     defaultModelId: modelId,
-    defaultModeId: null,
-    dynamicModels: false,
-    modelDisplayPolicy: null,
-    promptCapabilities: null,
     models: [{
       id: modelId,
       displayName: modelId,
       aliases: [],
       status: "active",
       isDefault: true,
-      tags: [],
-      launchRemediation: null,
     }],
     launchControls: [],
   };
@@ -61,7 +55,7 @@ function launchAgent(
 
 function catalog(agents: DesktopAgentLaunchAgent[]): DesktopAgentLaunchCatalog {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     catalogVersion: "cloud-test",
     generatedAt: "2026-05-05T00:00:00Z",
     workspaceId: null,
@@ -184,15 +178,7 @@ describe("useChatLaunchCatalog", () => {
   it("uses runtime launch options when the target has refreshed dynamic models", () => {
     mocks.useCloudAgentCatalog.mockReturnValue({
       data: catalog([
-        {
-          ...launchAgent("cursor", "auto", "Cursor"),
-          dynamicModels: true,
-          modelDisplayPolicy: {
-            defaultVisibleModelIds: ["auto"],
-            allowUserVisibleModelSelection: true,
-            moreModelsSource: "lastKnownLiveSnapshot",
-          },
-        },
+        launchAgent("cursor", "auto", "Cursor"),
       ]),
       isLoading: false,
       error: null,
