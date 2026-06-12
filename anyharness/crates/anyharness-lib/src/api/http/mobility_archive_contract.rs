@@ -170,6 +170,7 @@ fn from_contract_session_record(
         native_session_id: record.native_session_id,
         agent_auth_scope: None,
         required_agent_auth_revision: None,
+        agent_auth_contexts: None,
         requested_model_id: record.requested_model_id,
         current_model_id: record.current_model_id,
         requested_mode_id: record.requested_mode_id,

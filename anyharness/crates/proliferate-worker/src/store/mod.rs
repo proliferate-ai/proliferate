@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 mod applied_revisions;
+mod catalog_push_state;
 mod connection;
 mod exposure_cache;
 mod identity;

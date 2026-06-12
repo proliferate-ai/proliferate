@@ -79,6 +79,7 @@ impl SessionRuntime {
             native_session_id: None,
             agent_auth_scope: None,
             required_agent_auth_revision: None,
+            agent_auth_contexts: None,
             requested_model_id: None,
             current_model_id: None,
             requested_mode_id: None,

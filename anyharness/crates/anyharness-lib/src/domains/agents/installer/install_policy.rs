@@ -92,6 +92,27 @@ pub fn plan_artifact(facts: &ArtifactFacts, reinstall_requested: bool) -> Option
     None
 }
 
+/// Catalog-supplied pin overrides (the WHICH document wins over registry
+/// specs when an active v2 catalog declares versions for this agent).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PinOverrides {
+    pub agent_process: Option<String>,
+    pub native: Option<String>,
+}
+
+/// The effective pin: catalog override first, registry spec as the fallback.
+pub fn effective_pin(
+    overrides: Option<&PinOverrides>,
+    descriptor: &AgentDescriptor,
+    role: &ArtifactRole,
+) -> Option<String> {
+    let from_catalog = overrides.and_then(|overrides| match role {
+        ArtifactRole::AgentProcess => overrides.agent_process.clone(),
+        ArtifactRole::NativeCli => overrides.native.clone(),
+    });
+    from_catalog.or_else(|| pinned_version_for(descriptor, role))
+}
+
 /// The declared version pin for an agent-process install spec, when the spec
 /// carries one (registry npm package pins). Native CLIs are attested, not
 /// pinned, until the catalog supplies pins.
@@ -186,5 +207,29 @@ mod tests {
         assert!(pinned.is_some(), "claude agent process should carry a pin");
         // Native CLIs are attested, not pinned, in the registry era.
         assert_eq!(pinned_version_for(&claude, &ArtifactRole::NativeCli), None);
+    }
+
+    #[test]
+    fn catalog_pin_overrides_registry_pin_and_falls_back() {
+        use crate::domains::agents::registry;
+        let claude = registry::descriptor("claude").expect("claude");
+        let overrides = PinOverrides {
+            agent_process: Some("9.9.9".into()),
+            native: Some("2.0.0".into()),
+        };
+        assert_eq!(
+            effective_pin(Some(&overrides), &claude, &ArtifactRole::AgentProcess).as_deref(),
+            Some("9.9.9")
+        );
+        assert_eq!(
+            effective_pin(Some(&overrides), &claude, &ArtifactRole::NativeCli).as_deref(),
+            Some("2.0.0")
+        );
+        // absent overrides fall back to the registry-derived pin
+        assert_eq!(
+            effective_pin(None, &claude, &ArtifactRole::AgentProcess),
+            pinned_version_for(&claude, &ArtifactRole::AgentProcess)
+        );
+        assert_eq!(effective_pin(None, &claude, &ArtifactRole::NativeCli), None);
     }
 }

@@ -85,6 +85,12 @@ impl WorkerStore {
                     CHECK (legacy_exposure_polling_enabled IN (0, 1)),
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS catalog_push_state (
+                catalog TEXT PRIMARY KEY,
+                pushed_version TEXT NOT NULL,
+                etag TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             CREATE TABLE IF NOT EXISTS applied_revisions (
                 domain TEXT PRIMARY KEY,
                 applied_revision INTEGER NOT NULL DEFAULT 0,

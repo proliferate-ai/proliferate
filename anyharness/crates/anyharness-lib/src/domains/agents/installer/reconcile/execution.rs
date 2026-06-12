@@ -82,6 +82,7 @@ impl AgentReconcileService {
         runtime_home: PathBuf,
         reinstall: bool,
         agent_seed_store: Option<AgentSeedStore>,
+        catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
     ) -> AgentReconcileJobSnapshot {
         let snapshot = {
             let mut current = self.job.lock().await;
@@ -134,6 +135,7 @@ impl AgentReconcileService {
                 runtime_home,
                 reinstall,
                 agent_seed_store,
+                catalog,
             )
             .await;
         });
@@ -164,6 +166,7 @@ async fn run_reconcile_job(
     runtime_home: PathBuf,
     reinstall: bool,
     agent_seed_store: Option<AgentSeedStore>,
+    catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
 ) {
     let started = Instant::now();
     if update_job(&jobs, &job_id, |job| {
@@ -208,8 +211,12 @@ async fn run_reconcile_job(
 
         let agent_runtime_home = runtime_home.clone();
         let options = options.clone();
+        let agent_catalog = catalog.clone();
         let result = match tokio::task::spawn_blocking(move || {
-            reconcile_agent(&descriptor, &agent_runtime_home, &options)
+            let pins = agent_catalog
+                .as_ref()
+                .and_then(|catalog| catalog.pin_overrides(descriptor.kind.as_str()));
+            reconcile_agent(&descriptor, &agent_runtime_home, &options, pins.as_ref())
         })
         .await
         {
@@ -349,6 +356,7 @@ mod tests {
                 PathBuf::from("/tmp/anyharness-test"),
                 true,
                 None,
+                None,
             )
             .await;
 
@@ -367,6 +375,7 @@ mod tests {
                 Vec::new(),
                 PathBuf::from("/tmp/anyharness-empty"),
                 true,
+                None,
                 None,
             )
             .await;

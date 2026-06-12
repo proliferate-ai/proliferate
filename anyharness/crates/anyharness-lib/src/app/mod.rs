@@ -8,6 +8,7 @@ use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
 use crate::domains::agents::auth::{AgentAuthConfigStore, AgentAuthService};
+use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
@@ -171,14 +172,15 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
+        let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled());
         let agent_runtime = Arc::new(AgentRuntime::new(
             runtime_home.clone(),
             agent_reconcile_service.clone(),
             agent_seed_store.clone(),
+            AgentCatalogService::new(catalog_sync_service.clone()),
         ));
-        let catalog_sync_service = Arc::new(CatalogSyncService::from_bundled(
-            catalog_applied_reconcile_poke(agent_runtime.clone()),
-        ));
+        catalog_sync_service
+            .set_catalog_applied_poke(catalog_applied_reconcile_poke(agent_runtime.clone()));
         let agent_auth_service = Arc::new(AgentAuthService::new(
             AgentAuthConfigStore::new(db.clone()),
             session_data_cipher.clone(),
@@ -223,6 +225,7 @@ impl AppState {
             WorkspaceStore::new(db.clone()),
             DynamicModelRegistryStore::new(db.clone()),
             agent_auth_service.clone(),
+            AgentCatalogService::new(catalog_sync_service.clone()),
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));

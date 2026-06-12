@@ -288,7 +288,7 @@ mod tests {
         let catalog = parse_draft();
 
         assert_eq!(catalog.schema_version, 2);
-        assert_eq!(catalog.catalog_version, "2026-06-10.6");
+        assert_eq!(catalog.catalog_version, draft_catalog_version().as_str());
         let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
         assert_eq!(probed_against.registry_version, None);
         assert_eq!(catalog.agents.len(), 5);
@@ -310,7 +310,7 @@ mod tests {
                 .iter()
                 .map(|context| context.id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["anthropic-api", "anthropic-oauth"]
+            vec!["anthropic-api", "anthropic-oauth", "bedrock"]
         );
         let sonnet = &claude.session.models[0];
         assert_eq!(sonnet.id, "sonnet");
@@ -331,11 +331,24 @@ mod tests {
         let mapping = model_control.mapping.as_ref().expect("model mapping");
         assert_eq!(mapping.switch_via.as_deref(), Some("setSessionModel"));
         assert_eq!(mapping.variant_syntax.as_deref(), Some("slash-effort"));
-        let gpt = &codex.session.models[0];
-        let provenance = gpt.provenance.as_ref().expect("model provenance");
+        // Variant families are draft data — anchor on the stable shape, not a
+        // fixed model id (the probed model list moves between catalog runs).
+        let with_variants = codex
+            .session
+            .models
+            .iter()
+            .find(|model| {
+                model
+                    .provenance
+                    .as_ref()
+                    .is_some_and(|provenance| !provenance.variant_ids.is_empty())
+            })
+            .expect("some codex model carries variant ids");
+        let provenance = with_variants.provenance.as_ref().expect("provenance");
         assert!(provenance
             .variant_ids
-            .contains(&"gpt-5.5/xhigh".to_string()));
+            .iter()
+            .any(|variant| variant.starts_with(&format!("{}/", with_variants.id))));
 
         let cursor = &catalog.agents[2];
         assert!(cursor.provenance.attestation.is_none());
@@ -403,5 +416,16 @@ mod tests {
             AgentCatalogAuthSignal::Env("ANTHROPIC_API_KEY".to_string())
         );
         assert_eq!(leaf.depth(), 1);
+    }
+
+    fn draft_catalog_version() -> String {
+        let text = std::fs::read_to_string(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../../scripts/agent-catalog/catalog.draft.json"),
+        )
+        .expect("read draft catalog");
+        serde_json::from_str::<serde_json::Value>(&text).expect("parse draft")["catalogVersion"]
+            .as_str()
+            .expect("catalogVersion")
+            .to_string()
     }
 }

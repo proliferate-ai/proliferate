@@ -36,6 +36,13 @@ pub struct ActiveAuthContexts {
 }
 
 impl ActiveAuthContexts {
+    #[cfg(test)]
+    pub fn test_from_ids<I: Into<String>>(ids: impl IntoIterator<Item = I>) -> Self {
+        Self {
+            ids: ids.into_iter().map(Into::into).collect(),
+        }
+    }
+
     pub fn ids(&self) -> &[String] {
         &self.ids
     }

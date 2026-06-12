@@ -59,8 +59,19 @@ pub fn install_agent(
     runtime_home: &Path,
     options: &InstallOptions,
 ) -> Result<Vec<InstalledArtifactResult>, InstallError> {
+    install_agent_with_pins(descriptor, runtime_home, options, None)
+}
+
+/// Install with catalog-supplied pin overrides (the v2-era path: catalog owns
+/// WHICH versions; the registry spec is the fallback).
+pub fn install_agent_with_pins(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    options: &InstallOptions,
+    catalog_pins: Option<&super::install_policy::PinOverrides>,
+) -> Result<Vec<InstalledArtifactResult>, InstallError> {
     let _install_lock = AgentInstallLock::acquire_agent(runtime_home, &descriptor.kind)?;
-    let plan = plan_for_descriptor(descriptor, runtime_home, options.reinstall);
+    let plan = plan_for_descriptor(descriptor, runtime_home, options.reinstall, catalog_pins);
     if plan.has_reinstalls() {
         for artifact in &plan.artifacts {
             if let Some(reason) = &artifact.reinstall {
@@ -161,8 +172,9 @@ pub(crate) fn plan_for_descriptor(
     descriptor: &AgentDescriptor,
     runtime_home: &Path,
     reinstall_requested: bool,
+    catalog_pins: Option<&super::install_policy::PinOverrides>,
 ) -> super::install_policy::InstallPlan {
-    use super::install_policy::{plan_artifact, pinned_version_for, ArtifactFacts, PlannedArtifact};
+    use super::install_policy::{effective_pin, plan_artifact, ArtifactFacts, PlannedArtifact};
 
     let manifest = super::manifest::read_manifest(runtime_home, descriptor.kind.as_str());
     let mut roles = Vec::new();
@@ -186,7 +198,7 @@ pub(crate) fn plan_for_descriptor(
                 Some(&observed == recorded)
             });
             let facts = ArtifactFacts {
-                pinned_version: pinned_version_for(descriptor, &role),
+                pinned_version: effective_pin(catalog_pins, descriptor, &role),
                 manifest_version: entry.and_then(|entry| entry.version.clone()),
                 checksum_matches,
             };
