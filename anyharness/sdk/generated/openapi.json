@@ -5928,6 +5928,9 @@
           "agentKind": {
             "type": "string"
           },
+          "authSlotId": {
+            "type": "string"
+          },
           "credentialId": {
             "type": "string"
           },
@@ -6000,6 +6003,7 @@
         "type": "object",
         "required": [
           "agentKind",
+          "authSlotId",
           "materializationMode",
           "credentialId",
           "credentialRevision",
@@ -6011,6 +6015,9 @@
         ],
         "properties": {
           "agentKind": {
+            "type": "string"
+          },
+          "authSlotId": {
             "type": "string"
           },
           "credentialId": {

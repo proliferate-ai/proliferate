@@ -41,6 +41,9 @@ from proliferate.server.cloud.agent_auth.models import (
 from proliferate.server.cloud.agent_auth.provider_keys import (
     _ensure_bifrost_provider_key_for_managed_budget,
 )
+from proliferate.server.cloud.agent_auth.registry import (
+    credential_provider_id_for_provider_kind,
+)
 from proliferate.server.cloud.agent_auth.value_redaction import (
     _budget_amount,
     _safe_error_message,
@@ -111,18 +114,19 @@ async def _reconcile_bifrost_managed_budget_subject(
         budget_duration = budget.budget_duration or AGENT_GATEWAY_BUDGET_DURATION_V1
 
     managed_provider_plans: list[tuple[str, tuple[GatewayModelDeploymentRequest, ...]]] = []
-    seen_provider_kinds: set[str] = set()
+    seen_credential_provider_ids: set[str] = set()
     for agent_kind in _managed_credit_agent_kinds():
         provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
-        if provider_kind in seen_provider_kinds:
+        credential_provider_id = credential_provider_id_for_provider_kind(provider_kind)
+        if credential_provider_id in seen_credential_provider_ids:
             continue
         deployments = _gateway_deployments_for_credential(
-            agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
             provider_kind=provider_kind,
         )
         if deployments:
             managed_provider_plans.append((provider_kind, deployments))
-            seen_provider_kinds.add(provider_kind)
+            seen_credential_provider_ids.add(credential_provider_id)
     if not managed_provider_plans:
         return await _mark_bifrost_budget_failed(
             db,

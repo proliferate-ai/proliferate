@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::readiness::service::resolve_agent_with_env;
+use crate::domains::agents::registry;
 use crate::domains::sessions::extensions::SessionTurnFinishedContext;
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
@@ -289,10 +289,7 @@ impl SessionRuntime {
         );
 
         let descriptor_lookup_started = Instant::now();
-        let registry = built_in_registry();
-        let descriptor = registry
-            .iter()
-            .find(|descriptor| descriptor.kind.as_str() == record.agent_kind)
+        let descriptor = registry::descriptor(&record.agent_kind)
             .ok_or_else(|| StartSessionError::AgentDescriptorNotFound(record.agent_kind.clone()))?;
         tracing::info!(
             session_id = %record.id,
@@ -307,7 +304,7 @@ impl SessionRuntime {
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
         let agent_auth_overlay = self
-            .agent_auth_config_service
+            .agent_auth_service
             .launch_overlay(
                 &record.agent_kind,
                 record.agent_auth_scope.as_ref(),
@@ -318,7 +315,7 @@ impl SessionRuntime {
         readiness_env.extend(agent_auth_overlay.support_env.clone());
         readiness_env.extend(agent_auth_overlay.protected_env.clone());
         let agent_resolution_started = Instant::now();
-        let resolved_agent = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
+        let resolved_agent = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,
@@ -472,13 +469,13 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
 }
 
 fn map_agent_auth_launch_error_to_start(
-    error: crate::domains::agents::auth_config::AgentAuthLaunchOverlayError,
+    error: crate::domains::agents::auth::AgentAuthLaunchOverlayError,
 ) -> StartSessionError {
     match error {
-        crate::domains::agents::auth_config::AgentAuthLaunchOverlayError::SelectionRequired(
+        crate::domains::agents::auth::AgentAuthLaunchOverlayError::SelectionRequired(
             required,
         ) => StartSessionError::AgentAuthSelectionRequired(required),
-        crate::domains::agents::auth_config::AgentAuthLaunchOverlayError::Internal(error) => {
+        crate::domains::agents::auth::AgentAuthLaunchOverlayError::Internal(error) => {
             StartSessionError::Internal(error)
         }
     }

@@ -38,6 +38,10 @@ from proliferate.server.cloud.agent_auth.managed_credit_rules import (
 from proliferate.server.cloud.agent_auth.models import (
     EnsureFreeManagedCreditsRequest,
 )
+from proliferate.server.cloud.agent_auth.registry import (
+    credential_provider_id_for_provider_kind,
+    default_auth_slot_id,
+)
 from proliferate.server.cloud.agent_auth.results import (
     EnsureFreeManagedCreditsResult,
     FreeManagedCreditReadyAgentModel,
@@ -255,20 +259,26 @@ async def ensure_free_managed_credits_for_user(
     credentials: list[AgentAuthCredentialRecord] = []
     policies: list[AgentGatewayPolicyRecord] = []
     ready_models: list[FreeManagedCreditReadyAgentModel] = []
+    seen_credential_ids: set[UUID] = set()
+    seen_policy_ids: set[UUID] = set()
     existing_selections = {
-        selection.agent_kind: selection
+        (selection.agent_kind, selection.auth_slot_id): selection
         for selection in await store.list_selections_for_profile(db, profile.id)
     }
     for agent_kind in requested_agent_kinds:
         provider_kind, deployments = _managed_credit_deployments_for_agent(agent_kind)
         if not deployments:
             continue
+        auth_slot_id = default_auth_slot_id(agent_kind)
+        if auth_slot_id is None:
+            continue
+        credential_provider_id = credential_provider_id_for_provider_kind(provider_kind)
         credential = await store.get_managed_gateway_credential_for_owner(
             db,
             owner_scope="personal",
             owner_user_id=actor_user_id,
             organization_id=None,
-            agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
         )
         redacted_summary_json = json.dumps(
             {
@@ -285,7 +295,7 @@ async def ensure_free_managed_credits_for_user(
                 owner_user_id=actor_user_id,
                 organization_id=None,
                 created_by_user_id=actor_user_id,
-                agent_kind=agent_kind,
+                credential_provider_id=credential_provider_id,
                 credential_kind="managed_gateway",
                 display_name="Proliferate free credits",
                 redacted_summary_json=redacted_summary_json,
@@ -327,8 +337,12 @@ async def ensure_free_managed_credits_for_user(
                 )
                 or credential
             )
-        credentials.append(credential)
-        policies.append(policy)
+        if credential.id not in seen_credential_ids:
+            credentials.append(credential)
+            seen_credential_ids.add(credential.id)
+        if policy.id not in seen_policy_ids:
+            policies.append(policy)
+            seen_policy_ids.add(policy.id)
         if policy.status == "ready" and policy.litellm_sync_status == "synced":
             ready_models.append(
                 FreeManagedCreditReadyAgentModel(
@@ -339,7 +353,7 @@ async def ensure_free_managed_credits_for_user(
                     credential_id=credential.id,
                 )
             )
-            existing_selection = existing_selections.get(agent_kind)
+            existing_selection = existing_selections.get((agent_kind, auth_slot_id))
             should_select_managed_credential = existing_selection is None
             if existing_selection is not None:
                 existing_credential = await store.get_credential(
@@ -373,6 +387,7 @@ async def ensure_free_managed_credits_for_user(
                     actor_user_id=actor_user_id,
                     sandbox_profile_id=profile.id,
                     agent_kind=agent_kind,
+                    auth_slot_id=auth_slot_id,
                     credential_id=credential.id,
                     credential_share_id=None,
                     force_restart=existing_selection is not None,

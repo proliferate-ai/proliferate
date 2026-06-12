@@ -154,7 +154,6 @@ export interface CloudAgentCatalogAgentInput {
   kind: string;
   displayName: string;
   description?: string | null;
-  process?: Record<string, unknown> | null;
   session: CloudAgentCatalogSessionInput;
 }
 

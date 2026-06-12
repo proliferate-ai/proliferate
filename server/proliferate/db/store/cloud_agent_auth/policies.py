@@ -134,14 +134,14 @@ async def get_managed_gateway_credential(
     db: AsyncSession,
     *,
     organization_id: UUID,
-    agent_kind: str,
+    credential_provider_id: str,
 ) -> AgentAuthCredentialRecord | None:
     return await get_managed_gateway_credential_for_owner(
         db,
         owner_scope="organization",
         owner_user_id=None,
         organization_id=organization_id,
-        agent_kind=agent_kind,
+        credential_provider_id=credential_provider_id,
     )
 
 
@@ -151,7 +151,7 @@ async def get_managed_gateway_credential_for_owner(
     owner_scope: str,
     owner_user_id: UUID | None,
     organization_id: UUID | None,
-    agent_kind: str,
+    credential_provider_id: str,
 ) -> AgentAuthCredentialRecord | None:
     owner_filters = [AgentAuthCredential.owner_scope == owner_scope]
     if owner_scope == "personal":
@@ -178,7 +178,7 @@ async def get_managed_gateway_credential_for_owner(
                 )
                 .where(
                     *owner_filters,
-                    AgentAuthCredential.agent_kind == agent_kind,
+                    AgentAuthCredential.credential_provider_id == credential_provider_id,
                     AgentAuthCredential.credential_kind == "managed_gateway",
                     AgentAuthCredential.revoked_at.is_(None),
                     AgentAuthCredential.status != "revoked",

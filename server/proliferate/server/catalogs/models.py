@@ -105,7 +105,6 @@ class AgentCatalogAgent(BaseModel):
     kind: Literal["claude", "codex", "gemini", "cursor", "opencode"]
     displayName: str
     description: str | None = None
-    process: dict[str, object]
     session: AgentCatalogSession
 
 

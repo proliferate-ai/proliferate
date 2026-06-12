@@ -38,7 +38,6 @@
       "required": [
         "kind",
         "displayName",
-        "process",
         "session"
       ],
       "additionalProperties": false,
@@ -61,9 +60,6 @@
             "string",
             "null"
           ]
-        },
-        "process": {
-          "type": "object"
         },
         "session": {
           "$ref": "#/$defs/session"

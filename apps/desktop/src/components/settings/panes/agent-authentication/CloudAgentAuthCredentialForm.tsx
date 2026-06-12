@@ -15,7 +15,6 @@ import {
   agentAuthGatewayCreatePayloadReady,
   agentAuthGatewayProviderOptionsForCapabilities,
   buildAgentAuthGatewayCredentialRequest,
-  type AgentAuthGatewaySelectableAgentKind,
   type AgentAuthGatewayProviderChoice,
 } from "@/lib/domain/agent-auth/agent-auth-gateway-form";
 import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
@@ -54,7 +53,6 @@ export function CloudAgentAuthCredentialForm({
   const [providerKind, setProviderKind] = useState<AgentAuthGatewayProviderChoice>(
     "anthropic_api_key",
   );
-  const [agentKind, setAgentKind] = useState<AgentAuthGatewaySelectableAgentKind>("codex");
   const [ownerScope, setOwnerScope] =
     useState<"personal" | "organization">(allowedOwnerScopes[0] ?? "personal");
   const [displayName, setDisplayName] = useState("");
@@ -95,27 +93,9 @@ export function CloudAgentAuthCredentialForm({
     }
   }, [allowedOwnerScopes, ownerScope]);
 
-  useEffect(() => {
-    if (providerKind === "gemini_api_key" && agentKind !== "gemini") {
-      setAgentKind("gemini");
-      return;
-    }
-    if (providerKind !== "gemini_api_key" && agentKind === "gemini") {
-      setAgentKind("codex");
-      return;
-    }
-    if (
-      agentKind === "opencode"
-      && agentGatewayCapabilities?.opencodeGatewayEnabled !== true
-    ) {
-      setAgentKind("codex");
-    }
-  }, [agentGatewayCapabilities?.opencodeGatewayEnabled, agentKind, providerKind]);
-
   async function handleCreateCredential() {
     const body = buildAgentAuthGatewayCredentialRequest({
       providerKind,
-      agentKind,
       ownerScope,
       organizationId: credentialOrganizationId,
       displayName,
@@ -225,34 +205,6 @@ export function CloudAgentAuthCredentialForm({
               </Select>
             </div>
           </div>
-
-          {(providerKind === "openai_api_key"
-            || providerKind === "openai_compatible"
-            || providerKind === "gemini_api_key") && (
-            <div>
-              <Label htmlFor="agent-auth-agent-kind">Harness</Label>
-              <Select
-                id="agent-auth-agent-kind"
-                value={agentKind}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-                  setAgentKind(event.target.value as AgentAuthGatewaySelectableAgentKind)}
-              >
-                {providerKind === "gemini_api_key" ? (
-                  <option value="gemini">Gemini</option>
-                ) : (
-                  <>
-                    <option value="codex">Codex</option>
-                    <option
-                      value="opencode"
-                      disabled={agentGatewayCapabilities?.opencodeGatewayEnabled !== true}
-                    >
-                      OpenCode
-                    </option>
-                  </>
-                )}
-              </Select>
-            </div>
-          )}
 
           <div>
             <Label htmlFor="agent-auth-display-name">Display name</Label>

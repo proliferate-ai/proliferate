@@ -25,7 +25,7 @@ pub(super) fn compute_readiness(
         }
         CredentialState::MissingEnv => ResolvedAgentStatus::CredentialsRequired,
         CredentialState::LoginRequired => {
-            if auth.login.is_some() {
+            if auth.supports_login() {
                 ResolvedAgentStatus::LoginRequired
             } else {
                 ResolvedAgentStatus::CredentialsRequired

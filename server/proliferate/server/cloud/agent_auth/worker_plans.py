@@ -26,6 +26,7 @@ from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthSelectionPlan,
     WorkerAgentAuthSyncedFilesConfig,
 )
+from proliferate.server.cloud.agent_auth.registry import default_auth_slot_id
 from proliferate.server.cloud.agent_auth.runtime_keys import _worker_gateway_config
 from proliferate.server.cloud.agent_auth.synced_files import _worker_synced_files_config
 from proliferate.server.cloud.agent_auth.worker_cleanup import (
@@ -83,6 +84,7 @@ async def _worker_selection_plan(
         )
         return WorkerAgentAuthSelectionPlan(
             agentKind=selection.agent_kind,
+            authSlotId=selection.auth_slot_id,
             materializationMode=selection.materialization_mode,
             credentialId=credential.id,
             credentialRevision=credential.revision,
@@ -95,6 +97,7 @@ async def _worker_selection_plan(
         synced_files = await _worker_synced_files_config(db, credential, selection)
         return WorkerAgentAuthSelectionPlan(
             agentKind=selection.agent_kind,
+            authSlotId=selection.auth_slot_id,
             materializationMode=selection.materialization_mode,
             credentialId=credential.id,
             credentialRevision=credential.revision,
@@ -132,6 +135,7 @@ async def _worker_cleanup_selection_plan(
         return None
     return WorkerAgentAuthSelectionPlan(
         agentKind=selection.agent_kind,
+        authSlotId=selection.auth_slot_id,
         materializationMode=selection.materialization_mode,
         credentialId=selection.credential_id,
         credentialRevision=selection.selected_revision,
@@ -170,6 +174,9 @@ def _worker_cleanup_plan_from_entry(
     credential_revision = entry.get("credentialRevision")
     if not isinstance(agent_kind, str) or not isinstance(materialization_mode, str):
         return None
+    auth_slot_id = _cleanup_entry_auth_slot_id(entry, agent_kind)
+    if auth_slot_id is None:
+        return None
     if not isinstance(credential_revision, int) or isinstance(credential_revision, bool):
         return None
     credential_share_id = _optional_uuid_value(entry.get("credentialShareId"))
@@ -181,6 +188,7 @@ def _worker_cleanup_plan_from_entry(
         return None
     return WorkerAgentAuthSelectionPlan(
         agentKind=agent_kind,
+        authSlotId=auth_slot_id,
         materializationMode=materialization_mode,
         credentialId=credential_id,
         credentialRevision=credential_revision,
@@ -194,6 +202,15 @@ def _worker_cleanup_plan_from_entry(
             cleanup=cleanup,
         ),
     )
+
+
+def _cleanup_entry_auth_slot_id(entry: dict[str, object], agent_kind: str) -> str | None:
+    auth_slot_id = entry.get("authSlotId")
+    if isinstance(auth_slot_id, str) and auth_slot_id:
+        return auth_slot_id
+    if "authSlotId" in entry:
+        return None
+    return default_auth_slot_id(agent_kind)
 
 
 def _optional_uuid_value(value: object) -> UUID | None:

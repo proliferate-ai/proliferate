@@ -109,7 +109,7 @@ fn recorded_source_spec(managed_dir: &Path) -> Option<String> {
     }
 }
 
-pub(super) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Option<String> {
+pub(crate) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Option<String> {
     if is_npm_non_registry_spec(package) {
         if non_registry_install_matches(package, managed_dir) {
             return None;
@@ -324,7 +324,7 @@ mod tests {
         std::fs::write(package_dir.join("package.json"), r#"{"version":"0.11.6"}"#)
             .expect("write installed package metadata");
 
-        let issue = managed_npm_install_issue("@proliferateai/codex-acp@0.11.7", &managed_dir);
+        let issue = managed_npm_install_issue("@proliferateai/codex-acp@0.11.8", &managed_dir);
 
         assert!(issue.is_some());
         let _ = std::fs::remove_dir_all(managed_dir);

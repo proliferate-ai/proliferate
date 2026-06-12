@@ -61,9 +61,12 @@ anyharness/crates/anyharness-lib/src/domains/agents/
     bundled.rs
     schema.rs
     validation.rs
-    projection/
-      descriptors.rs
-      models.rs
+    projection.rs
+
+  registry/
+    bundled.rs
+    schema.rs
+    projection.rs
 
   model_registry/
     mod.rs
@@ -78,7 +81,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/
 
   readiness/
     launch_options.rs
-    resolver.rs
+    service.rs
 
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/
   model_discovery.rs
@@ -797,12 +800,14 @@ anyharness/crates/anyharness-lib/src/domains/agents/
     validation.rs
       Validates catalog invariants.
 
-    projection/
-      descriptors.rs
-        Trusted catalog -> install/launch descriptors.
+    projection.rs
+      Trusted catalog -> fallback model metadata.
 
-      models.rs
-        Trusted catalog -> fallback model metadata.
+  registry/
+    bundled.rs
+    schema.rs
+    projection.rs
+      Trusted `catalogs/agents/v1/registry.json` -> install/launch/auth descriptors.
 
   model_registry/
     mod.rs
@@ -845,7 +850,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/
     launch_options.rs
       Includes effective model registry in launch-option responses.
 
-    resolver.rs
+    service.rs
       Still owns install/auth/readiness status. It does not run model refresh.
 
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/

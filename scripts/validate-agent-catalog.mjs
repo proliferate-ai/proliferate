@@ -4,7 +4,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 const CATALOG_PATH = path.resolve("catalogs/agents/v1/catalog.json");
+const REGISTRY_PATH = path.resolve("catalogs/agents/v1/registry.json");
 const VALID_AGENT_KINDS = new Set(["claude", "codex", "gemini", "cursor", "opencode"]);
+const VALID_DISCOVERY_KINDS = new Set(["none", "claude", "codex", "gemini", "opencode", "cursor"]);
+const VALID_READINESS_POLICIES = new Set([
+  "any_required_slot",
+  "all_required_slots",
+  "provider_managed",
+  "none",
+]);
+const VALID_PROTOCOL_FACADES = new Set(["anthropic", "openai", "genai"]);
+const VALID_CREDENTIAL_PROVIDER_IDS = new Set(["anthropic", "openai", "gemini", "cursor"]);
 const VALID_STATUSES = new Set(["candidate", "active", "deprecated", "hidden"]);
 const VALID_CONTROL_TYPES = new Set(["select"]);
 const VALID_VALUE_SOURCES = new Set(["inline", "agentModels", "discoveredModels"]);
@@ -29,6 +39,23 @@ const VALID_CREATE_FIELDS_BY_CONTROL = new Map([
 ]);
 const VALID_LIVE_SETTERS = new Set(["runtime_control"]);
 const VALID_REMEDIATION_KINDS = new Set(["managed_reinstall", "external_update", "restart"]);
+const VALID_NATIVE_INSTALL_KINDS = new Set([
+  "direct_binary",
+  "tarball_release",
+  "path_only",
+  "manual",
+]);
+const VALID_AGENT_PROCESS_INSTALL_KINDS = new Set([
+  "registry_backed",
+  "managed_npm_package",
+  "path_only",
+  "manual",
+]);
+const VALID_AGENT_PROCESS_FALLBACK_KINDS = new Set([
+  "npm_package",
+  "native_subcommand",
+  "binary_hint",
+]);
 
 function fail(message) {
   console.error(`agent catalog validation failed: ${message}`);
@@ -41,6 +68,28 @@ function assertString(value, field) {
     return false;
   }
   return true;
+}
+
+function assertOptionalString(value, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  assertString(value, field);
+}
+
+function validateStringMap(value, field, { allowEmpty = true } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    fail(`${field} must be an object`);
+    return;
+  }
+  const entries = Object.entries(value);
+  if (!allowEmpty && entries.length === 0) {
+    fail(`${field} must not be empty`);
+  }
+  for (const [key, mapValue] of entries) {
+    assertString(key, `${field}.key`);
+    assertString(mapValue, `${field}.${key}`);
+  }
 }
 
 function validateModel(model, agentKind, modelIds, aliasIds) {
@@ -161,11 +210,212 @@ function validateControl(control, agentKind, modelIds) {
   }
 }
 
-function validateProcess(process, agentKind) {
-  assertString(process?.launch?.executableName, `${agentKind}.process.launch.executableName`);
-  assertString(process?.auth?.discovery, `${agentKind}.process.auth.discovery`);
-  if (!process?.agentProcess?.install?.kind) {
-    fail(`${agentKind}.process.agentProcess.install.kind is required`);
+function validateStringArray(values, field, { allowEmpty = true } = {}) {
+  if (!Array.isArray(values)) {
+    fail(`${field} must be an array`);
+    return;
+  }
+  if (!allowEmpty && values.length === 0) {
+    fail(`${field} must not be empty`);
+  }
+  for (const value of values) {
+    assertString(value, field);
+  }
+}
+
+function validateNpmInstallFields(install, field) {
+  assertString(install?.package, `${field}.package`);
+  assertOptionalString(install?.packageSubdir, `${field}.packageSubdir`);
+  assertOptionalString(install?.sourceBuildBinaryName, `${field}.sourceBuildBinaryName`);
+  assertString(install?.executableRelpath, `${field}.executableRelpath`);
+}
+
+function validateAgentProcessFallback(fallback, field) {
+  if (!VALID_AGENT_PROCESS_FALLBACK_KINDS.has(fallback?.kind)) {
+    fail(`${field}.kind is invalid`);
+    return;
+  }
+  if (fallback.kind === "npm_package") {
+    validateNpmInstallFields(fallback, field);
+    return;
+  }
+  if (fallback.kind === "native_subcommand") {
+    validateStringArray(fallback.args, `${field}.args`);
+    return;
+  }
+  if (fallback.kind === "binary_hint") {
+    validateStringArray(fallback.candidateBinaries, `${field}.candidateBinaries`, { allowEmpty: false });
+    validateStringArray(fallback.args, `${field}.args`);
+  }
+}
+
+function validateAgentProcessInstall(install, field) {
+  if (!VALID_AGENT_PROCESS_INSTALL_KINDS.has(install?.kind)) {
+    fail(`${field}.kind is invalid`);
+    return;
+  }
+  if (install.kind === "registry_backed") {
+    assertString(install.registryId, `${field}.registryId`);
+    validateAgentProcessFallback(install.fallback, `${field}.fallback`);
+    return;
+  }
+  if (install.kind === "managed_npm_package") {
+    validateNpmInstallFields(install, field);
+    return;
+  }
+  if (install.kind === "path_only") {
+    validateStringArray(install.candidateBinaries, `${field}.candidateBinaries`, { allowEmpty: false });
+    validateStringArray(install.defaultArgs, `${field}.defaultArgs`);
+    assertOptionalString(install.docsUrl, `${field}.docsUrl`);
+    return;
+  }
+  if (install.kind === "manual") {
+    assertString(install.docsUrl, `${field}.docsUrl`);
+  }
+}
+
+function validateNativeInstall(install, field) {
+  if (!VALID_NATIVE_INSTALL_KINDS.has(install?.kind)) {
+    fail(`${field}.kind is invalid`);
+    return;
+  }
+  if (install.kind === "direct_binary") {
+    assertOptionalString(install.latestVersionUrl, `${field}.latestVersionUrl`);
+    assertString(install.binaryUrlTemplate, `${field}.binaryUrlTemplate`);
+    validateStringMap(install.platformMap, `${field}.platformMap`, { allowEmpty: false });
+    return;
+  }
+  if (install.kind === "tarball_release") {
+    assertString(install.latestUrlTemplate, `${field}.latestUrlTemplate`);
+    assertString(install.versionedUrlTemplate, `${field}.versionedUrlTemplate`);
+    assertString(install.expectedBinaryTemplate, `${field}.expectedBinaryTemplate`);
+    validateStringMap(install.platformMap, `${field}.platformMap`, { allowEmpty: false });
+    return;
+  }
+  if (install.kind === "path_only") {
+    validateStringArray(install.candidateBinaries, `${field}.candidateBinaries`, { allowEmpty: false });
+    assertOptionalString(install.docsUrl, `${field}.docsUrl`);
+    return;
+  }
+  if (install.kind === "manual") {
+    assertString(install.docsUrl, `${field}.docsUrl`);
+  }
+}
+
+function validateRegistryProcess(agent) {
+  const agentKind = agent?.kind ?? "agent";
+  assertString(agent?.launch?.executableName, `${agentKind}.launch.executableName`);
+  if (!Array.isArray(agent?.launch?.defaultArgs)) {
+    fail(`${agentKind}.launch.defaultArgs must be an array`);
+  }
+  if (!agent?.agentProcess?.install?.kind) {
+    fail(`${agentKind}.agentProcess.install.kind is required`);
+  } else {
+    validateAgentProcessInstall(agent.agentProcess.install, `${agentKind}.agentProcess.install`);
+  }
+  if (agent.native !== null && agent.native !== undefined && !agent.native?.install?.kind) {
+    fail(`${agentKind}.native.install.kind is required when native is present`);
+  } else if (agent.native !== null && agent.native !== undefined) {
+    validateNativeInstall(agent.native.install, `${agentKind}.native.install`);
+  }
+}
+
+function validateRegistryAuth(agent) {
+  const agentKind = agent?.kind ?? "agent";
+  const auth = agent?.auth;
+  if (!VALID_READINESS_POLICIES.has(auth?.readinessPolicy)) {
+    fail(`${agentKind}.auth.readinessPolicy is invalid`);
+  }
+  if (!Array.isArray(auth?.slots)) {
+    fail(`${agentKind}.auth.slots must be an array`);
+    return;
+  }
+  if (auth.readinessPolicy !== "none" && auth.slots.length === 0) {
+    fail(`${agentKind}.auth.slots must be non-empty unless readinessPolicy is none`);
+  }
+  const slotIds = new Set();
+  const requiredSlotIds = new Set();
+  for (const slot of auth.slots) {
+    assertString(slot?.id, `${agentKind}.auth.slot.id`);
+    if (slotIds.has(slot.id)) {
+      fail(`${agentKind}.auth.slot '${slot.id}' is duplicated`);
+    }
+    slotIds.add(slot.id);
+    assertString(slot?.label, `${agentKind}.auth.${slot.id}.label`);
+    validateStringArray(
+      slot?.credentialProviderIds,
+      `${agentKind}.auth.${slot.id}.credentialProviderIds`,
+      { allowEmpty: false },
+    );
+    for (const providerId of slot.credentialProviderIds ?? []) {
+      if (!VALID_CREDENTIAL_PROVIDER_IDS.has(providerId)) {
+        fail(`${agentKind}.auth.${slot.id}.credentialProviderIds '${providerId}' is invalid`);
+      }
+    }
+    if (typeof slot?.requiredForReadiness !== "boolean") {
+      fail(`${agentKind}.auth.${slot?.id ?? "slot"}.requiredForReadiness must be boolean`);
+    } else if (slot.requiredForReadiness) {
+      requiredSlotIds.add(slot.id);
+    }
+    validateStringArray(slot?.envVars, `${agentKind}.auth.${slot.id}.envVars`);
+    if (!VALID_DISCOVERY_KINDS.has(slot?.discovery)) {
+      fail(`${agentKind}.auth.${slot.id}.discovery is invalid`);
+    }
+    if (slot.login !== null && slot.login !== undefined) {
+      assertString(slot.login?.label, `${agentKind}.auth.${slot.id}.login.label`);
+      assertString(slot.login?.command?.program, `${agentKind}.auth.${slot.id}.login.command.program`);
+      if (!Array.isArray(slot.login?.command?.args)) {
+        fail(`${agentKind}.auth.${slot.id}.login.command.args must be an array`);
+      }
+      if (typeof slot.login?.reusesUserState !== "boolean") {
+        fail(`${agentKind}.auth.${slot.id}.login.reusesUserState must be boolean`);
+      }
+    }
+
+    const gateway = slot.materialization?.gatewayEnv;
+    if (gateway !== null && gateway !== undefined) {
+      if (!VALID_PROTOCOL_FACADES.has(gateway.protocolFacade)) {
+        fail(`${agentKind}.auth.${slot.id}.materialization.gatewayEnv.protocolFacade is invalid`);
+      }
+      validateStringArray(
+        gateway.protectedEnvKeys,
+        `${agentKind}.auth.${slot.id}.materialization.gatewayEnv.protectedEnvKeys`,
+      );
+      validateStringArray(
+        gateway.supportEnvKeys,
+        `${agentKind}.auth.${slot.id}.materialization.gatewayEnv.supportEnvKeys`,
+      );
+    }
+    const synced = slot.materialization?.syncedFiles;
+    if (synced !== null && synced !== undefined) {
+      validateStringArray(
+        synced.protectedEnvKeys,
+        `${agentKind}.auth.${slot.id}.materialization.syncedFiles.protectedEnvKeys`,
+      );
+      validateStringArray(
+        synced.allowedFilePaths,
+        `${agentKind}.auth.${slot.id}.materialization.syncedFiles.allowedFilePaths`,
+      );
+      validateStringArray(
+        synced.cleanupFilePaths,
+        `${agentKind}.auth.${slot.id}.materialization.syncedFiles.cleanupFilePaths`,
+      );
+      const allowedFilePaths = new Set(synced.allowedFilePaths ?? []);
+      for (const cleanupPath of synced.cleanupFilePaths ?? []) {
+        if (!allowedFilePaths.has(cleanupPath)) {
+          fail(
+            `${agentKind}.auth.${slot.id}.materialization.syncedFiles.cleanupFilePaths `
+            + `'${cleanupPath}' must also be listed in allowedFilePaths`,
+          );
+        }
+      }
+    }
+  }
+  if (
+    (auth.readinessPolicy === "any_required_slot" || auth.readinessPolicy === "all_required_slots")
+    && requiredSlotIds.size === 0
+  ) {
+    fail(`${agentKind}.auth.readinessPolicy requires at least one required slot`);
   }
 }
 
@@ -194,7 +444,6 @@ function validateCatalog(catalog) {
     }
     agents.add(agent.kind);
     assertString(agent.displayName, `${agent.kind}.displayName`);
-    validateProcess(agent.process, agent.kind);
 
     const session = agent.session;
     assertString(session?.defaultModelId, `${agent.kind}.session.defaultModelId`);
@@ -267,11 +516,56 @@ function validateCatalog(catalog) {
   }
 }
 
+function validateRegistry(registry, catalog) {
+  if (registry.schemaVersion !== 1) {
+    fail("registry.schemaVersion must be 1");
+  }
+  assertString(registry.registryVersion, "registryVersion");
+  assertString(registry.generatedAt, "registry.generatedAt");
+  if (Number.isNaN(Date.parse(registry.generatedAt))) {
+    fail("registry.generatedAt must be an ISO timestamp");
+  }
+  if (!Array.isArray(registry.agents) || registry.agents.length === 0) {
+    fail("registry.agents must be a non-empty array");
+    return;
+  }
+
+  const catalogAgentsByKind = new Map((catalog.agents ?? []).map((agent) => [agent.kind, agent]));
+  const registryAgents = new Set();
+  for (const agent of registry.agents) {
+    assertString(agent?.kind, "registry.agent.kind");
+    if (!VALID_AGENT_KINDS.has(agent.kind)) {
+      fail(`registry agent.kind '${agent.kind}' is not supported by this runtime`);
+    }
+    if (registryAgents.has(agent.kind)) {
+      fail(`registry agent.kind '${agent.kind}' is duplicated`);
+    }
+    registryAgents.add(agent.kind);
+    assertString(agent.displayName, `${agent.kind}.displayName`);
+    if (!catalogAgentsByKind.has(agent.kind)) {
+      fail(`registry agent '${agent.kind}' is missing from catalog`);
+    } else if (catalogAgentsByKind.get(agent.kind).displayName !== agent.displayName) {
+      fail(`registry agent '${agent.kind}' displayName must match catalog`);
+    }
+    validateRegistryProcess(agent);
+    validateRegistryAuth(agent);
+  }
+
+  for (const agent of catalog.agents ?? []) {
+    if (!registryAgents.has(agent.kind)) {
+      fail(`catalog agent '${agent.kind}' is missing from registry`);
+    }
+  }
+}
+
 const catalog = JSON.parse(fs.readFileSync(CATALOG_PATH, "utf8"));
+const registry = JSON.parse(fs.readFileSync(REGISTRY_PATH, "utf8"));
 validateCatalog(catalog);
+validateRegistry(registry, catalog);
 
 if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
 console.log(`validated ${CATALOG_PATH}`);
+console.log(`validated ${REGISTRY_PATH}`);

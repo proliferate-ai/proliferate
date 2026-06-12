@@ -5,13 +5,16 @@ use anyharness_credential_discovery::{
     detect_local_auth_state as discover_local_auth_state, LocalAuthState, ProviderId,
 };
 
-use super::model::{AuthSpec, CredentialDiscoveryKind, CredentialState};
+use crate::domains::agents::model::{
+    AuthReadinessPolicy, AuthSlotSpec, AuthSpec, CredentialDiscoveryKind, CredentialState,
+    ResolvedAuthSlot,
+};
 
 /// Determine the credential state for an agent by checking env vars first,
 /// then running provider-specific local discovery, then falling back to
 /// login-required or missing-env as appropriate.
 pub fn detect_credentials(auth: &AuthSpec, home_dir: &Path) -> CredentialState {
-    detect_credentials_with_env(auth, home_dir, &BTreeMap::new())
+    detect_auth_slots(auth, home_dir).0
 }
 
 pub fn detect_credentials_with_env(
@@ -19,11 +22,43 @@ pub fn detect_credentials_with_env(
     home_dir: &Path,
     additional_env: &BTreeMap<String, String>,
 ) -> CredentialState {
-    if auth.env_vars.is_empty() && auth.discovery == CredentialDiscoveryKind::None {
-        return CredentialState::Ready;
+    detect_auth_slots_with_env(auth, home_dir, additional_env).0
+}
+
+pub fn detect_auth_slots(
+    auth: &AuthSpec,
+    home_dir: &Path,
+) -> (CredentialState, Vec<ResolvedAuthSlot>) {
+    detect_auth_slots_with_env(auth, home_dir, &BTreeMap::new())
+}
+
+pub fn detect_auth_slots_with_env(
+    auth: &AuthSpec,
+    home_dir: &Path,
+    additional_env: &BTreeMap<String, String>,
+) -> (CredentialState, Vec<ResolvedAuthSlot>) {
+    let slots = auth
+        .slots
+        .iter()
+        .map(|slot| ResolvedAuthSlot {
+            spec: slot.clone(),
+            credential_state: detect_slot_credentials(slot, home_dir, additional_env),
+        })
+        .collect::<Vec<_>>();
+
+    (aggregate_credential_state(auth, &slots), slots)
+}
+
+fn detect_slot_credentials(
+    slot: &AuthSlotSpec,
+    home_dir: &Path,
+    additional_env: &BTreeMap<String, String>,
+) -> CredentialState {
+    if slot.env_vars.is_empty() && slot.discovery == CredentialDiscoveryKind::None {
+        return CredentialState::MissingEnv;
     }
 
-    if auth
+    if slot
         .env_vars
         .iter()
         .any(|var| additional_env.contains_key(var) || std::env::var(var).is_ok())
@@ -31,19 +66,63 @@ pub fn detect_credentials_with_env(
         return CredentialState::Ready;
     }
 
-    if detect_local_auth(&auth.discovery, home_dir) {
+    if detect_local_auth(&slot.discovery, home_dir) {
         return CredentialState::ReadyViaLocalAuth;
     }
 
-    if auth.discovery == CredentialDiscoveryKind::OpenCode {
-        return CredentialState::Ready;
-    }
-
-    if auth.login.is_some() {
+    if slot.login.is_some() {
         return CredentialState::LoginRequired;
     }
 
     CredentialState::MissingEnv
+}
+
+fn aggregate_credential_state(auth: &AuthSpec, slots: &[ResolvedAuthSlot]) -> CredentialState {
+    match auth.readiness_policy {
+        AuthReadinessPolicy::None | AuthReadinessPolicy::ProviderManaged => CredentialState::Ready,
+        AuthReadinessPolicy::AnyRequiredSlot => {
+            let required = required_slots(slots);
+            if required.is_empty() {
+                return CredentialState::Ready;
+            }
+            if required.iter().any(slot_is_ready) {
+                return CredentialState::Ready;
+            }
+            preferred_missing_state(required)
+        }
+        AuthReadinessPolicy::AllRequiredSlots => {
+            let required = required_slots(slots);
+            if required.is_empty() || required.iter().all(|slot| slot_is_ready(slot)) {
+                return CredentialState::Ready;
+            }
+            preferred_missing_state(required)
+        }
+    }
+}
+
+fn required_slots(slots: &[ResolvedAuthSlot]) -> Vec<&ResolvedAuthSlot> {
+    slots
+        .iter()
+        .filter(|slot| slot.spec.required_for_readiness)
+        .collect()
+}
+
+fn slot_is_ready(slot: &&ResolvedAuthSlot) -> bool {
+    matches!(
+        slot.credential_state,
+        CredentialState::Ready | CredentialState::ReadyViaLocalAuth
+    )
+}
+
+fn preferred_missing_state(slots: Vec<&ResolvedAuthSlot>) -> CredentialState {
+    if slots
+        .iter()
+        .any(|slot| slot.credential_state == CredentialState::LoginRequired)
+    {
+        CredentialState::LoginRequired
+    } else {
+        CredentialState::MissingEnv
+    }
 }
 
 /// Dispatches to the right provider-specific detector based on the discovery kind.
@@ -213,9 +292,17 @@ mod tests {
     fn treats_opencode_auth_as_provider_managed_when_no_env_or_auth_exists() {
         let home = make_temp_home();
         let auth = AuthSpec {
-            env_vars: vec![],
-            login: None,
-            discovery: CredentialDiscoveryKind::OpenCode,
+            readiness_policy: AuthReadinessPolicy::ProviderManaged,
+            slots: vec![AuthSlotSpec {
+                id: "openai".into(),
+                label: "OpenAI".into(),
+                credential_provider_ids: vec!["openai".into()],
+                required_for_readiness: false,
+                env_vars: vec![],
+                login: None,
+                discovery: CredentialDiscoveryKind::OpenCode,
+                materialization: Default::default(),
+            }],
         };
 
         assert_eq!(detect_credentials(&auth, &home), CredentialState::Ready);

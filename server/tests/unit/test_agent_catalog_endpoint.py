@@ -5,9 +5,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from proliferate.constants.cloud import RESERVED_CLOUD_REPO_ENV_VARS
 from proliferate.server.catalogs.api import router
 from proliferate.server.catalogs.domain.schema import agent_catalog_schema_version_is_supported
 from proliferate.server.catalogs.service import CATALOG_PATH, read_agent_catalog
+from proliferate.server.cloud.agent_auth.registry import (
+    REGISTRY_PATH,
+    _resolve_registry_path,
+    registry_auth_slots,
+)
 
 
 def test_agent_catalog_endpoint_returns_typed_catalog_with_etag() -> None:
@@ -49,6 +55,33 @@ def test_agent_catalog_schema_version_policy() -> None:
 
 def test_agent_catalog_file_is_available_from_source_checkout() -> None:
     assert CATALOG_PATH.is_file()
+
+
+def test_agent_registry_file_is_available_from_source_checkout() -> None:
+    assert REGISTRY_PATH.is_file()
+
+
+def test_cloud_repo_env_reservations_cover_agent_auth_protected_env_keys() -> None:
+    protected_env_keys = set()
+    for slot in registry_auth_slots():
+        if slot.gateway_env is not None:
+            protected_env_keys.update(slot.gateway_env.protected_env_keys)
+        if slot.synced_files is not None:
+            protected_env_keys.update(slot.synced_files.protected_env_keys)
+
+    assert protected_env_keys <= RESERVED_CLOUD_REPO_ENV_VARS
+
+
+def test_agent_registry_path_resolves_server_docker_layout(tmp_path: Path) -> None:
+    app_root = tmp_path / "app"
+    packaged_registry = app_root / "catalogs" / "agents" / "v1" / "registry.json"
+    packaged_registry.parent.mkdir(parents=True)
+    packaged_registry.write_text("{}", encoding="utf-8")
+    service_path = app_root / "proliferate" / "server" / "cloud" / "agent_auth" / "registry.py"
+    service_path.parent.mkdir(parents=True)
+    service_path.write_text("", encoding="utf-8")
+
+    assert _resolve_registry_path(service_path) == packaged_registry
 
 
 def test_server_dockerfile_packages_agent_catalog() -> None:

@@ -44,6 +44,9 @@ def test_cloud_capabilities_gate_gateway_byok(monkeypatch: pytest.MonkeyPatch) -
     assert capabilities.agent_gateway.byok_providers.gemini_api_key is True
     assert capabilities.agent_gateway.byok_providers.openai_compatible is False
     assert capabilities.agent_gateway.opencode_gateway_enabled is False
+    assert all(
+        slot.agent_kind != "opencode" for slot in capabilities.agent_gateway.agent_auth_slots
+    )
 
 
 def test_cloud_capabilities_fail_closed_when_gateway_disabled(

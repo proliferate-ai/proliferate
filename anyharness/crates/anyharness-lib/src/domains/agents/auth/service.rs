@@ -1,5 +1,7 @@
-use std::collections::BTreeMap;
-use std::fmt;
+//! AgentAuthService: apply/status/launch-overlay over the encrypted selection
+//! store. resolve (load + decrypt) -> decide (overlay_policy) -> materialize
+//! (fs effects). Pure rules live in overlay_policy.rs.
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -8,31 +10,24 @@ use anyharness_contract::v1::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::domains::agents::registry;
 use crate::domains::sessions::mcp_bindings::crypto::{
     decrypt_bytes, encrypt_bytes, SessionDataCipher,
 };
 
-mod codex_config;
-mod launch;
-mod scope;
-mod status;
-mod store;
-mod validation;
-
-use self::codex_config::write_codex_config;
-use self::launch::{reject_expired_selection, selection_required_error};
-use self::scope::{default_external_scope, scope_key, LOCAL_SCOPE_KEY};
-use self::status::{no_selection_kinds, status_response};
-use self::store::AgentAuthConfigRecord;
-pub use self::store::AgentAuthConfigStore;
-use self::validation::validate_config_input;
+use super::codex_config::write_codex_config;
+use super::overlay_policy::{self, EnvOverlayPlan};
+use super::scope::{default_external_scope, scope_key, LOCAL_SCOPE_KEY};
+use super::status::{no_selection_kinds, status_response};
+use super::store::{AgentAuthConfigRecord, AgentAuthConfigStore};
+use super::validation::validate_config_input;
 
 const CLAUDE_CONFIG_DIR_ENV: &str = "CLAUDE_CONFIG_DIR";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AgentAuthLaunchOverlay {
-    pub support_env: BTreeMap<String, String>,
-    pub protected_env: BTreeMap<String, String>,
+    pub support_env: std::collections::BTreeMap<String, String>,
+    pub protected_env: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,8 +44,8 @@ pub enum AgentAuthLaunchOverlayError {
     Internal(anyhow::Error),
 }
 
-impl fmt::Display for AgentAuthLaunchOverlayError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for AgentAuthLaunchOverlayError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SelectionRequired(required) => f.write_str(&required.detail),
             Self::Internal(error) => write!(f, "{error}"),
@@ -92,14 +87,14 @@ pub struct AgentAuthConfigStatus {
 }
 
 #[derive(Clone)]
-pub struct AgentAuthConfigService {
+pub struct AgentAuthService {
     store: AgentAuthConfigStore,
     cipher: Option<SessionDataCipher>,
     runtime_home: PathBuf,
     apply_lock: Arc<Mutex<()>>,
 }
 
-impl AgentAuthConfigService {
+impl AgentAuthService {
     pub fn new(
         store: AgentAuthConfigStore,
         cipher: Option<SessionDataCipher>,
@@ -115,8 +110,9 @@ impl AgentAuthConfigService {
 
     pub fn apply_config(
         &self,
-        input: AgentAuthConfigInput,
+        mut input: AgentAuthConfigInput,
     ) -> anyhow::Result<AgentAuthConfigApplyOutcome> {
+        normalize_legacy_auth_slot_ids(&mut input);
         validate_config_input(&input)?;
         let _guard = self
             .apply_lock
@@ -141,7 +137,6 @@ impl AgentAuthConfigService {
                 });
             }
         }
-        self.write_managed_config_files(&input)?;
         let plaintext = serde_json::to_vec(&input)?;
         let ciphertext = encrypt_bytes(cipher, &plaintext)?;
         let applied = self
@@ -190,6 +185,7 @@ impl AgentAuthConfigService {
         ))
     }
 
+    /// resolve (load + decrypt) -> decide (overlay_policy::plan) -> materialize.
     pub fn launch_overlay(
         &self,
         agent_kind: &str,
@@ -202,58 +198,32 @@ impl AgentAuthConfigService {
         } else {
             self.store.find_by_scope(LOCAL_SCOPE_KEY)?
         };
-        let Some(record) = record else {
-            if scope.is_some() || required_revision.is_some() {
-                return Err(selection_required_error(
-                    scope.cloned(),
-                    agent_kind,
-                    "missing",
-                ));
-            }
-            return Ok(AgentAuthLaunchOverlay::default());
+        let decrypted = match &record {
+            Some(record) => Some((record.revision, self.decrypt_record(record)?)),
+            None => None,
         };
-        if let Some(required_revision) = required_revision {
-            if record.revision < required_revision {
-                return Err(selection_required_error(
-                    scope.cloned(),
-                    agent_kind,
-                    "needs_resync",
-                ));
-            }
-        }
-        let config = self.decrypt_record(&record)?;
-        let Some(selection) = config
-            .selections
-            .iter()
-            .find(|selection| selection.agent_kind == agent_kind)
-        else {
-            if scope.is_some() || required_revision.is_some() {
-                return Err(selection_required_error(
-                    scope.cloned(),
-                    agent_kind,
-                    "missing",
-                ));
-            }
-            return Ok(AgentAuthLaunchOverlay::default());
-        };
-        if let Some(status) = selection.status.as_deref() {
-            if !matches!(status, "active" | "ready") {
-                return Err(selection_required_error(
-                    scope.cloned(),
-                    agent_kind,
-                    if status == "needs_resync" {
-                        "needs_resync"
-                    } else {
-                        "invalid"
-                    },
-                ));
-            }
-        }
-        reject_expired_selection(selection)
-            .map_err(|_| selection_required_error(scope.cloned(), agent_kind, "expired"))?;
-        let mut support_env = selection.support_env.clone();
-        let mut protected_env = selection.protected_env.clone();
-        if agent_kind == "claude" && selection.materialization_mode == "gateway_env" {
+        let plan = overlay_policy::plan(
+            agent_kind,
+            scope,
+            required_revision,
+            decrypted.as_ref().map(|(revision, config)| (*revision, config)),
+            chrono::Utc::now(),
+        )?;
+        self.materialize(plan)
+    }
+
+    /// The effects the pure plan is not allowed to perform.
+    fn materialize(
+        &self,
+        plan: EnvOverlayPlan,
+    ) -> Result<AgentAuthLaunchOverlay, AgentAuthLaunchOverlayError> {
+        let EnvOverlayPlan {
+            mut support_env,
+            mut protected_env,
+            needs_claude_gateway_dir,
+            codex,
+        } = plan;
+        if needs_claude_gateway_dir {
             let config_dir = self.claude_gateway_config_dir();
             std::fs::create_dir_all(&config_dir).map_err(|error| {
                 anyhow::anyhow!(
@@ -266,7 +236,12 @@ impl AgentAuthConfigService {
                 config_dir.to_string_lossy().into_owned(),
             );
         }
-        if agent_kind == "codex" && selection.protected_config.contains_key("codex") {
+        if let Some(codex) = codex {
+            write_codex_config(
+                &self.codex_home_dir(),
+                &codex.config,
+                codex.api_key.as_deref(),
+            )?;
             protected_env.insert(
                 "CODEX_HOME".to_string(),
                 self.codex_home_dir().to_string_lossy().into_owned(),
@@ -286,28 +261,10 @@ impl AgentAuthConfigService {
             anyhow::bail!("ANYHARNESS_DATA_KEY is required to read agent auth config");
         };
         let plaintext = decrypt_bytes(cipher, &record.config_ciphertext)?;
-        Ok(serde_json::from_slice(&plaintext)?)
-    }
-
-    fn write_managed_config_files(&self, request: &AgentAuthConfigInput) -> anyhow::Result<()> {
-        for selection in &request.selections {
-            if selection.agent_kind != "codex" {
-                continue;
-            }
-            let Some(config) = selection.protected_config.get("codex") else {
-                continue;
-            };
-            write_codex_config(
-                &self.codex_home_dir(),
-                config,
-                selection
-                    .protected_env
-                    .get("OPENAI_API_KEY")
-                    .or_else(|| selection.protected_env.get("CODEX_API_KEY"))
-                    .map(String::as_str),
-            )?;
-        }
-        Ok(())
+        let mut config: AgentAuthConfigInput = serde_json::from_slice(&plaintext)?;
+        normalize_legacy_auth_slot_ids(&mut config);
+        validate_config_input(&config)?;
+        Ok(config)
     }
 
     fn codex_home_dir(&self) -> PathBuf {
@@ -319,10 +276,17 @@ impl AgentAuthConfigService {
     }
 }
 
-#[cfg(test)]
-#[path = "../auth_config_claude_tests.rs"]
-mod auth_config_claude_tests;
-
-#[cfg(test)]
-#[path = "../auth_config_tests.rs"]
-mod auth_config_tests;
+fn normalize_legacy_auth_slot_ids(input: &mut AgentAuthConfigInput) {
+    for selection in &mut input.selections {
+        if !selection.auth_slot_id.trim().is_empty() {
+            continue;
+        }
+        let Some(descriptor) = registry::descriptor(&selection.agent_kind) else {
+            continue;
+        };
+        if descriptor.auth.slots.len() != 1 {
+            continue;
+        }
+        selection.auth_slot_id = descriptor.auth.slots[0].id.clone();
+    }
+}

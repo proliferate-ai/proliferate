@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +22,7 @@ from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZ
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
+    AgentGatewayRuntimeGrantRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileRecord,
 )
@@ -42,7 +46,7 @@ from proliferate.server.cloud.agent_auth.gateway_policies import (
     _require_credential_ready_for_selection,
 )
 from proliferate.server.cloud.agent_auth.managed_credit_rules import (
-    _managed_credit_provider_kind_for_agent,
+    _managed_credit_provider_kind_for_provider,
 )
 from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthGatewayConfig,
@@ -54,7 +58,6 @@ from proliferate.server.cloud.agent_auth.provider_keys import (
 )
 from proliferate.server.cloud.agent_auth.results import BifrostRuntimeVirtualKeyResult
 from proliferate.server.cloud.agent_auth.router_materializations import (
-    _disable_bifrost_virtual_key_materialization,
     _disable_bifrost_virtual_keys_for_budget,
 )
 from proliferate.server.cloud.agent_auth.synced_files import (
@@ -84,6 +87,9 @@ _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
         CloudCommandStatus.failed_delivery.value,
     }
 )
+_GATEWAY_GRANT_REFRESH_WINDOW = timedelta(days=2)
+_RUNTIME_GRANT_TOKEN_DOMAIN = "agent-gateway-runtime-grant"
+_RUNTIME_GRANT_HASH_KEY_ID = "sha256-v1"
 
 
 async def _issue_bifrost_runtime_virtual_key_for_selection(
@@ -112,6 +118,8 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         )
     plan = selection_plan_for_credential(
         agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
+        credential_provider_id=credential.credential_provider_id,
         credential_kind=credential.credential_kind,
     )
     if not isinstance(plan, SelectionPlan) or plan.protocol_facade is None:
@@ -129,6 +137,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         db,
         policy=policy,
         agent_kind=selection.agent_kind,
+        credential_provider_id=credential.credential_provider_id,
     )
     provider = str(provider_key["provider"])
     provider_key_id = str(provider_key["key_id"])
@@ -151,7 +160,16 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         models=models,
         budget_limit=budget_limit,
         agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
         policy_id=policy.id,
+    )
+    await store.lock_runtime_grant_route(
+        db,
+        policy_id=policy.id,
+        target_id=auth.target_id,
+        sandbox_profile_id=profile.id,
+        agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
     )
     existing = await store.get_runtime_router_materialization(
         db,
@@ -159,6 +177,9 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         selection_id=selection.id,
         target_id=auth.target_id,
     )
+    now = utcnow()
+    stale_virtual_key_id: str | None = None
+    stale_grant_ids: set[UUID] = set()
     if (
         existing is not None
         and existing.status == "active"
@@ -167,26 +188,33 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         and existing.router_object_id
         and existing.router_object_secret_ciphertext
     ):
-        return BifrostRuntimeVirtualKeyResult(
-            virtual_key=decrypt_text(existing.router_object_secret_ciphertext),
-            virtual_key_id=existing.router_object_id,
-            expires_at_iso=(utcnow() + _GATEWAY_GRANT_TTL).isoformat(),
-        )
-    client = new_bifrost_admin_client()
-    if (
-        existing is not None
-        and existing.status == "active"
-        and existing.router_object_id
-        and (existing.sync_fingerprint != fingerprint or existing.sync_status != "synced")
-    ):
-        await _disable_bifrost_virtual_key_materialization(
+        existing_secret = decrypt_text(existing.router_object_secret_ciphertext)
+        existing_grant = await store.get_runtime_grant_by_token_hash(
             db,
-            client=client,
-            materialization=existing,
-            error_code="bifrost_virtual_key_rotation_failed",
-            raise_on_failure=True,
+            _runtime_grant_token_hash(existing_secret),
         )
-        existing = None
+        if _runtime_grant_reusable(
+            existing_grant,
+            now=now,
+            policy_id=policy.id,
+            credential_id=credential.id,
+            selection_id=selection.id,
+            target_id=auth.target_id,
+            sandbox_profile_id=profile.id,
+            agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
+            issued_profile_revision=profile.agent_auth_revision,
+        ):
+            return BifrostRuntimeVirtualKeyResult(
+                virtual_key=existing_secret,
+                virtual_key_id=existing.router_object_id,
+                expires_at_iso=existing_grant.expires_at.isoformat(),
+            )
+        stale_virtual_key_id = existing.router_object_id
+        if existing_grant is not None:
+            stale_grant_ids.add(existing_grant.id)
+
+    client = new_bifrost_admin_client()
 
     provider_config: dict[str, object] = {
         "provider": provider,
@@ -210,6 +238,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
     description = json.dumps(
         {
             "credentialId": str(credential.id),
+            "authSlotId": selection.auth_slot_id,
             "policyId": str(policy.id),
             "sandboxProfileId": str(profile.id),
             "targetId": str(auth.target_id),
@@ -252,10 +281,74 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
     )
     if not materialization.router_object_id:
         raise BifrostIntegrationError("Bifrost virtual key materialization is missing an id.")
+    expires_at = utcnow() + _GATEWAY_GRANT_TTL
+    await store.create_runtime_grant(
+        db,
+        token_hash=_runtime_grant_token_hash(secret),
+        hash_key_id=_RUNTIME_GRANT_HASH_KEY_ID,
+        policy_id=policy.id,
+        credential_id=credential.id,
+        selection_id=selection.id,
+        issued_profile_revision=profile.agent_auth_revision,
+        target_id=auth.target_id,
+        sandbox_profile_id=profile.id,
+        organization_id=policy.organization_id,
+        user_id=policy.owner_user_id,
+        agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
+        protocol_facade=plan.protocol_facade,
+        expires_at=expires_at,
+    )
+    if stale_virtual_key_id and stale_virtual_key_id != materialization.router_object_id:
+        try:
+            await client.disable_virtual_key(stale_virtual_key_id)
+        except BifrostIntegrationError as exc:
+            raise AgentAuthError(
+                "Bifrost previous runtime virtual key could not be disabled.",
+                code="bifrost_runtime_virtual_key_rotation_failed",
+                status_code=502,
+            ) from exc
+        await store.revoke_runtime_grants_by_ids(db, stale_grant_ids)
     return BifrostRuntimeVirtualKeyResult(
         virtual_key=secret,
         virtual_key_id=materialization.router_object_id,
-        expires_at_iso=(utcnow() + _GATEWAY_GRANT_TTL).isoformat(),
+        expires_at_iso=expires_at.isoformat(),
+    )
+
+
+def _runtime_grant_token_hash(token: str) -> str:
+    return hmac.new(
+        settings.cloud_secret_key.encode("utf-8"),
+        f"{_RUNTIME_GRANT_TOKEN_DOMAIN}:{token}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _runtime_grant_reusable(
+    grant: AgentGatewayRuntimeGrantRecord | None,
+    *,
+    now: datetime,
+    policy_id: UUID,
+    credential_id: UUID,
+    selection_id: UUID,
+    target_id: UUID,
+    sandbox_profile_id: UUID,
+    agent_kind: str,
+    auth_slot_id: str,
+    issued_profile_revision: int,
+) -> bool:
+    return (
+        grant is not None
+        and grant.revoked_at is None
+        and grant.expires_at > now + _GATEWAY_GRANT_REFRESH_WINDOW
+        and grant.issued_profile_revision == issued_profile_revision
+        and grant.policy_id == policy_id
+        and grant.credential_id == credential_id
+        and grant.selection_id == selection_id
+        and grant.target_id == target_id
+        and grant.sandbox_profile_id == sandbox_profile_id
+        and grant.agent_kind == agent_kind
+        and grant.auth_slot_id == auth_slot_id
     )
 
 
@@ -264,9 +357,10 @@ async def _bifrost_provider_key_for_policy(
     *,
     policy: AgentGatewayPolicyRecord,
     agent_kind: str,
+    credential_provider_id: str,
 ) -> dict[str, object]:
     if policy.policy_kind == "proliferate_managed":
-        provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
+        provider_kind = _managed_credit_provider_kind_for_provider(credential_provider_id)
         if policy.budget_subject_id is None:
             raise AgentAuthError(
                 "Managed gateway policy is missing a budget subject.",
@@ -298,6 +392,7 @@ async def _bifrost_provider_key_for_policy(
             )
         deployments = _gateway_deployments_for_credential(
             agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
             provider_kind=provider_kind,
         )
         if not deployments:
@@ -324,6 +419,7 @@ async def _bifrost_provider_key_for_policy(
         provider_kind = provider_credential.provider_kind
         deployments = _gateway_deployments_for_credential(
             agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
             provider_kind=provider_kind,
         )
         if not deployments:
@@ -438,6 +534,7 @@ async def _worker_gateway_config(
         )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )
@@ -475,27 +572,61 @@ async def _worker_gateway_config(
         )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )
         return config
     if selection.agent_kind == "opencode":
-        facade_base = f"{base}/openai/v1"
-        config = WorkerAgentAuthGatewayConfig(
-            protocolFacade="openai",
-            baseUrls={"openai": facade_base},
-            runtimeGrantToken=result.virtual_key,
-            expiresAt=result.expires_at_iso,
-            protectedEnv={
-                "OPENAI_API_KEY": result.virtual_key,
-                "OPENAI_BASE_URL": facade_base,
-            },
-            supportEnv={},
-            protectedConfig={},
-            supportConfig={},
-        )
+        if selection.auth_slot_id == "anthropic":
+            facade_base = f"{base}/anthropic"
+            config = WorkerAgentAuthGatewayConfig(
+                protocolFacade="anthropic",
+                baseUrls={"anthropic": facade_base},
+                runtimeGrantToken=result.virtual_key,
+                expiresAt=result.expires_at_iso,
+                protectedEnv={
+                    "ANTHROPIC_API_KEY": result.virtual_key,
+                    "ANTHROPIC_AUTH_TOKEN": result.virtual_key,
+                    "ANTHROPIC_BASE_URL": facade_base,
+                },
+                supportEnv={},
+                protectedConfig={},
+                supportConfig={},
+            )
+        elif selection.auth_slot_id == "gemini":
+            facade_base = f"{base}/genai"
+            config = WorkerAgentAuthGatewayConfig(
+                protocolFacade="genai",
+                baseUrls={"genai": facade_base},
+                runtimeGrantToken=result.virtual_key,
+                expiresAt=result.expires_at_iso,
+                protectedEnv={
+                    "GEMINI_API_KEY": result.virtual_key,
+                    "GOOGLE_GEMINI_BASE_URL": facade_base,
+                },
+                supportEnv={},
+                protectedConfig={},
+                supportConfig={},
+            )
+        else:
+            facade_base = f"{base}/openai/v1"
+            config = WorkerAgentAuthGatewayConfig(
+                protocolFacade="openai",
+                baseUrls={"openai": facade_base},
+                runtimeGrantToken=result.virtual_key,
+                expiresAt=result.expires_at_iso,
+                protectedEnv={
+                    "OPENAI_API_KEY": result.virtual_key,
+                    "OPENAI_BASE_URL": facade_base,
+                },
+                supportEnv={},
+                protectedConfig={},
+                supportConfig={},
+            )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )
@@ -517,6 +648,7 @@ async def _worker_gateway_config(
         )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )

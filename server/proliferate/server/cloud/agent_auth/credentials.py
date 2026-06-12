@@ -35,7 +35,6 @@ from proliferate.server.cloud.agent_auth.deployment_plans import (
 )
 from proliferate.server.cloud.agent_auth.domain.policy import (
     SelectionPlan,
-    is_supported_agent_kind,
     selection_plan_for_credential,
 )
 from proliferate.server.cloud.agent_auth.domain.synced_payload import (
@@ -52,6 +51,11 @@ from proliferate.server.cloud.agent_auth.models import (
     SyncSyncedCredentialRequest,
 )
 from proliferate.server.cloud.agent_auth.refresh import _mark_target_pending_and_queue_refresh
+from proliferate.server.cloud.agent_auth.registry import (
+    auth_slot,
+    credential_provider_id_for_provider_kind,
+    default_auth_slot_id,
+)
 from proliferate.server.cloud.agent_auth.results import (
     CreateGatewayCredentialResult,
     CredentialListItem,
@@ -91,19 +95,15 @@ async def list_credentials(
     *,
     actor_user_id: UUID,
     organization_id: UUID | None,
-    agent_kind: str | None,
+    credential_provider_id: str | None,
 ) -> tuple[AgentAuthCredentialRecord, ...]:
     if organization_id is not None:
         await _require_organization_member(db, actor_user_id, organization_id)
-    if agent_kind is not None and not is_supported_agent_kind(agent_kind):
-        raise AgentAuthError(
-            "Unsupported agent kind.", code="unsupported_agent_kind", status_code=400
-        )
     return await store.list_visible_credentials(
         db,
         actor_user_id=actor_user_id,
         organization_id=organization_id,
-        agent_kind=agent_kind,
+        credential_provider_id=credential_provider_id,
     )
 
 
@@ -112,13 +112,13 @@ async def list_credentials_for_response(
     *,
     actor_user_id: UUID,
     organization_id: UUID | None,
-    agent_kind: str | None,
+    credential_provider_id: str | None,
 ) -> tuple[CredentialListItem, ...]:
     credentials = await list_credentials(
         db,
         actor_user_id=actor_user_id,
         organization_id=organization_id,
-        agent_kind=agent_kind,
+        credential_provider_id=credential_provider_id,
     )
     items: list[CredentialListItem] = []
     for credential in credentials:
@@ -150,12 +150,22 @@ async def sync_synced_credential_for_user(
             code="unsupported_synced_agent_kind",
             status_code=400,
         )
+    auth_slot_id = default_auth_slot_id(agent_kind)
+    slot = auth_slot(agent_kind, auth_slot_id or "")
+    if auth_slot_id is None or slot is None or not slot.credential_provider_ids:
+        raise AgentAuthError(
+            "Native auth sync is not configured for this agent.",
+            code="unsupported_synced_agent_kind",
+            status_code=400,
+        )
+    credential_provider_id = slot.credential_provider_ids[0]
     normalized = normalize_synced_credential_payload(
         agent_kind=agent_kind,
         auth_mode=body.auth_mode,
         env_vars=getattr(body, "env_vars", None),
         files=getattr(body, "files", None),
     )
+    normalized.payload["provider"] = credential_provider_id
     redacted_summary = redacted_synced_payload_summary(
         agent_kind=agent_kind,
         payload=normalized.payload,
@@ -171,7 +181,7 @@ async def sync_synced_credential_for_user(
     existing = await store.get_active_personal_synced_credential_for_update(
         db,
         user_id=actor_user_id,
-        agent_kind=agent_kind,
+        credential_provider_id=credential_provider_id,
     )
     payload_changed = True
     if existing is not None and existing.payload_ciphertext:
@@ -194,7 +204,7 @@ async def sync_synced_credential_for_user(
             owner_user_id=actor_user_id,
             organization_id=None,
             created_by_user_id=actor_user_id,
-            agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
             credential_kind="synced_path",
             display_name=display_name,
             redacted_summary_json=redacted_summary_json,
@@ -222,7 +232,10 @@ async def sync_synced_credential_for_user(
 
     plan = selection_plan_for_credential(
         agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
+        credential_provider_id=credential.credential_provider_id,
         credential_kind=credential.credential_kind,
+        synced_source_agent_kind=agent_kind,
     )
     if not isinstance(plan, SelectionPlan):
         raise AgentAuthError(plan.message, code=plan.code, status_code=plan.status_code)
@@ -234,10 +247,10 @@ async def sync_synced_credential_for_user(
         )
 
     selections = {
-        selection.agent_kind: selection
+        (selection.agent_kind, selection.auth_slot_id): selection
         for selection in await store.list_selections_for_profile(db, profile.id)
     }
-    existing_selection = selections.get(agent_kind)
+    existing_selection = selections.get((agent_kind, auth_slot_id))
     selection_changed = (
         existing_selection is None
         or existing_selection.status != "active"
@@ -251,6 +264,7 @@ async def sync_synced_credential_for_user(
         sandbox_profile_id=profile.id,
         owner_scope="personal",
         agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
         credential_id=credential.id,
         credential_share_id=None,
         materialization_mode=plan.materialization_mode,
@@ -295,6 +309,7 @@ async def sync_synced_credential_for_user(
         metadata_json=json.dumps(
             {
                 "agentKind": agent_kind,
+                "authSlotId": auth_slot_id,
                 "authMode": normalized.auth_mode,
                 "changed": changed,
                 "selectionChanged": selection_changed,
@@ -336,6 +351,17 @@ async def create_gateway_credential(
     _validate_policy_owner_scope(body.policy_kind, body.owner_scope)
     _require_gateway_byok_enabled(body.provider_kind)
     _require_gateway_byok_create_allowed(body.policy_kind)
+    expected_credential_provider_id = credential_provider_id_for_provider_kind(body.provider_kind)
+    if (
+        body.credential_provider_id is not None
+        and body.credential_provider_id != expected_credential_provider_id
+    ):
+        raise AgentAuthError(
+            "credentialProviderId does not match providerKind.",
+            code="credential_provider_mismatch",
+            status_code=400,
+        )
+    credential_provider_id = expected_credential_provider_id
 
     validation = _validate_provider_payload(body.provider_kind, body.payload)
     credential = await store.create_agent_auth_credential(
@@ -344,7 +370,7 @@ async def create_gateway_credential(
         owner_user_id=owner_user_id,
         organization_id=organization_id,
         created_by_user_id=actor_user_id,
-        agent_kind=body.agent_kind,
+        credential_provider_id=credential_provider_id,
         credential_kind="managed_gateway",
         display_name=_clean_display_name(body.display_name),
         redacted_summary_json=json.dumps(validation.redacted_summary, sort_keys=True),
@@ -360,7 +386,7 @@ async def create_gateway_credential(
         credential_id=credential.id,
         metadata_json=json.dumps(
             {
-                "agentKind": body.agent_kind,
+                "credentialProviderId": credential_provider_id,
                 "credentialKind": "managed_gateway",
                 "providerKind": body.provider_kind,
             },
@@ -433,7 +459,7 @@ async def create_gateway_credential(
             provider_kind=body.provider_kind,
             provider_payload=body.payload,
             model_deployments=_gateway_deployments_for_credential(
-                agent_kind=body.agent_kind,
+                credential_provider_id=credential_provider_id,
                 provider_kind=body.provider_kind,
             ),
             existing_policy=policy,

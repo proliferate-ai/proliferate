@@ -210,7 +210,7 @@ SetConfigOption(model) → set_session_model on the existing native session (sam
 **`domains/`** (durable meaning)
 - Server-like `service + store` per feature, but the *running* half lives in
   `live/`. A domain owns durable truth and decisions; it must not reach into live
-  coordination. `runtime_config` and `agents/auth_config` own the two synced
+  coordination. `runtime_config` and `agents/auth` own the two synced
   bundles; `plugins` owns skills; `sessions` owns the session record + mcp_bindings
   + subagents.
 

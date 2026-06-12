@@ -14,6 +14,10 @@ export interface CloudAgentGatewayCapabilitiesLike {
   managedCreditsOrganizationEnabled?: boolean | null;
   managedCreditAgentKinds?: readonly string[] | null;
   opencodeGatewayEnabled?: boolean | null;
+  agentAuthSlots?: readonly {
+    agentKind?: string | null;
+    credentialProviderIds?: readonly string[] | null;
+  }[] | null;
 }
 
 export interface CloudHarnessUnavailableView {
@@ -29,8 +33,11 @@ export interface CloudHarnessAvailability {
 }
 
 export interface CloudAgentAuthCredentialLike {
-  agentKind?: string | null;
+  credentialProviderId?: string | null;
   credentialKind?: string | null;
+  redactedSummary?: {
+    agentKind?: unknown;
+  } | null;
   status?: string | null;
 }
 
@@ -45,8 +52,48 @@ export function readySyncedCloudAgentKinds(
       .filter((credential) =>
         credential.status === "ready" && credential.credentialKind === "synced_path"
       )
-      .map((credential) => credential.agentKind ?? ""),
+      .map((credential) =>
+        typeof credential.redactedSummary?.agentKind === "string"
+          ? credential.redactedSummary.agentKind
+          : ""
+      ),
   );
+}
+
+export function readyCloudAgentKinds(input: {
+  credentials: readonly CloudAgentAuthCredentialLike[] | null | undefined;
+  agentGateway?: CloudAgentGatewayCapabilitiesLike | null;
+}): string[] {
+  if (!input.credentials) {
+    return [];
+  }
+  const readyKinds: string[] = [];
+  for (const credential of input.credentials) {
+    if (credential.status !== "ready") {
+      continue;
+    }
+    if (
+      credential.credentialKind === "synced_path"
+      && typeof credential.redactedSummary?.agentKind === "string"
+    ) {
+      readyKinds.push(credential.redactedSummary.agentKind);
+      continue;
+    }
+    if (
+      credential.credentialKind !== "managed_gateway"
+      || !credential.credentialProviderId
+      || !input.agentGateway?.enabled
+      || !input.agentGateway?.agentAuthSlots
+    ) {
+      continue;
+    }
+    for (const slot of input.agentGateway.agentAuthSlots) {
+      if (slot.credentialProviderIds?.includes(credential.credentialProviderId)) {
+        readyKinds.push(slot.agentKind ?? "");
+      }
+    }
+  }
+  return normalizeCloudAgentKindList(readyKinds);
 }
 
 export function resolveCloudHarnessAvailability(input: {

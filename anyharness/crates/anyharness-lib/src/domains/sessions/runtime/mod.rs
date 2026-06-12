@@ -14,7 +14,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
-use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthSelectionRequired};
+use crate::domains::agents::auth::{AgentAuthService, AgentAuthSelectionRequired};
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
@@ -49,7 +49,7 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-    agent_auth_config_service: Arc<AgentAuthConfigService>,
+    agent_auth_service: Arc<AgentAuthService>,
 }
 
 impl SessionRuntime {
@@ -266,7 +266,7 @@ impl SessionRuntime {
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-        agent_auth_config_service: Arc<AgentAuthConfigService>,
+        agent_auth_service: Arc<AgentAuthService>,
     ) -> Self {
         Self {
             session_service,
@@ -281,7 +281,7 @@ impl SessionRuntime {
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
-            agent_auth_config_service,
+            agent_auth_service,
         }
     }
 

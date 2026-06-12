@@ -301,6 +301,7 @@ class AgentGatewayRuntimeGrant(Base):
             "target_id",
             "sandbox_profile_id",
             "agent_kind",
+            "auth_slot_id",
         ),
         Index(
             "ix_agent_gateway_runtime_grant_selection_revision",
@@ -344,6 +345,7 @@ class AgentGatewayRuntimeGrant(Base):
         nullable=True,
     )
     agent_kind: Mapped[str] = mapped_column(String(32), index=True)
+    auth_slot_id: Mapped[str] = mapped_column(String(64), index=True)
     protocol_facade: Mapped[str] = mapped_column(String(32))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

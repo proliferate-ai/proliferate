@@ -79,7 +79,7 @@ async def share_personal_credential_with_organization(
         owner_user_id=actor_user_id,
         organization_id=organization_id,
         shared_by_user_id=actor_user_id,
-        allowed_agent_kind=credential.agent_kind,
+        allowed_credential_provider_id=credential.credential_provider_id,
     )
     await store.record_audit_event(
         db,

@@ -33,7 +33,9 @@ It includes:
 - docs URL
 
 The built-in descriptors live in
-`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`;
+`registry/service.rs` provides `descriptor(kind)`, the sanctioned single-kind
+lookup.
 
 ### Artifact Specs (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
@@ -95,31 +97,37 @@ This is the main handoff from the agents area into the rest of the runtime.
 
 ### Bundled Catalog and Registry
 
-There is one supported AnyHarness runtime catalog input:
+There are two supported AnyHarness runtime agent inputs:
 
 - `catalogs/agents/v1/catalog.json`
   - supported agent families
-  - install and launch metadata
-  - credential-discovery metadata
   - fallback model/control metadata
+  - static session-display metadata
+- `catalogs/agents/v1/registry.json`
+  - supported agent families
+  - install and launch metadata
+  - auth-slot and materialization metadata
+  - credential-discovery metadata
 
-Runtime code projects that bundled catalog into two target-local surfaces:
+Runtime code projects those bundled inputs into target-local surfaces:
 
 - `anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`
   - trusted built-in `AgentDescriptor` values
 - `anyharness/crates/anyharness-lib/src/domains/agents/catalog/**`
-  - schema, validation, bundled loading, and model/descriptor projections
+  - schema, validation, bundled loading, and model/control projections
+- `anyharness/crates/anyharness-lib/src/domains/agents/registry/**`
+  - schema, validation, bundled loading, and descriptor/auth-slot projections
 
 There is no separate runtime `catalog.rs` source and no split model/launch
-catalog path. Cloud product catalogs may be newer than this bundled runtime
-catalog; AnyHarness still validates creation against what the target runtime
-can actually launch.
+catalog path. Cloud product catalogs may be newer than these bundled runtime
+inputs; AnyHarness still validates creation against what the target runtime can
+actually launch.
 
 ### Resolution Flow
 
 Resolution is owned by
 `anyharness/crates/anyharness-lib/src/domains/agents/readiness/**`.
-`resolver.rs` is the side-effect-free entrypoint; artifact probing,
+`service.rs` is the side-effect-free entrypoint; artifact probing,
 compatibility checks, override parsing, managed artifact paths, and status
 calculation live in focused readiness modules beside it.
 
@@ -157,7 +165,7 @@ chain support, public/free model behavior, and live ACP-reported model list.
 
 Code path:
 
-- `anyharness/crates/anyharness-lib/src/domains/agents/credentials/mod.rs`
+- `anyharness/crates/anyharness-lib/src/domains/agents/auth/credentials.rs`
 - Claude/Codex local file parsing and portable export normalization are shared
   with desktop cloud sync via `anyharness/crates/anyharness-credential-discovery/`
 
@@ -170,8 +178,8 @@ Local readiness and cloud portability intentionally remain separate questions:
 ### Installation Flow
 
 Managed installation is owned by
-`anyharness/crates/anyharness-lib/src/domains/agents/installer.rs`, with
-focused child modules under `domains/agents/installer/`.
+`anyharness/crates/anyharness-lib/src/domains/agents/installer/service.rs`,
+with focused sibling modules under `domains/agents/installer/`.
 
 The flow is:
 
@@ -258,8 +266,8 @@ the broader agents flow.
 
 ### Reconcile Flow
 
-`reconcile/`
-(`anyharness/crates/anyharness-lib/src/domains/agents/reconcile/`)
+`installer/reconcile/`
+(`anyharness/crates/anyharness-lib/src/domains/agents/installer/reconcile/`)
 is the batch install path.
 
 It iterates the built-in registry and attempts managed install where supported,
@@ -279,7 +287,8 @@ Packaged desktop builds can ship a compressed agent seed so first launch does
 not need to download the most common managed agents before the user can start.
 The seed is a `.tar.zst` resource built by `scripts/build-agent-seed.mjs` from
 `apps/desktop/src-tauri/agent-seed.inputs.json` and hydrated by
-`anyharness/crates/anyharness-lib/src/domains/agents/seed/` at runtime startup.
+`anyharness/crates/anyharness-lib/src/domains/agents/installer/seed/` at
+runtime startup.
 The HTTP runtime starts immediately with `agentSeed.status=hydrating`; the heavy
 archive extraction and checksum verification run on a blocking background task
 so `/health` can respond while seed hydration is still in progress.
@@ -401,7 +410,8 @@ free.
 
 ## Important Invariants
 
-- Built-in descriptors are the source of truth for supported agents in v1.
+- Built-in registry descriptors are the source of truth for supported runtime
+  agents in v1.
 - `ResolvedAgentStatus` is derived from installation state, compatibility, and
   credential state together.
 - Credential detection must remain explicit and provider-specific.

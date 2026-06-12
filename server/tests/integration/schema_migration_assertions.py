@@ -567,9 +567,16 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         }
     )
     assert {
-        "ix_agent_auth_credential_owner_user_kind_status",
-        "ix_agent_auth_credential_org_kind_status",
+        "ix_agent_auth_credential_owner_user_provider_status",
+        "ix_agent_auth_credential_org_provider_status",
     } <= agent_auth_indexes
+    selection_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"]
+            for index in inspect(sync_conn).get_indexes("sandbox_agent_auth_selection")
+        }
+    )
+    assert "uq_sandbox_agent_auth_selection_profile_agent_slot" in selection_indexes
 
     sandbox_profile_indexes = await conn.run_sync(
         lambda sync_conn: {

@@ -75,9 +75,6 @@ async def reconcile_agent_gateway_runtime_grant_freshness(
             if profile is None:
                 skipped += 1
                 continue
-            if grant.issued_profile_revision != profile.agent_auth_revision:
-                skipped += 1
-                continue
             if profile.primary_target_id != grant.target_id:
                 skipped += 1
                 continue

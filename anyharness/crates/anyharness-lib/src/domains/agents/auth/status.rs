@@ -2,9 +2,9 @@ use anyharness_contract::v1::{
     AgentAuthExternalScope, AgentAuthSelectionConfig, AgentAuthSelectionStatus,
 };
 
-use super::{AgentAuthConfigInput, AgentAuthConfigStatus};
+use crate::domains::agents::registry::built_in_registry;
 
-const AGENT_AUTH_REQUIRED_AGENT_KINDS: &[&str] = &["claude", "codex", "opencode", "gemini"];
+use super::{AgentAuthConfigInput, AgentAuthConfigStatus};
 
 pub(super) fn status_response(
     external_scope: Option<AgentAuthExternalScope>,
@@ -22,6 +22,7 @@ pub(super) fn status_response(
 fn selection_status(selection: &AgentAuthSelectionConfig) -> AgentAuthSelectionStatus {
     AgentAuthSelectionStatus {
         agent_kind: selection.agent_kind.clone(),
+        auth_slot_id: selection.auth_slot_id.clone(),
         materialization_mode: selection.materialization_mode.clone(),
         credential_id: selection.credential_id.clone(),
         credential_revision: selection.credential_revision,
@@ -37,17 +38,21 @@ fn selection_status(selection: &AgentAuthSelectionConfig) -> AgentAuthSelectionS
 }
 
 pub(super) fn no_selection_kinds(selections: &[AgentAuthSelectionConfig]) -> Vec<String> {
-    AGENT_AUTH_REQUIRED_AGENT_KINDS
-        .iter()
+    built_in_registry()
+        .into_iter()
         .filter(|kind| {
+            let agent_kind = kind.kind.as_str();
+            if kind.auth.slots.is_empty() {
+                return false;
+            }
             !selections.iter().any(|selection| {
-                selection.agent_kind == **kind
+                selection.agent_kind == agent_kind
                     && selection
                         .status
                         .as_deref()
                         .map_or(true, |status| matches!(status, "active" | "ready"))
             })
         })
-        .map(|kind| (*kind).to_string())
+        .map(|descriptor| descriptor.kind.as_str().to_string())
         .collect()
 }

@@ -5,7 +5,7 @@ use anyharness_contract::v1::AgentAuthSelectionConfig;
 use crate::domains::sessions::mcp_bindings::crypto::SessionDataCipher;
 use crate::persistence::Db;
 
-use super::{AgentAuthConfigInput, AgentAuthConfigService, AgentAuthConfigStore};
+use super::{AgentAuthConfigInput, AgentAuthService, AgentAuthConfigStore};
 
 fn cipher() -> SessionDataCipher {
     SessionDataCipher::from_env_value("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
@@ -19,7 +19,7 @@ fn claude_gateway_launch_overlay_sets_managed_config_dir() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         root.clone(),
@@ -30,6 +30,7 @@ fn claude_gateway_launch_overlay_sets_managed_config_dir() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,
@@ -72,7 +73,7 @@ fn claude_gateway_launch_overlay_sets_managed_config_dir() {
 
 #[test]
 fn apply_config_rejects_support_env_claude_config_dir() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -83,6 +84,7 @@ fn apply_config_rejects_support_env_claude_config_dir() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,

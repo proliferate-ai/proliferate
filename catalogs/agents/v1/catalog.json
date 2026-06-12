@@ -14,55 +14,6 @@
       "kind": "claude",
       "displayName": "Claude",
       "description": "Claude Code through claude-agent-acp.",
-      "process": {
-        "native": {
-          "install": {
-            "kind": "direct_binary",
-            "latestVersionUrl": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
-            "binaryUrlTemplate": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/{version}/{platform}/claude",
-            "platformMap": {
-              "macos_arm64": "darwin-arm64",
-              "macos_x64": "darwin-x64",
-              "linux_x64": "linux-x64",
-              "linux_arm64": "linux-arm64",
-              "windows_x64": "win32-x64",
-              "windows_arm64": "win32-arm64"
-            }
-          }
-        },
-        "agentProcess": {
-          "install": {
-            "kind": "managed_npm_package",
-            "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#3ff484e671de5fe9275d2e7596d683df06b99e14",
-            "packageSubdir": null,
-            "sourceBuildBinaryName": null,
-            "executableRelpath": "node_modules/.bin/claude-agent-acp"
-          }
-        },
-        "launch": {
-          "executableName": "claude-agent-acp",
-          "defaultArgs": []
-        },
-        "auth": {
-          "envVars": [
-            "ANTHROPIC_AUTH_TOKEN",
-            "ANTHROPIC_API_KEY"
-          ],
-          "login": {
-            "label": "Log in with Claude",
-            "command": {
-              "program": "claude",
-              "args": [
-                "/login"
-              ]
-            },
-            "reusesUserState": true,
-            "message": null
-          },
-          "discovery": "claude"
-        },
-        "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp"
-      },
       "session": {
         "defaultModelId": "us.anthropic.claude-sonnet-4-6",
         "defaultModeId": "default",
@@ -493,67 +444,6 @@
       "kind": "codex",
       "displayName": "Codex",
       "description": "OpenAI Codex through codex-acp.",
-      "process": {
-        "native": {
-          "install": {
-            "kind": "tarball_release",
-            "latestUrlTemplate": "https://github.com/openai/codex/releases/latest/download/codex-{target}.tar.gz",
-            "versionedUrlTemplate": "https://github.com/openai/codex/releases/download/{version}/codex-{target}.tar.gz",
-            "expectedBinaryTemplate": "codex-{target}",
-            "platformMap": {
-              "macos_arm64": "aarch64-apple-darwin",
-              "macos_x64": "x86_64-apple-darwin",
-              "linux_x64": "x86_64-unknown-linux-musl",
-              "linux_arm64": "aarch64-unknown-linux-musl",
-              "windows_x64": "x86_64-pc-windows-msvc",
-              "windows_arm64": "aarch64-pc-windows-msvc"
-            }
-          }
-        },
-        "agentProcess": {
-          "install": {
-            "kind": "managed_npm_package",
-            "package": "git+https://github.com/proliferate-ai/codex-acp.git#1fdb4661c2aef0815a6aab16be27ea70f4c2b94f",
-            "packageSubdir": "npm",
-            "sourceBuildBinaryName": null,
-            "executableRelpath": "node_modules/.bin/codex-acp"
-          }
-        },
-        "launch": {
-          "executableName": "codex-acp",
-          "defaultArgs": [
-            "-c",
-            "features.plugins=false",
-            "-c",
-            "features.tool_suggest=false",
-            "-c",
-            "plugins={}",
-            "-c",
-            "marketplaces={}",
-            "-c",
-            "mcp_servers={}"
-          ]
-        },
-        "auth": {
-          "envVars": [
-            "OPENAI_API_KEY",
-            "CODEX_API_KEY"
-          ],
-          "login": {
-            "label": "Log in with Codex",
-            "command": {
-              "program": "codex",
-              "args": [
-                "login"
-              ]
-            },
-            "reusesUserState": true,
-            "message": null
-          },
-          "discovery": "codex"
-        },
-        "docsUrl": "https://github.com/proliferate-ai/codex-acp"
-      },
       "session": {
         "defaultModelId": "gpt-5.5",
         "defaultModeId": "auto",
@@ -909,45 +799,6 @@
       "kind": "gemini",
       "displayName": "Gemini",
       "description": "Gemini CLI through its ACP surface.",
-      "process": {
-        "native": null,
-        "agentProcess": {
-          "install": {
-            "kind": "registry_backed",
-            "registryId": "gemini",
-            "fallback": {
-              "kind": "binary_hint",
-              "candidateBinaries": [
-                "gemini"
-              ],
-              "args": [
-                "--experimental-acp"
-              ]
-            }
-          }
-        },
-        "launch": {
-          "executableName": "gemini",
-          "defaultArgs": []
-        },
-        "auth": {
-          "envVars": [
-            "GEMINI_API_KEY",
-            "GOOGLE_API_KEY"
-          ],
-          "login": {
-            "label": "Log in with Gemini",
-            "command": {
-              "program": "gemini",
-              "args": []
-            },
-            "reusesUserState": true,
-            "message": "When Gemini opens, choose Sign in with Google. If it opens into chat, type `/auth`."
-          },
-          "discovery": "gemini"
-        },
-        "docsUrl": "https://github.com/google-gemini/gemini-cli"
-      },
       "session": {
         "defaultModelId": "auto-gemini-3",
         "defaultModeId": "default",
@@ -1240,46 +1091,6 @@
       "kind": "cursor",
       "displayName": "Cursor",
       "description": "Cursor Agent CLI through ACP.",
-      "process": {
-        "native": null,
-        "agentProcess": {
-          "install": {
-            "kind": "registry_backed",
-            "registryId": "cursor",
-            "fallback": {
-              "kind": "binary_hint",
-              "candidateBinaries": [
-                "cursor-agent"
-              ],
-              "args": [
-                "acp"
-              ]
-            }
-          }
-        },
-        "launch": {
-          "executableName": "cursor-agent",
-          "defaultArgs": []
-        },
-        "auth": {
-          "envVars": [
-            "CURSOR_API_KEY"
-          ],
-          "login": {
-            "label": "Log in with Cursor",
-            "command": {
-              "program": "cursor-agent",
-              "args": [
-                "login"
-              ]
-            },
-            "reusesUserState": true,
-            "message": null
-          },
-          "discovery": "cursor"
-        },
-        "docsUrl": "https://docs.cursor.com/cli/acp"
-      },
       "session": {
         "defaultModelId": "composer-2.5-fast",
         "defaultModeId": "agent",
@@ -2331,32 +2142,6 @@
       "kind": "opencode",
       "displayName": "OpenCode",
       "description": "OpenCode through its ACP surface.",
-      "process": {
-        "native": null,
-        "agentProcess": {
-          "install": {
-            "kind": "registry_backed",
-            "registryId": "opencode",
-            "fallback": {
-              "kind": "npm_package",
-              "package": "opencode-ai",
-              "packageSubdir": null,
-              "sourceBuildBinaryName": null,
-              "executableRelpath": "node_modules/.bin/opencode-ai"
-            }
-          }
-        },
-        "launch": {
-          "executableName": "opencode-ai",
-          "defaultArgs": []
-        },
-        "auth": {
-          "envVars": [],
-          "login": null,
-          "discovery": "opencode"
-        },
-        "docsUrl": "https://opencode.ai"
-      },
       "session": {
         "defaultModelId": "opencode/big-pickle",
         "defaultModeId": "build",

@@ -299,11 +299,12 @@ Known violations, named per the specs convention. The rule above is the law;
 these are the debt:
 
 - ~81 `anyharness_contract` import lines inside `domains/**`; worst:
-  `runtime_config` persists wire types as rows, `agents/auth_config` uses
+  `runtime_config` persists wire types as rows, `agents/auth` uses
   contract structs as its domain model. Target: domain twins minted at the
   seams.
-- `api/http/agents.rs` carries a second error mechanism (`ProblemResponse`)
-  alongside `ApiError`. Target: one mechanism.
+- `api/http/agents_model_registry.rs` (with `agents_errors.rs`) carries a
+  second error mechanism (`ProblemResponse`) alongside `ApiError`. Target: one
+  mechanism.
 - `api/http/workspaces_lifecycle.rs` implements the retire state machine in
   the handler (three copies including retention). Target: a lifecycle service
   in `domains/workspaces`.

@@ -18,6 +18,7 @@ import {
   syncSyncedAgentAuthCredential,
   type AgentAuthAgentKind,
   type AgentAuthCredential,
+  type AgentAuthCredentialProviderId,
   type AgentAuthCredentialListOptions,
   type CloudCapabilities,
   type CreateGatewayCredentialRequest,
@@ -59,10 +60,11 @@ export function useAgentAuthCredentials(
 ) {
   const client = useCloudClient();
   const organizationId = options.organizationId ?? null;
-  const agentKind = options.agentKind ?? null;
+  const credentialProviderId = options.credentialProviderId ?? null;
   return useQuery<AgentAuthCredential[]>({
-    queryKey: agentAuthCredentialsKey(organizationId, agentKind),
-    queryFn: () => listAgentAuthCredentials({ organizationId, agentKind }, client),
+    queryKey: agentAuthCredentialsKey(organizationId, credentialProviderId),
+    queryFn: () =>
+      listAgentAuthCredentials({ organizationId, credentialProviderId }, client),
     enabled: options.enabled ?? true,
     placeholderData: EMPTY_CREDENTIALS,
   });
@@ -175,10 +177,12 @@ export function useAgentAuthMutations() {
     mutationFn: (input: {
       sandboxProfileId: string;
       agentKind: AgentAuthAgentKind;
+      authSlotId: AgentAuthCredentialProviderId | string;
       selection: SelectAgentAuthCredentialInput;
     }) => putSandboxAgentAuthSelection(
       input.sandboxProfileId,
       input.agentKind,
+      input.authSlotId,
       input.selection,
       client,
     ),

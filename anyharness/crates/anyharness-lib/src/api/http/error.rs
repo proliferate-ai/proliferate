@@ -3,11 +3,34 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 
-use crate::domains::agents::auth_config::AgentAuthSelectionRequired;
+use crate::domains::agents::auth::AgentAuthSelectionRequired;
 
 pub struct ApiError(StatusCode, ProblemDetails);
 
 impl ApiError {
+    /// General constructor for mappers that must preserve exact wire titles.
+    pub fn new(
+        status: StatusCode,
+        title: impl Into<String>,
+        detail: Option<String>,
+        code: Option<&str>,
+    ) -> Self {
+        Self(
+            status,
+            ProblemDetails {
+                type_url: "about:blank".into(),
+                title: title.into(),
+                status: status.as_u16(),
+                detail,
+                instance: None,
+                code: code.map(String::from),
+                resolution_scope: None,
+                agent_kind: None,
+                selection_status: None,
+            },
+        )
+    }
+
     pub fn not_found(detail: impl Into<String>, code: &str) -> Self {
         Self(
             StatusCode::NOT_FOUND,

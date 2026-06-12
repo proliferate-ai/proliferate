@@ -5,8 +5,11 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 
 from proliferate.config import settings
+from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 from proliferate.server.cloud.agent_auth.domain.byok_policy import gateway_route_isolation_ready
+from proliferate.server.cloud.agent_auth.registry import registry_auth_slots
 from proliferate.server.cloud.capabilities.models import (
+    AgentAuthSlotCapability,
     AgentGatewayByokProviderCapabilities,
     AgentGatewayCapabilities,
     CloudCapabilitiesResponse,
@@ -88,6 +91,7 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
                 openaiCompatible=False,
             ),
             opencodeGatewayEnabled=gateway_enabled and settings.agent_gateway_opencode_enabled,
+            agentAuthSlots=_agent_auth_slots(),
         )
     )
 
@@ -133,3 +137,51 @@ def _managed_credit_agent_kind_has_provider(agent_kind: str) -> bool:
     if agent_kind == "gemini":
         return bool(settings.agent_gateway_managed_gemini_api_key.strip())
     return False
+
+
+def _agent_auth_slots() -> list[AgentAuthSlotCapability]:
+    supported = set(SUPPORTED_CLOUD_AGENTS)
+    slots = [
+        slot
+        for slot in registry_auth_slots()
+        if slot.agent_kind in supported
+        and (slot.agent_kind != "opencode" or settings.agent_gateway_opencode_enabled)
+    ]
+    first_slot_by_agent = {slot.agent_kind: slot.auth_slot_id for slot in reversed(slots)}
+    required_slot_by_agent = {
+        slot.agent_kind: slot.auth_slot_id for slot in slots if slot.required_for_readiness
+    }
+    return [
+        AgentAuthSlotCapability(
+            agentKind=slot.agent_kind,
+            authSlotId=slot.auth_slot_id,
+            label=_slot_label(slot.agent_kind, slot.label),
+            shortLabel=slot.label,
+            credentialProviderIds=list(slot.credential_provider_ids),
+            localProvider=_local_provider_for_discovery(slot.discovery),
+            primary=slot.auth_slot_id
+            == required_slot_by_agent.get(
+                slot.agent_kind,
+                first_slot_by_agent.get(slot.agent_kind),
+            ),
+        )
+        for slot in slots
+    ]
+
+
+def _slot_label(agent_kind: str, slot_label: str) -> str:
+    agent_label = {
+        "claude": "Claude",
+        "codex": "Codex",
+        "opencode": "OpenCode",
+        "gemini": "Gemini",
+    }.get(agent_kind, agent_kind)
+    if slot_label == agent_label:
+        return slot_label
+    return f"{agent_label} {slot_label}"
+
+
+def _local_provider_for_discovery(discovery: str) -> str | None:
+    if discovery in {"claude", "codex", "gemini"}:
+        return discovery
+    return None

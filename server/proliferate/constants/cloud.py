@@ -18,12 +18,20 @@ from typing import Final, Literal
 # ---------------------------------------------------------------------------
 
 CloudAgentKind = Literal["claude", "codex", "opencode", "gemini"]
+AgentCredentialProviderId = Literal["anthropic", "openai", "gemini", "cursor"]
 
 SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = (
     "claude",
     "codex",
     "opencode",
     "gemini",
+)
+
+SUPPORTED_AGENT_CREDENTIAL_PROVIDERS: tuple[AgentCredentialProviderId, ...] = (
+    "anthropic",
+    "openai",
+    "gemini",
+    "cursor",
 )
 
 # Native credential sync does not support every catalog agent kind yet.
@@ -42,12 +50,19 @@ RESERVED_CLOUD_REPO_ENV_VARS: frozenset[str] = frozenset(
     {
         "AMP_API_KEY",
         "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_CUSTOM_HEADERS",
+        "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
         "CODEX_API_KEY",
+        "CODEX_HOME",
         "CURSOR_API_KEY",
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
+        "GOOGLE_GEMINI_BASE_URL",
         "GOOGLE_GENAI_USE_VERTEXAI",
         "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
     }
 )
 

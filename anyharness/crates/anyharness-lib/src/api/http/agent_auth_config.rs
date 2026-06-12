@@ -5,7 +5,7 @@ use axum::{extract::State, Json};
 
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::auth_config::{
+use crate::domains::agents::auth::{
     AgentAuthConfigApplyOutcome, AgentAuthConfigInput, AgentAuthConfigStatus,
 };
 
@@ -23,7 +23,7 @@ pub async fn apply_agent_auth_config(
     Json(request): Json<ApplyAgentAuthConfigRequest>,
 ) -> Result<Json<ApplyAgentAuthConfigResponse>, ApiError> {
     let response = state
-        .agent_auth_config_service
+        .agent_auth_service
         .apply_config(agent_auth_config_input(request))
         .map_err(|error| ApiError::bad_request(error.to_string(), "agent_auth_config_invalid"))?;
     Ok(Json(agent_auth_config_apply_response(response)))
@@ -41,7 +41,7 @@ pub async fn get_agent_auth_config_status(
     State(state): State<AppState>,
 ) -> Result<Json<AgentAuthConfigStatusResponse>, ApiError> {
     let response = state
-        .agent_auth_config_service
+        .agent_auth_service
         .status()
         .map_err(|error| ApiError::internal(error.to_string()))?;
     Ok(Json(agent_auth_config_status_response(response)))

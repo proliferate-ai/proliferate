@@ -22,6 +22,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
 from proliferate.server.cloud.agent_auth.domain.types import SyncedCredentialAuthMode
 
 AgentKind = Literal["claude", "codex", "opencode", "gemini"]
+CredentialProviderId = Literal["anthropic", "openai", "gemini", "cursor"]
 
 
 class GatewayModelDeploymentRequest(BaseModel):
@@ -41,7 +42,10 @@ class EnsureFreeManagedCreditsRequest(BaseModel):
 class CreateGatewayCredentialRequest(BaseModel):
     owner_scope: Literal["personal", "organization"] = Field(alias="ownerScope")
     organization_id: UUID | None = Field(default=None, alias="organizationId")
-    agent_kind: AgentKind = Field(alias="agentKind")
+    credential_provider_id: CredentialProviderId | None = Field(
+        default=None,
+        alias="credentialProviderId",
+    )
     display_name: str = Field(alias="displayName")
     policy_kind: Literal["org_byok", "personal_byok"] = Field(alias="policyKind")
     provider_kind: Literal[
@@ -105,7 +109,8 @@ class AgentAuthCredentialResponse(BaseModel):
     owner_user_id: UUID | None = Field(alias="ownerUserId")
     organization_id: UUID | None = Field(alias="organizationId")
     created_by_user_id: UUID | None = Field(alias="createdByUserId")
-    agent_kind: str = Field(alias="agentKind")
+    credential_provider_id: str = Field(alias="credentialProviderId")
+    agent_kind: str | None = Field(default=None, alias="agentKind")
     credential_kind: str = Field(alias="credentialKind")
     display_name: str = Field(alias="displayName")
     redacted_summary: dict[str, object] = Field(alias="redactedSummary")
@@ -126,7 +131,8 @@ class AgentAuthCredentialShareResponse(BaseModel):
     share_scope: str = Field(alias="shareScope")
     shared_by_user_id: UUID = Field(alias="sharedByUserId")
     status: str
-    allowed_agent_kind: str = Field(alias="allowedAgentKind")
+    allowed_credential_provider_id: str = Field(alias="allowedCredentialProviderId")
+    allowed_agent_kind: str | None = Field(default=None, alias="allowedAgentKind")
     revoked_at: str | None = Field(alias="revokedAt")
     revoked_by_user_id: UUID | None = Field(alias="revokedByUserId")
 
@@ -181,6 +187,7 @@ class SandboxAgentAuthSelectionResponse(BaseModel):
     sandbox_profile_id: UUID = Field(alias="sandboxProfileId")
     owner_scope: str = Field(alias="ownerScope")
     agent_kind: str = Field(alias="agentKind")
+    auth_slot_id: str = Field(alias="authSlotId")
     credential_id: UUID = Field(alias="credentialId")
     credential_share_id: UUID | None = Field(alias="credentialShareId")
     materialization_mode: str = Field(alias="materializationMode")
@@ -233,6 +240,7 @@ class WorkerAgentAuthSyncedFilesConfig(BaseModel):
 
 class WorkerAgentAuthSelectionPlan(BaseModel):
     agent_kind: str = Field(alias="agentKind")
+    auth_slot_id: str = Field(alias="authSlotId")
     materialization_mode: str = Field(alias="materializationMode")
     credential_id: UUID = Field(alias="credentialId")
     credential_revision: int = Field(alias="credentialRevision")
@@ -347,16 +355,21 @@ def credential_response(
     *,
     active_credential_share_id: UUID | None = None,
 ) -> AgentAuthCredentialResponse:
+    redacted_summary = _json_object(record.redacted_summary_json)
     return AgentAuthCredentialResponse(
         id=record.id,
         ownerScope=record.owner_scope,
         ownerUserId=record.owner_user_id,
         organizationId=record.organization_id,
         createdByUserId=record.created_by_user_id,
-        agentKind=record.agent_kind,
+        credentialProviderId=record.credential_provider_id,
+        agentKind=_legacy_agent_kind_for_credential(
+            record.credential_provider_id,
+            redacted_summary,
+        ),
         credentialKind=record.credential_kind,
         displayName=record.display_name,
-        redactedSummary=_json_object(record.redacted_summary_json),
+        redactedSummary=redacted_summary,
         status=record.status,
         revision=record.revision,
         activeCredentialShareId=active_credential_share_id,
@@ -375,7 +388,8 @@ def credential_share_response(
         shareScope=record.share_scope,
         sharedByUserId=record.shared_by_user_id,
         status=record.status,
-        allowedAgentKind=record.allowed_agent_kind,
+        allowedCredentialProviderId=record.allowed_credential_provider_id,
+        allowedAgentKind=_legacy_agent_kind_for_provider(record.allowed_credential_provider_id),
         revokedAt=_iso(record.revoked_at),
         revokedByUserId=record.revoked_by_user_id,
     )
@@ -461,6 +475,7 @@ def selection_response(
         sandboxProfileId=record.sandbox_profile_id,
         ownerScope=record.owner_scope,
         agentKind=record.agent_kind,
+        authSlotId=record.auth_slot_id,
         credentialId=record.credential_id,
         credentialShareId=record.credential_share_id,
         materializationMode=record.materialization_mode,
@@ -492,6 +507,28 @@ def target_state_response(
 def _json_object(value: str) -> dict[str, object]:
     parsed = json.loads(value or "{}")
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _legacy_agent_kind_for_credential(
+    credential_provider_id: str,
+    redacted_summary: dict[str, object],
+) -> str | None:
+    agent_kind = redacted_summary.get("agentKind")
+    if isinstance(agent_kind, str) and agent_kind:
+        return agent_kind
+    return _legacy_agent_kind_for_provider(credential_provider_id)
+
+
+def _legacy_agent_kind_for_provider(credential_provider_id: str) -> str | None:
+    if credential_provider_id == "anthropic":
+        return "claude"
+    if credential_provider_id == "openai":
+        return "codex"
+    if credential_provider_id == "gemini":
+        return "gemini"
+    if credential_provider_id == "cursor":
+        return "cursor"
+    return None
 
 
 def _iso(value: object) -> str | None:

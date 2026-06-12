@@ -18,17 +18,21 @@ pub(super) fn selection_required_error(
     })
 }
 
-pub(super) fn reject_expired_selection(selection: &AgentAuthSelectionConfig) -> anyhow::Result<()> {
+pub(super) fn reject_expired_selection(
+    selection: &AgentAuthSelectionConfig,
+    now: DateTime<Utc>,
+) -> anyhow::Result<()> {
     let Some(expires_at) = selection.expires_at.as_deref() else {
         return Ok(());
     };
     let expires_at = DateTime::parse_from_rfc3339(expires_at)
         .map_err(|error| anyhow::anyhow!("agent auth selection expiresAt is invalid: {error}"))?
         .with_timezone(&Utc);
-    if expires_at <= Utc::now() {
+    if expires_at <= now {
         anyhow::bail!(
-            "agent auth selection for {} expired at {}",
+            "agent auth selection for {}/{} expired at {}",
             selection.agent_kind,
+            selection.auth_slot_id,
             expires_at.to_rfc3339()
         );
     }

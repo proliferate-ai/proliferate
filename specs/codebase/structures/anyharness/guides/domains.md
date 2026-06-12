@@ -523,7 +523,7 @@ violations.
 
 Migration exceptions (the rule is the law; this is the debt):
 `domains/runtime_config` persists contract types as rows and uses them as its
-model; `domains/agents/auth_config` uses contract auth structs end-to-end.
+model; `domains/agents/auth` uses contract auth structs end-to-end.
 Target: domain twins minted at the API seam. (The sessions runtime's former
 fetching response mapper is resolved: `runtime/view.rs` composes `SessionView`
 and the API maps it dep-lessly.)

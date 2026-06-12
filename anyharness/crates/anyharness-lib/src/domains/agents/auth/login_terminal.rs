@@ -3,7 +3,7 @@ use crate::live::terminals::{
     AgentLoginTerminalStatus as LiveAgentLoginTerminalStatus, StartAgentLoginTerminalOptions,
 };
 
-use super::runtime::{AgentLoginStart, AgentRuntime, AgentRuntimeError};
+use crate::domains::agents::runtime::{AgentLoginStart, AgentRuntime, AgentRuntimeError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentLoginTerminalStatus {

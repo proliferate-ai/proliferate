@@ -1801,6 +1801,7 @@ export interface components {
         };
         AgentAuthSelectionConfig: {
             agentKind: string;
+            authSlotId?: string;
             credentialId: string;
             /** Format: int64 */
             credentialRevision: number;
@@ -1824,6 +1825,7 @@ export interface components {
         };
         AgentAuthSelectionStatus: {
             agentKind: string;
+            authSlotId: string;
             credentialId: string;
             /** Format: int64 */
             credentialRevision: number;

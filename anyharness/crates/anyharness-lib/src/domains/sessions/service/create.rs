@@ -5,14 +5,14 @@ use anyharness_contract::v1::AgentAuthExternalScope;
 use uuid::Uuid;
 
 use super::{CreateSessionError, SessionService};
-use crate::domains::agents::auth_config::AgentAuthLaunchOverlayError;
+use crate::domains::agents::auth::AgentAuthLaunchOverlayError;
 use crate::domains::agents::catalog::projection::models::bundled_create_mode_ids;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::model_registry::resolution::{
     resolve_launch_model_id, ModelResolutionError,
 };
-use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::readiness::service::resolve_agent_with_env;
+use crate::domains::agents::registry;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::workspaces::env::read_materialized_session_env;
 use crate::domains::workspaces::model::WorkspaceSurface;
@@ -71,13 +71,9 @@ impl SessionService {
         }
 
         let registry_lookup_started = Instant::now();
-        let registry = built_in_registry();
-        let descriptor = registry
-            .iter()
-            .find(|d| d.kind.as_str() == agent_kind)
-            .ok_or_else(|| {
-                CreateSessionError::Invalid(format!("unknown agent kind: {agent_kind}"))
-            })?;
+        let descriptor = registry::descriptor(agent_kind).ok_or_else(|| {
+            CreateSessionError::Invalid(format!("unknown agent kind: {agent_kind}"))
+        })?;
         tracing::info!(
             workspace_id = %workspace_id,
             agent_kind = %agent_kind,
@@ -88,7 +84,7 @@ impl SessionService {
         let workspace_env = read_materialized_session_env(Path::new(&workspace.path))
             .map_err(CreateSessionError::Internal)?;
         let agent_auth_overlay = self
-            .agent_auth_config_service
+            .agent_auth_service
             .launch_overlay(
                 agent_kind,
                 agent_auth_scope.as_ref(),
@@ -103,14 +99,14 @@ impl SessionService {
         readiness_env.extend(agent_auth_overlay.support_env);
         readiness_env.extend(agent_auth_overlay.protected_env);
         let agent_resolution_started = Instant::now();
-        let resolved = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
+        let resolved = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
         if resolved.status != ResolvedAgentStatus::Ready {
             tracing::warn!(
                 workspace_id = %workspace_id,
                 agent_kind = %agent_kind,
                 status = ?resolved.status,
                 credential_state = ?resolved.credential_state,
-                descriptor_auth_env_vars = ?descriptor.auth.env_vars,
+                descriptor_auth_env_vars = ?descriptor.auth.expected_env_vars(),
                 auth_support_env_keys = ?auth_support_env_keys,
                 auth_protected_env_keys = ?auth_protected_env_keys,
                 "Agent auth launch overlay did not satisfy agent readiness"

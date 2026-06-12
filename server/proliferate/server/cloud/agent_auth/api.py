@@ -67,7 +67,7 @@ worker_router = APIRouter(
 @router.get("/agent-auth/credentials", response_model=list[AgentAuthCredentialResponse])
 async def list_agent_auth_credentials_endpoint(
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    agent_kind: str | None = Query(default=None, alias="agentKind"),
+    credential_provider_id: str | None = Query(default=None, alias="credentialProviderId"),
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[AgentAuthCredentialResponse]:
@@ -80,7 +80,7 @@ async def list_agent_auth_credentials_endpoint(
             db,
             actor_user_id=user.id,
             organization_id=organization_id,
-            agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
         )
     ]
 
@@ -243,10 +243,13 @@ async def list_agent_auth_selections_endpoint(
     ]
 
 
-@router.put("/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}")
+@router.put(
+    "/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}/{auth_slot_id}"
+)
 async def select_agent_auth_credential_endpoint(
     sandbox_profile_id: UUID,
     agent_kind: CloudAgentKind,
+    auth_slot_id: str,
     body: SelectAgentAuthCredentialRequest,
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
@@ -256,6 +259,7 @@ async def select_agent_auth_credential_endpoint(
         actor_user_id=user.id,
         sandbox_profile_id=sandbox_profile_id,
         agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
         credential_id=body.credential_id,
         credential_share_id=body.credential_share_id,
         force_restart=body.force_restart,
