@@ -933,49 +933,51 @@ mark.codex-thread-find-active {
   --color-scrollbar-thumb: rgba(0, 0, 0, 0.08);
   --color-scrollbar-thumb-active: rgba(0, 0, 0, 0.16);
 
-  /* Claude-style oat paper instead of pure white. */
+  /* Claude-style light: oat paper, white cards, warm near-black ink,
+     ink-alpha overlay states. Derived from the claude.ai light aesthetic;
+     provisional until a Codex Claude+light capture replaces it. */
   --color-background: #faf9f5;
-  --color-foreground: hsl(39 8% 16%);
+  --color-foreground: #21201c;
   --color-overlay: hsl(0 0% 0%);
 
-  --color-primary: hsl(14 15% 22%);
-  --color-primary-foreground: hsl(44 9% 95%);
+  --color-primary: #21201c;
+  --color-primary-foreground: #faf9f5;
 
-  --color-secondary: hsl(44 10% 98%);
-  --color-secondary-foreground: hsl(39 8% 16%);
+  --color-secondary: #f1efe7;
+  --color-secondary-foreground: #21201c;
 
-  --color-accent: hsl(24 30% 10% / 0.05);
-  --color-accent-foreground: hsl(39 8% 16%);
-  --color-muted: hsl(44 10% 97%);
-  --color-muted-foreground: hsl(39 8% 16% / 0.6);
-  --color-faint: hsl(39 8% 16% / 0.45);
-  --color-helper: hsl(39 8% 16% / 0.6);
+  --color-accent: rgb(33 32 28 / 0.05);
+  --color-accent-foreground: #21201c;
+  --color-muted: #f1efe7;
+  --color-muted-foreground: rgb(33 32 28 / 0.62);
+  --color-faint: rgb(33 32 28 / 0.46);
+  --color-helper: rgb(33 32 28 / 0.62);
 
-  --color-card: hsl(44 0% 100%);
-  --color-card-foreground: hsl(38 9% 12%);
+  --color-card: #ffffff;
+  --color-card-foreground: #21201c;
 
-  --color-popover: hsl(44 0% 100%);
-  --color-popover-foreground: hsl(38 9% 12%);
-  --color-popover-accent: hsl(18 14% 7% / 0.05);
-  --color-popover-ring: hsl(38 9% 12% / 0.08);
+  --color-popover: #ffffff;
+  --color-popover-foreground: #21201c;
+  --color-popover-accent: rgb(33 32 28 / 0.05);
+  --color-popover-ring: rgb(33 32 28 / 0.08);
 
-  --color-border: hsl(24 30% 10% / 0.09);
-  --color-input: hsl(18 14% 7% / 0.1);
-  --color-input-border: hsl(18 14% 7% / 0.1);
-  --color-separator: hsl(24 30% 10% / 0.07);
-  --color-ring: hsl(39 8% 16%);
-  --color-border-light: hsl(18 14% 7% / 0.05);
-  --color-border-heavy: hsl(18 14% 7% / 0.12);
-  --color-surface: hsl(44 0% 100%);
-  --color-surface-under: hsl(44 10% 98%);
-  --color-surface-control: hsl(44 10% 96%);
-  --color-surface-control-opaque: hsl(44 10% 96%);
-  --color-surface-elevated: hsl(44 0% 100%);
-  --color-surface-elevated-secondary: hsl(18 14% 7% / 0.03);
-  --color-surface-editor: hsl(44 10% 97%);
-  --color-list-hover: hsl(18 14% 7% / 0.05);
-  --color-foreground-secondary: hsl(18 14% 7% / 0.7);
-  --color-foreground-tertiary: hsl(18 14% 7% / 0.5);
+  --color-border: rgb(33 32 28 / 0.09);
+  --color-input: rgb(33 32 28 / 0.1);
+  --color-input-border: rgb(33 32 28 / 0.1);
+  --color-separator: rgb(33 32 28 / 0.07);
+  --color-ring: hsl(17 52% 50%);
+  --color-border-light: rgb(33 32 28 / 0.05);
+  --color-border-heavy: rgb(33 32 28 / 0.13);
+  --color-surface: #faf9f5;
+  --color-surface-under: #f3f1ea;
+  --color-surface-control: #f0eee6;
+  --color-surface-control-opaque: #f0eee6;
+  --color-surface-elevated: #ffffff;
+  --color-surface-elevated-secondary: rgb(33 32 28 / 0.03);
+  --color-surface-editor: #f5f4ee;
+  --color-list-hover: rgb(33 32 28 / 0.05);
+  --color-foreground-secondary: rgb(33 32 28 / 0.7);
+  --color-foreground-tertiary: rgb(33 32 28 / 0.5);
 
   /* Terracotta accent family anchored at #cc7d5e = hsl(17 52% 58%);
      darkened cuts for text contrast on paper. */
@@ -1012,24 +1014,25 @@ mark.codex-thread-find-active {
   --color-tip-foreground: hsl(14 15% 22%);
   --color-plan-border: hsl(17 52% 58% / 0.5);
 
-  --color-switch-background: hsl(39 8% 16%);
-  --color-switch-foreground: hsl(44 0% 100%);
+  --color-switch-background: #21201c;
+  --color-switch-foreground: #faf9f5;
 
-  --color-composer-background: hsl(44 10% 98% / 0.82);
+  --color-composer-background: rgb(255 255 255 / 0.85);
 
-  --color-prose-border: hsl(38 7% 81%);
+  --color-prose-border: rgb(33 32 28 / 0.14);
 
-  --color-sidebar: hsl(44 10% 98%);
-  --color-sidebar-background: hsl(44 10% 98%);
-  --color-sidebar-foreground: hsl(18 14% 7% / 0.78);
-  --color-sidebar-primary: hsl(39 8% 16%);
-  --color-sidebar-primary-foreground: hsl(44 9% 95%);
-  --color-sidebar-muted-foreground: hsl(18 14% 7% / 0.45);
-  --color-sidebar-accent: hsl(18 14% 7% / 0.045);
-  --color-sidebar-accent-foreground: hsl(18 14% 7% / 0.85);
-  --color-sidebar-border: hsl(18 14% 7% / 0.08);
-  --color-sidebar-ring: hsl(37 5% 63%);
-  --color-sidebar-blue: hsl(221 83% 53%);
+  /* Sidebar: darker oat than the content paper, mirroring dark mode. */
+  --color-sidebar: #f3f1ea;
+  --color-sidebar-background: #faf9f5;
+  --color-sidebar-foreground: rgb(33 32 28 / 0.8);
+  --color-sidebar-primary: #21201c;
+  --color-sidebar-primary-foreground: #faf9f5;
+  --color-sidebar-muted-foreground: rgb(33 32 28 / 0.45);
+  --color-sidebar-accent: rgb(33 32 28 / 0.05);
+  --color-sidebar-accent-foreground: rgb(33 32 28 / 0.88);
+  --color-sidebar-border: rgb(33 32 28 / 0.08);
+  --color-sidebar-ring: hsl(17 52% 50%);
+  --color-sidebar-blue: hsl(17 52% 48%);
 
   --color-status-backlog: hsl(36 4% 54%);
   --color-status-backlog-hover: hsl(38 6% 35%);
