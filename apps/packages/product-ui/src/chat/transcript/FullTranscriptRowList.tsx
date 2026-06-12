@@ -58,6 +58,7 @@ export function FullTranscriptRowList({
   virtualizationMode,
 }: FullTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
@@ -233,6 +234,27 @@ export function FullTranscriptRowList({
     scrollToBottom,
   ]);
 
+  // Content can grow after the React commit (images decoding, async diff
+  // panels, code-highlight reflow). Re-stick on any content resize so a
+  // pinned viewport stays at the true bottom; the stickiness ref is the
+  // guard, so we always observe.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (!shouldStickToBottomRef.current) {
+        return;
+      }
+      scrollToBottom();
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+    };
+  }, [scrollToBottom]);
+
   return (
     <div className="relative h-full">
       <AutoHideScrollArea
@@ -241,6 +263,7 @@ export function FullTranscriptRowList({
         onViewportScroll={handleViewportScroll}
       >
         <div
+          ref={contentRef}
           className={`${gutterClassName} min-h-full`}
           data-transcript-virtualization-mode="full"
           data-transcript-virtualization-setting={virtualizationMode}
