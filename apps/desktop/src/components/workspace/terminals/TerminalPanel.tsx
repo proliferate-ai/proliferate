@@ -5,6 +5,7 @@ import { TerminalCommandFloatingAction } from "@/components/workspace/terminals/
 import { TerminalErrorBoundary } from "@/components/workspace/terminals/TerminalErrorBoundary";
 import { TerminalTopBar } from "@/components/workspace/terminals/TerminalTopBar";
 import { TerminalViewport } from "@/components/workspace/terminals/TerminalViewport";
+import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "@/lib/infra/terminals/terminal-grid-probe";
 
 interface TerminalPanelProps {
   workspaceId: string | null;
@@ -57,7 +58,10 @@ export function TerminalPanel({
           onNewTerminal={onNewTerminal}
         />
       )}
-      <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-sidebar">
+      <div
+        className="relative min-h-0 w-full flex-1 overflow-hidden bg-sidebar"
+        {...(workspaceId ? { [TERMINAL_GRID_PROBE_ATTRIBUTE]: workspaceId } : {})}
+      >
         {isLoading ? (
           <TerminalEmptyState label="Loading terminals" />
         ) : errorMessage ? (

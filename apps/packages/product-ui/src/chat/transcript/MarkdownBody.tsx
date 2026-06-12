@@ -106,16 +106,16 @@ const STATIC_MARKDOWN_COMPONENTS = {
       <div className="overflow-x-auto">
         {mdHtmlElement(
           "table",
-          "w-max min-w-full border-collapse text-chat leading-[var(--text-chat--line-height)]",
+          "w-max min-w-full border-collapse text-chat leading-[var(--text-chat--line-height)] [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.02] [&_tbody_tr:last-child_td]:border-b-0",
           props,
         )}
       </div>
     </div>
   ),
   th: (props: MdElementProps) =>
-    mdHtmlElement("th", "border-b border-border bg-foreground/5 p-1 text-left text-chat font-semibold leading-[var(--text-chat--line-height)] text-foreground", props),
+    mdHtmlElement("th", "border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left text-chat font-semibold leading-[var(--text-chat--line-height)] text-foreground", props),
   td: (props: MdElementProps) =>
-    mdHtmlElement("td", "border-b border-border p-1 text-chat leading-[var(--text-chat--line-height)]", props),
+    mdHtmlElement("td", "border-b border-border px-2.5 py-1.5 align-top text-chat leading-[var(--text-chat--line-height)]", props),
   pre: ({ children, dangerouslySetInnerHTML, node: _node, ...rest }: MdElementProps & { children?: ReactNode }) => {
     if (dangerouslySetInnerHTML) {
       return <pre {...rest} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;

@@ -2290,6 +2290,9 @@ body {
   --right-panel-tab-radius: 8px;
   --right-panel-tab-overlay-radius: 8px;
   --right-panel-tab-surface: transparent;
+  /* Matches the surface painted behind the header (workspace shell bg-sidebar)
+     so the sticky new-tab trigger masks tabs scrolling underneath it. */
+  --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-sidebar) 88%, transparent);
   --right-panel-tab-hover-bg: color-mix(
     in srgb,
     var(--color-sidebar-foreground) 4%,
@@ -2333,6 +2336,7 @@ body {
 
 :root[data-theme="mono"][data-mode="light"] .right-panel-tab-system {
   --right-panel-tab-surface: var(--color-surface);
+  --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-surface) 88%, transparent);
   --right-panel-tab-hover-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
   --right-panel-tab-active-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
   --right-panel-tab-text-secondary: color-mix(in oklab, var(--color-foreground) 65%, transparent);
@@ -2477,7 +2481,17 @@ body {
   align-items: center;
   height: 100%;
   flex-shrink: 0;
-  background-color: transparent;
+  background-color: var(--right-panel-tab-sticky-surface);
+}
+
+.right-panel-tab-system .ui-tab-system-new-tab-sticky::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  right: 100%;
+  width: 14px;
+  pointer-events: none;
+  background: linear-gradient(to left, var(--right-panel-tab-sticky-surface), transparent);
 }
 
 .right-panel-tab-system .right-panel-header-entry-shell {

@@ -115,7 +115,7 @@ export function useRightPanelEntryActions({
     }
     const activate = options?.activate ?? true;
     try {
-      const terminalId = await createTab(workspaceId, 120, 40);
+      const terminalId = await createTab(workspaceId);
       const terminalKey = rightPanelTerminalHeaderKey(terminalId);
       updateState((previous) => ({
         ...previous,

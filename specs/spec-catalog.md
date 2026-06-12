@@ -206,7 +206,7 @@ spec before end-to-end product work changes that surface.
 | --- | --- | --- |
 | **Onboarding** | `features/onboarding.md`; lower-level owners are `product-auth.md`, `agent-auth-bifrost-byok.md`, `billing.md`, `settings-admin-ia.md`, and workspace creation read path in `workspace-provisioning.md` | Covered for the current end-to-end read path; deepen the feature spec when onboarding UX grows. |
 | **Browsers** | AnyHarness runtime structure and future Product MCP pattern | Add a browser feature spec or Product MCP definition before adding user-visible browser workflows. |
-| **Terminals** | AnyHarness terminal internals and contract surfaces | Add `features/terminals.md` only for product UX/QA behavior; runtime-only work belongs in AnyHarness structure specs. |
+| **Terminals** | `features/terminals.md` for product UX (terminal pane, creation grid contract); AnyHarness structure specs for runtime internals | Covered for terminal pane UX; runtime-only work belongs in AnyHarness structure specs. |
 | **Computer Use** | Future Product MCP pattern | Add a computer-use feature spec or Product MCP definition before changing permissions, UX, or QA behavior. |
 | **Plugins** | `primitives/mcp-skills.md`, `settings-admin-ia.md` | Add `features/plugins.md` only when catalog/install/manage UX grows beyond the primitive contract. |
 | **Subagents** | `delegated-work.md`, `agent-features/definitions/subagents.md` | Covered for current UX and Product MCP semantics; split only if product-surface behavior outgrows those docs. |
@@ -374,7 +374,6 @@ until the operator-safe replacement flow and audit trail are implemented.
 | Gap | Action needed |
 | --- | --- |
 | Browsers feature | Write `features/browsers.md` |
-| Terminals feature | Write `features/terminals.md` |
 | Computer Use feature | Write `features/computer-use.md` |
 | Security spec | Write an authoritative security spec (no draft exists) |
 

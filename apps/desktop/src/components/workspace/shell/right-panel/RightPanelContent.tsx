@@ -5,6 +5,7 @@ import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { ScratchPadPanel } from "@/components/workspace/scratch/ScratchPadPanel";
 import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
+import { TERMINAL_GRID_PROBE_ATTRIBUTE } from "@/lib/infra/terminals/terminal-grid-probe";
 import type { TerminalRecord } from "@anyharness/sdk";
 import type {
   RightPanelActiveEntryKey,
@@ -76,6 +77,7 @@ export function RightPanelContent({
       data-panel="true"
       id="workspace-side-panel"
       className="relative min-h-0 flex-1 overflow-hidden"
+      {...(workspaceId ? { [TERMINAL_GRID_PROBE_ATTRIBUTE]: workspaceId } : {})}
     >
       {!shouldRenderContent ? (
         <RightPanelPlaceholder activeEntryKey={activeEntryKey} />

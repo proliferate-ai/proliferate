@@ -151,15 +151,15 @@ export function MarkdownRenderer({
               <div className="overflow-x-auto">
                 {mdHtmlElement(
                   "table",
-                  "min-w-full w-max border-collapse text-chat leading-[var(--text-chat--line-height)]",
+                  "min-w-full w-max border-collapse text-chat leading-[var(--text-chat--line-height)] [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.02] [&_tbody_tr:last-child_td]:border-b-0",
                   props,
                 )}
               </div>
             </div>
           ),
           th: (props) =>
-            mdHtmlElement("th", "border-b border-border bg-foreground/5 p-1 text-left text-chat leading-[var(--text-chat--line-height)] font-semibold text-foreground", props),
-          td: (props) => mdHtmlElement("td", "border-b border-border p-1 text-chat leading-[var(--text-chat--line-height)]", props),
+            mdHtmlElement("th", "border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left text-chat leading-[var(--text-chat--line-height)] font-semibold text-foreground", props),
+          td: (props) => mdHtmlElement("td", "border-b border-border px-2.5 py-1.5 align-top text-chat leading-[var(--text-chat--line-height)]", props),
           code: ({
             className: codeClassName,
             children,

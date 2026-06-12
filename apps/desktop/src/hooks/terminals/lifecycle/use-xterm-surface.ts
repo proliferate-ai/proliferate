@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
 import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
+import { TERMINAL_FONT_FAMILY } from "@/lib/domain/terminals/terminal-grid";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 interface UseXtermSurfaceInput {
@@ -91,7 +92,7 @@ export function useXtermSurface({
           cursorBlink: true,
           fontSize: terminalFontSizeRef.current,
           ...(lineHeight === undefined ? {} : { lineHeight }),
-          fontFamily: "'Geist Mono', 'SF Mono', Menlo, Monaco, 'Courier New', monospace",
+          fontFamily: TERMINAL_FONT_FAMILY,
           theme: getTerminalTheme(),
           allowTransparency: true,
           scrollback,
