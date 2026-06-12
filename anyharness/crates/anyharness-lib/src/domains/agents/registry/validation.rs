@@ -106,6 +106,42 @@ fn validate_auth(agent_kind: &str, auth: &AgentRegistryAuth) -> anyhow::Result<(
                 );
             }
         }
+        let mut seen_env_vars = HashSet::new();
+        for env_var in &slot.env_vars {
+            if env_var.name().trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{}' auth slot '{}' has empty env var name",
+                    agent_kind,
+                    slot.id
+                );
+            }
+            if !seen_env_vars.insert(env_var.name().to_string()) {
+                anyhow::bail!(
+                    "agent registry agent '{}' auth slot '{}' env var '{}' is duplicated",
+                    agent_kind,
+                    slot.id,
+                    env_var.name()
+                );
+            }
+        }
+        let mut seen_discovery_kinds = HashSet::new();
+        for discovery_kind in &slot.discovery_kinds {
+            if discovery_kind.trim().is_empty() {
+                anyhow::bail!(
+                    "agent registry agent '{}' auth slot '{}' has empty discovery kind",
+                    agent_kind,
+                    slot.id
+                );
+            }
+            if !seen_discovery_kinds.insert(discovery_kind.clone()) {
+                anyhow::bail!(
+                    "agent registry agent '{}' auth slot '{}' discovery kind '{}' is duplicated",
+                    agent_kind,
+                    slot.id,
+                    discovery_kind
+                );
+            }
+        }
         if slot.required_for_readiness {
             required_count += 1;
         }
@@ -138,4 +174,46 @@ fn validate_auth(agent_kind: &str, auth: &AgentRegistryAuth) -> anyhow::Result<(
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
+    use crate::domains::agents::registry::schema::AgentRegistryAuthSlotEnvVar;
+
+    #[test]
+    fn registry_rejects_duplicate_env_var_names() {
+        let mut registry = bundled_agent_registry_document().clone();
+        let slot = &mut registry.agents[0].auth.slots[0];
+        slot.env_vars.push(AgentRegistryAuthSlotEnvVar::Name(
+            "ANTHROPIC_API_KEY".to_string(),
+        ));
+
+        let error =
+            validate_agent_registry_document(&registry).expect_err("duplicate env var must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("env var 'ANTHROPIC_API_KEY' is duplicated"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn registry_rejects_empty_discovery_kind() {
+        let mut registry = bundled_agent_registry_document().clone();
+        registry.agents[0].auth.slots[0]
+            .discovery_kinds
+            .push("  ".to_string());
+
+        let error = validate_agent_registry_document(&registry)
+            .expect_err("empty discovery kind must fail");
+
+        assert!(
+            error.to_string().contains("has empty discovery kind"),
+            "unexpected error: {error}"
+        );
+    }
 }

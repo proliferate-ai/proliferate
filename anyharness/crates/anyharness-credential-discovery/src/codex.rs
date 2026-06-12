@@ -98,15 +98,47 @@ fn read_json_file(path: &Path) -> Result<Option<Value>, DiscoveryError> {
 }
 
 fn has_codex_auth(data: &Value) -> bool {
+    has_codex_api_key(data) || has_codex_oauth_tokens(data)
+}
+
+fn has_codex_api_key(data: &Value) -> bool {
     data.get("OPENAI_API_KEY")
         .and_then(Value::as_str)
         .map(|value| !value.is_empty())
         .unwrap_or(false)
-        || data
-            .pointer("/tokens/access_token")
-            .and_then(Value::as_str)
-            .map(|value| !value.is_empty())
-            .unwrap_or(false)
+}
+
+fn has_codex_oauth_tokens(data: &Value) -> bool {
+    data.pointer("/tokens/access_token")
+        .and_then(Value::as_str)
+        .map(|value| !value.is_empty())
+        .unwrap_or(false)
+}
+
+/// Kind-preserving fact detection: emits EVERY present codex credential
+/// kind. auth.json content is split by what the existing parser can already
+/// distinguish — `OPENAI_API_KEY` → `codex-auth-json-api-key`,
+/// `tokens.access_token` → `codex-auth-json-oauth` (both may be present);
+/// a usable keychain entry → `codex-keychain`.
+pub(crate) fn discovery_fact_kinds(
+    home_dir: &Path,
+) -> Result<Vec<&'static str>, DiscoveryError> {
+    let mut kinds = Vec::new();
+
+    if let Some(data) = read_json_file(&local_codex_auth_path(home_dir))? {
+        if has_codex_api_key(&data) {
+            kinds.push(crate::facts::fact_kinds::CODEX_AUTH_JSON_API_KEY);
+        }
+        if has_codex_oauth_tokens(&data) {
+            kinds.push(crate::facts::fact_kinds::CODEX_AUTH_JSON_OAUTH);
+        }
+    }
+
+    if read_keychain_codex_auth(home_dir)?.is_some() {
+        kinds.push(crate::facts::fact_kinds::CODEX_KEYCHAIN);
+    }
+
+    Ok(kinds)
 }
 
 #[cfg(target_os = "macos")]
@@ -210,6 +242,36 @@ mod tests {
             state,
             LocalAuthState::Present(LocalAuthSource::File { .. })
         ));
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn fact_kinds_distinguish_api_key_from_oauth_tokens() {
+        let home = make_temp_home();
+        fs::write(
+            home.join(CODEX_AUTH_PATH),
+            r#"{"OPENAI_API_KEY":"sk-test","tokens":{"access_token":"token"}}"#,
+        )
+        .expect("write codex auth");
+
+        assert_eq!(
+            discovery_fact_kinds(&home).expect("fact kinds"),
+            vec!["codex-auth-json-api-key", "codex-auth-json-oauth"]
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn fact_kinds_empty_for_unusable_auth_file() {
+        let home = make_temp_home();
+        fs::write(home.join(CODEX_AUTH_PATH), r#"{"OPENAI_API_KEY":""}"#)
+            .expect("write codex auth");
+
+        assert!(discovery_fact_kinds(&home)
+            .expect("fact kinds")
+            .is_empty());
 
         let _ = fs::remove_dir_all(home);
     }
