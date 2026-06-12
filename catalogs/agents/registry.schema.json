@@ -259,6 +259,7 @@
               ]
             },
             "sourceBuildBinaryName": {
+              "description": "When set, the installer clones the package source and cargo-builds this binary instead of npm-installing the wrapper; packageSubdir and executableRelpath are ignored.",
               "type": [
                 "string",
                 "null"
@@ -340,6 +341,7 @@
               ]
             },
             "sourceBuildBinaryName": {
+              "description": "When set, the installer clones the package source and cargo-builds this binary instead of npm-installing the wrapper; packageSubdir and executableRelpath are ignored.",
               "type": [
                 "string",
                 "null"

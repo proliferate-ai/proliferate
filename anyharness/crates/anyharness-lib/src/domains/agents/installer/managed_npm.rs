@@ -109,6 +109,19 @@ fn recorded_source_spec(managed_dir: &Path) -> Option<String> {
     }
 }
 
+/// Staleness check for source-built artifacts: the managed dir has no npm
+/// metadata, so the source marker is the only record of which spec (and git
+/// ref) the installed binary was built from.
+pub(crate) fn source_build_install_issue(package: &str, managed_dir: &Path) -> Option<String> {
+    if recorded_source_spec(managed_dir).is_some_and(|recorded| recorded == package) {
+        return None;
+    }
+    Some(
+        "Managed agent source build is out of date. Reinstall this agent to rebuild the bundled ACP adapter."
+            .into(),
+    )
+}
+
 pub(crate) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Option<String> {
     if is_npm_non_registry_spec(package) {
         if non_registry_install_matches(package, managed_dir) {
