@@ -11,7 +11,7 @@ use super::sessions_errors::map_resolve_interaction_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::runtime::{
-    InteractionPermissionDecision, InteractionResolutionRequest,
+    InteractionPermissionDecision, ResolutionRequest,
 };
 
 #[utoipa::path(
@@ -87,25 +87,25 @@ pub async fn reveal_mcp_elicitation_url(
     ))
 }
 
-fn resolve_interaction_input(request: ResolveInteractionRequest) -> InteractionResolutionRequest {
+fn resolve_interaction_input(request: ResolveInteractionRequest) -> ResolutionRequest {
     match request {
         ResolveInteractionRequest::Selected { option_id } => {
-            InteractionResolutionRequest::OptionId(option_id)
+            ResolutionRequest::OptionId(option_id)
         }
         ResolveInteractionRequest::Decision {
             decision: InteractionDecision::Allow,
-        } => InteractionResolutionRequest::Decision(InteractionPermissionDecision::Allow),
+        } => ResolutionRequest::Decision(InteractionPermissionDecision::Allow),
         ResolveInteractionRequest::Decision {
             decision: InteractionDecision::Deny,
-        } => InteractionResolutionRequest::Decision(InteractionPermissionDecision::Deny),
+        } => ResolutionRequest::Decision(InteractionPermissionDecision::Deny),
         ResolveInteractionRequest::Submitted { answers } => {
-            InteractionResolutionRequest::Submitted { answers }
+            ResolutionRequest::Submitted { answers }
         }
         ResolveInteractionRequest::Accepted { fields } => {
-            InteractionResolutionRequest::Accepted { fields }
+            ResolutionRequest::Accepted { fields }
         }
-        ResolveInteractionRequest::Declined => InteractionResolutionRequest::Declined,
-        ResolveInteractionRequest::Cancelled => InteractionResolutionRequest::Cancelled,
-        ResolveInteractionRequest::Dismissed => InteractionResolutionRequest::Dismissed,
+        ResolveInteractionRequest::Declined => ResolutionRequest::Declined,
+        ResolveInteractionRequest::Cancelled => ResolutionRequest::Cancelled,
+        ResolveInteractionRequest::Dismissed => ResolutionRequest::Dismissed,
     }
 }

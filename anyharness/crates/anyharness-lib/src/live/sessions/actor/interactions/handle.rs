@@ -3,52 +3,52 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::command::{
-    InteractionResolution, ResolveInteractionCommandError,
+    Resolution, ResolveInteractionCommandError,
 };
 use crate::live::sessions::actor::interactions::outcomes::{
     broker_outcome_to_interaction_event, map_resolve_interaction_error,
 };
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::interactions::broker::{
-    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome,
+use crate::live::sessions::rendezvous::broker::{
+    InteractionRendezvous, InteractionRendezvousOutcome, InteractionCancelOutcome,
 };
 
 pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,
-    interaction_broker: &Arc<InteractionBroker>,
+    interaction_broker: &Arc<InteractionRendezvous>,
     session_id: &str,
     request_id: String,
-    resolution: InteractionResolution,
+    resolution: Resolution,
 ) -> Result<(), ResolveInteractionCommandError> {
     let outcome = match resolution {
-        InteractionResolution::Selected { option_id } => interaction_broker
+        Resolution::Selected { option_id } => interaction_broker
             .resolve_with_option_id(session_id, &request_id, &option_id)
             .await
-            .map(InteractionBrokerOutcome::Permission),
-        InteractionResolution::Decision(decision) => interaction_broker
+            .map(InteractionRendezvousOutcome::Permission),
+        Resolution::Decision(decision) => interaction_broker
             .resolve_with_decision(session_id, &request_id, decision)
             .await
-            .map(InteractionBrokerOutcome::Permission),
-        InteractionResolution::Submitted { answers } => interaction_broker
+            .map(InteractionRendezvousOutcome::Permission),
+        Resolution::Submitted { answers } => interaction_broker
             .submit_user_input(session_id, &request_id, answers)
             .await
-            .map(InteractionBrokerOutcome::UserInput),
-        InteractionResolution::Accepted { fields } => interaction_broker
+            .map(InteractionRendezvousOutcome::UserInput),
+        Resolution::Accepted { fields } => interaction_broker
             .accept_mcp_elicitation(session_id, &request_id, fields)
             .await
-            .map(InteractionBrokerOutcome::McpElicitation),
-        InteractionResolution::Declined => interaction_broker
+            .map(InteractionRendezvousOutcome::McpElicitation),
+        Resolution::Declined => interaction_broker
             .decline_mcp_elicitation(session_id, &request_id)
             .await
-            .map(InteractionBrokerOutcome::McpElicitation),
-        InteractionResolution::Cancelled => {
+            .map(InteractionRendezvousOutcome::McpElicitation),
+        Resolution::Cancelled => {
             interaction_broker
                 .cancel(session_id, &request_id, InteractionCancelOutcome::Cancelled)
                 .await
         }
-        InteractionResolution::Dismissed => {
+        Resolution::Dismissed => {
             interaction_broker
                 .cancel(session_id, &request_id, InteractionCancelOutcome::Dismissed)
                 .await

@@ -8,7 +8,7 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 
 pub use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, ForkSessionCommandResult, InteractionResolution, PromptAcceptError,
+    ForkSessionCommandError, ForkSessionCommandResult, Resolution, PromptAcceptError,
     PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
     SetConfigOptionCommandError,
 };
@@ -285,7 +285,7 @@ impl LiveSessionHandle {
     pub async fn resolve_interaction(
         &self,
         request_id: String,
-        resolution: InteractionResolution,
+        resolution: Resolution,
     ) -> Result<(), ResolveInteractionCommandError> {
         self.send_request(|respond_to| SessionCommand::ResolveInteraction {
             request_id,

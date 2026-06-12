@@ -11,7 +11,7 @@ use crate::acp::permission_payload::{
     bound_raw_json, permission_option_mappings, permission_options,
 };
 use crate::domains::plans::model::PlanRecord;
-use crate::live::sessions::interactions::broker::PermissionOutcome;
+use crate::live::sessions::rendezvous::broker::PermissionOutcome;
 
 impl RuntimeClient {
     pub async fn handle_request_permission(

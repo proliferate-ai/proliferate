@@ -6,9 +6,9 @@ use serde_json::value::RawValue;
 use tokio::sync::{mpsc, Mutex};
 
 use crate::domains::plans::service::PlanService;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::interactions::broker::InteractionBroker;
+use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 
 mod mcp_elicitation;
 mod permission;
@@ -21,7 +21,7 @@ const CLAUDE_MCP_ELICITATION_METHOD: &str = "experimental/claude/mcpElicitation"
 pub struct RuntimeClient {
     pub session_id: String,
     pub notification_tx: mpsc::UnboundedSender<acp::schema::SessionNotification>,
-    pub interaction_broker: Arc<InteractionBroker>,
+    pub interaction_broker: Arc<InteractionRendezvous>,
     pub event_sink: Arc<Mutex<SessionEventSink>>,
     pub live_session_handle: Arc<LiveSessionHandle>,
     pub plan_service: Arc<PlanService>,
@@ -31,7 +31,7 @@ impl RuntimeClient {
     pub fn new(
         session_id: String,
         notification_tx: mpsc::UnboundedSender<acp::schema::SessionNotification>,
-        interaction_broker: Arc<InteractionBroker>,
+        interaction_broker: Arc<InteractionRendezvous>,
         event_sink: Arc<Mutex<SessionEventSink>>,
         live_session_handle: Arc<LiveSessionHandle>,
         plan_service: Arc<PlanService>,

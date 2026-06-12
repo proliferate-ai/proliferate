@@ -1,5 +1,5 @@
 use super::*;
-use crate::live::sessions::interactions::mcp_elicitation::normalize_standard_mcp_elicitation;
+use crate::live::sessions::rendezvous::mcp_elicitation::normalize_standard_mcp_elicitation;
 use agent_client_protocol::schema::{
     CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope,
 };
@@ -54,7 +54,7 @@ fn mcp_elicitation() -> StoredMcpElicitation {
 
 #[tokio::test]
 async fn registered_permission_can_be_resolved_before_wait_starts() {
-    let broker = InteractionBroker::new();
+    let broker = InteractionRendezvous::new();
     let session_id = "session-1";
     let request_id = "req-0";
     let options = vec![option("allow-once", acp::schema::PermissionOptionKind::AllowOnce)];
@@ -82,7 +82,7 @@ async fn registered_permission_can_be_resolved_before_wait_starts() {
 
 #[tokio::test]
 async fn decision_resolution_preserves_existing_option_preference() {
-    let broker = InteractionBroker::new();
+    let broker = InteractionRendezvous::new();
     broker
         .insert_pending_for_test(
             "session-1",
@@ -107,7 +107,7 @@ async fn decision_resolution_preserves_existing_option_preference() {
 
 #[tokio::test]
 async fn pending_requests_are_scoped_by_session() {
-    let broker = InteractionBroker::new();
+    let broker = InteractionRendezvous::new();
     let request_id = "req-shared";
     let options = vec![option("allow-once", acp::schema::PermissionOptionKind::AllowOnce)];
 
@@ -123,7 +123,7 @@ async fn pending_requests_are_scoped_by_session() {
             .cancel("session-b", request_id, InteractionCancelOutcome::Cancelled)
             .await
             .expect("cancel"),
-        InteractionBrokerOutcome::Permission(PermissionOutcome::Cancelled)
+        InteractionRendezvousOutcome::Permission(PermissionOutcome::Cancelled)
     );
     assert_eq!(wait_b.wait().await, PermissionOutcome::Cancelled);
 
@@ -146,7 +146,7 @@ async fn pending_requests_are_scoped_by_session() {
 
 #[tokio::test]
 async fn user_input_submit_validates_all_question_ids_and_options() {
-    let broker = InteractionBroker::new();
+    let broker = InteractionRendezvous::new();
     let wait = broker
         .register_user_input(
             "session-1",
@@ -185,7 +185,7 @@ async fn user_input_submit_validates_all_question_ids_and_options() {
 
 #[tokio::test]
 async fn user_input_submit_rejects_missing_duplicate_unknown_and_invalid_options() {
-    let broker = InteractionBroker::new();
+    let broker = InteractionRendezvous::new();
     broker
         .register_user_input(
             "session-1",
@@ -245,7 +245,7 @@ async fn user_input_submit_rejects_missing_duplicate_unknown_and_invalid_options
 
 #[tokio::test]
 async fn cancel_session_cancels_all_interaction_kinds() {
-    let broker = InteractionBroker::new();
+    let broker = InteractionRendezvous::new();
     let options = vec![option("allow-once", acp::schema::PermissionOptionKind::AllowOnce)];
     let permission_wait = broker
         .register_permission("session-1", "perm", &options)
@@ -267,15 +267,15 @@ async fn cancel_session_cancels_all_interaction_kinds() {
         vec![
             CancelledInteraction {
                 request_id: "input".to_string(),
-                outcome: InteractionBrokerOutcome::UserInput(UserInputOutcome::Dismissed),
+                outcome: InteractionRendezvousOutcome::UserInput(UserInputOutcome::Dismissed),
             },
             CancelledInteraction {
                 request_id: "mcp".to_string(),
-                outcome: InteractionBrokerOutcome::McpElicitation(McpElicitationOutcome::Dismissed),
+                outcome: InteractionRendezvousOutcome::McpElicitation(McpElicitationOutcome::Dismissed),
             },
             CancelledInteraction {
                 request_id: "perm".to_string(),
-                outcome: InteractionBrokerOutcome::Permission(PermissionOutcome::Dismissed),
+                outcome: InteractionRendezvousOutcome::Permission(PermissionOutcome::Dismissed),
             },
         ]
     );

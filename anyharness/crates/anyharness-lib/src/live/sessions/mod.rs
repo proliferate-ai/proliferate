@@ -1,9 +1,9 @@
 mod actor;
 mod background_work;
 mod driver;
-mod event_sink;
+mod sink;
 pub mod handle;
-mod interactions;
+mod rendezvous;
 mod manager;
 pub mod probe;
 mod replay;
@@ -11,11 +11,11 @@ mod replay;
 pub use actor::spawn::ActorReadyResult;
 pub use actor::state::SessionStartupStrategy;
 pub use handle::{
-    ForkSessionCommandError, ForkSessionCommandResult, InteractionResolution,
+    ForkSessionCommandError, ForkSessionCommandResult, Resolution,
     LiveSessionCommandError, LiveSessionExecutionSnapshot, LiveSessionHandle, PromptAcceptError,
     PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
     SetConfigOptionCommandError,
 };
-pub use interactions::broker::PermissionDecision;
+pub use rendezvous::broker::PermissionDecision;
 pub use manager::LiveSessionManager;
 pub(crate) use manager::RevealMcpElicitationUrlError;

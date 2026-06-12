@@ -14,7 +14,7 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
 use crate::live::sessions::actor::state::SessionStartupState;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn persist_session_config_state_if_changed(
     store: &SessionStore,
     event_sink: &Arc<Mutex<SessionEventSink>>,

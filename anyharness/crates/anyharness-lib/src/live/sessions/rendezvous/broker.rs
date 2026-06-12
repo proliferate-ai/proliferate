@@ -9,7 +9,7 @@ use anyharness_contract::v1::{
 use tokio::sync::{oneshot, Mutex};
 use validation::{map_mcp_validation_error, pick_option, validate_user_input_answers};
 
-use crate::live::sessions::interactions::mcp_elicitation::{
+use crate::live::sessions::rendezvous::mcp_elicitation::{
     McpElicitationOutcome, StoredMcpElicitation,
 };
 
@@ -19,7 +19,7 @@ mod validation;
 
 pub const USER_INPUT_OTHER_OPTION_LABEL: &str = "None of the above";
 
-pub struct InteractionBroker {
+pub struct InteractionRendezvous {
     pending: Arc<Mutex<HashMap<PendingInteractionKey, PendingInteractionRequest>>>,
 }
 
@@ -58,13 +58,13 @@ impl fmt::Debug for UserInputOutcome {
 }
 
 #[derive(Clone, PartialEq)]
-pub enum InteractionBrokerOutcome {
+pub enum InteractionRendezvousOutcome {
     Permission(PermissionOutcome),
     UserInput(UserInputOutcome),
     McpElicitation(McpElicitationOutcome),
 }
 
-impl fmt::Debug for InteractionBrokerOutcome {
+impl fmt::Debug for InteractionRendezvousOutcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Permission(outcome) => f.debug_tuple("Permission").field(outcome).finish(),
@@ -79,7 +79,7 @@ impl fmt::Debug for InteractionBrokerOutcome {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CancelledInteraction {
     pub request_id: String,
-    pub outcome: InteractionBrokerOutcome,
+    pub outcome: InteractionRendezvousOutcome,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,7 +132,7 @@ enum PendingInteractionRequest {
 }
 
 impl PendingInteractionRequest {
-    fn cancel(self, outcome: InteractionCancelOutcome) -> InteractionBrokerOutcome {
+    fn cancel(self, outcome: InteractionCancelOutcome) -> InteractionRendezvousOutcome {
         match self {
             Self::Permission(request) => {
                 let outcome = match outcome {
@@ -140,7 +140,7 @@ impl PendingInteractionRequest {
                     InteractionCancelOutcome::Dismissed => PermissionOutcome::Dismissed,
                 };
                 let _ = request.respond_to.send(outcome.clone());
-                InteractionBrokerOutcome::Permission(outcome)
+                InteractionRendezvousOutcome::Permission(outcome)
             }
             Self::UserInput(request) => {
                 let outcome = match outcome {
@@ -148,7 +148,7 @@ impl PendingInteractionRequest {
                     InteractionCancelOutcome::Dismissed => UserInputOutcome::Dismissed,
                 };
                 let _ = request.respond_to.send(outcome.clone());
-                InteractionBrokerOutcome::UserInput(outcome)
+                InteractionRendezvousOutcome::UserInput(outcome)
             }
             Self::McpElicitation(request) => {
                 let outcome = match outcome {
@@ -156,7 +156,7 @@ impl PendingInteractionRequest {
                     InteractionCancelOutcome::Dismissed => McpElicitationOutcome::Dismissed,
                 };
                 let _ = request.respond_to.send(outcome.clone());
-                InteractionBrokerOutcome::McpElicitation(outcome)
+                InteractionRendezvousOutcome::McpElicitation(outcome)
             }
         }
     }
@@ -241,7 +241,7 @@ pub(super) struct StoredUserInputQuestion {
     pub(super) option_labels: Vec<String>,
 }
 
-impl InteractionBroker {
+impl InteractionRendezvous {
     pub fn new() -> Self {
         Self {
             pending: Arc::new(Mutex::new(HashMap::new())),
@@ -524,7 +524,7 @@ impl InteractionBroker {
         session_id: &str,
         request_id: &str,
         outcome: InteractionCancelOutcome,
-    ) -> Result<InteractionBrokerOutcome, ResolveInteractionError> {
+    ) -> Result<InteractionRendezvousOutcome, ResolveInteractionError> {
         let key = PendingInteractionKey::new(session_id, request_id);
         let request = {
             let mut pending = self.pending.lock().await;
@@ -590,7 +590,7 @@ impl InteractionBroker {
     }
 }
 
-impl Clone for InteractionBroker {
+impl Clone for InteractionRendezvous {
     fn clone(&self) -> Self {
         Self {
             pending: self.pending.clone(),

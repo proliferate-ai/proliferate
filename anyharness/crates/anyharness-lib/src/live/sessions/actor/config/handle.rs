@@ -19,7 +19,7 @@ use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
 };
 use crate::live::sessions::actor::state::SessionStartupState;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn apply_requested_session_preferences(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,

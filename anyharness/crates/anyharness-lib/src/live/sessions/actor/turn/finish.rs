@@ -16,7 +16,7 @@ use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupStat
 use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
-use crate::live::sessions::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
+use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 

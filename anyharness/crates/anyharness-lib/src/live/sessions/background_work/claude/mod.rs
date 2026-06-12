@@ -4,7 +4,7 @@ use tokio::task::JoinHandle;
 use super::{BackgroundWorkOptions, BackgroundWorkUpdate};
 use crate::domains::sessions::model::SessionBackgroundWorkRecord;
 use crate::domains::sessions::store::SessionStore;
-use crate::live::sessions::event_sink::AcpToolPayload;
+use crate::live::sessions::sink::AcpToolPayload;
 
 mod output;
 mod registration;

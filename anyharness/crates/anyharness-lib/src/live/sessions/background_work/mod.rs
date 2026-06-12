@@ -8,7 +8,7 @@ use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
 };
 use crate::domains::sessions::store::SessionStore;
-use crate::live::sessions::event_sink::AcpToolPayload;
+use crate::live::sessions::sink::AcpToolPayload;
 
 mod claude;
 
@@ -212,7 +212,7 @@ mod tests {
     use crate::app::test_support;
     use crate::domains::sessions::model::SessionRecord;
     use crate::domains::sessions::store::SessionStore;
-    use crate::live::sessions::event_sink::AcpToolPayload;
+    use crate::live::sessions::sink::AcpToolPayload;
     use crate::persistence::Db;
 
     #[tokio::test(flavor = "current_thread")]

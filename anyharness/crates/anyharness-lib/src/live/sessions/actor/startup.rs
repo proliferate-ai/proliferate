@@ -25,10 +25,10 @@ use crate::live::sessions::driver::native_session::{
     has_anyharness_targeted_fork_extension, start_native_session,
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
-use crate::live::sessions::driver::runtime_client::RuntimeClient;
+use crate::live::sessions::driver::inbound::RuntimeClient;
 use crate::live::sessions::driver::start::initialize_connection;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::latency_trace_fields;
 

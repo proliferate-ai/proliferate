@@ -16,7 +16,7 @@ use crate::live::sessions::actor::config::selection::find_select_option_by_purpo
 use crate::live::sessions::actor::config::types::ConfigPurpose;
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::driver::types::NativeSessionStartupState;
-use crate::live::sessions::interactions::broker::InteractionBroker;
+use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 use crate::observability::latency::LatencyRequestContext;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,7 +56,7 @@ pub struct SessionActorConfig {
     pub session_launch_env: std::collections::BTreeMap<String, String>,
     pub agent_auth_env: std::collections::BTreeMap<String, String>,
     pub protected_agent_auth_env: std::collections::BTreeMap<String, String>,
-    pub interaction_broker: Arc<InteractionBroker>,
+    pub interaction_broker: Arc<InteractionRendezvous>,
     pub plan_service: Arc<PlanService>,
     pub review_service: Option<Arc<ReviewService>>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,

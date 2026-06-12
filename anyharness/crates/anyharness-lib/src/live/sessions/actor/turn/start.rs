@@ -11,7 +11,7 @@ use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActorConfig;
 use crate::live::sessions::actor::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 
 pub(in crate::live::sessions::actor) struct StartedPromptTurn {
     pub acp_blocks: Vec<acp::schema::ContentBlock>,
