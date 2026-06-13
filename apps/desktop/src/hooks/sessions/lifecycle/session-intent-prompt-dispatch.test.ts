@@ -120,12 +120,64 @@ describe("dispatchPromptIntent", () => {
     });
     expect(mocks.rehydrateSessionSlotFromHistory).not.toHaveBeenCalled();
   });
+
+  it("requests session title and workspace name on the first prompt", async () => {
+    mocks.getSessionRecord.mockReturnValue({ lastPromptAt: null });
+    const entry = useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "client-session-1",
+      workspaceId: "workspace-1",
+      text: "Build please",
+      blocks: [{ type: "text", text: "Build please" }],
+    });
+    mocks.mutateAsync.mockResolvedValue({
+      session: { id: "session-1" },
+      status: "queued",
+      queuedSeq: 4,
+    });
+    const deps = createDeps();
+
+    await dispatchPromptIntent(entry, deps);
+
+    expect(deps.maybeGenerateSessionTitle).toHaveBeenCalledWith({
+      sessionId: "client-session-1",
+      firstUserMessage: "Build please",
+    });
+    expect(deps.maybeGenerateWorkspaceName).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      clientSessionId: "client-session-1",
+      firstUserMessage: "Build please",
+    });
+  });
+
+  it("does not request a workspace name on a subsequent prompt", async () => {
+    mocks.getSessionRecord.mockReturnValue({ lastPromptAt: "2026-06-04T09:00:00Z" });
+    const entry = useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "client-session-1",
+      workspaceId: "workspace-1",
+      text: "Keep going",
+      blocks: [{ type: "text", text: "Keep going" }],
+    });
+    mocks.mutateAsync.mockResolvedValue({
+      session: { id: "session-1" },
+      status: "queued",
+      queuedSeq: 4,
+    });
+    const deps = createDeps();
+
+    await dispatchPromptIntent(entry, deps);
+
+    expect(deps.maybeGenerateSessionTitle).not.toHaveBeenCalled();
+    expect(deps.maybeGenerateWorkspaceName).not.toHaveBeenCalled();
+  });
 });
 
 function createDeps(): PromptIntentDispatchDeps {
   return {
     applySessionSummary: vi.fn(),
     maybeGenerateSessionTitle: vi.fn(),
+    maybeGenerateWorkspaceName: vi.fn(),
     promptSessionMutation: {
       mutateAsync: mocks.mutateAsync,
     } as unknown as PromptIntentDispatchDeps["promptSessionMutation"],

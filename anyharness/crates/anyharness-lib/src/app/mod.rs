@@ -51,7 +51,6 @@ use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
-use crate::domains::sessions::workspace_naming::mcp::auth::WorkspaceNamingMcpAuth;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::access_store::WorkspaceAccessStore;
@@ -291,7 +290,6 @@ impl AppState {
             review_hook_event_tx,
             review_service.clone(),
         ));
-        let workspace_naming_mcp_auth = Arc::new(WorkspaceNamingMcpAuth::new(runtime_home.clone()));
         let skills_mcp_auth = Arc::new(SkillsMcpAuth::new(runtime_home.clone()));
         let runtime_config_session_launch_extension =
             Arc::new(RuntimeConfigSessionLaunchExtension::new(
@@ -306,10 +304,8 @@ impl AppState {
                 bearer_token: bearer_token.clone(),
                 review_mcp_auth: review_mcp_auth.clone(),
                 subagent_mcp_auth: subagent_mcp_auth.clone(),
-                workspace_naming_mcp_auth: workspace_naming_mcp_auth.clone(),
                 cowork_mcp_auth: cowork_mcp_auth.clone(),
                 subagent_service: subagent_service.clone(),
-                session_store: SessionStore::new(db.clone()),
             });
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
@@ -408,15 +404,12 @@ impl AppState {
             .spawn_background_tasks(review_hook_event_rx);
         let product_mcp_endpoint_registry =
             product_mcp::build_product_mcp_endpoint_registry(product_mcp::EndpointRegistryDeps {
-                db: db.clone(),
                 review_runtime: review_runtime.clone(),
                 review_mcp_auth,
                 subagent_service: subagent_service.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
                 subagent_mcp_auth,
-                workspace_access_gate: workspace_access_gate.clone(),
-                workspace_naming_mcp_auth,
                 cowork_artifact_runtime: cowork_artifact_runtime.clone(),
                 cowork_runtime: cowork_runtime.clone(),
                 cowork_mcp_auth,

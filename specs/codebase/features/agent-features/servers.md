@@ -4,7 +4,7 @@ Status: authoritative for product-owned MCP servers in AnyHarness.
 
 Product MCP servers are AnyHarness-owned tools exposed to agents through MCP.
 They let an agent call Proliferate product capabilities such as subagents,
-reviews, cowork artifacts, workspace naming, computer use, browser use, or
+reviews, cowork artifacts, computer use, browser use, or
 artifacts.
 
 This document does not cover arbitrary external/user-supplied MCP servers
@@ -48,7 +48,6 @@ Current internal product MCPs:
 ```text
 domains/sessions/subagents/mcp
 domains/reviews/mcp
-domains/sessions/workspace_naming/mcp
 domains/cowork/mcp
 ```
 
@@ -116,7 +115,6 @@ Examples:
 ```text
 domains/reviews/mcp/
 domains/sessions/subagents/mcp/
-domains/sessions/workspace_naming/mcp/
 domains/artifacts/mcp/
 domains/computer_use/mcp/
 domains/browser/mcp/
@@ -320,8 +318,7 @@ state.
 
 Expected but currently unavailable product state should normally resolve to a
 typed context that advertises fewer tools rather than failing protocol setup.
-Examples: a reviews MCP attached to a session with no current review role, a
-workspace-naming MCP attached after the workspace was already named, or a
+Examples: a reviews MCP attached to a session with no current review role, or a
 subagents MCP attached to a parent that is now depth/fanout/config blocked.
 Use a hard context error for missing rows, cross-workspace tokens, corrupt
 state, or a product MCP attached to a fundamentally unsupported surface.
@@ -512,9 +509,6 @@ parent session with subagent support
 
 cowork session
   receives artifacts MCP with cowork thread/artifact scope
-
-workspace naming session
-  receives workspace_naming MCP with workspace/session scope
 ```
 
 User-selectable examples:
@@ -614,7 +608,6 @@ Internal product MCPs:
 ```text
 subagents
 reviews
-workspace_naming
 ```
 
 Properties:

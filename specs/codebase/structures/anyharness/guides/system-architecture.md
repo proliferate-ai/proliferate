@@ -839,7 +839,7 @@ How should this appear in the UI?
 
 Use `integrations/` for reusable mechanics that would still make sense if the
 product feature were removed. If the file name wants a product noun such as
-`reviews`, `cowork`, `subagents`, `sessions`, or `workspace_naming`, it almost
+`reviews`, `cowork`, `subagents`, or `sessions`, it almost
 certainly belongs in a domain.
 
 Canonical integration:

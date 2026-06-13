@@ -78,7 +78,6 @@ sessions/
   mcp_bindings/
   links/
   subagents/
-  workspace_naming/
 
 workspaces/
   model.rs
@@ -142,7 +141,6 @@ Examples:
 
 ```text
 domains/sessions/subagents/
-domains/sessions/workspace_naming/
 domains/sessions/links/
 ```
 
@@ -340,7 +338,6 @@ Examples:
 ```text
 domains/sessions/links/
 domains/sessions/subagents/
-domains/sessions/workspace_naming/
 domains/workspaces/materialization/
 domains/workspaces/retention/
 domains/workspaces/purge/
@@ -364,7 +361,6 @@ Product surfaces implement the trait:
 domains/cowork/session_extension.rs
 domains/reviews/session_extension.rs
 domains/sessions/subagents/session_extension.rs
-domains/sessions/workspace_naming/session_extension.rs
 ```
 
 `app/` wires implementations into the core. The core domain depends only on the
@@ -450,7 +446,6 @@ domains/cowork/mcp/
 domains/reviews/mcp/
 domains/plugins/mcp/
 domains/sessions/subagents/mcp/
-domains/sessions/workspace_naming/mcp/
 ```
 
 Generic MCP protocol/server mechanics do not belong in domains:

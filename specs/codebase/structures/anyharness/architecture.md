@@ -24,7 +24,7 @@ It owns:
 - **The synced config** the cloud pushes in — external MCP servers, skills, and
   agent/provider auth — and its materialization into a session.
 - **The product MCP tools** we expose back to the agent (subagents, reviews,
-  cowork, skills, workspace-naming, …).
+  cowork, skills, …).
 
 It does **not** own: product orchestration or multi-sandbox truth (the cloud's
 job), process lifecycle / binary updates (supervisor's job), or cloud transport

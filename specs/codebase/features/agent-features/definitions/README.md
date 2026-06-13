@@ -29,4 +29,3 @@ Current definitions:
 - [cowork.md](cowork.md)
 - [artifacts.md](artifacts.md)
 - [reviews.md](reviews.md)
-- [workspace-naming.md](workspace-naming.md)

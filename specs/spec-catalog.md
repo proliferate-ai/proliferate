@@ -43,7 +43,7 @@ Session engine call chain: `api/http → SessionRuntime → SessionService/Sessi
 
 Layers: `api/` (transport), `app/` (wiring), `domains/` (durable product rules), `live/` (actors/handles/PTYs), `adapters/` (files/git/processes), `integrations/` (MCP/ACP protocol), `persistence/`, `observability/`.
 
-Product domains plugged in via `SessionExtension`: `cowork`, `reviews`, `subagents`, `workspace_naming`.
+Product domains plugged in via `SessionExtension`: `cowork`, `reviews`, `subagents`.
 
 MCP is a vertical: `domains/sessions/mcp_bindings/` (user bindings + assembly), `domains/<feature>/mcp/` (tool behavior), `integrations/mcp/` (JSON-RPC scaffolding), `live/sessions/interactions/mcp_elicitation/` (live ACP interaction).
 
@@ -137,7 +137,7 @@ mcp-skills.md adds: catalog entry → configured item → runtime manifest pipel
 
 ### Product MCP Structure
 **`specs/codebase/features/agent-features/servers.md`** — repeatable two-part pattern.
-**`specs/codebase/features/agent-features/definitions/`** — concrete definitions: `artifacts.md`, `cowork.md`, `reviews.md`, `subagents.md`, `workspace-naming.md`, `prompt-and-skill-policy.md`.
+**`specs/codebase/features/agent-features/definitions/`** — concrete definitions: `artifacts.md`, `cowork.md`, `reviews.md`, `subagents.md`, `prompt-and-skill-policy.md`.
 
 Every product MCP server: `definition.rs`, `auth.rs`, `context.rs`, `tools.rs`, `calls.rs`. Session binding side: `product_catalog.rs` — launch-side facade: select and materialize product MCP launch extras for this session (mints capability token). URL: `/v1/workspaces/{id}/.../{session_id}/mcp`.
 
@@ -179,7 +179,7 @@ Most billing already shipped. Spec 09 closes: wire `authorize_sandbox_start` to 
 | File | Covers |
 | --- | --- |
 | `agent-features/servers.md` | Product MCP server pattern (see Primitives above) |
-| `agent-features/definitions/*.md` | artifacts, cowork, reviews, subagents, workspace-naming, prompt-and-skill-policy |
+| `agent-features/definitions/*.md` | artifacts, cowork, reviews, subagents, prompt-and-skill-policy |
 | `automations.md` | Agent automation orchestration |
 | `chat-composer.md` | Chat input composer surface |
 | `chat-transcript.md` | Transcript rendering surface |

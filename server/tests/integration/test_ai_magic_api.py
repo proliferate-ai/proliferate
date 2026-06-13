@@ -110,3 +110,67 @@ class TestAiMagicApi:
         assert first.status_code == 200
         assert second.status_code == 429
         assert second.json()["detail"]["code"] == "ai_magic_rate_limited"
+
+    @pytest.mark.asyncio
+    async def test_generate_workspace_name_returns_name(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._workspace_name_windows.clear()
+        session = await _register_and_login(client, "ai-magic-ws@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return "# Auth token refresh"
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        response = await client.post(
+            "/v1/ai_magic/workspace-names/generate",
+            headers=headers,
+            json={"promptText": "Fix the auth token refresh logic in the API client."},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"name": "Auth token refresh"}
+
+    @pytest.mark.asyncio
+    async def test_generate_workspace_name_rate_limits_per_user(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ai_magic_service._workspace_name_windows.clear()
+        session = await _register_and_login(client, "ai-magic-ws-limit@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+        monkeypatch.setattr(ai_magic_service, "WORKSPACE_NAME_RATE_LIMIT_REQUESTS", 1)
+        monkeypatch.setattr(ai_magic_service, "WORKSPACE_NAME_RATE_LIMIT_WINDOW_SECONDS", 600)
+
+        async def fake_generate_message_text(**_: object) -> str:
+            return "Branch rename timing"
+
+        monkeypatch.setattr(
+            "proliferate.server.ai_magic.service.generate_message_text",
+            fake_generate_message_text,
+        )
+
+        first = await client.post(
+            "/v1/ai_magic/workspace-names/generate",
+            headers=headers,
+            json={"promptText": "Investigate flaky branch rename timing."},
+        )
+        second = await client.post(
+            "/v1/ai_magic/workspace-names/generate",
+            headers=headers,
+            json={"promptText": "Investigate flaky branch rename timing."},
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.json()["detail"]["code"] == "ai_magic_rate_limited"
