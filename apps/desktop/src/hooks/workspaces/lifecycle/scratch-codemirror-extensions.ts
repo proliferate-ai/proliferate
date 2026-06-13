@@ -59,7 +59,9 @@ export const scratchEditorTheme = EditorView.theme({
   ".cm-content": {
     minHeight: "100%",
     padding: "0.9rem 1.05rem",
-    caretColor: "var(--color-foreground)",
+    // drawSelection() paints the caret as a .cm-cursor element; hide the native
+    // one so we don't get two carets.
+    caretColor: "transparent",
     fontFamily: "inherit",
     lineHeight: "var(--scratch-line-height)",
   },
@@ -92,8 +94,10 @@ export const scratchEditorTheme = EditorView.theme({
   ".cm-cursor": {
     borderLeftColor: "var(--color-foreground)",
     borderLeftWidth: "1px",
-    height: "1.1em !important",
-    marginTop: "0.21em",
+    // Match the caret to the text's own height (ascender→baseline), centred in
+    // the line box, instead of the full line-height. Scales with headings.
+    height: "1em !important",
+    marginTop: "0.33em",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--color-foreground) 18%, transparent)",

@@ -2,6 +2,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting } from "@codemirror/language";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
+  drawSelection,
   EditorView,
   keymap,
   placeholder,
@@ -86,6 +87,9 @@ export function useScratchCodeMirrorEditor({
   // Owns the imperative CodeMirror editor lifecycle and keeps React as the source of saved text.
   const extensions = useMemo(() => [
     history(),
+    // Replaces the native contentEditable caret (whose height we can't control
+    // and which spans the full line box) with a styleable .cm-cursor element.
+    drawSelection(),
     scratchMarkdownLanguage(),
     syntaxHighlighting(scratchHighlightStyle),
     scratchLivePreview,
