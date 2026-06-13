@@ -13,7 +13,8 @@ def build_session_title_user_prompt(prompt_text: str) -> str:
     return f"First user message:\n{prompt_text.strip()}"
 
 
-WORKSPACE_NAME_SYSTEM_PROMPT = """You generate short names for AI coding workspaces (a branch of work).
+WORKSPACE_NAME_SYSTEM_PROMPT = """You generate short names for AI coding workspaces.
+A workspace groups one branch of related work.
 
 Return exactly one plain-text name.
 Do not include quotes, markdown, numbering, or extra commentary.

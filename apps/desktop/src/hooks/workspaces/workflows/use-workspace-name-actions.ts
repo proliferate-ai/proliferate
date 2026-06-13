@@ -73,7 +73,7 @@ export function useWorkspaceNameActions() {
 
     try {
       const response = await generateWorkspaceName(trimmedPrompt);
-      const name = response.name?.trim();
+      const name = response.name.trim();
       if (!name) {
         return;
       }

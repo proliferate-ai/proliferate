@@ -14,6 +14,7 @@ export function workspaceDisplayNameOverride(workspace: LogicalWorkspace): strin
   return (
     workspace.localWorkspace?.displayName?.trim()
     || workspace.cloudWorkspace?.displayName?.trim()
+    || workspace.mobilityWorkspace?.displayName?.trim()
     || null
   );
 }
