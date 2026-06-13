@@ -4,18 +4,13 @@ import {
   useLayoutEffect,
   memo,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import {
-  shouldStickToVirtualBottom,
-} from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
-  STICKY_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_TOP_PADDING_PX,
   DEFAULT_CHAT_COLUMN_CLASSNAME,
   DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
@@ -26,6 +21,7 @@ import {
   type HistoryPrependScrollAnchor,
   type TranscriptRowListBaseProps,
 } from "./TranscriptRowListShared";
+import { useTranscriptStickToBottom } from "./useTranscriptStickToBottom";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 
 type TranscriptRowRenderer = (
@@ -59,36 +55,19 @@ export function FullTranscriptRowList({
 }: FullTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const shouldStickToBottomRef = useRef(true);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
-  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
-
-  const scrollToBottom = useCallback(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) {
-      return;
-    }
-    viewport.scrollTop = viewport.scrollHeight;
-  }, []);
-
-  const updateStickiness = useCallback((viewport: HTMLDivElement) => {
-    const stick = shouldStickToVirtualBottom({
-      scrollOffset: viewport.scrollTop,
-      viewportSize: viewport.clientHeight,
-      totalVirtualSize: viewport.scrollHeight,
-      thresholdPx: STICKY_BOTTOM_THRESHOLD_PX,
-    });
-    shouldStickToBottomRef.current = stick;
-    setIsPinnedToBottom(stick);
-  }, []);
-
-  const handleScrollToBottomClick = useCallback(() => {
-    shouldStickToBottomRef.current = true;
-    setIsPinnedToBottom(true);
-    scrollToBottom();
-  }, [scrollToBottom]);
+  const {
+    isPinnedToBottom,
+    pinnedRef,
+    onViewportScroll,
+    scrollToBottom,
+    handleScrollToBottomClick,
+    notifyProgrammaticScroll,
+    setPinned,
+    resetForSession,
+  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,
@@ -156,29 +135,19 @@ export function FullTranscriptRowList({
   ]);
 
   const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
-    updateStickiness(viewport);
+    onViewportScroll(viewport);
     maybeLoadOlderHistory(viewport, "scroll");
-    onScrollSample();
   }, [
     maybeLoadOlderHistory,
-    onScrollSample,
-    updateStickiness,
+    onViewportScroll,
   ]);
 
   useLayoutEffect(() => {
-    shouldStickToBottomRef.current = true;
     pendingPrependAnchorRef.current = null;
     lastOlderHistoryCursorRequestRef.current = null;
     lastPrefetchDecisionLogRef.current = null;
-  }, [activeSessionId, selectedWorkspaceId]);
-
-  useLayoutEffect(() => {
-    shouldStickToBottomRef.current = true;
-    setIsPinnedToBottom(true);
-    scrollToBottom();
-    // This is intentionally keyed to session identity and row availability.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionId, selectedWorkspaceId]);
+    resetForSession();
+  }, [activeSessionId, selectedWorkspaceId, resetForSession]);
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -195,10 +164,11 @@ export function FullTranscriptRowList({
       return;
     }
 
-    shouldStickToBottomRef.current = false;
-    const scrollDelta = viewport.scrollHeight - anchor.scrollHeight;
-    viewport.scrollTop = anchor.scrollTop + scrollDelta;
-  }, [olderHistoryCursor, rows.length]);
+    setPinned(false);
+    notifyProgrammaticScroll(() => {
+      viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+    });
+  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -222,7 +192,7 @@ export function FullTranscriptRowList({
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
   useLayoutEffect(() => {
-    if (!shouldStickToBottomRef.current) {
+    if (!pinnedRef.current) {
       return;
     }
     scrollToBottom();
@@ -230,6 +200,7 @@ export function FullTranscriptRowList({
     bottomInsetPx,
     isSessionBusy,
     pendingPromptText,
+    pinnedRef,
     rows,
     scrollToBottom,
   ]);
@@ -244,7 +215,7 @@ export function FullTranscriptRowList({
       return;
     }
     const observer = new ResizeObserver(() => {
-      if (!shouldStickToBottomRef.current) {
+      if (!pinnedRef.current) {
         return;
       }
       scrollToBottom();
@@ -253,7 +224,7 @@ export function FullTranscriptRowList({
     return () => {
       observer.disconnect();
     };
-  }, [scrollToBottom]);
+  }, [pinnedRef, scrollToBottom]);
 
   return (
     <div className="relative h-full">

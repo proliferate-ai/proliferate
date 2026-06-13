@@ -6,7 +6,7 @@ import {
 } from "./transcript-row-model";
 import { createPromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import {
-  shouldStickToVirtualBottom,
+  resolveVirtualBottomDistance,
 } from "./transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
@@ -292,23 +292,29 @@ describe("buildTranscriptRowModel", () => {
   });
 });
 
-describe("shouldStickToVirtualBottom", () => {
-  it("stays sticky when asynchronous row measurement grows total size near the bottom", () => {
-    expect(shouldStickToVirtualBottom({
+describe("resolveVirtualBottomDistance", () => {
+  it("reports the remaining distance from the bottom", () => {
+    expect(resolveVirtualBottomDistance({
       scrollOffset: 920,
       viewportSize: 500,
       totalVirtualSize: 1500,
-      thresholdPx: 96,
-    })).toBe(true);
+    })).toBe(80);
   });
 
-  it("does not stick when the user has scrolled into history", () => {
-    expect(shouldStickToVirtualBottom({
+  it("grows as the user scrolls into history", () => {
+    expect(resolveVirtualBottomDistance({
       scrollOffset: 300,
       viewportSize: 500,
       totalVirtualSize: 1500,
-      thresholdPx: 96,
-    })).toBe(false);
+    })).toBe(700);
+  });
+
+  it("clamps to zero when overscrolled past the bottom", () => {
+    expect(resolveVirtualBottomDistance({
+      scrollOffset: 1100,
+      viewportSize: 500,
+      totalVirtualSize: 1500,
+    })).toBe(0);
   });
 });
 

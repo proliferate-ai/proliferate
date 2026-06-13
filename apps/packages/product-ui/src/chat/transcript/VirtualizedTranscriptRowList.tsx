@@ -4,28 +4,27 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  shouldStickToVirtualBottom,
-} from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
   buildRenderableRows,
   estimateRenderableRowHeight,
   estimateRenderableRowsHeight,
+  GLUE_MAX_FRAMES,
+  GLUE_STABLE_FRAMES,
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
-  STICKY_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_TOP_PADDING_PX,
   TranscriptScrollToBottomButton,
+  type ContentHeightScrollAnchor,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
   type TranscriptRenderableRow,
   type TranscriptRowListBaseProps,
 } from "./TranscriptRowListShared";
+import { useTranscriptStickToBottom } from "./useTranscriptStickToBottom";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { useTranscriptVirtualizerBlankFallback } from "./useTranscriptVirtualizerBlankFallback";
 
@@ -36,6 +35,11 @@ interface VirtualScrollAnchor {
   offsetWithinRowPx: number;
   rowIndex: number;
   rowCount: number;
+  // Real measured DOM metrics at capture, for the composition-change fallback
+  // (turn-row split) where offset+estimate math lands wrong. See the restore
+  // effect below.
+  scrollHeight: number;
+  scrollTop: number;
 }
 
 interface VirtualizedTranscriptRowListProps extends TranscriptRowListBaseProps {
@@ -63,13 +67,22 @@ export function VirtualizedTranscriptRowList({
   virtualizationMode,
 }: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const shouldStickToBottomRef = useRef(true);
   const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
+  const compensateFrameRef = useRef<number | null>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
-  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
+  const {
+    isPinnedToBottom,
+    pinnedRef,
+    onViewportScroll,
+    scrollToBottom,
+    handleScrollToBottomClick,
+    notifyProgrammaticScroll,
+    setPinned,
+    resetForSession,
+  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
@@ -98,37 +111,6 @@ export function VirtualizedTranscriptRowList({
   const bottomSpacerHeight = lastVirtualItem
     ? Math.max(totalContentHeight - lastVirtualItem.end, 0)
     : 0;
-
-  const scrollToBottom = useCallback(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) {
-      return;
-    }
-    // Pin against the real DOM scroll height instead of
-    // virtualizer.scrollToIndex: index-based scrolling positions by the
-    // virtualizer's *estimated* size for rows that haven't been measured
-    // yet (e.g. the row appended by this very update), so each append lands
-    // the viewport wrong by the estimate error and visibly bounces when the
-    // measurement corrects it a frame later.
-    viewport.scrollTop = viewport.scrollHeight;
-  }, []);
-
-  const updateStickiness = useCallback((viewport: HTMLDivElement) => {
-    const stick = shouldStickToVirtualBottom({
-      scrollOffset: viewport.scrollTop,
-      viewportSize: viewport.clientHeight,
-      totalVirtualSize: viewport.scrollHeight,
-      thresholdPx: STICKY_BOTTOM_THRESHOLD_PX,
-    });
-    shouldStickToBottomRef.current = stick;
-    setIsPinnedToBottom(stick);
-  }, []);
-
-  const handleScrollToBottomClick = useCallback(() => {
-    shouldStickToBottomRef.current = true;
-    setIsPinnedToBottom(true);
-    scrollToBottom();
-  }, [scrollToBottom]);
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,
@@ -202,30 +184,20 @@ export function VirtualizedTranscriptRowList({
   ]);
 
   const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
-    updateStickiness(viewport);
+    onViewportScroll(viewport);
     maybeLoadOlderHistory(viewport, "scroll");
-    onScrollSample();
   }, [
     maybeLoadOlderHistory,
-    onScrollSample,
-    updateStickiness,
+    onViewportScroll,
   ]);
 
   useLayoutEffect(() => {
-    shouldStickToBottomRef.current = true;
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
     lastOlderHistoryCursorRequestRef.current = null;
     lastPrefetchDecisionLogRef.current = null;
-  }, [activeSessionId, selectedWorkspaceId]);
-
-  useLayoutEffect(() => {
-    shouldStickToBottomRef.current = true;
-    setIsPinnedToBottom(true);
-    scrollToBottom();
-    // This is intentionally keyed to session identity and row availability.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionId, selectedWorkspaceId]);
+    resetForSession();
+  }, [activeSessionId, resetForSession, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -242,10 +214,11 @@ export function VirtualizedTranscriptRowList({
       return;
     }
 
-    shouldStickToBottomRef.current = false;
-    const scrollDelta = viewport.scrollHeight - anchor.scrollHeight;
-    viewport.scrollTop = anchor.scrollTop + scrollDelta;
-  }, [olderHistoryCursor, rows.length]);
+    setPinned(false);
+    notifyProgrammaticScroll(() => {
+      viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+    });
+  }, [notifyProgrammaticScroll, olderHistoryCursor, rows.length, setPinned]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -266,10 +239,56 @@ export function VirtualizedTranscriptRowList({
     return () => { window.cancelAnimationFrame(frame); };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
+  // Hold the anchored content in place while a freshly-inserted row above it
+  // measures in. Re-applies the measured scrollHeight delta each frame (so the
+  // anchor stays put as the estimate corrects), stopping once the height is
+  // stable or a frame budget is hit.
+  const startAboveChangeCompensation = useCallback((anchor: ContentHeightScrollAnchor) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (compensateFrameRef.current != null) {
+      cancelAnimationFrame(compensateFrameRef.current);
+    }
+    let lastHeight = -1;
+    let stableFrames = 0;
+    let totalFrames = 0;
+    const tick = () => {
+      const viewport = scrollRef.current;
+      if (!viewport || pinnedRef.current) {
+        compensateFrameRef.current = null;
+        return;
+      }
+      notifyProgrammaticScroll(() => {
+        viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
+      });
+      const height = viewport.scrollHeight;
+      if (height === lastHeight) {
+        stableFrames += 1;
+      } else {
+        stableFrames = 0;
+        lastHeight = height;
+      }
+      totalFrames += 1;
+      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= GLUE_MAX_FRAMES) {
+        compensateFrameRef.current = null;
+        return;
+      }
+      compensateFrameRef.current = requestAnimationFrame(tick);
+    };
+    compensateFrameRef.current = requestAnimationFrame(tick);
+  }, [notifyProgrammaticScroll, pinnedRef]);
+
+  // While unpinned, a completing turn can split one row into completed-history +
+  // content — a new, unmeasured row inserted ABOVE the anchored row. The
+  // getOffsetForIndex + offsetWithinRowPx restore lands against the 360px
+  // estimate and bumps when measurement corrects. When rows were inserted above
+  // the anchor, hold the user's position with the measured scrollHeight delta;
+  // pure shifts and below-the-viewport appends keep the offset reposition / no-op.
   useLayoutEffect(() => {
     const anchor = pendingAnchorRef.current;
     pendingAnchorRef.current = null;
-    if (!anchor || shouldStickToBottomRef.current) {
+    if (!anchor || pinnedRef.current) {
       return;
     }
     if (
@@ -284,13 +303,27 @@ export function VirtualizedTranscriptRowList({
       return;
     }
 
+    if (nextIndex > anchor.rowIndex) {
+      startAboveChangeCompensation(anchor);
+      return;
+    }
+
     const offsetInfo = virtualizer.getOffsetForIndex(nextIndex, "start");
     if (!offsetInfo) return;
-    virtualizer.scrollToOffset(offsetInfo[0] + anchor.offsetWithinRowPx);
-  }, [renderableRows, rows.length, virtualizer]);
+    notifyProgrammaticScroll(() => {
+      virtualizer.scrollToOffset(offsetInfo[0] + anchor.offsetWithinRowPx);
+    });
+  }, [
+    notifyProgrammaticScroll,
+    pinnedRef,
+    renderableRows,
+    rows.length,
+    startAboveChangeCompensation,
+    virtualizer,
+  ]);
 
   useLayoutEffect(() => {
-    if (!shouldStickToBottomRef.current) {
+    if (!pinnedRef.current) {
       return;
     }
     scrollToBottom();
@@ -298,6 +331,7 @@ export function VirtualizedTranscriptRowList({
     bottomInsetPx,
     isSessionBusy,
     pendingPromptText,
+    pinnedRef,
     renderableRows.length,
     scrollToBottom,
     totalContentHeight,
@@ -305,7 +339,7 @@ export function VirtualizedTranscriptRowList({
 
   useLayoutEffect(() => () => {
     const viewport = scrollRef.current;
-    if (!viewport || shouldStickToBottomRef.current) {
+    if (!viewport || pinnedRef.current) {
       pendingAnchorRef.current = null;
       return;
     }
@@ -329,8 +363,16 @@ export function VirtualizedTranscriptRowList({
       offsetWithinRowPx: Math.max(viewport.scrollTop - firstVisibleVirtualRow.start, 0),
       rowIndex: firstVisibleVirtualRow.index,
       rowCount: renderableRows.length,
+      scrollHeight: viewport.scrollHeight,
+      scrollTop: viewport.scrollTop,
     };
   });
+
+  useEffect(() => () => {
+    if (compensateFrameRef.current != null) {
+      cancelAnimationFrame(compensateFrameRef.current);
+    }
+  }, []);
 
   useTranscriptVirtualizerBlankFallback({
     activeSessionId,

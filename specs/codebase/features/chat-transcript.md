@@ -161,11 +161,36 @@ row). Blocks must not carry external vertical padding of their own
 not vary with streaming state: a turn completing is a zero-delta layout change
 for everything already rendered.
 
-Bottom pinning in the non-virtualized list is resize-driven: a
-`ResizeObserver` on the scroll content re-sticks the viewport whenever content
-grows after the React commit (image decode, async diff panels, highlight
-reflow) while the user is pinned. The virtualized list gets the same guarantee
-from measured `totalContentHeight`.
+### Stick-to-bottom engine
+
+Bottom pinning is owned by one shared engine,
+`apps/packages/product-ui/src/chat/transcript/useTranscriptStickToBottom.ts`,
+consumed by both `FullTranscriptRowList` and `VirtualizedTranscriptRowList`. It
+distinguishes user scrolls from its own programmatic snaps (`notifyProgrammaticScroll`
+tags every `scrollTop`/`scrollToOffset` write the engine or its callers make) so
+a streaming snap can never fight a user scrolling up. Intent to leave is detected
+pre-emptively via passive `wheel`/`keydown`/`touch` listeners on the viewport,
+flipping the pin state *before* the next snap layout effect reads it. Re-pinning
+happens only when a user scroll lands within a tight bottom band
+(`REPIN_BOTTOM_THRESHOLD_PX`), not the retired 96px `STICKY_BOTTOM_THRESHOLD_PX`
+window — that loose window kept small upward scrolls "pinned" and let the snap
+yank the user back.
+
+While pinned, content growth re-sticks the viewport: the non-virtualized list
+via a `ResizeObserver` on the scroll content plus a per-commit layout effect, the
+virtualized list via measured `totalContentHeight`; both call the engine's
+`scrollToBottom`, which writes `scrollTop = scrollHeight` (never
+`virtualizer.scrollToIndex`, which bounces on unmeasured rows). On tab/window
+re-show while pinned, a short pre-paint rAF "glue" loop holds the viewport at the
+true bottom until row measurement settles, collapsing the resume backlog into one
+jump instead of a visible crawl.
+
+When the user is unpinned, a completing turn that splits one row into
+`completed-history` + `content` (a new, unmeasured row inserted above the anchor)
+would bump the viewport as the 360px estimate corrects. The virtualized list
+holds the anchored content with the measured `scrollHeight` delta in a
+stability-gated loop; the non-virtualized list relies on native browser scroll
+anchoring (`overflow-anchor`, left at its default) for the small seam.
 
 ### Streaming Handoff
 
