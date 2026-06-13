@@ -315,7 +315,7 @@ describe("shortcut dispatch policy", () => {
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
-      altKey: false,
+      altKey: true,
       defaultPrevented: true,
       target: null,
     } as KeyboardEvent)).toBe(true);
@@ -326,7 +326,7 @@ describe("shortcut dispatch policy", () => {
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
-      altKey: true,
+      altKey: false,
       defaultPrevented: true,
       target: null,
     } as KeyboardEvent)).toBe(true);
@@ -361,7 +361,7 @@ describe("shortcut dispatch policy", () => {
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
-      altKey: false,
+      altKey: true,
       defaultPrevented: true,
       target: {
         tagName: "TEXTAREA",
@@ -483,7 +483,7 @@ describe("shortcut dispatch policy", () => {
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
-      altKey: false,
+      altKey: true,
       defaultPrevented: true,
       target: null,
     } as KeyboardEvent)).toBe(true);

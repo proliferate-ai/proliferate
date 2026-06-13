@@ -87,14 +87,9 @@ export async function handleEmptyWorkspaceBootstrap(
     count: sessionsIncludingDismissed.length,
   });
 
-  if (hasDismissedSessions) {
-    deps.setActiveSessionId(null);
-    if (input.isCurrent()) {
-      deps.markWorkspaceBootstrappedInSession(input.workspaceId);
-    }
-    return { shouldReturn: true };
-  }
-
+  // Dismissed-only workspaces have no visible session to land on, so fall through to
+  // the default-session creation path below (same as a truly empty workspace) instead
+  // of leaving the user on the empty hero. hasDismissedSessions stays logged above.
   const activeProjectedSessionId = resolveActiveProjectedSessionForPendingWorkspace(
     input.workspaceId,
     deps.getPendingWorkspaceEntry(),

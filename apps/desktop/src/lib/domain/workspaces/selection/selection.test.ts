@@ -45,13 +45,13 @@ describe("choosePreferredWorkspaceSession", () => {
     expect(choosePreferredWorkspaceSession(sessions, null)?.id).toBe("prompted");
   });
 
-  it("does not auto-select setup-only sessions", () => {
+  it("falls back to the most recently updated session when none are prompted", () => {
     const sessions = [
       { id: "session-1", updatedAt: "2026-04-07T18:00:00.000Z" },
       { id: "session-2", updatedAt: "2026-04-07T19:00:00.000Z" },
     ];
 
-    expect(choosePreferredWorkspaceSession(sessions, null)).toBeNull();
+    expect(choosePreferredWorkspaceSession(sessions, null)?.id).toBe("session-2");
   });
 });
 

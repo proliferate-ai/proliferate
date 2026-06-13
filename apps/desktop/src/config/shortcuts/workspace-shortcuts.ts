@@ -57,15 +57,6 @@ export const WORKSPACE_SHORTCUTS = {
     match: { kind: "fixed-code", code: "KeyC", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
-  workspaceByIndex: {
-    id: "workspace.by-index",
-    label: "⌘⌥1-9",
-    nonMacLabel: "Ctrl+Alt+1-9",
-    description: "Switch to workspace by index",
-    owner: "js",
-    match: { kind: "digit-code", meta: true, shift: false, alt: true },
-    allowInInputs: true,
-  },
   previousWorkspace: {
     id: "workspace.previous-workspace",
     label: "⌘⌥↑",
@@ -122,13 +113,16 @@ export const WORKSPACE_SHORTCUTS = {
   },
   tabByIndex: {
     id: "workspace.tab-by-index",
-    label: "⌘1-9",
-    nonMacLabel: "Ctrl+1-9",
+    label: "⌘⌥1-9",
+    nonMacLabel: "Ctrl+Alt+1-9",
     description: "Jump to chat by index",
     owner: "js",
-    match: { kind: "digit-key", meta: true, shift: false, alt: false },
+    match: { kind: "digit-code", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
+  // Declared before workspaceByIndex so the Settings overlay wins the ⌘1-9 overlap
+  // while it is open. When Settings is closed its handler is unregistered, so dispatch
+  // falls through to workspace switching.
   settingsSectionByIndex: {
     id: "settings.section-by-index",
     label: "⌘1-9",
@@ -137,6 +131,15 @@ export const WORKSPACE_SHORTCUTS = {
     owner: "js",
     match: { kind: "digit-key", meta: true, shift: false, alt: false },
     allowInInputs: false,
+  },
+  workspaceByIndex: {
+    id: "workspace.by-index",
+    label: "⌘1-9",
+    nonMacLabel: "Ctrl+1-9",
+    description: "Switch to workspace by index",
+    owner: "js",
+    match: { kind: "digit-key", meta: true, shift: false, alt: false },
+    allowInInputs: true,
   },
   newSessionTab: {
     id: "workspace.new-session-tab",

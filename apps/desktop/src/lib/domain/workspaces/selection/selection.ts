@@ -31,12 +31,15 @@ export function choosePreferredWorkspaceSession<T extends WorkspaceSelectionSess
     return preferredSession;
   }
 
+  // Prefer prompted sessions, but never strand the user on the empty hero: when a
+  // workspace has only never-prompted sessions (e.g. setup-only sessions), fall back
+  // to the most recently updated one so a workspace switch always lands on a session.
+  // This mirrors resolveOptimisticWorkspaceSessionId's visible-session fallback so the
+  // optimistic and post-load picks agree.
   const promptedSessions = sessions.filter((session) => session.lastPromptAt);
-  if (promptedSessions.length === 0) {
-    return null;
-  }
+  const rankedSessions = promptedSessions.length > 0 ? promptedSessions : sessions;
 
-  return [...promptedSessions].sort((left, right) => sessionTimestamp(right) - sessionTimestamp(left))[0] ?? null;
+  return [...rankedSessions].sort((left, right) => sessionTimestamp(right) - sessionTimestamp(left))[0] ?? null;
 }
 
 export function getLatestWorkspaceInteractionTimestamp<T extends WorkspaceSelectionSessionLike>(

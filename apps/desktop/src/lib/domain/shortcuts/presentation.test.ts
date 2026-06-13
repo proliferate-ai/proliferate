@@ -9,9 +9,9 @@ describe("shortcut presentation", () => {
       SHORTCUTS.workspaceByIndex,
     );
 
-    expect(labels.get("workspace-1")).toBe("⌘⌥1");
-    expect(labels.get("workspace-8")).toBe("⌘⌥8");
+    expect(labels.get("workspace-1")).toBe("⌘1");
+    expect(labels.get("workspace-8")).toBe("⌘8");
     expect(labels.has("workspace-9")).toBe(false);
-    expect(labels.get("workspace-10")).toBe("⌘⌥9");
+    expect(labels.get("workspace-10")).toBe("⌘9");
   });
 });
