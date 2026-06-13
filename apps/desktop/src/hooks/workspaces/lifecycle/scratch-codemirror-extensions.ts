@@ -25,19 +25,18 @@ export function scratchMarkdownLanguage() {
 }
 
 export const scratchHighlightStyle = HighlightStyle.define([
+  // Heading scale/spacing lives on the line (see scratchEditorTheme) so it
+  // survives the caret revealing the raw "#"; here we only carry weight/colour.
   { tag: tags.heading, color: "var(--color-foreground)", fontWeight: "600" },
-  { tag: tags.heading1, fontSize: "1.4em", lineHeight: "1.35" },
-  { tag: tags.heading2, fontSize: "1.25em", lineHeight: "1.35" },
-  { tag: tags.heading3, fontSize: "1.12em", lineHeight: "1.35" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "600" },
   { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--color-muted-foreground)" },
   { tag: tags.link, color: "var(--color-foreground)", textDecoration: "underline" },
   {
     tag: tags.monospace,
-    color: "var(--color-muted-foreground)",
+    color: "var(--color-foreground)",
     fontFamily: "var(--scratch-code-font-family)",
-    fontSize: "0.93em",
+    fontSize: "0.9em",
   },
 ]);
 
@@ -68,6 +67,25 @@ export const scratchEditorTheme = EditorView.theme({
     padding: "0",
     lineHeight: "var(--scratch-line-height)",
   },
+  ".cm-line.scratch-heading": {
+    fontWeight: "600",
+    paddingTop: "0.7em",
+    paddingBottom: "0.1em",
+  },
+  // The first line shouldn't carry top space on top of the content padding.
+  ".cm-content > .cm-line:first-child.scratch-heading": {
+    paddingTop: "0",
+  },
+  ".cm-line.scratch-heading-1": { fontSize: "1.5em", lineHeight: "1.3" },
+  ".cm-line.scratch-heading-2": { fontSize: "1.28em", lineHeight: "1.3" },
+  ".cm-line.scratch-heading-3": { fontSize: "1.14em", lineHeight: "1.35" },
+  ".cm-line.scratch-heading-4": { fontSize: "1.05em", lineHeight: "1.4" },
+  ".cm-line.scratch-heading-5": { fontSize: "1em", lineHeight: "1.45" },
+  ".cm-line.scratch-heading-6": {
+    fontSize: "0.95em",
+    lineHeight: "1.45",
+    color: "var(--color-muted-foreground)",
+  },
   ".cm-focused": {
     outline: "none",
   },
@@ -90,8 +108,12 @@ export const scratchEditorTheme = EditorView.theme({
   },
   ".scratch-inline-code": {
     backgroundColor: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
-    borderRadius: "0.25em",
-    padding: "0.1em 0.25em",
+    border: "1px solid color-mix(in oklab, var(--color-foreground) 8%, transparent)",
+    borderRadius: "0.35em",
+    padding: "0.03em 0.32em",
+    // Keep the chip from stretching the line box and clone its box when it wraps.
+    boxDecorationBreak: "clone",
+    WebkitBoxDecorationBreak: "clone",
   },
   ".scratch-list-marker": {
     display: "inline-flex",

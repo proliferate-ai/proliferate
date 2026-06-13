@@ -34,6 +34,14 @@ const CODE_MARK_NAMES = ["CodeMark"];
 
 const inlineCodeDecoration = Decoration.mark({ class: "scratch-inline-code" });
 const hideMarkDecoration = Decoration.replace({});
+const headingLineDecorations: Record<number, Decoration> = {
+  1: Decoration.line({ class: "scratch-heading scratch-heading-1" }),
+  2: Decoration.line({ class: "scratch-heading scratch-heading-2" }),
+  3: Decoration.line({ class: "scratch-heading scratch-heading-3" }),
+  4: Decoration.line({ class: "scratch-heading scratch-heading-4" }),
+  5: Decoration.line({ class: "scratch-heading scratch-heading-5" }),
+  6: Decoration.line({ class: "scratch-heading scratch-heading-6" }),
+};
 
 export const scratchLivePreview = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
@@ -43,7 +51,12 @@ export const scratchLivePreview = ViewPlugin.fromClass(class {
   }
 
   update(update: ViewUpdate) {
-    if (update.docChanged || update.viewportChanged || update.selectionSet) {
+    if (
+      update.docChanged
+      || update.viewportChanged
+      || update.selectionSet
+      || update.focusChanged
+    ) {
       this.decorations = buildScratchLivePreviewDecorations(update.view);
     }
   }
@@ -90,23 +103,30 @@ function decorateFormattedNode(
     return;
   }
 
-  if (revealed) {
+  if (node.name.startsWith("ATXHeading")) {
+    const level = Number(node.name.slice("ATXHeading".length)) || 1;
+    const line = view.state.doc.lineAt(node.from);
+    // Size and space the whole line, so the heading keeps its scale even while
+    // the cursor is on it revealing the raw "#" marker.
+    decorations.push(headingLineDecorations[level].range(line.from));
+    if (!revealed) {
+      for (const mark of childrenOfType(node, HEADING_MARK_NAMES)) {
+        // Swallow the space separating the marker from the heading text so the
+        // rendered heading starts flush with the line.
+        const isOpeningMark = mark.from === node.from;
+        const from = !isOpeningMark && view.state.doc.sliceString(mark.from - 1, mark.from) === " "
+          ? mark.from - 1
+          : mark.from;
+        const to = isOpeningMark && view.state.doc.sliceString(mark.to, mark.to + 1) === " "
+          ? mark.to + 1
+          : mark.to;
+        decorations.push(hideMarkDecoration.range(from, to));
+      }
+    }
     return;
   }
 
-  if (node.name.startsWith("ATXHeading")) {
-    for (const mark of childrenOfType(node, HEADING_MARK_NAMES)) {
-      // Swallow the space separating the marker from the heading text so the
-      // rendered heading starts flush with the line.
-      const isOpeningMark = mark.from === node.from;
-      const from = !isOpeningMark && view.state.doc.sliceString(mark.from - 1, mark.from) === " "
-        ? mark.from - 1
-        : mark.from;
-      const to = isOpeningMark && view.state.doc.sliceString(mark.to, mark.to + 1) === " "
-        ? mark.to + 1
-        : mark.to;
-      decorations.push(hideMarkDecoration.range(from, to));
-    }
+  if (revealed) {
     return;
   }
 
@@ -127,6 +147,11 @@ function revealRange(view: EditorView, node: SyntaxNode) {
 }
 
 function selectionTouches(view: EditorView, range: { from: number; to: number }) {
+  // An unfocused scratchpad renders fully, like Obsidian — raw markdown is only
+  // revealed for the span the caret is actually sitting in while editing.
+  if (!view.hasFocus) {
+    return false;
+  }
   return view.state.selection.ranges.some(
     (selectionRange) => selectionRange.to >= range.from && selectionRange.from <= range.to,
   );
