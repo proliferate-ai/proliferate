@@ -38,7 +38,7 @@ describe("ScratchCodeMirrorEditor", () => {
     expect(styleText).toContain("font-size: var(--scratch-font-size)");
     expect(styleText).toContain("line-height: var(--scratch-line-height)");
     expect(styleText).toContain("white-space: normal");
-    expect(styleText).toContain("height: 1.25em !important");
+    expect(styleText).toContain("height: 1em !important");
     expect(styleText).not.toContain("min-height: 1.1em");
   });
 });
