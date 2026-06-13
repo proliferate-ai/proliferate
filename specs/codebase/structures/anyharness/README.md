@@ -143,7 +143,6 @@ domains/reviews
 domains/plans
 domains/mobility
 domains/sessions/subagents
-domains/sessions/workspace_naming
 ```
 
 They should not fork session startup, prompt dispatch, or event ingestion. When
@@ -154,7 +153,7 @@ Example:
 
 ```text
 domains/sessions/extensions::SessionExtension
-  implemented by cowork, reviews, subagents, workspace naming
+  implemented by cowork, reviews, subagents
   wired by app/
   consumed by SessionRuntime at launch/prompt boundaries
 ```
@@ -261,8 +260,8 @@ Specs:
   MCP server pattern: definition, auth, injection, context, tools, calls, UI
   exposure, and session MCP selection.
 - [../../features/agent-features/definitions/README.md](../../features/agent-features/definitions/README.md) for the concrete product
-  MCP definitions currently being standardized: subagents, artifacts, reviews,
-  and workspace naming.
+  MCP definitions currently being standardized: subagents, artifacts, and
+  reviews.
 
 Subsystem docs under `specs/codebase/structures/anyharness/src/**` own
 behavior for runtime areas that do not yet have a focused guide or spec:
@@ -312,7 +311,7 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md), [guides/domains.md](guides/domains.md) |
-| Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**`, `domains/sessions/workspace_naming/**` | owning product domain | [../../features/agent-features/servers.md](../../features/agent-features/servers.md), [../../features/agent-features/definitions/README.md](../../features/agent-features/definitions/README.md), [guides/domains.md](guides/domains.md) |
+| Product MCP tool servers for artifacts, reviews, subagents | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**` | owning product domain | [../../features/agent-features/servers.md](../../features/agent-features/servers.md), [../../features/agent-features/definitions/README.md](../../features/agent-features/definitions/README.md), [guides/domains.md](guides/domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) |
 | Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [guides/domains.md](guides/domains.md), [../../features/agent-features/definitions/artifacts.md](../../features/agent-features/definitions/artifacts.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [../../features/cowork-artifacts.md](../../features/cowork-artifacts.md) |
@@ -439,5 +438,5 @@ persistence -> domains
 Core domains should not import product surface domains. When a product surface
 needs to plug into a core lifecycle, use an extension point wired in `app/`.
 For example, the session engine owns the `SessionExtension` trait; cowork,
-reviews, subagents, and workspace naming implement it; `app` wires them into
+reviews, and subagents implement it; `app` wires them into
 `SessionRuntime`.

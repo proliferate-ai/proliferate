@@ -389,7 +389,6 @@ domains/sessions/
   live_config/
   links/
   subagents/
-  workspace_naming/
 
 live/sessions/
   model.rs          # launch bundles, capability traits, hook ports

@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     # Secondary LLM flows
     anthropic_api_key: str = ""
     ai_magic_session_title_model: str = "claude-haiku-4-5-20251001"
+    ai_magic_workspace_name_model: str = "claude-haiku-4-5-20251001"
 
     # Cloud workspaces
     cloud_secret_key: str = "CHANGE-ME-IN-PRODUCTION-CLOUD-SECRET"

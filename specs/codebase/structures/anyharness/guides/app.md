@@ -153,7 +153,6 @@ domains/sessions/extensions
 domains/cowork/session_extension.rs
 domains/reviews/session_extension.rs
 domains/sessions/subagents/session_extension.rs
-domains/sessions/workspace_naming/session_extension.rs
   implement the trait
 
 app/

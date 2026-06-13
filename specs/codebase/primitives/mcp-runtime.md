@@ -39,7 +39,6 @@ Current implementations:
 domains/cowork/runtime.rs
 domains/reviews/hooks.rs
 domains/sessions/subagents/hooks.rs
-domains/sessions/workspace_naming/hooks.rs
 ```
 
 The extension returns launch extras:
@@ -58,7 +57,6 @@ Examples:
 - cowork artifact/delegation tools
 - subagent tools
 - review tools
-- workspace naming tool
 
 Current implementation shape:
 
@@ -66,7 +64,6 @@ Current implementation shape:
 domains/cowork/mcp/
 domains/reviews/mcp/
 domains/sessions/subagents/mcp/
-domains/sessions/workspace_naming/mcp/
 ```
 
 Product tool behavior stays with the product domain.
@@ -249,7 +246,6 @@ Do not move product behavior:
 
 - `create_subagent`
 - `submit_review_result`
-- `set_workspace_display_name`
 - `create_artifact`
 - cowork delegation/coding tools
 

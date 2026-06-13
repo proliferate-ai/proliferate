@@ -9,3 +9,11 @@ class GenerateSessionTitleRequest(BaseModel):
 
 class GenerateSessionTitleResponse(BaseModel):
     title: str = Field(min_length=1, max_length=80)
+
+
+class GenerateWorkspaceNameRequest(BaseModel):
+    prompt_text: str = Field(alias="promptText", min_length=1, max_length=4000)
+
+
+class GenerateWorkspaceNameResponse(BaseModel):
+    name: str = Field(min_length=1, max_length=60)

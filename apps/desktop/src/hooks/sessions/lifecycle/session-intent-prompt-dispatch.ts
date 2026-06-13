@@ -47,6 +47,11 @@ export interface PromptIntentDispatchDeps {
     sessionId: string;
     firstUserMessage: string;
   }) => Promise<void> | void;
+  maybeGenerateWorkspaceName: (input: {
+    workspaceId: string;
+    clientSessionId: string;
+    firstUserMessage: string;
+  }) => Promise<void> | void;
   promptSessionMutation: PromptSessionMutation;
   rehydrateSessionSlotFromHistory: (
     sessionId: string,
@@ -196,6 +201,11 @@ export async function dispatchPromptIntent(
     if (shouldGenerateTitle) {
       void deps.maybeGenerateSessionTitle({
         sessionId: entry.clientSessionId,
+        firstUserMessage: entry.text,
+      });
+      void deps.maybeGenerateWorkspaceName({
+        workspaceId,
+        clientSessionId: entry.clientSessionId,
         firstUserMessage: entry.text,
       });
     }

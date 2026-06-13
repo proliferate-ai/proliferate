@@ -15,6 +15,7 @@ import type {
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
+import { useWorkspaceNameActions } from "@/hooks/workspaces/workflows/use-workspace-name-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { getSessionRecord } from "@/stores/sessions/session-records";
@@ -39,6 +40,7 @@ export function useSessionIntentDispatcher(): void {
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const { applySessionSummary } = useSessionSummaryActions();
   const { maybeGenerateSessionTitle } = useSessionTitleActions();
+  const { maybeGenerateWorkspaceName } = useWorkspaceNameActions();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const promptSessionMutation = usePromptSessionMutation();
@@ -70,6 +72,7 @@ export function useSessionIntentDispatcher(): void {
         await dispatchPromptIntent(intent, {
           applySessionSummary,
           maybeGenerateSessionTitle,
+          maybeGenerateWorkspaceName,
           promptSessionMutation,
           rehydrateSessionSlotFromHistory,
           upsertWorkspaceSessionRecord,
@@ -98,6 +101,7 @@ export function useSessionIntentDispatcher(): void {
     editPendingPromptMutation,
     getWorkspaceSurface,
     maybeGenerateSessionTitle,
+    maybeGenerateWorkspaceName,
     promptSessionMutation,
     rehydrateSessionSlotFromHistory,
     resolveInteractionMutation,

@@ -195,16 +195,16 @@ mod tests {
     };
 
     static INJECTION_TEST_DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
-        id: "workspace_naming",
-        route_slug: "workspace_naming",
-        acp_server_name: "workspace_naming",
-        server_info_name: "proliferate-workspace-naming",
-        display_name: "Workspace naming",
-        description: "Name workspaces",
+        id: "injection_probe",
+        route_slug: "injection_probe",
+        acp_server_name: "injection_probe",
+        server_info_name: "proliferate-injection-probe",
+        display_name: "Injection probe",
+        description: "Injection probe",
         visibility: ProductMcpVisibility::Internal,
-        instructions: "Name the workspace",
-        unauthorized_code: "WORKSPACE_NAMING_UNAUTHORIZED",
-        request_invalid_code: "WORKSPACE_NAMING_INVALID",
+        instructions: "Injection probe",
+        unauthorized_code: "INJECTION_PROBE_UNAUTHORIZED",
+        request_invalid_code: "INJECTION_PROBE_INVALID",
         prompt_policy: ProductMcpPromptPolicy::SystemAndFirstPrompt,
     };
 
@@ -365,10 +365,10 @@ mod tests {
         let [SessionMcpServer::Http(server)] = extras.mcp_servers.as_slice() else {
             panic!("expected one HTTP product MCP server");
         };
-        assert_eq!(server.server_name, "workspace_naming");
+        assert_eq!(server.server_name, "injection_probe");
         assert_eq!(
             server.url,
-            "http://127.0.0.1:4317/v1/workspaces/workspace-1/sessions/session-1/mcp/workspace_naming"
+            "http://127.0.0.1:4317/v1/workspaces/workspace-1/sessions/session-1/mcp/injection_probe"
         );
         assert!(
             server

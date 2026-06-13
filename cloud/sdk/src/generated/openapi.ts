@@ -2739,6 +2739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/ai_magic/workspace-names/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Workspace Name Endpoint */
+        post: operations["generate_workspace_name_endpoint_v1_ai_magic_workspace_names_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/support/messages": {
         parameters: {
             query?: never;
@@ -5911,6 +5928,16 @@ export interface components {
         GenerateSessionTitleResponse: {
             /** Title */
             title: string;
+        };
+        /** GenerateWorkspaceNameRequest */
+        GenerateWorkspaceNameRequest: {
+            /** Prompttext */
+            promptText: string;
+        };
+        /** GenerateWorkspaceNameResponse */
+        GenerateWorkspaceNameResponse: {
+            /** Name */
+            name: string;
         };
         /** GrantAllocationInfo */
         GrantAllocationInfo: {
@@ -14918,6 +14945,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerateSessionTitleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_workspace_name_endpoint_v1_ai_magic_workspace_names_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateWorkspaceNameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateWorkspaceNameResponse"];
                 };
             };
             /** @description Validation Error */
