@@ -1,5 +1,4 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { markdown } from "@codemirror/lang-markdown";
 import { syntaxHighlighting } from "@codemirror/language";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
@@ -16,8 +15,10 @@ import {
   scratchEditorTheme,
   scratchHighlightStyle,
   scratchListDecorations,
+  scratchMarkdownLanguage,
   wordWrapExtension,
 } from "@/hooks/workspaces/lifecycle/scratch-codemirror-extensions";
+import { scratchLivePreview } from "@/hooks/workspaces/lifecycle/scratch-codemirror-live-preview";
 
 interface UseScratchCodeMirrorEditorOptions {
   hostRef: RefObject<HTMLDivElement | null>;
@@ -85,8 +86,9 @@ export function useScratchCodeMirrorEditor({
   // Owns the imperative CodeMirror editor lifecycle and keeps React as the source of saved text.
   const extensions = useMemo(() => [
     history(),
-    markdown({ addKeymap: false }),
+    scratchMarkdownLanguage(),
     syntaxHighlighting(scratchHighlightStyle),
+    scratchLivePreview,
     placeholderCompartmentRef.current.of(placeholder(placeholderText)),
     scratchEditorTheme,
     scratchListDecorations,

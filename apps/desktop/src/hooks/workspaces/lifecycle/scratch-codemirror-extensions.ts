@@ -1,3 +1,4 @@
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import {
@@ -13,10 +14,24 @@ import {
   parseScratchMarkdownListPrefix,
 } from "@/lib/domain/workspaces/scratch/scratch-list-formatting";
 
+export function scratchMarkdownLanguage() {
+  return markdown({
+    addKeymap: false,
+    base: markdownLanguage,
+    // A lone "-"/"=" under a paragraph otherwise reparses the previous line as
+    // a setext heading, bolding it mid-typing when starting a bullet.
+    extensions: [{ remove: ["SetextHeading"] }],
+  });
+}
+
 export const scratchHighlightStyle = HighlightStyle.define([
   { tag: tags.heading, color: "var(--color-foreground)", fontWeight: "600" },
+  { tag: tags.heading1, fontSize: "1.4em", lineHeight: "1.35" },
+  { tag: tags.heading2, fontSize: "1.25em", lineHeight: "1.35" },
+  { tag: tags.heading3, fontSize: "1.12em", lineHeight: "1.35" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "600" },
+  { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--color-muted-foreground)" },
   { tag: tags.link, color: "var(--color-foreground)", textDecoration: "underline" },
   {
     tag: tags.monospace,
@@ -59,8 +74,8 @@ export const scratchEditorTheme = EditorView.theme({
   ".cm-cursor": {
     borderLeftColor: "var(--color-foreground)",
     borderLeftWidth: "1px",
-    height: "1.25em !important",
-    marginTop: "0.14em",
+    height: "1.1em !important",
+    marginTop: "0.21em",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
@@ -72,6 +87,11 @@ export const scratchEditorTheme = EditorView.theme({
     fontSize: "var(--scratch-font-size)",
     lineHeight: "var(--scratch-line-height)",
     whiteSpace: "normal",
+  },
+  ".scratch-inline-code": {
+    backgroundColor: "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+    borderRadius: "0.25em",
+    padding: "0.1em 0.25em",
   },
   ".scratch-list-marker": {
     display: "inline-flex",
