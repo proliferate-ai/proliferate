@@ -33,6 +33,9 @@ pub fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             format!("workspace {workspace_id} is retired"),
             "WORKSPACE_RETIRED",
         ),
+        WorkspaceAccessError::Unexpected(error) => ApiError::internal(format!(
+            "workspace access state could not be verified: {error}"
+        )),
     }
 }
 

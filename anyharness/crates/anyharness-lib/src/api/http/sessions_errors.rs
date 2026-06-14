@@ -1,3 +1,4 @@
+use super::access::map_access_error;
 use super::error::ApiError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::domains::sessions::runtime::{
@@ -64,6 +65,7 @@ pub(super) fn map_resolve_interaction_error(error: ResolveInteractionError) -> A
             format!("Interaction request is not an MCP URL elicitation: {request_id}"),
             "INTERACTION_NOT_MCP_URL_ELICITATION",
         ),
+        ResolveInteractionError::Access(error) => map_access_error(error),
         ResolveInteractionError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
@@ -236,5 +238,24 @@ pub(super) fn map_session_lifecycle_error(error: SessionLifecycleError) -> ApiEr
             "SESSION_NOT_FOUND",
         ),
         SessionLifecycleError::Internal(error) => ApiError::internal(error.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    use crate::domains::sessions::runtime::ResolveInteractionError;
+    use crate::domains::workspaces::access_gate::WorkspaceAccessError;
+
+    #[test]
+    fn interaction_access_store_failures_map_to_internal_error() {
+        let response = super::map_resolve_interaction_error(ResolveInteractionError::Access(
+            WorkspaceAccessError::Unexpected(anyhow::anyhow!("database unavailable")),
+        ))
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

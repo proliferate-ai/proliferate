@@ -19,7 +19,7 @@ impl SessionRuntime {
     ) -> Result<(), ResolveInteractionError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| ResolveInteractionError::SessionNotLive(error.to_string()))?;
+            .map_err(ResolveInteractionError::Access)?;
 
         let handle = self
             .acp_manager
@@ -148,7 +148,7 @@ impl SessionRuntime {
     ) -> Result<McpElicitationUrlReveal, ResolveInteractionError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| ResolveInteractionError::SessionNotLive(error.to_string()))?;
+            .map_err(ResolveInteractionError::Access)?;
 
         let handle = self
             .acp_manager

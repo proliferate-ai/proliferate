@@ -528,13 +528,8 @@ pub fn active_path_owner_retire_blocker(active: &WorkspaceRecord) -> WorkspaceRe
 
 pub fn workspace_access_retire_blocker(error: WorkspaceAccessError) -> WorkspaceRetireBlocker {
     let message = match error {
-        WorkspaceAccessError::MutationBlocked { mode, .. } => {
-            format!(
-                "Workspace cannot be marked done while access mode is {}.",
-                mode.as_str()
-            )
-        }
-        WorkspaceAccessError::LiveSessionStartBlocked { mode, .. } => {
+        WorkspaceAccessError::MutationBlocked { mode, .. }
+        | WorkspaceAccessError::LiveSessionStartBlocked { mode, .. } => {
             format!(
                 "Workspace cannot be marked done while access mode is {}.",
                 mode.as_str()
@@ -542,6 +537,7 @@ pub fn workspace_access_retire_blocker(error: WorkspaceAccessError) -> Workspace
         }
         WorkspaceAccessError::WorkspaceRetired(_) => "Workspace is already retired.".to_string(),
         WorkspaceAccessError::WorkspaceNotFound(_)
+        | WorkspaceAccessError::Unexpected(_)
         | WorkspaceAccessError::SessionNotFound(_)
         | WorkspaceAccessError::TerminalNotFound(_) => {
             "Workspace access state could not be verified.".to_string()

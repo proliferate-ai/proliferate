@@ -12,11 +12,11 @@ anyharness/crates/anyharness-contract/src/v1/sessions.rs 802 existing AnyHarness
 anyharness/crates/anyharness-lib/src/api/openapi.rs 845 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1172 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1884 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1524 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1522 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1512 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs 1057 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 617 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1112 custom migration with legacy schema coverage
 anyharness/crates/proliferate-worker/src/control/commands/executor.rs 1636 existing Proliferate worker oversized command executor
 anyharness/crates/proliferate-worker/src/control/commands/mapping.rs 979 existing Proliferate worker oversized command mapper

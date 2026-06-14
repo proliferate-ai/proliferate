@@ -27,6 +27,8 @@ pub enum WorkspaceAccessError {
     },
     #[error("workspace {0} is retired")]
     WorkspaceRetired(String),
+    #[error(transparent)]
+    Unexpected(#[from] anyhow::Error),
 }
 
 #[derive(Clone)]
@@ -59,12 +61,12 @@ impl WorkspaceAccessGate {
         let workspace = self
             .workspace_store
             .find_by_id(workspace_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
+            .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
         Ok(self
             .access_store
             .find_by_workspace(workspace_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
+            .map_err(WorkspaceAccessError::Unexpected)?
             .unwrap_or_else(|| WorkspaceAccessRecord::normal_for_workspace(&workspace)))
     }
 
@@ -77,7 +79,7 @@ impl WorkspaceAccessGate {
         let workspace = self
             .workspace_store
             .find_by_id(workspace_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
+            .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
         let record = WorkspaceAccessRecord {
             workspace_id: workspace.id.clone(),
@@ -87,14 +89,14 @@ impl WorkspaceAccessGate {
         };
         self.access_store
             .upsert(&record)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?;
+            .map_err(WorkspaceAccessError::Unexpected)?;
         Ok(record)
     }
 
     pub fn clear_runtime_state(&self, workspace_id: &str) -> Result<(), WorkspaceAccessError> {
         self.access_store
             .delete(workspace_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))
+            .map_err(WorkspaceAccessError::Unexpected)
     }
 
     pub fn assert_can_mutate_for_workspace(
@@ -104,7 +106,7 @@ impl WorkspaceAccessGate {
         let workspace = self
             .workspace_store
             .find_by_id(workspace_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
+            .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
         if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
             return Err(WorkspaceAccessError::WorkspaceRetired(
@@ -128,7 +130,7 @@ impl WorkspaceAccessGate {
         let workspaces = self
             .workspace_store
             .list_active_by_repo_root_id(repo_root_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?;
+            .map_err(WorkspaceAccessError::Unexpected)?;
         for workspace in workspaces {
             self.assert_can_mutate_for_workspace(&workspace.id)?;
         }
@@ -142,7 +144,7 @@ impl WorkspaceAccessGate {
         let workspaces = self
             .workspace_store
             .list_active_by_repo_root_id(repo_root_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?;
+            .map_err(WorkspaceAccessError::Unexpected)?;
         for workspace in workspaces {
             let state = self.runtime_state(&workspace.id)?;
             if matches!(
@@ -165,7 +167,7 @@ impl WorkspaceAccessGate {
         let session = self
             .session_store
             .find_by_id(session_id)
-            .map_err(|error| WorkspaceAccessError::SessionNotFound(error.to_string()))?
+            .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::SessionNotFound(session_id.to_string()))?;
         self.assert_can_mutate_for_workspace(&session.workspace_id)
     }
@@ -193,13 +195,13 @@ impl WorkspaceAccessGate {
         let session = self
             .session_store
             .find_by_id(session_id)
-            .map_err(|error| WorkspaceAccessError::SessionNotFound(error.to_string()))?
+            .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::SessionNotFound(session_id.to_string()))?;
         let state = self.runtime_state(&session.workspace_id)?;
         let workspace = self
             .workspace_store
             .find_by_id(&session.workspace_id)
-            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
+            .map_err(WorkspaceAccessError::Unexpected)?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(session.workspace_id.clone()))?;
         if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
             return Err(WorkspaceAccessError::WorkspaceRetired(session.workspace_id));
@@ -218,7 +220,7 @@ impl WorkspaceAccessGate {
 mod tests {
     use std::sync::Arc;
 
-    use super::WorkspaceAccessGate;
+    use super::{WorkspaceAccessError, WorkspaceAccessGate};
     use crate::domains::sessions::store::SessionStore;
     use crate::domains::terminals::store::TerminalStore;
     use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
@@ -263,7 +265,12 @@ mod tests {
         }
     }
 
-    fn build_gate() -> (WorkspaceAccessGate, WorkspaceStore, WorkspaceAccessStore) {
+    fn build_gate_with_db() -> (
+        WorkspaceAccessGate,
+        WorkspaceStore,
+        WorkspaceAccessStore,
+        Db,
+    ) {
         let db = Db::open_in_memory().expect("open db");
         db.with_conn(|conn| {
             conn.execute(
@@ -290,9 +297,54 @@ mod tests {
             workspace_store.clone(),
             session_store,
             access_store.clone(),
-            Arc::new(TerminalService::new(TerminalStore::new(db), runtime_home)),
+            Arc::new(TerminalService::new(
+                TerminalStore::new(db.clone()),
+                runtime_home,
+            )),
         );
+        (gate, workspace_store, access_store, db)
+    }
+
+    fn build_gate() -> (WorkspaceAccessGate, WorkspaceStore, WorkspaceAccessStore) {
+        let (gate, workspace_store, access_store, _) = build_gate_with_db();
         (gate, workspace_store, access_store)
+    }
+
+    #[test]
+    fn runtime_state_reports_missing_workspace_as_not_found() {
+        let (gate, _, _) = build_gate();
+
+        let error = gate
+            .runtime_state("missing-workspace")
+            .expect_err("missing workspace should be not found");
+
+        assert!(matches!(
+            error,
+            WorkspaceAccessError::WorkspaceNotFound(id) if id == "missing-workspace"
+        ));
+    }
+
+    #[test]
+    fn runtime_state_reports_access_store_failure_as_unexpected() {
+        let (gate, workspace_store, _, db) = build_gate_with_db();
+        workspace_store
+            .insert(&workspace_record(
+                "workspace-1",
+                "repo-root-1",
+                "/tmp/repo/one",
+            ))
+            .expect("insert workspace");
+        db.with_conn(|conn| {
+            conn.execute("DROP TABLE workspace_access_modes", [])?;
+            Ok(())
+        })
+        .expect("drop access table");
+
+        let error = gate
+            .runtime_state("workspace-1")
+            .expect_err("broken access store should not be not found");
+
+        assert!(matches!(error, WorkspaceAccessError::Unexpected(_)));
     }
 
     #[test]
