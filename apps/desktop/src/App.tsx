@@ -73,14 +73,6 @@ const UpdatePlaygroundPage = import.meta.env.DEV
     )
   : null
 
-const TabStripPlaygroundPage = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/pages/TabStripPlaygroundPage").then((m) => ({
-        default: m.TabStripPlaygroundPage,
-      })),
-    )
-  : null
-
 function isTauriDesktop(): boolean {
   return typeof window !== "undefined"
     && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>)
@@ -293,16 +285,6 @@ function AppRuntime() {
                 element={
                   <Suspense fallback={null}>
                     <UpdatePlaygroundPage />
-                  </Suspense>
-                }
-              />
-            )}
-            {import.meta.env.DEV && TabStripPlaygroundPage && (
-              <Route
-                path="/playground/tabs"
-                element={
-                  <Suspense fallback={null}>
-                    <TabStripPlaygroundPage />
                   </Suspense>
                 }
               />
