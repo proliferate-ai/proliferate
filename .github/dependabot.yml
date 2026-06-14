@@ -1,0 +1,71 @@
+# Dependabot configuration — https://docs.github.com/code-security/dependabot
+# Keeps each ecosystem's dependencies patched. PRs carry the release:*/area:*
+# labels required by .github/workflows/pr-metadata.yml so they pass CI checks.
+version: 2
+updates:
+  # JavaScript / TypeScript — pnpm workspace (root lockfile covers all packages)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "release:maintenance"
+      - "area:release"
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Rust — Cargo workspace (root lockfile covers all crates)
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "release:maintenance"
+      - "area:release"
+    groups:
+      cargo-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Python — server (uv-managed)
+  - package-ecosystem: "uv"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "release:maintenance"
+      - "area:server"
+    groups:
+      python-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker — server image
+  - package-ecosystem: "docker"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "release:maintenance"
+      - "area:server"
+
+  # GitHub Actions — workflow pinned actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "release:maintenance"
+      - "area:release"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
