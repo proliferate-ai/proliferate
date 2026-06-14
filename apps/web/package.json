@@ -21,7 +21,7 @@
     "@proliferate/ui": "workspace:*",
     "@sentry/react": "^10.45.0",
     "@tanstack/react-query": "^5.95.2",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.18.0",
     "posthog-js": "^1.363.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
