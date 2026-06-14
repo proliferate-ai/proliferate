@@ -20,7 +20,7 @@ import { createWebCloudClient } from "../../../lib/access/cloud/client";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 export function AuthScreen() {
-  const { setToken, setSession } = useAuthToken();
+  const { setToken, setSession, bootstrapUnreachable } = useAuthToken();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [manualToken, setManualToken] = useState("");
@@ -98,7 +98,7 @@ export function AuthScreen() {
         onClick: () => void signIn(provider),
       }))}
       note={AUTH_SIGN_IN_COPY.note}
-      error={providerError}
+      error={providerError ?? (bootstrapUnreachable ? localApiUnreachableNotice() : null)}
       devAccess={webEnv.devAccessTokenLogin ? (
         <div className="mt-2 border-t border-border pt-4">
           {showDevAccess ? (
@@ -154,4 +154,14 @@ export function AuthScreen() {
 
 function providerIcon(provider: AuthProviderName) {
   return <ProviderBrandIcon provider={provider} />;
+}
+
+function localApiUnreachableNotice() {
+  return (
+    <>
+      Local API is not reachable at <code>{webEnv.apiBaseUrl}</code>. Start the
+      Proliferate API or set <code>VITE_PROLIFERATE_API_BASE_URL</code> before
+      signing in.
+    </>
+  );
 }

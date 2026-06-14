@@ -23,11 +23,15 @@ import {
   readStoredAuthToken,
   writeStoredAuthToken,
 } from "../lib/access/cloud/auth-token-store";
+import { isApiUnreachableError } from "../lib/access/cloud/session-bootstrap-failure";
+
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 5_000;
 
 interface AuthTokenContextValue {
   token: string | null;
   user: AuthUser | null;
   bootstrapping: boolean;
+  bootstrapUnreachable: boolean;
   setToken: (token: string) => void;
   setSession: (session: AuthSessionResponse) => void;
   clearToken: () => Promise<void>;
@@ -44,6 +48,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(initialTokenRef.current);
   const [user, setUserState] = useState<AuthUser | null>(null);
   const [bootstrapping, setBootstrapping] = useState(initialTokenRef.current === null);
+  const [bootstrapUnreachable, setBootstrapUnreachable] = useState(false);
   const authEpochRef = useRef(0);
   const client = useMemo(() => createWebCloudClient(webEnv.apiBaseUrl, token), [token]);
 
@@ -55,7 +60,14 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const bootstrapEpoch = authEpochRef.current;
     const bootstrapClient = createWebCloudClient(webEnv.apiBaseUrl, null);
-    bootstrapWebSession(bootstrapClient)
+    const abortController = new AbortController();
+    // In dev, bound the wait so a missing local API surfaces an actionable
+    // notice instead of an indefinite loading screen. Production keeps the
+    // unbounded wait.
+    const timeoutId = import.meta.env.DEV
+      ? window.setTimeout(() => abortController.abort(), SESSION_BOOTSTRAP_TIMEOUT_MS)
+      : null;
+    bootstrapWebSession(bootstrapClient, { signal: abortController.signal })
       .then((session) => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           queryClient.clear();
@@ -63,19 +75,24 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
           setUserState(session.user);
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           setTokenState(null);
           setUserState(null);
+          setBootstrapUnreachable(import.meta.env.DEV && isApiUnreachableError(error));
         }
       })
       .finally(() => {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
           setBootstrapping(false);
         }
       });
     return () => {
       cancelled = true;
+      abortController.abort();
     };
   }, []);
 
@@ -84,11 +101,13 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
       token,
       user,
       bootstrapping,
+      bootstrapUnreachable,
       setToken(nextToken) {
         authEpochRef.current += 1;
         queryClient.clear();
         writeStoredAuthToken(nextToken);
         setBootstrapping(false);
+        setBootstrapUnreachable(false);
         setTokenState(nextToken);
         setUserState(null);
       },
@@ -97,6 +116,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         queryClient.clear();
         clearStoredAuthToken();
         setBootstrapping(false);
+        setBootstrapUnreachable(false);
         setTokenState(session.accessToken);
         setUserState(session.user);
       },
@@ -118,7 +138,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         setUserState(null);
       },
     }),
-    [bootstrapping, token, user],
+    [bootstrapping, bootstrapUnreachable, token, user],
   );
 
   return (
