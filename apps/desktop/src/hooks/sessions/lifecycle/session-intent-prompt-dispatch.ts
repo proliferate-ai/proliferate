@@ -22,6 +22,9 @@ import {
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/access/anyharness/session-runtime";
+import {
+  prepareLocalRuntimeConfigForTarget,
+} from "@/lib/access/anyharness/session-runtime-config";
 import { sendCloudPromptCommand } from "@/lib/access/cloud/session-commands";
 import {
   waitForSessionMaterialization,
@@ -121,12 +124,18 @@ export async function dispatchPromptIntent(
       return;
     }
     const {
+      connection,
       target,
       workspaceId,
       materializedSessionId: resolvedSessionId,
     } = await getSessionClientAndWorkspace(entry.clientSessionId);
     requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
     const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
+    await prepareLocalRuntimeConfigForTarget(
+      target,
+      connection,
+      requestOptions,
+    );
 
     useSessionIntentStore.getState().patchIntent(entry.intentId, {
       status: "dispatching",
