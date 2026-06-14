@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contribution Guide
+    url: https://github.com/proliferate-ai/proliferate/blob/main/CONTRIBUTING.md
+    about: Read this before opening an issue or PR.
+  - name: Discussions
+    url: https://github.com/proliferate-ai/proliferate/discussions
+    about: Questions, ideas, and general discussion.
