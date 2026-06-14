@@ -1,0 +1,93 @@
+name: Bug Report
+description: Report something that is broken or behaving unexpectedly
+title: "[Bug]: "
+labels: ["release:fix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much as you
+        can — reproduction steps and environment details are the most useful.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can a maintainer reproduce this?
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / Recordings
+      description: If applicable, add screenshots or a screen recording to help explain.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the repo does this affect? (matches our `area:*` labels)
+      options:
+        - desktop
+        - anyharness
+        - sdk
+        - server
+        - cloud
+        - docs
+        - website
+        - release
+        - product
+        - not sure
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, app/CLI version, browser, etc.
+      placeholder: |
+        - OS: macOS 15.5
+        - App/CLI version: 1.2.3
+        - Browser (if relevant): Chrome 140
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Any relevant config, profiles, or flags in use.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste any relevant log output. This is automatically formatted, no backticks needed.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Anything else that might help.
+    validations:
+      required: false
