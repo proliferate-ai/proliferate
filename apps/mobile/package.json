@@ -35,7 +35,7 @@
     "expo-linking": "~8.0.9",
     "expo-localization": "~17.0.8",
     "expo-secure-store": "~15.0.8",
-    "expo-splash-screen": "~31.0.12",
+    "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~3.0.9",
     "posthog-react-native": "^4.45.10",
     "react": "19.1.0",
