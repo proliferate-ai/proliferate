@@ -95,7 +95,9 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Open Source
 
-Proliferate is AGPL-3.0. The desktop and web apps are fully open today, and self-hosting for the complete cloud control plane is coming soon.
+Proliferate is AGPL-3.0. The desktop and web apps are fully open today.
+Self-hosting the full cloud control plane is in beta — see
+[Self-hosting](#self-hosting) below.
 
 ## Getting Started
 
@@ -148,12 +150,27 @@ generated Tauri config, and app labels.
 
 </details>
 
-<details>
-<summary>Self-host Proliferate Cloud (coming soon)</summary>
+<details id="self-hosting">
+<summary>Self-host Proliferate Cloud (beta)</summary>
 
-Self-hosting the full Proliferate Cloud control plane is coming soon. Teams
-that want an early self-hosted deployment can reach out through
-[proliferate.com](https://proliferate.com) for access and deployment support.
+### Self-hosting
+
+Self-hosting the full Proliferate Cloud control plane is in **beta**. The
+deployment path works today via Docker Compose, with polished end-to-end docs
+on the way.
+
+- **Docker Compose:** [self-hosted-deploy.md](./specs/developing/deploying/self-hosted-deploy.md) —
+  Caddy + Postgres + API, with bootstrap and update scripts
+- **AWS (one-click):** [self-hosted-aws.md](./specs/developing/deploying/self-hosted-aws.md) —
+  CloudFormation wrapper that provisions the stack on EC2
+- **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
+  documents every required and optional setting
+
+Point the desktop app at your control plane by setting `apiBaseUrl` in
+`~/.proliferate/config.json`. Since this is beta, expect rough edges — please
+[open an issue](../../issues/new/choose) or ask in
+[Discord](https://discord.gg/wCEgUnEuF) if you hit problems, and see
+[SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
 </details>
 
@@ -173,9 +190,10 @@ that want an early self-hosted deployment can reach out through
 - 🔐 **Credential gateway** - your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
 - 🏢 **Organizations** - team seats, shared settings, cloud limits, and governance controls
 - 📱 **Mobile** - coming soon: dispatch work, approve actions, and follow runs from your phone
-- 🏗️ **Self-hosted Proliferate Cloud** - coming soon: run the full cloud control plane yourself
+- 🏗️ **Self-hosted Proliferate Cloud** - beta: run the full cloud control plane yourself ([docs](#self-hosting))
 
-Proliferate Cloud will be fully self-hostable and open source once it's out of beta.
+Proliferate Cloud is open source (AGPL-3.0) and self-hostable today in beta; the
+self-host experience will be fully polished as Cloud moves toward GA.
 
 ## Community
 

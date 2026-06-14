@@ -1,0 +1,13 @@
+# CODEOWNERS — https://docs.github.com/articles/about-code-owners
+# Listed owners are requested for review automatically when matching files change.
+# The last matching pattern wins, so keep more specific paths below the default.
+
+# Default owner for everything in the repo.
+* @pablonyx
+
+# Security & community-health surfaces — review changes here carefully.
+/SECURITY.md            @pablonyx
+/.github/               @pablonyx
+/.github/workflows/     @pablonyx
+/.github/dependabot.yml @pablonyx
+/.github/CODEOWNERS     @pablonyx
