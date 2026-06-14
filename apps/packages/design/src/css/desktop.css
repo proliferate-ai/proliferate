@@ -2159,53 +2159,31 @@ body {
   --workspace-shell-tab-font-weight: 500;
   --workspace-shell-tab-icon-size: 0.875rem; /* 14px */
   --workspace-shell-tab-content-gap: 0.5rem;
-  --workspace-shell-tab-inactive-background: color-mix(
-    in oklab,
-    var(--color-foreground) 2%,
-    var(--color-background)
-  );
-  --workspace-shell-tab-inactive-border: color-mix(in oklab, var(--color-border) 15%, transparent);
-  --workspace-shell-tab-hover-background: var(--workspace-shell-tab-inactive-background);
-  --workspace-shell-tab-hover-border: color-mix(in oklab, var(--color-border) 35%, transparent);
-  --workspace-shell-tab-active-background: color-mix(
-    in oklab,
-    var(--color-foreground) 6%,
-    var(--color-background)
-  );
-  --workspace-shell-tab-active-border: color-mix(in oklab, var(--color-border) 70%, transparent);
-  --workspace-shell-tab-selected-background: color-mix(
-    in oklab,
-    var(--color-foreground) 8%,
-    var(--color-background)
-  );
-  --workspace-shell-tab-selected-border: color-mix(in oklab, var(--color-border) 60%, transparent);
+  --workspace-shell-tab-radius: 0.625rem; /* 10px */
+  /* Border-only tabs: the clean neutral rim defines each tab, no fill at rest
+     or on hover. The selected tab is the exception — a subtle lighter fill
+     (plus a heavier rim and brighter text) lifts it above the rest. */
+  --workspace-shell-tab-border: var(--color-border);
+  --workspace-shell-tab-inactive-background: transparent;
+  --workspace-shell-tab-inactive-border: var(--workspace-shell-tab-border);
+  --workspace-shell-tab-hover-background: transparent;
+  --workspace-shell-tab-hover-border: var(--color-border-heavy);
+  --workspace-shell-tab-active-background: color-mix(in oklab, var(--color-foreground) 7%, transparent);
+  --workspace-shell-tab-active-border: var(--color-border-heavy);
+  --workspace-shell-tab-selected-background: color-mix(in oklab, var(--color-foreground) 10%, transparent);
+  --workspace-shell-tab-selected-border: var(--color-border-heavy);
   --workspace-shell-action-size: 1.75rem; /* 28px */
-  --workspace-shell-action-font-size: var(--text-xs);
-  --workspace-shell-action-line-height: var(--text-xs--line-height);
+  --workspace-shell-action-font-size: var(--text-sm);
+  --workspace-shell-action-line-height: var(--text-sm--line-height);
   --workspace-shell-action-font-weight: 500;
   --workspace-shell-action-icon-size: 0.8125rem; /* 13px */
   --workspace-shell-action-radius: 0.5rem;
-  --workspace-shell-action-border: var(--color-border);
-  --workspace-shell-action-background: var(--color-background);
+  /* Header action buttons (+, Run, open-in) match the tabs: border-only, no
+     fill at rest (hover adds a tint). Right-panel buttons opt out below. */
+  --workspace-shell-action-border: var(--workspace-shell-tab-border);
+  --workspace-shell-action-background: transparent;
   --workspace-shell-action-foreground: var(--color-muted-foreground);
-  --workspace-shell-action-hover-background: var(--color-accent);
-  --workspace-shell-action-hover-foreground: var(--color-foreground);
-}
-
-:root[data-theme="mono"][data-mode="light"],
-:root[data-theme="original"][data-mode="light"] {
-  --workspace-shell-tab-inactive-background: transparent;
-  --workspace-shell-tab-inactive-border: transparent;
-  --workspace-shell-tab-hover-background: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --workspace-shell-tab-hover-border: transparent;
-  --workspace-shell-tab-active-background: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --workspace-shell-tab-active-border: transparent;
-  --workspace-shell-tab-selected-background: color-mix(in oklab, var(--color-foreground) 7%, transparent);
-  --workspace-shell-tab-selected-border: transparent;
-  --workspace-shell-action-border: var(--color-border);
-  --workspace-shell-action-background: var(--color-surface-elevated-secondary);
-  --workspace-shell-action-foreground: var(--color-foreground-secondary);
-  --workspace-shell-action-hover-background: var(--color-list-hover);
+  --workspace-shell-action-hover-background: var(--color-composer-control-hover);
   --workspace-shell-action-hover-foreground: var(--color-foreground);
 }
 
@@ -2256,6 +2234,13 @@ body {
   font-size: var(--workspace-shell-action-font-size);
   line-height: var(--workspace-shell-action-line-height);
   font-weight: var(--workspace-shell-action-font-weight);
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+/* Right-panel trigger buttons stay flat (no chip rim/fill). */
+.glass-editor-panel-new-tab-menu-trigger {
+  border-color: transparent;
+  background-color: transparent;
 }
 
 .workspace-shell-action-button {
@@ -2288,11 +2273,9 @@ body {
   color: var(--workspace-shell-action-hover-foreground);
 }
 
-.workspace-shell-toolbar-button {
-  border-color: transparent;
-  background-color: transparent;
-}
-
+/* Split control: primary action + chevron menu segment sharing one pill.
+   The left segment drops its inner edge so the right segment's border is the
+   single divider seam (no doubled line). */
 .workspace-shell-split-button-left {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
@@ -2305,12 +2288,8 @@ body {
 }
 
 .workspace-shell-split-button-right.workspace-shell-icon-button {
-  width: calc(var(--workspace-shell-action-size) - 0.25rem);
-  min-width: calc(var(--workspace-shell-action-size) - 0.25rem);
-}
-
-.workspace-shell-split-button-right.workspace-shell-action-button {
-  padding-inline: 0.375rem;
+  width: calc(var(--workspace-shell-action-size) - 0.5rem);
+  min-width: calc(var(--workspace-shell-action-size) - 0.5rem);
 }
 
 /* ---- Right panel tabs ---- */
@@ -2343,8 +2322,6 @@ body {
   --right-panel-tab-text-primary: var(--color-sidebar-foreground);
   --right-panel-tab-text-secondary: color-mix(in srgb, var(--color-sidebar-foreground) 65%, transparent);
   --right-panel-tab-text-tertiary: var(--color-sidebar-muted-foreground);
-  --right-panel-tab-border: color-mix(in oklab, var(--color-sidebar-border) 80%, transparent);
-  --right-panel-tab-outer-border: var(--right-panel-tab-border);
   --right-panel-tab-focus: var(--color-sidebar-ring);
   --right-panel-tab-font-size: var(--workspace-shell-tab-font-size);
   --right-panel-tab-line-height: var(--workspace-shell-tab-line-height);
@@ -2368,7 +2345,6 @@ body {
   color: var(--right-panel-tab-text-secondary);
   font-size: var(--right-panel-tab-font-size);
   line-height: var(--right-panel-tab-line-height);
-  border-bottom: 1px solid var(--right-panel-tab-outer-border);
 }
 
 :root[data-theme="mono"][data-mode="light"] .right-panel-tab-system,
@@ -2378,8 +2354,6 @@ body {
   --right-panel-tab-hover-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
   --right-panel-tab-active-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);
   --right-panel-tab-text-secondary: color-mix(in oklab, var(--color-foreground) 65%, transparent);
-  --right-panel-tab-border: var(--color-border-light);
-  --right-panel-tab-outer-border: transparent;
 }
 
 .right-panel-tab-system .ui-tab-system-bar {
@@ -2890,20 +2864,6 @@ body {
 
 .right-panel-tab-system .right-panel-tool-drop-target {
   width: var(--tab-gap);
-}
-
-.right-panel-tab-system .right-panel-header-entry-separator {
-  position: absolute;
-  inset-inline-end: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1px;
-  height: 12px;
-  flex-shrink: 0;
-  border-radius: 9999px;
-  background-color: var(--right-panel-tab-border);
-  opacity: 1;
-  transition: opacity 100ms ease;
 }
 
 .right-panel-tab-system .ui-tab-system-live-region {

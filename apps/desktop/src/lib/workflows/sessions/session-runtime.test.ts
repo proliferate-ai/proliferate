@@ -424,17 +424,54 @@ describe("pruneInactiveSessionStreams", () => {
 });
 
 describe("resumeSession", () => {
-  it("resumes without per-session MCP or plugin payloads", async () => {
+  it("reapplies local runtime config before resuming without per-session MCP or plugin payloads", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
       location: "local",
       runtimeGeneration: 0,
     });
+    mocks.ensurePersonalSandboxProfile.mockResolvedValue({
+      id: "profile-1",
+      primaryTargetId: "target-1",
+    });
+    mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockResolvedValue({
+      applyRequest: {
+        source: "desktop",
+        revision: {
+          id: "revision-1",
+          sequence: 2,
+          contentHash: "hash-1",
+          externalScope: {
+            provider: "proliferate-cloud",
+            id: "profile-1",
+            targetId: "target-1",
+          },
+        },
+        manifest: {},
+      },
+    });
+    mocks.applyRuntimeConfig.mockResolvedValue({
+      applied: true,
+      status: "applied",
+      revision: {
+        id: "revision-1",
+        sequence: 2,
+        contentHash: "hash-1",
+        externalScope: {
+          provider: "proliferate-cloud",
+          id: "profile-1",
+          targetId: "target-1",
+        },
+      },
+    });
     mocks.resume.mockResolvedValue({ id: "session-1" });
 
     await resumeSession("session-1");
 
+    expect(mocks.applyRuntimeConfig).toHaveBeenCalledTimes(1);
+    expect(mocks.applyRuntimeConfig.mock.invocationCallOrder[0]!)
+      .toBeLessThan(mocks.resume.mock.invocationCallOrder[0]!);
     expect(mocks.resume).toHaveBeenCalledTimes(1);
     const [sessionId, resumeOptions, requestOptions] = mocks.resume.mock.calls[0]!;
     expect(sessionId).toBe("session-1");

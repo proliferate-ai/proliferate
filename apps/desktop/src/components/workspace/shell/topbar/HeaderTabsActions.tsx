@@ -10,9 +10,9 @@ import type {
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 const HEADER_ICON_BUTTON_CLASS =
-  "workspace-shell-icon-button workspace-shell-toolbar-button shrink-0 disabled:pointer-events-none disabled:opacity-40";
+  "workspace-shell-icon-button shrink-0 disabled:pointer-events-none disabled:opacity-40";
 const HEADER_FILTER_BUTTON_CLASS =
-  "workspace-shell-action-button workspace-shell-toolbar-button shrink-0 gap-1 px-1.5 text-xs disabled:pointer-events-none disabled:opacity-40";
+  "workspace-shell-action-button shrink-0 gap-1 px-1.5 disabled:pointer-events-none disabled:opacity-40";
 
 interface HeaderTabsActionsProps {
   closedChatTabs: HeaderChatMenuEntry[];
@@ -37,9 +37,8 @@ export function HeaderTabsActions({
       type="button"
       variant="ghost"
       size="sm"
-      disabled={closedCount === 0}
-      aria-label={closedCount > 0 ? `Closed sessions (${closedCount})` : "No closed sessions"}
-      title={closedCount > 0 ? `Closed sessions (${closedCount})` : "No closed sessions"}
+      aria-label={`Closed sessions (${closedCount})`}
+      title={`Closed sessions (${closedCount})`}
       className={HEADER_FILTER_BUTTON_CLASS}
     >
       <ListFilter className="size-3.5" />
@@ -64,7 +63,7 @@ export function HeaderTabsActions({
         </span>
       </Button>
 
-      {closedCount > 0 ? (
+      {closedCount > 0 && (
         <PopoverButton
           align="end"
           trigger={closedSessionsTrigger}
@@ -85,8 +84,6 @@ export function HeaderTabsActions({
             />
           )}
         </PopoverButton>
-      ) : (
-        closedSessionsTrigger
       )}
     </>
   );

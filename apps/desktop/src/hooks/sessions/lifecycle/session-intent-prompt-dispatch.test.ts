@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   logLatency: vi.fn(),
   mutateAsync: vi.fn(),
   patchSessionRecord: vi.fn(),
+  prepareLocalRuntimeConfigForTarget: vi.fn(),
   promptAttachmentSnapshotsToBlocks: vi.fn(),
   rehydrateSessionSlotFromHistory: vi.fn(),
   sendCloudPromptCommand: vi.fn(),
@@ -26,6 +27,10 @@ vi.mock("@/lib/access/browser/prompt-attachment-blocks", () => ({
 
 vi.mock("@/lib/access/anyharness/session-runtime", () => ({
   getSessionClientAndWorkspace: mocks.getSessionClientAndWorkspace,
+}));
+
+vi.mock("@/lib/access/anyharness/session-runtime-config", () => ({
+  prepareLocalRuntimeConfigForTarget: mocks.prepareLocalRuntimeConfigForTarget,
 }));
 
 vi.mock("@/lib/access/cloud/session-commands", () => ({
@@ -61,11 +66,16 @@ describe("dispatchPromptIntent", () => {
     vi.clearAllMocks();
     mocks.getLatencyFlowRequestHeaders.mockReturnValue(null);
     mocks.getSessionClientAndWorkspace.mockResolvedValue({
+      connection: {
+        runtimeUrl: "http://runtime.local",
+        anyharnessWorkspaceId: "workspace-1",
+      },
       target: { location: "local" },
       workspaceId: "workspace-1",
       materializedSessionId: "session-1",
     });
     mocks.getSessionRecord.mockReturnValue({ lastPromptAt: "2026-06-04T09:00:00Z" });
+    mocks.prepareLocalRuntimeConfigForTarget.mockResolvedValue(null);
     mocks.waitForSessionMaterialization.mockResolvedValue("session-1");
   });
 
@@ -170,6 +180,34 @@ describe("dispatchPromptIntent", () => {
 
     expect(deps.maybeGenerateSessionTitle).not.toHaveBeenCalled();
     expect(deps.maybeGenerateWorkspaceName).not.toHaveBeenCalled();
+  });
+
+  it("reapplies local runtime config before dispatching a local prompt", async () => {
+    const entry = useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "client-session-1",
+      workspaceId: "workspace-1",
+      text: "Build please",
+      blocks: [{ type: "text", text: "Build please" }],
+    });
+    mocks.mutateAsync.mockResolvedValue({
+      session: { id: "session-1" },
+      status: "queued",
+      queuedSeq: 1,
+    });
+
+    await dispatchPromptIntent(entry, createDeps());
+
+    expect(mocks.prepareLocalRuntimeConfigForTarget).toHaveBeenCalledWith(
+      { location: "local" },
+      {
+        runtimeUrl: "http://runtime.local",
+        anyharnessWorkspaceId: "workspace-1",
+      },
+      undefined,
+    );
+    expect(mocks.prepareLocalRuntimeConfigForTarget.mock.invocationCallOrder[0]!)
+      .toBeLessThan(mocks.mutateAsync.mock.invocationCallOrder[0]!);
   });
 });
 

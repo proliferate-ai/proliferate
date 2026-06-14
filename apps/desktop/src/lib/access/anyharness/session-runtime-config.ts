@@ -68,6 +68,18 @@ export async function prepareLocalSessionRuntimeConfig(
   }
 }
 
+export async function prepareLocalRuntimeConfigForTarget(
+  target: RuntimeTarget,
+  connection: AnyHarnessRuntimeConfigConnection,
+  options?: ApplyRuntimeConfigOptions,
+  config?: PrepareLocalSessionRuntimeConfigOptions,
+): Promise<RuntimeConfigRevisionExpectation | null> {
+  if (target.location !== "local") {
+    return null;
+  }
+  return prepareLocalSessionRuntimeConfig(connection, options, config);
+}
+
 async function loadDesktopRuntimeConfigApplyRequest(
   timeoutMs: number,
 ): Promise<DesktopRuntimeConfigApplyRequestResponse | null> {

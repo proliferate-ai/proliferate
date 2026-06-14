@@ -23,10 +23,8 @@ import type { Workspace } from "@anyharness/sdk";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";
 
-const HEADER_ICON_BUTTON_CLASS =
-  "workspace-shell-icon-button workspace-shell-toolbar-button";
-const HEADER_RUN_BUTTON_CLASS =
-  "workspace-shell-action-button workspace-shell-toolbar-button text-xs font-medium";
+const HEADER_ICON_BUTTON_CLASS = "workspace-shell-icon-button";
+const HEADER_RUN_BUTTON_CLASS = "workspace-shell-action-button font-medium";
 
 interface GlobalHeaderProps {
   selectedWorkspace: Workspace | undefined;
@@ -84,7 +82,7 @@ export const GlobalHeader = memo(function GlobalHeader({
     <DebugProfiler id="global-header">
       <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-4">
         <div
-          className="min-w-0 max-w-[220px] shrink-0 truncate px-1 text-base font-medium leading-5 text-foreground"
+          className="min-w-0 max-w-[220px] shrink-0 truncate px-1 text-sm font-medium leading-5 text-muted-foreground"
           title={title}
           data-telemetry-mask="true"
         >
@@ -97,9 +95,8 @@ export const GlobalHeader = memo(function GlobalHeader({
 
         <DebugProfiler id="global-header-actions">
           <div className="flex shrink-0 items-center gap-1.5">
-            <div className="h-4 w-px bg-border/70" aria-hidden="true" />
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               loading={runLoading}
               disabled={runDisabled}

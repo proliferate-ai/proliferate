@@ -67,9 +67,7 @@ export function SplitButton({
             onClick={onClick}
             title={label}
             aria-label={label}
-            className={showLabel
-              ? "workspace-shell-action-button workspace-shell-split-button-left inline-flex items-center whitespace-nowrap flex-1 justify-start font-mono font-medium"
-              : "workspace-shell-icon-button workspace-shell-split-button-left inline-flex items-center justify-center whitespace-nowrap"}
+            className={`${primaryClassName} workspace-shell-split-button-left ${showLabel ? "flex-1 justify-start" : ""}`}
           >
             {content}
           </Button>
@@ -80,11 +78,10 @@ export function SplitButton({
             onClick={toggle}
             aria-haspopup="menu"
             aria-expanded={isOpen}
+            data-state={isOpen ? "open" : "closed"}
             title={`Choose ${label}`}
             aria-label={`Choose ${label}`}
-            className={showLabel
-              ? "workspace-shell-action-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap gap-1.5 font-[450]"
-              : "workspace-shell-icon-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap"}
+            className="workspace-shell-icon-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap"
           >
             <ChevronDown className="size-3" />
           </Button>

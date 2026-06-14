@@ -25,6 +25,9 @@ import {
   type AnyHarnessWorkspaceSessionConnection,
   type ListSessionsOptions,
 } from "@/lib/access/anyharness/sessions";
+import {
+  prepareLocalRuntimeConfigForTarget,
+} from "@/lib/access/anyharness/session-runtime-config";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
@@ -220,20 +223,26 @@ export async function resumeSession(
   },
 ) {
   const measurementOperationId = options?.measurementOperationId;
-  const { connection, materializedSessionId } = await measureSessionWorkflowStep(
+  const { connection, target, materializedSessionId } = await measureSessionWorkflowStep(
     measurementOperationId,
     "session.resume.resolve_target",
     () => getSessionClientAndWorkspace(sessionId),
+  );
+  const requestOptions = getMeasurementRequestOptions({
+    operationId: measurementOperationId,
+    category: "session.resume",
+    headers: options?.requestHeaders,
+  });
+  await prepareLocalRuntimeConfigForTarget(
+    target,
+    connection,
+    requestOptions,
   );
   return resumeRuntimeSession(
     connection,
     materializedSessionId,
     undefined,
-    getMeasurementRequestOptions({
-      operationId: measurementOperationId,
-      category: "session.resume",
-      headers: options?.requestHeaders,
-    }),
+    requestOptions,
   );
 }
 
