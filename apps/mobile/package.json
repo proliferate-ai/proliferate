@@ -29,7 +29,7 @@
     "expo-application": "~7.0.8",
     "expo-blur": "^15.0.8",
     "expo-clipboard": "~8.0.8",
-    "expo-crypto": "~15.0.9",
+    "expo-crypto": "~56.0.4",
     "expo-device": "~8.0.10",
     "expo-file-system": "~19.0.22",
     "expo-linking": "~8.0.9",
