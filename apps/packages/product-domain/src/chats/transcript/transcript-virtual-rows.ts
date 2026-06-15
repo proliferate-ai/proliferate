@@ -13,13 +13,3 @@ export function resolveVirtualBottomDistance(input: {
     0,
   );
 }
-
-export function shouldStickToVirtualBottom(input: {
-  scrollOffset: number;
-  viewportSize: number;
-  totalVirtualSize: number;
-  thresholdPx: number;
-}): boolean {
-  const distance = resolveVirtualBottomDistance(input);
-  return distance <= input.thresholdPx;
-}

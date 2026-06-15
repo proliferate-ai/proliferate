@@ -4,7 +4,23 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 
 export const TRANSCRIPT_TOP_PADDING_PX = 16;
-export const STICKY_BOTTOM_THRESHOLD_PX = 96;
+// Stick-to-bottom engine tuning (see useTranscriptStickToBottom).
+// A user scroll re-pins only within this tight band of the true bottom. The
+// legacy 96px "sticky window" was retired: it kept a small upward scroll
+// "pinned" and let the next streaming snap fight the user back to the bottom.
+export const REPIN_BOTTOM_THRESHOLD_PX = 24;
+// A programmatic snap's resulting scroll event is recognized (and excluded from
+// pin/direction tracking) when scrollTop lands within this tolerance of the
+// value we wrote — absorbs subpixel scrollHeight and clamp slop.
+export const PROGRAMMATIC_MATCH_TOL_PX = 2;
+// Ignore subpixel scroll jitter when classifying user scroll direction.
+export const DIRECTION_EPSILON_PX = 1;
+// Visibility-resume glue loop: hold the viewport at the bottom each frame until
+// measured scrollHeight is stable for this many consecutive frames, capped at
+// GLUE_MAX_FRAMES, so a suspended-then-resumed measurement backlog collapses
+// into one jump instead of a visible crawl.
+export const GLUE_STABLE_FRAMES = 3;
+export const GLUE_MAX_FRAMES = 12;
 export const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
 export const HISTORY_LOADING_ROW_KEY = "history-loader";
 export const DEFAULT_CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-3xl";
@@ -31,11 +47,17 @@ export interface TranscriptRowListBaseProps {
   gutterClassName?: string;
 }
 
-export interface HistoryPrependScrollAnchor {
-  cursor: number | null;
+// Preserves the user's read position across a content-height change above the
+// viewport using measured DOM deltas (immune to virtualizer estimate error):
+// after the change, scrollTop = scrollTop + (newScrollHeight - scrollHeight).
+export interface ContentHeightScrollAnchor {
   rowCount: number;
   scrollHeight: number;
   scrollTop: number;
+}
+
+export interface HistoryPrependScrollAnchor extends ContentHeightScrollAnchor {
+  cursor: number | null;
 }
 
 export type TranscriptRenderableRow =
