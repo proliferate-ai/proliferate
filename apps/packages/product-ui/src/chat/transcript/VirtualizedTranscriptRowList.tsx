@@ -11,19 +11,17 @@ import {
   buildRenderableRows,
   estimateRenderableRowHeight,
   estimateRenderableRowsHeight,
-  GLUE_MAX_FRAMES,
-  GLUE_STABLE_FRAMES,
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
   TranscriptScrollToBottomButton,
-  type ContentHeightScrollAnchor,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
   type TranscriptRenderableRow,
   type TranscriptRowListBaseProps,
 } from "./TranscriptRowListShared";
+import { useAboveChangeCompensation } from "./useAboveChangeCompensation";
 import { useTranscriptStickToBottom } from "./useTranscriptStickToBottom";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { useTranscriptVirtualizerBlankFallback } from "./useTranscriptVirtualizerBlankFallback";
@@ -68,7 +66,6 @@ export function VirtualizedTranscriptRowList({
 }: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
-  const compensateFrameRef = useRef<number | null>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
@@ -239,45 +236,11 @@ export function VirtualizedTranscriptRowList({
     return () => { window.cancelAnimationFrame(frame); };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
-  // Hold the anchored content in place while a freshly-inserted row above it
-  // measures in. Re-applies the measured scrollHeight delta each frame (so the
-  // anchor stays put as the estimate corrects), stopping once the height is
-  // stable or a frame budget is hit.
-  const startAboveChangeCompensation = useCallback((anchor: ContentHeightScrollAnchor) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (compensateFrameRef.current != null) {
-      cancelAnimationFrame(compensateFrameRef.current);
-    }
-    let lastHeight = -1;
-    let stableFrames = 0;
-    let totalFrames = 0;
-    const tick = () => {
-      const viewport = scrollRef.current;
-      if (!viewport || pinnedRef.current) {
-        compensateFrameRef.current = null;
-        return;
-      }
-      notifyProgrammaticScroll(() => {
-        viewport.scrollTop = anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight);
-      });
-      const height = viewport.scrollHeight;
-      if (height === lastHeight) {
-        stableFrames += 1;
-      } else {
-        stableFrames = 0;
-        lastHeight = height;
-      }
-      totalFrames += 1;
-      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= GLUE_MAX_FRAMES) {
-        compensateFrameRef.current = null;
-        return;
-      }
-      compensateFrameRef.current = requestAnimationFrame(tick);
-    };
-    compensateFrameRef.current = requestAnimationFrame(tick);
-  }, [notifyProgrammaticScroll, pinnedRef]);
+  const startAboveChangeCompensation = useAboveChangeCompensation({
+    scrollRef,
+    pinnedRef,
+    notifyProgrammaticScroll,
+  });
 
   // While unpinned, a completing turn can split one row into completed-history +
   // content — a new, unmeasured row inserted ABOVE the anchored row. The
@@ -367,12 +330,6 @@ export function VirtualizedTranscriptRowList({
       scrollTop: viewport.scrollTop,
     };
   });
-
-  useEffect(() => () => {
-    if (compensateFrameRef.current != null) {
-      cancelAnimationFrame(compensateFrameRef.current);
-    }
-  }, []);
 
   useTranscriptVirtualizerBlankFallback({
     activeSessionId,
