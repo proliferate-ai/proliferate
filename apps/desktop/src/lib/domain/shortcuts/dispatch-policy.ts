@@ -75,7 +75,7 @@ function canBypassDefaultPrevented(
 
   if (
     (
-      shortcut.id === SHORTCUTS.tabByIndex.id
+      shortcut.id === SHORTCUTS.workspaceByIndex.id
       || shortcut.id === SHORTCUTS.settingsSectionByIndex.id
     )
     && (event.metaKey || event.ctrlKey)
@@ -87,7 +87,7 @@ function canBypassDefaultPrevented(
   }
 
   if (
-    shortcut.id === SHORTCUTS.workspaceByIndex.id
+    shortcut.id === SHORTCUTS.tabByIndex.id
     && (event.metaKey || event.ctrlKey)
     && event.altKey
     && !event.shiftKey
