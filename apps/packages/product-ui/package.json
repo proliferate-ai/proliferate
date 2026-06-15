@@ -280,24 +280,24 @@
   "dependencies": {
     "@proliferate/product-domain": "workspace:*",
     "@proliferate/ui": "workspace:*",
-    "@tanstack/react-virtual": "3.13.24",
+    "@tanstack/react-virtual": "3.14.2",
     "lucide-react": "^0.468.0",
     "react-markdown": "^9",
     "remark-gfm": "^4",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.6.0"
   },
   "peerDependencies": {
     "react": "^19",
     "react-dom": "^19"
   },
   "devDependencies": {
-    "@types/react": "~19.1.0",
-    "@types/react-dom": "~19.1.0",
+    "@types/react": "~19.2.17",
+    "@types/react-dom": "~19.2.3",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
-    "jsdom": "^29.1.0",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "jsdom": "^29.1.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "typescript": "^5.7",
     "vitest": "^3.2.4"
   }
