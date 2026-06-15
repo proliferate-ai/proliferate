@@ -21,6 +21,11 @@ engine = create_async_engine(
     # connections keep replaying plans against the dead OID and fail forever with
     # "no unique or exclusion constraint matching the ON CONFLICT specification".
     # pool_pre_ping does not help — it only runs SELECT 1, it does not re-plan.
+    # Tradeoff: every query now goes through a full Parse/Bind/Execute cycle with
+    # no plan reuse, which costs throughput under load (asyncpg benchmarks ~10-20%).
+    # We accept that for correctness. TODO: revisit re-enabling the cache once the
+    # migration divergence is cleaned up and index OIDs stop churning under live
+    # connections — at which point pool_recycle below is sufficient on its own.
     connect_args={"statement_cache_size": 0},
     # Defense-in-depth: age connections out so no pooled connection lives
     # indefinitely across a schema change.
