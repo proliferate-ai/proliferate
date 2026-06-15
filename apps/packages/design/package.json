@@ -30,6 +30,6 @@
     "tailwindcss": "^4"
   },
   "devDependencies": {
-    "typescript": "^5.7"
+    "typescript": "^6.0"
   }
 }
