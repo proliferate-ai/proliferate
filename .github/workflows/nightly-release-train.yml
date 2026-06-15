@@ -212,7 +212,10 @@ jobs:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       version: ${{ needs.prepare.outputs.desktop_version }}
       dry_run: false
-      publish_updater: false
+      # Zero-touch auto-prod: publish the updater/download assets so existing
+      # installs auto-update on every train. release-desktop.yml is not bound to a
+      # GitHub Environment, so there is no approval gate on this step.
+      publish_updater: true
       target_os: all
     secrets: inherit
 
@@ -264,6 +267,65 @@ jobs:
     uses: ./.github/workflows/_deploy-mobile.yml
     with:
       environment: staging
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.mobile == 'true' }}
+    secrets: inherit
+
+  # ── Production promotion (zero-touch auto-prod) ───────────────────────────────
+  # Each prod job promotes only after its staging counterpart deploys cleanly, so
+  # the train still validates on staging first — but with no human approval step.
+  # Targets the existing `Production` GitHub Environment (prod cluster, deploy
+  # role, prod E2B template, secrets). The Environment's required-reviewer rule
+  # must be removed for these to run unattended.
+
+  deploy-e2b-prod:
+    needs: [prepare, deploy-e2b]
+    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-e2b.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-e2b.yml
+    with:
+      environment: Production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.e2b == 'true' }}
+      rolling_tag: production
+      mode: build_and_promote
+    secrets: inherit
+
+  deploy-server-prod:
+    needs: [prepare, deploy-server, deploy-e2b-prod]
+    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-server.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-server.yml
+    with:
+      environment: Production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.server == 'true' }}
+    secrets: inherit
+
+  deploy-workers-prod:
+    needs: [prepare, deploy-workers, deploy-server-prod]
+    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-workers.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-workers.yml
+    with:
+      environment: Production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.workers == 'true' }}
+    secrets: inherit
+
+  deploy-web-prod:
+    needs: [prepare, deploy-web, deploy-server-prod]
+    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-web.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-web.yml
+    with:
+      environment: Production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.web == 'true' }}
+    secrets: inherit
+
+  deploy-mobile-prod:
+    needs: [prepare, deploy-mobile]
+    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-mobile.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-mobile.yml
+    with:
+      environment: Production
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       enabled: ${{ needs.prepare.outputs.mobile == 'true' }}
     secrets: inherit
@@ -352,6 +414,11 @@ jobs:
       - deploy-workers
       - deploy-web
       - deploy-mobile
+      - deploy-e2b-prod
+      - deploy-server-prod
+      - deploy-workers-prod
+      - deploy-web-prod
+      - deploy-mobile-prod
     if: ${{ always() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -371,4 +438,9 @@ jobs:
             echo "- Workers staging: \`${{ needs.deploy-workers.result }}\`"
             echo "- Web staging: \`${{ needs.deploy-web.result }}\`"
             echo "- Mobile staging: \`${{ needs.deploy-mobile.result }}\`"
+            echo "- E2B prod: \`${{ needs.deploy-e2b-prod.result }}\`"
+            echo "- Server prod: \`${{ needs.deploy-server-prod.result }}\`"
+            echo "- Workers prod: \`${{ needs.deploy-workers-prod.result }}\`"
+            echo "- Web prod: \`${{ needs.deploy-web-prod.result }}\`"
+            echo "- Mobile prod: \`${{ needs.deploy-mobile-prod.result }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
