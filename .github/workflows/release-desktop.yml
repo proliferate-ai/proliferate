@@ -115,7 +115,7 @@ jobs:
 
       - name: Checkout
         if: steps.filter.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -144,7 +144,7 @@ jobs:
 
       - name: Setup Node 22
         if: steps.filter.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -168,7 +168,7 @@ jobs:
 
       - name: Setup pnpm
         if: steps.filter.outputs.skip != 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10.11.0
 
@@ -506,7 +506,7 @@ jobs:
 
       - name: Upload build artifacts (macOS)
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.target }}
           path: |
@@ -516,7 +516,7 @@ jobs:
 
       - name: Upload DMG-only artifact (macOS)
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: proliferate-dmg-${{ matrix.target }}
           path: |
@@ -530,7 +530,7 @@ jobs:
     if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -569,7 +569,7 @@ jobs:
           git push origin "refs/tags/$RELEASE_TAG"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: all-artifacts
           pattern: desktop-*
@@ -579,7 +579,7 @@ jobs:
         run: find all-artifacts -type f | sort
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Proliferate Desktop ${{ startsWith(github.ref_name, 'desktop-v') && github.ref_name || format('desktop-v{0}', inputs.version) }}
           draft: true
@@ -599,17 +599,17 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
       - name: Setup Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: all-artifacts
           pattern: desktop-*
@@ -619,7 +619,7 @@ jobs:
         run: find all-artifacts -type f | sort
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DESKTOP_RELEASE_ROLE_ARN }}
           aws-region: us-east-1
