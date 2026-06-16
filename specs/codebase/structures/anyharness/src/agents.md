@@ -99,13 +99,13 @@ This is the main handoff from the agents area into the rest of the runtime.
 
 There are two supported AnyHarness runtime agent inputs:
 
-- `catalogs/agents/v1/catalog.json`
+- `catalogs/agents/catalog.json` (the lockfile)
   - supported agent families
-  - fallback model/control metadata
-  - static session-display metadata
-- `catalogs/agents/v1/registry.json`
+  - resolved, sha-pinned install `source` per harness role
+  - model/control metadata + static session-display metadata
+- `catalogs/agents/registry.json`
   - supported agent families
-  - install and launch metadata
+  - install method/launch metadata (probe-time discovery config)
   - auth-slot and materialization metadata
   - credential-discovery metadata
 
@@ -364,8 +364,8 @@ seeded Claude install.
 - the built-in supported-agent registry
 - static install and auth metadata
 - provider-specific credential detection
-- managed install behavior
-- ACP-registry-backed distribution resolution
+- managed install behavior (fenced: materialize EXACTLY the catalog pin,
+  sha-verified — ACP-registry resolution is probe-time, see "ACP Registry Flow")
 - readiness computation
 - the final resolved launch surface handed to ACP
 - curated provider/model catalogs used by sessions
@@ -425,7 +425,7 @@ Add behavior here when it changes agent availability, for example:
 - a new supported agent family
 - a new credential-discovery mechanism
 - a new managed install strategy
-- a new ACP registry mapping
+- a new resolved-pin source kind (binary/archive/npm/git) + its probe resolver
 - a new provider/model catalog surface
 
 Do not add behavior here when it belongs to:

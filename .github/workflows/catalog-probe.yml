@@ -55,10 +55,17 @@ jobs:
       - name: Run probe matrix (skips missing credentials)
         run: ./scripts/agent-catalog/run-probes.sh
 
-      - name: Rebuild catalog draft + viewer
+      - name: Rebuild catalog draft, resolve pins, promote to bundled + viewer
         working-directory: scripts/agent-catalog
         run: |
           node build-catalog.mjs
+          # Freeze the fresh draft into a fenced lockfile (resolve every harness
+          # source + sha, reusing the previously-shipped shas for unchanged
+          # URLs), then promote it to the bundled catalog the runtime loads.
+          node resolve-pins.mjs \
+            --catalog catalog.draft.json \
+            --reuse-from ../../catalogs/agents/catalog.json
+          cp catalog.draft.json ../../catalogs/agents/catalog.json
           node render-catalog.mjs
 
       - name: Upload viewer artifact
@@ -73,7 +80,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git add scripts/agent-catalog/generated scripts/agent-catalog/catalog.draft.json
+          git add scripts/agent-catalog/generated scripts/agent-catalog/catalog.draft.json catalogs/agents/catalog.json
           if git diff --cached --quiet; then
             echo "No catalog changes."
             exit 0

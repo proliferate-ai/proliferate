@@ -48,16 +48,25 @@ const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
 const registry = JSON.parse(readFileSync(registryPath, "utf8"));
 const registryByKind = new Map(registry.agents.map((a) => [a.kind, a]));
 
-// Reuse sha256 already in the catalog for unchanged URLs so re-runs (e.g. to
-// add launch args) don't re-download every artifact.
+// Reuse sha256 already known (from the catalog being processed and/or a
+// `--reuse-from` reference, e.g. the previously-shipped lockfile) for unchanged
+// URLs, so re-runs and draft→bundled promotion don't re-download every artifact.
 const knownSha = new Map();
-for (const agent of catalog.agents) {
-  for (const pin of [agent.harness.native, agent.harness.agentProcess]) {
-    const targets = pin?.source?.targets;
-    if (!targets) continue;
-    for (const t of Object.values(targets)) {
-      if (t.url && t.sha256) knownSha.set(t.url, t.sha256);
+const collectShas = (doc) => {
+  for (const agent of doc.agents ?? []) {
+    for (const pin of [agent.harness?.native, agent.harness?.agentProcess]) {
+      for (const t of Object.values(pin?.source?.targets ?? {})) {
+        if (t.url && t.sha256) knownSha.set(t.url, t.sha256);
+      }
     }
+  }
+};
+collectShas(catalog);
+if (args.reuseFrom) {
+  try {
+    collectShas(JSON.parse(readFileSync(resolve(args.reuseFrom), "utf8")));
+  } catch (e) {
+    console.warn(`! --reuse-from ${args.reuseFrom} not read: ${e.message}`);
   }
 }
 
@@ -224,11 +233,8 @@ async function githubLatestTag(versionedUrlTemplate) {
 }
 
 async function shaFor(url) {
+  if (knownSha.has(url)) return knownSha.get(url);
   if (noDownload) return "";
-  if (knownSha.has(url)) {
-    console.log(`   = ${url} (cached sha)`);
-    return knownSha.get(url);
-  }
   process.stdout.write(`   ↓ ${url} … `);
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) throw new Error(`download failed ${res.status} for ${url}`);
@@ -258,6 +264,7 @@ function parseArgs(argv) {
     else if (a === "--agent") out.agent = argv[++i];
     else if (a === "--platforms") out.platforms = argv[++i];
     else if (a === "--catalog") out.catalog = argv[++i];
+    else if (a === "--reuse-from") out.reuseFrom = argv[++i];
     else if (a === "--registry") out.registry = argv[++i];
     else throw new Error(`unexpected arg ${a}`);
   }

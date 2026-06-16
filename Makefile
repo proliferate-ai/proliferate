@@ -62,7 +62,7 @@ $(error PROFILE is required. Example: make dev PROFILE=main)
 endif
 endif
 
-.PHONY: catalog-view catalog-update dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
+.PHONY: catalog-view catalog-pin catalog-update dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
@@ -817,8 +817,17 @@ clean:
 catalog-view:
 	cd scripts/agent-catalog && node build-catalog.mjs && node render-catalog.mjs && open catalog.html
 
+# Rebuild the draft, resolve every harness into a fenced pin (per-platform
+# {url,sha256} or npm/git, reusing prior shas for unchanged URLs), and promote
+# it to the bundled lockfile the runtime loads (catalogs/agents/catalog.json).
+catalog-pin:
+	cd scripts/agent-catalog && node build-catalog.mjs \
+		&& node resolve-pins.mjs --catalog catalog.draft.json --reuse-from ../../catalogs/agents/catalog.json \
+		&& cp catalog.draft.json ../../catalogs/agents/catalog.json \
+		&& node render-catalog.mjs
+
 # Re-run the full probe matrix (skips contexts missing credentials; reads
-# .probe-secrets.env at the repo root), then rebuild and open the viewer.
+# .probe-secrets.env at the repo root), then re-pin the bundled lockfile.
 catalog-update:
 	./scripts/agent-catalog/run-probes.sh
-	$(MAKE) catalog-view
+	$(MAKE) catalog-pin

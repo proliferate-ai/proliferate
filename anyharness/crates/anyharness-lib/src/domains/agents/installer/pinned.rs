@@ -159,6 +159,8 @@ pub(super) fn install_agent_process_from_pin(
                 .unwrap_or_else(|| kind.as_str().to_string());
             let exec_path = storage.join(&expected);
             if !exec_path.exists() {
+                // Don't leave a populated-but-unusable tree behind.
+                let _ = std::fs::remove_dir_all(&storage);
                 return Err(InstallError::MissingManagedArtifact(exec_path));
             }
             make_executable(&exec_path)?;

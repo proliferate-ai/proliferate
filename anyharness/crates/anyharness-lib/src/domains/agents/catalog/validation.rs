@@ -121,8 +121,17 @@ fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) 
             executable_relpath,
             ..
         } => {
-            if repo.trim().is_empty() || git_ref.trim().is_empty() {
-                anyhow::bail!("agent '{kind}' {role} git source needs repo and gitRef");
+            if repo.trim().is_empty() {
+                anyhow::bail!("agent '{kind}' {role} git source needs a repo");
+            }
+            // A mutable ref (branch/tag) is not a trust anchor — only a full
+            // commit SHA is content-addressed.
+            let is_commit_sha = matches!(git_ref.len(), 40 | 64)
+                && git_ref.bytes().all(|b| b.is_ascii_hexdigit());
+            if !is_commit_sha {
+                anyhow::bail!(
+                    "agent '{kind}' {role} git source ref must be a full commit SHA, got '{git_ref}'"
+                );
             }
             if executable_relpath.trim().is_empty() {
                 anyhow::bail!("agent '{kind}' {role} git source needs executableRelpath");

@@ -66,10 +66,10 @@ Consequences:
 The supported AnyHarness agent input schemas are:
 
 ```text
-catalogs/agents/v1/catalog.json
-catalogs/agents/v1/schema.json
-catalogs/agents/v1/registry.json
-catalogs/agents/v1/registry.schema.json
+catalogs/agents/catalog.json          # the lockfile (probe-generated, source-pinned)
+catalogs/agents/schema.json
+catalogs/agents/registry.json         # trusted method/auth/launch + discovery config
+catalogs/agents/registry.schema.json
 ```
 
 The catalog document describes optimistic/static session choices:
@@ -180,12 +180,13 @@ anyharness-lib/src/domains/agents/
     credentials.rs            # plus auth-config/login modules (see agent-auth)
   installer/
     mod.rs
-    service.rs
-    agent_process.rs
-    downloads.rs
+    service.rs                  # require_source fence + orchestration
+    install_policy.rs           # ResolvedPinSource + effective_pin/effective_source
+    pinned.rs                   # fenced materializer: download EXACTLY the pin, sha-verify
+    agent_process.rs            # launcher generation + seed launcher regen
+    downloads.rs                # sha256-verified download/extract helpers
     lock.rs
     managed_npm.rs
-    native.rs
     npm.rs
     reconcile/
       mod.rs
