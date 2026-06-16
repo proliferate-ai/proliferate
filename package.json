@@ -23,9 +23,9 @@
     "test:agent:local": "pnpm test:agent:sdk && pnpm test:agent:runtime:local"
   },
   "dependencies": {
-    "e2b": "^2.16.0"
+    "e2b": "^2.30.0"
   },
   "devDependencies": {
-    "playwright": "1.59.1"
+    "playwright": "1.61.0"
   }
 }
