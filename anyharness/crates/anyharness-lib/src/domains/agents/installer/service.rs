@@ -155,6 +155,10 @@ pub fn install_agent_with_pins(
     if is_agent_process_installable(&descriptor.agent_process.install) {
         has_installable = true;
         let process_options = options_for_role(options, &plan, &ArtifactRole::AgentProcess);
+        // The ACP adapter stays on the managed-npm / registry path: claude+codex
+        // are git-ref pinned (reproducible already); the registry-backed adapters
+        // need their ACP-mode launch args, which the pin does not yet carry.
+        // Fencing the adapter is a follow-up (capture launch args in the pin).
         if let Some(result) = install_agent_process_artifact(
             &descriptor.agent_process,
             &descriptor.kind,

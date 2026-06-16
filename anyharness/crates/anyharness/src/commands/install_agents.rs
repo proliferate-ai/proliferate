@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, bail, Result};
 use clap::Args;
 
 use anyharness_lib::app::{default_runtime_home, ensure_runtime_home};
-use anyharness_lib::domains::agents::model::{AgentDescriptor, AgentKind};
+use anyharness_lib::domains::agents::catalog::service::AgentCatalogService;
+use anyharness_lib::domains::agents::catalog::sync::CatalogSyncService;
 use anyharness_lib::domains::agents::installer::reconcile::{
-    reconcile_agents, AgentReconcileOutcome, AgentReconcileResult,
+    reconcile_agents_with_pins, AgentReconcileOutcome, AgentReconcileResult,
 };
+use anyharness_lib::domains::agents::model::{AgentDescriptor, AgentKind};
 use anyharness_lib::domains::agents::registry::built_in_registry;
 
 #[derive(Args)]
@@ -30,7 +34,13 @@ pub fn run(args: InstallAgentsArgs) -> Result<()> {
 
     let requested_agents = resolve_requested_agents(&args.agents)?;
     let registry = selected_registry(&requested_agents);
-    let results = reconcile_agents(&registry, &runtime_home, args.reinstall);
+    // The bundled catalog is the lockfile: it drives WHICH version + the fenced,
+    // sha-verified install source. The seed build and the runtime now reconcile
+    // against the same pins.
+    let catalog = AgentCatalogService::new(Arc::new(CatalogSyncService::from_bundled()));
+    let results = reconcile_agents_with_pins(&registry, &runtime_home, args.reinstall, |kind| {
+        catalog.pin_overrides(kind)
+    });
 
     if results.is_empty() {
         bail!("no agents selected for installation");
