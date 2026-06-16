@@ -125,6 +125,59 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
       },
     ],
   },
+  grok: {
+    mode: [
+      {
+        value: "default",
+        label: "Default",
+        shortLabel: "Default",
+        description: "Ask before each action.",
+        tone: "info",
+        icon: "chat",
+        isDefault: true,
+      },
+      {
+        value: "acceptEdits",
+        label: "Accept Edits",
+        shortLabel: "Edits",
+        description: "Auto-approve file edits.",
+        tone: "success",
+        icon: "edit",
+      },
+      {
+        value: "auto",
+        label: "Auto",
+        shortLabel: "Auto",
+        description: "Use a model classifier to approve or deny permission prompts.",
+        tone: "success",
+        icon: "sparkles",
+      },
+      {
+        value: "plan",
+        label: "Plan",
+        shortLabel: "Plan",
+        description: "Plan without execution.",
+        tone: "accent",
+        icon: "plan",
+      },
+      {
+        value: "dontAsk",
+        label: "Don't Ask",
+        shortLabel: "Don't Ask",
+        description: "Auto-approve most actions.",
+        tone: "warning",
+        icon: "shieldCheck",
+      },
+      {
+        value: "bypassPermissions",
+        label: "Bypass",
+        shortLabel: "Bypass",
+        description: "Skip permission checks.",
+        tone: "destructive",
+        icon: "zap",
+      },
+    ],
+  },
   codex: {
     mode: [
       {

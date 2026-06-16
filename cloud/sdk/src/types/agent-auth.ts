@@ -1,6 +1,6 @@
 import type { components } from "../generated/openapi.js";
 
-export type AgentAuthAgentKind = "claude" | "codex" | "opencode" | "gemini";
+export type AgentAuthAgentKind = "claude" | "codex" | "opencode" | "gemini" | "grok";
 export type AgentAuthCredentialProviderId = "anthropic" | "openai" | "gemini" | "cursor";
 export type AgentAuthOwnerScope = "system" | "personal" | "organization";
 export type SandboxProfileOwnerScope = "personal" | "organization";
