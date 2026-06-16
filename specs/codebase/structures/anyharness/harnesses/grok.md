@@ -45,10 +45,15 @@ registry auth slot uses `syncedFiles` materialization for `.grok/auth.json`
 (discovery `grok`, fact `grok-auth-json-oauth`). ACP `authMethods` are
 `cached_token` (the file) and `grok.com` (browser sign-in). Grok is not a
 gateway/BYOK provider, so it does not surface in the cloud BYOK credential UI.
+Cloud auth is via `XAI_API_KEY` / `GROK_API_KEY`: the registry declares
+`syncedFiles` for `~/.grok/auth.json`, but Desktop does not yet export that file
+(the Tauri credential exporter covers claude/codex/gemini only), so syncing a
+local Grok login into a cloud sandbox is not wired today.
 
 ## ACP Capabilities and Vendor Extensions
 
-Grok reports `loadSession`, MCP `http` + `sse` (Product MCPs attach over HTTP),
+From a manual ACP `initialize` (these are not captured by the catalog probe),
+Grok reported `loadSession`, MCP `http` + `sse` (Product MCPs attach over HTTP),
 and no image/audio prompt input. It also emits non-standard JSON-RPC the
 protocol does not define — `_x.ai/announcements/update` notifications, repeated
 `skills-reload` results, and `_meta` keys such as `x.ai/fs_notify`. The ACP
@@ -57,10 +62,23 @@ these vendor messages are present or stable.
 
 ## Modes
 
-Grok's permission modes mirror Claude's: `default`, `acceptEdits`, `auto`,
-`dontAsk`, `bypassPermissions`, `plan`. The desktop session-control
-presentation supplies these for create-session; the cowork default coding mode
-is `bypassPermissions`.
+Grok's ACP `session/new` advertises **no modes** (`modes: null` at probe time),
+so AnyHarness exposes no create-session permission-mode control for Grok: the
+catalog carries only a `model` control, the desktop shows no mode picker, and
+cowork launches Grok with no `mode_id` (sending one is rejected by
+`validate_mode`). Grok's CLI does accept a top-level `--permission-mode`
+(`default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan`), but that
+surface is not exposed over the ACP `agent stdio` path Grok runs under here. If
+Grok later advertises modes via ACP, the probe captures them and the catalog
+gains a `mode` control automatically.
+
+## Transcript and Permissions
+
+Grok uses the standard ACP `request_permission` path, normalized into AnyHarness
+`permission` interactions like every other harness; there is no Grok-specific
+transcript or permission normalization, and unknown vendor methods resolve as
+`method_not_found` (no crash). Because Grok advertises no ACP modes (see Modes),
+its permission behavior is whatever the Grok adapter defaults to for the session.
 
 ## Limitations
 

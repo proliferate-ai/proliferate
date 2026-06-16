@@ -84,11 +84,32 @@ fn read_json_file(path: &Path) -> Result<Option<Value>, DiscoveryError> {
     }
 }
 
-/// `~/.grok/auth.json` is Grok's cached login-token store (the ACP
-/// `cached_token` auth method). The exact field layout is internal to the Grok
-/// CLI, so any non-empty JSON object is treated as a usable login.
+/// `~/.grok/auth.json` is Grok's cached OAuth login store. The token lives in a
+/// record keyed by a dynamic `"<issuer>::<principal>"` string, under `key`
+/// (alongside `refresh_token`/`expires_at`); a flat/legacy layout may instead
+/// use `access_token`/`token`. Treat the file as usable only when some record
+/// carries a non-empty token — NOT merely a non-empty object, which would
+/// false-positive on a config/marker-only file and report a spurious "ready".
 fn has_grok_auth(data: &Value) -> bool {
-    data.as_object().map(|obj| !obj.is_empty()).unwrap_or(false)
+    let Some(obj) = data.as_object() else {
+        return false;
+    };
+    obj.values().any(record_has_token) || record_has_token(data)
+}
+
+fn record_has_token(value: &Value) -> bool {
+    let Some(record) = value.as_object() else {
+        return false;
+    };
+    ["key", "access_token", "token"]
+        .iter()
+        .filter_map(|field| record.get(*field).and_then(Value::as_str))
+        .any(|token| !token.is_empty())
+        || record
+            .get("tokens")
+            .and_then(|tokens| tokens.get("access_token"))
+            .and_then(Value::as_str)
+            .is_some_and(|token| !token.is_empty())
 }
 
 fn portable_path(value: &str) -> PortableRelativePath {
@@ -110,15 +131,32 @@ mod tests {
         path
     }
 
+    // Real ~/.grok/auth.json shape: a record keyed by "<issuer>::<principal>"
+    // whose access token lives under `key`.
+    const GROK_AUTH_JSON: &str =
+        r#"{"https://auth.x.ai::p1":{"key":"tok","refresh_token":"r","expires_at":"2030"}}"#;
+
     #[test]
-    fn detects_grok_auth_file() {
+    fn detects_issuer_keyed_token() {
+        let home = make_temp_home();
+        fs::write(home.join(GROK_AUTH_PATH), GROK_AUTH_JSON).expect("write grok auth");
+
+        assert!(matches!(
+            detect_local_auth_state(&home).expect("detect"),
+            LocalAuthState::Present(LocalAuthSource::File { .. })
+        ));
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn detects_flat_token_fallback() {
         let home = make_temp_home();
         fs::write(home.join(GROK_AUTH_PATH), r#"{"access_token":"token"}"#)
             .expect("write grok auth");
 
-        let state = detect_local_auth_state(&home).expect("detect");
         assert!(matches!(
-            state,
+            detect_local_auth_state(&home).expect("detect"),
             LocalAuthState::Present(LocalAuthSource::File { .. })
         ));
 
@@ -138,9 +176,15 @@ mod tests {
     }
 
     #[test]
-    fn absent_for_empty_object() {
+    fn absent_for_config_only_object() {
+        // Non-empty file with no usable token must NOT report ready — this was
+        // the false-positive under the old "any non-empty object" heuristic.
         let home = make_temp_home();
-        fs::write(home.join(GROK_AUTH_PATH), r#"{}"#).expect("write grok auth");
+        fs::write(
+            home.join(GROK_AUTH_PATH),
+            r#"{"hasCompletedOnboarding":true,"https://auth.x.ai::p1":{"key":"","email":"x@y.z"}}"#,
+        )
+        .expect("write grok auth");
 
         assert_eq!(
             detect_local_auth_state(&home).expect("detect"),
@@ -153,8 +197,7 @@ mod tests {
     #[test]
     fn fact_kinds_present_for_usable_auth() {
         let home = make_temp_home();
-        fs::write(home.join(GROK_AUTH_PATH), r#"{"access_token":"token"}"#)
-            .expect("write grok auth");
+        fs::write(home.join(GROK_AUTH_PATH), GROK_AUTH_JSON).expect("write grok auth");
 
         assert_eq!(
             discovery_fact_kinds(&home).expect("fact kinds"),
@@ -167,8 +210,7 @@ mod tests {
     #[test]
     fn exports_grok_auth_file() {
         let home = make_temp_home();
-        fs::write(home.join(GROK_AUTH_PATH), r#"{"access_token":"token"}"#)
-            .expect("write grok auth");
+        fs::write(home.join(GROK_AUTH_PATH), GROK_AUTH_JSON).expect("write grok auth");
 
         let export = export_portable_auth(&home)
             .expect("export")
