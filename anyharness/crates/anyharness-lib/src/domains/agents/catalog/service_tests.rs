@@ -64,7 +64,7 @@ fn bundled_catalog_is_a_complete_lockfile() {
             .as_ref()
             .unwrap_or_else(|| panic!("{kind} {role} pin must carry a resolved source (lockfile)"));
         if let AgentCatalogArtifactSource::Binary { targets }
-        | AgentCatalogArtifactSource::Archive { targets } = source
+        | AgentCatalogArtifactSource::Archive { targets, .. } = source
         {
             assert!(!targets.is_empty(), "{kind} {role} has no platform targets");
             for (platform, target) in targets {

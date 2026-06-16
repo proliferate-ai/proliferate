@@ -48,6 +48,19 @@ const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
 const registry = JSON.parse(readFileSync(registryPath, "utf8"));
 const registryByKind = new Map(registry.agents.map((a) => [a.kind, a]));
 
+// Reuse sha256 already in the catalog for unchanged URLs so re-runs (e.g. to
+// add launch args) don't re-download every artifact.
+const knownSha = new Map();
+for (const agent of catalog.agents) {
+  for (const pin of [agent.harness.native, agent.harness.agentProcess]) {
+    const targets = pin?.source?.targets;
+    if (!targets) continue;
+    for (const t of Object.values(targets)) {
+      if (t.url && t.sha256) knownSha.set(t.url, t.sha256);
+    }
+  }
+}
+
 let acpRegistryCache = null;
 async function acpRegistry() {
   if (!acpRegistryCache) acpRegistryCache = await fetchJson(ACP_REGISTRY_URL);
@@ -109,7 +122,8 @@ async function resolveNative(kind, install) {
       const expectedBinary = install.expectedBinaryTemplate.replaceAll("{target}", target);
       targets[platKey] = { url, sha256: await shaFor(url), expectedBinary };
     }
-    return { version, source: { kind: "archive", targets } };
+    // A native CLI is invoked by the adapter, not directly — no ACP launch args.
+    return { version, source: { kind: "archive", targets, args: [] } };
   }
   throw new Error(`${kind}: native install kind '${install.kind}' is not resolvable`);
 }
@@ -142,11 +156,17 @@ async function resolveAgentProcess(kind, install, currentVersion) {
       const pkg = entry.distribution.npx.package; // already pinned `@scope/pkg@ver`
       return {
         version: entry.version ?? npmVersionOf(pkg) ?? currentVersion,
-        source: { kind: "npm", package: pkg, sha256: npmIntegrity(pkg) },
+        source: {
+          kind: "npm",
+          package: pkg,
+          sha256: npmIntegrity(pkg),
+          args: entry.distribution.npx.args ?? [],
+        },
       };
     }
     if (entry.distribution.binary) {
       const targets = {};
+      let args = [];
       for (const [acpKey, target] of Object.entries(entry.distribution.binary)) {
         const ourKey = ACP_PLATFORM_MAP[acpKey];
         if (!ourKey || !platforms.has(ourKey)) continue; // platform we do not ship
@@ -155,8 +175,9 @@ async function resolveAgentProcess(kind, install, currentVersion) {
           sha256: await shaFor(target.archive),
           expectedBinary: target.cmd,
         };
+        if (target.args) args = target.args; // ACP-mode args (consistent across platforms)
       }
-      return { version: entry.version ?? currentVersion, source: { kind: "archive", targets } };
+      return { version: entry.version ?? currentVersion, source: { kind: "archive", targets, args } };
     }
     throw new Error(`${kind}: ACP entry '${install.registryId}' has no npx/binary distribution`);
   }
@@ -204,6 +225,10 @@ async function githubLatestTag(versionedUrlTemplate) {
 
 async function shaFor(url) {
   if (noDownload) return "";
+  if (knownSha.has(url)) {
+    console.log(`   = ${url} (cached sha)`);
+    return knownSha.get(url);
+  }
   process.stdout.write(`   ↓ ${url} … `);
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) throw new Error(`download failed ${res.status} for ${url}`);

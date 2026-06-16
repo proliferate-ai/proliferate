@@ -195,7 +195,7 @@ pub(super) fn install_agent_process_artifact(
     }
 }
 
-fn launcher_path_prefixes(runtime_home: &Path, kind: &AgentKind) -> Vec<PathBuf> {
+pub(super) fn launcher_path_prefixes(runtime_home: &Path, kind: &AgentKind) -> Vec<PathBuf> {
     let mut prefixes = Vec::new();
     let managed_native_dir = artifact_root(runtime_home, kind, &ArtifactRole::NativeCli);
     let managed_native_binary = managed_native_dir.join(kind.as_str());
@@ -208,7 +208,7 @@ fn launcher_path_prefixes(runtime_home: &Path, kind: &AgentKind) -> Vec<PathBuf>
     prefixes
 }
 
-fn managed_launcher_env(kind: &AgentKind) -> HashMap<String, String> {
+pub(super) fn managed_launcher_env(kind: &AgentKind) -> HashMap<String, String> {
     let mut env = HashMap::new();
     if *kind == AgentKind::Claude {
         env.insert("DISABLE_AUTOUPDATER".into(), "1".into());

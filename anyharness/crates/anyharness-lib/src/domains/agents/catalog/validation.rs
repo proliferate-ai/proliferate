@@ -92,7 +92,7 @@ fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) 
     };
     match source {
         AgentCatalogArtifactSource::Binary { targets }
-        | AgentCatalogArtifactSource::Archive { targets } => {
+        | AgentCatalogArtifactSource::Archive { targets, .. } => {
             if targets.is_empty() {
                 anyhow::bail!("agent '{kind}' {role} source has no platform targets");
             }

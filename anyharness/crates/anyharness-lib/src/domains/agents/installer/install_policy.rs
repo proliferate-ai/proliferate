@@ -113,10 +113,12 @@ pub enum ResolvedPinSource {
     },
     Archive {
         targets: std::collections::BTreeMap<String, ResolvedPinTarget>,
+        args: Vec<String>,
     },
     Npm {
         package: String,
         sha256: Option<String>,
+        args: Vec<String>,
     },
     Git {
         repo: String,

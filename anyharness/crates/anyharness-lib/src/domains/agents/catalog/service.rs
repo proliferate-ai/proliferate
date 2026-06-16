@@ -87,12 +87,18 @@ fn project_source(pin: &AgentCatalogArtifactPin) -> Option<ResolvedPinSource> {
         AgentCatalogArtifactSource::Binary { targets: t } => {
             ResolvedPinSource::Binary { targets: targets(t) }
         }
-        AgentCatalogArtifactSource::Archive { targets: t } => {
-            ResolvedPinSource::Archive { targets: targets(t) }
-        }
-        AgentCatalogArtifactSource::Npm { package, sha256 } => ResolvedPinSource::Npm {
+        AgentCatalogArtifactSource::Archive { targets: t, args } => ResolvedPinSource::Archive {
+            targets: targets(t),
+            args: args.clone(),
+        },
+        AgentCatalogArtifactSource::Npm {
+            package,
+            sha256,
+            args,
+        } => ResolvedPinSource::Npm {
             package: package.clone(),
             sha256: sha256.clone(),
+            args: args.clone(),
         },
         AgentCatalogArtifactSource::Git {
             repo,

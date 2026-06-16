@@ -155,17 +155,35 @@ pub fn install_agent_with_pins(
     if is_agent_process_installable(&descriptor.agent_process.install) {
         has_installable = true;
         let process_options = options_for_role(options, &plan, &ArtifactRole::AgentProcess);
-        // The ACP adapter stays on the managed-npm / registry path: claude+codex
-        // are git-ref pinned (reproducible already); the registry-backed adapters
-        // need their ACP-mode launch args, which the pin does not yet carry.
-        // Fencing the adapter is a follow-up (capture launch args in the pin).
-        if let Some(result) = install_agent_process_artifact(
-            &descriptor.agent_process,
-            &descriptor.kind,
-            &descriptor.launch.default_args,
-            runtime_home,
-            &process_options,
-        )? {
+        // Fenced path: the catalog's resolved source (git/npm/archive) + baked
+        // ACP launch args drive the adapter install with no `/latest` re-fetch.
+        // Legacy registry path only when the pin declares no source.
+        let result = if let Some(source) =
+            effective_source(catalog_pins, &ArtifactRole::AgentProcess)
+        {
+            let version = super::install_policy::effective_pin(
+                catalog_pins,
+                descriptor,
+                &ArtifactRole::AgentProcess,
+            );
+            pinned::install_agent_process_from_pin(
+                &source,
+                version.as_deref(),
+                &descriptor.kind,
+                &descriptor.launch.executable_name,
+                runtime_home,
+                process_options.reinstall,
+            )?
+        } else {
+            install_agent_process_artifact(
+                &descriptor.agent_process,
+                &descriptor.kind,
+                &descriptor.launch.default_args,
+                runtime_home,
+                &process_options,
+            )?
+        };
+        if let Some(result) = result {
             tracing::info!(
                 agent = descriptor.kind.as_str(),
                 role = "agent_process",

@@ -94,12 +94,20 @@ pub enum AgentCatalogArtifactSource {
     /// A tar/zip archive: extract + find `expectedBinary`. Per-platform url+sha.
     Archive {
         targets: BTreeMap<String, AgentCatalogPinTarget>,
+        /// ACP-mode launch args baked into the managed launcher (e.g. `["acp"]`
+        /// for a registry-backed adapter binary). Empty for a native CLI.
+        #[serde(default)]
+        args: Vec<String>,
     },
     /// An npm-registry package pinned to an exact version.
     Npm {
         package: String,
         #[serde(default)]
         sha256: Option<String>,
+        /// ACP-mode launch args baked into the managed launcher (e.g.
+        /// `["--acp"]` for gemini).
+        #[serde(default)]
+        args: Vec<String>,
     },
     /// A git specifier (our adapter forks) installed/built from a pinned ref.
     Git {
