@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "dompurify": "^3.2.7",
-    "marked": "^16.4.1",
+    "marked": "^18.0.5",
     "sucrase": "^3.35.0"
   },
   "devDependencies": {
