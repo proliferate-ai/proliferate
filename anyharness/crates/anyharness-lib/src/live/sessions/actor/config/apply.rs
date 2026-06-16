@@ -137,6 +137,15 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option_with_po
     // `variantSyntax` agents (cursor) only accept their advertised composed
     // values (`composer-2.5[fast=true]`); a switch may carry just the base id.
     let resolved_value = resolve_model_variant_value(option, desired_value);
+    if resolved_value != desired_value {
+        tracing::debug!(
+            native_session_id,
+            config_id,
+            requested = desired_value,
+            resolved = %resolved_value,
+            "[model-switch] resolved variant model id to advertised value"
+        );
+    }
     let desired_value = resolved_value.as_str();
 
     if !select_option_contains_value(option, desired_value) && !allow_foreign_value {
@@ -184,6 +193,24 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     let is_mode_request = is_mode_config_request(config_id, option);
     let tracked_purpose = tracked_config_purpose(config_id, option);
     let model_value_authorized = is_model_request && catalog_authorized_model;
+
+    // Resolve a bare variant base to the harness's advertised composed value up
+    // front, so the value we validate, send, AND persist all agree (otherwise
+    // the base id would be stored while the composed value is what applied).
+    let resolved_value = match option {
+        Some(option) => resolve_model_variant_value(option, desired_value),
+        None => desired_value.to_string(),
+    };
+    if resolved_value != desired_value {
+        tracing::debug!(
+            session_id,
+            config_id,
+            requested = desired_value,
+            resolved = %resolved_value,
+            "[model-switch] resolved variant model id to advertised value"
+        );
+    }
+    let desired_value = resolved_value.as_str();
 
     if option.is_none() && !is_model_request && !is_mode_request {
         return Err(SetConfigOptionCommandError::Rejected(format!(

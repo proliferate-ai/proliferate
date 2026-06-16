@@ -244,6 +244,34 @@ fn model_variant_base(value: &str) -> &str {
     value.split('[').next().unwrap_or(value)
 }
 
+/// Whether `value` is a `bracket-params` variant: a base followed by `[]` or
+/// `[k=v,...]`. `composer-2.5[fast=true]` / `kimi-k2.5[]` -> true. A bare
+/// context tag like `sonnet[1m]` -> false (it is a distinct model id, not a
+/// param list), and a bare id -> false. This keeps the resolver scoped to the
+/// bracket-params variant syntax without a catalog lookup.
+fn is_bracket_params_variant(value: &str) -> bool {
+    match value.split_once('[') {
+        Some((_, rest)) => match rest.strip_suffix(']') {
+            Some(inner) => inner.is_empty() || inner.split(',').all(|pair| pair.contains('=')),
+            None => false,
+        },
+        None => false,
+    }
+}
+
+/// Whether the request already names its own variant params, e.g.
+/// `composer-2.5[fast=false]`. An empty `[]` carries no choice and is treated
+/// as bare (resolvable); a bare id is not explicit.
+fn has_explicit_variant_params(value: &str) -> bool {
+    match value.split_once('[') {
+        Some((_, rest)) => match rest.strip_suffix(']') {
+            Some(inner) => !inner.is_empty(),
+            None => true,
+        },
+        None => false,
+    }
+}
+
 /// Resolve a requested model value to the exact string the harness advertises.
 ///
 /// `variantSyntax` agents (e.g. cursor, `bracket-params`) only accept their
@@ -251,15 +279,23 @@ fn model_variant_base(value: &str) -> &str {
 /// default params are decided by the harness at runtime, not the catalog. A
 /// switch request often carries only the base id (`composer-2.5`). When the
 /// model option does not already list the requested value but advertises
-/// exactly one value with the same base, return that advertised value so the
-/// harness receives a string it recognizes. Otherwise the value is returned
-/// unchanged (exact matches, ambiguous bases, and non-model options are
-/// no-ops), leaving the existing accept/reject behavior intact.
+/// exactly one composed variant with the same base, return that advertised
+/// value so the harness receives a string it recognizes.
+///
+/// The value is returned unchanged when any of these hold, so existing
+/// accept/reject behavior is untouched:
+/// - the request already carries its own `[params]` (never override an
+///   explicit choice — only fill in a missing one);
+/// - the option already lists the value, or it is not a model option;
+/// - the base matches zero or more than one advertised value (ambiguous);
+/// - the matching advertised value is not a bracket-params variant (e.g. a
+///   bare `[1m]` context tag), so non-variant agents like claude are no-ops.
 pub(in crate::live::sessions::actor) fn resolve_model_variant_value(
     option: &acp::schema::SessionConfigOption,
     desired_value: &str,
 ) -> String {
-    if select_option_contains_value(option, desired_value)
+    if has_explicit_variant_params(desired_value)
+        || select_option_contains_value(option, desired_value)
         || !option_matches_purpose(option, ConfigPurpose::Model)
     {
         return desired_value.to_string();
@@ -268,7 +304,7 @@ pub(in crate::live::sessions::actor) fn resolve_model_variant_value(
     let base = model_variant_base(desired_value);
     let mut matches = select_option_values(option)
         .into_iter()
-        .filter(|value| model_variant_base(value) == base);
+        .filter(|value| model_variant_base(value) == base && is_bracket_params_variant(value));
     match (matches.next(), matches.next()) {
         (Some(only), None) => only,
         _ => desired_value.to_string(),

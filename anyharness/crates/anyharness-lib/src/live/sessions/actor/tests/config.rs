@@ -482,6 +482,49 @@ fn resolve_model_variant_value_maps_base_id_to_advertised_composed_value() {
 }
 
 #[test]
+fn resolve_model_variant_value_never_overrides_explicit_params() {
+    let mut option = acp::schema::SessionConfigOption::select(
+        "model",
+        "Model",
+        "composer-2.5[fast=true]",
+        vec![acp::schema::SessionConfigSelectOption::new(
+            "composer-2.5[fast=true]",
+            "composer-2.5",
+        )],
+    );
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+
+    // A request that already names its params is left as-is, even though the
+    // base matches the single advertised variant.
+    assert_eq!(
+        resolve_model_variant_value(&option, "composer-2.5[fast=false]"),
+        "composer-2.5[fast=false]"
+    );
+    // An empty `[]` carries no choice, so it still resolves to the variant.
+    assert_eq!(
+        resolve_model_variant_value(&option, "composer-2.5[]"),
+        "composer-2.5[fast=true]"
+    );
+}
+
+#[test]
+fn resolve_model_variant_value_does_not_collapse_context_tag_variants() {
+    // A `[1m]` context tag is a distinct model id, not a bracket-params
+    // variant — a bare base must never silently resolve into it.
+    let mut option = acp::schema::SessionConfigOption::select(
+        "model",
+        "Model",
+        "sonnet[1m]",
+        vec![acp::schema::SessionConfigSelectOption::new(
+            "sonnet[1m]",
+            "Sonnet (1M context)",
+        )],
+    );
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+    assert_eq!(resolve_model_variant_value(&option, "sonnet"), "sonnet");
+}
+
+#[test]
 fn resolve_model_variant_value_is_noop_for_non_model_options() {
     let mut option = acp::schema::SessionConfigOption::select(
         "mode",
