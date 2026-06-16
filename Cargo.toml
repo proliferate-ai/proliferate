@@ -87,7 +87,7 @@ tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 
 # Desktop-only
-rfd = "0.15"
+rfd = "0.16"
 keyring = "3"
 which = "7"
 window-vibrancy = "0.6"
