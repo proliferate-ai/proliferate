@@ -157,5 +157,6 @@ function isCloudAgentRuntimeKind(value: string): value is AgentAuthAgentKind {
   return value === "claude"
     || value === "codex"
     || value === "opencode"
-    || value === "gemini";
+    || value === "gemini"
+    || value === "grok";
 }
