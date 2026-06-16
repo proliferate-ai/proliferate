@@ -165,13 +165,19 @@ export function useRuntimeInputSyncRuntime() {
     descriptor: RuntimeInputSyncDescriptor,
   ) => {
     switch (descriptor.kind) {
-      case "credential":
-        await syncLocalAgentAuthCredentialToCloud(descriptor.provider);
-        await Promise.all([
-          invalidateAgentAuth(),
-          invalidateWorkspaceCollections(),
-        ]);
+      case "credential": {
+        const { provider } = descriptor;
+        // Cred-sync only covers tauri-keychain providers (AgentAuthProvider:
+        // claude/codex/gemini). grok and other kinds aren't syncable here.
+        if (provider === "claude" || provider === "codex" || provider === "gemini") {
+          await syncLocalAgentAuthCredentialToCloud(provider);
+          await Promise.all([
+            invalidateAgentAuth(),
+            invalidateWorkspaceCollections(),
+          ]);
+        }
         return;
+      }
       case "repo_tracked_file":
         await syncRepoFile(descriptor);
         return;
