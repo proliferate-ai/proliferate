@@ -1,10 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use super::agent_process::{self, install_agent_process_artifact, is_agent_process_installable};
+use super::install_policy::effective_source;
 use super::lock::AgentInstallLock;
 use super::native::{install_native_artifact, is_native_installable};
+use super::pinned;
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
+use crate::domains::agents::readiness::paths::artifact_root;
+use crate::integrations::agent_cli::executable::is_valid_executable;
 use crate::integrations::agent_cli::launcher::LauncherError;
 
 #[derive(Debug, Clone)]
@@ -38,6 +42,14 @@ pub enum InstallError {
     FetchFailed { url: String, message: String },
     #[error("ACP registry error: {0}")]
     RegistryFailed(String),
+    #[error("checksum mismatch for {url}: expected {expected}, got {actual}")]
+    ChecksumMismatch {
+        url: String,
+        expected: String,
+        actual: String,
+    },
+    #[error("pinned source has no download for this platform: {0}")]
+    NoPinForPlatform(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -100,12 +112,33 @@ pub fn install_agent_with_pins(
         if is_native_installable(&native_spec.install) {
             has_installable = true;
             let native_options = options_for_role(options, &plan, &ArtifactRole::NativeCli);
-            if let Some(result) = install_native_artifact(
-                native_spec,
-                &descriptor.kind,
-                runtime_home,
-                &native_options,
-            )? {
+            // Fenced path: when the catalog declares a Binary/Archive source for
+            // the native CLI, install EXACTLY that (sha256-verified) instead of
+            // resolving the registry spec. Otherwise the legacy path runs.
+            let pinned_source = effective_source(catalog_pins, &ArtifactRole::NativeCli)
+                .filter(pinned::is_binary_or_archive);
+            let result = if let Some(source) = pinned_source {
+                install_pinned_role(
+                    &source,
+                    super::install_policy::effective_pin(
+                        catalog_pins,
+                        descriptor,
+                        &ArtifactRole::NativeCli,
+                    ),
+                    &native_options,
+                    &descriptor.kind,
+                    &ArtifactRole::NativeCli,
+                    runtime_home,
+                )?
+            } else {
+                install_native_artifact(
+                    native_spec,
+                    &descriptor.kind,
+                    runtime_home,
+                    &native_options,
+                )?
+            };
+            if let Some(result) = result {
                 tracing::info!(
                     agent = descriptor.kind.as_str(),
                     role = "native_cli",
@@ -221,4 +254,29 @@ fn options_for_role(
         native_version: options.native_version.clone(),
         agent_process_version: options.agent_process_version.clone(),
     }
+}
+
+/// Install one role from a fenced Binary/Archive pin (sha256-verified), with
+/// the same idempotent skip as the legacy mechanisms: an already-installed
+/// artifact is left alone unless the plan forced a reinstall.
+fn install_pinned_role(
+    source: &super::install_policy::ResolvedPinSource,
+    version: Option<String>,
+    options: &InstallOptions,
+    kind: &AgentKind,
+    role: &ArtifactRole,
+    runtime_home: &Path,
+) -> Result<Option<InstalledArtifactResult>, InstallError> {
+    let target_path = artifact_root(runtime_home, kind, role).join(kind.as_str());
+    if is_valid_executable(&target_path) && !options.reinstall {
+        return Ok(None);
+    }
+    let result = pinned::install_binary_or_archive_from_pin(
+        source,
+        version.as_deref().unwrap_or_default(),
+        kind,
+        role,
+        runtime_home,
+    )?;
+    Ok(Some(result))
 }

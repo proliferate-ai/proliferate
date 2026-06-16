@@ -6,6 +6,7 @@ pub(crate) mod managed_npm;
 pub mod manifest;
 mod native;
 mod npm;
+mod pinned;
 pub mod reconcile;
 pub mod seed;
 mod service;

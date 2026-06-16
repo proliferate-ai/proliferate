@@ -169,6 +169,19 @@ impl Platform {
             _ => "node",
         }
     }
+
+    /// The registry/catalog platform-map key (`macos_arm64`, `linux_x64`, …)
+    /// used to index a pin's per-target downloads.
+    pub fn registry_key(self) -> &'static str {
+        match self {
+            Self::MacosArm64 => "macos_arm64",
+            Self::MacosX64 => "macos_x64",
+            Self::LinuxX64 => "linux_x64",
+            Self::LinuxArm64 => "linux_arm64",
+            Self::WindowsX64 => "windows_x64",
+            Self::WindowsArm64 => "windows_arm64",
+        }
+    }
 }
 
 /// Describes the native CLI artifact for an agent (optional; not all agents have one).

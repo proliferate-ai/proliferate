@@ -93,6 +93,16 @@ fn install_error_to_api(error: InstallError) -> ApiError {
             "ACP registry lookup failed",
             "AGENT_REGISTRY_FAILED",
         ),
+        InstallError::ChecksumMismatch { .. } => (
+            StatusCode::BAD_GATEWAY,
+            "Downloaded agent artifact failed checksum verification",
+            "AGENT_CHECKSUM_MISMATCH",
+        ),
+        InstallError::NoPinForPlatform(_) => (
+            StatusCode::BAD_REQUEST,
+            "No pinned agent download for this platform",
+            "AGENT_NO_PIN_FOR_PLATFORM",
+        ),
         InstallError::Io(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Agent install failed",

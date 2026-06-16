@@ -91,10 +91,46 @@ pub fn plan_artifact(facts: &ArtifactFacts, reinstall_requested: bool) -> Option
 
 /// Catalog-supplied pin overrides (the WHICH document wins over registry
 /// specs when an active v2 catalog declares versions for this agent).
+///
+/// The `*_source` fields carry the resolved, fenced install source from the
+/// lockfile. When present, the materializer downloads EXACTLY that (sha256
+/// verified) instead of consulting the registry install spec.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PinOverrides {
     pub agent_process: Option<String>,
     pub native: Option<String>,
+    pub agent_process_source: Option<ResolvedPinSource>,
+    pub native_source: Option<ResolvedPinSource>,
+}
+
+/// Installer-domain mirror of `catalog::schema::AgentCatalogArtifactSource`
+/// (kept here so `installer/` does not depend on `catalog/` structs). The
+/// per-target `sha256` is the trust anchor enforced at download.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedPinSource {
+    Binary {
+        targets: std::collections::BTreeMap<String, ResolvedPinTarget>,
+    },
+    Archive {
+        targets: std::collections::BTreeMap<String, ResolvedPinTarget>,
+    },
+    Npm {
+        package: String,
+        sha256: Option<String>,
+    },
+    Git {
+        repo: String,
+        git_ref: String,
+        package_subdir: Option<String>,
+        executable_relpath: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedPinTarget {
+    pub url: String,
+    pub sha256: String,
+    pub expected_binary: Option<String>,
 }
 
 /// The effective pin: catalog override first, registry spec as the fallback.
@@ -108,6 +144,18 @@ pub fn effective_pin(
         ArtifactRole::NativeCli => overrides.native.clone(),
     });
     from_catalog.or_else(|| pinned_version_for(descriptor, role))
+}
+
+/// The resolved, fenced install source for this role, when the active catalog
+/// declares one. `None` means the legacy registry-spec path applies.
+pub fn effective_source(
+    overrides: Option<&PinOverrides>,
+    role: &ArtifactRole,
+) -> Option<ResolvedPinSource> {
+    overrides.and_then(|overrides| match role {
+        ArtifactRole::AgentProcess => overrides.agent_process_source.clone(),
+        ArtifactRole::NativeCli => overrides.native_source.clone(),
+    })
 }
 
 /// The declared version pin for an agent-process install spec, when the spec
@@ -219,6 +267,7 @@ mod tests {
         let overrides = PinOverrides {
             agent_process: Some("9.9.9".into()),
             native: Some("2.0.0".into()),
+            ..Default::default()
         };
         assert_eq!(
             effective_pin(Some(&overrides), &claude, &ArtifactRole::AgentProcess).as_deref(),
