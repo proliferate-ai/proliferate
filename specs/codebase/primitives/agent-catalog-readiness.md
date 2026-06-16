@@ -460,6 +460,14 @@ Do not add:
 - credential detection inside `catalog/**`
 - install/update execution inside `catalog/**`
 - provider CLI mechanics inside `catalog/**`
+- **install-time latest resolution**: fetching a "latest version" URL, the ACP
+  `/latest` registry, or any network index from the install path. The catalog
+  pin's resolved `source` is the only install input; resolution happens at probe
+  time (`resolve-pins.mjs`), never at install.
+- **PATH adoption**: launching or installing a provider binary discovered on
+  `PATH` instead of the pinned managed artifact.
+- **non-pin install fallbacks**: `binary_hint` / npm-latest / registry-spec
+  fallbacks. A role with no resolved source pin is a hard error, not a fallback.
 
 ## Acceptance
 

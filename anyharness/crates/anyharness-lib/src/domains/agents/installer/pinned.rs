@@ -19,15 +19,6 @@ use crate::domains::agents::readiness::paths::artifact_root;
 use crate::integrations::agent_cli::executable::{is_valid_executable, make_executable};
 use crate::integrations::agent_cli::launcher::generate_launcher_script;
 
-/// True when this source is materialized by the fenced binary/archive path.
-/// `Npm`/`Git` go through the managed-npm path (already version/ref pinned).
-pub(super) fn is_binary_or_archive(source: &ResolvedPinSource) -> bool {
-    matches!(
-        source,
-        ResolvedPinSource::Binary { .. } | ResolvedPinSource::Archive { .. }
-    )
-}
-
 /// Materialize one artifact from its pinned, fenced `Binary`/`Archive` source:
 /// resolve this platform's target, download it, verify the sha256, place the
 /// executable at the managed artifact path. Refuses anything that doesn't match
@@ -270,6 +261,47 @@ mod tests {
         let target = artifact_root(&home, &AgentKind::Claude, &ArtifactRole::NativeCli)
             .join(AgentKind::Claude.as_str());
         assert!(!target.exists(), "no artifact may survive a bad checksum");
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
+
+    #[test]
+    fn npm_adapter_pin_bakes_acp_launch_args() {
+        // A registry-backed npm adapter (e.g. gemini) must bake its ACP-mode
+        // args (`--acp`) into the managed launcher — this is the bug an earlier
+        // pass introduced by baking session default_args instead.
+        let scratch = temp_dir("npm-adapter");
+        let pkg = scratch.join("pkg");
+        std::fs::create_dir_all(pkg.join("bin")).expect("bin dir");
+        std::fs::write(
+            pkg.join("package.json"),
+            "{\"name\":\"fake-acp-agent\",\"version\":\"0.0.1\",\
+             \"bin\":{\"fake-acp-agent\":\"bin/cli.js\"},\"files\":[\"bin\"]}",
+        )
+        .expect("package.json");
+        std::fs::write(pkg.join("bin/cli.js"), "#!/usr/bin/env node\n").expect("cli");
+
+        let home = scratch.join("home");
+        let source = ResolvedPinSource::Npm {
+            package: format!("file:{}", pkg.display()),
+            sha256: None,
+            args: vec!["--acp".to_string()],
+        };
+        let result = install_agent_process_from_pin(
+            &source,
+            Some("0.46.0"),
+            &AgentKind::Gemini,
+            "fake-acp-agent",
+            &home,
+            true,
+        )
+        .expect("adapter install")
+        .expect("installed launcher");
+
+        let launcher = std::fs::read_to_string(&result.path).expect("read launcher");
+        assert!(
+            launcher.contains("--acp"),
+            "ACP launch arg must be baked into the launcher: {launcher}"
+        );
         let _ = std::fs::remove_dir_all(&scratch);
     }
 }

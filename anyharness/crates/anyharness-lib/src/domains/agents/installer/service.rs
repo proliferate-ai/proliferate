@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use super::agent_process::{self, install_agent_process_artifact, is_agent_process_installable};
-use super::install_policy::effective_source;
+use super::agent_process;
+use super::install_policy::{effective_source, ResolvedPinSource};
 use super::lock::AgentInstallLock;
-use super::native::{install_native_artifact, is_native_installable};
 use super::pinned;
 use crate::domains::agents::installer::seed;
 use crate::domains::agents::model::*;
@@ -97,7 +96,6 @@ pub fn install_agent_with_pins(
         }
     }
     let mut installed = Vec::new();
-    let mut has_installable = false;
 
     tracing::info!(
         agent = descriptor.kind.as_str(),
@@ -108,81 +106,48 @@ pub fn install_agent_with_pins(
         "starting managed agent install"
     );
 
-    if let Some(native_spec) = &descriptor.native {
-        if is_native_installable(&native_spec.install) {
-            has_installable = true;
-            let native_options = options_for_role(options, &plan, &ArtifactRole::NativeCli);
-            // Fenced path: when the catalog declares a Binary/Archive source for
-            // the native CLI, install EXACTLY that (sha256-verified) instead of
-            // resolving the registry spec. Otherwise the legacy path runs.
-            let pinned_source = effective_source(catalog_pins, &ArtifactRole::NativeCli)
-                .filter(pinned::is_binary_or_archive);
-            let result = if let Some(source) = pinned_source {
-                install_pinned_role(
-                    &source,
-                    super::install_policy::effective_pin(
-                        catalog_pins,
-                        descriptor,
-                        &ArtifactRole::NativeCli,
-                    ),
-                    &native_options,
-                    &descriptor.kind,
-                    &ArtifactRole::NativeCli,
-                    runtime_home,
-                )?
-            } else {
-                install_native_artifact(
-                    native_spec,
-                    &descriptor.kind,
-                    runtime_home,
-                    &native_options,
-                )?
-            };
-            if let Some(result) = result {
-                tracing::info!(
-                    agent = descriptor.kind.as_str(),
-                    role = "native_cli",
-                    path = %result.path.display(),
-                    source = %result.source,
-                    version = ?result.version,
-                    "installed managed agent artifact"
-                );
-                installed.push(result);
-            }
+    // The catalog is the lockfile and the fence: every installable role must
+    // declare a resolved source. No source => no install (never a latest-fetch,
+    // PATH adoption, or ACP `/latest` re-fetch).
+    if descriptor.native.is_some() {
+        let native_options = options_for_role(options, &plan, &ArtifactRole::NativeCli);
+        let source = require_source(catalog_pins, descriptor, &ArtifactRole::NativeCli)?;
+        if let Some(result) = install_pinned_role(
+            &source,
+            super::install_policy::effective_pin(catalog_pins, descriptor, &ArtifactRole::NativeCli),
+            &native_options,
+            &descriptor.kind,
+            &ArtifactRole::NativeCli,
+            runtime_home,
+        )? {
+            tracing::info!(
+                agent = descriptor.kind.as_str(),
+                role = "native_cli",
+                path = %result.path.display(),
+                source = %result.source,
+                version = ?result.version,
+                "installed managed agent artifact"
+            );
+            installed.push(result);
         }
     }
 
-    if is_agent_process_installable(&descriptor.agent_process.install) {
-        has_installable = true;
+    {
         let process_options = options_for_role(options, &plan, &ArtifactRole::AgentProcess);
-        // Fenced path: the catalog's resolved source (git/npm/archive) + baked
-        // ACP launch args drive the adapter install with no `/latest` re-fetch.
-        // Legacy registry path only when the pin declares no source.
-        let result = if let Some(source) =
-            effective_source(catalog_pins, &ArtifactRole::AgentProcess)
-        {
-            let version = super::install_policy::effective_pin(
-                catalog_pins,
-                descriptor,
-                &ArtifactRole::AgentProcess,
-            );
-            pinned::install_agent_process_from_pin(
-                &source,
-                version.as_deref(),
-                &descriptor.kind,
-                &descriptor.launch.executable_name,
-                runtime_home,
-                process_options.reinstall,
-            )?
-        } else {
-            install_agent_process_artifact(
-                &descriptor.agent_process,
-                &descriptor.kind,
-                &descriptor.launch.default_args,
-                runtime_home,
-                &process_options,
-            )?
-        };
+        let source = require_source(catalog_pins, descriptor, &ArtifactRole::AgentProcess)?;
+        let version = super::install_policy::effective_pin(
+            catalog_pins,
+            descriptor,
+            &ArtifactRole::AgentProcess,
+        );
+        let result = pinned::install_agent_process_from_pin(
+            &source,
+            version.as_deref(),
+            &descriptor.kind,
+            &descriptor.launch.executable_name,
+            runtime_home,
+            process_options.reinstall,
+        )?;
         if let Some(result) = result {
             tracing::info!(
                 agent = descriptor.kind.as_str(),
@@ -194,10 +159,6 @@ pub fn install_agent_with_pins(
             );
             installed.push(result);
         }
-    }
-
-    if !has_installable {
-        return Err(InstallError::NotInstallable);
     }
 
     seed::mark_installed_artifacts_user_modified(runtime_home, &descriptor.kind, &installed);
@@ -276,6 +237,23 @@ fn options_for_role(
         native_version: options.native_version.clone(),
         agent_process_version: options.agent_process_version.clone(),
     }
+}
+
+/// The fence: every installable role must carry a resolved source in the
+/// active catalog lockfile. A missing source is a hard error — never a silent
+/// fallback to a latest-fetch / PATH binary / ACP `/latest` re-fetch.
+fn require_source(
+    catalog_pins: Option<&super::install_policy::PinOverrides>,
+    descriptor: &AgentDescriptor,
+    role: &ArtifactRole,
+) -> Result<ResolvedPinSource, InstallError> {
+    effective_source(catalog_pins, role).ok_or_else(|| {
+        InstallError::InvalidInstallSpec(format!(
+            "{}: {} has no resolved source pin in the catalog lockfile",
+            descriptor.kind.as_str(),
+            super::manifest::role_name(role),
+        ))
+    })
 }
 
 /// Install one role from a fenced Binary/Archive pin (sha256-verified), with
