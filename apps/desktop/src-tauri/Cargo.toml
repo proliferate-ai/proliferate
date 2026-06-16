@@ -40,7 +40,7 @@ keyring.workspace = true
 base64 = "0.22"
 getrandom = "0.4"
 which = "7"
-window-vibrancy = "0.6"
+window-vibrancy = "0.7"
 uuid.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
