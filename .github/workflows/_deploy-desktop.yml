@@ -40,7 +40,7 @@ jobs:
     env:
       DESKTOP_DEPLOY_ENABLED: ${{ vars.DESKTOP_DEPLOY_ENABLED || 'false' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.git_sha }}
 

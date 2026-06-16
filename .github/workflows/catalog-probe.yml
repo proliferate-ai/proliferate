@@ -34,14 +34,14 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install system build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libcap-dev
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -61,7 +61,7 @@ jobs:
           node render-catalog.mjs
 
       - name: Upload viewer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: catalog-viewer
           path: scripts/agent-catalog/catalog.html
