@@ -38,7 +38,7 @@ class CloudAgentRunConfig(Base):
             name="ck_cloud_agent_run_config_owner_fields",
         ),
         CheckConstraint(
-            "agent_kind IN ('claude', 'codex', 'opencode', 'gemini', 'cursor')",
+            "agent_kind IN ('claude', 'codex', 'opencode', 'gemini', 'cursor', 'grok')",
             name="ck_cloud_agent_run_config_agent_kind",
         ),
         CheckConstraint(
@@ -127,7 +127,7 @@ class CloudAgentRunConfigDefault(Base):
             name="ck_cloud_agent_run_config_default_owner_fields",
         ),
         CheckConstraint(
-            "agent_kind IN ('claude', 'codex', 'opencode', 'gemini', 'cursor')",
+            "agent_kind IN ('claude', 'codex', 'opencode', 'gemini', 'cursor', 'grok')",
             name="ck_cloud_agent_run_config_default_agent_kind",
         ),
         Index(

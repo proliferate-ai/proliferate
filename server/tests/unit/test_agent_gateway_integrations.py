@@ -109,4 +109,4 @@ def test_bifrost_provider_key_fingerprint_changes_when_secrets_change() -> None:
 
 
 def test_allowed_agent_kinds_include_opencode() -> None:
-    assert allowed_agent_kinds() == ["claude", "codex", "opencode", "gemini"]
+    assert allowed_agent_kinds() == ["claude", "codex", "opencode", "gemini", "grok"]
