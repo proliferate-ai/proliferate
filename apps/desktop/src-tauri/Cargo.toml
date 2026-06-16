@@ -39,7 +39,7 @@ rfd.workspace = true
 keyring.workspace = true
 base64 = "0.22"
 getrandom = "0.4"
-which = "7"
+which = "8"
 window-vibrancy = "0.6"
 uuid.workspace = true
 
