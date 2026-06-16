@@ -906,7 +906,7 @@ wheels = [
 
 [[package]]
 name = "fastapi-users"
-version = "15.0.4"
+version = "15.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "email-validator" },
@@ -916,9 +916,9 @@ dependencies = [
     { name = "pyjwt", extra = ["crypto"] },
     { name = "python-multipart" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4b/52/fadeae2c8435fb457a9cd91e402639fa5c9a25b16e6d204e043bf00cd875/fastapi_users-15.0.4.tar.gz", hash = "sha256:62657a4323de929cd98697b0fbdea77773ef271a6b57ef359080b9f773ebe144", size = 121394, upload-time = "2026-02-05T09:36:41.194Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/79/98b9d733274cfe0c776fde637dc53b421a0142f51a9e3e9fecd72741f7c1/fastapi_users-15.0.5.tar.gz", hash = "sha256:097f69701894e650c346df89b1cdb0a09cf139234f4cb9a8ece275af4e98e202", size = 121394, upload-time = "2026-03-27T09:01:17.161Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/71/48/5fb2a18227ccbd5138515f21fc4fa8abcd9982238de43511d7f941e708db/fastapi_users-15.0.4-py3-none-any.whl", hash = "sha256:30940894825e1dd7b86f6013e4bc75eccc25ae8ce5261d1b180f6411bb28aff4", size = 39037, upload-time = "2026-02-05T09:36:42.195Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/8e/1ed6bbe36c486b98217c4be6769d61fcb98c38b334fb39706de661a905b6/fastapi_users-15.0.5-py3-none-any.whl", hash = "sha256:10fd4f3e85ed66f694a6ca2ecac609af4e59d1f9ec64d1557f5912dccfd87c7f", size = 39038, upload-time = "2026-03-27T09:01:16.158Z" },
 ]
 
 [package.optional-dependencies]
@@ -1788,7 +1788,7 @@ requires-dist = [
     { name = "daytona", specifier = ">=0.29.0" },
     { name = "e2b", specifier = ">=1.5.6" },
     { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "fastapi-users", extras = ["sqlalchemy", "oauth"], specifier = ">=14.0.0" },
+    { name = "fastapi-users", extras = ["sqlalchemy", "oauth"], specifier = ">=15.0.5" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "httpx-oauth", specifier = ">=0.16.0" },
