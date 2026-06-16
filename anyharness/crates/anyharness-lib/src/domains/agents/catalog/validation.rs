@@ -105,9 +105,14 @@ fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) 
                 }
             }
         }
-        AgentCatalogArtifactSource::Npm { package, .. } => {
+        AgentCatalogArtifactSource::Npm { package, sha256, .. } => {
             if package.trim().is_empty() {
                 anyhow::bail!("agent '{kind}' {role} npm source has empty package");
+            }
+            // An npm pin's integrity is its trust anchor; a null sha (e.g. a
+            // failed `npm view`) must not ship as an unverifiable pin.
+            if !sha256.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+                anyhow::bail!("agent '{kind}' {role} npm source has no integrity (sha256)");
             }
         }
         AgentCatalogArtifactSource::Git {

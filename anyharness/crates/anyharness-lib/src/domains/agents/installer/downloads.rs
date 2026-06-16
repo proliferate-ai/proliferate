@@ -163,3 +163,60 @@ pub(super) fn download_and_extract_archive_verified(
     let _ = std::fs::remove_dir_all(&staging_dir);
     Ok(())
 }
+
+/// Download an archive, verify its sha256, and extract the WHOLE tree into
+/// `dest_dir`, preserving every file. Use this for multi-file adapter bundles
+/// (e.g. cursor) whose entry binary execs its sibling files — extracting only
+/// the entry binary would break them. `dest_dir` is replaced atomically-ish
+/// (removed then recreated) so a re-install starts clean.
+pub(super) fn download_and_extract_archive_tree_verified(
+    url: &str,
+    dest_dir: &Path,
+    expected_sha256: &str,
+) -> Result<(), InstallError> {
+    let _ = std::fs::remove_dir_all(dest_dir);
+    std::fs::create_dir_all(dest_dir)?;
+    let archive_path = dest_dir.join("_archive.download");
+
+    if let Err(e) = curl_download_binary(url, &archive_path)
+        .and_then(|()| verify_sha256(url, &archive_path, expected_sha256))
+    {
+        let _ = std::fs::remove_dir_all(dest_dir);
+        return Err(e);
+    }
+
+    let is_zip = url.ends_with(".zip");
+    let extract = if is_zip {
+        Command::new("unzip")
+            .arg("-q")
+            .arg(&archive_path)
+            .arg("-d")
+            .arg(dest_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+    } else {
+        Command::new("tar")
+            .arg("xzf")
+            .arg(&archive_path)
+            .arg("-C")
+            .arg(dest_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+    };
+    let output = extract.map_err(|e| InstallError::FetchFailed {
+        url: url.into(),
+        message: e.to_string(),
+    })?;
+    if !output.status.success() {
+        let _ = std::fs::remove_dir_all(dest_dir);
+        return Err(InstallError::FetchFailed {
+            url: url.into(),
+            message: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        });
+    }
+    // Keep the extracted tree; drop only the downloaded archive.
+    let _ = std::fs::remove_file(&archive_path);
+    Ok(())
+}

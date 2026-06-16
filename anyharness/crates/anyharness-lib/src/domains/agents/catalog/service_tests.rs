@@ -66,7 +66,14 @@ fn bundled_catalog_is_a_complete_lockfile() {
         if let AgentCatalogArtifactSource::Binary { targets }
         | AgentCatalogArtifactSource::Archive { targets, .. } = source
         {
-            assert!(!targets.is_empty(), "{kind} {role} has no platform targets");
+            // Every shipped platform must be pinned — otherwise install only
+            // hard-fails at runtime (NoPinForPlatform) on that platform.
+            for shipped in ["macos_arm64", "macos_x64", "linux_x64"] {
+                assert!(
+                    targets.contains_key(shipped),
+                    "{kind} {role} is missing a pin for shipped platform {shipped}"
+                );
+            }
             for (platform, target) in targets {
                 assert_eq!(
                     target.sha256.len(),

@@ -365,21 +365,19 @@ Current agent CLI topology:
 ```text
 integrations/agent_cli/
   mod.rs
-  acp_registry.rs
   executable.rs
   launcher.rs
   model_discovery.rs
 ```
 
-This is mostly valid, but should stay narrow.
+This is mostly valid, but should stay narrow. (`acp_registry.rs` was removed
+when the install path was fenced: ACP-registry resolution is now a probe-time
+producer concern — `scripts/agent-catalog/resolve-pins.mjs` — and install
+consumes the frozen catalog pin instead.)
 
 Mapping:
 
 ```text
-acp_registry.rs
-  ACP registry wire schema, fetch/parse/resolve distribution metadata,
-  install metadata mechanics.
-
 executable.rs
   Executable/path helpers used by agent CLI mechanics. This is the weakest fit
   because it is generic local-machine logic; keep it private support and avoid

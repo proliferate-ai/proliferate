@@ -191,17 +191,22 @@ The flow is:
 
 Important install cases:
 
-- direct binary or tarball native installs write into the managed artifact dir
-- ACP-registry-backed installs try the ACP registry first
-- registry-backed installs fall back to local npm/native-subcommand/binary-hint
-  rules when needed
-- managed npm installs create a managed launcher surface under runtime home
+- every install materializes the agent's resolved **catalog pin**: a
+  sha256-verified per-platform binary/archive download, or a pinned npm/git
+  specifier. There is no install-time latest-fetch, PATH adoption, ACP-registry
+  lookup, or fallback — a role with no pin is a hard error (see
+  `agent-catalog-readiness` Banned Shapes)
+- the ACP-mode launch args for registry-backed adapters (e.g. cursor `acp`,
+  gemini `--acp`) are frozen into the pin and baked into the managed launcher;
+  multi-file adapter bundles (cursor) keep their whole extracted tree
+- direct binary/tarball native installs write into the managed artifact dir;
+  managed npm/git installs create a managed launcher surface under runtime home
 - managed npm readiness compares the installed package metadata against the
   bundled package spec; stale managed packages report `install_required` so
   normal setup/reconcile can update user-owned older ACP adapters
 - manual reinstall/reconcile is the update path for every installable agent
-  process recipe, including registry-backed Gemini, Cursor, and OpenCode
-  installs whose latest version is only knowable by consulting the ACP registry
+  process recipe; the version + source come from the bundled catalog lockfile,
+  resolved at probe time by `scripts/agent-catalog/resolve-pins.mjs`
 - installer mutations are serialized by runtime-home file locks under
   `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
   write the same agent at the same time
@@ -246,23 +251,18 @@ install agents. A fresh cloud/SSH target may report worker and AnyHarness
 online while `start_session` still fails with an install/readiness error until
 the requested agent is installed through this API.
 
-### ACP Registry Flow
+### ACP Registry Flow (probe-time only)
 
-`integrations/agent_cli/acp_registry.rs` and
-`integrations/agent_cli/acp_registry/**`
-(`anyharness/crates/anyharness-lib/src/integrations/agent_cli/acp_registry.rs`)
-are the provider-mechanics helper boundary for ACP-registry-backed
-agent-process installation.
+ACP-registry resolution is a **producer / probe-time** concern, not a runtime
+install input. `scripts/agent-catalog/resolve-pins.mjs` fetches the ACP registry
+(`cdn.agentclientprotocol.com/registry/v1/latest`), resolves each agent's
+platform distribution + ACP launch args, downloads + checksums the artifacts,
+and freezes the result into the catalog pin (`harness.<role>.source`).
 
-It owns:
-
-- fetching the registry document
-- resolving the best platform distribution
-- applying version overrides
-- installing registry-provided npm or binary distributions
-
-It does not own agent readiness. It is only one install/discovery input into
-the broader agents flow.
+The runtime installer never consults the ACP registry — it materializes the
+frozen, sha256-verified pin. The former in-tree
+`integrations/agent_cli/acp_registry` module (registry fetch + install-time
+distribution resolution) was removed when the install path was fenced.
 
 ### Reconcile Flow
 

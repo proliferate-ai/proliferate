@@ -10,7 +10,10 @@
 use std::path::Path;
 
 use super::agent_process::{launcher_path_prefixes, managed_launcher_env};
-use super::downloads::{curl_download_binary_verified, download_and_extract_archive_verified};
+use super::downloads::{
+    curl_download_binary_verified, download_and_extract_archive_tree_verified,
+    download_and_extract_archive_verified,
+};
 use super::install_policy::{ResolvedPinSource, ResolvedPinTarget};
 use super::npm::install_managed_npm_package;
 use super::{InstallError, InstalledArtifactResult};
@@ -140,20 +143,28 @@ pub(super) fn install_agent_process_from_pin(
                 "pinned_npm",
             )
         }
-        ResolvedPinSource::Archive { args, .. } => {
+        ResolvedPinSource::Archive { targets, args } => {
             if is_valid_executable(&launcher_path) && !reinstall {
                 return Ok(None);
             }
-            let placed = install_binary_or_archive_from_pin(
-                source,
-                version.unwrap_or_default(),
-                kind,
-                &ArtifactRole::AgentProcess,
-                runtime_home,
-            )?;
+            // Preserve the WHOLE extracted tree: a registry-backed adapter binary
+            // (e.g. cursor's `dist-package/cursor-agent`) execs its sibling files,
+            // so we extract into a managed dir and point the launcher inside it.
+            let target = pick_target(targets)?;
+            let storage = managed_dir.join("registry_binary");
+            download_and_extract_archive_tree_verified(&target.url, &storage, &target.sha256)?;
+            let expected = target
+                .expected_binary
+                .clone()
+                .unwrap_or_else(|| kind.as_str().to_string());
+            let exec_path = storage.join(&expected);
+            if !exec_path.exists() {
+                return Err(InstallError::MissingManagedArtifact(exec_path));
+            }
+            make_executable(&exec_path)?;
             generate_launcher_script(
                 &launcher_path,
-                &placed.path,
+                &exec_path,
                 args,
                 &launcher_env,
                 &path_prefixes,
@@ -302,6 +313,71 @@ mod tests {
             launcher.contains("--acp"),
             "ACP launch arg must be baked into the launcher: {launcher}"
         );
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
+
+    #[test]
+    fn archive_adapter_pin_preserves_sibling_files() {
+        // Regression guard: a registry-backed adapter binary (cursor) execs its
+        // sibling files, so the whole extracted tree must survive — not just the
+        // entry binary.
+        let scratch = temp_dir("archive-adapter");
+        let payload = scratch.join("payload");
+        std::fs::create_dir_all(payload.join("pkg")).expect("payload dirs");
+        std::fs::write(
+            payload.join("pkg/agent"),
+            b"#!/bin/sh\nexec \"$(dirname \"$0\")/helper\"\n",
+        )
+        .expect("agent");
+        std::fs::write(payload.join("pkg/helper"), b"#!/bin/sh\necho ok\n").expect("helper");
+
+        let archive = scratch.join("bundle.tar.gz");
+        let status = std::process::Command::new("tar")
+            .arg("czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(&payload)
+            .arg("pkg")
+            .status()
+            .expect("tar");
+        assert!(status.success(), "tar must succeed");
+        let sha = sha256_hex(&std::fs::read(&archive).expect("read archive"));
+
+        let mut targets = BTreeMap::new();
+        targets.insert(
+            Platform::detect().expect("platform").registry_key().to_string(),
+            ResolvedPinTarget {
+                url: format!("file://{}", archive.display()),
+                sha256: sha,
+                expected_binary: Some("pkg/agent".to_string()),
+            },
+        );
+        let source = ResolvedPinSource::Archive {
+            targets,
+            args: vec!["acp".to_string()],
+        };
+
+        let home = scratch.join("home");
+        let result = install_agent_process_from_pin(
+            &source,
+            Some("1.0.0"),
+            &AgentKind::Cursor,
+            "cursor-agent",
+            &home,
+            true,
+        )
+        .expect("adapter install")
+        .expect("installed launcher");
+
+        let storage = artifact_root(&home, &AgentKind::Cursor, &ArtifactRole::AgentProcess)
+            .join("registry_binary");
+        assert!(storage.join("pkg/agent").exists(), "entry binary must survive");
+        assert!(
+            storage.join("pkg/helper").exists(),
+            "sibling file must survive — the cursor regression this guards"
+        );
+        let launcher = std::fs::read_to_string(&result.path).expect("read launcher");
+        assert!(launcher.contains("acp"), "ACP arg must be baked: {launcher}");
         let _ = std::fs::remove_dir_all(&scratch);
     }
 }
