@@ -12,6 +12,15 @@ updates:
     labels:
       - "release:maintenance"
       - "area:release"
+    ignore:
+      # Expo SDK packages are version-locked to the installed Expo SDK and must be
+      # upgraded together via `expo install` during an SDK bump — never piecemeal by
+      # Dependabot (it proposes SDK-56 versions while apps/mobile is pinned to SDK 54,
+      # which fails "Repo shape checks"). See apps/mobile/package.json.
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
     groups:
       npm-minor-and-patch:
         update-types:
