@@ -69,8 +69,58 @@ pub struct AgentCatalogHarnessPins {
 #[serde(rename_all = "camelCase")]
 pub struct AgentCatalogArtifactPin {
     pub version: String,
+    /// Legacy single-hash field; superseded by `source`. Kept for migration so
+    /// pre-lockfile catalogs still parse.
     #[serde(default)]
     pub sha256: Option<String>,
+    /// The resolved, fenced install source (the lockfile's executable truth).
+    /// When present, install materializes EXACTLY this — sha256-verified — and
+    /// never consults registry install specs. When absent, the legacy
+    /// registry-spec path is used (deleted once every pin carries a source).
+    #[serde(default)]
+    pub source: Option<AgentCatalogArtifactSource>,
+}
+
+/// Resolved install source for one artifact. The per-target `sha256` is the
+/// trust anchor: install downloads the url, verifies the hash, and refuses
+/// anything else — so a url living in the catalog cannot fetch unintended bytes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", rename_all_fields = "camelCase")]
+pub enum AgentCatalogArtifactSource {
+    /// A single executable: download + chmod. Per-platform url+sha.
+    Binary {
+        targets: BTreeMap<String, AgentCatalogPinTarget>,
+    },
+    /// A tar/zip archive: extract + find `expectedBinary`. Per-platform url+sha.
+    Archive {
+        targets: BTreeMap<String, AgentCatalogPinTarget>,
+    },
+    /// An npm-registry package pinned to an exact version.
+    Npm {
+        package: String,
+        #[serde(default)]
+        sha256: Option<String>,
+    },
+    /// A git specifier (our adapter forks) installed/built from a pinned ref.
+    Git {
+        repo: String,
+        git_ref: String,
+        #[serde(default)]
+        package_subdir: Option<String>,
+        executable_relpath: String,
+    },
+}
+
+/// One platform's resolved download for a `Binary`/`Archive` source.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogPinTarget {
+    /// Keyed in `targets` by the registry platform key (`macos_arm64`, …).
+    pub url: String,
+    pub sha256: String,
+    /// For `Archive`: the binary name inside the extracted tree.
+    #[serde(default)]
+    pub expected_binary: Option<String>,
 }
 
 /// Pinned data dependency that gates model lists (e.g. opencode models.dev).

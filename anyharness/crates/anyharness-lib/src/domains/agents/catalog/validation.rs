@@ -8,8 +8,8 @@ use std::collections::HashSet;
 use chrono::DateTime;
 
 use super::schema::{
-    AgentCatalogAgent, AgentCatalogAuthContext, AgentCatalogAuthSignal, AgentCatalogDocument,
-    AgentCatalogModel,
+    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource, AgentCatalogAuthContext,
+    AgentCatalogAuthSignal, AgentCatalogDocument, AgentCatalogModel,
 };
 use crate::domains::agents::model::AgentKind;
 
@@ -57,6 +57,7 @@ fn validate_agent(
             agent.kind
         );
     }
+    validate_artifact_pin(&agent.kind, "agentProcess", &agent.harness.agent_process)?;
     if let Some(native) = &agent.harness.native {
         if native.version.trim().is_empty() {
             anyhow::bail!(
@@ -64,6 +65,7 @@ fn validate_agent(
                 agent.kind
             );
         }
+        validate_artifact_pin(&agent.kind, "native", native)?;
     }
 
     let mut context_ids = HashSet::new();
@@ -77,6 +79,50 @@ fn validate_agent(
     let mut seen_models = HashSet::new();
     for model in &agent.session.models {
         validate_model(&agent.kind, model, &context_ids, &mut seen_models)?;
+    }
+    Ok(())
+}
+
+/// A resolved pin source is the lockfile's executable truth, so its fields must
+/// be materializable: per-target downloads need a url and the trust-anchor
+/// sha256; npm/git need a package/ref. A pin with no source is fine (legacy).
+fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) -> anyhow::Result<()> {
+    let Some(source) = &pin.source else {
+        return Ok(());
+    };
+    match source {
+        AgentCatalogArtifactSource::Binary { targets }
+        | AgentCatalogArtifactSource::Archive { targets } => {
+            if targets.is_empty() {
+                anyhow::bail!("agent '{kind}' {role} source has no platform targets");
+            }
+            for (platform, target) in targets {
+                if target.url.trim().is_empty() {
+                    anyhow::bail!("agent '{kind}' {role} target '{platform}' has empty url");
+                }
+                if target.sha256.trim().is_empty() {
+                    anyhow::bail!("agent '{kind}' {role} target '{platform}' has empty sha256");
+                }
+            }
+        }
+        AgentCatalogArtifactSource::Npm { package, .. } => {
+            if package.trim().is_empty() {
+                anyhow::bail!("agent '{kind}' {role} npm source has empty package");
+            }
+        }
+        AgentCatalogArtifactSource::Git {
+            repo,
+            git_ref,
+            executable_relpath,
+            ..
+        } => {
+            if repo.trim().is_empty() || git_ref.trim().is_empty() {
+                anyhow::bail!("agent '{kind}' {role} git source needs repo and gitRef");
+            }
+            if executable_relpath.trim().is_empty() {
+                anyhow::bail!("agent '{kind}' {role} git source needs executableRelpath");
+            }
+        }
     }
     Ok(())
 }

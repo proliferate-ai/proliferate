@@ -109,20 +109,34 @@ not rewrite catalog or registry JSON.
 
 Executable behavior is security-sensitive.
 
-The trusted bundled registry may define:
+The trusted bundled registry defines the slow, hand-curated **method** and
+identity:
 
-- install methods
-- binary/package URLs
-- executable names
-- launch args
-- credential discovery kind
-- login command
-- auth-slot materialization policy
+- install method per role (direct binary / tarball / managed npm / git /
+  registry-backed) and the platform map
+- discovery endpoints used only at probe time (latest-version URLs, ACP
+  registry ids, URL templates) and the manual adapter git refs
+- executable names and launch args
+- credential discovery kind, login command, auth-slot materialization policy
+
+The catalog is the **lockfile**: each harness pin may carry a resolved
+`source` — the exact, per-platform `{url, sha256}` for a binary/archive, or a
+pinned npm/git specifier — produced by the probe (`resolve-pins.mjs`). Install
+consumes the catalog pin, materializes EXACTLY that, and verifies the
+**sha256 before use**.
+
+The sha256 is the trust anchor. A url living in the catalog cannot fetch
+unintended bytes: a mismatch hard-fails the install and leaves nothing on disk.
+This is what permits resolved download URLs to live in the (bundled, versioned,
+build-signed) catalog rather than the registry — the integrity check, not the
+file's location, is the security boundary. The registry still owns auth,
+launch, and the install method; it is never consulted for *which bytes* once a
+pin declares a source.
 
 This boundary should be visible in code. The projection that produces
-`AgentDescriptor` must be sourced from trusted registry data only. Catalog data
-may enrich model/control display options but must not define executable
-behavior.
+`AgentDescriptor` is sourced from trusted registry data only (method, auth,
+launch). Catalog data enriches it with the resolved, sha-anchored version pin
+and model/control display options.
 
 ## Source Shape
 
