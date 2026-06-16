@@ -304,7 +304,7 @@ async fn run_enumeration(
 
     let baseline_config_options = serde_json::to_value(&new_session.config_options)?;
     let modes = serde_json::to_value(&new_session.modes)?;
-    let current_model_id: Option<String> = None;
+    let mut current_model_id: Option<String> = None;
     let current_mode_id = new_session
         .modes
         .as_ref()
@@ -322,6 +322,21 @@ async fn run_enumeration(
             model_source = "modelConfigOption";
             model_config_id = Some(config_id);
             available = entries;
+        }
+    }
+    if available.is_empty() {
+        // Some harnesses (e.g. Grok) advertise their model menu only via the
+        // initialize response's vendor `_meta.modelState`, not the ACP models
+        // block or a `model` config option.
+        if let Some(model_state) = init.meta.as_ref().and_then(|meta| meta.get("modelState")) {
+            if let Some(entries) = model_entries_from_model_state(model_state) {
+                model_source = "initMetaModelState";
+                current_model_id = model_state
+                    .get("currentModelId")
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string);
+                available = entries;
+            }
         }
     }
     if available.is_empty() {
@@ -362,6 +377,10 @@ async fn run_enumeration(
                     None
                 }
             }
+        } else if model_source == "initMetaModelState" {
+            // Models advertised via `_meta` are not switchable through a config
+            // option, so there is no per-model config matrix to capture.
+            None
         } else {
             // ACP 0.14 removed set_session_model; harnesses that expose models
             // via the ACP models block can no longer be switched for per-model
@@ -496,6 +515,33 @@ fn model_entries_from_config_options(
         _ => return None,
     };
     Some((option.id.to_string(), entries))
+}
+
+/// Some harnesses (e.g. Grok) advertise their model menu only via the
+/// initialize response's vendor `_meta.modelState.availableModels`
+/// (`[{ modelId, name, description, ... }]`) rather than the ACP models block
+/// or a `model` config option. Extract (model_id, name, description) entries.
+fn model_entries_from_model_state(
+    model_state: &serde_json::Value,
+) -> Option<Vec<(String, String, Option<String>)>> {
+    let models = model_state.get("availableModels")?.as_array()?;
+    let entries: Vec<(String, String, Option<String>)> = models
+        .iter()
+        .filter_map(|model| {
+            let id = model.get("modelId").and_then(|value| value.as_str())?;
+            let name = model
+                .get("name")
+                .and_then(|value| value.as_str())
+                .unwrap_or(id)
+                .to_string();
+            let description = model
+                .get("description")
+                .and_then(|value| value.as_str())
+                .map(str::to_string);
+            Some((id.to_string(), name, description))
+        })
+        .collect();
+    (!entries.is_empty()).then_some(entries)
 }
 
 /// Best-effort identification of the native CLI the adapter will use:

@@ -3064,6 +3064,235 @@
       }
     },
     {
+      "kind": "grok",
+      "displayName": "Grok",
+      "harness": {
+        "agentProcess": {
+          "version": "unknown"
+        }
+      },
+      "authContexts": [
+        {
+          "id": "xai-api",
+          "authSlotId": "xai",
+          "signals": {
+            "anyOf": [
+              {
+                "env": "XAI_API_KEY"
+              },
+              {
+                "env": "GROK_API_KEY"
+              },
+              {
+                "discovery": "grok-auth-json-oauth"
+              }
+            ]
+          }
+        }
+      ],
+      "session": {
+        "controls": [
+          {
+            "key": "model",
+            "mapping": {
+              "createField": "modelId",
+              "switchVia": "setSessionModel",
+              "liveConfigId": "model"
+            }
+          }
+        ],
+        "models": [
+          {
+            "id": "grok-4.20-0309-non-reasoning",
+            "displayName": "Grok-4.20-0309-Non-Reasoning",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-4.20-0309-reasoning",
+            "displayName": "Grok-4.20-0309-Reasoning",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-4.20-multi-agent-0309",
+            "displayName": "Grok-4.20-Multi-Agent-0309",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-4.3",
+            "displayName": "Grok-4.3",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-build-0.1",
+            "displayName": "Grok-Build-0.1",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-imagine-image",
+            "displayName": "Grok-Imagine-Image",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": false,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-imagine-image-quality",
+            "displayName": "Grok-Imagine-Image-Quality",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": false,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-imagine-video",
+            "displayName": "Grok-Imagine-Video",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": false,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "grok-imagine-video-1.5-preview",
+            "displayName": "Grok-Imagine-Video-1.5-Preview",
+            "availability": {
+              "anyOf": [
+                "xai-api"
+              ]
+            },
+            "defaultVisible": false,
+            "controls": {},
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "grok.xai-api"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          }
+        ],
+        "defaults": {
+          "xai-api": "grok-4.20-0309-non-reasoning"
+        },
+        "observedDefaults": {
+          "xai-api": "grok-4.20-0309-non-reasoning"
+        }
+      },
+      "provenance": {
+        "probedAt": "2026-06-16T06:46:29.757670+00:00",
+        "attestation": null,
+        "runs": [
+          {
+            "id": "grok.xai-api",
+            "snapshotPath": "generated/grok.xai-api.probe.json"
+          }
+        ]
+      }
+    },
+    {
       "kind": "opencode",
       "displayName": "OpenCode",
       "harness": {

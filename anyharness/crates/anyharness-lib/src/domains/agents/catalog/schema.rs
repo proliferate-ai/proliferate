@@ -295,7 +295,7 @@ mod tests {
             probed_against.registry_version.as_deref(),
             Some(bundled_registry_version().as_str())
         );
-        assert_eq!(catalog.agents.len(), 5);
+        assert_eq!(catalog.agents.len(), 6);
 
         let claude = &catalog.agents[0];
         assert_eq!(claude.kind, "claude");
@@ -358,7 +358,7 @@ mod tests {
         assert!(cursor.provenance.attestation.is_none());
         assert!(cursor.harness.native.is_none());
 
-        let opencode = &catalog.agents[4];
+        let opencode = &catalog.agents[5];
         assert!(opencode
             .auth_contexts
             .iter()
