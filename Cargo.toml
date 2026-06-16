@@ -32,7 +32,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2.4"
 file-rotate = "0.8.0"
 sentry = { version = "0.48.2", default-features = false, features = ["backtrace", "contexts", "debug-images", "panic", "release-health", "reqwest", "rustls"] }
-sentry-anyhow = "0.47.0"
+sentry-anyhow = "0.48.2"
 sentry-tracing = { version = "0.47.0", features = ["logs"] }
 
 # Error handling
