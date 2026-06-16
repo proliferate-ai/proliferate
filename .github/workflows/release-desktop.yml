@@ -91,6 +91,11 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      # The desktop renderer (vite) build OOMs the default Node heap on the
+      # macOS-Intel runner; give every node step in this job ample headroom.
+      NODE_OPTIONS: --max-old-space-size=8192
+
     steps:
       - name: Decide whether to build this matrix entry
         id: filter
