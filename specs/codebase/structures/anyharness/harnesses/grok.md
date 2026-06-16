@@ -5,9 +5,11 @@ Status: authoritative for Grok-specific AnyHarness adapter behavior.
 Grok (xAI Grok Build) speaks the Agent Client Protocol natively, so it is
 launched through the upstream ACP registry rather than a Proliferate-owned
 adapter: `agentProcess.install.kind = registry_backed`, `registryId =
-"grok-build"`, distributed as `npx @xai-official/grok agent stdio`. A
-`binary_hint` fallback runs a local `grok` (`agent stdio`) when the registry is
-unreachable. No fork or wrapper adapter is required.
+"grok-build"`. The upstream ACP registry resolves that id to its npx
+distribution (currently `@xai-official/grok`, run as `agent stdio`); the exact
+package is owned by that registry, not this repo. A `binary_hint` fallback runs
+a local `grok` (`agent stdio`) when the registry is unreachable. No fork or
+wrapper adapter is required.
 
 ## Live Model Control
 
