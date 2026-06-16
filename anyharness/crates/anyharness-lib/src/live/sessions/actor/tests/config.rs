@@ -450,6 +450,53 @@ fn select_option_values_flattens_grouped_options() {
 }
 
 #[test]
+fn resolve_model_variant_value_maps_base_id_to_advertised_composed_value() {
+    let mut option = acp::schema::SessionConfigOption::select(
+        "model",
+        "Model",
+        "kimi-k2.5[]",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("kimi-k2.5[]", "kimi-k2.5"),
+            acp::schema::SessionConfigSelectOption::new("composer-2.5[fast=true]", "composer-2.5"),
+        ],
+    );
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+
+    // A bare base id resolves to the single advertised composed value.
+    assert_eq!(
+        resolve_model_variant_value(&option, "composer-2.5"),
+        "composer-2.5[fast=true]"
+    );
+    // An empty-bracket form resolves by the same base.
+    assert_eq!(
+        resolve_model_variant_value(&option, "composer-2.5[]"),
+        "composer-2.5[fast=true]"
+    );
+    // An exact advertised value is returned unchanged.
+    assert_eq!(
+        resolve_model_variant_value(&option, "kimi-k2.5[]"),
+        "kimi-k2.5[]"
+    );
+    // An unknown base is left as-is so the harness still decides.
+    assert_eq!(resolve_model_variant_value(&option, "gpt-5.5"), "gpt-5.5");
+}
+
+#[test]
+fn resolve_model_variant_value_is_noop_for_non_model_options() {
+    let mut option = acp::schema::SessionConfigOption::select(
+        "mode",
+        "Mode",
+        "default",
+        vec![
+            acp::schema::SessionConfigSelectOption::new("default", "Default"),
+            acp::schema::SessionConfigSelectOption::new("plan", "Plan"),
+        ],
+    );
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Mode);
+    assert_eq!(resolve_model_variant_value(&option, "agent"), "agent");
+}
+
+#[test]
 fn model_config_request_rejects_values_outside_live_select_options() {
     let db = Db::open_in_memory().expect("open db");
     let store = SessionStore::new(db);

@@ -12,7 +12,7 @@ use crate::live::sessions::actor::config::queue::config_request_matches_current_
 use crate::live::sessions::actor::config::selection::{
     current_select_value, find_select_option_by_purpose, find_select_option_for_request,
     find_select_option_for_value, is_mode_config_request, is_model_config_request,
-    option_matches_purpose, select_option_contains_value,
+    option_matches_purpose, resolve_model_variant_value, select_option_contains_value,
 };
 use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
@@ -133,6 +133,11 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option_with_po
     else {
         return Ok(ConfigApplyOutcome::NotApplied);
     };
+
+    // `variantSyntax` agents (cursor) only accept their advertised composed
+    // values (`composer-2.5[fast=true]`); a switch may carry just the base id.
+    let resolved_value = resolve_model_variant_value(option, desired_value);
+    let desired_value = resolved_value.as_str();
 
     if !select_option_contains_value(option, desired_value) && !allow_foreign_value {
         return Ok(ConfigApplyOutcome::NotApplied);

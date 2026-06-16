@@ -236,3 +236,41 @@ pub(in crate::live::sessions::actor) fn select_option_values(
         _ => Vec::new(),
     }
 }
+
+/// The model id without any `variantSyntax` suffix — everything before the
+/// first `[`. `composer-2.5[fast=true]` -> `composer-2.5`; a bare id is
+/// returned unchanged.
+fn model_variant_base(value: &str) -> &str {
+    value.split('[').next().unwrap_or(value)
+}
+
+/// Resolve a requested model value to the exact string the harness advertises.
+///
+/// `variantSyntax` agents (e.g. cursor, `bracket-params`) only accept their
+/// fully composed values — `composer-2.5[fast=true]`, `kimi-k2.5[]` — whose
+/// default params are decided by the harness at runtime, not the catalog. A
+/// switch request often carries only the base id (`composer-2.5`). When the
+/// model option does not already list the requested value but advertises
+/// exactly one value with the same base, return that advertised value so the
+/// harness receives a string it recognizes. Otherwise the value is returned
+/// unchanged (exact matches, ambiguous bases, and non-model options are
+/// no-ops), leaving the existing accept/reject behavior intact.
+pub(in crate::live::sessions::actor) fn resolve_model_variant_value(
+    option: &acp::schema::SessionConfigOption,
+    desired_value: &str,
+) -> String {
+    if select_option_contains_value(option, desired_value)
+        || !option_matches_purpose(option, ConfigPurpose::Model)
+    {
+        return desired_value.to_string();
+    }
+
+    let base = model_variant_base(desired_value);
+    let mut matches = select_option_values(option)
+        .into_iter()
+        .filter(|value| model_variant_base(value) == base);
+    match (matches.next(), matches.next()) {
+        (Some(only), None) => only,
+        _ => desired_value.to_string(),
+    }
+}
