@@ -39,7 +39,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::{aws, claude, codex, cursor, gemini, opencode, DiscoveryError};
+use crate::{aws, claude, codex, cursor, gemini, grok, opencode, DiscoveryError};
 
 /// The exact discovery-kind strings detectors emit. Open vocabulary: new
 /// detectors add new constants; consumers match on strings, never on a
@@ -58,6 +58,8 @@ pub mod fact_kinds {
     /// Per-provider facts are `opencode-auth-json/<provider>`.
     pub const OPENCODE_AUTH_JSON_PREFIX: &str = "opencode-auth-json/";
     pub const CURSOR_KEYCHAIN: &str = "cursor-keychain";
+    /// Cached login token in `~/.grok/auth.json` (Grok's `cached_token` auth).
+    pub const GROK_AUTH_JSON_OAUTH: &str = "grok-auth-json-oauth";
 }
 
 /// One observed credential fact. Presence only for secrets: `Env` carries no
@@ -115,6 +117,7 @@ fn discovery_fact_kinds(home_dir: &Path, env_keys: &BTreeSet<String>) -> Vec<Str
     extend_tolerating(&mut kinds, "claude", claude::discovery_fact_kinds(home_dir));
     extend_tolerating(&mut kinds, "codex", codex::discovery_fact_kinds(home_dir));
     extend_tolerating(&mut kinds, "gemini", gemini::discovery_fact_kinds(home_dir));
+    extend_tolerating(&mut kinds, "grok", grok::discovery_fact_kinds(home_dir));
     kinds.extend(
         aws::discovery_fact_kinds(home_dir, env_keys)
             .into_iter()

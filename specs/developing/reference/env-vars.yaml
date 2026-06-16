@@ -728,6 +728,27 @@
   tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════
+# Catalog probe (CI)
+# ═══════════════════════════════════════════════════════════════════════
+# Provider credentials consumed only by the nightly catalog-probe workflow
+# (.github/workflows/catalog-probe.yml) to enumerate each harness's models.
+# NOTE: the other probe provider secrets (OPENAI_API_KEY, GEMINI_API_KEY,
+# CURSOR_API_KEY, CLAUDE_CODE_OAUTH_TOKEN) are also CI-only and not yet
+# enumerated here — a pre-existing gap, tracked separately.
+
+- name: XAI_API_KEY
+  secret: true
+  default: ""
+  description: xAI API key for the Grok harness; used by the catalog probe to enumerate Grok models
+  tags: [ci]
+
+- name: GROK_API_KEY
+  secret: true
+  default: ""
+  description: Alias the Grok CLI accepts for the xAI key (XAI_API_KEY preferred)
+  tags: [ci]
+
+# ═══════════════════════════════════════════════════════════════════════
 # Server: Observability
 # ═══════════════════════════════════════════════════════════════════════
 

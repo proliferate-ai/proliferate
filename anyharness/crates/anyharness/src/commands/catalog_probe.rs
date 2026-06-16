@@ -11,7 +11,7 @@ use anyharness_lib::live::sessions::probe::{probe_agent, ProbeOptions, ProbeSnap
 
 #[derive(Args)]
 pub struct CatalogProbeArgs {
-    /// Agent kind to probe (claude, codex, gemini, cursor, opencode)
+    /// Agent kind to probe (claude, codex, gemini, cursor, opencode, grok)
     #[arg(long)]
     pub agent: String,
 
@@ -367,6 +367,15 @@ wire_api = "responses"
             "cursor-agent ignores CURSOR_API_KEY for ACP sessions; run `cursor-agent login` \
              on this machine and use --auth-context cursor-login instead"
         ),
+        // Grok (xAI Grok Build) speaks ACP natively and authenticates from
+        // XAI_API_KEY. Isolate HOME so machine-local ~/.grok config (default
+        // model, cached login) cannot pollute observed values.
+        (AgentKind::Grok, "xai-api") => {
+            let key = secrets.require("XAI_API_KEY")?;
+            let mut env = isolation_env(auth_context, &[("HOME", "home")], isolation_dirs)?;
+            env.insert("XAI_API_KEY".to_string(), key);
+            Ok(env)
+        }
         _ => bail!(
             "unsupported (agent, auth-context) combination: ({}, {auth_context})",
             agent_kind.as_str()
@@ -388,6 +397,8 @@ const CREDENTIAL_ENV_VARS: &[&str] = &[
     "GOOGLE_API_KEY",
     "CURSOR_API_KEY",
     "OPENCODE_API_KEY",
+    "XAI_API_KEY",
+    "GROK_API_KEY",
     "AWS_BEARER_TOKEN_BEDROCK",
     // Ambient SigV4 credentials must not reach spawned agents either: some
     // harnesses (e.g. opencode's amazon-bedrock provider) auto-detect them

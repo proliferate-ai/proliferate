@@ -1594,6 +1594,9 @@ pub(crate) fn default_cowork_coding_mode_for_agent(agent_kind: &str) -> Option<&
         "claude" => Some("bypassPermissions"),
         "codex" => Some("full-access"),
         "gemini" => Some("yolo"),
+        // Grok advertises no ACP modes (probe: modes=null) and its catalog has
+        // no `mode` control, so a non-empty mode_id is rejected at
+        // create-session. Send none — Grok runs with its own default.
         _ => None,
     }
 }
@@ -1819,9 +1822,23 @@ fn git_branch_exists(repo_root_path: &str, branch_name: &str) -> bool {
 mod tests {
     use super::{
         coding_workspace_label, coding_workspace_name_from_branch, coding_workspace_slug,
-        cowork_transcript_search_text, workspace_name_with_suffix,
+        cowork_transcript_search_text, default_cowork_coding_mode_for_agent,
+        workspace_name_with_suffix,
     };
     use crate::domains::sessions::model::SessionEventRecord;
+
+    #[test]
+    fn cowork_sends_no_mode_for_grok() {
+        // Grok has no catalog `mode` control (ACP modes=null); a non-empty
+        // default would be rejected at create-session, so cowork must send none.
+        assert_eq!(default_cowork_coding_mode_for_agent("grok"), None);
+        // Sanity: agents with a mode control still get their default.
+        assert_eq!(
+            default_cowork_coding_mode_for_agent("claude"),
+            Some("bypassPermissions")
+        );
+        assert_eq!(default_cowork_coding_mode_for_agent("gemini"), Some("yolo"));
+    }
 
     #[test]
     fn normalizes_coding_workspace_names() {

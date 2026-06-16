@@ -304,7 +304,7 @@ async fn run_enumeration(
 
     let baseline_config_options = serde_json::to_value(&new_session.config_options)?;
     let modes = serde_json::to_value(&new_session.modes)?;
-    let current_model_id: Option<String> = None;
+    let mut current_model_id: Option<String> = None;
     let current_mode_id = new_session
         .modes
         .as_ref()
@@ -322,6 +322,21 @@ async fn run_enumeration(
             model_source = "modelConfigOption";
             model_config_id = Some(config_id);
             available = entries;
+        }
+    }
+    if available.is_empty() {
+        // Some harnesses (e.g. Grok) advertise their model menu only via the
+        // initialize response's vendor `_meta.modelState`, not the ACP models
+        // block or a `model` config option.
+        if let Some(model_state) = init.meta.as_ref().and_then(|meta| meta.get("modelState")) {
+            if let Some(entries) = model_entries_from_model_state(model_state) {
+                model_source = "initMetaModelState";
+                current_model_id = model_state
+                    .get("currentModelId")
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string);
+                available = entries;
+            }
         }
     }
     if available.is_empty() {
@@ -362,6 +377,10 @@ async fn run_enumeration(
                     None
                 }
             }
+        } else if model_source == "initMetaModelState" {
+            // Models advertised via `_meta` are not switchable through a config
+            // option, so there is no per-model config matrix to capture.
+            None
         } else {
             // ACP 0.14 removed set_session_model; harnesses that expose models
             // via the ACP models block can no longer be switched for per-model
@@ -498,6 +517,33 @@ fn model_entries_from_config_options(
     Some((option.id.to_string(), entries))
 }
 
+/// Some harnesses (e.g. Grok) advertise their model menu only via the
+/// initialize response's vendor `_meta.modelState.availableModels`
+/// (`[{ modelId, name, description, ... }]`) rather than the ACP models block
+/// or a `model` config option. Extract (model_id, name, description) entries.
+fn model_entries_from_model_state(
+    model_state: &serde_json::Value,
+) -> Option<Vec<(String, String, Option<String>)>> {
+    let models = model_state.get("availableModels")?.as_array()?;
+    let entries: Vec<(String, String, Option<String>)> = models
+        .iter()
+        .filter_map(|model| {
+            let id = model.get("modelId").and_then(|value| value.as_str())?;
+            let name = model
+                .get("name")
+                .and_then(|value| value.as_str())
+                .unwrap_or(id)
+                .to_string();
+            let description = model
+                .get("description")
+                .and_then(|value| value.as_str())
+                .map(str::to_string);
+            Some((id.to_string(), name, description))
+        })
+        .collect();
+    (!entries.is_empty()).then_some(entries)
+}
+
 /// Best-effort identification of the native CLI the adapter will use:
 /// the CLAUDE_CODE_EXECUTABLE-style env override, else the managed native
 /// artifact. Runs `--version` to record the actual version string.
@@ -539,4 +585,61 @@ fn probe_workspace_dir(kind: &AgentKind) -> anyhow::Result<PathBuf> {
     ));
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::model_entries_from_model_state;
+    use serde_json::json;
+
+    #[test]
+    fn maps_model_id_name_and_description() {
+        let state = json!({
+            "currentModelId": "grok-build-0.1",
+            "availableModels": [
+                { "modelId": "grok-build-0.1", "name": "Grok Build", "description": "coding" },
+                { "modelId": "grok-4.3", "name": "Grok 4.3" }
+            ]
+        });
+        assert_eq!(
+            model_entries_from_model_state(&state).expect("entries"),
+            vec![
+                (
+                    "grok-build-0.1".to_string(),
+                    "Grok Build".to_string(),
+                    Some("coding".to_string())
+                ),
+                ("grok-4.3".to_string(), "Grok 4.3".to_string(), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn falls_back_to_model_id_when_name_absent() {
+        let state = json!({ "availableModels": [{ "modelId": "grok-4.3" }] });
+        assert_eq!(
+            model_entries_from_model_state(&state).expect("entries"),
+            vec![("grok-4.3".to_string(), "grok-4.3".to_string(), None)]
+        );
+    }
+
+    #[test]
+    fn skips_entries_without_a_model_id() {
+        let state = json!({ "availableModels": [{ "name": "no id" }, { "modelId": "grok-4.3" }] });
+        assert_eq!(
+            model_entries_from_model_state(&state).expect("entries"),
+            vec![("grok-4.3".to_string(), "grok-4.3".to_string(), None)]
+        );
+    }
+
+    #[test]
+    fn none_when_no_usable_models() {
+        assert!(model_entries_from_model_state(&json!({})).is_none());
+        assert!(model_entries_from_model_state(&json!({ "availableModels": [] })).is_none());
+        assert!(model_entries_from_model_state(&json!({ "currentModelId": "x" })).is_none());
+        assert!(
+            model_entries_from_model_state(&json!({ "availableModels": [{ "name": "x" }] }))
+                .is_none()
+        );
+    }
 }

@@ -8,6 +8,7 @@ import {
   putSandboxAgentAuthSelection,
   type AgentAuthAgentKind,
   type AgentGatewayCapabilities,
+  type EnsureFreeManagedCreditsRequest,
   type EnsureFreeManagedCreditsResponse,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
@@ -200,6 +201,23 @@ function fallbackAuthSlot(authSlotId: string): LaunchAuthSlot {
   };
 }
 
+// Free managed credits exist only for gateway/managed-credit providers; other
+// kinds (e.g. grok, which is BYO-key) aren't eligible, so the request omits the
+// agent kind for them rather than sending an unsupported value.
+function freeCreditAgentKind(
+  kind: AgentAuthAgentKind | null,
+): EnsureFreeManagedCreditsRequest["agentKind"] {
+  switch (kind) {
+    case "claude":
+    case "codex":
+    case "opencode":
+    case "gemini":
+      return kind;
+    default:
+      return null;
+  }
+}
+
 async function ensureFreeManagedCreditsWithRetry(args: {
   client: ProliferateCloudClient;
   agentKind: AgentAuthAgentKind | null;
@@ -207,7 +225,7 @@ async function ensureFreeManagedCreditsWithRetry(args: {
 }): Promise<EnsureFreeManagedCreditsResponse> {
   return withRecoverableRetry(() =>
     ensureFreeManagedCredits({
-      agentKind: args.agentKind,
+      agentKind: freeCreditAgentKind(args.agentKind),
       modelId: args.modelId,
     }, args.client)
   );

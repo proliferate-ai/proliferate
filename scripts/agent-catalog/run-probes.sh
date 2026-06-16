@@ -99,6 +99,10 @@ else skip gemini google-oauth "no gemini oauth creds (run \`gemini\` and log in)
 # cursor: machine login (keychain); probe fails cleanly if not logged in
 probe cursor cursor-login --model-switch-timeout-secs 5
 
+if need_env XAI_API_KEY; then
+  probe grok xai-api --model-switch-timeout-secs 3
+else skip grok xai-api "XAI_API_KEY not set (xAI Grok)"; fi
+
 echo "── waiting on ${#pids[@]} probes"
 failures=0
 for i in "${!pids[@]}"; do

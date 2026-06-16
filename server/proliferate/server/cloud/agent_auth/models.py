@@ -22,7 +22,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
 from proliferate.server.cloud.agent_auth.domain.types import SyncedCredentialAuthMode
 
 AgentKind = Literal["claude", "codex", "opencode", "gemini"]
-CredentialProviderId = Literal["anthropic", "openai", "gemini", "cursor"]
+CredentialProviderId = Literal["anthropic", "openai", "gemini", "cursor", "xai"]
 
 
 class GatewayModelDeploymentRequest(BaseModel):
@@ -528,6 +528,8 @@ def _legacy_agent_kind_for_provider(credential_provider_id: str) -> str | None:
         return "gemini"
     if credential_provider_id == "cursor":
         return "cursor"
+    if credential_provider_id == "xai":
+        return "grok"
     return None
 
 

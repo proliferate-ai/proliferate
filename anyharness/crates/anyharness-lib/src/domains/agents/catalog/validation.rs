@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn rejects_baseline_auth_context_with_slot_id_or_signals() {
         let mut catalog = draft_catalog();
-        let baseline = catalog.agents[4]
+        let baseline = catalog.agents[5]
             .auth_contexts
             .iter_mut()
             .find(|context| context.id == BASELINE_AUTH_CONTEXT_ID)
@@ -373,7 +373,7 @@ mod tests {
         expect_invalid(&catalog, "baseline auth context must not have authSlotId");
 
         let mut catalog = draft_catalog();
-        let baseline = catalog.agents[4]
+        let baseline = catalog.agents[5]
             .auth_contexts
             .iter_mut()
             .find(|context| context.id == BASELINE_AUTH_CONTEXT_ID)

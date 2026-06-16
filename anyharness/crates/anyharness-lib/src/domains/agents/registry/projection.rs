@@ -248,6 +248,7 @@ fn parse_credential_discovery(value: &str) -> anyhow::Result<CredentialDiscovery
         "gemini" => Ok(CredentialDiscoveryKind::Gemini),
         "opencode" => Ok(CredentialDiscoveryKind::OpenCode),
         "cursor" => Ok(CredentialDiscoveryKind::Cursor),
+        "grok" => Ok(CredentialDiscoveryKind::Grok),
         _ => anyhow::bail!("unsupported credential discovery '{value}'"),
     }
 }
@@ -255,7 +256,7 @@ fn parse_credential_discovery(value: &str) -> anyhow::Result<CredentialDiscovery
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::model::AgentKind;
+    use crate::domains::agents::model::{AgentKind, CredentialDiscoveryKind};
 
     #[test]
     fn bundled_codex_launch_disables_user_profile_extensions() {
@@ -296,6 +297,31 @@ mod tests {
         assert_eq!(
             slot_ids,
             vec!["openai", "anthropic", "gemini", "opencode-zen"]
+        );
+    }
+
+    #[test]
+    fn bundled_grok_uses_registry_backed_install_and_xai_slot() {
+        let grok = bundled_agent_descriptors()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Grok)
+            .expect("grok descriptor");
+
+        assert_eq!(grok.launch.executable_name, "grok");
+
+        let slot = grok.auth.slots.first().expect("grok auth slot");
+        assert_eq!(slot.id, "xai");
+        assert_eq!(slot.discovery, CredentialDiscoveryKind::Grok);
+        assert_eq!(slot.credential_provider_ids, vec!["xai".to_string()]);
+
+        let synced = slot
+            .materialization
+            .synced_files
+            .as_ref()
+            .expect("grok synced files");
+        assert_eq!(
+            synced.allowed_file_paths,
+            vec![".grok/auth.json".to_string()]
         );
     }
 }

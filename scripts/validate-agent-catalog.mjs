@@ -11,7 +11,7 @@ import path from "node:path";
 
 const CATALOG_PATH = path.resolve("catalogs/agents/catalog.json");
 const REGISTRY_PATH = path.resolve("catalogs/agents/registry.json");
-const VALID_AGENT_KINDS = new Set(["claude", "codex", "gemini", "cursor", "opencode"]);
+const VALID_AGENT_KINDS = new Set(["claude", "codex", "gemini", "cursor", "opencode", "grok"]);
 const VALID_STATUSES = new Set(["candidate", "active", "deprecated", "hidden"]);
 const BASELINE_CONTEXT_ID = "baseline";
 

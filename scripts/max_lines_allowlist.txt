@@ -11,12 +11,13 @@ anyharness/crates/anyharness-contract/src/v1/events.rs 949 existing AnyHarness c
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 802 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-lib/src/api/openapi.rs 845 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1172 existing AnyHarness oversized test file
-anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1884 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1901 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1522 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1512 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs 1057 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 645 catalog probe with per-harness model-source fallbacks and tests
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1112 custom migration with legacy schema coverage
 anyharness/crates/proliferate-worker/src/control/commands/executor.rs 1636 existing Proliferate worker oversized command executor
 anyharness/crates/proliferate-worker/src/control/commands/mapping.rs 979 existing Proliferate worker oversized command mapper
@@ -30,9 +31,9 @@ apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 662 exis
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 632 existing desktop oversized test file
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
 server/proliferate/server/cloud/commands/domain/payload.py 549 existing cloud command payload validator with workspace materialization policies
-server/proliferate/server/cloud/agent_auth/models.py 535 existing cloud agent auth API schema module pending request/response split
+server/proliferate/server/cloud/agent_auth/models.py 537 existing cloud agent auth API schema module pending request/response split
 server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split
-server/proliferate/constants/cloud.py 610 existing cloud constants module with command and target config enums
+server/proliferate/constants/cloud.py 614 existing cloud constants module with command and target config enums
 server/tests/integration/schema_migration_assertions.py 885 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test

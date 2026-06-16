@@ -1,4 +1,4 @@
-export const CLOUD_AGENT_KIND_ORDER = ["claude", "codex", "gemini", "opencode"] as const;
+export const CLOUD_AGENT_KIND_ORDER = ["claude", "codex", "gemini", "opencode", "grok"] as const;
 export const DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS = ["claude", "codex"] as const;
 
 export type CloudHarnessUnavailableReason =
@@ -208,6 +208,8 @@ export function cloudAgentKindLabel(agentKind: string): string {
       return "Gemini";
     case "opencode":
       return "OpenCode";
+    case "grok":
+      return "Grok";
     default:
       return agentKind;
   }

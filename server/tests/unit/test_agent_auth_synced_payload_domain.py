@@ -44,7 +44,7 @@ def test_build_credential_statuses_applies_defaults_and_filters_revoked() -> Non
 
     by_provider = {status.provider: status for status in statuses}
 
-    assert allowed_agent_kinds() == ["claude", "codex", "opencode", "gemini"]
+    assert allowed_agent_kinds() == ["claude", "codex", "opencode", "gemini", "grok"]
     assert ready_agent_kinds(statuses) == ["claude"]
     assert by_provider["claude"].synced is True
     assert by_provider["claude"].auth_mode == "file"

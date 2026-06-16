@@ -48,7 +48,8 @@
             "codex",
             "gemini",
             "cursor",
-            "opencode"
+            "opencode",
+            "grok"
           ]
         },
         "displayName": {
@@ -481,7 +482,8 @@
             "codex",
             "gemini",
             "opencode",
-            "cursor"
+            "cursor",
+            "grok"
           ]
         },
         "login": {

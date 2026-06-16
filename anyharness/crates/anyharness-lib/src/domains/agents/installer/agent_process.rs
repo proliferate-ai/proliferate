@@ -127,8 +127,15 @@ pub(super) fn install_agent_process_artifact(
                 return Ok(None);
             }
 
+            let registry_bin_hints: Vec<String> = match fallback {
+                AgentProcessFallback::BinaryHint {
+                    candidate_binaries, ..
+                } => candidate_binaries.clone(),
+                _ => Vec::new(),
+            };
             match install_from_registry(
                 registry_id,
+                &registry_bin_hints,
                 &managed_dir,
                 &launcher_path,
                 options.agent_process_version.as_deref(),
@@ -252,6 +259,7 @@ fn launcher_uses_binary_hint(launcher_path: &Path, candidate_binaries: &[String]
 
 fn install_from_registry(
     registry_id: &str,
+    bin_hints: &[String],
     managed_dir: &Path,
     launcher_path: &Path,
     version_override: Option<&str>,
@@ -282,15 +290,18 @@ fn install_from_registry(
                 }
             })?;
 
-            let bin_hint = registry_id.strip_suffix("-acp").unwrap_or(registry_id);
-            let bin_name = format!("{bin_hint}");
-            let npm_bin = storage.join("node_modules").join(".bin").join(&bin_name);
-            let cmd_path = if npm_bin.exists() {
-                npm_bin
-            } else {
-                find_npm_bin(&storage, registry_id)
-                    .ok_or_else(|| InstallError::MissingManagedArtifact(npm_bin))?
-            };
+            // Resolve the installed binary. Try the registryId-derived name
+            // first (gemini/cursor/opencode match it), then the descriptor's
+            // declared candidate binaries (Grok's registryId "grok-build"
+            // differs from its npm bin "grok"), then the single-entry fallback.
+            let registry_bin = registry_id.strip_suffix("-acp").unwrap_or(registry_id);
+            let bin_dir = storage.join("node_modules").join(".bin");
+            let cmd_path = std::iter::once(registry_bin.to_string())
+                .chain(bin_hints.iter().cloned())
+                .map(|name| bin_dir.join(name))
+                .find(|candidate| candidate.exists())
+                .or_else(|| find_npm_bin(&storage, registry_id))
+                .ok_or_else(|| InstallError::MissingManagedArtifact(bin_dir.join(registry_bin)))?;
 
             let env = {
                 let mut merged = env.clone();

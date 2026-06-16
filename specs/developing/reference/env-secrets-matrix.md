@@ -124,6 +124,17 @@ Rate-limit thresholds (`SESSION_TITLE_RATE_LIMIT_REQUESTS`,
 `SESSION_TITLE_RATE_LIMIT_WINDOW_SECONDS`) and title length caps now live in
 `server/proliferate/constants/ai_magic.py`. They are not env-overridable.
 
+## Catalog probe (CI)
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `XAI_API_KEY` | Yes | No | xAI key for the Grok harness; catalog-probe model enumeration |
+| `GROK_API_KEY` | Yes | No | Alias the Grok CLI accepts for the xAI key |
+
+Consumed only by the nightly catalog-probe workflow. The other probe provider
+secrets (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `CURSOR_API_KEY`,
+`CLAUDE_CODE_OAUTH_TOKEN`) are likewise CI-only and not yet enumerated here.
+
 ## Cloud Workspaces and Billing
 
 | Variable | Secret | Required | Used for |

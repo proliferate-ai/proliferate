@@ -23,7 +23,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const generatedDir = join(here, "generated");
 const outPath = join(here, "catalog.draft.json");
 
-const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini", cursor: "Cursor", opencode: "OpenCode" };
+const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
 // Which registry auth slot satisfies each probe auth context (curation-owned).
 // Per-agent context -> registry auth slot. Slot ids MUST be slots the
 // registry declares for that agent (the runtime classifier skips contexts
@@ -41,6 +41,7 @@ const AUTH_CONTEXT_SLOTS = {
     "gemini-api": "gemini",
     "opencode-zen": "opencode-zen",
   },
+  grok: { "xai-api": "xai" },
 };
 
 // Runtime-detection signals per context (the curation overlay): how the
@@ -72,6 +73,9 @@ const AUTH_CONTEXT_SIGNALS = {
     "gemini-api": { anyOf: [{ env: "GEMINI_API_KEY" }, { env: "GOOGLE_API_KEY" }, { discovery: "opencode-auth-json/google" }, { discovery: "opencode-auth-json/gemini" }] },
     "opencode-zen": { discovery: "opencode-auth-json/opencode" },
   },
+  grok: {
+    "xai-api": { anyOf: [{ env: "XAI_API_KEY" }, { env: "GROK_API_KEY" }, { discovery: "grok-auth-json-oauth" }] },
+  },
 };
 
 // Curated per-context launch defaults (session.defaults): the classifier's
@@ -92,6 +96,7 @@ const AGENT_SESSION_DEFAULTS = {
   gemini: { "gemini-api": "auto", "google-oauth": "auto" },
   cursor: { "cursor-login": "default" },
   opencode: { "baseline": "opencode/big-pickle" },
+  grok: { "xai-api": "grok-4.20-0309-non-reasoning" },
 };
 
 // Display-name curation: probe snapshots carry pretty names for some models
@@ -121,6 +126,7 @@ const CONTROL_MAPPINGS = {
   gemini: { mode: { createField: "modeId", liveConfigId: "mode" } },
   cursor: { mode: { createField: "modeId", liveConfigId: "mode" } },
   opencode: { mode: { createField: "modeId", liveConfigId: "mode" } },
+  grok: { mode: { createField: "modeId", liveConfigId: "mode" } },
 };
 
 // Visibility policy: every PROVEN model (harness menu or accepted trial)
@@ -134,6 +140,13 @@ const MODEL_VISIBILITY_OPT_OUTS = {
     "claude-opus-4-8",
     // global-region duplicate of us.anthropic.claude-fable-5 (bedrock)
     "global.anthropic.claude-fable-5",
+  ],
+  grok: [
+    // image/video generation models — not coding models, hidden from the picker
+    "grok-imagine-image",
+    "grok-imagine-image-quality",
+    "grok-imagine-video",
+    "grok-imagine-video-1.5-preview",
   ],
 };
 
@@ -180,6 +193,7 @@ const AUTH_CONTEXT_PRECEDENCE = {
   gemini: ["gemini-api", "google-oauth"],
   cursor: ["cursor-login"],
   opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline"],
+  grok: ["xai-api"],
 };
 
 const warnings = [];
