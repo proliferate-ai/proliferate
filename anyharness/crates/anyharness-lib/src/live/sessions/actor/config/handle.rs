@@ -9,7 +9,8 @@ use crate::live::sessions::actor::config::apply::{
 use crate::live::sessions::actor::config::persist::persist_requested_config_value_if_changed;
 use crate::live::sessions::actor::config::queue::queue_pending_config_change;
 use crate::live::sessions::actor::config::selection::{
-    find_select_option_by_purpose, find_select_option_for_request, select_option_values,
+    find_select_option_by_purpose, find_select_option_for_request, resolve_model_variant_value,
+    select_option_values,
 };
 use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose,
@@ -124,6 +125,15 @@ impl SessionActor {
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
         let option = find_select_option_for_request(&self.startup_state.config_options, config_id);
+        // Resolve a bare variant base to the advertised composed value before
+        // queueing/persisting, so the queued + persisted value match what the
+        // idle replay will actually send (mirrors apply_specific_config_option).
+        let resolved_value = match option {
+            Some(option) => resolve_model_variant_value(option, value),
+            None => value.to_string(),
+        };
+        let value = resolved_value.as_str();
+
         queue_pending_config_change(
             self.caps.state.as_ref(),
             &self.session_id,
