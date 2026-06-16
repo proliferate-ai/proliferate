@@ -134,6 +134,7 @@ fn detect_local_auth(kind: &CredentialDiscoveryKind, home_dir: &Path) -> bool {
         CredentialDiscoveryKind::Gemini => detect_shared_local_auth(ProviderId::Gemini, home_dir),
         CredentialDiscoveryKind::OpenCode => detect_opencode_local_auth(home_dir),
         CredentialDiscoveryKind::Cursor => detect_cursor_local_auth(home_dir),
+        CredentialDiscoveryKind::Grok => detect_shared_local_auth(ProviderId::Xai, home_dir),
     }
 }
 

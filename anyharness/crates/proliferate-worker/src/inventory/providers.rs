@@ -7,6 +7,7 @@ pub fn collect() -> Option<Value> {
         "claude": command_version("claude", &["--version"]),
         "codex": command_version("codex", &["--version"]),
         "gemini": command_version("gemini", &["--version"]),
-        "opencode": command_version("opencode", &["--version"])
+        "opencode": command_version("opencode", &["--version"]),
+        "grok": command_version("grok", &["--version"])
     }))
 }

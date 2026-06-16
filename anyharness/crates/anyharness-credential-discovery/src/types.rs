@@ -5,6 +5,7 @@ pub enum ProviderId {
     Claude,
     Codex,
     Gemini,
+    Xai,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -9,6 +9,7 @@ pub enum AgentKind {
     Gemini,
     Cursor,
     OpenCode,
+    Grok,
 }
 
 impl AgentKind {
@@ -19,6 +20,7 @@ impl AgentKind {
             Self::Gemini => "gemini",
             Self::Cursor => "cursor",
             Self::OpenCode => "opencode",
+            Self::Grok => "grok",
         }
     }
 
@@ -29,6 +31,7 @@ impl AgentKind {
             Self::Gemini => "Gemini",
             Self::Cursor => "Cursor",
             Self::OpenCode => "OpenCode",
+            Self::Grok => "Grok",
         }
     }
 
@@ -39,6 +42,7 @@ impl AgentKind {
             Self::Gemini,
             Self::Cursor,
             Self::OpenCode,
+            Self::Grok,
         ]
     }
 
@@ -49,6 +53,7 @@ impl AgentKind {
             "gemini" => Some(Self::Gemini),
             "cursor" => Some(Self::Cursor),
             "opencode" => Some(Self::OpenCode),
+            "grok" => Some(Self::Grok),
             _ => None,
         }
     }
@@ -265,6 +270,8 @@ pub enum CredentialDiscoveryKind {
     OpenCode,
     /// Check Cursor-specific ~/.cursor/cli-config.json for login state.
     Cursor,
+    /// Check Grok-specific ~/.grok/auth.json for a cached login token.
+    Grok,
 }
 
 /// Describes how to log in with this agent's native CLI if env-based auth is missing.

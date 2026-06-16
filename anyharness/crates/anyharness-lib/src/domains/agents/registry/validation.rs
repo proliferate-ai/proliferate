@@ -5,7 +5,7 @@ use chrono::DateTime;
 use super::schema::{AgentRegistryAgent, AgentRegistryAuth, AgentRegistryDocument};
 use crate::domains::agents::model::AgentKind;
 
-const VALID_CREDENTIAL_PROVIDER_IDS: &[&str] = &["anthropic", "openai", "gemini", "cursor"];
+const VALID_CREDENTIAL_PROVIDER_IDS: &[&str] = &["anthropic", "openai", "gemini", "cursor", "xai"];
 
 pub fn validate_agent_registry_document(registry: &AgentRegistryDocument) -> anyhow::Result<()> {
     if registry.schema_version != 1 {

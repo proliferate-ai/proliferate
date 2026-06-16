@@ -1594,6 +1594,7 @@ pub(crate) fn default_cowork_coding_mode_for_agent(agent_kind: &str) -> Option<&
         "claude" => Some("bypassPermissions"),
         "codex" => Some("full-access"),
         "gemini" => Some("yolo"),
+        "grok" => Some("bypassPermissions"),
         _ => None,
     }
 }

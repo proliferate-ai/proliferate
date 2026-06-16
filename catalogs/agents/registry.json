@@ -478,6 +478,76 @@
         ]
       },
       "docsUrl": "https://opencode.ai"
+    },
+    {
+      "kind": "grok",
+      "displayName": "Grok",
+      "description": "xAI's Grok Build coding agent through its native ACP surface.",
+      "native": null,
+      "agentProcess": {
+        "install": {
+          "kind": "registry_backed",
+          "registryId": "grok-build",
+          "fallback": {
+            "kind": "binary_hint",
+            "candidateBinaries": [
+              "grok"
+            ],
+            "args": [
+              "agent",
+              "stdio"
+            ]
+          }
+        }
+      },
+      "launch": {
+        "executableName": "grok",
+        "defaultArgs": []
+      },
+      "auth": {
+        "readinessPolicy": "any_required_slot",
+        "slots": [
+          {
+            "id": "xai",
+            "label": "xAI",
+            "credentialProviderIds": [
+              "xai"
+            ],
+            "requiredForReadiness": true,
+            "envVars": [
+              "XAI_API_KEY",
+              "GROK_API_KEY"
+            ],
+            "discovery": "grok",
+            "discoveryKinds": [
+              "grok-auth-json-oauth"
+            ],
+            "materialization": {
+              "syncedFiles": {
+                "protectedEnvKeys": [],
+                "allowedFilePaths": [
+                  ".grok/auth.json"
+                ],
+                "cleanupFilePaths": [
+                  ".grok/auth.json"
+                ]
+              }
+            },
+            "login": {
+              "label": "Log in with Grok",
+              "command": {
+                "program": "grok",
+                "args": [
+                  "login"
+                ]
+              },
+              "reusesUserState": true,
+              "message": null
+            }
+          }
+        ]
+      },
+      "docsUrl": "https://x.ai/cli"
     }
   ]
 }
