@@ -4,7 +4,7 @@ use std::sync::{mpsc, OnceLock};
 
 use anyharness_credential_discovery::{export_portable_auth, PortableAuthExport, ProviderId};
 use base64::Engine;
-use getrandom::getrandom;
+use getrandom::fill;
 use serde::{Deserialize, Serialize};
 
 use crate::app_config::{app_dir_path, native_dev_profile, read_json_file, write_json_file_atomic};
@@ -322,7 +322,7 @@ fn ensure_runtime_data_key() -> Result<String, String> {
         return Ok(value);
     }
     let mut bytes = [0u8; 32];
-    getrandom(&mut bytes).map_err(|e| e.to_string())?;
+    fill(&mut bytes).map_err(|e| e.to_string())?;
     let value = base64::engine::general_purpose::STANDARD.encode(bytes);
     set_password(RUNTIME_SERVICE, ANYHARNESS_DATA_KEY_ACCOUNT, &value)?;
     Ok(value)

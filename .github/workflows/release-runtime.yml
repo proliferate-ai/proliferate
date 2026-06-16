@@ -63,7 +63,7 @@ jobs:
             runner: windows-latest
             archive: zip
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -109,7 +109,7 @@ jobs:
             -DestinationPath "anyharness-${{ matrix.target }}.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: anyharness-${{ matrix.target }}
           path: anyharness-${{ matrix.target }}.${{ matrix.archive }}
@@ -119,16 +119,16 @@ jobs:
     name: Publish SDK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.11.0
 
@@ -167,11 +167,11 @@ jobs:
     needs: [build-binaries, publish-sdk]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -203,7 +203,7 @@ jobs:
 
       - name: Create GitHub Release
         if: (github.event_name == 'push' || inputs.publish) && !inputs.dry_run
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           target_commitish: ${{ inputs.git_sha || github.sha }}

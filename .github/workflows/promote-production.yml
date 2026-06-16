@@ -57,7 +57,7 @@ jobs:
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
       summary_json: ${{ steps.detect.outputs.summary_json }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref }}
@@ -238,7 +238,7 @@ jobs:
             echo "- Desktop: \`${{ needs.deploy-desktop.result }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.plan.outputs.dry_run == 'true' && 'deploy-plan-production' || 'deploy-summary-production' }}
           path: deploy-summary/production.json

@@ -18,11 +18,15 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use super::schema::{
-    AgentCatalogAgent, AgentCatalogAuthContext, AgentCatalogDocument, AgentCatalogHarnessPins,
-    AgentCatalogModel, AgentCatalogModelControl,
+    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource, AgentCatalogAuthContext,
+    AgentCatalogDocument, AgentCatalogHarnessPins, AgentCatalogModel, AgentCatalogModelControl,
+    AgentCatalogPinTarget,
 };
 use super::sync::CatalogSyncService;
 use crate::domains::agents::auth::context::ActiveAuthContexts;
+use crate::domains::agents::installer::install_policy::{
+    PinOverrides, ResolvedPinSource, ResolvedPinTarget,
+};
 use crate::domains::agents::model::ModelCatalogStatus;
 
 /// Read surface over the active catalog held by [`CatalogSyncService`].
@@ -37,11 +41,9 @@ impl AgentCatalogService {
     }
 
     /// Catalog pin overrides for the installer (None when the kind is
-    /// unknown to the active catalog).
-    pub fn pin_overrides(
-        &self,
-        kind: &str,
-    ) -> Option<crate::domains::agents::installer::install_policy::PinOverrides> {
+    /// unknown to the active catalog). Carries both the version (drift) and
+    /// the resolved, fenced install source (materialization) per role.
+    pub fn pin_overrides(&self, kind: &str) -> Option<PinOverrides> {
         let active = self.active_catalog();
         let pins = active.pins(kind)?;
         // Placeholder pins ("unknown" — e.g. cursor pre manifest-provenance)
@@ -49,17 +51,61 @@ impl AgentCatalogService {
         let usable = |version: &str| {
             (!version.is_empty() && version != "unknown").then(|| version.to_string())
         };
-        Some(
-            crate::domains::agents::installer::install_policy::PinOverrides {
-                agent_process: usable(&pins.agent_process.version),
-                native: pins.native.as_ref().and_then(|pin| usable(&pin.version)),
-            },
-        )
+        Some(PinOverrides {
+            agent_process: usable(&pins.agent_process.version),
+            native: pins.native.as_ref().and_then(|pin| usable(&pin.version)),
+            agent_process_source: project_source(&pins.agent_process),
+            native_source: pins.native.as_ref().and_then(project_source),
+        })
     }
 
     pub fn active_catalog(&self) -> ActiveCatalog {
         ActiveCatalog::new(self.sync.active().document)
     }
+}
+
+/// Project a catalog artifact pin's resolved source (schema) into the
+/// installer-domain `ResolvedPinSource`. `None` when the pin has no source
+/// (legacy pre-lockfile pin) — the installer then uses the registry spec.
+fn project_source(pin: &AgentCatalogArtifactPin) -> Option<ResolvedPinSource> {
+    let targets = |targets: &BTreeMap<String, AgentCatalogPinTarget>| {
+        targets
+            .iter()
+            .map(|(platform, target)| {
+                (
+                    platform.clone(),
+                    ResolvedPinTarget {
+                        url: target.url.clone(),
+                        sha256: target.sha256.clone(),
+                        expected_binary: target.expected_binary.clone(),
+                    },
+                )
+            })
+            .collect()
+    };
+    Some(match pin.source.as_ref()? {
+        AgentCatalogArtifactSource::Binary { targets: t } => {
+            ResolvedPinSource::Binary { targets: targets(t) }
+        }
+        AgentCatalogArtifactSource::Archive { targets: t } => {
+            ResolvedPinSource::Archive { targets: targets(t) }
+        }
+        AgentCatalogArtifactSource::Npm { package, sha256 } => ResolvedPinSource::Npm {
+            package: package.clone(),
+            sha256: sha256.clone(),
+        },
+        AgentCatalogArtifactSource::Git {
+            repo,
+            git_ref,
+            package_subdir,
+            executable_relpath,
+        } => ResolvedPinSource::Git {
+            repo: repo.clone(),
+            git_ref: git_ref.clone(),
+            package_subdir: package_subdir.clone(),
+            executable_relpath: executable_relpath.clone(),
+        },
+    })
 }
 
 /// A pinned catalog snapshot: readers borrow from it for as long as they

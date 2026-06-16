@@ -11,10 +11,33 @@
       "displayName": "Claude",
       "harness": {
         "agentProcess": {
-          "version": "0.29.0"
+          "version": "0.29.0",
+          "source": {
+            "kind": "git",
+            "repo": "https://github.com/proliferate-ai/claude-agent-acp.git",
+            "gitRef": "3ff484e671de5fe9275d2e7596d683df06b99e14",
+            "executableRelpath": "node_modules/.bin/claude-agent-acp"
+          }
         },
         "native": {
-          "version": "2.1.170 (Claude Code)"
+          "version": "2.1.178",
+          "source": {
+            "kind": "binary",
+            "targets": {
+              "macos_arm64": {
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.178/darwin-arm64/claude",
+                "sha256": "473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309"
+              },
+              "macos_x64": {
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.178/darwin-x64/claude",
+                "sha256": "e6c5f5eec2b4d18f6234c3ba500e285f07a2e5ffb4c67d4ba0494c28c70dfe79"
+              },
+              "linux_x64": {
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.178/linux-x64/claude",
+                "sha256": "17ed1a983a49404c4673de286419a8fd6617c92440a2e0f789bcc413a3b14de1"
+              }
+            }
+          }
         }
       },
       "authContexts": [
@@ -842,10 +865,37 @@
       "displayName": "Codex",
       "harness": {
         "agentProcess": {
-          "version": "0.11.8"
+          "version": "0.11.8",
+          "source": {
+            "kind": "git",
+            "repo": "https://github.com/proliferate-ai/codex-acp.git",
+            "gitRef": "988bd156960d038104ae60e5bbbf5d190502a0f3",
+            "packageSubdir": "npm",
+            "executableRelpath": "node_modules/.bin/codex-acp"
+          }
         },
         "native": {
-          "version": "codex-cli 0.139.0"
+          "version": "rust-v0.140.0",
+          "source": {
+            "kind": "archive",
+            "targets": {
+              "macos_arm64": {
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.140.0/codex-aarch64-apple-darwin.tar.gz",
+                "sha256": "c81eaf1b4c9aee0e81e2b39dec1742a57b61be6c109f8811e7fcd41f55c2233d",
+                "expectedBinary": "codex-aarch64-apple-darwin"
+              },
+              "macos_x64": {
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.140.0/codex-x86_64-apple-darwin.tar.gz",
+                "sha256": "2bd0edf75fd1451425736bae41470c3b800fe8eb372c194a668434f9526df9f0",
+                "expectedBinary": "codex-x86_64-apple-darwin"
+              },
+              "linux_x64": {
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.140.0/codex-x86_64-unknown-linux-musl.tar.gz",
+                "sha256": "48e591964d4bbaab7c0433daed41c65ea8f152fc0f1dd2334a42e3dd322a4906",
+                "expectedBinary": "codex-x86_64-unknown-linux-musl"
+              }
+            }
+          }
         }
       },
       "authContexts": [
@@ -1561,7 +1611,27 @@
       "displayName": "Cursor",
       "harness": {
         "agentProcess": {
-          "version": "unknown"
+          "version": "2026.06.15",
+          "source": {
+            "kind": "archive",
+            "targets": {
+              "macos_arm64": {
+                "url": "https://downloads.cursor.com/lab/2026.06.15-03-48-54-da23e37/darwin/arm64/agent-cli-package.tar.gz",
+                "sha256": "9de9e9669a008ec670617b42413a9b04a1404bac2acf899f87e55a80aa51ff14",
+                "expectedBinary": "./dist-package/cursor-agent"
+              },
+              "macos_x64": {
+                "url": "https://downloads.cursor.com/lab/2026.06.15-03-48-54-da23e37/darwin/x64/agent-cli-package.tar.gz",
+                "sha256": "fa1636a2769809320d4755773e89a3c86b1fbb552bbe0ecd958bd544ee57c926",
+                "expectedBinary": "./dist-package/cursor-agent"
+              },
+              "linux_x64": {
+                "url": "https://downloads.cursor.com/lab/2026.06.15-03-48-54-da23e37/linux/x64/agent-cli-package.tar.gz",
+                "sha256": "c63cf8173606dedea5959d87917f64a729743cf7f8346cf8c7ac8cf68a86ac36",
+                "expectedBinary": "./dist-package/cursor-agent"
+              }
+            }
+          }
         }
       },
       "authContexts": [
@@ -2789,7 +2859,12 @@
       "displayName": "Gemini",
       "harness": {
         "agentProcess": {
-          "version": "0.45.3"
+          "version": "0.46.0",
+          "source": {
+            "kind": "npm",
+            "package": "@google/gemini-cli@0.46.0",
+            "sha256": "sha512-+HZtuuDKsL8mvOUWgK08GkrL1BQM4IplaSzxIjAM262FmJFp3Jo/zlHUq9ulRKcvx0agZ4KAzuj7jG9yIAxFBw=="
+          }
         }
       },
       "authContexts": [
@@ -3297,7 +3372,27 @@
       "displayName": "OpenCode",
       "harness": {
         "agentProcess": {
-          "version": "1.16.2"
+          "version": "1.17.7",
+          "source": {
+            "kind": "archive",
+            "targets": {
+              "macos_arm64": {
+                "url": "https://github.com/anomalyco/opencode/releases/download/v1.17.7/opencode-darwin-arm64.zip",
+                "sha256": "7a63aeb5a15b29da2681ac2b8c74d4cb3a64fa13b61198a3c7dc771243c23972",
+                "expectedBinary": "./opencode"
+              },
+              "macos_x64": {
+                "url": "https://github.com/anomalyco/opencode/releases/download/v1.17.7/opencode-darwin-x64.zip",
+                "sha256": "4953e7c3c8db8c623ea726d8ecb6657ba04806b7b4d906c078fc072fb172cfe0",
+                "expectedBinary": "./opencode"
+              },
+              "linux_x64": {
+                "url": "https://github.com/anomalyco/opencode/releases/download/v1.17.7/opencode-linux-x64.tar.gz",
+                "sha256": "60fe5a92dc9af64ec079348fedde17e12da6a867efe7e8353be8038480607924",
+                "expectedBinary": "./opencode"
+              }
+            }
+          }
         }
       },
       "authContexts": [

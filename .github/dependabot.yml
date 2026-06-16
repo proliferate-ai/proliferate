@@ -12,6 +12,19 @@ updates:
     labels:
       - "release:maintenance"
       - "area:release"
+    ignore:
+      # Expo SDK packages are version-locked to the installed Expo SDK and must be
+      # upgraded together via `expo install` during an SDK bump — never piecemeal by
+      # Dependabot (it proposes SDK-56 versions while apps/mobile is pinned to SDK 54,
+      # which fails "Repo shape checks"). See apps/mobile/package.json.
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      # Major upgrades are handled deliberately (they need manual migration work),
+      # not as routine auto-PRs — this is what stops the recurring major-bump churn.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-and-patch:
         update-types:
@@ -27,6 +40,18 @@ updates:
     labels:
       - "release:maintenance"
       - "area:release"
+    ignore:
+      # Major upgrades are handled deliberately, not as routine auto-PRs.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # 0.x crates with breaking changes that need a dedicated migration
+      # (RustCrypto digest 0.11 generic-array → hybrid-array; see #688/#689/#713).
+      - dependency-name: "hmac"
+        versions: [">=0.13.0"]
+      - dependency-name: "sha2"
+        versions: [">=0.11.0"]
+      - dependency-name: "rfd"
+        versions: [">=0.16.0"]
     groups:
       cargo-minor-and-patch:
         update-types:
@@ -42,6 +67,10 @@ updates:
     labels:
       - "release:maintenance"
       - "area:server"
+    ignore:
+      # Major upgrades are handled deliberately, not as routine auto-PRs.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       python-minor-and-patch:
         update-types:
@@ -56,6 +85,11 @@ updates:
     labels:
       - "release:maintenance"
       - "area:server"
+    ignore:
+      # Base-image major bumps must be verified by building/running the image,
+      # which PR CI doesn't do — handle as a deliberate upgrade.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions — workflow pinned actions
   - package-ecosystem: "github-actions"

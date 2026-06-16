@@ -10,7 +10,13 @@ from proliferate.main import create_app
 
 
 def _route_paths() -> set[str]:
-    return {getattr(route, "path", "") for route in create_app().router.routes}
+    # Resolve mounted paths via the OpenAPI schema rather than walking
+    # ``router.routes`` directly. Starlette >= 1.3 keeps included sub-routers as
+    # opaque ``_IncludedRouter`` objects whose nested paths no longer surface as
+    # top-level ``route.path`` values, so naive introspection silently misses
+    # every mounted route. ``openapi()`` reconstructs the full, prefix-aware paths
+    # the same way across Starlette versions.
+    return set(create_app().openapi()["paths"].keys())
 
 
 def _request(path: str = "/api/auth/web/github/start") -> Request:
