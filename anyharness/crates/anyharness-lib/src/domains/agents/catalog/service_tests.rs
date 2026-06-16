@@ -52,6 +52,40 @@ fn pins_surface_catalog_harness_versions() {
 }
 
 #[test]
+fn bundled_catalog_is_a_complete_lockfile() {
+    use super::schema::{AgentCatalogArtifactPin, AgentCatalogArtifactSource};
+
+    let sync = Arc::new(CatalogSyncService::from_bundled());
+    let catalog = AgentCatalogService::new(sync).active_catalog();
+
+    let check = |kind: &str, role: &str, pin: &AgentCatalogArtifactPin| {
+        let source = pin
+            .source
+            .as_ref()
+            .unwrap_or_else(|| panic!("{kind} {role} pin must carry a resolved source (lockfile)"));
+        if let AgentCatalogArtifactSource::Binary { targets }
+        | AgentCatalogArtifactSource::Archive { targets } = source
+        {
+            assert!(!targets.is_empty(), "{kind} {role} has no platform targets");
+            for (platform, target) in targets {
+                assert_eq!(
+                    target.sha256.len(),
+                    64,
+                    "{kind} {role} {platform} sha256 must be a full hash"
+                );
+            }
+        }
+    };
+
+    for agent in catalog.agents() {
+        check(&agent.kind, "agentProcess", &agent.harness.agent_process);
+        if let Some(native) = &agent.harness.native {
+            check(&agent.kind, "native", native);
+        }
+    }
+}
+
+#[test]
 fn models_intersect_availability_with_active_contexts() {
     let catalog = draft_catalog();
 
