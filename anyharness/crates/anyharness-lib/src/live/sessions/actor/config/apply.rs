@@ -473,9 +473,34 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
         }))?
         .into();
     let ext = acp::schema::ExtRequest::new(ACP_SET_SESSION_MODEL_METHOD, params);
-    conn.send_request(acp::AgentRequest::ExtMethodRequest(ext))
+    tracing::info!(
+        method = ACP_SET_SESSION_MODEL_METHOD,
+        native_session_id,
+        model_id = desired_model_id,
+        "[model-switch] sending session/set_model"
+    );
+    let response = match conn
+        .send_request(acp::AgentRequest::ExtMethodRequest(ext))
         .block_task()
-        .await?;
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::warn!(
+                native_session_id,
+                model_id = desired_model_id,
+                error = %error,
+                "[model-switch] agent rejected session/set_model"
+            );
+            return Err(error.into());
+        }
+    };
+    tracing::info!(
+        native_session_id,
+        model_id = desired_model_id,
+        response = %response,
+        "[model-switch] agent accepted session/set_model"
+    );
 
     startup_state.current_model_id = Some(desired_model_id.to_string());
     set_select_option_current_value_for_purpose(
