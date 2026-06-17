@@ -11,6 +11,10 @@ The plugin does not add a runtime dependency to Proliferate. It gives agents a p
 - Plugin eval cases in `evals/proliferate-workspace-operator/cases.jsonl`.
 - Privacy-safe measurement guidance for teams that want production plugin metrics.
 
+## Manifest Compatibility
+
+The Codex and Claude manifests use `skills: ./skills/`, which is resolved from the plugin root by the plugin manifest contract. The Codex manifest validates with the local plugin validator used for this contribution.
+
 ## Primary Workflows
 
 - Workspace readiness review.
@@ -32,7 +36,7 @@ Use this plugin directory directly from the repository when your harness support
 plugins/proliferate-workspace-operator
 ```
 
-For Telvine-backed distribution and metrics:
+For Telvine-backed distribution and metrics, the Telvine CLI is published as [`telvine` on npm](https://www.npmjs.com/package/telvine):
 
 ```bash
 npm i -g telvine
