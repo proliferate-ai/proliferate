@@ -1,0 +1,55 @@
+---
+name: proliferate-workspace-operator
+description: Operate Proliferate local and cloud agent workspaces with reproducible checks. Use this skill when an agent is asked to plan, build, review, or verify Proliferate workflows and needs plugin-specific acceptance criteria.
+---
+
+# Proliferate Agent Plugin
+
+This skill turns a broad agent request into a Proliferate-specific workflow with explicit verification evidence. It is intentionally operational: it should produce a plan, the expected artifacts, and plugin eval metadata that another maintainer can review.
+
+## Capabilities
+
+- Workspace setup.
+- Cloud/local agent routing.
+- Task handoff.
+- Result verification.
+
+## Workflow
+
+1. Workspace readiness review.
+2. Local-to-cloud handoff.
+3. Agent output acceptance review.
+4. Session metadata audit.
+
+## Required Output
+
+Return a concise implementation or review note with these sections:
+
+- `Scope`: the exact Proliferate workflow, repository area, and user-facing outcome.
+- `Inputs`: non-secret configuration, sample IDs, file paths, docs, or local commands needed to proceed.
+- `Plan`: ordered steps the agent should take, including where human approval is required.
+- `Verification`: commands, UI checks, fixtures, screenshots, traces, or logs that prove the plugin workflow behaved correctly.
+- `Plugin Eval Metadata`: the eval case id, expected pass criteria, and any safe metadata events to record.
+- `Risks`: unresolved assumptions, missing credentials, destructive operations, or compatibility concerns.
+
+## Acceptance Checks
+
+- Captures target workspace and execution mode.
+- Separates credentials from task instructions.
+- Requires artifact paths or URLs for outputs.
+- Records retry and escalation decisions.
+
+## Privacy And Telemetry Boundary
+
+Only emit metadata about plugin behavior, such as component name, outcome, duration bucket, harness name, and sanitized error class. Do not emit prompts, file contents, connector payloads, API tokens, request bodies, model outputs, user data, or production identifiers.
+
+## Optional Telvine Measurement
+
+Teams that publish this plugin through Telvine can measure adoption and eval outcomes without changing Proliferate runtime code:
+
+```bash
+npm i -g telvine
+telvine login
+telvine publish ./plugins/proliferate-workspace-operator
+telvine plugins metrics
+```
