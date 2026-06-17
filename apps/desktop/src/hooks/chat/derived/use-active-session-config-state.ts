@@ -1,4 +1,4 @@
-import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
+import { DEFAULT_MODEL_CONFIG_ID, getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
 import {
   pendingConfigChangesForSessionIntents,
 } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
@@ -81,13 +81,13 @@ export function useActiveSessionLaunchState(): {
   );
 
   const pendingModelId = useMemo(() => {
-    if (!slice.currentModelConfigId) {
-      return null;
-    }
-    return getPendingSessionConfigChange(
-      pendingConfigChanges,
-      slice.currentModelConfigId,
-    )?.value ?? null;
+    // Prefer the live model control's config id; fall back to the default
+    // "model" key so an optimistic switch made before the session exposes a
+    // model control (pending/not-yet-connected session) is still reflected.
+    const change =
+      getPendingSessionConfigChange(pendingConfigChanges, slice.currentModelConfigId)
+      ?? getPendingSessionConfigChange(pendingConfigChanges, DEFAULT_MODEL_CONFIG_ID);
+    return change?.value ?? null;
   }, [pendingConfigChanges, slice.currentModelConfigId]);
 
   const currentLaunchIdentity = useMemo<ActiveLaunchIdentity | null>(() => {

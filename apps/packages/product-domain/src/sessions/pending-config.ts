@@ -4,6 +4,12 @@ import type {
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
 
+// Fallback model config id used before a session exposes a live model control
+// (e.g. an optimistic, not-yet-connected session). Mirrors the server's
+// ACP_MODEL_COMPAT_CONFIG_ID so optimistic config intents written under this key
+// resolve consistently on the read side.
+export const DEFAULT_MODEL_CONFIG_ID = "model";
+
 export type PendingSessionConfigChangeStatus = "submitting" | "queued";
 
 export interface PendingSessionConfigChange {

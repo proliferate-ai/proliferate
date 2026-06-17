@@ -12,6 +12,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
+import { DEFAULT_MODEL_CONFIG_ID } from "@proliferate/product-domain/sessions/pending-config";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
@@ -71,9 +72,10 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       // Same-harness switch always keeps the session (decision 10). The
       // runtime accepts catalog-authorized values beyond the live option
       // list and falls back to relaunching the agent process under the same
-      // session when the harness has no live mechanism (gemini). "model" is
-      // the generic model config id when the session exposes no control.
-      void setActiveSessionConfigOption(scopedCurrentModelConfigId ?? "model", selection.modelId)
+      // session when the harness has no live mechanism (gemini).
+      // DEFAULT_MODEL_CONFIG_ID is the generic model config id when the session
+      // exposes no live control (e.g. an optimistic, not-yet-connected session).
+      void setActiveSessionConfigOption(scopedCurrentModelConfigId ?? DEFAULT_MODEL_CONFIG_ID, selection.modelId)
         .then(() => {
           setWorkspaceArrivalEvent(null);
         })
