@@ -12,6 +12,7 @@ const USER_PREFERENCE_KEYS = [
   "defaultLiveSessionControlValuesByAgentKind",
   "defaultOpenInTargetId",
   "branchPrefixType",
+  "defaultNewWorkspaceMode",
   "turnEndSoundEnabled",
   "turnEndSoundId",
   "transparentChromeEnabled",

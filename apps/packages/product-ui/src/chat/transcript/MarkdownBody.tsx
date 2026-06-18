@@ -192,9 +192,11 @@ export const MarkdownBody = memo(function MarkdownBody({
     "[&>ol+p]:mt-4",
     "[&>ul+p]:mt-4",
     // GFM task lists: drop the stray disc bullet and align the checkbox inline.
+    // Descendant selector (not `>input`) so it also matches loose lists where
+    // the checkbox sits inside a <p>; avoid flex so nested blocks still stack.
     "[&_ul.contains-task-list]:list-none [&_ul.contains-task-list]:pl-0",
-    "[&_li.task-list-item]:pl-0 [&_li.task-list-item]:flex [&_li.task-list-item]:items-start [&_li.task-list-item]:gap-2",
-    "[&_li.task-list-item>input]:mt-1 [&_li.task-list-item>input]:size-3.5 [&_li.task-list-item>input]:shrink-0 [&_li.task-list-item>input]:accent-link-foreground",
+    "[&_li.task-list-item]:pl-0",
+    "[&_li.task-list-item_input]:mr-2 [&_li.task-list-item_input]:size-3.5 [&_li.task-list-item_input]:align-middle [&_li.task-list-item_input]:accent-link-foreground",
     className,
   ].filter(Boolean).join(" ");
 
