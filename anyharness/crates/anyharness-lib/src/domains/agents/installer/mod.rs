@@ -4,7 +4,6 @@ pub mod install_policy;
 mod lock;
 pub(crate) mod managed_npm;
 pub mod manifest;
-mod native;
 mod npm;
 mod pinned;
 pub mod reconcile;

@@ -894,7 +894,8 @@
                 "sha256": "48e591964d4bbaab7c0433daed41c65ea8f152fc0f1dd2334a42e3dd322a4906",
                 "expectedBinary": "codex-x86_64-unknown-linux-musl"
               }
-            }
+            },
+            "args": []
           }
         }
       },
@@ -1630,7 +1631,10 @@
                 "sha256": "c63cf8173606dedea5959d87917f64a729743cf7f8346cf8c7ac8cf68a86ac36",
                 "expectedBinary": "./dist-package/cursor-agent"
               }
-            }
+            },
+            "args": [
+              "acp"
+            ]
           }
         }
       },
@@ -2863,7 +2867,10 @@
           "source": {
             "kind": "npm",
             "package": "@google/gemini-cli@0.46.0",
-            "sha256": "sha512-+HZtuuDKsL8mvOUWgK08GkrL1BQM4IplaSzxIjAM262FmJFp3Jo/zlHUq9ulRKcvx0agZ4KAzuj7jG9yIAxFBw=="
+            "sha256": "sha512-+HZtuuDKsL8mvOUWgK08GkrL1BQM4IplaSzxIjAM262FmJFp3Jo/zlHUq9ulRKcvx0agZ4KAzuj7jG9yIAxFBw==",
+            "args": [
+              "--acp"
+            ]
           }
         }
       },
@@ -3147,7 +3154,11 @@
           "source": {
             "kind": "npm",
             "package": "@xai-official/grok@0.2.54",
-            "sha256": "sha512-ULpC2TtWTAYAM7BCjt2pE4agkch/2YqdYyrBIR9LKVaiyvnzMOuuEcPxlmgY/9hqxEofB7MvYAp4LRb5BwkVkA=="
+            "sha256": "sha512-ULpC2TtWTAYAM7BCjt2pE4agkch/2YqdYyrBIR9LKVaiyvnzMOuuEcPxlmgY/9hqxEofB7MvYAp4LRb5BwkVkA==",
+            "args": [
+              "agent",
+              "stdio"
+            ]
           }
         }
       },
@@ -3396,7 +3407,10 @@
                 "sha256": "60fe5a92dc9af64ec079348fedde17e12da6a867efe7e8353be8038480607924",
                 "expectedBinary": "./opencode"
               }
-            }
+            },
+            "args": [
+              "acp"
+            ]
           }
         }
       },

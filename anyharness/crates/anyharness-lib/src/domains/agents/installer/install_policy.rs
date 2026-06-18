@@ -93,8 +93,8 @@ pub fn plan_artifact(facts: &ArtifactFacts, reinstall_requested: bool) -> Option
 /// specs when an active v2 catalog declares versions for this agent).
 ///
 /// The `*_source` fields carry the resolved, fenced install source from the
-/// lockfile. When present, the materializer downloads EXACTLY that (sha256
-/// verified) instead of consulting the registry install spec.
+/// lockfile. When present, the materializer installs EXACTLY that and never
+/// consults a registry install spec or fetches "latest".
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PinOverrides {
     pub agent_process: Option<String>,
@@ -104,8 +104,16 @@ pub struct PinOverrides {
 }
 
 /// Installer-domain mirror of `catalog::schema::AgentCatalogArtifactSource`
-/// (kept here so `installer/` does not depend on `catalog/` structs). The
-/// per-target `sha256` is the trust anchor enforced at download.
+/// (kept here so `installer/` does not depend on `catalog/` structs).
+///
+/// Integrity anchor per kind:
+/// - `Binary`/`Archive`: the per-target `sha256` is enforced at download — the
+///   url cannot fetch unintended bytes.
+/// - `Npm`: the exact `package@version` + npm's own registry-integrity check.
+///   The `sha256` (npm dist.integrity) is recorded provenance, not separately
+///   re-verified here.
+/// - `Git`: the commit SHA in `git_ref` is content-addressed (validation
+///   requires a full SHA, not a mutable ref).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedPinSource {
     Binary {
@@ -113,10 +121,12 @@ pub enum ResolvedPinSource {
     },
     Archive {
         targets: std::collections::BTreeMap<String, ResolvedPinTarget>,
+        args: Vec<String>,
     },
     Npm {
         package: String,
         sha256: Option<String>,
+        args: Vec<String>,
     },
     Git {
         repo: String,

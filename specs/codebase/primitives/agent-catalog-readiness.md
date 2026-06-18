@@ -66,10 +66,10 @@ Consequences:
 The supported AnyHarness agent input schemas are:
 
 ```text
-catalogs/agents/v1/catalog.json
-catalogs/agents/v1/schema.json
-catalogs/agents/v1/registry.json
-catalogs/agents/v1/registry.schema.json
+catalogs/agents/catalog.json          # the lockfile (probe-generated, source-pinned)
+catalogs/agents/schema.json
+catalogs/agents/registry.json         # trusted method/auth/launch + discovery config
+catalogs/agents/registry.schema.json
 ```
 
 The catalog document describes optimistic/static session choices:
@@ -180,12 +180,13 @@ anyharness-lib/src/domains/agents/
     credentials.rs            # plus auth-config/login modules (see agent-auth)
   installer/
     mod.rs
-    service.rs
-    agent_process.rs
-    downloads.rs
+    service.rs                  # require_source fence + orchestration
+    install_policy.rs           # ResolvedPinSource + effective_pin/effective_source
+    pinned.rs                   # fenced materializer: download EXACTLY the pin, sha-verify
+    agent_process.rs            # launcher generation + seed launcher regen
+    downloads.rs                # sha256-verified download/extract helpers
     lock.rs
     managed_npm.rs
-    native.rs
     npm.rs
     reconcile/
       mod.rs
@@ -460,6 +461,14 @@ Do not add:
 - credential detection inside `catalog/**`
 - install/update execution inside `catalog/**`
 - provider CLI mechanics inside `catalog/**`
+- **install-time latest resolution**: fetching a "latest version" URL, the ACP
+  `/latest` registry, or any network index from the install path. The catalog
+  pin's resolved `source` is the only install input; resolution happens at probe
+  time (`resolve-pins.mjs`), never at install.
+- **PATH adoption**: launching or installing a provider binary discovered on
+  `PATH` instead of the pinned managed artifact.
+- **non-pin install fallbacks**: `binary_hint` / npm-latest / registry-spec
+  fallbacks. A role with no resolved source pin is a hard error, not a fallback.
 
 ## Acceptance
 

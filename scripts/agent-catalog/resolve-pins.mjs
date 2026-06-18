@@ -48,6 +48,28 @@ const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
 const registry = JSON.parse(readFileSync(registryPath, "utf8"));
 const registryByKind = new Map(registry.agents.map((a) => [a.kind, a]));
 
+// Reuse sha256 already known (from the catalog being processed and/or a
+// `--reuse-from` reference, e.g. the previously-shipped lockfile) for unchanged
+// URLs, so re-runs and draft→bundled promotion don't re-download every artifact.
+const knownSha = new Map();
+const collectShas = (doc) => {
+  for (const agent of doc.agents ?? []) {
+    for (const pin of [agent.harness?.native, agent.harness?.agentProcess]) {
+      for (const t of Object.values(pin?.source?.targets ?? {})) {
+        if (t.url && t.sha256) knownSha.set(t.url, t.sha256);
+      }
+    }
+  }
+};
+collectShas(catalog);
+if (args.reuseFrom) {
+  try {
+    collectShas(JSON.parse(readFileSync(resolve(args.reuseFrom), "utf8")));
+  } catch (e) {
+    console.warn(`! --reuse-from ${args.reuseFrom} not read: ${e.message}`);
+  }
+}
+
 let acpRegistryCache = null;
 async function acpRegistry() {
   if (!acpRegistryCache) acpRegistryCache = await fetchJson(ACP_REGISTRY_URL);
@@ -109,7 +131,8 @@ async function resolveNative(kind, install) {
       const expectedBinary = install.expectedBinaryTemplate.replaceAll("{target}", target);
       targets[platKey] = { url, sha256: await shaFor(url), expectedBinary };
     }
-    return { version, source: { kind: "archive", targets } };
+    // A native CLI is invoked by the adapter, not directly — no ACP launch args.
+    return { version, source: { kind: "archive", targets, args: [] } };
   }
   throw new Error(`${kind}: native install kind '${install.kind}' is not resolvable`);
 }
@@ -142,11 +165,17 @@ async function resolveAgentProcess(kind, install, currentVersion) {
       const pkg = entry.distribution.npx.package; // already pinned `@scope/pkg@ver`
       return {
         version: entry.version ?? npmVersionOf(pkg) ?? currentVersion,
-        source: { kind: "npm", package: pkg, sha256: npmIntegrity(pkg) },
+        source: {
+          kind: "npm",
+          package: pkg,
+          sha256: npmIntegrity(pkg),
+          args: entry.distribution.npx.args ?? [],
+        },
       };
     }
     if (entry.distribution.binary) {
       const targets = {};
+      let args = [];
       for (const [acpKey, target] of Object.entries(entry.distribution.binary)) {
         const ourKey = ACP_PLATFORM_MAP[acpKey];
         if (!ourKey || !platforms.has(ourKey)) continue; // platform we do not ship
@@ -155,8 +184,9 @@ async function resolveAgentProcess(kind, install, currentVersion) {
           sha256: await shaFor(target.archive),
           expectedBinary: target.cmd,
         };
+        if (target.args) args = target.args; // ACP-mode args (consistent across platforms)
       }
-      return { version: entry.version ?? currentVersion, source: { kind: "archive", targets } };
+      return { version: entry.version ?? currentVersion, source: { kind: "archive", targets, args } };
     }
     throw new Error(`${kind}: ACP entry '${install.registryId}' has no npx/binary distribution`);
   }
@@ -203,6 +233,7 @@ async function githubLatestTag(versionedUrlTemplate) {
 }
 
 async function shaFor(url) {
+  if (knownSha.has(url)) return knownSha.get(url);
   if (noDownload) return "";
   process.stdout.write(`   ↓ ${url} … `);
   const res = await fetch(url, { redirect: "follow" });
@@ -233,6 +264,7 @@ function parseArgs(argv) {
     else if (a === "--agent") out.agent = argv[++i];
     else if (a === "--platforms") out.platforms = argv[++i];
     else if (a === "--catalog") out.catalog = argv[++i];
+    else if (a === "--reuse-from") out.reuseFrom = argv[++i];
     else if (a === "--registry") out.registry = argv[++i];
     else throw new Error(`unexpected arg ${a}`);
   }
