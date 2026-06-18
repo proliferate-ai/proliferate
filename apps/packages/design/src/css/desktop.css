@@ -1931,7 +1931,7 @@ body {
 }
 
 .proliferate-spinner {
-  animation: proliferate-spinner-rotate 1.1s linear infinite;
+  animation: proliferate-spinner-rotate 1.4s linear infinite;
   transform-origin: center;
   will-change: transform;
 }

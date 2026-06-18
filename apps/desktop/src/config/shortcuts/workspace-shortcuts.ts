@@ -1,6 +1,15 @@
 import type { ShortcutDef } from "./types";
 
 export const WORKSPACE_SHORTCUTS = {
+  newDefault: {
+    id: "workspace.new-default",
+    label: "⌘N",
+    nonMacLabel: "Ctrl+N",
+    description: "New workspace",
+    owner: "js",
+    match: { kind: "fixed-code", code: "KeyN", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
   newWorktree: {
     id: "workspace.new-worktree",
     label: "⌘⌥N",

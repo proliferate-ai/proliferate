@@ -121,6 +121,15 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     store.setThreadsCollapsed(!store.threadsCollapsed);
   });
 
+  useShortcutHandler("workspace.new-default", () => {
+    const mode = useUserPreferencesStore.getState().defaultNewWorkspaceMode;
+    if (mode === "local") {
+      actions.newLocalWorkspace.execute("shortcut");
+    } else {
+      actions.newWorktreeWorkspace.execute("shortcut");
+    }
+  });
+
   useShortcutHandler("workspace.new-local", () => {
     actions.newLocalWorkspace.execute("shortcut");
   });

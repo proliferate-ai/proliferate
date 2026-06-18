@@ -55,6 +55,9 @@ type MdTag =
   | "h1"
   | "h2"
   | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
   | "li"
   | "ol"
   | "p"
@@ -82,6 +85,12 @@ const STATIC_MARKDOWN_COMPONENTS = {
     mdHtmlElement("h2", "mb-2.5 mt-5 text-[20px] font-semibold leading-[1.25] text-foreground", props),
   h3: (props: MdElementProps) =>
     mdHtmlElement("h3", "mb-2.5 mt-5 text-[17px] font-semibold leading-[22px] text-foreground", props),
+  h4: (props: MdElementProps) =>
+    mdHtmlElement("h4", "mb-2 mt-4 text-[15px] font-semibold leading-[1.3] text-foreground", props),
+  h5: (props: MdElementProps) =>
+    mdHtmlElement("h5", "mb-1.5 mt-4 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground", props),
+  h6: (props: MdElementProps) =>
+    mdHtmlElement("h6", "mb-1.5 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground", props),
   p: (props: MdElementProps) =>
     mdHtmlElement("p", "mb-[0.6875rem] mt-0 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
   ul: (props: MdElementProps) =>
@@ -182,6 +191,12 @@ export const MarkdownBody = memo(function MarkdownBody({
     "[&_li>ul]:mt-2",
     "[&>ol+p]:mt-4",
     "[&>ul+p]:mt-4",
+    // GFM task lists: drop the stray disc bullet and align the checkbox inline.
+    // Descendant selector (not `>input`) so it also matches loose lists where
+    // the checkbox sits inside a <p>; avoid flex so nested blocks still stack.
+    "[&_ul.contains-task-list]:list-none [&>ul.contains-task-list]:pl-0",
+    "[&_li.task-list-item]:pl-0",
+    "[&_li.task-list-item_input]:mr-2 [&_li.task-list-item_input]:size-3.5 [&_li.task-list-item_input]:align-middle [&_li.task-list-item_input]:accent-link-foreground",
     className,
   ].filter(Boolean).join(" ");
 

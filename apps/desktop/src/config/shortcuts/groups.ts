@@ -30,6 +30,7 @@ export const SHORTCUT_GROUPS = [
   {
     title: "Workspaces",
     shortcutKeys: [
+      "newDefault",
       "newWorktree",
       "newLocal",
       "newCloud",

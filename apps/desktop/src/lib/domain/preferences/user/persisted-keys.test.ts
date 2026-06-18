@@ -26,4 +26,13 @@ describe("persisted user preference keys", () => {
     });
     expect(hasDeprecatedUserPreferenceKeys(persisted)).toBe(true);
   });
+
+  it("treats defaultNewWorkspaceMode as a known key, not a forward-compatible extra", () => {
+    const persisted = { defaultNewWorkspaceMode: "local" };
+
+    expect(pickLegacyUserPreferencesInput(persisted)).toEqual({
+      defaultNewWorkspaceMode: "local",
+    });
+    expect(getForwardCompatibleUserPreferenceExtras(persisted)).toEqual({});
+  });
 });

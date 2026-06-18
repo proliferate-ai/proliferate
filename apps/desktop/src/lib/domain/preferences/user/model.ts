@@ -13,6 +13,7 @@ import { DEFAULT_OPEN_IN_TARGET_ID } from "@/config/open-target-defaults";
 
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
 export type TurnEndSoundId = "ding" | "gong";
+export type DefaultNewWorkspaceMode = "worktree" | "local";
 
 export interface UserPreferences {
   themePreset: ThemePreset;
@@ -26,6 +27,7 @@ export interface UserPreferences {
   defaultLiveSessionControlValuesByAgentKind: DefaultLiveSessionControlValuesByAgentKind;
   defaultOpenInTargetId: string;
   branchPrefixType: BranchPrefixType;
+  defaultNewWorkspaceMode: DefaultNewWorkspaceMode;
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
@@ -50,6 +52,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   defaultLiveSessionControlValuesByAgentKind: {},
   defaultOpenInTargetId: DEFAULT_OPEN_IN_TARGET_ID,
   branchPrefixType: "none",
+  defaultNewWorkspaceMode: "worktree",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   transparentChromeEnabled: false,
@@ -74,6 +77,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   defaultLiveSessionControlValuesByAgentKind: {},
   defaultOpenInTargetId: DEFAULT_OPEN_IN_TARGET_ID,
   branchPrefixType: "none",
+  defaultNewWorkspaceMode: "worktree",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   // Existing persisted records keep the legacy transparent chrome default;

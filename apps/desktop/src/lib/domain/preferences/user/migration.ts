@@ -82,6 +82,14 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
+  if (
+    next.defaultNewWorkspaceMode !== "worktree"
+    && next.defaultNewWorkspaceMode !== "local"
+  ) {
+    next.defaultNewWorkspaceMode = PERSISTED_RECORD_BACKFILL.defaultNewWorkspaceMode;
+    changed = true;
+  }
+
   const sanitizedDefaultOpenInTargetId = typeof next.defaultOpenInTargetId === "string"
     ? next.defaultOpenInTargetId.trim()
     : "";

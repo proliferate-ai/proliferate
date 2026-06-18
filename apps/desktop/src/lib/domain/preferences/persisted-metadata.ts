@@ -58,6 +58,7 @@ export function selectPersistedUserPreferencesSlice(
       preferences.defaultLiveSessionControlValuesByAgentKind,
     defaultOpenInTargetId: preferences.defaultOpenInTargetId,
     branchPrefixType: preferences.branchPrefixType,
+    defaultNewWorkspaceMode: preferences.defaultNewWorkspaceMode,
     turnEndSoundEnabled: preferences.turnEndSoundEnabled,
     turnEndSoundId: preferences.turnEndSoundId,
     transparentChromeEnabled: preferences.transparentChromeEnabled,
