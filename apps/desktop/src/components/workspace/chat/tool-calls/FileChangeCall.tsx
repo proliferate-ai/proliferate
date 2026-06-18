@@ -53,10 +53,21 @@ export function FileChangeCall({
 }: FileChangeCallProps) {
   const hasDiff = !!patch;
   const actionLabel = getOperationLabel(operation, status);
-  const displayPath = newWorkspacePath || workspacePath || newPath || path;
+  // For a move, the chip the user sees as the diff target is the destination
+  // (the right side of the `old -> new` label). Open exactly that so the diff
+  // card's open action lands on the file the label names, not the pre-move path.
+  const isMove = operation === "move";
+  const resolvedWorkspacePath = isMove
+    ? (newWorkspacePath ?? workspacePath)
+    : (workspacePath ?? newWorkspacePath);
+  const displayPath = resolvedWorkspacePath
+    ?? (isMove ? (newPath ?? path) : (path ?? newPath))
+    ?? path;
   const fileReferenceActions = useFileReferenceActions({
     rawPath: displayPath,
-    workspacePath: newWorkspacePath || workspacePath,
+    workspacePath: resolvedWorkspacePath,
+    // These paths come straight from the tool call — they are authoritative.
+    authoritativePath: true,
   });
   const handleOpenFile = useCallback(() => {
     void fileReferenceActions.openPrimary();

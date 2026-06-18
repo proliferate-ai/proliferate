@@ -17,6 +17,14 @@ const shellMocks = vi.hoisted(() => ({
   revealInFinder: vi.fn(async () => undefined),
 }));
 
+const fuzzyMocks = vi.hoisted(() => ({
+  resolve: vi.fn(async (_input: unknown): Promise<string | null> => null),
+}));
+
+const viewerStoreMocks = vi.hoisted(() => ({
+  openTarget: vi.fn(),
+}));
+
 vi.mock("@/hooks/editor/workflows/use-open-in-default-editor", () => ({
   useOpenInDefaultEditor: () => ({
     defaultTarget: null,
@@ -39,11 +47,17 @@ vi.mock("@/lib/access/tauri/shell", () => ({
 }));
 
 vi.mock("@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
-  useFuzzyFileResolver: () => async () => null,
+  useFuzzyFileResolver: () => fuzzyMocks.resolve,
+}));
+
+vi.mock("@/stores/editor/workspace-viewer-tabs-store", () => ({
+  useWorkspaceViewerTabsStore: (selector: (state: { openTarget: typeof viewerStoreMocks.openTarget }) => unknown) =>
+    selector({ openTarget: viewerStoreMocks.openTarget }),
 }));
 
 afterEach(() => {
   vi.clearAllMocks();
+  fuzzyMocks.resolve.mockResolvedValue(null);
 });
 
 describe("useFileReferenceActions", () => {
@@ -59,6 +73,42 @@ describe("useFileReferenceActions", () => {
 
     expect(shellMocks.revealInFinder).toHaveBeenCalledWith("/Users/pablo/landing");
     expect(editorMocks.openInDefaultEditor).not.toHaveBeenCalled();
+  });
+
+  it("fuzzy-corrects a non-authoritative workspace path and reopens it", async () => {
+    fuzzyMocks.resolve.mockResolvedValue("src/real/App.tsx");
+    const { result } = renderHook(
+      () => useFileReferenceActions({ rawPath: "App.tsx", workspacePath: "App.tsx" }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    await act(async () => {
+      await result.current.openInSidebar();
+    });
+
+    expect(fuzzyMocks.resolve).toHaveBeenCalledTimes(1);
+    // Opened optimistically, then reopened on the corrected path.
+    expect(viewerStoreMocks.openTarget).toHaveBeenCalledTimes(2);
+  });
+
+  it("never fuzzy-corrects an authoritative tool-call path", async () => {
+    fuzzyMocks.resolve.mockResolvedValue("src/real/App.tsx");
+    const { result } = renderHook(
+      () => useFileReferenceActions({
+        rawPath: "App.tsx",
+        workspacePath: "App.tsx",
+        authoritativePath: true,
+      }),
+      { wrapper: workspaceWrapper("/repo") },
+    );
+
+    await act(async () => {
+      await result.current.openInSidebar();
+    });
+
+    expect(fuzzyMocks.resolve).not.toHaveBeenCalled();
+    // Opened exactly once, on the named path — no fuzzy reopen.
+    expect(viewerStoreMocks.openTarget).toHaveBeenCalledTimes(1);
   });
 });
 

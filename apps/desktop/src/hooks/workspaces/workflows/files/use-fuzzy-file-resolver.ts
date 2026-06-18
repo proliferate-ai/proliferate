@@ -38,16 +38,19 @@ export function useFuzzyFileResolver() {
         // High limit (server caps at 200): a basename can match many files, and
         // truncating the real one out would defeat the "already exists" guard
         // and risk correcting a valid path to the wrong file.
+        const limit = 200;
         const response = await searchWorkspaceFiles(
           connection,
           connection.anyharnessWorkspaceId,
           basename,
-          200,
+          limit,
         );
-        return pickFuzzyPathMatch(
-          targetPath,
-          (response.results ?? []).map((result) => result.path),
-        );
+        const candidatePaths = (response.results ?? []).map((result) => result.path);
+        // When the result set is capped, the exact file or a second suffix match
+        // may have been dropped — abstain rather than risk a wrong correction.
+        return pickFuzzyPathMatch(targetPath, candidatePaths, {
+          truncated: candidatePaths.length >= limit,
+        });
       } catch {
         return null;
       }

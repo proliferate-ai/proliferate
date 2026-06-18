@@ -1,29 +1,44 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FileChangeCall } from "./FileChangeCall";
 
-vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
-  useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
-    reference: {
-      rawPath,
-      path: rawPath,
-      line: null,
-      column: null,
-      absolutePath: `/repo/${rawPath}`,
-      workspacePath: rawPath,
-    },
-    openTargets: [],
-    canOpenInSidebar: true,
-    canOpenExternal: true,
-    copyPath: vi.fn(),
-    openInSidebar: vi.fn(),
-    openDefault: vi.fn(),
-    openPrimary: vi.fn(),
-    openWithTarget: vi.fn(),
-    reveal: vi.fn(),
-  }),
+const fileReferenceActionsMock = vi.hoisted(() => ({
+  calls: [] as Array<{ rawPath: string; workspacePath?: string | null; authoritativePath?: boolean }>,
 }));
+
+vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
+  useFileReferenceActions: (input: {
+    rawPath: string;
+    workspacePath?: string | null;
+    authoritativePath?: boolean;
+  }) => {
+    fileReferenceActionsMock.calls.push(input);
+    return {
+      reference: {
+        rawPath: input.rawPath,
+        path: input.rawPath,
+        line: null,
+        column: null,
+        absolutePath: `/repo/${input.rawPath}`,
+        workspacePath: input.rawPath,
+      },
+      openTargets: [],
+      canOpenInSidebar: true,
+      canOpenExternal: true,
+      copyPath: vi.fn(),
+      openInSidebar: vi.fn(),
+      openDefault: vi.fn(),
+      openPrimary: vi.fn(),
+      openWithTarget: vi.fn(),
+      reveal: vi.fn(),
+    };
+  },
+}));
+
+afterEach(() => {
+  fileReferenceActionsMock.calls.length = 0;
+});
 
 describe("FileChangeCall", () => {
   it("renders expanded edit diffs as file cards without an aggregate files-changed header", () => {
@@ -93,5 +108,27 @@ describe("FileChangeCall", () => {
 
     expect(html).toContain("Too large to render inline");
     expect(html).not.toContain("overflow-x-auto overflow-y-auto");
+  });
+
+  it("opens the move destination authoritatively (matches the label's target chip)", () => {
+    renderToStaticMarkup(
+      createElement(FileChangeCall, {
+        operation: "move",
+        path: "src/old/Foo.tsx",
+        workspacePath: "src/old/Foo.tsx",
+        basename: "Foo.tsx",
+        newPath: "src/new/Foo.tsx",
+        newWorkspacePath: "src/new/Foo.tsx",
+        newBasename: "Foo.tsx",
+        status: "completed",
+      }),
+    );
+
+    // The component resolves its own diff-card open target before rendering the
+    // label chips, so calls[0] is the diff card's actions hook.
+    const diffCardCall = fileReferenceActionsMock.calls[0];
+    expect(diffCardCall?.rawPath).toBe("src/new/Foo.tsx");
+    expect(diffCardCall?.workspacePath).toBe("src/new/Foo.tsx");
+    expect(diffCardCall?.authoritativePath).toBe(true);
   });
 });

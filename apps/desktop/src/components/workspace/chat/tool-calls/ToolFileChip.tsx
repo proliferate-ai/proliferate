@@ -28,6 +28,8 @@ export function ToolFileChip({
       basename={basename}
       label={basename}
       workspacePath={workspacePath}
+      // The tool call named this exact file — never fuzzy-correct it.
+      authoritativePath
       variant="chip"
     />
   );

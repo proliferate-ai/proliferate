@@ -18,11 +18,19 @@ import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-ta
 interface UseFileReferenceActionsInput {
   rawPath: string;
   workspacePath?: string | null;
+  /**
+   * When the path comes from an authoritative source (a tool call that named the
+   * exact file it touched), skip the fuzzy backstop entirely: there is no
+   * ambiguity to correct, and a fuzzy "correction" would only risk opening a
+   * different same-basename file than the one the chip names.
+   */
+  authoritativePath?: boolean;
 }
 
 export function useFileReferenceActions({
   rawPath,
   workspacePath,
+  authoritativePath = false,
 }: UseFileReferenceActionsInput) {
   const openTarget = useWorkspaceViewerTabsStore((state) => state.openTarget);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -77,10 +85,15 @@ export function useFileReferenceActions({
       }
     };
     // Open optimistically so the common (correct-path) case has zero latency.
-    // Then, best-effort and non-blocking, correct a partial/abbreviated path
-    // and re-open if it actually pointed elsewhere (the viewer would otherwise
-    // just show "file not found").
     openViewer(reference.workspacePath);
+    // Authoritative tool-call paths name the exact file — never second-guess
+    // them with the fuzzy backstop.
+    if (authoritativePath) {
+      return;
+    }
+    // Otherwise, best-effort and non-blocking, correct a partial/abbreviated
+    // path and re-open if it actually pointed elsewhere (the viewer would
+    // otherwise just show "file not found").
     const corrected = await fuzzyResolveFilePath({
       workspacePath: reference.workspacePath,
       materializedWorkspaceId,
@@ -90,6 +103,7 @@ export function useFileReferenceActions({
     }
   }, [
     activateViewerTarget,
+    authoritativePath,
     fuzzyResolveFilePath,
     openTarget,
     reference.workspacePath,
