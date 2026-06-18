@@ -1,4 +1,8 @@
-import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
+import {
+  getPendingSessionConfigChange,
+  reconcilePendingConfigChanges,
+  type PendingSessionConfigChanges,
+} from "@proliferate/product-domain/sessions/pending-config";
 import {
   pendingConfigChangesForSessionIntents,
 } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
@@ -149,6 +153,7 @@ export function useActiveSessionConfigState() {
       materializedSessionId: entry?.materializedSessionId ?? null,
       modeId: entry?.modeId ?? null,
       workspaceId: entry?.workspaceId ?? null,
+      liveConfig: entry?.liveConfig ?? null,
       normalizedControls: entry?.liveConfig?.normalizedControls ?? null,
       directoryPendingConfigChanges: normalizeEmptyPendingConfigChanges(
         entry?.pendingConfigChanges,
@@ -157,11 +162,21 @@ export function useActiveSessionConfigState() {
   }));
   const stableNormalizedControls = useStableNormalizedControls(slice.normalizedControls);
   const pendingConfigChanges = useMemo(
-    () => mergePendingConfigChanges(
-      slice.directoryPendingConfigChanges,
-      intentPendingConfigChanges,
-    ),
-    [intentPendingConfigChanges, slice.directoryPendingConfigChanges],
+    () =>
+      // Release an optimistic change as soon as the authoritative live config
+      // already reflects its value. This keeps optimism through `accepted` (so a
+      // real switch never reverts to the not-yet-updated value mid-flight) while
+      // immediately clearing no-op switches (NoChange / already-current), which
+      // emit no config_option_update and would otherwise leave the optimistic
+      // value stuck forever.
+      reconcilePendingConfigChanges(
+        slice.liveConfig,
+        mergePendingConfigChanges(
+          slice.directoryPendingConfigChanges,
+          intentPendingConfigChanges,
+        ),
+      ).pendingConfigChanges,
+    [intentPendingConfigChanges, slice.directoryPendingConfigChanges, slice.liveConfig],
   );
   return {
     ...slice,
