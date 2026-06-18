@@ -1,6 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
+import { useRunningAgentCount } from "@/hooks/app/lifecycle/use-running-agent-count";
 
 export function UpdateRestartDialog() {
   const {
@@ -8,8 +9,21 @@ export function UpdateRestartDialog() {
     availableVersion,
     restartPromptOpen,
     closeRestartPrompt,
+    scheduleRestartWhenIdle,
     restartNow,
   } = useUpdater();
+  const runningCount = useRunningAgentCount();
+
+  const installed = availableVersion
+    ? `Proliferate ${availableVersion} is installed.`
+    : "The update is installed.";
+  const hasRunning = runningCount > 0;
+  const runningLabel = runningCount === 1
+    ? "1 session is running"
+    : `${runningCount} sessions are running`;
+  const stopClause = runningCount === 1
+    ? "restarting will stop it."
+    : "restarting will stop them.";
 
   return (
     <ModalShell
@@ -17,47 +31,38 @@ export function UpdateRestartDialog() {
       onClose={closeRestartPrompt}
       title="Restart to finish updating"
       showCloseButton={false}
-      sizeClassName="max-w-[420px]"
-      overlayClassName="bg-black/70"
+      sizeClassName="max-w-[440px]"
       panelClassName="!rounded-lg border-border/80 bg-card shadow-floating-dark"
-      bodyClassName="px-5 pb-0 pt-0"
-      footerClassName="flex shrink-0 items-center justify-end gap-2 px-5 pb-4 pt-5"
-      headerContent={(
-        <div>
-          <h2 className="text-base font-medium leading-6 text-foreground">
-            Restart to finish updating
-          </h2>
-          <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
-            {availableVersion
-              ? `Proliferate ${availableVersion} is installed and ready.`
-              : "Proliferate is installed and ready."}
-          </p>
-        </div>
-      )}
+      bodyClassName="px-5 pb-5 pt-0"
+      footerClassName="flex shrink-0 items-center justify-end gap-2 px-5 pb-5 pt-0"
       footer={(
         <>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-[34px] px-3.5 text-[13px]"
-            onClick={closeRestartPrompt}
-          >
+          <Button variant="ghost" size="sm" onClick={closeRestartPrompt}>
             Later
           </Button>
           <Button
-            variant="primary"
+            variant={hasRunning ? "secondary" : "primary"}
             size="sm"
-            className="h-[34px] px-4 text-[13px]"
             onClick={() => void restartNow()}
           >
             Restart now
           </Button>
+          {hasRunning ? (
+            <Button variant="primary" size="sm" onClick={scheduleRestartWhenIdle}>
+              Restart when they finish
+            </Button>
+          ) : null}
         </>
       )}
     >
-      <p className="text-[13px] leading-[1.55] text-muted-foreground">
-        Restarting closes Proliferate and reopens on the new version. Anything running locally
-        will stop, so finish in-progress work first.
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {hasRunning ? (
+          <>
+            {installed} <span className="text-foreground">{runningLabel}</span> — {stopClause}
+          </>
+        ) : (
+          `${installed} It’s ready to use.`
+        )}
       </p>
     </ModalShell>
   );

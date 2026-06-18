@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { X } from "@proliferate/ui/icons";
+import { Spinner, X } from "@proliferate/ui/icons";
 import { useUpdater, type UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
@@ -41,36 +41,21 @@ export function UpdateNotificationCard() {
   }
 
   const card = updateCardPresentation(phase, availableVersion);
-  const canDismiss = phase !== "downloading";
+  const isDownloading = phase === "downloading";
 
   return (
     <aside
       aria-label={card.ariaLabel}
-      className="relative w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-border/80 bg-card px-3 py-2.5 text-sm text-card-foreground shadow-floating-dark animate-toast-in"
+      className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground shadow-floating-dark animate-toast-in"
     >
-      {canDismiss ? (
-        <Button
-          type="button"
-          variant="unstyled"
-          size="unstyled"
-          aria-label="Dismiss update notification"
-          className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-          onClick={() => setDismissedKey(visibleKey)}
-        >
-          <X className="size-3" />
-        </Button>
-      ) : null}
-
-      <div className={`${canDismiss ? "pr-7" : ""}`}>
-        <h2 className="select-text truncate text-[13px] font-medium leading-5 text-card-foreground">
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate text-[13px] font-medium leading-5 text-card-foreground">
           {card.title}
         </h2>
         <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
           {card.description}
         </p>
-      </div>
 
-      {phase !== "downloading" ? (
         <div className="mt-2 flex items-center justify-end gap-2">
           <Button
             type="button"
@@ -85,7 +70,8 @@ export function UpdateNotificationCard() {
             type="button"
             variant="primary"
             size="sm"
-            className="h-7 px-2.5 text-xs"
+            className="h-7 gap-1.5 px-2.5 text-xs"
+            disabled={isDownloading}
             onClick={() => {
               if (phase === "available") {
                 void downloadUpdate();
@@ -96,10 +82,22 @@ export function UpdateNotificationCard() {
               }
             }}
           >
+            {isDownloading ? <Spinner className="size-3" /> : null}
             {card.actionLabel}
           </Button>
         </div>
-      ) : null}
+      </div>
+
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        aria-label="Dismiss update notification"
+        className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+        onClick={() => setDismissedKey(visibleKey)}
+      >
+        <X className="size-3.5" />
+      </Button>
     </aside>
   );
 }

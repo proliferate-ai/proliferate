@@ -16,6 +16,7 @@ interface UpdaterState {
   errorMessage: string | null;
   downloadProgress: number | null;
   restartPromptOpen: boolean;
+  restartWhenIdle: boolean;
   _updateHandle: unknown | null;
 
   setPhase: (phase: UpdaterPhase) => void;
@@ -25,6 +26,7 @@ interface UpdaterState {
   setError: (message: string) => void;
   setChecked: (timestamp: string) => void;
   setRestartPromptOpen: (open: boolean) => void;
+  setRestartWhenIdle: (armed: boolean) => void;
   reset: () => void;
 }
 
@@ -35,6 +37,7 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
   errorMessage: null,
   downloadProgress: null,
   restartPromptOpen: false,
+  restartWhenIdle: false,
   _updateHandle: null,
 
   setPhase: (phase) => set({ phase, errorMessage: null, restartPromptOpen: false }),
@@ -46,11 +49,14 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
       _updateHandle: handle,
       errorMessage: null,
       restartPromptOpen: false,
+      restartWhenIdle: false,
     }),
 
   setDownloadProgress: (progress) => set({ downloadProgress: progress }),
 
-  setReady: () => set({ phase: "ready", downloadProgress: null, restartPromptOpen: true }),
+  // Download finished; the new version is installed on disk. We do NOT auto-open the
+  // restart confirm — the pill + toast prompt, and the confirm opens on explicit click.
+  setReady: () => set({ phase: "ready", downloadProgress: null, restartPromptOpen: false }),
 
   setError: (message) =>
     set({
@@ -64,6 +70,8 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
 
   setRestartPromptOpen: (open) => set({ restartPromptOpen: open }),
 
+  setRestartWhenIdle: (armed) => set({ restartWhenIdle: armed }),
+
   reset: () =>
     set({
       phase: "idle",
@@ -71,6 +79,7 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
       errorMessage: null,
       downloadProgress: null,
       restartPromptOpen: false,
+      restartWhenIdle: false,
       _updateHandle: null,
     }),
 }));

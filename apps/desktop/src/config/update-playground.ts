@@ -78,7 +78,7 @@ export const UPDATE_PREVIEW_STATES: UpdatePreviewState[] = [
     version: null,
     currentVersion: "0.1.22",
     progress: null,
-    checkedAt: "6 hours ago",
+    checkedAt: "12 minutes ago",
     title: "Could not check for updates",
     description: "The desktop updater could not reach the release feed.",
     detail: "Try again when the network is available.",

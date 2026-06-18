@@ -23,6 +23,28 @@ export function isDevUpdaterMockSupported(): boolean {
   return import.meta.env.DEV && typeof window !== "undefined";
 }
 
+let envSeedApplied = false;
+
+// Dev convenience: boot straight into a forced updater phase via
+// `VITE_PROLIFERATE_UPDATER_MOCK=available|downloading|ready` (e.g. when running `pdev`),
+// so the real pill / toast / confirm can be exercised without the playground. Runs once and
+// never clobbers an existing mock (e.g. one the playground set).
+export function seedDevUpdaterMockFromEnv(): void {
+  if (!isDevUpdaterMockSupported() || envSeedApplied) {
+    return;
+  }
+  envSeedApplied = true;
+
+  const phase = import.meta.env.VITE_PROLIFERATE_UPDATER_MOCK?.trim();
+  if (!isDevUpdaterMockPhase(phase)) {
+    return;
+  }
+  if (window.localStorage.getItem(DEV_UPDATER_MOCK_KEY)) {
+    return;
+  }
+  writeDevUpdaterMock(normalizeDevUpdaterMock(phase));
+}
+
 export function readDevUpdaterMock(): DevUpdaterMockState | null {
   if (!isDevUpdaterMockSupported()) {
     return null;
