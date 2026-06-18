@@ -29,15 +29,19 @@ use super::{
 };
 
 /// Resolve steps only — gather the durable facts, then let the pure policy in
-/// `launch_policy` pick the strategy. The parent lookup keeps today's gating
-/// (only fork children without their own native id pay for it).
+/// `launch_policy` pick the strategy. The parent lookup is gated: a fork child
+/// needs its parent's native id whenever it has not yet run its own turn
+/// (`last_prompt_at` unset) — either because it never had a native id, or
+/// because its eagerly-recorded one is process-local and may be dead after a
+/// cold restart-before-first-prompt. A fork child that has already run keeps
+/// its durable native id and skips the lookup.
 pub(super) fn choose_session_startup_strategy(
     record: &SessionRecord,
     session_store: &SessionStore,
 ) -> anyhow::Result<SessionStartupStrategy> {
     let is_fork_child =
         session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?;
-    let fork_parent_native_session_id = if is_fork_child && record.native_session_id.is_none() {
+    let fork_parent_native_session_id = if is_fork_child && record.last_prompt_at.is_none() {
         session_store
             .find_parent_by_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?
             .map(|parent| parent.native_session_id)

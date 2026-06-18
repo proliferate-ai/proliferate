@@ -470,7 +470,10 @@ fn choose_startup_strategy_keeps_non_claude_agents_on_native_load_path() {
 }
 
 #[test]
-fn choose_startup_strategy_loads_fork_children_without_fresh_fallback() {
+fn choose_startup_strategy_loads_started_fork_children_without_fresh_fallback() {
+    // A fork child that has already run its own turn (`last_prompt_at` set) has
+    // a durable native transcript; load it with no fallback and skip the parent
+    // lookup.
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -482,6 +485,7 @@ fn choose_startup_strategy_loads_fork_children_without_fresh_fallback() {
     let mut child = session_record("claude");
     child.id = "fork-child".to_string();
     child.native_session_id = Some("fork-native".to_string());
+    child.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
     let link = link_record(
         "fork-link",
         SessionLinkRelation::Fork,
@@ -498,6 +502,46 @@ fn choose_startup_strategy_loads_fork_children_without_fresh_fallback() {
     assert_eq!(
         strategy,
         SessionStartupStrategy::LoadNativeNoFallback("fork-native".to_string())
+    );
+}
+
+#[test]
+fn choose_startup_strategy_reforks_zero_turn_fork_child_with_native_id() {
+    // The bug case end-to-end through the IO layer: a fork child with an
+    // eagerly-recorded native id but no first prompt resolves the parent native
+    // id (widened gating) and re-forks instead of issuing a dead no-fallback
+    // load.
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut parent = session_record("claude");
+    parent.id = "parent-session".to_string();
+    parent.native_session_id = Some("parent-native".to_string());
+    store.insert(&parent).expect("insert parent");
+
+    let mut child = session_record("claude");
+    child.id = "fork-child".to_string();
+    child.native_session_id = Some("stale-fork-native".to_string());
+    child.last_prompt_at = None;
+    let link = link_record(
+        "fork-link",
+        SessionLinkRelation::Fork,
+        "parent-session",
+        "fork-child",
+    );
+    store
+        .insert_session_with_link(&child, &link)
+        .expect("insert fork child and link");
+
+    let strategy =
+        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
+
+    assert_eq!(
+        strategy,
+        SessionStartupStrategy::ForkFromNative {
+            parent_native_session_id: "parent-native".to_string()
+        }
     );
 }
 

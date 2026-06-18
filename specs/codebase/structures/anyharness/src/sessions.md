@@ -258,6 +258,22 @@ Fork invariants:
 - adapters whose fork ids are process-local until first prompt, such as Claude,
   start the child actor with `fork_from_native`; that child actor calls ACP
   `session/fork` from the parent native id and owns the resulting live fork
+- a process-local fork id only becomes durable (reloadable via `load_session`)
+  once the child has run its own first turn. Until then — i.e. while the child's
+  `last_prompt_at` is unset — startup re-forks from the parent
+  (`fork_from_native`) rather than loading the child's recorded native id, even
+  if one was eagerly persisted at fork creation. Loading it after a cold
+  restart-before-first-prompt returns `Resource not found` and, with no
+  fallback, bricks the session. Once `last_prompt_at` is set the child loads its
+  own native id with no fallback (re-forking would drop the child's own turns).
+  If a zero-turn child cannot resolve a parent native id, it falls back to its
+  own (possibly stale) native id rather than failing the launch. This decision
+  keys on `last_prompt_at`, not on `turn_started`: the transcript snapshot below
+  copies the parent's `turn_started` events into the child, so that signal is
+  always set for forks. Known limitation: re-fork is tip-only (see below), so a
+  zero-turn child re-forked after the parent advanced sees the parent's current
+  tip, not its frozen snapshot — strictly better than the prior permanent
+  failure; full fidelity needs ACP message-indexed fork, which is unavailable.
 - for adapters that cannot replay the forked transcript through child
   `load_session`, AnyHarness snapshots the parent's durable `session_events`
   into the child before startup and appends child events after that prefix
