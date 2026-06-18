@@ -101,6 +101,24 @@ function formatGptModelId(modelId: string): string | null {
   );
 }
 
+function formatGeminiModelId(modelId: string): string | null {
+  const match = /^gemini-(\d+(?:\.\d+)?)-(.+)$/.exec(modelId);
+  if (!match) {
+    return null;
+  }
+
+  const [, version, suffix = ""] = match;
+  const suffixLabel = suffix
+    .split("-")
+    .filter(Boolean)
+    .map(titleCaseToken)
+    .join(" ");
+
+  return normalizeWhitespace(
+    `Gemini ${version}${suffixLabel ? ` ${suffixLabel}` : ""}`,
+  );
+}
+
 function formatClaudeModelId(modelId: string): string | null {
   const match = /claude-([a-z]+)-(\d)-(\d)(?:-[\d-]+)?/.exec(modelId);
   if (!match) {
@@ -156,7 +174,7 @@ export function resolveModelDisplayName(args: {
   }
 
   if (preferKnownAlias) {
-    const formatted = formatClaudeModelId(modelId);
+    const formatted = formatClaudeModelId(modelId) ?? formatGeminiModelId(modelId);
     if (formatted) {
       return withContextHint(formatted, sourceLabels);
     }
@@ -179,5 +197,6 @@ export function resolveModelDisplayName(args: {
   }
 
   return formatGptModelId(modelId)
-    ?? formatClaudeModelId(modelId);
+    ?? formatClaudeModelId(modelId)
+    ?? formatGeminiModelId(modelId);
 }

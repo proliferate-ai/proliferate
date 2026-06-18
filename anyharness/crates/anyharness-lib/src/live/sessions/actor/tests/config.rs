@@ -277,11 +277,12 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 }
 
 #[test]
-fn direct_model_setter_is_permanently_disabled() {
-    // set_session_model was removed from ACP in 0.14; the setter stub always
-    // returns NotApplied. should_apply_model_via_direct_setter must always return
-    // false so callers reject model requests rather than silently accepting them.
-    let startup_state = SessionStartupState {
+fn direct_model_setter_engages_only_without_live_model_control() {
+    // Harnesses that report no live model control (ACP 0.14 drops the legacy
+    // models block, so Gemini surfaces neither a model config option nor
+    // available_models) route a switch through the legacy `session/set_model`
+    // ext call; the agent is the sole authority on validity.
+    let no_model_control = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
         config_options: Vec::new(),
@@ -289,13 +290,23 @@ fn direct_model_setter_is_permanently_disabled() {
         available_models: Vec::new(),
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
-
-    assert!(!should_apply_model_via_direct_setter(
-        &startup_state,
-        "sonnet"
+    assert!(should_apply_model_via_direct_setter(
+        &no_model_control,
+        "gemini-2.5-pro"
     ));
+
+    // When a live model list IS present, membership is enforced upstream — the
+    // direct setter must not override it.
+    let with_model_control = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: Vec::new(),
+        current_model_id: Some("sonnet".to_string()),
+        available_models: session_model_options(&["sonnet", "haiku"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
     assert!(!should_apply_model_via_direct_setter(
-        &startup_state,
+        &with_model_control,
         "opus"
     ));
 }

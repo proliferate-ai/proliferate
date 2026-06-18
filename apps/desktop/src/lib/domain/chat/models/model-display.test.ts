@@ -94,6 +94,34 @@ describe("resolveModelDisplayName", () => {
       }),
     ).toBe("GPT 5.5");
   });
+
+  it("derives a Gemini label even when the catalog label is the raw id", () => {
+    // The catalog ships "Gemini-2.5-Pro", which lowercases to the model id and
+    // would be discarded as a raw label; the formatter must still produce a name.
+    expect(
+      resolveModelDisplayName({
+        agentKind: "gemini",
+        modelId: "gemini-2.5-pro",
+        sourceLabels: ["Gemini-2.5-Pro"],
+        preferKnownAlias: true,
+      }),
+    ).toBe("Gemini 2.5 Pro");
+  });
+
+  it("formats Gemini preview and flash variants", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "gemini",
+        modelId: "gemini-3-pro-preview",
+      }),
+    ).toBe("Gemini 3 Pro Preview");
+    expect(
+      resolveModelDisplayName({
+        agentKind: "gemini",
+        modelId: "gemini-2.5-flash",
+      }),
+    ).toBe("Gemini 2.5 Flash");
+  });
 });
 
 describe("shouldHideModel", () => {

@@ -436,25 +436,93 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible_wi
     Ok(ConfigApplyOutcome::AppliedAuthoritative)
 }
 
+/// Wire method for the legacy `session/set_model` RPC. ACP 0.14 dropped the
+/// typed `SetSessionModelRequest`, but harnesses that predate the
+/// model-as-config-option migration (e.g. Gemini CLI, via its
+/// `unstable_setSessionModel` handler) still listen on this method. We reach it
+/// through ACP's extension-method channel: the method string is serialized
+/// verbatim, so the lack of a `_` prefix (which only gates *inbound* ext
+/// routing) is irrelevant on the outbound path.
+const ACP_SET_SESSION_MODEL_METHOD: &str = "session/set_model";
+
+/// Switch the model on a session whose harness exposes no `model` config option
+/// (so `set_session_config_option` has no target). Mirrors
+/// [`apply_mode_via_direct_setter_legacy`], but the typed request was removed in
+/// ACP 0.14, so we send the legacy `session/set_model` as an extension method.
+/// The agent is the sole authority: a rejection comes back as an error and
+/// surfaces cleanly (the session stays Idle, the connection intact).
 pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
-    _conn: &acp::ConnectionTo<acp::Agent>,
-    _native_session_id: &str,
-    _startup_state: &mut SessionStartupState,
-    _desired_model_id: &str,
+    conn: &acp::ConnectionTo<acp::Agent>,
+    native_session_id: &str,
+    startup_state: &mut SessionStartupState,
+    desired_model_id: &str,
 ) -> anyhow::Result<ConfigApplyOutcome> {
-    // set_session_model was removed from ACP in 0.14; model selection is now
-    // config-option-only via set_session_config_option.
-    Ok(ConfigApplyOutcome::NotApplied)
+    if startup_state.current_model_id.as_deref() == Some(desired_model_id) {
+        return Ok(ConfigApplyOutcome::NoChange);
+    }
+
+    if !should_apply_model_via_direct_setter(startup_state, desired_model_id) {
+        return Ok(ConfigApplyOutcome::NotApplied);
+    }
+
+    // Params mirror acp.SetSessionModelRequest: { sessionId, modelId }.
+    let params: Arc<serde_json::value::RawValue> =
+        serde_json::value::to_raw_value(&serde_json::json!({
+            "sessionId": native_session_id,
+            "modelId": desired_model_id,
+        }))?
+        .into();
+    let ext = acp::schema::ExtRequest::new(ACP_SET_SESSION_MODEL_METHOD, params);
+    tracing::info!(
+        method = ACP_SET_SESSION_MODEL_METHOD,
+        native_session_id,
+        model_id = desired_model_id,
+        "[model-switch] sending session/set_model"
+    );
+    let response = match conn
+        .send_request(acp::AgentRequest::ExtMethodRequest(ext))
+        .block_task()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::warn!(
+                native_session_id,
+                model_id = desired_model_id,
+                error = %error,
+                "[model-switch] agent rejected session/set_model"
+            );
+            return Err(error.into());
+        }
+    };
+    tracing::info!(
+        native_session_id,
+        model_id = desired_model_id,
+        response = %response,
+        "[model-switch] agent accepted session/set_model"
+    );
+
+    startup_state.current_model_id = Some(desired_model_id.to_string());
+    set_select_option_current_value_for_purpose(
+        &mut startup_state.config_options,
+        ConfigPurpose::Model,
+        desired_model_id,
+    );
+
+    Ok(ConfigApplyOutcome::AppliedAuthoritative)
 }
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
-    _startup_state: &SessionStartupState,
+    startup_state: &SessionStartupState,
     _desired_model_id: &str,
 ) -> bool {
-    // set_session_model was removed in ACP 0.14; available_models is always empty
-    // and the setter stub returns NotApplied. Always return false so callers reject
-    // model requests that have no config-option target rather than silently accepting.
-    false
+    // Attempt the legacy `session/set_model` only when the harness reports no live
+    // model control at all. ACP 0.14 drops the legacy models block, so Gemini-style
+    // harnesses surface neither a `model` config option nor `available_models` — the
+    // write cannot be gated locally, and the agent is the sole authority on validity.
+    // When a live model list IS present, membership is enforced upstream; don't
+    // override that.
+    !startup_state.has_direct_model_control()
 }
 
 pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legacy(
