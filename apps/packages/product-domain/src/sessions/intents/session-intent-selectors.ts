@@ -310,11 +310,19 @@ function pendingConfigChangeFromIntent(
       mutationId: Number.NaN,
     };
   }
-  if (intent.status === "accepted" && intent.applyState === "queued") {
+  // Hold the optimistic value through `accepted` (the HTTP mutation has
+  // returned) until the authoritative `config_option_update` event transitions
+  // this intent to `reconciled`. Clearing at `accepted+applied` instead briefly
+  // reverts the control to the not-yet-updated server value — the "switch lands
+  // one behind" off-by-one. The same SSE event that reconciles the intent also
+  // updates the directory `currentValue` (stream-patch), so the hand-off has no
+  // gap, and the intent can't stick: reconcile only fires once the authoritative
+  // value matches the requested one.
+  if (intent.status === "accepted") {
     return {
       rawConfigId: intent.configId,
       value: intent.value,
-      status: "queued",
+      status: intent.applyState === "queued" ? "queued" : "submitting",
       mutationId: Number.NaN,
     };
   }
