@@ -10,7 +10,7 @@ import type {
   SessionUpdateConfigIntent,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import { sessionIntentsForSession } from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import type { SessionEventEnvelope, TranscriptState } from "@anyharness/sdk";
+import type { SessionEventEnvelope, SessionLiveConfigSnapshot, TranscriptState } from "@anyharness/sdk";
 import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { resolveCurrentModeLabel } from "@/lib/domain/chat/composer/chat-input";
@@ -61,6 +61,7 @@ export function useActiveSessionLaunchState(): {
       agentKind: entry?.agentKind ?? null,
       modelId: entry?.modelId ?? null,
       requestedModelId: entry?.requestedModelId ?? null,
+      liveConfig: entry?.liveConfig ?? null,
       directoryPendingConfigChanges: normalizeEmptyPendingConfigChanges(
         entry?.pendingConfigChanges,
       ),
@@ -79,9 +80,13 @@ export function useActiveSessionLaunchState(): {
   const pendingConfigChanges = useMemo(
     () => mergePendingConfigChanges(
       slice.directoryPendingConfigChanges,
-      intentPendingConfigChanges,
+      // Release an optimistic intent change once the authoritative live config
+      // already reflects it (no-op switches clear immediately; real switches
+      // hold until the config_option_update lands). Only intent-pending is
+      // reconciled — server-side queued changes keep their pending state.
+      releaseOptimisticIntentChanges(slice.liveConfig, intentPendingConfigChanges),
     ),
-    [intentPendingConfigChanges, slice.directoryPendingConfigChanges],
+    [intentPendingConfigChanges, slice.directoryPendingConfigChanges, slice.liveConfig],
   );
 
   const pendingModelId = useMemo(() => {
@@ -162,20 +167,10 @@ export function useActiveSessionConfigState() {
   }));
   const stableNormalizedControls = useStableNormalizedControls(slice.normalizedControls);
   const pendingConfigChanges = useMemo(
-    () =>
-      // Release an optimistic change as soon as the authoritative live config
-      // already reflects its value. This keeps optimism through `accepted` (so a
-      // real switch never reverts to the not-yet-updated value mid-flight) while
-      // immediately clearing no-op switches (NoChange / already-current), which
-      // emit no config_option_update and would otherwise leave the optimistic
-      // value stuck forever.
-      reconcilePendingConfigChanges(
-        slice.liveConfig,
-        mergePendingConfigChanges(
-          slice.directoryPendingConfigChanges,
-          intentPendingConfigChanges,
-        ),
-      ).pendingConfigChanges,
+    () => mergePendingConfigChanges(
+      slice.directoryPendingConfigChanges,
+      releaseOptimisticIntentChanges(slice.liveConfig, intentPendingConfigChanges),
+    ),
     [intentPendingConfigChanges, slice.directoryPendingConfigChanges, slice.liveConfig],
   );
   return {
@@ -206,6 +201,21 @@ export function useActiveSessionModeState(): {
         : null),
     };
   }));
+}
+
+// Drop an optimistic intent change once the authoritative live config already
+// reflects its value. No-op switches (NoChange / already-current) match
+// immediately and release at once — important because the backend emits no
+// config_option_update for them, so there is no later event to clear them and
+// they would otherwise stay optimistically stuck. A real switch keeps its
+// optimistic value until the authoritative currentValue catches up. Scoped to
+// intent-pending only; server-side queued changes keep their own pending state.
+function releaseOptimisticIntentChanges(
+  liveConfig: SessionLiveConfigSnapshot | null | undefined,
+  intentPendingConfigChanges: PendingSessionConfigChanges,
+): PendingSessionConfigChanges {
+  return reconcilePendingConfigChanges(liveConfig, intentPendingConfigChanges)
+    .pendingConfigChanges;
 }
 
 function mergePendingConfigChanges(
