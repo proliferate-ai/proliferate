@@ -22,6 +22,9 @@ interface FileReferenceBadgeProps {
   label?: ReactNode;
   basename?: string;
   workspacePath?: string | null;
+  /** See {@link useFileReferenceActions}: skip the fuzzy backstop for paths
+   * that a tool call named authoritatively. */
+  authoritativePath?: boolean;
   variant?: FileReferenceBadgeVariant;
   stopPropagation?: boolean;
   className?: string;
@@ -32,11 +35,12 @@ export function FileReferenceBadge({
   label,
   basename,
   workspacePath,
+  authoritativePath = false,
   variant = "inline",
   stopPropagation = true,
   className = "",
 }: FileReferenceBadgeProps) {
-  const actions = useFileReferenceActions({ rawPath, workspacePath });
+  const actions = useFileReferenceActions({ rawPath, workspacePath, authoritativePath });
   const { onContextMenuCapture } = useFileReferenceNativeContextMenu(actions);
   const resolvedBasename = basename ?? extractBasename(actions.reference.workspacePath ?? actions.reference.path);
   const iconPath = actions.reference.workspacePath ?? actions.reference.path;

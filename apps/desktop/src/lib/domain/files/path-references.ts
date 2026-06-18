@@ -37,11 +37,20 @@ export function resolveFileReference(args: {
  * from a basename search, return the single candidate whose path equals or ends
  * with the target path. Returns null when the target already appears among the
  * candidates (it exists), or when the suffix match is absent or ambiguous.
+ *
+ * Pass `truncated: true` when the search hit its result cap: a truncated set can
+ * silently drop the exact file (defeating the "already exists" guard) or the
+ * real second suffix match (defeating the uniqueness guard), so we abstain
+ * entirely rather than risk correcting to the wrong file.
  */
 export function pickFuzzyPathMatch(
   targetPath: string,
   candidatePaths: readonly string[],
+  options?: { truncated?: boolean },
 ): string | null {
+  if (options?.truncated) {
+    return null;
+  }
   // Compare case-insensitively (the workspace search is case-insensitive, and
   // a ref may differ in case from the real file) but return the real casing.
   const target = targetPath.toLowerCase();

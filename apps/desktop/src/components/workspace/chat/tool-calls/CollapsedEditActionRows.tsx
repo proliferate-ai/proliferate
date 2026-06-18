@@ -64,6 +64,10 @@ function EditActionRow({
   const fileReferenceActions = useFileReferenceActions({
     rawPath: pathLabel,
     workspacePath,
+    // The path comes from the file_change tool-call metadata, so it is
+    // authoritative — skip the fuzzy backstop (which could re-resolve a
+    // same-basename file), matching FileChangeCall.
+    authoritativePath: true,
   });
   const handleOpen = useCallback(() => {
     void fileReferenceActions.openPrimary();

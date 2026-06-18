@@ -30,6 +30,14 @@ describe("pickFuzzyPathMatch", () => {
     expect(pickFuzzyPathMatch("content/ui/markdownrenderer.tsx", tree))
       .toBe("apps/desktop/src/components/content/ui/MarkdownRenderer.tsx");
   });
+
+  it("abstains when the search result set was truncated", () => {
+    // A truncated set can drop the exact file or a second suffix match, so a
+    // would-be unique correction is unsafe — abstain.
+    expect(
+      pickFuzzyPathMatch("content/ui/MarkdownRenderer.tsx", tree, { truncated: true }),
+    ).toBeNull();
+  });
 });
 
 describe("resolveFileReference", () => {

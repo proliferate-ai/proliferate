@@ -132,16 +132,63 @@ export function linkHost(href: string): string | null {
 
 /**
  * Whether an href should be treated as an external web link (vs. a workspace
- * file path). Deliberately conservative: only `http(s)://…` and `www.…`.
+ * file path). Conservative: `http(s)://…`, `www.…`, and a bare `host.tld/path`
+ * form only when the TLD is a well-known web TLD (see {@link isSchemelessWebHost}).
  *
- * A bare `host.tld/path` form (`github.com/x`) is NOT claimed, because it is
- * structurally indistinguishable from a relative file path with a dotted
- * directory (`v1.2/notes.txt`, `CHANGELOG.md/x`) — claiming those would lose
- * the file mention and fire a favicon fetch for a bogus host. Scheme-less URLs
- * are rare in agent output (they almost always emit `https://`), so this trades
- * that edge for never stealing a real file path.
+ * The TLD allow-list is what keeps a relative file path with a dotted directory
+ * (`v1.2/notes.txt`, `CHANGELOG.md/x`) from being mistaken for a host: their
+ * "TLD" (`2`, `md`) is not a web TLD, so they stay file mentions. Without this,
+ * `github.com/org/repo` rendered as a dead FilePathLink (it never resolves to a
+ * workspace file), so we now claim it as an external link.
  */
 export function isExternalHttpLink(href: string): boolean {
   const value = href.trim();
-  return /^https?:\/\//i.test(value) || /^www\.[a-z0-9-]/i.test(value);
+  return (
+    /^https?:\/\//i.test(value) ||
+    /^www\.[a-z0-9-]/i.test(value) ||
+    isSchemelessWebHost(value)
+  );
+}
+
+/**
+ * Web TLDs common enough that they unambiguously signal a host rather than a
+ * file extension. Deliberately small: every entry must be a TLD that is never a
+ * real file extension (so it can't steal `notes.md`, `data.io` would be rare).
+ */
+const WEB_TLDS = new Set([
+  "com",
+  "org",
+  "net",
+  "io",
+  "dev",
+  "app",
+  "ai",
+  "co",
+  "gov",
+  "edu",
+]);
+
+/**
+ * A bare `host.tld/path` link with a well-known web TLD and at least one path
+ * segment (so a bare `foo.com` filename-with-extension is not claimed). The
+ * host's final label must be a {@link WEB_TLDS} entry; this is what lets
+ * `github.com/org/repo` through while leaving `v1.2/notes.txt` to file
+ * detection.
+ */
+export function isSchemelessWebHost(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed) || trimmed.includes("://")) {
+    return false;
+  }
+  const slash = trimmed.indexOf("/");
+  // Require a path segment after the host so a bare token isn't claimed.
+  if (slash <= 0 || slash === trimmed.length - 1) {
+    return false;
+  }
+  const host = trimmed.slice(0, slash).toLowerCase();
+  const labels = host.split(".");
+  if (labels.length < 2 || labels.some((label) => label.length === 0)) {
+    return false;
+  }
+  return WEB_TLDS.has(labels[labels.length - 1]);
 }
