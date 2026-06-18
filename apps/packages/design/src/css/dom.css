@@ -49,9 +49,18 @@ body {
   background: var(--color-background);
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/*
+ * Neutralize the browser's default anchor color/underline, but keep it in
+ * `@layer base` so intentional utility classes on a link (text-link-foreground,
+ * underline, the provider/file mention styles, …) still win. An UNLAYERED rule
+ * here would beat every `@layer utilities` class and silently strip all link
+ * styling — anchors would render as plain inherited text.
+ */
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 .proliferate-scrollbar,
