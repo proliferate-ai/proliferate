@@ -122,6 +122,10 @@ function compareExactLocalWorkspaceDuplicateOrderForSelection(
   };
 }
 
+function workspaceHasOwnSessions(workspace: Workspace): boolean {
+  return (workspace.executionSummary?.totalSessionCount ?? 0) > 0;
+}
+
 function collapseExactLocalWorkspaceDuplicates(
   workspaces: readonly Workspace[],
   currentSelectionId: string | null,
@@ -137,23 +141,45 @@ function collapseExactLocalWorkspaceDuplicates(
     }
   }
 
-  return Array.from(byMaterialization.values()).map((bucket) => {
+  // Distinct local workspaces for the same folder+branch are kept separate so
+  // each "project/feature thread" gets its own sidebar entry. Within a bucket,
+  // every workspace that has its own chats is surfaced as a distinct entry; only
+  // genuinely-empty (setup-only / stale) duplicates are folded onto the top used
+  // entry so they don't show as junk rows but stay selectable. A brand-new empty
+  // workspace is still shown immediately via the pending-workspace projection
+  // until its first turn makes it "used".
+  return Array.from(byMaterialization.values()).flatMap((bucket): CollapsedLocalWorkspace[] => {
     if (bucket.length === 1) {
-      return {
+      return [{
         workspace: bucket[0]!,
         aliasIds: [],
-      };
+      }];
     }
 
-    const workspace = [...bucket]
-      .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
-    const aliasIds = bucket
-      .filter((candidate) => candidate.id !== workspace.id)
-      .flatMap(localWorkspaceIdentityIds);
-    return {
+    const used = bucket.filter(workspaceHasOwnSessions);
+    const empty = bucket.filter((candidate) => !workspaceHasOwnSessions(candidate));
+
+    if (used.length === 0) {
+      // No chats anywhere in this folder+branch yet: keep a single
+      // representative (preferring history/selection), aliasing the rest.
+      const representative = [...empty]
+        .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
+      return [{
+        workspace: representative,
+        aliasIds: empty
+          .filter((candidate) => candidate.id !== representative.id)
+          .flatMap(localWorkspaceIdentityIds),
+      }];
+    }
+
+    const sortedUsed = [...used]
+      .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId));
+    const foldedEmptyAliasIds = empty.flatMap(localWorkspaceIdentityIds);
+    return sortedUsed.map((workspace, index) => ({
       workspace,
-      aliasIds,
-    };
+      // Fold stale empty duplicates onto the top used entry.
+      aliasIds: index === 0 ? foldedEmptyAliasIds : [],
+    }));
   });
 }
 
