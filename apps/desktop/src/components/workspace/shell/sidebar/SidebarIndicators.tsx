@@ -77,7 +77,7 @@ export function SidebarStatusIndicatorView({
           {glyph}
         </IconButton>
       ) : (
-        <span role="img" aria-label={indicator.tooltip}>{glyph}</span>
+        <span role="img" aria-label={indicator.tooltip} className="inline-flex items-center justify-center">{glyph}</span>
       )}
     </Tooltip>
   );
