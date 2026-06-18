@@ -36,10 +36,10 @@ fn pins_surface_catalog_harness_versions() {
     let catalog = draft_catalog();
 
     let claude = catalog.pins("claude").expect("claude pins");
-    assert_eq!(claude.agent_process.version, "0.29.0");
+    assert_eq!(claude.agent_process.version, "0.44.0");
     assert_eq!(
         claude.native.as_ref().map(|pin| pin.version.as_str()),
-        Some("2.1.170 (Claude Code)")
+        Some("2.1.181")
     );
 
     // Cursor has no native pin; unknown kinds have no pins at all.
@@ -99,16 +99,26 @@ fn models_intersect_availability_with_active_contexts() {
     assert_eq!(
         model_ids(catalog.models("claude", &contexts(&["anthropic-api"]))),
         vec![
+            "default",
+            "opus[1m]",
             "sonnet",
             "sonnet[1m]",
             "haiku",
+            "opus",
             "claude-fable-5",
             "claude-opus-4-8"
         ]
     );
     assert_eq!(
         model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"]))),
-        vec!["haiku", "claude-fable-5", "claude-opus-4-8", "opus"]
+        vec![
+            "default",
+            "sonnet",
+            "haiku",
+            "opus",
+            "claude-fable-5",
+            "claude-opus-4-8"
+        ]
     );
     // No matching context, no models; unknown kind, no models.
     assert!(catalog
@@ -130,8 +140,8 @@ fn baseline_counts_as_a_context_when_active() {
             "opencode/big-pickle",
             "opencode/deepseek-v4-flash-free",
             "opencode/mimo-v2.5-free",
-            "opencode/minimax-m3-free",
-            "opencode/nemotron-3-ultra-free"
+            "opencode/nemotron-3-ultra-free",
+            "opencode/north-mini-code-free"
         ]
     );
 }
@@ -147,7 +157,7 @@ fn visible_models_are_the_default_visible_subset_of_available() {
     assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
         model_ids(catalog.visible_models("claude", &contexts(&["anthropic-oauth"]))),
-        vec!["haiku", "claude-fable-5", "opus"]
+        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5"]
     );
 }
 
@@ -158,7 +168,7 @@ fn controls_return_the_per_model_matrix() {
     let opus = catalog.controls("claude", "opus").expect("opus controls");
     assert_eq!(
         opus.get("effort").expect("effort control").values,
-        vec!["low", "medium", "high", "xhigh"]
+        vec!["default", "low", "medium", "high", "xhigh", "max"]
     );
     assert!(opus.contains_key("mode"));
     assert!(catalog.controls("claude", "not-a-model").is_none());
@@ -209,19 +219,19 @@ fn validate_launch_availability_beats_visibility() {
 fn validate_launch_rejects_gated_and_unknown_models() {
     let catalog = draft_catalog();
 
-    // sonnet is api-only: gated under oauth, with the unlock condition.
+    // sonnet[1m] is api-only: gated under oauth, with the unlock condition.
     let gated = catalog
         .validate_launch(
             "claude",
             &contexts(&["anthropic-oauth"]),
-            Some("sonnet"),
+            Some("sonnet[1m]"),
             None,
         )
         .expect_err("api-only model must be gated under oauth");
     assert_eq!(
         gated,
         SelectionUnsupported::ModelGated {
-            model_id: "sonnet".into(),
+            model_id: "sonnet[1m]".into(),
             required_contexts: vec!["anthropic-api".into()],
         }
     );
@@ -262,8 +272,8 @@ fn validate_launch_defaults_to_the_first_visible_available_model() {
     let selection = catalog
         .validate_launch("claude", &contexts(&["anthropic-oauth"]), None, None)
         .expect("default resolution never hard-fails");
-    assert_eq!(selection.model_id.as_deref(), Some("haiku"));
-    assert_eq!(selection.launch_model_id.as_deref(), Some("haiku"));
+    assert_eq!(selection.model_id.as_deref(), Some("default"));
+    assert_eq!(selection.launch_model_id.as_deref(), Some("default"));
 
     // No model available at all (claude has no baseline-available models):
     // selection stays empty — the harness default applies, never a block.
@@ -293,17 +303,22 @@ fn validate_launch_honors_curation_defaults_per_context() {
 fn validate_launch_resolves_probe_observed_variant_ids() {
     let catalog = draft_catalog();
 
-    // "gpt-5.5/xhigh" is a probe-observed variant id of gpt-5.5.
+    // The fully-qualified bracket id is a probe-observed variant id of
+    // cursor's claude-fable-5: resolution matches it against the model's
+    // recorded variantIds and preserves it as the launch id.
     let selection = catalog
         .validate_launch(
-            "codex",
-            &contexts(&["openai-api"]),
-            Some("gpt-5.5/xhigh"),
+            "cursor",
+            &contexts(&["cursor-login"]),
+            Some("claude-fable-5[thinking=true,context=300k,effort=high]"),
             None,
         )
         .expect("observed variant id must resolve");
-    assert_eq!(selection.model_id.as_deref(), Some("gpt-5.5"));
-    assert_eq!(selection.launch_model_id.as_deref(), Some("gpt-5.5/xhigh"));
+    assert_eq!(selection.model_id.as_deref(), Some("claude-fable-5"));
+    assert_eq!(
+        selection.launch_model_id.as_deref(),
+        Some("claude-fable-5[thinking=true,context=300k,effort=high]")
+    );
 }
 
 #[test]
@@ -341,7 +356,24 @@ fn validate_launch_composes_variants_by_declared_syntax() {
     ));
 
     // slash-effort composition validates effort against the base model.
-    let slash = catalog
+    // No probed agent currently declares slash-effort (codex's fresh probe
+    // dropped its variant syntax), so declare it on codex's model control to
+    // exercise the composition path: gpt-5.4 carries reasoning_effort
+    // ["low","medium","high","xhigh"], so "/medium" composes.
+    let mut raw: serde_json::Value =
+        serde_json::from_str(draft_catalog_json()).expect("draft must parse");
+    raw["agents"][1]["session"]["controls"]
+        .as_array_mut()
+        .expect("codex controls")
+        .iter_mut()
+        .find(|control| control["key"] == "model")
+        .expect("codex model control")["mapping"]["variantSyntax"] =
+        serde_json::json!("slash-effort");
+    let slash_document =
+        parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
+            .expect("doctored draft must load");
+    let slash_catalog = ActiveCatalog::new(Arc::new(slash_document));
+    let slash = slash_catalog
         .validate_launch(
             "codex",
             &contexts(&["openai-oauth"]),
@@ -349,6 +381,7 @@ fn validate_launch_composes_variants_by_declared_syntax() {
             None,
         )
         .expect("slash-effort variant must resolve");
+    assert_eq!(slash.model_id.as_deref(), Some("gpt-5.4"));
     assert_eq!(slash.launch_model_id.as_deref(), Some("gpt-5.4/medium"));
 
     // claude declares no variantSyntax: composition never applies.

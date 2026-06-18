@@ -90,6 +90,14 @@ for (const agent of catalog.agents) {
     agent.harness.native.version = version;
     agent.harness.native.source = source;
     console.log(`   native        ${version}  (${source.kind})`);
+  } else if (agent.harness.native) {
+    // The probe's nativeCli attestation can leak a foreign launcher (e.g. the
+    // bundled `claude` binary reported as the nativeCli for cursor/opencode)
+    // onto agents that have no native artifact in the registry. Such a pin can
+    // never be sourced, so drop it — otherwise the bundled catalog ships a
+    // sourceless native entry and stops being a complete lockfile.
+    delete agent.harness.native;
+    console.log(`   native        (dropped — no registry native artifact)`);
   }
 
   const ap = await resolveAgentProcess(
