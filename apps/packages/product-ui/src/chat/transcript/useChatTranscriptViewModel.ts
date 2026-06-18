@@ -65,6 +65,7 @@ export function useChatTranscriptViewModel({
     outboxEntries = EMPTY_OUTBOX_ENTRIES,
     transcript,
     sessionViewState,
+    reasoningActive = false,
     history,
     layout,
   } = state;
@@ -127,6 +128,7 @@ export function useChatTranscriptViewModel({
     virtualRows,
     outboxStartedAtByPromptId,
     sessionViewState,
+    reasoningActive,
     renderTurnTrailingStatus,
   });
 

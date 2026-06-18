@@ -86,6 +86,22 @@ export function isSessionEffectivelyStreaming(
   ) {
     return false;
   }
+  // `isStreaming` is the coarse turn-open flag and can stick when a
+  // `turn_ended` is missed (e.g. a backgrounded session). The execution
+  // summary is the authoritative turn phase, so a stale stream flag must not
+  // resurrect "running"/"iterating" once the summary has settled to a
+  // non-running phase. Only "running" (a turn actually in progress) and
+  // "starting" keep bare streaming live; "idle"/"errored"/"closed" and a
+  // settled "awaiting_interaction" are not iterating.
+  const summaryPhase = slot.executionSummary?.phase;
+  if (
+    summaryPhase === "idle"
+    || summaryPhase === "errored"
+    || summaryPhase === "closed"
+    || summaryPhase === "awaiting_interaction"
+  ) {
+    return false;
+  }
   return true;
 }
 

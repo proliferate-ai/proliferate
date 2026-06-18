@@ -142,6 +142,30 @@ export function currentValueLabel(
   return current?.label ?? currentValue ?? null;
 }
 
+/**
+ * Whether the reasoning/thinking control is currently on. Handles both the
+ * two-value on/off toggle and multi-value (e.g. none/low/medium/high) shapes:
+ * reasoning is active when a value is selected that is not a disabled-token
+ * ("off"/"none"/"disabled"/"false") value. Used to keep the trailing thinking
+ * indicator visible for the whole turn when reasoning mode is enabled.
+ */
+export function isReasoningControlActive(
+  control: NormalizedSessionControl | null | undefined,
+): boolean {
+  if (!control || control.currentValue == null) {
+    return false;
+  }
+  const current = control.values.find((value) => value.value === control.currentValue);
+  const tokens = current ? valueTokens(current) : valueTokens({
+    value: control.currentValue,
+    label: "",
+  });
+  if (tokens.length === 0) {
+    return true;
+  }
+  return !tokens.some((token) => isDisabledToken(token) || token === "none");
+}
+
 export function resolveToggleState(
   control: NormalizedSessionControl,
   currentValueOverride?: string | null,

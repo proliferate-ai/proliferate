@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { NormalizedSessionControls } from "@anyharness/sdk";
+import type { NormalizedSessionControl } from "@anyharness/sdk";
 import {
   buildLiveSessionControlDescriptors,
+  isReasoningControlActive,
   mergeSessionConfigControlDescriptors,
   type LiveSessionControlDescriptor,
 } from "./session-controls";
@@ -163,6 +165,47 @@ describe("mergeSessionConfigControlDescriptors", () => {
         rawConfigId: "reasoning_effort",
       },
     ]);
+  });
+});
+
+describe("isReasoningControlActive", () => {
+  const reasoningControl = (
+    currentValue: string | null,
+    values: { value: string; label: string }[],
+  ): NormalizedSessionControl => ({
+    key: "reasoning",
+    rawConfigId: "reasoning",
+    label: "Reasoning",
+    currentValue,
+    settable: true,
+    values,
+  });
+
+  it("is inactive without a control or selected value", () => {
+    expect(isReasoningControlActive(null)).toBe(false);
+    expect(isReasoningControlActive(undefined)).toBe(false);
+    expect(isReasoningControlActive(
+      reasoningControl(null, [{ value: "on", label: "On" }]),
+    )).toBe(false);
+  });
+
+  it("treats off/none toggle values as inactive", () => {
+    const toggle = [
+      { value: "off", label: "Off" },
+      { value: "on", label: "On" },
+    ];
+    expect(isReasoningControlActive(reasoningControl("off", toggle))).toBe(false);
+    expect(isReasoningControlActive(reasoningControl("on", toggle))).toBe(true);
+  });
+
+  it("treats a non-none multi-value selection as active", () => {
+    const levels = [
+      { value: "none", label: "None" },
+      { value: "low", label: "Low" },
+      { value: "high", label: "High" },
+    ];
+    expect(isReasoningControlActive(reasoningControl("none", levels))).toBe(false);
+    expect(isReasoningControlActive(reasoningControl("high", levels))).toBe(true);
   });
 });
 
