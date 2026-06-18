@@ -65,7 +65,6 @@ export function ChatTranscriptView({
 
   return (
     <ChatTranscriptRows
-      rowListKey={`${model.selectedWorkspaceId ?? "workspace"}:${model.activeSessionId}`}
       rows={model.virtualRows}
       selectionRootRef={selectionRootRef}
       hasOlderHistory={model.hasOlderHistory}

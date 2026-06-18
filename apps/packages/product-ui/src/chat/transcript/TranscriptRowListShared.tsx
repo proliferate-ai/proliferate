@@ -21,12 +21,18 @@ export const DIRECTION_EPSILON_PX = 1;
 // nothing would re-pin and the scroll-to-bottom button would wrongly show while
 // already at the bottom.
 export const SCROLLABLE_OVERFLOW_EPSILON_PX = 1;
-// Visibility-resume glue loop: hold the viewport at the bottom each frame until
-// measured scrollHeight is stable for this many consecutive frames, capped at
-// GLUE_MAX_FRAMES, so a suspended-then-resumed measurement backlog collapses
+// Glue loops re-apply a scroll write each frame until measured scrollHeight is
+// stable for this many consecutive frames, so a measurement backlog collapses
 // into one jump instead of a visible crawl.
 export const GLUE_STABLE_FRAMES = 3;
-export const GLUE_MAX_FRAMES = 12;
+// Above-change compensation holds an anchored row in place while one freshly
+// inserted row measures in — a small, bounded backlog — so a hard frame cap is
+// a safe ceiling.
+export const GLUE_ABOVE_MAX_FRAMES = 12;
+// The visibility/focus resume path can face an arbitrarily large
+// suspended-then-resumed measurement backlog, so it terminates on stability
+// rather than a hard cap; this is only a runaway safety ceiling.
+export const GLUE_RESUME_MAX_FRAMES = 600;
 export const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
 export const HISTORY_LOADING_ROW_KEY = "history-loader";
 export const DEFAULT_CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-3xl";

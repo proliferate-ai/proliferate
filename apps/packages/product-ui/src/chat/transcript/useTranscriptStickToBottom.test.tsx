@@ -41,12 +41,12 @@ interface HarnessHandle {
   viewport: HTMLDivElement;
 }
 
-function renderHarness(onScrollSample = vi.fn()) {
+function renderHarness(onScrollSample = vi.fn(), onResumeMeasure?: () => void) {
   const handle: { current: HarnessHandle | null } = { current: null };
 
   function Harness() {
     const scrollRef = useRef<HTMLDivElement>(null);
-    const api = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+    const api = useTranscriptStickToBottom({ scrollRef, onScrollSample, onResumeMeasure });
     return (
       <div
         ref={(node) => {
@@ -281,6 +281,40 @@ describe("useTranscriptStickToBottom", () => {
       flushRafRound();
     });
     expect(viewport.scrollTop).toBe(1600);
+  });
+
+  it("forces a synchronous measure on resume so the backlog lands in one jump", () => {
+    const onResumeMeasure = vi.fn();
+    const handle = renderHarness(vi.fn(), onResumeMeasure);
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
+
+    act(() => {
+      fireEvent(document, new Event("visibilitychange"));
+    });
+    expect(onResumeMeasure).toHaveBeenCalledTimes(1);
+  });
+
+  it("resume glue terminates on stability past the old 12-frame cap", () => {
+    const handle = renderHarness();
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
+
+    act(() => {
+      fireEvent(document, new Event("visibilitychange"));
+    });
+
+    // Grow the bottom for far more than the old 12-frame cap; the resume loop
+    // must keep following the backlog (it terminates on stability, not a cap).
+    let height = 1000;
+    for (let frame = 0; frame < 20; frame += 1) {
+      height += 200;
+      setMetrics(viewport, { scrollHeight: height, clientHeight: 300, scrollTop: viewport.scrollTop });
+      act(() => {
+        flushRafRound();
+      });
+      expect(viewport.scrollTop).toBe(height);
+    }
   });
 
   it("bails the glue loop if the user scrolls up mid-resume", () => {
