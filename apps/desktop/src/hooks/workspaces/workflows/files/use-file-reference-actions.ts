@@ -64,21 +64,29 @@ export function useFileReferenceActions({
       selectedLogicalWorkspaceId,
       materializedWorkspaceId: selectedWorkspaceId,
     });
-    // Backstop: if the reference is a partial/abbreviated path, correct it to
-    // the real workspace file before opening so it resolves instead of 404ing.
+    const openViewer = (path: string) => {
+      const target = fileViewerTarget(path);
+      openTarget(target);
+      if (materializedWorkspaceId) {
+        activateViewerTarget({
+          workspaceId: materializedWorkspaceId,
+          shellWorkspaceId: workspaceUiKey,
+          target,
+          mode: "open-or-focus",
+        });
+      }
+    };
+    // Open optimistically so the common (correct-path) case has zero latency.
+    // Then, best-effort and non-blocking, correct a partial/abbreviated path
+    // and re-open if it actually pointed elsewhere (the viewer would otherwise
+    // just show "file not found").
+    openViewer(reference.workspacePath);
     const corrected = await fuzzyResolveFilePath({
       workspacePath: reference.workspacePath,
       materializedWorkspaceId,
     });
-    const target = fileViewerTarget(corrected ?? reference.workspacePath);
-    openTarget(target);
-    if (materializedWorkspaceId) {
-      activateViewerTarget({
-        workspaceId: materializedWorkspaceId,
-        shellWorkspaceId: workspaceUiKey,
-        target,
-        mode: "open-or-focus",
-      });
+    if (corrected && corrected !== reference.workspacePath) {
+      openViewer(corrected);
     }
   }, [
     activateViewerTarget,

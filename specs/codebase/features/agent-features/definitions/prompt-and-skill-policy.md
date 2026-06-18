@@ -40,7 +40,8 @@ Use for:
 - platform identity
 - safety and repository rules
 - global tool-use invariants
-- global response-formatting invariants (file references as markdown links;
+- global response-formatting invariants (file references as markdown links with
+  the complete workspace-root path, never abbreviated;
   owned by `domains/sessions/response_formatting.rs`, injected for every
   session in `domains/sessions/mcp_bindings/assembly.rs` on both the
   `systemPrompt.append` meta channel and the first-prompt channel so Codex,
