@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
@@ -65,6 +66,18 @@ export function VirtualizedTranscriptRowList({
   virtualizationMode,
 }: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The stick-to-bottom engine is created before the virtualizer below, so the
+  // resume-measure callback reads it through a ref (set once the virtualizer
+  // exists) to force one synchronous measure pass on tab/window resume.
+  const virtualizerRef = useRef<{ measure: () => void } | null>(null);
+  // measure() clears the entire itemSizeCache (full re-measure from estimates),
+  // so this momentarily resets scrollHeight to estimates before the resume glue
+  // loop follows the re-measure. That cost is acceptable only because this is
+  // resume-only (one tab/window re-show); do NOT widen its trigger to per-event
+  // paths or it reintroduces the estimate->measure churn during streaming.
+  const resumeMeasure = useCallback(() => {
+    virtualizerRef.current?.measure();
+  }, []);
   const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
@@ -80,7 +93,11 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+  } = useTranscriptStickToBottom({ scrollRef, onScrollSample, onResumeMeasure: resumeMeasure });
+  // Gates the blank-viewport fallback until the virtualizer has run >=1
+  // measurement pass after mount/session change; the first frame is
+  // estimate-only and would read as blank (the session-switch flicker).
+  const [measurementReady, setMeasurementReady] = useState(false);
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
@@ -101,6 +118,7 @@ export function VirtualizedTranscriptRowList({
     initialOffset: () => estimatedInitialBottomOffset,
     useAnimationFrameWithResizeObserver: true,
   });
+  virtualizerRef.current = virtualizer;
   const virtualItems = virtualizer.getVirtualItems();
   const totalContentHeight = virtualizer.getTotalSize();
   const firstVirtualItem = virtualItems[0] ?? null;
@@ -189,13 +207,35 @@ export function VirtualizedTranscriptRowList({
     onViewportScroll,
   ]);
 
+  // On mount and every session/workspace switch, reset stickiness (keeping the
+  // virtualizer mounted so its measurement cache survives) and re-gate the
+  // blank-fallback until the next measurement pass lands.
   useLayoutEffect(() => {
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
     lastOlderHistoryCursorRequestRef.current = null;
     lastPrefetchDecisionLogRef.current = null;
+    setMeasurementReady(false);
     resetForSession();
   }, [activeSessionId, resetForSession, selectedWorkspaceId]);
+
+  // Flip measurement-ready one frame after a session change: by the next frame
+  // the virtualizer has already measured the visible rows (via
+  // useAnimationFrameWithResizeObserver) so the blank-viewport check can run
+  // without false-positiving on the estimate-only first frame. Gate strictly to
+  // session/workspace change: keying off rows.length would re-arm on every
+  // streamed-row append, and an explicit virtualizer.measure() here would clear
+  // the whole itemSizeCache and reintroduce per-event estimate->measure churn.
+  const hasRows = rows.length > 0;
+  useEffect(() => {
+    if (!hasRows) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      setMeasurementReady(true);
+    });
+    return () => { window.cancelAnimationFrame(frame); };
+  }, [activeSessionId, hasRows, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
@@ -343,6 +383,7 @@ export function VirtualizedTranscriptRowList({
     firstVirtualItem,
     lastVirtualItem,
     lastBlankReportSignatureRef,
+    measurementReady,
     onFallback,
     rowCount: rows.length,
     scrollRef,

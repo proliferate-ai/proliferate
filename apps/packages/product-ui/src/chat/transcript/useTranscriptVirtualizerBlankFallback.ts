@@ -7,6 +7,7 @@ export function useTranscriptVirtualizerBlankFallback({
   firstVirtualItem,
   lastVirtualItem,
   lastBlankReportSignatureRef,
+  measurementReady,
   onFallback,
   rowCount,
   scrollRef,
@@ -15,12 +16,17 @@ export function useTranscriptVirtualizerBlankFallback({
   firstVirtualItem: { index: number } | null;
   lastVirtualItem: { index: number } | null;
   lastBlankReportSignatureRef: RefObject<string | null>;
+  // Suppress the blank-viewport check until >=1 measurement pass has completed
+  // after mount/session change. The first virtualized frame is estimate-only:
+  // rows aren't positioned yet, so the viewport reads "blank" and would
+  // wrongly swap virtualized->full for a frame (the session-switch flicker).
+  measurementReady: boolean;
   onFallback: (reason: string) => void;
   rowCount: number;
   scrollRef: RefObject<HTMLDivElement | null>;
 }): void {
   useEffect(() => {
-    if (rowCount === 0) {
+    if (rowCount === 0 || !measurementReady) {
       return;
     }
 
@@ -70,6 +76,7 @@ export function useTranscriptVirtualizerBlankFallback({
     firstVirtualItem,
     lastBlankReportSignatureRef,
     lastVirtualItem,
+    measurementReady,
     onFallback,
     rowCount,
     scrollRef,

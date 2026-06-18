@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import {
-  GLUE_MAX_FRAMES,
+  GLUE_ABOVE_MAX_FRAMES,
   GLUE_STABLE_FRAMES,
   type ContentHeightScrollAnchor,
 } from "./TranscriptRowListShared";
@@ -49,7 +49,7 @@ export function useAboveChangeCompensation({
         lastHeight = height;
       }
       totalFrames += 1;
-      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= GLUE_MAX_FRAMES) {
+      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= GLUE_ABOVE_MAX_FRAMES) {
         compensateFrameRef.current = null;
         return;
       }

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { resolveVirtualBottomDistance } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
-  GLUE_MAX_FRAMES,
+  GLUE_ABOVE_MAX_FRAMES,
+  GLUE_RESUME_MAX_FRAMES,
   GLUE_STABLE_FRAMES,
   PROGRAMMATIC_MATCH_TOL_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
@@ -27,6 +28,13 @@ export interface UseTranscriptStickToBottomOptions {
   onScrollSample: () => void;
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
+  /**
+   * Force a synchronous virtualizer measure pass on tab/window resume so the
+   * suspended-then-resumed measurement backlog lands in one jump (one
+   * synchronous measure, then the glue loop follows any residual growth) rather
+   * than crawling in over many estimate→measure frames.
+   */
+  onResumeMeasure?: () => void;
 }
 
 export interface TranscriptStickToBottom {
@@ -66,12 +74,15 @@ export function useTranscriptStickToBottom({
   scrollRef,
   onScrollSample,
   repinThresholdPx = REPIN_BOTTOM_THRESHOLD_PX,
+  onResumeMeasure,
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
   const programmaticRef = useRef<{ expectedTop: number; frame: number } | null>(null);
   const glueFrameRef = useRef<number | null>(null);
+  const onResumeMeasureRef = useRef(onResumeMeasure);
+  onResumeMeasureRef.current = onResumeMeasure;
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -166,7 +177,7 @@ export function useTranscriptStickToBottom({
     scrollToBottom();
   }, [scrollToBottom, setPinned]);
 
-  const startGlueLoop = useCallback(() => {
+  const startGlueLoop = useCallback((maxFrames: number = GLUE_ABOVE_MAX_FRAMES) => {
     if (typeof window === "undefined") {
       return;
     }
@@ -194,7 +205,9 @@ export function useTranscriptStickToBottom({
         lastHeight = height;
       }
       totalFrames += 1;
-      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= GLUE_MAX_FRAMES) {
+      // The resume path passes GLUE_RESUME_MAX_FRAMES so it effectively
+      // terminates on stability; maxFrames is only a runaway safety ceiling.
+      if (stableFrames >= GLUE_STABLE_FRAMES || totalFrames >= maxFrames) {
         glueFrameRef.current = null;
         return;
       }
@@ -262,7 +275,10 @@ export function useTranscriptStickToBottom({
       if (document.visibilityState !== "visible" || !pinnedRef.current) {
         return;
       }
-      startGlueLoop();
+      // Force one synchronous measure so the backlog lands in a single jump,
+      // then glue (terminating on stability) to follow any residual growth.
+      onResumeMeasureRef.current?.();
+      startGlueLoop(GLUE_RESUME_MAX_FRAMES);
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
