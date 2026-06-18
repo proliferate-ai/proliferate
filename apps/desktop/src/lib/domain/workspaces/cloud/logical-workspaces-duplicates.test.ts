@@ -138,69 +138,138 @@ describe("logical workspace duplicate local records", () => {
     );
   });
 
-  it("collapses exact duplicate local records and prefers transcript history over setup-only slots", () => {
+  it("keeps distinct local workspaces that each have their own chats", () => {
+    // Same folder+branch, but each record has its own sessions: they are
+    // separate "project/feature threads" and must stay as distinct entries.
     const checkoutPath = "/tmp/proliferate";
-    const setupOnlyLocal = {
+    const firstLocal = {
       ...makeWorkspace({
-        id: "local-setup-only",
-        branch: "main",
-        updatedAt: "2026-06-02T09:50:00.000Z",
-        executionSummary: makeExecutionSummary({
-          phase: "running",
-          totalSessionCount: 4,
-          liveSessionCount: 4,
-          updatedAt: "2026-06-02T09:50:00.000Z",
-        }),
-      }),
-      path: checkoutPath,
-    };
-    const historicalLocal = {
-      ...makeWorkspace({
-        id: "local-with-transcript",
+        id: "local-first",
         branch: "main",
         updatedAt: "2026-06-02T09:10:00.000Z",
         executionSummary: makeExecutionSummary({
-          totalSessionCount: 4,
+          totalSessionCount: 2,
           liveSessionCount: 0,
           updatedAt: "2026-06-02T09:15:00.000Z",
         }),
       }),
       path: checkoutPath,
     };
+    const secondLocal = {
+      ...makeWorkspace({
+        id: "local-second",
+        branch: "main",
+        updatedAt: "2026-06-02T09:50:00.000Z",
+        executionSummary: makeExecutionSummary({
+          phase: "running",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          updatedAt: "2026-06-02T09:50:00.000Z",
+        }),
+      }),
+      path: checkoutPath,
+    };
 
     const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [setupOnlyLocal, historicalLocal],
+      localWorkspaces: [secondLocal, firstLocal],
+      repoRoots: [],
+      cloudWorkspaces: [],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces).toHaveLength(2);
+    const firstEntry = findLogicalWorkspace(logicalWorkspaces, firstLocal.id);
+    const secondEntry = findLogicalWorkspace(logicalWorkspaces, secondLocal.id);
+    expect(firstEntry?.localWorkspace?.id).toBe(firstLocal.id);
+    expect(secondEntry?.localWorkspace?.id).toBe(secondLocal.id);
+    expect(firstEntry?.id).not.toBe(secondEntry?.id);
+  });
+
+  it("folds a zero-session duplicate onto the local workspace that has chats", () => {
+    // A genuinely-empty (setup-only / stale) duplicate of the same folder+branch
+    // is hidden behind the used record rather than shown as a junk row, but stays
+    // selectable via alias lookup.
+    const checkoutPath = "/tmp/proliferate";
+    const usedLocal = {
+      ...makeWorkspace({
+        id: "local-used",
+        branch: "main",
+        updatedAt: "2026-06-02T09:10:00.000Z",
+        executionSummary: makeExecutionSummary({
+          totalSessionCount: 3,
+          liveSessionCount: 0,
+          updatedAt: "2026-06-02T09:15:00.000Z",
+        }),
+      }),
+      path: checkoutPath,
+    };
+    const emptyLocal = {
+      ...makeWorkspace({
+        id: "local-empty",
+        branch: "main",
+        updatedAt: "2026-06-02T09:50:00.000Z",
+      }),
+      path: checkoutPath,
+    };
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [emptyLocal, usedLocal],
       repoRoots: [],
       cloudWorkspaces: [],
       currentSelectionId: null,
     });
 
     expect(logicalWorkspaces).toHaveLength(1);
-    expect(logicalWorkspaces[0]?.localWorkspace?.id).toBe(historicalLocal.id);
-    expect(logicalWorkspaceRelatedIds(logicalWorkspaces[0]!)).toContain(setupOnlyLocal.id);
-    expect(logicalWorkspaceRelatedIds(logicalWorkspaces[0]!)).toContain(
-      buildLocalSlotLogicalWorkspaceId(setupOnlyLocal.id),
-    );
-    expect(findLogicalWorkspace(logicalWorkspaces, setupOnlyLocal.id)?.id)
+    expect(logicalWorkspaces[0]?.localWorkspace?.id).toBe(usedLocal.id);
+    expect(logicalWorkspaceRelatedIds(logicalWorkspaces[0]!)).toContain(emptyLocal.id);
+    expect(findLogicalWorkspace(logicalWorkspaces, emptyLocal.id)?.id)
       .toBe(logicalWorkspaces[0]?.id);
     expect(findLogicalWorkspace(
       logicalWorkspaces,
-      buildLocalSlotLogicalWorkspaceId(setupOnlyLocal.id),
+      buildLocalSlotLogicalWorkspaceId(emptyLocal.id),
     )?.id).toBe(logicalWorkspaces[0]?.id);
+  });
 
-    const selectedDuplicateWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [setupOnlyLocal, historicalLocal],
+  it("keeps a just-created (selected, zero-session) duplicate visible next to a used sibling", () => {
+    // Regression: clicking "New local workspace" on an already-used folder makes
+    // a 0-session row that is immediately selected. It must show as its own entry
+    // (not fold into the used sibling) so selection resolves to the new workspace.
+    const checkoutPath = "/tmp/proliferate";
+    const usedLocal = {
+      ...makeWorkspace({
+        id: "local-used",
+        branch: "main",
+        updatedAt: "2026-06-02T09:10:00.000Z",
+        executionSummary: makeExecutionSummary({
+          totalSessionCount: 3,
+          liveSessionCount: 0,
+          updatedAt: "2026-06-02T09:15:00.000Z",
+        }),
+      }),
+      path: checkoutPath,
+    };
+    const justCreated = {
+      ...makeWorkspace({
+        id: "local-just-created",
+        branch: "main",
+        updatedAt: "2026-06-02T09:50:00.000Z",
+      }),
+      path: checkoutPath,
+    };
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [usedLocal, justCreated],
       repoRoots: [],
       cloudWorkspaces: [],
-      currentSelectionId: setupOnlyLocal.id,
+      currentSelectionId: justCreated.id,
     });
 
-    expect(selectedDuplicateWorkspaces).toHaveLength(1);
-    expect(selectedDuplicateWorkspaces[0]?.localWorkspace?.id).toBe(setupOnlyLocal.id);
-    expect(selectedDuplicateWorkspaces[0]?.preferredMaterializationId).toBe(setupOnlyLocal.id);
-    expect(logicalWorkspaceRelatedIds(selectedDuplicateWorkspaces[0]!)).toContain(
-      historicalLocal.id,
-    );
+    expect(logicalWorkspaces).toHaveLength(2);
+    const createdEntry = findLogicalWorkspace(logicalWorkspaces, justCreated.id);
+    const usedEntry = findLogicalWorkspace(logicalWorkspaces, usedLocal.id);
+    expect(createdEntry?.localWorkspace?.id).toBe(justCreated.id);
+    expect(usedEntry?.localWorkspace?.id).toBe(usedLocal.id);
+    expect(createdEntry?.id).not.toBe(usedEntry?.id);
   });
 
   it("promotes a prior local-slot workspace to canonical and preserves alias lookup", () => {

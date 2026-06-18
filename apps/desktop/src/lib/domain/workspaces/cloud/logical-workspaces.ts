@@ -122,6 +122,10 @@ function compareExactLocalWorkspaceDuplicateOrderForSelection(
   };
 }
 
+function workspaceHasOwnSessions(workspace: Workspace): boolean {
+  return (workspace.executionSummary?.totalSessionCount ?? 0) > 0;
+}
+
 function collapseExactLocalWorkspaceDuplicates(
   workspaces: readonly Workspace[],
   currentSelectionId: string | null,
@@ -137,23 +141,53 @@ function collapseExactLocalWorkspaceDuplicates(
     }
   }
 
-  return Array.from(byMaterialization.values()).map((bucket) => {
+  // Distinct local workspaces for the same folder+branch are kept separate so
+  // each "project/feature thread" gets its own sidebar entry. Within a bucket,
+  // a workspace is surfaced as its own distinct entry when it has its own chats
+  // OR it is the current selection (covers a just-created workspace that has no
+  // chats yet — `createLocalWorkspaceAndEnter` selects it immediately). Only
+  // genuinely-empty, unselected (setup-only / stale) duplicates are folded onto
+  // the top distinct entry so they don't show as junk rows but stay selectable.
+  return Array.from(byMaterialization.values()).flatMap((bucket): CollapsedLocalWorkspace[] => {
     if (bucket.length === 1) {
-      return {
+      return [{
         workspace: bucket[0]!,
         aliasIds: [],
-      };
+      }];
     }
 
-    const workspace = [...bucket]
-      .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
-    const aliasIds = bucket
-      .filter((candidate) => candidate.id !== workspace.id)
-      .flatMap(localWorkspaceIdentityIds);
-    return {
+    const distinct = bucket.filter(
+      (candidate) =>
+        workspaceHasOwnSessions(candidate)
+        || localWorkspaceMatchesSelection(candidate, currentSelectionId),
+    );
+    const foldable = bucket.filter(
+      (candidate) =>
+        !workspaceHasOwnSessions(candidate)
+        && !localWorkspaceMatchesSelection(candidate, currentSelectionId),
+    );
+
+    if (distinct.length === 0) {
+      // No chats and nothing selected in this folder+branch yet: keep a single
+      // representative (preferring history/selection), aliasing the rest.
+      const representative = [...foldable]
+        .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
+      return [{
+        workspace: representative,
+        aliasIds: foldable
+          .filter((candidate) => candidate.id !== representative.id)
+          .flatMap(localWorkspaceIdentityIds),
+      }];
+    }
+
+    const sortedDistinct = [...distinct]
+      .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId));
+    const foldedAliasIds = foldable.flatMap(localWorkspaceIdentityIds);
+    return sortedDistinct.map((workspace, index) => ({
       workspace,
-      aliasIds,
-    };
+      // Fold stale empty duplicates onto the first distinct entry.
+      aliasIds: index === 0 ? foldedAliasIds : [],
+    }));
   });
 }
 
