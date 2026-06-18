@@ -77,7 +77,7 @@ export function SidebarStatusIndicatorView({
           {glyph}
         </IconButton>
       ) : (
-        glyph
+        <span role="img" aria-label={indicator.tooltip}>{glyph}</span>
       )}
     </Tooltip>
   );
