@@ -53,6 +53,8 @@ import {
 } from "@/lib/domain/workspaces/selection/optimistic-session-shell";
 import { handleEmptyWorkspaceBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-empty-session";
 import { handleRememberedWorkspaceSessionBootstrap } from "@/hooks/workspaces/workflows/workspace-bootstrap-remembered-session";
+import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
+import { choosePreferredWorkspaceSession } from "@/lib/domain/workspaces/selection/selection";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -323,6 +325,34 @@ export function useWorkspaceBootstrapActions() {
 
     if (isCurrent()) {
       markWorkspaceBootstrappedInSession(workspaceId);
+    }
+
+    // Final guarantee: the bootstrap handlers above can fall through with no
+    // active session (race/staleness holes), stranding the user on the empty
+    // hero even though the workspace has sessions. If we're still current and
+    // nothing got selected, land on the preferred session so a workspace with
+    // >=1 session never shows the empty state.
+    if (
+      isCurrent()
+      && sessions.length > 0
+      && !useSessionSelectionStore.getState().activeSessionId
+    ) {
+      const fallbackSession = choosePreferredWorkspaceSession(sessions, null);
+      if (fallbackSession) {
+        logLatency("workspace.select.session_fallback", {
+          workspaceId,
+          logicalWorkspaceId,
+          sessionId: fallbackSession.id,
+          sessionCount: sessions.length,
+          totalElapsedMs: elapsedMs(startedAt),
+        });
+        await selectSessionWithShellIntentRollback({
+          workspaceId,
+          sessionId: fallbackSession.id,
+          options: { latencyFlowId },
+          selectSession,
+        });
+      }
     }
 
     return { sessions };
