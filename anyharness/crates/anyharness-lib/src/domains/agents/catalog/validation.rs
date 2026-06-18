@@ -331,7 +331,7 @@ mod tests {
         let claude = &mut catalog.agents[0];
         let duplicate = claude.session.models[0].clone();
         claude.session.models.push(duplicate);
-        expect_invalid(&catalog, "model 'sonnet' is duplicated");
+        expect_invalid(&catalog, "model 'default' is duplicated");
     }
 
     #[test]
@@ -424,9 +424,9 @@ mod tests {
     #[test]
     fn rejects_model_control_default_outside_values() {
         let mut catalog = draft_catalog();
-        let sonnet = &mut catalog.agents[0].session.models[0];
-        let effort = sonnet.controls.get_mut("effort").expect("effort control");
-        effort.default = Some("xhigh".to_string());
-        expect_invalid(&catalog, "default 'xhigh' is not a value");
+        let model = &mut catalog.agents[0].session.models[0];
+        let effort = model.controls.get_mut("effort").expect("effort control");
+        effort.default = Some("ultra".to_string());
+        expect_invalid(&catalog, "default 'ultra' is not a value");
     }
 }
