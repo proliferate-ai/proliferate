@@ -122,14 +122,17 @@ export async function dispatchConfigIntent(
         patchSessionRecord(intent.clientSessionId, nextPatch);
       }
       if (response.applyState === "applied" && intent.persistDefaultPreference) {
-        // Persist against whichever mode-like control the intent actually
-        // targeted: collaborationMode (default/plan) or mode (permissions).
-        // The preference guard requires this rawConfigId to match intent.configId.
+        // Only the permission `mode` control persists into the create-session
+        // mode_id store (defaultSessionModeByAgentKind). collaboration_mode
+        // (default/plan) is a live control whose default lives in a separate
+        // store (defaultLiveSessionControlValuesByAgentKind), so it must NOT
+        // pass this guard — otherwise toggling Plan/Default would write
+        // "plan"/"default" as an invalid permission mode_id.
         const normalizedControls = effectiveLiveConfig?.normalizedControls;
         const intentModeRawConfigId =
-          [normalizedControls?.collaborationMode, normalizedControls?.mode]
-            .find((control) => control?.rawConfigId === intent.configId)
-            ?.rawConfigId ?? null;
+          normalizedControls?.mode?.rawConfigId === intent.configId
+            ? normalizedControls.mode.rawConfigId
+            : null;
         persistDefaultSessionModePreference({
           agentKind: response.session.agentKind ?? latestSlot.agentKind,
           liveConfigRawConfigId: intentModeRawConfigId,
