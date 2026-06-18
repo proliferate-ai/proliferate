@@ -90,6 +90,32 @@ describe("session intents", () => {
     });
   });
 
+  it("holds the optimistic config value through accepted+applied until reconciled (off-by-one fix)", () => {
+    const acceptedApplied = {
+      ...createUpdateConfigIntent({
+        intentId: "config-applied",
+        clientSessionId: "session-1",
+        configId: "mode",
+        value: "plan",
+      }),
+      status: "accepted" as const,
+      applyState: "applied" as const,
+    };
+
+    // Held optimistically so the control does not briefly revert to the
+    // not-yet-updated server value between the HTTP response and the SSE echo.
+    // Status is "settling" (not "submitting") so the held value shows no spinner
+    // — the backend already applied it; we are only awaiting the echo.
+    expect(pendingConfigChangesForSessionIntents([acceptedApplied])).toMatchObject({
+      mode: { rawConfigId: "mode", value: "plan", status: "settling" },
+    });
+
+    // Once the authoritative config_option_update reconciles the intent, the
+    // optimistic value is released (server value is now authoritative).
+    const reconciled = { ...acceptedApplied, status: "reconciled" as const };
+    expect(pendingConfigChangesForSessionIntents([reconciled]).mode).toBeUndefined();
+  });
+
   it("does not queue a prompt solely because stale session metadata says busy", () => {
     expect(resolvePromptOutboxPlacement({
       isSessionBusy: isPromptOutboxPlacementBusy({

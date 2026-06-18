@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 
 import { createTranscriptState } from "@anyharness/sdk";
+import type { SessionLiveConfigSnapshot } from "@anyharness/sdk";
+import type { PendingSessionConfigChanges } from "@proliferate/product-domain/sessions/pending-config";
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   useActivePendingPrompts,
 } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import {
+  composePendingConfigChanges,
   useActiveSessionConfigState,
   useActiveSessionLaunchState,
 } from "@/hooks/chat/derived/use-active-session-config-state";
@@ -297,5 +300,45 @@ describe("useActiveSessionLaunchState", () => {
       kind: "gemini",
       modelId: "gemini-3-flash-preview",
     });
+  });
+});
+
+function liveConfigWithMode(currentValue: string): SessionLiveConfigSnapshot {
+  return {
+    normalizedControls: { mode: { rawConfigId: "mode", currentValue }, extras: [] },
+    rawConfigOptions: [],
+    sourceSeq: 1,
+  } as unknown as SessionLiveConfigSnapshot;
+}
+
+function modeChange(value: string): PendingSessionConfigChanges {
+  return {
+    mode: { rawConfigId: "mode", value, status: "submitting", mutationId: Number.NaN },
+  };
+}
+
+describe("composePendingConfigChanges", () => {
+  it("releases an optimistic intent change once the authoritative value matches", () => {
+    // No-op switch (value already current): emits no config_option_update, so it
+    // must release immediately rather than stay optimistically stuck.
+    expect(
+      composePendingConfigChanges(liveConfigWithMode("plan"), null, modeChange("plan")),
+    ).toBeNull();
+  });
+
+  it("holds an optimistic intent change until the authoritative value matches", () => {
+    // Real switch: authoritative still on the old value, so the optimistic value
+    // is held (prevents the off-by-one revert) until the live config catches up.
+    expect(
+      composePendingConfigChanges(liveConfigWithMode("default"), null, modeChange("plan")),
+    ).toMatchObject({ mode: { value: "plan", status: "submitting" } });
+  });
+
+  it("does not reconcile server-side directory pending changes", () => {
+    // Directory (server-queued) changes keep their pending state even when the
+    // authoritative value matches — only intent optimism is released here.
+    expect(
+      composePendingConfigChanges(liveConfigWithMode("plan"), modeChange("plan"), {}),
+    ).toMatchObject({ mode: { value: "plan" } });
   });
 });
