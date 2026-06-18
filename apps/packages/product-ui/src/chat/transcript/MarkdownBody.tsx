@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Check, Copy } from "@proliferate/ui/icons";
+import { ProviderLinkMention } from "./ProviderLinkMention";
 
 interface MarkdownBodyProps {
   content: string;
@@ -163,9 +164,14 @@ function createMarkdownAnchor(renderLink: MarkdownLinkRenderer | undefined) {
         />
       );
     }
+    // Default: render an inline provider-icon mention (brand SVG for known
+    // hosts, favicon otherwise). Non-URL hrefs degrade to a plain link inside
+    // ProviderLinkMention.
+    if (href) {
+      return <ProviderLinkMention href={href}>{children}</ProviderLinkMention>;
+    }
     return (
       <a
-        href={href}
         target="_blank"
         rel="noopener noreferrer"
         {...rest}
