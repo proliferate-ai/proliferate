@@ -70,6 +70,11 @@ export function VirtualizedTranscriptRowList({
   // resume-measure callback reads it through a ref (set once the virtualizer
   // exists) to force one synchronous measure pass on tab/window resume.
   const virtualizerRef = useRef<{ measure: () => void } | null>(null);
+  // measure() clears the entire itemSizeCache (full re-measure from estimates),
+  // so this momentarily resets scrollHeight to estimates before the resume glue
+  // loop follows the re-measure. That cost is acceptable only because this is
+  // resume-only (one tab/window re-show); do NOT widen its trigger to per-event
+  // paths or it reintroduces the estimate->measure churn during streaming.
   const resumeMeasure = useCallback(() => {
     virtualizerRef.current?.measure();
   }, []);
@@ -215,18 +220,22 @@ export function VirtualizedTranscriptRowList({
   }, [activeSessionId, resetForSession, selectedWorkspaceId]);
 
   // Flip measurement-ready one frame after a session change: by the next frame
-  // the virtualizer has measured the visible rows, so the blank-viewport check
-  // can run without false-positiving on the estimate-only first frame.
+  // the virtualizer has already measured the visible rows (via
+  // useAnimationFrameWithResizeObserver) so the blank-viewport check can run
+  // without false-positiving on the estimate-only first frame. Gate strictly to
+  // session/workspace change: keying off rows.length would re-arm on every
+  // streamed-row append, and an explicit virtualizer.measure() here would clear
+  // the whole itemSizeCache and reintroduce per-event estimate->measure churn.
+  const hasRows = rows.length > 0;
   useEffect(() => {
-    if (rows.length === 0) {
+    if (!hasRows) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
-      virtualizer.measure();
       setMeasurementReady(true);
     });
     return () => { window.cancelAnimationFrame(frame); };
-  }, [activeSessionId, rows.length, selectedWorkspaceId, virtualizer]);
+  }, [activeSessionId, hasRows, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
