@@ -160,15 +160,29 @@ async function drainSupportReportQueue(
         message: `failed.${failure.kind}`,
       });
 
-      const exhausted = supportReportRetriesExhausted({
-        attemptCount,
-        createdAt: entry.job.createdAt,
-        nowMs: Date.now(),
-      });
+      // Already completed on a prior attempt — this is success, not failure.
+      // Clean up the queued job quietly instead of nagging.
+      if (failure.kind === "already_completed") {
+        removePersistedJob(entry.job.jobId);
+        await deleteSupportReportJobAttachments(entry.job);
+        showToast(failure.toastMessage, "info");
+        continue;
+      }
+
+      // Cap only genuinely-transient failures. Blocked-on-user/config states
+      // (auth_required, cloud/storage unconfigured, dev_auth_bypass) stay queued
+      // until the user signs in or the server is configured — dropping them on a
+      // timer would silently lose a report the user can still send.
+      const exhausted = failure.kind === "transient"
+        && supportReportRetriesExhausted({
+          attemptCount,
+          createdAt: entry.job.createdAt,
+          nowMs: Date.now(),
+        });
       if (!failure.retryable || exhausted) {
         removePersistedJob(entry.job.jobId);
         await deleteSupportReportJobAttachments(entry.job);
-        if (exhausted && failure.retryable) {
+        if (exhausted) {
           void logRendererEvent({
             source: "support_report_upload",
             message: "dropped.exhausted",

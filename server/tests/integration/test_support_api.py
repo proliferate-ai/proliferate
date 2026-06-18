@@ -456,7 +456,7 @@ class TestSupportApi:
         )
 
         assert changed_upload_targets.status_code == 400
-        assert changed_upload_targets.json()["detail"]["code"] == "support_report_upload_invalid"
+        assert changed_upload_targets.json()["detail"]["code"] == "support_report_upload_conflict"
 
     @pytest.mark.asyncio
     async def test_support_report_upload_targets_reissue_refreshes_drifted_content(
@@ -548,6 +548,32 @@ class TestSupportApi:
         assert reissued.status_code == 200
         assert reissued.json()["diagnostics"]["putUrl"].startswith("https://s3.test/")
         assert reissued.json()["attachments"][0]["clientFileId"] == "file-1"
+
+        # Same intent (1 attachment) but a genuinely different object key set (new
+        # client_file_id) IS a conflict — exercises the object-key comparison
+        # branch directly, not the intent validation that guards it.
+        different_objects = await client.post(
+            f"/v1/support/reports/{report_id}/upload-targets",
+            headers=headers,
+            json={
+                "diagnostics": {
+                    "contentType": "application/json",
+                    "sizeBytes": 512,
+                    "sha256": "abc123",
+                },
+                "attachments": [
+                    {
+                        "clientFileId": "file-2",
+                        "fileName": "other.png",
+                        "contentType": "image/png",
+                        "sizeBytes": 100,
+                        "sha256": "def456",
+                    }
+                ],
+            },
+        )
+        assert different_objects.status_code == 400
+        assert different_objects.json()["detail"]["code"] == "support_report_upload_conflict"
 
     @pytest.mark.asyncio
     async def test_support_report_upload_returns_503_when_storage_unconfigured(

@@ -36,7 +36,9 @@ from proliferate.server.support.domain.report_records import (
 )
 from proliferate.server.support.errors import (
     SupportMessageEmpty,
+    SupportReportAlreadyCompleted,
     SupportReportStorageUnavailable,
+    SupportReportUploadConflict,
     SupportReportUploadInvalid,
 )
 from proliferate.server.support.jobs import schedule_support_tracker_after_commit
@@ -224,7 +226,7 @@ async def create_support_report_upload_targets(
     if report is None or report.owner_user_id != sender_user_id:
         raise SupportReportUploadInvalid("Unknown support report upload.")
     if report.status not in {"created", "uploading"}:
-        raise SupportReportUploadInvalid("Support report upload is already completed.")
+        raise SupportReportAlreadyCompleted("Support report upload is already completed.")
 
     _install_report_correlation(report)
     validate_upload_target_request(body)
@@ -247,7 +249,7 @@ async def create_support_report_upload_targets(
         existing_manifest.get("schemaVersion") == 1
         and expected_manifest_keys(existing_manifest) != expected_manifest_keys(manifest)
     ):
-        raise SupportReportUploadInvalid(
+        raise SupportReportUploadConflict(
             "Support report upload targets already exist for different objects."
         )
     await support_reports.update_report_upload_manifest(

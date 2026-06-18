@@ -582,8 +582,10 @@ Row exists, `request_object_written_at` is null:
 - Compare `object_manifest_json` to S3 `list-objects-v2`.
 - Check CORS/network failures, upload URL expiration, object size caps, and
   Desktop Sentry.
-- A retry should refresh upload targets only when metadata matches the original
-  manifest.
+- A retry refreshes upload targets for the same object set; object keys and
+  upload intent (diagnostics flag + attachment count) must match, but re-captured
+  diagnostics content (size/sha256) may differ and is accepted. A mismatched
+  object set returns `support_report_upload_conflict` (terminal, non-retryable).
 
 `/complete` returns an upload-invalid error:
 
@@ -677,7 +679,9 @@ Support reports are designed to be safely retried.
 
 - Report creation is idempotent by authenticated `owner_user_id` and
   `client_job_id`.
-- Upload targets are immutable after the first manifest is stored.
+- Upload targets can be re-issued while the report is uploadable: the object set
+  (keys + intent) is fixed, but per-object content metadata is refreshed so
+  re-captured diagnostics complete.
 - Completion verifies exactly the objects in the stored manifest.
 - GitHub and Linear issue creation are idempotent by the hidden marker.
 - `tracker.json` lets S3-only audits see whether tracker reconciliation

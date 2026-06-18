@@ -193,7 +193,7 @@ describe("useSupportReportUploadQueue", () => {
   });
 
   it("drops a job that has exhausted its retry budget instead of retrying forever", async () => {
-    cloudSupportMocks.createSupportReport.mockRejectedValue(
+    cloudSupportMocks.createSupportReport.mockRejectedValueOnce(
       new Error("Upload failed with 503."),
     );
     window.localStorage.setItem(
@@ -211,6 +211,52 @@ describe("useSupportReportUploadQueue", () => {
     });
     expect(toastStoreMocks.show).toHaveBeenCalledWith(
       "Couldn't send your report after several tries. Please try again from Help.",
+    );
+  });
+
+  it("keeps a blocked-on-sign-in report queued instead of dropping it on the cap", async () => {
+    cloudSupportMocks.createSupportReport.mockRejectedValueOnce(
+      Object.assign(new Error("You must sign in."), { status: 401, code: "unauthorized" }),
+    );
+    window.localStorage.setItem(
+      "proliferate.supportReportJobs.v1",
+      JSON.stringify([
+        { job: makeSupportReportJob("job-blocked"), attemptCount: 20, nextAttemptAt: null },
+      ]),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(cloudSupportMocks.createSupportReport).toHaveBeenCalled();
+    });
+    // auth_required is exempt from the retry cap — the report stays queued even
+    // far past the attempt budget, because the user can still sign in.
+    const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+    expect(JSON.parse(raw ?? "[]")).toHaveLength(1);
+  });
+
+  it("clears the job quietly when upload-targets reports the report already completed", async () => {
+    cloudSupportMocks.createSupportReportUploadTargets.mockRejectedValueOnce(
+      Object.assign(new Error("Support report upload is already completed."), {
+        code: "support_report_already_completed",
+      }),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(activeListeners()).toHaveLength(1);
+    });
+    activeListeners()[0]?.handler(makeSupportReportJob("job-already-done"));
+
+    await waitFor(() => {
+      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+    });
+    expect(toastStoreMocks.show).toHaveBeenCalledWith(
+      "Report already sent. Support has the details.",
+      "info",
     );
   });
 

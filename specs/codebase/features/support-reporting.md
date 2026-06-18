@@ -125,11 +125,17 @@ refs, and server-derived correlation IDs. It must not contain presigned URLs.
 
 `POST /v1/support/reports/{reportId}/upload-targets` validates diagnostics and
 attachment metadata for the report owner, persists the expected object manifest,
-and returns short-lived presigned `PUT` targets. Clients may call it again to
-refresh expired URLs while the report is still uploadable, but the object
-manifest is immutable once written. A retry with different diagnostics or
-attachment metadata is rejected so completion cannot be pointed at a different
-payload than the original upload intent.
+and returns short-lived presigned `PUT` targets. Clients may call it again while
+the report is still uploadable to refresh expired URLs and re-issue targets for
+re-captured diagnostics. The expected **object set** is immutable — the object
+keys plus the upload intent (diagnostics flag and attachment count) cannot
+change, and a retry that alters them is rejected
+(`support_report_upload_conflict`). Per-object content metadata (size/sha256) is
+refreshed from the latest re-issue, because diagnostics are legitimately
+re-captured on each client retry; completion then verifies against the refreshed
+manifest. Re-issue must stay idempotent by object identity — comparing full
+content (size/sha256) rejected every retry forever and was the cause of the
+support-report "could not be sent" retry loop.
 
 `POST /v1/support/reports/{reportId}/complete` verifies uploaded object keys are
 inside the stored report prefix, requires every object in the stored manifest to

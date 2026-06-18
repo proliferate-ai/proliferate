@@ -107,6 +107,32 @@ describe("describeSupportReportUploadFailure", () => {
     expect(failure.kind).toBe("upload_conflict");
     expect(failure.retryable).toBe(false);
   });
+
+  it("classifies the stable conflict code as terminal regardless of message", () => {
+    const failure = describeSupportReportUploadFailure(
+      { message: "reworded server prose", code: "support_report_upload_conflict" },
+      2,
+    );
+
+    expect(failure.kind).toBe("upload_conflict");
+    expect(failure.retryable).toBe(false);
+  });
+
+  it("treats an already-completed report as benign success, not a conflict", () => {
+    const byCode = describeSupportReportUploadFailure(
+      { message: "reworded", code: "support_report_already_completed" },
+      2,
+    );
+    const byMessage = describeSupportReportUploadFailure(
+      new Error("Support report upload is already completed."),
+      2,
+    );
+
+    for (const failure of [byCode, byMessage]) {
+      expect(failure.kind).toBe("already_completed");
+      expect(failure.retryable).toBe(false);
+    }
+  });
 });
 
 describe("supportReportRetriesExhausted", () => {

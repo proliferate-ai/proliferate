@@ -1,4 +1,5 @@
 export type SupportReportUploadFailureKind =
+  | "already_completed"
   | "auth_required"
   | "cloud_unconfigured"
   | "dev_auth_bypass"
@@ -99,10 +100,25 @@ export function describeSupportReportUploadFailure(
     };
   }
 
-  // Server-side conflicts where retrying the same job can never succeed: the
-  // report's object set / intent is locked, or it already completed. Retrying
-  // these only re-toasts forever, so they are terminal.
-  if (isUploadConflictError(message)) {
+  // The report already completed on a prior attempt (e.g. the complete call
+  // landed but the client lost the response before clearing the job). This is
+  // success, not failure — the queue treats `already_completed` as idempotent
+  // cleanup rather than showing an error.
+  if (code === "support_report_already_completed" || isAlreadyCompletedError(message)) {
+    return {
+      kind: "already_completed",
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage: "Report already sent. Support has the details.",
+      toastCooldownMs: 0,
+    };
+  }
+
+  // Terminal upload-target conflict: the report's locked object set / intent can
+  // never reconcile with this request, so retrying the same job is hopeless.
+  // Prefer the stable server code; fall back to message text for older servers.
+  if (code === "support_report_upload_conflict" || isUploadConflictError(message)) {
     return {
       kind: "upload_conflict",
       message,
@@ -178,8 +194,11 @@ function isUploadConflictError(message: string): boolean {
   const normalized = message.toLowerCase();
   return normalized.includes("targets already exist for different objects")
     || normalized.includes("changed diagnostics intent")
-    || normalized.includes("changed attachment intent")
-    || normalized.includes("upload is already completed");
+    || normalized.includes("changed attachment intent");
+}
+
+function isAlreadyCompletedError(message: string): boolean {
+  return message.toLowerCase().includes("upload is already completed");
 }
 
 // Terminal-retry guard: a retryable failure that has exhausted its attempt

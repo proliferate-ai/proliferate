@@ -41,6 +41,21 @@ class SupportReportUploadInvalid(InvalidRequest):
         super().__init__(message)
 
 
+class SupportReportUploadConflict(SupportReportUploadInvalid):
+    """Terminal upload-target conflict: the request can never reconcile with the
+    report's locked object set / intent. Carries a distinct code so the client
+    classifies it as non-retryable from a stable signal, not message prose."""
+
+    code = "support_report_upload_conflict"
+
+
+class SupportReportAlreadyCompleted(SupportReportUploadInvalid):
+    """The report already completed on a prior attempt. Distinct code so the
+    client treats it as success (idempotent cleanup), not a failure."""
+
+    code = "support_report_already_completed"
+
+
 class SupportReportTrackerUnavailable(ProliferateError):
     code = "support_report_tracker_unavailable"
     status_code = 503
