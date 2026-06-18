@@ -110,11 +110,7 @@ export function AuthScreenLayout({
               className="h-11 w-full"
             >
               {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
-              {submitting
-                ? AUTH_LOGIN_LABELS.waiting
-                : githubSignInChecking
-                  ? AUTH_LOGIN_LABELS.checking
-                  : AUTH_LOGIN_LABELS.signIn}
+              {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
               {!submitting && <ArrowRight className="h-4 w-4" />}
             </Button>
           </div>
@@ -125,7 +121,7 @@ export function AuthScreenLayout({
           <div className="absolute inset-x-0 top-full mt-3 text-center">
             {showAuth && error
               ? <p className="text-sm text-destructive">{error}</p>
-              : showAuth && (githubSignInChecking || !githubSignInAvailable)
+              : showAuth && !githubSignInChecking && !githubSignInAvailable
                 ? (
                   <p className="text-sm text-muted-foreground">
                     {githubSignInUnavailableDescription}

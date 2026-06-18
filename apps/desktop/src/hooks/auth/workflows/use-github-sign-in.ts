@@ -16,8 +16,10 @@ export interface UseGitHubSignInResult {
 }
 
 // Owns GitHub sign-in form state and submit callback. Does not own auth availability access.
-// `enabled` gates the availability poll so it only runs when sign-in is actually
-// shown (the persistent auth shell mounts this hook during the loading phase too).
+// `enabled` can gate the availability poll for on-demand callers. The auth shell leaves it
+// enabled during the loading phase too, so the availability answer is warm before the sign-in
+// button morphs in — otherwise the first-load pending window flashes a "checking…" state
+// during the loading -> auth transition.
 export function useGitHubSignIn(options?: { enabled?: boolean }): UseGitHubSignInResult {
   const { signInWithGitHub } = useAuthActions();
   const { cloudEnabled } = useAppCapabilities();

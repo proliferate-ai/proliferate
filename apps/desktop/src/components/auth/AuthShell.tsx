@@ -20,7 +20,7 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
     signInAvailable,
     signInChecking,
     signInUnavailableDescription,
-  } = useGitHubSignIn({ enabled: mode === "auth" });
+  } = useGitHubSignIn();
 
   return (
     <AuthScreenLayout

@@ -16,7 +16,6 @@ export const AUTH_LOGIN_LABELS = {
   detail: "Start by signing in with GitHub.",
   detailWithLocalPrefix: "Continue with GitHub, or",
   signIn: "Continue with GitHub",
-  checking: "Checking GitHub sign-in...",
   waiting: "Waiting for GitHub...",
   continueLocally: "Start locally",
   continueLocallyInline: "start locally",
