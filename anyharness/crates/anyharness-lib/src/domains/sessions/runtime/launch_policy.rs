@@ -31,26 +31,13 @@ pub(super) struct SessionStartupFacts {
     pub has_turn_started_event: bool,
 }
 
-/// Pure startup-strategy matrix. Behavior-equivalent to the pre-split
-/// store-coupled decision; only the fact gathering moved out.
+/// Pure startup-strategy matrix: gathered facts in, a `SessionStartupStrategy`
+/// out. All fact gathering lives in `startup.rs`; this stays data-in/data-out.
 pub(super) fn choose_startup_strategy(
     facts: &SessionStartupFacts,
 ) -> anyhow::Result<SessionStartupStrategy> {
     if facts.is_fork_child {
-        if let Some(native_session_id) = facts.native_session_id.clone() {
-            return Ok(SessionStartupStrategy::LoadNativeNoFallback(
-                native_session_id,
-            ));
-        }
-        let parent_native_session_id = facts
-            .fork_parent_native_session_id
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("fork child is missing its parent link"))?
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("fork parent is missing native session id"))?;
-        return Ok(SessionStartupStrategy::ForkFromNative {
-            parent_native_session_id,
-        });
+        return choose_fork_child_strategy(facts);
     }
 
     let Some(native_session_id) = facts.native_session_id.clone() else {
@@ -72,6 +59,103 @@ pub(super) fn choose_startup_strategy(
     }
 
     Ok(SessionStartupStrategy::ResumeSeqFreshNative)
+}
+
+/// Startup strategy for a fork child.
+///
+/// When a fork child's recorded native id is reloadable depends on the adapter:
+///
+/// - adapters with durable fork ids (e.g. Codex) get a reloadable native id at
+///   fork time, so a recorded id always loads with no fallback.
+/// - adapters whose fork ids are process-local until first prompt (Claude — see
+///   `specs/.../src/sessions.md` fork invariants) only durably persist the
+///   child's native session after its first turn. Until then the eagerly
+///   recorded id is valid only while the original actor stays alive; after a
+///   cold restart-before-first-prompt the agent has no transcript for it and
+///   `load_session` returns `Resource not found`.
+///
+/// So for a child that has its own native id:
+/// - already ran its own turn (`has_last_prompt_at`), or a durable-fork adapter:
+///   load it with no fallback (re-forking would lose the child's own turns).
+/// - a process-local-fork (Claude) child that has not run yet: re-fork from the
+///   parent native id (`fork_from_native`), which is what the spec prescribes.
+///   Fall back to the child's own (possibly stale) id only when no parent can be
+///   resolved. This strategy is only computed on a cold start (a live handle
+///   short-circuits before `choose_session_startup_strategy`), so by then a
+///   process-local id is already dead and the fallback fails identically to the
+///   prior behavior — never worse, and it keeps a clean path for durable-fork
+///   adapters whose recorded id is still valid.
+///
+/// Residual window: `has_last_prompt_at` flips at turn start
+/// (`actor/turn/active.rs::update_last_prompt_at`), slightly before Claude
+/// persists the transcript, so a crash during the child's very first turn can
+/// leave a recorded `last_prompt_at` with a non-durable native id. There is no
+/// lossless local recovery for a child that has started its own turn (re-forking
+/// from the parent would drop that turn), so this narrow case is left to the
+/// existing error surface (tracked as a follow-up).
+///
+/// Note the deliberate asymmetry with the non-fork Claude branch above, which
+/// keys on `has_turn_started_event`: that signal is unusable here because the
+/// fork transcript snapshot copies the parent's `turn_started` events into the
+/// child (`store/links.rs::insert_fork_session_with_link_and_event_snapshot`),
+/// so it is `true` for every fork child regardless of its own activity. Only
+/// `has_last_prompt_at` distinguishes "child has run since the fork." Do not
+/// unify the two branches.
+fn choose_fork_child_strategy(
+    facts: &SessionStartupFacts,
+) -> anyhow::Result<SessionStartupStrategy> {
+    let fork_id_is_process_local = fork_id_is_process_local(&facts.agent_kind);
+
+    if let Some(native_session_id) = facts.native_session_id.clone() {
+        // Durable-fork adapters, or a child that has already run its own turn:
+        // the recorded native id is reloadable.
+        if facts.has_last_prompt_at || !fork_id_is_process_local {
+            return Ok(SessionStartupStrategy::LoadNativeNoFallback(
+                native_session_id,
+            ));
+        }
+        // Zero-turn process-local-fork (Claude) child: prefer re-forking from
+        // the parent; otherwise fall back to the child's own native id rather
+        // than failing the launch.
+        if let Some(parent_native_session_id) = resolved_parent_native_session_id(facts) {
+            return Ok(SessionStartupStrategy::ForkFromNative {
+                parent_native_session_id,
+            });
+        }
+        return Ok(SessionStartupStrategy::LoadNativeNoFallback(
+            native_session_id,
+        ));
+    }
+
+    // No native id of its own: must re-fork from the parent.
+    let parent_native_session_id = resolved_parent_native_session_id(facts).ok_or_else(|| {
+        match facts.fork_parent_native_session_id {
+            Some(_) => anyhow::anyhow!("fork parent is missing native session id"),
+            None => anyhow::anyhow!("fork child is missing its parent link"),
+        }
+    })?;
+    Ok(SessionStartupStrategy::ForkFromNative {
+        parent_native_session_id,
+    })
+}
+
+/// Whether an adapter's fork ids are process-local until the child's first
+/// prompt (vs durable at fork time). Single source for the distinction that
+/// also gates `fork.rs::child_actor_forks`; the two must stay in lockstep — a
+/// child only reaches the zero-turn "stale native id" state if it was forked on
+/// the child actor here. Currently Claude is the only process-local adapter; a
+/// typed adapter capability would be the longer-term home (see PR follow-up).
+pub(super) fn fork_id_is_process_local(agent_kind: &str) -> bool {
+    agent_kind == AgentKind::Claude.as_str()
+}
+
+/// The parent's native session id, if one was resolved and is non-empty.
+fn resolved_parent_native_session_id(facts: &SessionStartupFacts) -> Option<String> {
+    facts
+        .fork_parent_native_session_id
+        .clone()
+        .flatten()
+        .filter(|value| !value.trim().is_empty())
 }
 
 /// Precondition: a closed session row never launches.
@@ -199,10 +283,72 @@ mod tests {
     }
 
     #[test]
-    fn loads_fork_children_without_fresh_fallback() {
+    fn loads_started_fork_children_without_fresh_fallback() {
+        // A fork child that has run its own turn has a durable native
+        // transcript; load it with no fallback (re-forking would lose the
+        // child's own turns).
         let mut facts = facts();
         facts.is_fork_child = true;
         facts.native_session_id = Some("fork-native".to_string());
+        facts.has_last_prompt_at = true;
+        facts.fork_parent_native_session_id = Some(Some("parent-native".to_string()));
+
+        let strategy = choose_startup_strategy(&facts).expect("strategy");
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::LoadNativeNoFallback("fork-native".to_string())
+        );
+    }
+
+    #[test]
+    fn reforks_zero_turn_fork_child_with_native_id_from_parent() {
+        // The bug case: the child has an eagerly-recorded native id but has
+        // never run its own turn, so that id is process-local and may be dead
+        // after a cold restart. Re-fork from the parent instead of issuing a
+        // no-fallback load that would brick the session.
+        let mut facts = facts();
+        facts.is_fork_child = true;
+        facts.native_session_id = Some("stale-fork-native".to_string());
+        facts.has_last_prompt_at = false;
+        facts.fork_parent_native_session_id = Some(Some("parent-native".to_string()));
+
+        let strategy = choose_startup_strategy(&facts).expect("strategy");
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::ForkFromNative {
+                parent_native_session_id: "parent-native".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn zero_turn_fork_child_falls_back_to_own_native_id_when_parent_unresolvable() {
+        // Last resort: if a zero-turn child cannot resolve a parent native id,
+        // try its own (possibly stale) native id rather than failing the launch
+        // — never regress below the prior behavior.
+        let mut facts = facts();
+        facts.is_fork_child = true;
+        facts.native_session_id = Some("fork-native".to_string());
+        facts.has_last_prompt_at = false;
+        facts.fork_parent_native_session_id = Some(None);
+
+        let strategy = choose_startup_strategy(&facts).expect("strategy");
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::LoadNativeNoFallback("fork-native".to_string())
+        );
+    }
+
+    #[test]
+    fn loads_non_claude_zero_turn_fork_child_without_refork() {
+        // Durable-fork adapters keep their recorded native id even with no first
+        // prompt; only process-local (Claude) fork ids re-fork on zero turns.
+        let mut facts = facts();
+        facts.is_fork_child = true;
+        facts.agent_kind = "codex".to_string();
+        facts.native_session_id = Some("fork-native".to_string());
+        facts.has_last_prompt_at = false;
+        facts.fork_parent_native_session_id = Some(Some("parent-native".to_string()));
 
         let strategy = choose_startup_strategy(&facts).expect("strategy");
         assert_eq!(

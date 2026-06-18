@@ -470,7 +470,10 @@ fn choose_startup_strategy_keeps_non_claude_agents_on_native_load_path() {
 }
 
 #[test]
-fn choose_startup_strategy_loads_fork_children_without_fresh_fallback() {
+fn choose_startup_strategy_loads_started_fork_children_without_fresh_fallback() {
+    // A fork child that has already run its own turn (`last_prompt_at` set) has
+    // a durable native transcript; load it with no fallback and skip the parent
+    // lookup.
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
@@ -482,6 +485,7 @@ fn choose_startup_strategy_loads_fork_children_without_fresh_fallback() {
     let mut child = session_record("claude");
     child.id = "fork-child".to_string();
     child.native_session_id = Some("fork-native".to_string());
+    child.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
     let link = link_record(
         "fork-link",
         SessionLinkRelation::Fork,
@@ -498,6 +502,46 @@ fn choose_startup_strategy_loads_fork_children_without_fresh_fallback() {
     assert_eq!(
         strategy,
         SessionStartupStrategy::LoadNativeNoFallback("fork-native".to_string())
+    );
+}
+
+#[test]
+fn choose_startup_strategy_reforks_zero_turn_fork_child_with_native_id() {
+    // The bug case end-to-end through the IO layer: a fork child with an
+    // eagerly-recorded native id but no first prompt resolves the parent native
+    // id (widened gating) and re-forks instead of issuing a dead no-fallback
+    // load.
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut parent = session_record("claude");
+    parent.id = "parent-session".to_string();
+    parent.native_session_id = Some("parent-native".to_string());
+    store.insert(&parent).expect("insert parent");
+
+    let mut child = session_record("claude");
+    child.id = "fork-child".to_string();
+    child.native_session_id = Some("stale-fork-native".to_string());
+    child.last_prompt_at = None;
+    let link = link_record(
+        "fork-link",
+        SessionLinkRelation::Fork,
+        "parent-session",
+        "fork-child",
+    );
+    store
+        .insert_session_with_link(&child, &link)
+        .expect("insert fork child and link");
+
+    let strategy =
+        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
+
+    assert_eq!(
+        strategy,
+        SessionStartupStrategy::ForkFromNative {
+            parent_native_session_id: "parent-native".to_string()
+        }
     );
 }
 
@@ -537,6 +581,105 @@ fn choose_startup_strategy_forks_unstarted_fork_children_from_parent_native_id()
     assert!(
         strategy.resumes_durable_history(),
         "fork startup appends after the copied parent transcript snapshot"
+    );
+}
+
+#[test]
+fn choose_startup_strategy_reforks_snapshot_polluted_zero_turn_fork_child() {
+    // End-to-end guard against the snapshot-pollution trap: build the child via
+    // the real fork snapshot (which copies the parent's `turn_started` events),
+    // so `has_turn_started_event(child)` is true. A zero-turn Claude child must
+    // still re-fork from the parent — proving the policy keys on `last_prompt_at`
+    // and not on the polluted `turn_started` signal. This test fails if anyone
+    // reverts the fork branch to key on `has_turn_started_event`.
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut parent = session_record("claude");
+    parent.id = "parent-session".to_string();
+    parent.native_session_id = Some("parent-native".to_string());
+    store.insert(&parent).expect("insert parent");
+    store
+        .append_event(&SessionEventRecord {
+            id: 0,
+            session_id: "parent-session".to_string(),
+            seq: 1,
+            timestamp: "2026-03-25T00:01:00Z".to_string(),
+            event_type: "turn_started".to_string(),
+            turn_id: Some("turn-1".to_string()),
+            item_id: None,
+            payload_json: r#"{"type":"turn_started"}"#.to_string(),
+        })
+        .expect("append parent turn");
+
+    let mut child = session_record("claude");
+    child.id = "fork-child".to_string();
+    child.native_session_id = Some("stale-fork-native".to_string());
+    child.last_prompt_at = None;
+    let link = link_record(
+        "fork-link",
+        SessionLinkRelation::Fork,
+        "parent-session",
+        "fork-child",
+    );
+    store
+        .insert_fork_session_with_link_and_event_snapshot(&child, &link)
+        .expect("insert fork child with snapshot");
+
+    // Precondition: the snapshot polluted the child's turn_started signal.
+    assert!(
+        store
+            .has_turn_started_event("fork-child")
+            .expect("has_turn_started_event"),
+        "snapshot should have copied the parent's turn_started into the child"
+    );
+
+    let strategy =
+        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
+
+    assert_eq!(
+        strategy,
+        SessionStartupStrategy::ForkFromNative {
+            parent_native_session_id: "parent-native".to_string()
+        }
+    );
+}
+
+#[test]
+fn choose_startup_strategy_loads_non_claude_zero_turn_fork_child_without_refork() {
+    // Durable-fork adapters (e.g. Codex) get a reloadable native id at fork
+    // time, so a zero-turn fork child keeps LoadNativeNoFallback rather than
+    // re-forking — the re-fork path is specific to process-local fork ids.
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut parent = session_record("codex");
+    parent.id = "parent-session".to_string();
+    parent.native_session_id = Some("parent-native".to_string());
+    store.insert(&parent).expect("insert parent");
+
+    let mut child = session_record("codex");
+    child.id = "fork-child".to_string();
+    child.native_session_id = Some("fork-native".to_string());
+    child.last_prompt_at = None;
+    let link = link_record(
+        "fork-link",
+        SessionLinkRelation::Fork,
+        "parent-session",
+        "fork-child",
+    );
+    store
+        .insert_session_with_link(&child, &link)
+        .expect("insert fork child and link");
+
+    let strategy =
+        choose_session_startup_strategy(&child, &store).expect("select startup strategy");
+
+    assert_eq!(
+        strategy,
+        SessionStartupStrategy::LoadNativeNoFallback("fork-native".to_string())
     );
 }
 
