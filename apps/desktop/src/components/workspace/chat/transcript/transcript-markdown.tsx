@@ -5,6 +5,7 @@ import {
   type MarkdownInlineCodeRenderInput,
   type MarkdownLinkRenderInput,
 } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { isExternalHttpLink } from "@proliferate/product-ui/chat/transcript/ProviderLinkMention";
 import { FilePathLink } from "@/components/content/ui/FilePathLink";
 import { useHighlightedCode } from "@/hooks/ui/highlighting/use-highlighted-code";
 import {
@@ -24,7 +25,10 @@ export function renderTranscriptLink({
   href,
   children,
 }: MarkdownLinkRenderInput): ReactNode | null {
-  if (!looksLikeFileReferenceHref(href)) {
+  // External web links (incl. scheme-less hosts like `github.com/...`) fall
+  // through to the shared provider-icon mention in MarkdownBody; only
+  // workspace file references become FilePathLinks here.
+  if (isExternalHttpLink(href) || !looksLikeFileReferenceHref(href)) {
     return null;
   }
   const text = markdownChildrenText(children);

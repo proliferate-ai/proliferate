@@ -8,7 +8,7 @@
 /// Instruction telling models to format file references as markdown links
 /// with workspace-root-relative destinations (optionally `:line` suffixed),
 /// falling back to absolute paths only outside the workspace.
-pub const FILE_REFERENCE_INSTRUCTIONS: &str = "When referencing a file in your responses, format it as a markdown link: the text is the file name or workspace-relative path, and the destination is the path relative to the workspace root, optionally suffixed with :line — for example [models.rs](src/models.rs:42) or [README.md](README.md). Use an absolute path destination only for files outside the workspace root. Prefer these links over bare or backticked paths whenever you mention a specific file.";
+pub const FILE_REFERENCE_INSTRUCTIONS: &str = "When referencing a file in your responses, format it as a markdown link. The destination MUST be the file's complete path from the workspace root — every leading directory included, exactly as it appears in the file tree (e.g. what `git ls-files` prints) — never abbreviated and never relative to the current file or a subdirectory. The link text can be just the file name. Optionally suffix the destination with :line. For example, in a monorepo: [MarkdownRenderer.tsx](apps/desktop/src/components/content/ui/MarkdownRenderer.tsx:142), or [README.md](README.md). Use an absolute path destination only for files outside the workspace root. Prefer these links over bare or backticked paths whenever you mention a specific file.";
 
 /// System prompt append entries applied to every session, regardless of
 /// harness or workspace surface.

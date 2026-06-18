@@ -49,7 +49,7 @@ describe("MarkdownRenderer", () => {
       }),
     );
 
-    expect(html).toContain("text-link-foreground underline");
+    expect(html).toContain("data-provider-link-host=\"example.com\"");
     expect(html).toContain("bg-[var(--color-code-block-background,var(--color-muted))]");
     expect(html.match(/data-file-reference-badge="inline"/g)).toHaveLength(2);
     expect(html).toContain("README.md");
@@ -65,13 +65,13 @@ describe("MarkdownRenderer", () => {
     expect(html).toContain("border-l-2 border-border");
   });
 
-  it("renders autolinked GitHub URLs as inline chips while preserving authored link text", () => {
+  it("renders GitHub and other web URLs as provider-icon mentions, bare or labeled", () => {
     const html = renderToStaticMarkup(
       createElement(MarkdownRenderer, {
         content: [
           "https://github.com/proliferate-ai/proliferate",
           "<https://github.com/proliferate-ai/proliferate/pull/43>",
-          "[https://github.com/proliferate-ai/proliferate/blob/main/apps/desktop/src/App.tsx](https://github.com/proliferate-ai/proliferate/blob/main/apps/desktop/src/App.tsx)",
+          "[blob](https://github.com/proliferate-ai/proliferate/blob/main/apps/desktop/src/App.tsx)",
           "[see the PR](https://github.com/proliferate-ai/proliferate/pull/44)",
           "[actions](https://github.com/proliferate-ai/proliferate/actions)",
           "[external](https://example.com/docs)",
@@ -79,17 +79,13 @@ describe("MarkdownRenderer", () => {
       }),
     );
 
-    expect(html.match(/data-github-link-chip="true"/g)).toHaveLength(3);
-    expect(html).toContain("data-github-link-kind=\"repo\"");
-    expect(html).toContain("data-github-link-kind=\"pull\"");
-    expect(html).toContain("data-github-link-kind=\"file\"");
-    expect(html).toContain("PR");
-    expect(html).toContain("proliferate-ai/proliferate#43");
-    expect(html).toContain("proliferate-ai/proliferate/apps/desktop/src/App.tsx");
-    expect(html).toContain("text-link-foreground underline");
-    expect(html).toContain(">see the PR</a>");
-    expect(html).toContain(">actions</a>");
-    expect(html).toContain(">external</a>");
-    expect(html).not.toContain("proliferate-ai/proliferate#44</span>");
+    // Every web URL becomes a mention, bare autolink or [label](url), GitHub or not.
+    expect(html.match(/data-provider-link-host="github\.com"/g)).toHaveLength(5);
+    expect(html.match(/data-provider-link-host="example\.com"/g)).toHaveLength(1);
+    // Authored link text is preserved as the mention label.
+    expect(html).toContain("see the PR");
+    // Non-brand hosts use the favicon service; GitHub uses its brand SVG.
+    expect(html).toContain("https://www.google.com/s2/favicons?domain=example.com");
+    expect(html).not.toContain("data-github-link-chip");
   });
 });
