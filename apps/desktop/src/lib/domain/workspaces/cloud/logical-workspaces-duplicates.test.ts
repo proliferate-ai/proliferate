@@ -230,6 +230,48 @@ describe("logical workspace duplicate local records", () => {
     )?.id).toBe(logicalWorkspaces[0]?.id);
   });
 
+  it("keeps a just-created (selected, zero-session) duplicate visible next to a used sibling", () => {
+    // Regression: clicking "New local workspace" on an already-used folder makes
+    // a 0-session row that is immediately selected. It must show as its own entry
+    // (not fold into the used sibling) so selection resolves to the new workspace.
+    const checkoutPath = "/tmp/proliferate";
+    const usedLocal = {
+      ...makeWorkspace({
+        id: "local-used",
+        branch: "main",
+        updatedAt: "2026-06-02T09:10:00.000Z",
+        executionSummary: makeExecutionSummary({
+          totalSessionCount: 3,
+          liveSessionCount: 0,
+          updatedAt: "2026-06-02T09:15:00.000Z",
+        }),
+      }),
+      path: checkoutPath,
+    };
+    const justCreated = {
+      ...makeWorkspace({
+        id: "local-just-created",
+        branch: "main",
+        updatedAt: "2026-06-02T09:50:00.000Z",
+      }),
+      path: checkoutPath,
+    };
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [usedLocal, justCreated],
+      repoRoots: [],
+      cloudWorkspaces: [],
+      currentSelectionId: justCreated.id,
+    });
+
+    expect(logicalWorkspaces).toHaveLength(2);
+    const createdEntry = findLogicalWorkspace(logicalWorkspaces, justCreated.id);
+    const usedEntry = findLogicalWorkspace(logicalWorkspaces, usedLocal.id);
+    expect(createdEntry?.localWorkspace?.id).toBe(justCreated.id);
+    expect(usedEntry?.localWorkspace?.id).toBe(usedLocal.id);
+    expect(createdEntry?.id).not.toBe(usedEntry?.id);
+  });
+
   it("promotes a prior local-slot workspace to canonical and preserves alias lookup", () => {
     const olderLocal = makeWorkspace({
       id: "local-older",

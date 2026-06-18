@@ -110,6 +110,17 @@ for that path. The runtime does not expose a canonical-vs-sibling concept for
 these duplicates; desktop reconstructs that projection from the returned local
 workspace rows.
 
+Desktop projection rule (sidebar logical workspaces): duplicate local rows
+sharing the same `path + branch` each become their own sidebar entry when they
+have their own chats (sessions) or are the current selection — so a user can keep
+multiple distinct "project/feature threads" over the same checkout, and a newly
+created local workspace (selected immediately, no chats yet) shows right away.
+Only genuinely-empty, unselected (setup-only / stale) duplicate rows are folded
+behind the first distinct entry — hidden as a junk row but still resolvable via
+alias lookup. This lives in `collapseExactLocalWorkspaceDuplicates`
+(`apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.ts`); distinct
+entries get `local-slot` logical ids and `#2`/`#3` sidebar name suffixes.
+
 ### Create Workspace
 
 `create_workspace(...)`

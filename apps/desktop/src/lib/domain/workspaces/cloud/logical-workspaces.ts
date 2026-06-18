@@ -143,11 +143,11 @@ function collapseExactLocalWorkspaceDuplicates(
 
   // Distinct local workspaces for the same folder+branch are kept separate so
   // each "project/feature thread" gets its own sidebar entry. Within a bucket,
-  // every workspace that has its own chats is surfaced as a distinct entry; only
-  // genuinely-empty (setup-only / stale) duplicates are folded onto the top used
-  // entry so they don't show as junk rows but stay selectable. A brand-new empty
-  // workspace is still shown immediately via the pending-workspace projection
-  // until its first turn makes it "used".
+  // a workspace is surfaced as its own distinct entry when it has its own chats
+  // OR it is the current selection (covers a just-created workspace that has no
+  // chats yet — `createLocalWorkspaceAndEnter` selects it immediately). Only
+  // genuinely-empty, unselected (setup-only / stale) duplicates are folded onto
+  // the top distinct entry so they don't show as junk rows but stay selectable.
   return Array.from(byMaterialization.values()).flatMap((bucket): CollapsedLocalWorkspace[] => {
     if (bucket.length === 1) {
       return [{
@@ -156,29 +156,37 @@ function collapseExactLocalWorkspaceDuplicates(
       }];
     }
 
-    const used = bucket.filter(workspaceHasOwnSessions);
-    const empty = bucket.filter((candidate) => !workspaceHasOwnSessions(candidate));
+    const distinct = bucket.filter(
+      (candidate) =>
+        workspaceHasOwnSessions(candidate)
+        || localWorkspaceMatchesSelection(candidate, currentSelectionId),
+    );
+    const foldable = bucket.filter(
+      (candidate) =>
+        !workspaceHasOwnSessions(candidate)
+        && !localWorkspaceMatchesSelection(candidate, currentSelectionId),
+    );
 
-    if (used.length === 0) {
-      // No chats anywhere in this folder+branch yet: keep a single
+    if (distinct.length === 0) {
+      // No chats and nothing selected in this folder+branch yet: keep a single
       // representative (preferring history/selection), aliasing the rest.
-      const representative = [...empty]
+      const representative = [...foldable]
         .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
       return [{
         workspace: representative,
-        aliasIds: empty
+        aliasIds: foldable
           .filter((candidate) => candidate.id !== representative.id)
           .flatMap(localWorkspaceIdentityIds),
       }];
     }
 
-    const sortedUsed = [...used]
+    const sortedDistinct = [...distinct]
       .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId));
-    const foldedEmptyAliasIds = empty.flatMap(localWorkspaceIdentityIds);
-    return sortedUsed.map((workspace, index) => ({
+    const foldedAliasIds = foldable.flatMap(localWorkspaceIdentityIds);
+    return sortedDistinct.map((workspace, index) => ({
       workspace,
-      // Fold stale empty duplicates onto the top used entry.
-      aliasIds: index === 0 ? foldedEmptyAliasIds : [],
+      // Fold stale empty duplicates onto the first distinct entry.
+      aliasIds: index === 0 ? foldedAliasIds : [],
     }));
   });
 }
