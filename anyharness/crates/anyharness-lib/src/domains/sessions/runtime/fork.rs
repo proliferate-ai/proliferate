@@ -1,6 +1,5 @@
 use anyharness_contract::v1::SessionExecutionPhase;
 
-use crate::domains::agents::model::AgentKind;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
@@ -85,7 +84,11 @@ impl SessionRuntime {
             return Err(ForkSessionError::Busy);
         }
 
-        let child_actor_forks = parent.agent_kind == AgentKind::Claude.as_str();
+        // Must stay in lockstep with the resume-side strategy: a child forked on
+        // the child actor (process-local fork id) is the one that can later land
+        // in the zero-turn "stale native id" state handled by `launch_policy`.
+        let child_actor_forks =
+            super::launch_policy::fork_id_is_process_local(&parent.agent_kind);
         let forked = if child_actor_forks {
             handle.verify_fork_ready().await.map_err(|error| {
                 map_live_fork_command_error(error, "session actor dropped fork readiness response")

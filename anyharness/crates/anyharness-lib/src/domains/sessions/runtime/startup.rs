@@ -29,12 +29,15 @@ use super::{
 };
 
 /// Resolve steps only — gather the durable facts, then let the pure policy in
-/// `launch_policy` pick the strategy. The parent lookup is gated: a fork child
-/// needs its parent's native id whenever it has not yet run its own turn
-/// (`last_prompt_at` unset) — either because it never had a native id, or
-/// because its eagerly-recorded one is process-local and may be dead after a
-/// cold restart-before-first-prompt. A fork child that has already run keeps
-/// its durable native id and skips the lookup.
+/// `launch_policy` pick the strategy. The parent lookup is gated to fork
+/// children that have not yet run their own turn (`last_prompt_at` unset): the
+/// policy may need the parent native id to re-fork — either because the child
+/// never had a native id, or because its eagerly-recorded one is process-local
+/// and may be dead after a cold restart-before-first-prompt. This intentionally
+/// over-fetches for durable-fork (non-Claude) zero-turn children, where the
+/// policy ignores the parent id; that is a single harmless row read kept here so
+/// the resolve gate doesn't have to duplicate the adapter distinction. A fork
+/// child that has already run keeps its durable native id and skips the lookup.
 pub(super) fn choose_session_startup_strategy(
     record: &SessionRecord,
     session_store: &SessionStore,

@@ -269,7 +269,9 @@ Fork invariants:
   If a zero-turn child cannot resolve a parent native id, it falls back to its
   own (possibly stale) native id rather than failing the launch. This applies
   to process-local-fork adapters (Claude); durable-fork adapters keep loading
-  their recorded native id. The decision keys on `last_prompt_at`, not on
+  their recorded native id per the durable-fork bullet above (a zero-turn
+  durable-fork child still uses `load_session`). The decision keys on
+  `last_prompt_at`, not on
   `turn_started`: the transcript snapshot below copies the parent's
   `turn_started` events into the child, so that signal is always set for forks.
   Because re-fork is tip-only, a zero-turn child re-forked after the parent

@@ -80,9 +80,11 @@ pub(super) fn choose_startup_strategy(
 /// - a process-local-fork (Claude) child that has not run yet: re-fork from the
 ///   parent native id (`fork_from_native`), which is what the spec prescribes.
 ///   Fall back to the child's own (possibly stale) id only when no parent can be
-///   resolved, so we never regress below the prior behavior — that floor still
-///   succeeds for a same-process resume and fails identically to today when the
-///   native session is genuinely gone.
+///   resolved. This strategy is only computed on a cold start (a live handle
+///   short-circuits before `choose_session_startup_strategy`), so by then a
+///   process-local id is already dead and the fallback fails identically to the
+///   prior behavior — never worse, and it keeps a clean path for durable-fork
+///   adapters whose recorded id is still valid.
 ///
 /// Residual window: `has_last_prompt_at` flips at turn start
 /// (`actor/turn/active.rs::update_last_prompt_at`), slightly before Claude
@@ -90,7 +92,7 @@ pub(super) fn choose_startup_strategy(
 /// leave a recorded `last_prompt_at` with a non-durable native id. There is no
 /// lossless local recovery for a child that has started its own turn (re-forking
 /// from the parent would drop that turn), so this narrow case is left to the
-/// existing error surface; see the follow-up in the PR/spec.
+/// existing error surface (tracked as a follow-up).
 ///
 /// Note the deliberate asymmetry with the non-fork Claude branch above, which
 /// keys on `has_turn_started_event`: that signal is unusable here because the
@@ -102,7 +104,7 @@ pub(super) fn choose_startup_strategy(
 fn choose_fork_child_strategy(
     facts: &SessionStartupFacts,
 ) -> anyhow::Result<SessionStartupStrategy> {
-    let fork_id_is_process_local = facts.agent_kind == AgentKind::Claude.as_str();
+    let fork_id_is_process_local = fork_id_is_process_local(&facts.agent_kind);
 
     if let Some(native_session_id) = facts.native_session_id.clone() {
         // Durable-fork adapters, or a child that has already run its own turn:
@@ -135,6 +137,16 @@ fn choose_fork_child_strategy(
     Ok(SessionStartupStrategy::ForkFromNative {
         parent_native_session_id,
     })
+}
+
+/// Whether an adapter's fork ids are process-local until the child's first
+/// prompt (vs durable at fork time). Single source for the distinction that
+/// also gates `fork.rs::child_actor_forks`; the two must stay in lockstep — a
+/// child only reaches the zero-turn "stale native id" state if it was forked on
+/// the child actor here. Currently Claude is the only process-local adapter; a
+/// typed adapter capability would be the longer-term home (see PR follow-up).
+pub(super) fn fork_id_is_process_local(agent_kind: &str) -> bool {
+    agent_kind == AgentKind::Claude.as_str()
 }
 
 /// The parent's native session id, if one was resolved and is non-empty.
