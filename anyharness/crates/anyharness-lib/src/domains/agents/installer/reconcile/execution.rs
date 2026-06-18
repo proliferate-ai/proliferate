@@ -25,6 +25,7 @@ pub struct AgentReconcileJobSnapshot {
     pub status: AgentReconcileJobStatus,
     pub job_id: Option<String>,
     pub reinstall: bool,
+    pub installed_only: bool,
     pub current_agent: Option<AgentKind>,
     pub results: Vec<AgentReconcileResult>,
     pub started_at: Option<String>,
@@ -37,6 +38,7 @@ struct AgentReconcileJob {
     job_id: String,
     status: AgentReconcileJobStatus,
     reinstall: bool,
+    installed_only: bool,
     current_agent: Option<AgentKind>,
     results: Vec<AgentReconcileResult>,
     started_at: Option<String>,
@@ -50,6 +52,7 @@ impl AgentReconcileJob {
             status: self.status.clone(),
             job_id: Some(self.job_id.clone()),
             reinstall: self.reinstall,
+            installed_only: self.installed_only,
             current_agent: self.current_agent.clone(),
             results: self.results.clone(),
             started_at: self.started_at.clone(),
@@ -93,13 +96,32 @@ impl AgentReconcileService {
                     existing.status,
                     AgentReconcileJobStatus::Queued | AgentReconcileJobStatus::Running
                 ) {
+                    // Reuse the in-flight job only if its scope COVERS this request.
+                    // A full job (installed_only=false) covers everything; an
+                    // installed-only job does NOT cover a full request — so a full
+                    // reconcile must supersede an in-flight installed-only pass,
+                    // otherwise missing agents would be silently skipped.
+                    let covers_request = !existing.installed_only || installed_only;
+                    if covers_request {
+                        tracing::info!(
+                            job_id = %existing.job_id,
+                            requested_reinstall = reinstall,
+                            job_reinstall = existing.reinstall,
+                            requested_installed_only = installed_only,
+                            job_installed_only = existing.installed_only,
+                            "agent reconcile request reused active job"
+                        );
+                        return existing.snapshot();
+                    }
                     tracing::info!(
-                        job_id = %existing.job_id,
-                        requested_reinstall = reinstall,
-                        job_reinstall = existing.reinstall,
-                        "agent reconcile request reused active job"
+                        superseded_job_id = %existing.job_id,
+                        job_installed_only = existing.installed_only,
+                        requested_installed_only = installed_only,
+                        "full agent reconcile supersedes in-flight installed-only job"
                     );
-                    return existing.snapshot();
+                    // Fall through: a new full job replaces the slot. The superseded
+                    // task's `update_job` calls no-op once the job_id changes, so it
+                    // self-terminates (its idempotent installs are harmless).
                 }
             }
 
@@ -108,6 +130,7 @@ impl AgentReconcileService {
                 job_id: job_id.clone(),
                 status: AgentReconcileJobStatus::Queued,
                 reinstall,
+                installed_only,
                 current_agent: None,
                 results: Vec::new(),
                 started_at: Some(chrono::Utc::now().to_rfc3339()),
@@ -153,6 +176,7 @@ impl AgentReconcileJobSnapshot {
             status: AgentReconcileJobStatus::Idle,
             job_id: None,
             reinstall: false,
+            installed_only: false,
             current_agent: None,
             results: Vec::new(),
             started_at: None,
@@ -369,6 +393,7 @@ mod tests {
                 job_id: "existing-job".into(),
                 status: AgentReconcileJobStatus::Running,
                 reinstall: false,
+                installed_only: false,
                 current_agent: Some(AgentKind::Codex),
                 results: Vec::new(),
                 started_at: Some(chrono::Utc::now().to_rfc3339()),
@@ -466,5 +491,78 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[tokio::test]
+    async fn full_reconcile_supersedes_in_flight_installed_only_job() {
+        // A full reconcile must NOT be silently swallowed by an in-flight
+        // installed-only startup pass (which skips missing agents).
+        let service = AgentReconcileService::new();
+        {
+            let mut job = service.job.lock().await;
+            *job = Some(AgentReconcileJob {
+                job_id: "startup-installed-only".into(),
+                status: AgentReconcileJobStatus::Running,
+                reinstall: false,
+                installed_only: true,
+                current_agent: None,
+                results: Vec::new(),
+                started_at: Some(chrono::Utc::now().to_rfc3339()),
+                finished_at: None,
+                message: None,
+            });
+        }
+
+        let snapshot = service
+            .start_or_get(
+                Vec::new(),
+                PathBuf::from("/tmp/anyharness-supersede"),
+                false,
+                false, // full scope
+                None,
+                None,
+            )
+            .await;
+
+        assert_ne!(
+            snapshot.job_id.as_deref(),
+            Some("startup-installed-only"),
+            "full reconcile must supersede the in-flight installed-only job, not reuse it"
+        );
+        assert!(!snapshot.installed_only, "the superseding job is full-scope");
+    }
+
+    #[tokio::test]
+    async fn installed_only_reuses_in_flight_installed_only_job() {
+        // Startup-style coalescing still holds: an installed-only request reuses
+        // a running installed-only job.
+        let service = AgentReconcileService::new();
+        {
+            let mut job = service.job.lock().await;
+            *job = Some(AgentReconcileJob {
+                job_id: "running-installed-only".into(),
+                status: AgentReconcileJobStatus::Running,
+                reinstall: false,
+                installed_only: true,
+                current_agent: None,
+                results: Vec::new(),
+                started_at: Some(chrono::Utc::now().to_rfc3339()),
+                finished_at: None,
+                message: None,
+            });
+        }
+
+        let snapshot = service
+            .start_or_get(
+                Vec::new(),
+                PathBuf::from("/tmp/anyharness-reuse"),
+                false,
+                true, // installed-only scope
+                None,
+                None,
+            )
+            .await;
+
+        assert_eq!(snapshot.job_id.as_deref(), Some("running-installed-only"));
     }
 }
