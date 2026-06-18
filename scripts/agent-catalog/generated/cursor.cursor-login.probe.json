@@ -1,12 +1,15 @@
 {
-  "probedAt": "2026-06-10T04:19:51.541700+00:00",
+  "probedAt": "2026-06-18T02:53:09.426103+00:00",
   "agentKind": "cursor",
   "authContext": "cursor-login",
   "attestation": null,
-  "modelSource": "acpModels",
-  "nativeCli": null,
+  "modelSource": "modelConfigOption",
+  "nativeCli": {
+    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
+    "version": "2.1.177 (Claude Code)"
+  },
   "trials": [],
-  "currentModelId": "kimi-k2.5[]",
+  "currentModelId": null,
   "currentModeId": "agent",
   "modes": {
     "availableModes": [
@@ -56,7 +59,7 @@
     },
     {
       "category": "model",
-      "currentValue": "kimi-k2.5[]",
+      "currentValue": "gemini-3.1-pro[]",
       "description": "Controls which model variant is used for responses",
       "id": "model",
       "name": "Model",
@@ -68,10 +71,6 @@
         {
           "name": "composer-2.5",
           "value": "composer-2.5[fast=true]"
-        },
-        {
-          "name": "claude-fable-5",
-          "value": "claude-fable-5[thinking=true,context=300k,effort=high]"
         },
         {
           "name": "claude-opus-4-8",
@@ -176,6 +175,10 @@
         {
           "name": "kimi-k2.5",
           "value": "kimi-k2.5[]"
+        },
+        {
+          "name": "claude-fable-5",
+          "value": "claude-fable-5[thinking=true,context=300k,effort=high]"
         }
       ],
       "type": "select"
@@ -186,207 +189,1222 @@
       "modelId": "default[]",
       "name": "Auto",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "default[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "composer-2.5[fast=true]",
       "name": "composer-2.5",
       "description": null,
-      "configOptions": null
-    },
-    {
-      "modelId": "claude-fable-5[thinking=true,context=300k,effort=high]",
-      "name": "claude-fable-5",
-      "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "composer-2.5[fast=true]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
       "name": "claude-opus-4-8",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
       "name": "gpt-5.5",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
       "name": "claude-sonnet-4-6",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.3-codex[reasoning=medium,fast=false]",
       "name": "gpt-5.3-codex",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.3-codex[reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]",
       "name": "claude-opus-4-7",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "grok-build-0.1[context=200k]",
       "name": "grok-build-0.1",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "grok-build-0.1[context=200k]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
       "name": "gpt-5.4",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
       "name": "claude-opus-4-6",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-opus-4-5[thinking=true]",
       "name": "claude-opus-4-5",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-opus-4-5[thinking=true]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.2[reasoning=medium,fast=false]",
       "name": "gpt-5.2",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.2[reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gemini-3.1-pro[]",
       "name": "gemini-3.1-pro",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gemini-3.1-pro[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.4-mini[reasoning=medium]",
       "name": "gpt-5.4-mini",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4-mini[reasoning=medium]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.4-nano[reasoning=medium]",
       "name": "gpt-5.4-nano",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4-nano[reasoning=medium]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-haiku-4-5[thinking=true]",
       "name": "claude-haiku-4-5",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-haiku-4-5[thinking=true]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "grok-4.3[context=200k]",
       "name": "grok-4.3",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "grok-4.3[context=200k]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-sonnet-4-5[thinking=true,context=200k]",
       "name": "claude-sonnet-4-5",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-sonnet-4-5[thinking=true,context=200k]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.2-codex[reasoning=medium,fast=false]",
       "name": "gpt-5.2-codex",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.2-codex[reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.1-codex-max[reasoning=medium,fast=false]",
       "name": "gpt-5.1-codex-max",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.1-codex-max[reasoning=medium,fast=false]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.1[reasoning=medium]",
       "name": "gpt-5.1",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.1[reasoning=medium]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gemini-3-flash[]",
       "name": "gemini-3-flash",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gemini-3-flash[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gemini-3.5-flash[]",
       "name": "gemini-3.5-flash",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gemini-3.5-flash[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5.1-codex-mini[reasoning=medium]",
       "name": "gpt-5.1-codex-mini",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.1-codex-mini[reasoning=medium]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "claude-sonnet-4[thinking=false,context=200k]",
       "name": "claude-sonnet-4",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-sonnet-4[thinking=false,context=200k]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gpt-5-mini[]",
       "name": "gpt-5-mini",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5-mini[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "gemini-2.5-flash[]",
       "name": "gemini-2.5-flash",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gemini-2.5-flash[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     },
     {
       "modelId": "kimi-k2.5[]",
       "name": "kimi-k2.5",
       "description": null,
-      "configOptions": null
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "kimi-k2.5[]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
+    {
+      "modelId": "claude-fable-5[thinking=true,context=300k,effort=high]",
+      "name": "claude-fable-5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "agent",
+          "description": "Controls how the agent executes tasks",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Full agent capabilities with tool access",
+              "name": "Agent",
+              "value": "agent"
+            },
+            {
+              "description": "Read-only mode for planning and designing before implementation",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Q&A mode - no edits or command execution",
+              "name": "Ask",
+              "value": "ask"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "claude-fable-5[thinking=true,context=300k,effort=high]",
+          "description": "Controls which model variant is used for responses",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
     }
   ],
   "warnings": [
-    "agent did not report agent_info at initialize",
-    "no ConfigOptionUpdate within 5s after switching to default[]",
-    "no ConfigOptionUpdate within 5s after switching to composer-2.5[fast=true]",
-    "no ConfigOptionUpdate within 5s after switching to claude-fable-5[thinking=true,context=300k,effort=high]",
-    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.5[context=272k,reasoning=medium,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.3-codex[reasoning=medium,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to grok-build-0.1[context=200k]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.4[context=272k,reasoning=medium,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-5[thinking=true]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.2[reasoning=medium,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to gemini-3.1-pro[]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.4-mini[reasoning=medium]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.4-nano[reasoning=medium]",
-    "no ConfigOptionUpdate within 5s after switching to claude-haiku-4-5[thinking=true]",
-    "no ConfigOptionUpdate within 5s after switching to grok-4.3[context=200k]",
-    "no ConfigOptionUpdate within 5s after switching to claude-sonnet-4-5[thinking=true,context=200k]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.2-codex[reasoning=medium,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.1-codex-max[reasoning=medium,fast=false]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.1[reasoning=medium]",
-    "no ConfigOptionUpdate within 5s after switching to gemini-3-flash[]",
-    "no ConfigOptionUpdate within 5s after switching to gemini-3.5-flash[]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5.1-codex-mini[reasoning=medium]",
-    "no ConfigOptionUpdate within 5s after switching to claude-sonnet-4[thinking=false,context=200k]",
-    "no ConfigOptionUpdate within 5s after switching to gpt-5-mini[]",
-    "no ConfigOptionUpdate within 5s after switching to gemini-2.5-flash[]",
-    "no ConfigOptionUpdate within 5s after switching to kimi-k2.5[]"
+    "agent did not report agent_info at initialize"
   ]
 }

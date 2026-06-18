@@ -1,17 +1,17 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-06-16.1",
+  "catalogVersion": "2026-06-18.4",
   "probedAgainst": {
     "registryVersion": "2026-06-10.1"
   },
-  "generatedAt": "2026-06-16T07:49:36.227Z",
+  "generatedAt": "2026-06-18T05:27:42.106Z",
   "agents": [
     {
       "kind": "claude",
       "displayName": "Claude",
       "harness": {
         "agentProcess": {
-          "version": "0.29.0",
+          "version": "0.44.0",
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/claude-agent-acp.git",
@@ -20,21 +20,21 @@
           }
         },
         "native": {
-          "version": "2.1.178",
+          "version": "2.1.181",
           "source": {
             "kind": "binary",
             "targets": {
               "macos_arm64": {
-                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.178/darwin-arm64/claude",
-                "sha256": "473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309"
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.181/darwin-arm64/claude",
+                "sha256": "c4d833b04606cef9b6eab3ad255ed2e1448f87dea2bc00ff5acf77b57df6e94d"
               },
               "macos_x64": {
-                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.178/darwin-x64/claude",
-                "sha256": "e6c5f5eec2b4d18f6234c3ba500e285f07a2e5ffb4c67d4ba0494c28c70dfe79"
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.181/darwin-x64/claude",
+                "sha256": "353798bcdc49a52a666645370e1c48a84fe837d93bf9d954c19338dca7260ddd"
               },
               "linux_x64": {
-                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.178/linux-x64/claude",
-                "sha256": "17ed1a983a49404c4673de286419a8fd6617c92440a2e0f789bcc413a3b14de1"
+                "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.181/linux-x64/claude",
+                "sha256": "35ffd4e9d9a86395d0ba4e05f8b23bf098bfeab95e97deacd6537909d1324e9c"
               }
             }
           }
@@ -90,7 +90,7 @@
             "key": "model",
             "mapping": {
               "createField": "modelId",
-              "switchVia": "setSessionModel",
+              "switchVia": "configOption",
               "liveConfigId": "model"
             }
           },
@@ -112,10 +112,12 @@
           {
             "key": "effort",
             "values": [
+              "default",
               "low",
               "medium",
               "high",
-              "xhigh"
+              "xhigh",
+              "max"
             ],
             "mapping": {
               "liveConfigId": "effort"
@@ -134,9 +136,63 @@
         ],
         "models": [
           {
-            "id": "sonnet",
-            "displayName": "Sonnet 4.6",
-            "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
+            "id": "default",
+            "displayName": "Default 4.5",
+            "description": "Use the default model (currently Sonnet 4.5)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "anthropic-oauth",
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.anthropic-api",
+                "claude.anthropic-oauth",
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opus[1m]",
+            "displayName": "Opus 4.8 (1M context)",
+            "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
             "availability": {
               "anyOf": [
                 "anthropic-api"
@@ -157,17 +213,71 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
-                  "high"
+                  "high",
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
               }
             },
             "status": "active",
             "provenance": {
               "observedIn": [
                 "claude.anthropic-api"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "sonnet",
+            "displayName": "Sonnet 4.6",
+            "description": "Sonnet 4.6 · Efficient for routine tasks",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "anthropic-oauth"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.anthropic-api",
+                "claude.anthropic-oauth"
               ],
               "observedInAllContexts": false,
               "viaTrialOnly": false
@@ -197,11 +307,13 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
-                  "high"
+                  "high",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -228,7 +340,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -250,8 +361,62 @@
             }
           },
           {
+            "id": "opus",
+            "displayName": "Opus 4.6",
+            "description": "Opus 4.6 · Legacy",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "anthropic-oauth",
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.anthropic-api",
+                "claude.anthropic-oauth",
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
             "id": "claude-fable-5",
-            "displayName": "Fable 5",
+            "displayName": "Claude-Fable-5",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -273,12 +438,21 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
               }
             },
             "status": "active",
@@ -293,7 +467,7 @@
           },
           {
             "id": "claude-opus-4-8",
-            "displayName": "Opus 4.8",
+            "displayName": "Claude-Opus-4-8",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -315,12 +489,14 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               },
               "fast_mode": {
                 "values": [
@@ -341,54 +517,6 @@
             }
           },
           {
-            "id": "opus",
-            "displayName": "Opus 4.8",
-            "description": "Opus 4.8 · Best for everyday, complex tasks",
-            "availability": {
-              "anyOf": [
-                "anthropic-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "auto",
-                  "default",
-                  "acceptEdits",
-                  "plan",
-                  "dontAsk",
-                  "bypassPermissions"
-                ],
-                "observedValue": "default"
-              },
-              "effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "claude.anthropic-oauth"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
             "id": "us.anthropic.claude-sonnet-4-6",
             "displayName": "Sonnet 4.6",
             "description": "Sonnet 4.6 · Efficient for routine tasks",
@@ -401,7 +529,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -412,11 +539,13 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
-                  "high"
+                  "high",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -441,7 +570,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -452,11 +580,13 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
-                  "high"
+                  "high",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -481,7 +611,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -492,12 +621,14 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -522,7 +653,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -554,7 +684,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -565,12 +694,14 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -595,7 +726,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -606,12 +736,14 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -636,7 +768,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -647,12 +778,14 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -677,7 +810,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -688,52 +820,14 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "claude.bedrock"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "us.anthropic.claude-opus-4-6-v1",
-            "displayName": "Opus 4.6",
-            "description": "Opus 4.6 · Legacy",
-            "availability": {
-              "anyOf": [
-                "bedrock"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "auto",
-                  "default",
-                  "acceptEdits",
-                  "plan",
-                  "dontAsk",
-                  "bypassPermissions"
+                  "xhigh",
+                  "max"
                 ],
                 "observedValue": "default"
-              },
-              "effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high"
-                ],
-                "observedValue": "high"
               }
             },
             "status": "active",
@@ -758,7 +852,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -769,11 +862,13 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
-                  "high"
+                  "high",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -787,7 +882,7 @@
           },
           {
             "id": "global.anthropic.claude-fable-5",
-            "displayName": "Fable 5",
+            "displayName": "Global.anthropic.claude-Fable-5",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -797,7 +892,6 @@
             "controls": {
               "mode": {
                 "values": [
-                  "auto",
                   "default",
                   "acceptEdits",
                   "plan",
@@ -808,12 +902,14 @@
               },
               "effort": {
                 "values": [
+                  "default",
                   "low",
                   "medium",
                   "high",
-                  "xhigh"
+                  "xhigh",
+                  "max"
                 ],
-                "observedValue": "high"
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -832,16 +928,16 @@
           "bedrock": "us.anthropic.claude-sonnet-4-6"
         },
         "observedDefaults": {
-          "anthropic-api": "sonnet",
+          "anthropic-api": "opus",
           "anthropic-oauth": "opus",
-          "bedrock": "us.anthropic.claude-sonnet-4-6"
+          "bedrock": "us.anthropic.claude-opus-4-8"
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T04:16:44.787695+00:00",
+        "probedAt": "2026-06-18T02:52:37.457623+00:00",
         "attestation": {
           "name": "@agentclientprotocol/claude-agent-acp",
-          "version": "0.29.0",
+          "version": "0.44.0",
           "title": "Claude Agent"
         },
         "runs": [
@@ -865,33 +961,33 @@
       "displayName": "Codex",
       "harness": {
         "agentProcess": {
-          "version": "0.11.8",
+          "version": "0.16.0-proliferate.1",
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/codex-acp.git",
-            "gitRef": "988bd156960d038104ae60e5bbbf5d190502a0f3",
+            "gitRef": "c66f9f3b9bf4811fa8ebdfc9ad908bf37845e50f",
             "packageSubdir": "npm",
             "executableRelpath": "node_modules/.bin/codex-acp"
           }
         },
         "native": {
-          "version": "rust-v0.140.0",
+          "version": "rust-v0.141.0",
           "source": {
             "kind": "archive",
             "targets": {
               "macos_arm64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.140.0/codex-aarch64-apple-darwin.tar.gz",
-                "sha256": "c81eaf1b4c9aee0e81e2b39dec1742a57b61be6c109f8811e7fcd41f55c2233d",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-aarch64-apple-darwin.tar.gz",
+                "sha256": "abdead5feebc259decaaec33465423bbb7904b3049fa28e92209cb924693c0f4",
                 "expectedBinary": "codex-aarch64-apple-darwin"
               },
               "macos_x64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.140.0/codex-x86_64-apple-darwin.tar.gz",
-                "sha256": "2bd0edf75fd1451425736bae41470c3b800fe8eb372c194a668434f9526df9f0",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-x86_64-apple-darwin.tar.gz",
+                "sha256": "7b7398b93dd16a3123c87286e312a7942be3c13f9619fc587dfc05563fcbc888",
                 "expectedBinary": "codex-x86_64-apple-darwin"
               },
               "linux_x64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.140.0/codex-x86_64-unknown-linux-musl.tar.gz",
-                "sha256": "48e591964d4bbaab7c0433daed41c65ea8f152fc0f1dd2334a42e3dd322a4906",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-x86_64-unknown-linux-musl.tar.gz",
+                "sha256": "f1e2bf9fa0ba6eb82119d621b6b71bc38edd33c06dc2867b31a027052358957d",
                 "expectedBinary": "codex-x86_64-unknown-linux-musl"
               }
             },
@@ -942,9 +1038,8 @@
             "key": "model",
             "mapping": {
               "createField": "modelId",
-              "switchVia": "setSessionModel",
-              "liveConfigId": "model",
-              "variantSyntax": "slash-effort"
+              "switchVia": "configOption",
+              "liveConfigId": "model"
             }
           },
           {
@@ -960,16 +1055,6 @@
             }
           },
           {
-            "key": "collaboration_mode",
-            "values": [
-              "plan",
-              "default"
-            ],
-            "mapping": {
-              "liveConfigId": "collaboration_mode"
-            }
-          },
-          {
             "key": "reasoning_effort",
             "values": [
               "low",
@@ -980,23 +1065,41 @@
             "mapping": {
               "liveConfigId": "reasoning_effort"
             }
-          },
-          {
-            "key": "fast_mode",
-            "values": [
-              "off",
-              "on"
-            ],
-            "mapping": {
-              "liveConfigId": "fast_mode"
-            }
           }
         ],
         "models": [
           {
-            "id": "openai.gpt-5.4-cmb/xhigh",
-            "displayName": "GPT-5.4 (xhigh) on Bedrock",
-            "description": "Strong model for everyday coding. Extra high reasoning depth for complex problems",
+            "id": "openai.gpt-oss-120b",
+            "displayName": "Openai.gpt-Oss-120b",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.5",
+            "displayName": "GPT-5.5",
+            "description": "Frontier model for complex coding, research, and real-world work.",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -1012,13 +1115,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1026,14 +1122,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "xhigh"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
@@ -1046,8 +1135,8 @@
             }
           },
           {
-            "id": "openai.gpt-5.4-cmb",
-            "displayName": "GPT-5.4 on Bedrock",
+            "id": "openai.gpt-5.4",
+            "displayName": "GPT-5.4",
             "description": "Strong model for everyday coding.",
             "availability": {
               "anyOf": [
@@ -1064,13 +1153,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1078,14 +1160,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
@@ -1094,124 +1169,7 @@
                 "codex.bedrock"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "openai.gpt-5.4-cmb/low",
-                "openai.gpt-5.4-cmb/medium",
-                "openai.gpt-5.4-cmb/high"
-              ]
-            }
-          },
-          {
-            "id": "openai.gpt-oss-120b",
-            "displayName": "GPT OSS 120B on Bedrock",
-            "description": "GPT OSS 120B on Bedrock Fast responses with lighter reasoning",
-            "availability": {
-              "anyOf": [
-                "bedrock"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high"
-                ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.bedrock"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "openai.gpt-oss-120b/low",
-                "openai.gpt-oss-120b/medium",
-                "openai.gpt-oss-120b/high"
-              ]
-            }
-          },
-          {
-            "id": "openai.gpt-oss-20b",
-            "displayName": "GPT OSS 20B on Bedrock",
-            "description": "GPT OSS 20B on Bedrock Fast responses with lighter reasoning",
-            "availability": {
-              "anyOf": [
-                "bedrock"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high"
-                ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.bedrock"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "openai.gpt-oss-20b/low",
-                "openai.gpt-oss-20b/medium",
-                "openai.gpt-oss-20b/high"
-              ]
+              "viaTrialOnly": false
             }
           },
           {
@@ -1234,13 +1192,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1248,14 +1199,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
@@ -1265,13 +1209,7 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "gpt-5.5/low",
-                "gpt-5.5/medium",
-                "gpt-5.5/high",
-                "gpt-5.5/xhigh"
-              ]
+              "viaTrialOnly": false
             }
           },
           {
@@ -1294,13 +1232,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1308,14 +1239,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
@@ -1325,13 +1249,7 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "gpt-5.4/low",
-                "gpt-5.4/medium",
-                "gpt-5.4/high",
-                "gpt-5.4/xhigh"
-              ]
+              "viaTrialOnly": false
             }
           },
           {
@@ -1354,13 +1272,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1368,14 +1279,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
@@ -1385,13 +1289,7 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "gpt-5.4-mini/low",
-                "gpt-5.4-mini/medium",
-                "gpt-5.4-mini/high",
-                "gpt-5.4-mini/xhigh"
-              ]
+              "viaTrialOnly": false
             }
           },
           {
@@ -1400,8 +1298,7 @@
             "description": "Coding-optimized model.",
             "availability": {
               "anyOf": [
-                "openai-api",
-                "openai-oauth"
+                "openai-api"
               ]
             },
             "defaultVisible": true,
@@ -1414,13 +1311,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1428,30 +1318,16 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
             "provenance": {
               "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
+                "codex.openai-api"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "gpt-5.3-codex/low",
-                "gpt-5.3-codex/medium",
-                "gpt-5.3-codex/high",
-                "gpt-5.3-codex/xhigh"
-              ]
+              "viaTrialOnly": false
             }
           },
           {
@@ -1460,8 +1336,7 @@
             "description": "Optimized for professional work and long-running agents.",
             "availability": {
               "anyOf": [
-                "openai-api",
-                "openai-oauth"
+                "openai-api"
               ]
             },
             "defaultVisible": true,
@@ -1474,13 +1349,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1488,30 +1356,16 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
             "provenance": {
               "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
+                "codex.openai-api"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "gpt-5.2/low",
-                "gpt-5.2/medium",
-                "gpt-5.2/high",
-                "gpt-5.2/xhigh"
-              ]
+              "viaTrialOnly": false
             }
           },
           {
@@ -1533,13 +1387,6 @@
                 ],
                 "observedValue": "read-only"
               },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1547,14 +1394,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "low"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
+                "observedValue": "medium"
               }
             },
             "status": "active",
@@ -1563,32 +1403,26 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "gpt-5.3-codex-spark/low",
-                "gpt-5.3-codex-spark/medium",
-                "gpt-5.3-codex-spark/high",
-                "gpt-5.3-codex-spark/xhigh"
-              ]
+              "viaTrialOnly": false
             }
           }
         ],
         "defaults": {
           "openai-api": "gpt-5.5",
           "openai-oauth": "gpt-5.5",
-          "bedrock": "openai.gpt-5.4-cmb"
+          "bedrock": "openai.gpt-5.5"
         },
         "observedDefaults": {
-          "bedrock": "openai.gpt-oss-120b/medium",
-          "openai-api": "gpt-5.5/medium",
-          "openai-oauth": "gpt-5.3-codex/medium"
+          "bedrock": "openai.gpt-oss-120b",
+          "openai-api": "gpt-5.5",
+          "openai-oauth": "gpt-5.5"
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T04:16:48.242571+00:00",
+        "probedAt": "2026-06-18T02:52:32.817407+00:00",
         "attestation": {
           "name": "codex-acp",
-          "version": "0.11.8",
+          "version": "0.16.0-proliferate.1",
           "title": "Codex"
         },
         "runs": [
@@ -1617,18 +1451,18 @@
             "kind": "archive",
             "targets": {
               "macos_arm64": {
-                "url": "https://downloads.cursor.com/lab/2026.06.15-03-48-54-da23e37/darwin/arm64/agent-cli-package.tar.gz",
-                "sha256": "9de9e9669a008ec670617b42413a9b04a1404bac2acf899f87e55a80aa51ff14",
+                "url": "https://downloads.cursor.com/lab/2026.06.15-18-00-12-6f5a2cf/darwin/arm64/agent-cli-package.tar.gz",
+                "sha256": "49ed840e3ab46a129968907dbfef06e459eefb2fca1c4fec538eb560e1b59bac",
                 "expectedBinary": "./dist-package/cursor-agent"
               },
               "macos_x64": {
-                "url": "https://downloads.cursor.com/lab/2026.06.15-03-48-54-da23e37/darwin/x64/agent-cli-package.tar.gz",
-                "sha256": "fa1636a2769809320d4755773e89a3c86b1fbb552bbe0ecd958bd544ee57c926",
+                "url": "https://downloads.cursor.com/lab/2026.06.15-18-00-12-6f5a2cf/darwin/x64/agent-cli-package.tar.gz",
+                "sha256": "6eb89fbd79374aac8145ea2f19793cfa3f6138d74af1d45d4fe299c644642a74",
                 "expectedBinary": "./dist-package/cursor-agent"
               },
               "linux_x64": {
-                "url": "https://downloads.cursor.com/lab/2026.06.15-03-48-54-da23e37/linux/x64/agent-cli-package.tar.gz",
-                "sha256": "c63cf8173606dedea5959d87917f64a729743cf7f8346cf8c7ac8cf68a86ac36",
+                "url": "https://downloads.cursor.com/lab/2026.06.15-18-00-12-6f5a2cf/linux/x64/agent-cli-package.tar.gz",
+                "sha256": "33b22b0c4fd0397a89fc1b908e4536bb0a8fb09daff97acf519fbec76569ccb3",
                 "expectedBinary": "./dist-package/cursor-agent"
               }
             },
@@ -1636,6 +1470,9 @@
               "acp"
             ]
           }
+        },
+        "native": {
+          "version": "2.1.177 (Claude Code)"
         }
       },
       "authContexts": [
@@ -1660,7 +1497,7 @@
             "key": "model",
             "mapping": {
               "createField": "modelId",
-              "switchVia": "setSessionModel",
+              "switchVia": "configOption",
               "liveConfigId": "model",
               "variantSyntax": "bracket-params"
             }
@@ -1779,52 +1616,6 @@
               "viaTrialOnly": false,
               "variantIds": [
                 "composer-2.5[fast=true]"
-              ]
-            }
-          },
-          {
-            "id": "claude-fable-5",
-            "displayName": "Claude-Fable-5",
-            "availability": {
-              "anyOf": [
-                "cursor-login"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "agent",
-                  "plan",
-                  "ask"
-                ],
-                "observedValue": "agent"
-              },
-              "thinking": {
-                "values": [
-                  "true"
-                ]
-              },
-              "context": {
-                "values": [
-                  "300k"
-                ]
-              },
-              "effort": {
-                "values": [
-                  "high"
-                ]
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "cursor.cursor-login"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false,
-              "variantIds": [
-                "claude-fable-5[thinking=true,context=300k,effort=high]"
               ]
             }
           },
@@ -2838,17 +2629,63 @@
                 "kimi-k2.5[]"
               ]
             }
+          },
+          {
+            "id": "claude-fable-5",
+            "displayName": "Claude-Fable-5",
+            "availability": {
+              "anyOf": [
+                "cursor-login"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
+              },
+              "context": {
+                "values": [
+                  "300k"
+                ]
+              },
+              "effort": {
+                "values": [
+                  "high"
+                ]
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "cursor.cursor-login"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-fable-5[thinking=true,context=300k,effort=high]"
+              ]
+            }
           }
         ],
         "defaults": {
           "cursor-login": "default"
         },
         "observedDefaults": {
-          "cursor-login": "kimi-k2.5[]"
+          "cursor-login": "gemini-3.1-pro[]"
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T04:19:51.541700+00:00",
+        "probedAt": "2026-06-18T02:53:09.426103+00:00",
         "attestation": null,
         "runs": [
           {
@@ -3150,11 +2987,11 @@
       "displayName": "Grok",
       "harness": {
         "agentProcess": {
-          "version": "0.2.54",
+          "version": "0.2.55",
           "source": {
             "kind": "npm",
-            "package": "@xai-official/grok@0.2.54",
-            "sha256": "sha512-ULpC2TtWTAYAM7BCjt2pE4agkch/2YqdYyrBIR9LKVaiyvnzMOuuEcPxlmgY/9hqxEofB7MvYAp4LRb5BwkVkA==",
+            "package": "@xai-official/grok@0.2.55",
+            "sha256": "sha512-I5v0ePk1Q/yQmLLkpCprzySaTQC1DvvN/rrzrbhaqCBptbBkEkwwpXZKhg1VyLqHczDUnwjmSIH/kSmLLjSc0g==",
             "args": [
               "agent",
               "stdio"
@@ -3412,6 +3249,9 @@
               "acp"
             ]
           }
+        },
+        "native": {
+          "version": "2.1.177 (Claude Code)"
         }
       },
       "authContexts": [
@@ -3488,6 +3328,19 @@
             }
           },
           {
+            "key": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max",
+              "none",
+              "minimal",
+              "thinking"
+            ]
+          },
+          {
             "key": "mode",
             "values": [
               "build",
@@ -3497,21 +3350,46 @@
               "createField": "modeId",
               "liveConfigId": "mode"
             }
-          },
-          {
-            "key": "effort",
-            "values": [
-              "high",
-              "max",
-              "low",
-              "medium",
-              "xhigh",
-              "minimal",
-              "none"
-            ]
           }
         ],
         "models": [
+          {
+            "id": "anthropic/claude-fable-5",
+            "displayName": "Anthropic/Claude Fable 5",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
           {
             "id": "anthropic/claude-3-5-haiku-latest",
             "displayName": "Anthropic/Claude Haiku 3.5 (latest)",
@@ -4331,8 +4209,8 @@
             }
           },
           {
-            "id": "opencode/minimax-m3-free",
-            "displayName": "OpenCode Zen/MiniMax M3 Free",
+            "id": "opencode/nemotron-3-ultra-free",
+            "displayName": "OpenCode Zen/Nemotron 3 Ultra Free",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -4344,6 +4222,14 @@
             },
             "defaultVisible": true,
             "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
               "mode": {
                 "values": [
                   "build",
@@ -4366,8 +4252,8 @@
             }
           },
           {
-            "id": "opencode/nemotron-3-ultra-free",
-            "displayName": "OpenCode Zen/Nemotron 3 Ultra Free",
+            "id": "opencode/north-mini-code-free",
+            "displayName": "OpenCode Zen/North Mini Code Free",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -4381,11 +4267,10 @@
             "controls": {
               "effort": {
                 "values": [
-                  "low",
-                  "medium",
+                  "none",
                   "high"
                 ],
-                "observedValue": "low"
+                "observedValue": "none"
               },
               "mode": {
                 "values": [
@@ -4445,33 +4330,6 @@
           {
             "id": "google/gemini-2.5-flash-preview-tts",
             "displayName": "Google/Gemini 2.5 Flash Preview TTS",
-            "availability": {
-              "anyOf": [
-                "gemini-api"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "build",
-                  "plan"
-                ],
-                "observedValue": "build"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "opencode.gemini-api"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "google/gemini-2.5-flash-tts",
-            "displayName": "Google/Gemini 2.5 Flash TTS",
             "availability": {
               "anyOf": [
                 "gemini-api"
@@ -4901,6 +4759,74 @@
           {
             "id": "google/gemma-4-31b-it",
             "displayName": "Google/Gemma 4 31B IT",
+            "availability": {
+              "anyOf": [
+                "gemini-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.gemini-api"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "google/gemma-4-E2B-it",
+            "displayName": "Google/Gemma 4 E2B IT",
+            "availability": {
+              "anyOf": [
+                "gemini-api"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.gemini-api"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "google/gemma-4-E4B-it",
+            "displayName": "Google/Gemma 4 E4B IT",
             "availability": {
               "anyOf": [
                 "gemini-api"
@@ -6790,33 +6716,6 @@
             }
           },
           {
-            "id": "opencode-go/glm-5",
-            "displayName": "OpenCode Go/GLM-5",
-            "availability": {
-              "anyOf": [
-                "opencode-zen"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "build",
-                  "plan"
-                ],
-                "observedValue": "build"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "opencode.opencode-zen"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
             "id": "opencode-go/glm-5.1",
             "displayName": "OpenCode Go/GLM-5.1",
             "availability": {
@@ -6844,8 +6743,8 @@
             }
           },
           {
-            "id": "opencode-go/kimi-k2.5",
-            "displayName": "OpenCode Go/Kimi K2.5",
+            "id": "opencode-go/glm-5.2",
+            "displayName": "OpenCode Go/GLM-5.2",
             "availability": {
               "anyOf": [
                 "opencode-zen"
@@ -6873,6 +6772,33 @@
           {
             "id": "opencode-go/kimi-k2.6",
             "displayName": "OpenCode Go/Kimi K2.6",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/kimi-k2.7-code",
+            "displayName": "OpenCode Go/Kimi K2.7 Code",
             "availability": {
               "anyOf": [
                 "opencode-zen"
@@ -6968,33 +6894,6 @@
             }
           },
           {
-            "id": "opencode-go/minimax-m2.5",
-            "displayName": "OpenCode Go/MiniMax M2.5",
-            "availability": {
-              "anyOf": [
-                "opencode-zen"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "build",
-                  "plan"
-                ],
-                "observedValue": "build"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "opencode.opencode-zen"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
             "id": "opencode-go/minimax-m2.7",
             "displayName": "OpenCode Go/MiniMax M2.7",
             "availability": {
@@ -7023,7 +6922,7 @@
           },
           {
             "id": "opencode-go/minimax-m3",
-            "displayName": "OpenCode Go/MiniMax M3 3",
+            "displayName": "OpenCode Go/MiniMax M3 3 (3x usage)",
             "availability": {
               "anyOf": [
                 "opencode-zen"
@@ -7031,6 +6930,13 @@
             },
             "defaultVisible": true,
             "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "thinking"
+                ],
+                "observedValue": "none"
+              },
               "mode": {
                 "values": [
                   "build",
@@ -7449,6 +7355,42 @@
           {
             "id": "opencode/deepseek-v4-flash",
             "displayName": "OpenCode Zen/DeepSeek V4 Flash",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/deepseek-v4-pro",
+            "displayName": "OpenCode Zen/DeepSeek V4 Pro",
             "availability": {
               "anyOf": [
                 "opencode-zen"
@@ -8459,10 +8401,10 @@
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T04:20:28.761181+00:00",
+        "probedAt": "2026-06-18T02:52:36.735929+00:00",
         "attestation": {
           "name": "OpenCode",
-          "version": "1.16.2",
+          "version": "1.17.7",
           "title": null
         },
         "runs": [
