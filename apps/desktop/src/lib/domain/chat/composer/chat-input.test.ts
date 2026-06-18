@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveChatDraftWorkspaceId,
   resolveChatInputAvailability,
+  resolveCurrentModeLabel,
 } from "./chat-input";
 
 describe("resolveChatDraftWorkspaceId", () => {
@@ -15,6 +16,52 @@ describe("resolveChatDraftWorkspaceId", () => {
 
   it("returns null when no workspace is selected", () => {
     expect(resolveChatDraftWorkspaceId(null, null)).toBeNull();
+  });
+});
+
+describe("resolveCurrentModeLabel", () => {
+  const planControl = {
+    currentValue: "plan",
+    values: [
+      { value: "default", label: "Default" },
+      { value: "plan", label: "Plan" },
+    ],
+  };
+  const permissionControl = {
+    currentValue: "acceptEdits",
+    values: [
+      { value: "acceptEdits", label: "Accept edits" },
+      { value: "readOnly", label: "Read only" },
+    ],
+  };
+
+  it("prefers the collaboration mode control over the permission mode control", () => {
+    expect(resolveCurrentModeLabel({
+      liveConfig: {
+        normalizedControls: {
+          collaborationMode: planControl,
+          mode: permissionControl,
+        },
+      },
+    })).toBe("Plan");
+  });
+
+  it("falls back to the permission mode control when no collaboration mode exists", () => {
+    expect(resolveCurrentModeLabel({
+      liveConfig: {
+        normalizedControls: {
+          mode: permissionControl,
+        },
+      },
+    })).toBe("Accept edits");
+  });
+
+  it("falls back to the slot mode id when no live config is present", () => {
+    expect(resolveCurrentModeLabel({ modeId: "plan" })).toBe("plan");
+  });
+
+  it("returns null when no mode is resolvable", () => {
+    expect(resolveCurrentModeLabel(null)).toBeNull();
   });
 });
 

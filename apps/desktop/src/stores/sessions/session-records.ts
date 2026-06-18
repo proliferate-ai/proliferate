@@ -49,7 +49,10 @@ export function createEmptySessionRecord(
   },
 ): SessionRuntimeRecord {
   const resolvedModeId =
-    config?.liveConfig?.normalizedControls.mode?.currentValue ?? config?.modeId ?? null;
+    config?.liveConfig?.normalizedControls.collaborationMode?.currentValue
+    ?? config?.liveConfig?.normalizedControls.mode?.currentValue
+    ?? config?.modeId
+    ?? null;
   const title = config?.title?.trim() || null;
   const transcript = {
     ...createTranscriptState(sessionId),
@@ -100,7 +103,8 @@ export function createSessionRecordFromSummary(
   },
 ): SessionRuntimeRecord {
   const modeId =
-    session.liveConfig?.normalizedControls.mode?.currentValue
+    session.liveConfig?.normalizedControls.collaborationMode?.currentValue
+    ?? session.liveConfig?.normalizedControls.mode?.currentValue
     ?? session.modeId
     ?? null;
   const title = session.title?.trim() || options?.titleFallback?.trim() || null;

@@ -47,6 +47,7 @@ interface ChatInputActiveSlotLike {
   } | null;
   liveConfig?: {
     normalizedControls?: {
+      collaborationMode?: NormalizedModeControlLike | null;
       mode?: NormalizedModeControlLike | null;
     } | null;
   } | null;
@@ -216,8 +217,16 @@ function pendingInteractionDisabledReason(kind: ChatInputPendingInteractionKind)
 export function resolveCurrentModeLabel(
   activeSlot: ChatInputActiveSlotLike | null,
 ): string | null {
+  const normalizedControls = activeSlot?.liveConfig?.normalizedControls;
+  // Codex exposes two mode-like controls: collaborationMode (default/plan) and
+  // mode (permissions). Prefer collaborationMode when present so the label
+  // tracks plan<->default, mirroring useChatSessionControls.
+  const modeControl =
+    normalizedControls?.collaborationMode
+    ?? normalizedControls?.mode
+    ?? null;
   const currentModeId =
-    activeSlot?.liveConfig?.normalizedControls?.mode?.currentValue
+    modeControl?.currentValue
     ?? activeSlot?.modeId
     ?? activeSlot?.transcript?.currentModeId
     ?? null;
@@ -225,6 +234,5 @@ export function resolveCurrentModeLabel(
     return null;
   }
 
-  const modeControl = activeSlot?.liveConfig?.normalizedControls?.mode ?? null;
   return modeControl?.values.find((value) => value.value === currentModeId)?.label ?? currentModeId;
 }
