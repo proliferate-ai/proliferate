@@ -5,8 +5,6 @@ import {
   computeChatSurfaceBottomInsetPx,
 } from "@/config/chat-layout";
 
-const CHAT_DOCK_RESIZE_SETTLE_MS = 90;
-
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
   const [metrics, setMetrics] = useState({
@@ -54,21 +52,20 @@ export function useChatDockInset() {
       return;
     }
 
-    let settleTimer: number | null = null;
+    // Re-measure on the next frame after any observed resize. The composer
+    // textarea autosizes synchronously in a layout effect, so coalescing to a
+    // single rAF keeps the transcript's bottom inset in lockstep with the dock
+    // (no perceptible lag when a line is added/removed). A frame is enough to
+    // dedupe bursts; the inset only affects the scroll area above the dock, so
+    // re-measuring can't feed back into the observed elements.
     const scheduleMeasure = () => {
-      if (settleTimer !== null) {
-        window.clearTimeout(settleTimer);
+      if (frameId !== null) {
+        return;
       }
-      settleTimer = window.setTimeout(() => {
-        settleTimer = null;
-        if (frameId !== null) {
-          window.cancelAnimationFrame(frameId);
-        }
-        frameId = window.requestAnimationFrame(() => {
-          frameId = null;
-          measure();
-        });
-      }, CHAT_DOCK_RESIZE_SETTLE_MS);
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        measure();
+      });
     };
 
     const observer = new ResizeObserver(() => {
@@ -87,9 +84,6 @@ export function useChatDockInset() {
 
     return () => {
       observer.disconnect();
-      if (settleTimer !== null) {
-        window.clearTimeout(settleTimer);
-      }
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }
