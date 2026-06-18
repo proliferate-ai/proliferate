@@ -93,6 +93,7 @@ describe("useTranscriptStickToBottom", () => {
 
   it("unpins immediately on an upward wheel (pre-empts the snap race)", () => {
     const handle = renderHarness();
+    setMetrics(handle.current.viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
     act(() => {
       fireEvent.wheel(handle.current.viewport, { deltaY: -20 });
     });
@@ -103,6 +104,7 @@ describe("useTranscriptStickToBottom", () => {
   it("unpins on ArrowUp / PageUp / Home keydown", () => {
     for (const key of ["ArrowUp", "PageUp", "Home"]) {
       const handle = renderHarness();
+      setMetrics(handle.current.viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
       act(() => {
         fireEvent.keyDown(handle.current.viewport, { key });
       });
@@ -113,10 +115,35 @@ describe("useTranscriptStickToBottom", () => {
 
   it("does not unpin on a downward wheel", () => {
     const handle = renderHarness();
+    setMetrics(handle.current.viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
     act(() => {
       fireEvent.wheel(handle.current.viewport, { deltaY: 20 });
     });
     expect(handle.current.api.isPinnedToBottom).toBe(true);
+  });
+
+  it("stays pinned on an upward wheel when the content is not scrollable", () => {
+    // Regression: with content that fits the viewport there is nowhere to
+    // scroll, so the wheel fires no scroll event. Unpinning here would strand
+    // the engine and show the scroll-to-bottom button while already at bottom.
+    const handle = renderHarness();
+    setMetrics(handle.current.viewport, { scrollHeight: 300, clientHeight: 300, scrollTop: 0 });
+    act(() => {
+      fireEvent.wheel(handle.current.viewport, { deltaY: -50 });
+    });
+    expect(handle.current.api.isPinnedToBottom).toBe(true);
+  });
+
+  it("stays pinned on ArrowUp/PageUp/Home when the content is not scrollable", () => {
+    for (const key of ["ArrowUp", "PageUp", "Home"]) {
+      const handle = renderHarness();
+      setMetrics(handle.current.viewport, { scrollHeight: 300, clientHeight: 300, scrollTop: 0 });
+      act(() => {
+        fireEvent.keyDown(handle.current.viewport, { key });
+      });
+      expect(handle.current.api.isPinnedToBottom).toBe(true);
+      cleanup();
+    }
   });
 
   it("ignores its own programmatic snap, then unpins on a real user scroll", () => {

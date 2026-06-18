@@ -15,6 +15,12 @@ export const REPIN_BOTTOM_THRESHOLD_PX = 24;
 export const PROGRAMMATIC_MATCH_TOL_PX = 2;
 // Ignore subpixel scroll jitter when classifying user scroll direction.
 export const DIRECTION_EPSILON_PX = 1;
+// Minimum overflow (scrollHeight - clientHeight) for the viewport to count as
+// scrollable. The pre-emptive intent-to-leave listeners must not unpin when the
+// content fits in the viewport: such a gesture produces no scroll event, so
+// nothing would re-pin and the scroll-to-bottom button would wrongly show while
+// already at the bottom.
+export const SCROLLABLE_OVERFLOW_EPSILON_PX = 1;
 // Visibility-resume glue loop: hold the viewport at the bottom each frame until
 // measured scrollHeight is stable for this many consecutive frames, capped at
 // GLUE_MAX_FRAMES, so a suspended-then-resumed measurement backlog collapses
