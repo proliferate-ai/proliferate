@@ -100,7 +100,18 @@ impl SessionActor {
         catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
-        apply_specific_config_option(
+        tracing::info!(
+            session_id = %self.session_id,
+            native_session_id = %self.native_session_id,
+            config_id,
+            value,
+            catalog_authorized_model,
+            dispatch = "idle",
+            current_model_id = ?self.startup_state.current_model_id,
+            current_mode_id = ?self.startup_state.current_mode_id,
+            "[config-switch] dispatch (apply now)"
+        );
+        let result = apply_specific_config_option(
             &self.conn,
             &self.native_session_id,
             &self.agent_kind,
@@ -113,7 +124,20 @@ impl SessionActor {
             value,
             catalog_authorized_model,
         )
-        .await
+        .await;
+        match &result {
+            Ok(state) => tracing::info!(
+                session_id = %self.session_id, config_id, value, ?state,
+                current_model_id = ?self.startup_state.current_model_id,
+                current_mode_id = ?self.startup_state.current_mode_id,
+                "[config-switch] idle apply result"
+            ),
+            Err(error) => tracing::warn!(
+                session_id = %self.session_id, config_id, value, error = ?error,
+                "[config-switch] idle apply rejected"
+            ),
+        }
+        result
     }
 
     pub(in crate::live::sessions::actor) async fn handle_busy_config_command(
@@ -123,6 +147,15 @@ impl SessionActor {
         catalog_authorized_model: bool,
     ) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError>
     {
+        tracing::info!(
+            session_id = %self.session_id,
+            native_session_id = %self.native_session_id,
+            config_id,
+            value,
+            catalog_authorized_model,
+            dispatch = "busy",
+            "[config-switch] dispatch (queued; applies at turn end)"
+        );
         let option = find_select_option_for_request(&self.startup_state.config_options, config_id);
         queue_pending_config_change(
             self.caps.state.as_ref(),

@@ -22,6 +22,7 @@ import {
 } from "@/stores/sessions/session-records";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { logConfigSwitchEvent } from "@/lib/access/tauri/diagnostics";
 
 type SetSessionConfigOptionMutation = ReturnType<typeof useSetSessionConfigOptionMutation>;
 
@@ -52,6 +53,13 @@ export async function dispatchConfigIntent(
       intent.clientSessionId,
       materializedSessionId,
     );
+    const preDispatchSlot = getSessionRecord(intent.clientSessionId);
+    logConfigSwitchEvent("fe send", {
+      configId: intent.configId,
+      value: intent.value,
+      localModeBefore: preDispatchSlot?.modeId ?? null,
+      localModelBefore: preDispatchSlot?.modelId ?? null,
+    });
     const response = await deps.setSessionConfigOptionMutation.mutateAsync({
       workspaceId,
       sessionId: materializedSessionId,
@@ -70,6 +78,18 @@ export async function dispatchConfigIntent(
       const effectiveLiveConfig = shouldReplaceLiveConfig
         ? responseLiveConfig
         : latestSlot.liveConfig;
+      // [config-switch] If shouldReplaceLiveConfig is false, the authoritative
+      // response is rejected and local `selected` stays stale until an SSE event
+      // arrives — the prime suspect for rapid Shift+Tab presses reading a lagging
+      // mode and re-sending the same value (NoChange on the backend).
+      logConfigSwitchEvent("fe response", {
+        configId: intent.configId,
+        sentValue: intent.value,
+        shouldReplaceLiveConfig,
+        responseModeCurrent: responseLiveConfig?.normalizedControls.mode?.currentValue ?? null,
+        responseModelCurrent: responseLiveConfig?.normalizedControls.model?.currentValue ?? null,
+        responseSessionModeId: response.session.modeId ?? null,
+      });
       const isModelConfigIntent =
         intent.configId === "model"
         || responseLiveConfig?.normalizedControls.model?.rawConfigId === intent.configId

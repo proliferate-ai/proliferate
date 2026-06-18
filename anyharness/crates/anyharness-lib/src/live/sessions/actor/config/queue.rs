@@ -103,6 +103,15 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
     let mut pending = store.list_pending_config_changes(session_id)?;
     pending.sort_by_key(|change| pending_config_rank(startup_state, &change.config_id));
 
+    if !pending.is_empty() {
+        tracing::info!(
+            session_id,
+            native_session_id,
+            pending_count = pending.len(),
+            "[config-switch] draining queued config changes at turn end"
+        );
+    }
+
     for change in pending {
         // Policy was enforced when the change was queued (advertised value
         // or catalog-authorized model), so replay re-authorizes it.
@@ -122,10 +131,22 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
         .await;
 
         match result {
-            Ok(_) => {
+            Ok(state) => {
+                tracing::info!(
+                    session_id, config_id = %change.config_id, value = %change.value, ?state,
+                    "[config-switch] drained change applied"
+                );
                 store.delete_pending_config_change(session_id, &change.config_id)?;
             }
-            Err(SetConfigOptionCommandError::Rejected(_)) => {
+            Err(SetConfigOptionCommandError::Rejected(reason)) => {
+                // NOTE(switch-diagnostics): a change that was valid when queued
+                // can become invalid by turn end (e.g. a mode no longer valid for
+                // the current model) and is then silently dropped — candidate
+                // cause of "switch didn't work occasionally".
+                tracing::warn!(
+                    session_id, config_id = %change.config_id, value = %change.value, reason = %reason,
+                    "[config-switch] drained change DROPPED (rejected at turn end)"
+                );
                 store.delete_pending_config_change(session_id, &change.config_id)?;
             }
         }

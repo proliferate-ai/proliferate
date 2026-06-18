@@ -3602,7 +3602,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "claude" | "codex" | "gemini" | "cursor" | "opencode";
+            kind: "claude" | "codex" | "gemini" | "cursor" | "opencode" | "grok";
             /** Displayname */
             displayName: string;
             harness: components["schemas"]["AgentCatalogHarnessPins"];
@@ -5723,7 +5723,7 @@ export interface components {
             /** Organizationid */
             organizationId?: string | null;
             /** Credentialproviderid */
-            credentialProviderId?: ("anthropic" | "openai" | "gemini" | "cursor") | null;
+            credentialProviderId?: ("anthropic" | "openai" | "gemini" | "cursor" | "xai") | null;
             /** Displayname */
             displayName: string;
             /**
@@ -8900,7 +8900,7 @@ export interface components {
             /** Runtimegeneration */
             runtimeGeneration: number;
             /** Allowedagentkinds */
-            allowedAgentKinds: ("claude" | "codex" | "opencode" | "gemini")[];
+            allowedAgentKinds: ("claude" | "codex" | "opencode" | "gemini" | "grok")[];
             /** Readyagentkinds */
             readyAgentKinds: string[];
             runtimeAuth: components["schemas"]["WorkspaceRuntimeAuthState"];
@@ -12046,7 +12046,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                agent_kind: "claude" | "codex" | "opencode" | "gemini";
+                agent_kind: "claude" | "codex" | "opencode" | "gemini" | "grok";
             };
             cookie?: never;
         };
@@ -12278,7 +12278,7 @@ export interface operations {
             header?: never;
             path: {
                 sandbox_profile_id: string;
-                agent_kind: "claude" | "codex" | "opencode" | "gemini";
+                agent_kind: "claude" | "codex" | "opencode" | "gemini" | "grok";
                 auth_slot_id: string;
             };
             cookie?: never;
