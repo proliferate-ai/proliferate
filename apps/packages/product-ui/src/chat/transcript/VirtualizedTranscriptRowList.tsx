@@ -23,6 +23,7 @@ import {
   type TranscriptRowListBaseProps,
 } from "./TranscriptRowListShared";
 import { useAboveChangeCompensation } from "./useAboveChangeCompensation";
+import { resolveUnpinnedAnchorRestore } from "./unpinned-anchor-restore";
 import { useTranscriptStickToBottom } from "./useTranscriptStickToBottom";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 import { useTranscriptVirtualizerBlankFallback } from "./useTranscriptVirtualizerBlankFallback";
@@ -283,12 +284,21 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
   });
 
-  // While unpinned, a completing turn can split one row into completed-history +
-  // content — a new, unmeasured row inserted ABOVE the anchored row. The
-  // getOffsetForIndex + offsetWithinRowPx restore lands against the 360px
-  // estimate and bumps when measurement corrects. When rows were inserted above
-  // the anchor, hold the user's position with the measured scrollHeight delta;
-  // pure shifts and below-the-viewport appends keep the offset reposition / no-op.
+  // While unpinned, a completing turn can split/grow rows around the anchored
+  // (first-visible) row. getOffsetForIndex builds on the 360px estimate for
+  // unmeasured neighbours, so the naive offset restore lands wrong and nudges
+  // the read position. Distinguish the three change shapes relative to the
+  // anchor and pick the restore that holds it at the same viewport y:
+  //   - anchor moved DOWN  (nextIndex > rowIndex): rows inserted ABOVE the
+  //     viewport — hold with the measured scrollHeight delta (estimate-immune).
+  //   - anchor moved UP    (nextIndex < rowIndex): rows removed ABOVE the
+  //     viewport — same measured-delta compensation applies.
+  //   - anchor index UNCHANGED (nextIndex === rowIndex): nothing changed above
+  //     the anchor, so getOffsetForIndex(nextIndex) is the anchor's real top.
+  //     A change strictly BELOW the viewport leaves scrollTop correct (hold it,
+  //     no move); a same-index height change of the anchor row itself needs the
+  //     measured offset — force-measure the anchor row first so the offset is
+  //     real, not the estimate, then restore offset + intra-row position.
   useLayoutEffect(() => {
     const anchor = pendingAnchorRef.current;
     pendingAnchorRef.current = null;
@@ -307,9 +317,31 @@ export function VirtualizedTranscriptRowList({
       return;
     }
 
-    if (nextIndex > anchor.rowIndex) {
+    const restore = resolveUnpinnedAnchorRestore({
+      capturedRowIndex: anchor.rowIndex,
+      nextRowIndex: nextIndex,
+    });
+
+    if (restore.kind === "measured-delta") {
+      // The anchor shifted, so rows were inserted/removed above the viewport.
+      // Measured-delta keeps the anchored row at the same y regardless of
+      // estimate error on the changed (unmeasured) rows.
       startAboveChangeCompensation(anchor);
       return;
+    }
+
+    // measured-offset — index unchanged: the composition change is at the anchor
+    // row or strictly below it. Force-measure the anchor row so its offset is
+    // measured rather than estimated, then re-anchor to (measured top + captured
+    // intra-row offset). When the change is purely below the viewport this
+    // reproduces the captured scrollTop exactly (a no-op hold); when the anchor
+    // row itself grew/shrank it holds the same visible content.
+    const viewport = scrollRef.current;
+    const anchorNode = viewport?.querySelector<HTMLElement>(
+      `[data-index="${nextIndex}"]`,
+    );
+    if (anchorNode) {
+      virtualizer.measureElement(anchorNode);
     }
 
     const offsetInfo = virtualizer.getOffsetForIndex(nextIndex, "start");
