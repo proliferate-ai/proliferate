@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
+import { useFuzzyFileResolver } from "@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 import {
@@ -35,6 +36,7 @@ export function useFileReferenceActions({
     targets,
   } = useOpenInDefaultEditor();
   const { workspacePath: workspaceRoot, resolveAbsolute } = useWorkspacePath();
+  const fuzzyResolveFilePath = useFuzzyFileResolver();
 
   const reference = useMemo(() => resolveFileReference({
     rawPath,
@@ -58,11 +60,17 @@ export function useFileReferenceActions({
     if (!reference.workspacePath) {
       return;
     }
-    const target = fileViewerTarget(reference.workspacePath);
     const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
       selectedLogicalWorkspaceId,
       materializedWorkspaceId: selectedWorkspaceId,
     });
+    // Backstop: if the reference is a partial/abbreviated path, correct it to
+    // the real workspace file before opening so it resolves instead of 404ing.
+    const corrected = await fuzzyResolveFilePath({
+      workspacePath: reference.workspacePath,
+      materializedWorkspaceId,
+    });
+    const target = fileViewerTarget(corrected ?? reference.workspacePath);
     openTarget(target);
     if (materializedWorkspaceId) {
       activateViewerTarget({
@@ -74,6 +82,7 @@ export function useFileReferenceActions({
     }
   }, [
     activateViewerTarget,
+    fuzzyResolveFilePath,
     openTarget,
     reference.workspacePath,
     selectedLogicalWorkspaceId,

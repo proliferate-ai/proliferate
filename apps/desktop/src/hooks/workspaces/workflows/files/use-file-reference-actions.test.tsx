@@ -13,6 +13,7 @@ const editorMocks = vi.hoisted(() => ({
 const shellMocks = vi.hoisted(() => ({
   copyPath: vi.fn(async () => undefined),
   openTarget: vi.fn(async () => undefined),
+  pathIsDirectory: vi.fn(async () => false),
   revealInFinder: vi.fn(async () => undefined),
 }));
 
@@ -33,7 +34,12 @@ vi.mock("@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation", () =
 vi.mock("@/lib/access/tauri/shell", () => ({
   copyPath: shellMocks.copyPath,
   openTarget: shellMocks.openTarget,
+  pathIsDirectory: shellMocks.pathIsDirectory,
   revealInFinder: shellMocks.revealInFinder,
+}));
+
+vi.mock("@/hooks/workspaces/workflows/files/use-fuzzy-file-resolver", () => ({
+  useFuzzyFileResolver: () => async () => null,
 }));
 
 afterEach(() => {
