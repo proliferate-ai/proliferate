@@ -8,6 +8,13 @@ import type { SessionDebugActionState } from "@/lib/domain/support/session-debug
 
 const runtimeUrl = "http://127.0.0.1:7007";
 const replayHealth = {
+  agentReconcile: {
+    status: "idle",
+    installed: 0,
+    alreadyInstalled: 0,
+    skipped: 0,
+    failed: 0,
+  },
   agentSeed: {
     lastAction: "none",
     ownership: "not_configured",

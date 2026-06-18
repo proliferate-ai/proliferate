@@ -1860,6 +1860,22 @@ export interface components {
         AgentLoginTerminalStatus: "starting" | "running" | "exited" | "failed";
         /** @enum {string} */
         AgentReadinessState: "ready" | "install_required" | "credentials_required" | "login_required" | "unsupported" | "error";
+        /**
+         * @description Coarse, low-cardinality reconcile status for `/health`. Per-agent detail
+         *     stays on `GET /v1/agents/reconcile`.
+         */
+        AgentReconcileSummary: {
+            /** Format: int32 */
+            alreadyInstalled: number;
+            currentAgent?: string | null;
+            /** Format: int32 */
+            failed: number;
+            /** Format: int32 */
+            installed: number;
+            /** Format: int32 */
+            skipped: number;
+            status: components["schemas"]["ReconcileJobStatus"];
+        };
         /** @enum {string} */
         AgentSeedFailureKind: "missing_archive" | "invalid_checksum" | "invalid_manifest" | "invalid_archive" | "io" | "unsupported_target" | "verification_failed";
         AgentSeedHealth: {
@@ -2545,6 +2561,7 @@ export interface components {
             targetSessionId: string;
         };
         HealthResponse: {
+            agentReconcile: components["schemas"]["AgentReconcileSummary"];
             agentSeed: components["schemas"]["AgentSeedHealth"];
             capabilities: components["schemas"]["RuntimeCapabilities"];
             runtimeHome: string;
@@ -3276,6 +3293,11 @@ export interface components {
             outcome: components["schemas"]["ReconcileOutcome"];
         };
         ReconcileAgentsRequest: {
+            /**
+             * @description When true, only agents already installed on disk are reconciled to the
+             *     catalog pins; missing agents are skipped (they install on demand at
+             *     session start). Defaults to false (full-scope reconcile).
+             */
             installedOnly?: boolean;
             reinstall?: boolean;
         };

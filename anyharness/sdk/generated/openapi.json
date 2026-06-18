@@ -6183,6 +6183,48 @@
           "error"
         ]
       },
+      "AgentReconcileSummary": {
+        "type": "object",
+        "description": "Coarse, low-cardinality reconcile status for `/health`. Per-agent detail\nstays on `GET /v1/agents/reconcile`.",
+        "required": [
+          "status",
+          "installed",
+          "alreadyInstalled",
+          "skipped",
+          "failed"
+        ],
+        "properties": {
+          "alreadyInstalled": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "currentAgent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "installed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReconcileJobStatus"
+          }
+        }
+      },
       "AgentSeedFailureKind": {
         "type": "string",
         "enum": [
@@ -9269,9 +9311,13 @@
           "version",
           "runtimeHome",
           "capabilities",
-          "agentSeed"
+          "agentSeed",
+          "agentReconcile"
         ],
         "properties": {
+          "agentReconcile": {
+            "$ref": "#/components/schemas/AgentReconcileSummary"
+          },
           "agentSeed": {
             "$ref": "#/components/schemas/AgentSeedHealth"
           },
@@ -12383,6 +12429,10 @@
       "ReconcileAgentsRequest": {
         "type": "object",
         "properties": {
+          "installedOnly": {
+            "type": "boolean",
+            "description": "When true, only agents already installed on disk are reconciled to the\ncatalog pins; missing agents are skipped (they install on demand at\nsession start). Defaults to false (full-scope reconcile)."
+          },
           "reinstall": {
             "type": "boolean"
           }
