@@ -1,10 +1,16 @@
 import { useState, type ReactNode } from "react";
-import { GitHub, Globe } from "@proliferate/ui/icons";
+import { GitHub } from "@proliferate/ui/icons";
 
 /**
  * Inline "mention"-style rendering for external links in markdown bodies, with
- * a provider icon: a brand SVG for known hosts (GitHub) and the site's favicon
- * for any other URL (AWS console, Linear, Vercel, …) — no per-provider code.
+ * a provider icon: a brand SVG for known hosts (GitHub) and the site's own
+ * favicon for any other URL (AWS console, Linear, Vercel, …) — no per-provider
+ * code and no third-party favicon service.
+ *
+ * Favicon resolution falls back gracefully: `https://<host>/favicon.ico`, then
+ * the registrable root domain's favicon (so `console.aws.amazon.com` → the
+ * `amazon.com` icon if the subdomain has none), then no icon at all. All
+ * requests go to the linked site itself, so no host list leaks to a third party.
  *
  * Styling matches the desktop file-mention look (see FileReferenceBadge): a
  * muted link color, an inline icon sized to one line-height, and a dashed
@@ -47,38 +53,60 @@ export function ProviderLinkMention({
       data-provider-link-host={host}
       className={INLINE_MENTION_CLASS}
     >
-      <span aria-hidden="true" className={ICON_SHELL_CLASS}>
-        <LinkIcon host={host} className={ICON_CLASS} />
-      </span>
+      <LinkIcon host={host} />
       <span className="min-w-0 break-words">{children}</span>
     </a>
   );
 }
 
-function LinkIcon({ host, className }: { host: string; className: string }): ReactNode {
-  const [faviconFailed, setFaviconFailed] = useState(false);
+function LinkIcon({ host }: { host: string }): ReactNode {
   if (host === "github.com" || host.endsWith(".github.com")) {
-    return <GitHub className={className} aria-hidden="true" />;
+    return (
+      <span aria-hidden="true" className={ICON_SHELL_CLASS}>
+        <GitHub className={ICON_CLASS} />
+      </span>
+    );
   }
-  if (faviconFailed) {
-    return <Globe className={className} aria-hidden="true" />;
+  return <FaviconIcon host={host} />;
+}
+
+/**
+ * Try the host's own `/favicon.ico`, then the root domain's, then render no icon
+ * — advancing through the candidates on each load error.
+ */
+function FaviconIcon({ host }: { host: string }): ReactNode {
+  const [stage, setStage] = useState(0);
+  const candidates = faviconCandidates(host);
+  if (stage >= candidates.length) {
+    return null;
   }
   return (
-    <img
-      src={faviconUrl(host)}
-      alt=""
-      decoding="async"
-      draggable={false}
-      referrerPolicy="no-referrer"
-      onError={() => setFaviconFailed(true)}
-      className={`${className} rounded-[2px] object-contain`}
-    />
+    <span aria-hidden="true" className={ICON_SHELL_CLASS}>
+      <img
+        key={candidates[stage]}
+        src={candidates[stage]}
+        alt=""
+        decoding="async"
+        draggable={false}
+        referrerPolicy="no-referrer"
+        onError={() => setStage((current) => current + 1)}
+        className={`${ICON_CLASS} rounded-[2px] object-contain`}
+      />
+    </span>
   );
 }
 
-/** Google's favicon service: more reliable than `{origin}/favicon.ico`. */
-function faviconUrl(host: string): string {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+function faviconCandidates(host: string): string[] {
+  const root = rootDomain(host);
+  return root === host
+    ? [`https://${host}/favicon.ico`]
+    : [`https://${host}/favicon.ico`, `https://${root}/favicon.ico`];
+}
+
+/** Registrable domain heuristic (last two labels) — good enough for favicons. */
+export function rootDomain(host: string): string {
+  const labels = host.split(".").filter(Boolean);
+  return labels.length > 2 ? labels.slice(-2).join(".") : host;
 }
 
 /**

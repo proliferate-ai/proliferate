@@ -107,13 +107,13 @@ Rules:
 - Mention labels display the workspace-relative path plus a `(line N)` suffix;
   raw absolute hrefs must not be shown as label text.
 - External/web link hrefs render as a shared inline provider-icon mention
-  (`ProviderLinkMention`): a GitHub brand SVG for github hosts, the site favicon
-  (Google s2 service, `Globe` on load error) otherwise. It is `MarkdownBody`'s
-  default anchor, so every surface gets it (web + cloud chat included); URL
-  detection (`isExternalHttpLink`) runs before file-path detection so a real
-  path is never mistaken for a link. NOTE: the favicon is an outbound request to
-  Google keyed on the linked host — a privacy consideration for internal/console
-  URLs on the web build, with no offline fallback beyond the error icon.
+  (`ProviderLinkMention`): a GitHub brand SVG for github hosts, otherwise the
+  site's own favicon — `https://<host>/favicon.ico`, falling back to the root
+  domain's favicon, then no icon. It is `MarkdownBody`'s default anchor, so every
+  surface gets it (web + cloud chat included); URL detection
+  (`isExternalHttpLink`) runs before file-path detection so a real path is never
+  mistaken for a link. Favicon requests go to the linked site itself (no
+  third-party favicon service), so no list of linked hosts leaks anywhere.
 - Web falls back to unhighlighted (identically styled) code blocks; shiki stays
   out of the web bundle.
 
