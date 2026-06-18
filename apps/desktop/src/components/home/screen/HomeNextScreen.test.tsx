@@ -289,7 +289,10 @@ describe("HomeNextScreen model availability notices", () => {
     expect(screen.queryByText("start cowork")).toBeNull();
   });
 
-  it("keeps the submitted preview for repository launches", () => {
+  it("does not render a submitted preview below the composer for repository launches", () => {
+    // Navigate-first (#1): the optimistic message now appears on the destination
+    // session shell, not on home — so no preview should paint here even for
+    // worktree/repository launches.
     screenMocks.homeNext.launchTarget = {
       kind: "worktree",
       repoRootId: "repo-root-1",
@@ -302,7 +305,10 @@ describe("HomeNextScreen model availability notices", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "start worktree" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
 
-    expect(screen.getByText("start worktree")).toBeTruthy();
+    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
+      text: "start worktree",
+    }));
+    expect(screen.queryByText("start worktree")).toBeNull();
   });
 
   it("renders onboarding cards as the only home onboarding actions", () => {
