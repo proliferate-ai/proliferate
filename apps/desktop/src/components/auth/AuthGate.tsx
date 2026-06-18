@@ -35,29 +35,40 @@ export function BootstrappedRoute() {
   const [fadeState, setFadeState] = useState<ShellFadeState>(
     status === "bootstrapping" ? "checking" : null,
   )
+  // The living mark settled to its resolved icon at least once. Tracked as state
+  // (not derived from the mark callback alone) because the SAME persistent mark
+  // only fires onResolved once — when revealing the app after the login screen,
+  // it has already resolved and won't fire again, so the reveal fade must key off
+  // this instead. Without it the shell would stay mounted forever after sign-in.
+  const [markResolved, setMarkResolved] = useState(false)
 
-  // Once bootstrapping resolves, settle the mark (drives the reveal/login flip).
   useEffect(() => {
     if (status === "bootstrapping") {
       setFadeState("checking")
+      setMarkResolved(false)
       return
     }
     setFadeState((current) => (current === "checking" ? "resolving" : current))
   }, [status])
 
-  // The mark finished resolving. Only the app destination fades the shell away;
-  // the login destination keeps the SAME shell mounted (loading -> auth in
-  // place) so the living mark never re-mounts.
-  const handleResolved = useCallback(() => {
-    if (destination !== "app") {
+  const handleResolved = useCallback(() => setMarkResolved(true), [])
+  const handleFadeComplete = useCallback(() => setFadeState(null), [])
+
+  // Reveal the app once the mark has settled and we're heading to the app. Runs
+  // for both the first-load reveal (bootstrapping -> app) and the post-sign-in
+  // reveal (login -> app), where the persistent mark already resolved.
+  useEffect(() => {
+    if (destination !== "app" || !markResolved) {
       return
     }
-    window.requestAnimationFrame(() => {
+    if (fadeState === null || fadeState === "fading") {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => setFadeState("fading"))
     })
-  }, [destination])
-
-  const handleFadeComplete = useCallback(() => setFadeState(null), [])
+    return () => window.cancelAnimationFrame(frame)
+  }, [destination, markResolved, fadeState])
 
   useEffect(() => {
     if (destination !== "app" || fadeState !== "fading") {

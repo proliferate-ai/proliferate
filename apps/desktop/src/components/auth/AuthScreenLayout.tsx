@@ -70,6 +70,7 @@ export function AuthScreenLayout({
           <div
             className={twMerge(
               "absolute inset-0 transition-all duration-300 ease-out",
+              "motion-reduce:translate-y-0 motion-reduce:transition-none",
               showAuth
                 ? "pointer-events-none -translate-y-1 opacity-0"
                 : "translate-y-0 opacity-100",
@@ -87,6 +88,7 @@ export function AuthScreenLayout({
           <div
             className={twMerge(
               "absolute inset-0 transition-all duration-300 ease-out",
+              "motion-reduce:translate-y-0 motion-reduce:transition-none",
               showAuth
                 ? "translate-y-0 opacity-100"
                 : "pointer-events-none translate-y-1 opacity-0",
@@ -116,35 +118,37 @@ export function AuthScreenLayout({
               {!submitting && <ArrowRight className="h-4 w-4" />}
             </Button>
           </div>
-        </div>
 
-        {/* Reserved message line so error / unavailable / local text never
-            shifts the layout above it. */}
-        <div className="-mt-4 min-h-5 text-center">
-          {showAuth && error
-            ? <p className="text-sm text-destructive">{error}</p>
-            : showAuth && (githubSignInChecking || !githubSignInAvailable)
-              ? (
-                <p className="text-sm text-muted-foreground">
-                  {githubSignInUnavailableDescription}
-                </p>
-              )
-              : showAuth && canContinueLocally
+          {/* Message line is absolutely anchored below the action slot so error /
+              unavailable / local text (which can wrap to multiple lines) never
+              changes the centered column height — the mark stays pinned. */}
+          <div className="absolute inset-x-0 top-full mt-3 text-center">
+            {showAuth && error
+              ? <p className="text-sm text-destructive">{error}</p>
+              : showAuth && (githubSignInChecking || !githubSignInAvailable)
                 ? (
                   <p className="text-sm text-muted-foreground">
-                    {AUTH_LOGIN_LABELS.detailWithLocalPrefix}{" "}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={onContinueLocally}
-                      className="inline h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                    >
-                      {AUTH_LOGIN_LABELS.continueLocallyInline}
-                    </Button>
+                    {githubSignInUnavailableDescription}
                   </p>
                 )
-                : null}
+                : showAuth && canContinueLocally
+                  ? (
+                    <p className="text-sm text-muted-foreground">
+                      {AUTH_LOGIN_LABELS.detailWithLocalPrefix}{" "}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={onContinueLocally}
+                        className="inline h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                      >
+                        {AUTH_LOGIN_LABELS.continueLocallyInline}
+                      </Button>
+                      .
+                    </p>
+                  )
+                  : null}
+          </div>
         </div>
       </div>
     </AuthAppearanceBoundary>
