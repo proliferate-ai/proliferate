@@ -44,6 +44,15 @@ export function listWorkspaceFiles(
   return getAnyHarnessClient(connection).files.list(workspaceId, dirPath, request);
 }
 
+export function searchWorkspaceFiles(
+  connection: AnyHarnessClientConnection,
+  workspaceId: string,
+  query: string,
+  limit = 25,
+) {
+  return getAnyHarnessClient(connection).files.search(workspaceId, query, limit);
+}
+
 export function readWorkspaceFile(
   connection: AnyHarnessClientConnection,
   workspaceId: string,

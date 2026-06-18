@@ -31,6 +31,27 @@ export function resolveFileReference(args: {
   };
 }
 
+/**
+ * Best-effort correction for a workspace file path that does not resolve to a
+ * real file (e.g. an agent dropped leading directories): given candidate paths
+ * from a basename search, return the single candidate whose path equals or ends
+ * with the target path. Returns null when the target already appears among the
+ * candidates (it exists), or when the suffix match is absent or ambiguous.
+ */
+export function pickFuzzyPathMatch(
+  targetPath: string,
+  candidatePaths: readonly string[],
+): string | null {
+  if (!targetPath || candidatePaths.includes(targetPath)) {
+    return null;
+  }
+  const suffix = `/${targetPath}`;
+  const matches = candidatePaths.filter(
+    (candidate) => candidate === targetPath || candidate.endsWith(suffix),
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function normalizeWorkspacePathOverride(path: string | null): string | null {
   if (!path) {
     return null;
