@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
+  supportReportRetriesExhausted,
 } from "./report-upload-failure";
 
 describe("describeSupportReportUploadFailure", () => {
@@ -82,6 +83,109 @@ describe("describeSupportReportUploadFailure", () => {
       retryDelayMs: 5 * 60_000,
       toastMessage: "Report could not be sent. We'll retry in the background.",
     });
+  });
+
+  it("treats a locked upload-target conflict as terminal instead of transient", () => {
+    const failure = describeSupportReportUploadFailure(
+      new Error("Support report upload targets already exist for different objects."),
+      379,
+    );
+
+    expect(failure).toMatchObject({
+      kind: "upload_conflict",
+      retryable: false,
+      retryDelayMs: null,
+    });
+  });
+
+  it("treats a changed-intent conflict as terminal", () => {
+    const failure = describeSupportReportUploadFailure(
+      new Error("Support report upload targets changed attachment intent."),
+      4,
+    );
+
+    expect(failure.kind).toBe("upload_conflict");
+    expect(failure.retryable).toBe(false);
+  });
+
+  it("classifies the stable conflict code as terminal regardless of message", () => {
+    const failure = describeSupportReportUploadFailure(
+      { message: "reworded server prose", code: "support_report_upload_conflict" },
+      2,
+    );
+
+    expect(failure.kind).toBe("upload_conflict");
+    expect(failure.retryable).toBe(false);
+  });
+
+  it("treats an already-completed report as benign success, not a conflict", () => {
+    const byCode = describeSupportReportUploadFailure(
+      { message: "reworded", code: "support_report_already_completed" },
+      2,
+    );
+    const byMessage = describeSupportReportUploadFailure(
+      new Error("Support report upload is already completed."),
+      2,
+    );
+
+    for (const failure of [byCode, byMessage]) {
+      expect(failure.kind).toBe("already_completed");
+      expect(failure.retryable).toBe(false);
+    }
+  });
+
+  it("treats other upload-invalid 400s as terminal rejections, not transient retries", () => {
+    const failure = describeSupportReportUploadFailure(
+      {
+        message: "Diagnostics payload is too large.",
+        code: "support_report_upload_invalid",
+        status: 400,
+      },
+      2,
+    );
+
+    expect(failure.kind).toBe("upload_rejected");
+    expect(failure.retryable).toBe(false);
+  });
+});
+
+describe("supportReportRetriesExhausted", () => {
+  const now = Date.parse("2026-06-17T00:00:00.000Z");
+
+  it("attempt-caps transient failures exactly at the boundary", () => {
+    expect(supportReportRetriesExhausted({ kind: "transient", attemptCount: 8, nowMs: now }))
+      .toBe(true);
+    expect(supportReportRetriesExhausted({ kind: "transient", attemptCount: 7, nowMs: now }))
+      .toBe(false);
+  });
+
+  it("does not attempt-cap blocked-on-user states while they are still fresh", () => {
+    expect(supportReportRetriesExhausted({
+      kind: "auth_required",
+      attemptCount: 50,
+      createdAt: "2026-06-16T18:00:00.000Z",
+      nowMs: now,
+    })).toBe(false);
+  });
+
+  it("age-caps every retryable failure once stale, including blocked states", () => {
+    for (const kind of ["transient", "auth_required", "storage_unconfigured"] as const) {
+      expect(supportReportRetriesExhausted({
+        kind,
+        attemptCount: 1,
+        createdAt: "2026-06-02T00:00:00.000Z",
+        nowMs: now,
+      })).toBe(true);
+    }
+  });
+
+  it("keeps retrying a fresh job within budget and age", () => {
+    expect(supportReportRetriesExhausted({
+      kind: "transient",
+      attemptCount: 2,
+      createdAt: "2026-06-16T18:00:00.000Z",
+      nowMs: now,
+    })).toBe(false);
   });
 });
 

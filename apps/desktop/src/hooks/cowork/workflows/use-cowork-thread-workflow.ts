@@ -1,9 +1,10 @@
 import {
   resolveRuntimeConnection,
+  useAgentLaunchOptionsQuery,
   useAnyHarnessRuntimeContext,
   useCreateCoworkThreadMutation,
 } from "@anyharness/sdk-react";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
@@ -22,6 +23,11 @@ import { useWorkspaceEntryFlow } from "@/hooks/workspaces/workflows/use-workspac
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { mergeRuntimeLaunchOptionsIntoModelRegistries } from "@/lib/domain/settings/model-registries";
+import {
+  isStoredDefaultModelStale,
+  withClearedDefaultModelIdByAgentKind,
+} from "@/lib/domain/agents/model-options";
 import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { mergeLiveDefaultLaunchControls } from "@/lib/domain/sessions/creation/launch-controls";
@@ -54,13 +60,28 @@ export function useCoworkThreadWorkflow() {
   const activateWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const { beginPendingWorkspace } = useWorkspaceEntryFlow();
   const { agents } = useAgentCatalog();
-  const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useCloudLaunchModelRegistries();
+  const { data: cloudModelRegistries = EMPTY_MODEL_REGISTRIES } = useCloudLaunchModelRegistries();
+  // Gate the new-thread model set to the runtime's active auth context. The cloud
+  // catalog lists every model across all contexts (incl. bedrock us.anthropic.*),
+  // so resolving a stored default against it alone can pick a model that is not
+  // valid in the live context. The runtime launch-options are pre-filtered to
+  // visible + available for the classified context; merging them (runtime wins)
+  // yields the same context-valid set the composer/model-selector already uses.
+  const runtimeLaunchOptions = useAgentLaunchOptionsQuery();
+  const modelRegistries = useMemo(
+    () => mergeRuntimeLaunchOptionsIntoModelRegistries(
+      cloudModelRegistries,
+      runtimeLaunchOptions.data?.agents ?? null,
+    ),
+    [cloudModelRegistries, runtimeLaunchOptions.data?.agents],
+  );
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:
       state.defaultLiveSessionControlValuesByAgentKind,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
+    set: state.set,
   })));
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
@@ -155,8 +176,21 @@ export function useCoworkThreadWorkflow() {
   ]);
 
   const createThread = useCallback(async () => {
+    // Resolve against the runtime's context-gated launch options, not the
+    // ungated cloud catalog. If the query has not resolved yet (e.g. a fast
+    // "New Thread" right after connect), fetch it now — otherwise the merge
+    // falls back to the cloud catalog and could pick a stale default (e.g. a
+    // bedrock id) that the runtime then rejects.
+    let runtimeAgents = runtimeLaunchOptions.data?.agents ?? null;
+    if (!runtimeAgents && runtimeUrl) {
+      runtimeAgents = (await runtimeLaunchOptions.refetch()).data?.agents ?? null;
+    }
+    const gatedRegistries = mergeRuntimeLaunchOptionsIntoModelRegistries(
+      cloudModelRegistries,
+      runtimeAgents,
+    );
     const defaults = resolveEffectiveChatDefaults(
-      modelRegistries,
+      gatedRegistries,
       agents,
       preferences,
       null,
@@ -166,7 +200,33 @@ export function useCoworkThreadWorkflow() {
       throw new Error(defaults.degradedReason ?? "No ready agents are available.");
     }
 
-    if (defaults.degradedReason) {
+    // Self-heal a stale stored default: if the persisted default model for this
+    // agent is not in the runtime's context-gated options (e.g. a bedrock id
+    // left over after switching to oauth), drop it so the warning does not
+    // re-fire on every new thread. Only act when the runtime authoritatively
+    // lists the agent (avoids wiping a valid default while options are loading).
+    const storedDefault = preferences.defaultChatModelIdByAgentKind[defaults.agentKind];
+    const runtimeAgent = runtimeAgents?.find(
+      (agent) => agent.kind === defaults.agentKind,
+    );
+    const healedStaleDefault = isStoredDefaultModelStale(
+      storedDefault,
+      runtimeAgent?.models ?? null,
+    );
+    if (healedStaleDefault) {
+      preferences.set(
+        "defaultChatModelIdByAgentKind",
+        withClearedDefaultModelIdByAgentKind(
+          preferences.defaultChatModelIdByAgentKind,
+          defaults.agentKind,
+        ),
+      );
+    }
+
+    // Surface the degraded reason — but not when we just self-healed a stale
+    // default: a valid model was substituted and the dead pref cleared, so
+    // there is nothing actionable to warn about.
+    if (defaults.degradedReason && !healedStaleDefault) {
       showToast(defaults.degradedReason, "info");
     }
 
@@ -176,9 +236,11 @@ export function useCoworkThreadWorkflow() {
     });
   }, [
     agents,
+    cloudModelRegistries,
     createThreadWithResolvedConfig,
-    modelRegistries,
     preferences,
+    runtimeLaunchOptions,
+    runtimeUrl,
     showToast,
   ]);
 

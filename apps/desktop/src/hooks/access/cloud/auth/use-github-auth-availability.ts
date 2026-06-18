@@ -7,14 +7,14 @@ import {
 import { useControlPlaneHealth } from "@/hooks/access/cloud/use-control-plane-health";
 import { githubDesktopAuthAvailabilityKey } from "./query-keys";
 
-export function useGitHubDesktopAuthAvailability() {
+export function useGitHubDesktopAuthAvailability(options?: { enabled?: boolean }) {
   const apiBaseUrl = getProliferateApiBaseUrl();
   const { data: controlPlaneReachable = false } = useControlPlaneHealth();
 
   return useQuery<GitHubDesktopAuthAvailability>({
     queryKey: githubDesktopAuthAvailabilityKey(apiBaseUrl),
     queryFn: getGitHubDesktopAuthAvailability,
-    enabled: controlPlaneReachable,
+    enabled: controlPlaneReachable && (options?.enabled ?? true),
     staleTime: 15_000,
     refetchInterval: 15_000,
     retry: 1,

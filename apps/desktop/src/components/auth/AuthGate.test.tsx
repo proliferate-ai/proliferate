@@ -1,12 +1,57 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { BootstrappedRoute } from "@/components/auth/AuthGate";
+import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
+
+// Force the auth-required gate so anonymous resolves to the sign-in shell
+// (exercising the loading -> login -> app reveal path).
+vi.mock("@/lib/domain/auth/auth-mode", () => ({
+  isProductAuthRequired: () => true,
+}));
+
+// BootstrappedRoute renders <AuthShell>, which pulls in the GitHub sign-in
+// availability query + capability hooks. These BootstrappedRoute tests only care
+// about the overlay/reveal lifecycle, so stub the shell to a marker that echoes
+// its mode and fires onMarkResolved once told the mark has settled
+// (markComplete) — mirroring the real living mark so the reveal fade is actually
+// exercised (and the post-sign-in deadlock would be caught).
+vi.mock("@/components/auth/AuthShell", async () => {
+  const { useEffect, useRef } = await import("react");
+  return {
+    AuthShell: ({
+      mode,
+      markComplete,
+      onMarkResolved,
+    }: {
+      mode: string;
+      markComplete: boolean;
+      onMarkResolved?: () => void;
+    }) => {
+      // Latch like the real ProliferateLivingMark: onResolved fires AT MOST
+      // ONCE. Without this latch the mock would re-fire whenever the callback
+      // identity changes, masking the post-sign-in deadlock the regression
+      // test exists to catch.
+      const resolvedRef = useRef(false);
+      useEffect(() => {
+        if (markComplete && !resolvedRef.current) {
+          resolvedRef.current = true;
+          onMarkResolved?.();
+        }
+      }, [markComplete, onMarkResolved]);
+      return (
+        <div data-testid="auth-shell" data-mode={mode}>
+          shell
+        </div>
+      );
+    },
+  };
+});
 import {
   BRAILLE_SWEEP_DOT_FRAMES,
   BRAILLE_SWEEP_FRAME_INTERVAL_MS,
@@ -129,7 +174,7 @@ describe("BootstrappedRoute", () => {
     useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
   });
 
-  it("mounts the destination behind the session check overlay before fading it away", () => {
+  it("shows the loading shell and withholds the workspace while bootstrapping", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
@@ -140,14 +185,80 @@ describe("BootstrappedRoute", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Checking your session")).toBeTruthy();
+    expect(screen.getByTestId("auth-shell").dataset.mode).toBe("loading");
+    expect(screen.queryByTestId("workspace")).toBeNull();
+  });
+
+  it("reveals the workspace after sign-in without leaving the shell stuck", async () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route element={<BootstrappedRoute />}>
+            <Route path="/" element={<main data-testid="workspace">Workspace</main>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // bootstrapping -> loading shell
+    expect(screen.getByTestId("auth-shell").dataset.mode).toBe("loading");
+
+    // resolves to anonymous + auth required -> in-place sign-in shell
+    act(() => {
+      useAuthStore.setState({ status: "anonymous" });
+    });
+    expect(screen.getByTestId("auth-shell").dataset.mode).toBe("auth");
     expect(screen.queryByTestId("workspace")).toBeNull();
 
+    // sign-in -> authenticated: the persistent shell must fade out and reveal
+    // the workspace (regression: the shell used to stay mounted forever here).
     act(() => {
       useAuthStore.setState({ status: "authenticated" });
     });
+    await waitFor(() => expect(screen.getByTestId("workspace")).toBeTruthy());
+    await waitFor(() => expect(screen.queryByTestId("auth-shell")).toBeNull());
+  });
+});
 
-    expect(screen.getByTestId("workspace")).toBeTruthy();
-    expect(screen.getByText("Checking your session")).toBeTruthy();
+describe("AuthScreenLayout", () => {
+  it("keeps the heading constant and disables the action while loading", () => {
+    const { rerender } = render(<AuthScreenLayout mode="loading" />);
+
+    expect(screen.getByText("Let's get your life's work done.")).toBeTruthy();
+    expect(screen.getByText("Restoring your session…")).toBeTruthy();
+    expect(
+      screen.getByText("Continue with GitHub").closest("button")?.disabled,
+    ).toBe(true);
+
+    rerender(
+      <AuthScreenLayout mode="auth" githubSignInAvailable onGitHubSignIn={() => {}} />,
+    );
+
+    // Heading is identical across modes (no reflow), and the action is live.
+    expect(screen.getByText("Let's get your life's work done.")).toBeTruthy();
+    expect(
+      screen.getByText("Continue with GitHub").closest("button")?.disabled,
+    ).toBe(false);
+  });
+
+  it("offers the inline continue-locally action when allowed", () => {
+    render(
+      <AuthScreenLayout
+        mode="auth"
+        githubSignInAvailable
+        canContinueLocally
+        onContinueLocally={() => {}}
+        onGitHubSignIn={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("start locally")).toBeTruthy();
+  });
+
+  it("ignores user appearance text-size preferences", () => {
+    setRootToNonDefaultTextScale();
+    render(<AuthScreenLayout mode="auth" />);
+
+    expectDefaultAuthAppearance(getAuthAppearanceBoundary());
   });
 });

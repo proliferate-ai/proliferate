@@ -1,9 +1,12 @@
 export type SupportReportUploadFailureKind =
+  | "already_completed"
   | "auth_required"
   | "cloud_unconfigured"
   | "dev_auth_bypass"
   | "local_payload_invalid"
   | "storage_unconfigured"
+  | "upload_conflict"
+  | "upload_rejected"
   | "transient";
 
 export interface SupportReportUploadFailure {
@@ -26,6 +29,11 @@ const RETRY_AFTER_SIGN_IN_DELAY_MS = 5 * 60_000;
 const CONFIG_RETRY_DELAY_MS = 30 * 60_000;
 const TRANSIENT_TOAST_COOLDOWN_MS = 5 * 60_000;
 const BLOCKED_TOAST_COOLDOWN_MS = 60 * 60_000;
+
+// A queued report that never succeeds must eventually be dropped — otherwise a
+// single un-completable report retries (and re-toasts) forever across restarts.
+const MAX_SUPPORT_REPORT_ATTEMPTS = 8;
+const MAX_SUPPORT_REPORT_AGE_MS = 48 * 60 * 60_000;
 
 export function describeSupportReportUploadFailure(
   error: unknown,
@@ -93,6 +101,52 @@ export function describeSupportReportUploadFailure(
     };
   }
 
+  // The report already completed on a prior attempt (e.g. the complete call
+  // landed but the client lost the response before clearing the job). This is
+  // success, not failure — the queue treats `already_completed` as idempotent
+  // cleanup rather than showing an error.
+  if (code === "support_report_already_completed" || isAlreadyCompletedError(message)) {
+    return {
+      kind: "already_completed",
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage: "Report already sent. Support has the details.",
+      toastCooldownMs: 0,
+    };
+  }
+
+  // Terminal upload-target conflict: the report's locked object set / intent can
+  // never reconcile with this request, so retrying the same job is hopeless.
+  // Prefer the stable server code; fall back to message text for older servers.
+  if (code === "support_report_upload_conflict" || isUploadConflictError(message)) {
+    return {
+      kind: "upload_conflict",
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage:
+        "This report can no longer be sent. Start a new report from Help if you still need support.",
+      toastCooldownMs: 0,
+    };
+  }
+
+  // Any other upload-invalid (HTTP 400) is a permanent server-side rejection of
+  // the request payload (diagnostics too large, object size mismatch, workspace
+  // selection, etc.). Retrying the same request can't fix it, so it is terminal
+  // rather than transient — otherwise it would retry until the age backstop.
+  if (code === "support_report_upload_invalid" || status === 400) {
+    return {
+      kind: "upload_rejected",
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage:
+        "This report was rejected and can't be sent as-is. Start a new report from Help.",
+      toastCooldownMs: 0,
+    };
+  }
+
   return {
     kind: "transient",
     message,
@@ -151,6 +205,41 @@ function isLocalPayloadError(message: string): boolean {
     || message.startsWith("Attachments are too large")
     || message.startsWith("Attachment is too large:")
     || message.startsWith("Attachment data is missing:");
+}
+
+function isUploadConflictError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("targets already exist for different objects")
+    || normalized.includes("changed diagnostics intent")
+    || normalized.includes("changed attachment intent");
+}
+
+function isAlreadyCompletedError(message: string): boolean {
+  return message.toLowerCase().includes("upload is already completed");
+}
+
+// Terminal-retry guard: a retryable failure that has exhausted its attempt
+// budget or aged out should be dropped rather than retried forever. This is the
+// systemic safety net for any failure that is misclassified as transient.
+export function supportReportRetriesExhausted(input: {
+  kind: SupportReportUploadFailureKind;
+  attemptCount: number;
+  createdAt?: string | null;
+  nowMs: number;
+}): boolean {
+  // The attempt budget bounds only genuinely-transient failures. Blocked-on-user
+  // / config states (auth_required, cloud/storage unconfigured, dev_auth_bypass)
+  // burn attempts in minutes but resolve when the user signs in or the server is
+  // configured, so they are NOT attempt-capped — only the age backstop applies.
+  if (input.kind === "transient" && input.attemptCount >= MAX_SUPPORT_REPORT_ATTEMPTS) {
+    return true;
+  }
+  // Age backstop bounds every retryable failure so nothing retries forever — a
+  // report stuck for 48h is stale regardless of why (e.g. a server that will
+  // never be configured).
+  const createdMs = input.createdAt ? Date.parse(input.createdAt) : Number.NaN;
+  return Number.isFinite(createdMs)
+    && input.nowMs - createdMs >= MAX_SUPPORT_REPORT_AGE_MS;
 }
 
 function retryDelayMs(attemptCount: number): number {

@@ -1,14 +1,17 @@
 {
-  "probedAt": "2026-06-10T04:20:28.761181+00:00",
+  "probedAt": "2026-06-18T02:52:36.735929+00:00",
   "agentKind": "opencode",
   "authContext": "opencode-zen",
   "attestation": {
     "name": "OpenCode",
-    "version": "1.16.2",
+    "version": "1.17.7",
     "title": null
   },
   "modelSource": "modelConfigOption",
-  "nativeCli": null,
+  "nativeCli": {
+    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
+    "version": "2.1.177 (Claude Code)"
+  },
   "trials": [],
   "currentModelId": null,
   "currentModeId": null,
@@ -29,20 +32,20 @@
           "value": "opencode-go/deepseek-v4-pro"
         },
         {
-          "name": "OpenCode Go/GLM-5",
-          "value": "opencode-go/glm-5"
-        },
-        {
           "name": "OpenCode Go/GLM-5.1",
           "value": "opencode-go/glm-5.1"
         },
         {
-          "name": "OpenCode Go/Kimi K2.5",
-          "value": "opencode-go/kimi-k2.5"
+          "name": "OpenCode Go/GLM-5.2",
+          "value": "opencode-go/glm-5.2"
         },
         {
           "name": "OpenCode Go/Kimi K2.6",
           "value": "opencode-go/kimi-k2.6"
+        },
+        {
+          "name": "OpenCode Go/Kimi K2.7 Code",
+          "value": "opencode-go/kimi-k2.7-code"
         },
         {
           "name": "OpenCode Go/MiMo V2.5",
@@ -53,15 +56,11 @@
           "value": "opencode-go/mimo-v2.5-pro"
         },
         {
-          "name": "OpenCode Go/MiniMax M2.5",
-          "value": "opencode-go/minimax-m2.5"
-        },
-        {
           "name": "OpenCode Go/MiniMax M2.7",
           "value": "opencode-go/minimax-m2.7"
         },
         {
-          "name": "OpenCode Go/MiniMax M3",
+          "name": "OpenCode Go/MiniMax M3 (3x usage)",
           "value": "opencode-go/minimax-m3"
         },
         {
@@ -123,6 +122,10 @@
         {
           "name": "OpenCode Zen/DeepSeek V4 Flash Free",
           "value": "opencode/deepseek-v4-flash-free"
+        },
+        {
+          "name": "OpenCode Zen/DeepSeek V4 Pro",
+          "value": "opencode/deepseek-v4-pro"
         },
         {
           "name": "OpenCode Zen/Gemini 3 Flash",
@@ -237,12 +240,12 @@
           "value": "opencode/minimax-m2.7"
         },
         {
-          "name": "OpenCode Zen/MiniMax M3 Free",
-          "value": "opencode/minimax-m3-free"
-        },
-        {
           "name": "OpenCode Zen/Nemotron 3 Ultra Free",
           "value": "opencode/nemotron-3-ultra-free"
+        },
+        {
+          "name": "OpenCode Zen/North Mini Code Free",
+          "value": "opencode/north-mini-code-free"
         },
         {
           "name": "OpenCode Zen/Qwen3.5 Plus",
@@ -399,41 +402,6 @@
       ]
     },
     {
-      "modelId": "opencode-go/glm-5",
-      "name": "OpenCode Go/GLM-5",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "opencode-go/glm-5",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
       "modelId": "opencode-go/glm-5.1",
       "name": "OpenCode Go/GLM-5.1",
       "description": null,
@@ -469,13 +437,13 @@
       ]
     },
     {
-      "modelId": "opencode-go/kimi-k2.5",
-      "name": "OpenCode Go/Kimi K2.5",
+      "modelId": "opencode-go/glm-5.2",
+      "name": "OpenCode Go/GLM-5.2",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "opencode-go/kimi-k2.5",
+          "currentValue": "opencode-go/glm-5.2",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -511,6 +479,41 @@
         {
           "category": "model",
           "currentValue": "opencode-go/kimi-k2.6",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode-go/kimi-k2.7-code",
+      "name": "OpenCode Go/Kimi K2.7 Code",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode-go/kimi-k2.7-code",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -653,41 +656,6 @@
       ]
     },
     {
-      "modelId": "opencode-go/minimax-m2.5",
-      "name": "OpenCode Go/MiniMax M2.5",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "opencode-go/minimax-m2.5",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
       "modelId": "opencode-go/minimax-m2.7",
       "name": "OpenCode Go/MiniMax M2.7",
       "description": null,
@@ -724,7 +692,7 @@
     },
     {
       "modelId": "opencode-go/minimax-m3",
-      "name": "OpenCode Go/MiniMax M3",
+      "name": "OpenCode Go/MiniMax M3 (3x usage)",
       "description": null,
       "configOptions": [
         {
@@ -735,6 +703,24 @@
           "options": [],
           "type": "select",
           "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Thinking",
+              "value": "thinking"
+            }
+          ],
+          "type": "select"
         },
         {
           "category": "mode",
@@ -1487,6 +1473,67 @@
         {
           "category": "model",
           "currentValue": "opencode/deepseek-v4-flash-free",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/deepseek-v4-pro",
+      "name": "OpenCode Zen/DeepSeek V4 Pro",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/deepseek-v4-pro",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -3067,41 +3114,6 @@
       ]
     },
     {
-      "modelId": "opencode/minimax-m3-free",
-      "name": "OpenCode Zen/MiniMax M3 Free",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "opencode/minimax-m3-free",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
       "modelId": "opencode/nemotron-3-ultra-free",
       "name": "OpenCode Zen/Nemotron 3 Ultra Free",
       "description": null,
@@ -3129,6 +3141,59 @@
             {
               "name": "Medium",
               "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/north-mini-code-free",
+      "name": "OpenCode Zen/North Mini Code Free",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/north-mini-code-free",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
             },
             {
               "name": "High",

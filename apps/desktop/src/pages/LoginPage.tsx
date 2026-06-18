@@ -1,5 +1,5 @@
 import { useLoginPage } from "@/hooks/auth/facade/use-login-page";
-import { LoginScreen } from "@/components/auth/LoginScreen";
+import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 
 export function LoginPage() {
   const {
@@ -15,7 +15,9 @@ export function LoginPage() {
   } = useLoginPage();
 
   return (
-    <LoginScreen
+    <AuthScreenLayout
+      mode="auth"
+      markComplete
       submitting={submitting}
       busy={busy}
       error={error}
@@ -23,8 +25,8 @@ export function LoginPage() {
       githubSignInChecking={githubSignInChecking}
       githubSignInUnavailableDescription={githubSignInUnavailableDescription}
       onGitHubSignIn={() => void handleGitHubSignIn()}
-      onContinueLocally={handleContinueLocally}
       canContinueLocally={canContinueLocally}
+      onContinueLocally={handleContinueLocally}
     />
   );
 }

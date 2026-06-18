@@ -91,7 +91,7 @@ const AGENT_SESSION_DEFAULTS = {
   codex: {
     "openai-api": "gpt-5.5",
     "openai-oauth": "gpt-5.5",
-    "bedrock": "openai.gpt-5.4-cmb",
+    "bedrock": "openai.gpt-5.5",
   },
   gemini: { "gemini-api": "auto", "google-oauth": "auto" },
   cursor: { "cursor-login": "default" },
@@ -367,6 +367,30 @@ function matrixKey(matrix) {
   );
 }
 
+// The same model id can legitimately expose different controls per auth
+// context: bedrock omits `fast_mode` and the `auto` permission mode, and a
+// floating id like `default` resolves to a different underlying model per
+// context (whose per-model option capture is also noisy — a context may
+// truncate a value set the baseline reported in full, e.g. dropping `xhigh`).
+// Collapse to the per-id superset: union the axes, then union each axis's
+// values in first-seen order. Per-context gating stays expressed at the model
+// level via `availability`; the harness rejects any value not valid in the
+// live context. Callers still warn on divergence so a genuine regression stays
+// visible in the build log rather than being silently absorbed.
+function mergeMatrices(matrices) {
+  const merged = {};
+  for (const matrix of Object.values(matrices)) {
+    for (const [axis, control] of Object.entries(matrix)) {
+      const into = (merged[axis] ??= { values: [], observedValue: control.observedValue });
+      for (const value of control.values) {
+        if (!into.values.includes(value)) into.values.push(value);
+      }
+      if (into.observedValue == null) into.observedValue = control.observedValue;
+    }
+  }
+  return merged;
+}
+
 // ---- per-agent collation ----------------------------------------------------
 const agents = [];
 for (const [kind, runs] of byAgent) {
@@ -436,17 +460,24 @@ for (const [kind, runs] of byAgent) {
     }
   }
 
-  // invariant [e]: same id across contexts must report the same (stripped) matrix
+  // invariant [e] (relaxed to a superset merge — see mergeMatrices): the same
+  // id may report different controls across auth contexts. Merge to the per-id
+  // superset rather than reject, but warn when contexts diverge so a real
+  // capability regression stays visible instead of being silently absorbed.
   for (const [modelId, entry] of observed) {
     const keys = new Set(Object.values(entry.matrices).map(matrixKey));
     if (keys.size > 1) {
-      throw new Error(`${kind}/${modelId}: option matrix differs across auth contexts — split ids or investigate:\n${JSON.stringify(entry.matrices, null, 2)}`);
+      console.warn(`⚠ ${kind}/${modelId}: controls differ across auth contexts — merging to superset:`);
+      for (const [ctx, matrix] of Object.entries(entry.matrices)) {
+        console.warn(`    ${ctx}: ${matrixKey(matrix)}`);
+      }
     }
+    entry.mergedMatrix = mergeMatrices(entry.matrices);
   }
 
   const probedContexts = runs.map((r) => r.data.authContext);
   const models = [...observed.entries()].map(([modelId, entry]) => {
-    const matrix = Object.values(entry.matrices)[0] ?? {};
+    const matrix = entry.mergedMatrix ?? {};
     // Observed-set semantics: exactly the contexts that saw this model.
     // 'baseline' is a first-class context; no always/anyOf inference.
     const contexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];

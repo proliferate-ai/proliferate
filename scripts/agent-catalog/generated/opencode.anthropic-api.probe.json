@@ -1,14 +1,17 @@
 {
-  "probedAt": "2026-06-10T04:16:43.719600+00:00",
+  "probedAt": "2026-06-18T02:52:36.413747+00:00",
   "agentKind": "opencode",
   "authContext": "anthropic-api",
   "attestation": {
     "name": "OpenCode",
-    "version": "1.16.2",
+    "version": "1.17.7",
     "title": null
   },
   "modelSource": "modelConfigOption",
-  "nativeCli": null,
+  "nativeCli": {
+    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
+    "version": "2.1.177 (Claude Code)"
+  },
   "trials": [],
   "currentModelId": null,
   "currentModeId": null,
@@ -20,6 +23,10 @@
       "id": "model",
       "name": "Model",
       "options": [
+        {
+          "name": "Anthropic/Claude Fable 5",
+          "value": "anthropic/claude-fable-5"
+        },
         {
           "name": "Anthropic/Claude Haiku 3.5 (latest)",
           "value": "anthropic/claude-3-5-haiku-latest"
@@ -113,12 +120,12 @@
           "value": "opencode/mimo-v2.5-free"
         },
         {
-          "name": "OpenCode Zen/MiniMax M3 Free",
-          "value": "opencode/minimax-m3-free"
-        },
-        {
           "name": "OpenCode Zen/Nemotron 3 Ultra Free",
           "value": "opencode/nemotron-3-ultra-free"
+        },
+        {
+          "name": "OpenCode Zen/North Mini Code Free",
+          "value": "opencode/north-mini-code-free"
         }
       ],
       "type": "select"
@@ -144,6 +151,71 @@
     }
   ],
   "models": [
+    {
+      "modelId": "anthropic/claude-fable-5",
+      "name": "Anthropic/Claude Fable 5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "anthropic/claude-fable-5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
     {
       "modelId": "anthropic/claude-3-5-haiku-latest",
       "name": "Anthropic/Claude Haiku 3.5 (latest)",
@@ -1432,41 +1504,6 @@
       ]
     },
     {
-      "modelId": "opencode/minimax-m3-free",
-      "name": "OpenCode Zen/MiniMax M3 Free",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "opencode/minimax-m3-free",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
       "modelId": "opencode/nemotron-3-ultra-free",
       "name": "OpenCode Zen/Nemotron 3 Ultra Free",
       "description": null,
@@ -1494,6 +1531,59 @@
             {
               "name": "Medium",
               "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/north-mini-code-free",
+      "name": "OpenCode Zen/North Mini Code Free",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/north-mini-code-free",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
             },
             {
               "name": "High",
