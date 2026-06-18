@@ -22,7 +22,7 @@ vi.mock("@/lib/domain/auth/auth-mode", () => ({
 // (markComplete) — mirroring the real living mark so the reveal fade is actually
 // exercised (and the post-sign-in deadlock would be caught).
 vi.mock("@/components/auth/AuthShell", async () => {
-  const { useEffect } = await import("react");
+  const { useEffect, useRef } = await import("react");
   return {
     AuthShell: ({
       mode,
@@ -33,8 +33,14 @@ vi.mock("@/components/auth/AuthShell", async () => {
       markComplete: boolean;
       onMarkResolved?: () => void;
     }) => {
+      // Latch like the real ProliferateLivingMark: onResolved fires AT MOST
+      // ONCE. Without this latch the mock would re-fire whenever the callback
+      // identity changes, masking the post-sign-in deadlock the regression
+      // test exists to catch.
+      const resolvedRef = useRef(false);
       useEffect(() => {
-        if (markComplete) {
+        if (markComplete && !resolvedRef.current) {
+          resolvedRef.current = true;
           onMarkResolved?.();
         }
       }, [markComplete, onMarkResolved]);
