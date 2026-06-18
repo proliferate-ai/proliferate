@@ -224,6 +224,15 @@ Global CSS is for:
 Component-specific styling belongs with the component or primitive, not in
 `index.css`.
 
+Shared element resets in `dom.css` (e.g. the `a` color/underline reset) must
+live in `@layer base`, never unlayered. Tailwind v4 puts utilities in
+`@layer utilities`, and unlayered CSS beats every layer regardless of
+specificity — an unlayered reset silently strips intentional utility classes
+(link color, underline, the file/provider mention styles) off the matching
+element, which then renders as plain inherited text. A `<button>`-based mention
+escapes an `a` reset and looks fine while the equivalent `<a>` does not, which is
+exactly how this hides.
+
 App stylesheets should be import-only where possible. `apps/web/src/index.css`
 imports only `@proliferate/design/dom.css`. `apps/desktop/src/index.css`
 imports app-owned third-party CSS plus `@proliferate/design/desktop.css`, which
