@@ -49,7 +49,7 @@
     "cmdk": "^1.1.1",
     "geist": "^1.7.2",
     "openapi-fetch": "^0.17.0",
-    "posthog-js": "^1.386.8",
+    "posthog-js": "^1.390.2",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-markdown": "^9",

@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       e2b:
-        specifier: ^2.30.0
-        version: 2.30.0
+        specifier: ^2.30.2
+        version: 2.30.2
     devDependencies:
       playwright:
         specifier: 1.61.0
@@ -154,7 +154,7 @@ importers:
         version: 3.14.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tauri-apps/api':
         specifier: ^2
-        version: 2.11.0
+        version: 2.11.1
       '@tauri-apps/plugin-deep-link':
         specifier: ^2.4.9
         version: 2.4.9
@@ -192,8 +192,8 @@ importers:
         specifier: ^0.17.0
         version: 0.17.0
       posthog-js:
-        specifier: ^1.386.8
-        version: 1.386.8
+        specifier: ^1.390.2
+        version: 1.390.2
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -205,7 +205,7 @@ importers:
         version: 9.1.0(@types/react@19.2.17)(react@19.2.7)
       react-router-dom:
         specifier: ^7
-        version: 7.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 7.18.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       remark-gfm:
         specifier: ^4
         version: 4.0.1
@@ -283,8 +283,8 @@ importers:
         specifier: workspace:*
         version: link:../packages/product-domain
       '@sentry/react-native':
-        specifier: ^8.14.0
-        version: 8.14.0(@expo/env@2.0.11)(dotenv@16.6.1)(expo@54.0.34(@babel/core@7.29.7)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
+        specifier: ^8.15.0
+        version: 8.15.0(@expo/env@2.0.11)(dotenv@16.6.1)(expo@54.0.34(@babel/core@7.29.7)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@tanstack/react-query':
         specifier: ^5.101.0
         version: 5.101.0(react@19.2.7)
@@ -328,8 +328,8 @@ importers:
         specifier: ~3.0.9
         version: 3.0.9(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       posthog-react-native:
-        specifier: ^4.47.2
-        version: 4.47.2(e442f5734f9a7fd8f3ed758928670078)
+        specifier: ^4.49.2
+        version: 4.49.2(e442f5734f9a7fd8f3ed758928670078)
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -350,8 +350,8 @@ importers:
         specifier: ^4.1.3
         version: 4.1.3
       '@sentry/expo-upload-sourcemaps':
-        specifier: ^8.14.0
-        version: 8.14.0(@expo/env@2.0.11)(dotenv@16.6.1)
+        specifier: ^8.15.0
+        version: 8.15.0(@expo/env@2.0.11)(dotenv@16.6.1)
       '@types/react':
         specifier: ~19.2.17
         version: 19.2.17
@@ -565,8 +565,8 @@ importers:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.7)
       posthog-js:
-        specifier: ^1.386.8
-        version: 1.386.8
+        specifier: ^1.390.2
+        version: 1.390.2
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -575,7 +575,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       react-router-dom:
         specifier: ^7
-        version: 7.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 7.18.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -643,8 +643,8 @@ importers:
   server/artifact-runtime:
     dependencies:
       dompurify:
-        specifier: ^3.4.10
-        version: 3.4.10
+        specifier: ^3.4.11
+        version: 3.4.11
       marked:
         specifier: ^16.4.1
         version: 16.4.2
@@ -2130,11 +2130,11 @@ packages:
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
     engines: {node: '>=8.0.0'}
 
-  '@posthog/core@1.32.5':
-    resolution: {integrity: sha512-Vmr6LZms7QEP1ljfTRRBVtLkeEHMrTmLECt0FXPLwUIgPwxOgvBdAYwRMWyP13WuN/XQweo1tJ9J1DxHNAF3qg==}
+  '@posthog/core@1.35.1':
+    resolution: {integrity: sha512-2a9JgJgR+Ow8lrUQHVZYXH9EgXskYDlpbgNW6UvtsVxp8pEEFD8PxjZMnzq73Dx3NhAwNUrnVpb8KeZzHAtoSA==}
 
-  '@posthog/types@1.386.4':
-    resolution: {integrity: sha512-UgE9+5+wkZg7yc2MpW5G32/6zYW8fAbXJkG8WGnrb4X8OKWzNa9cWeNCd82vKok+TSoRpM4qiYQFtBSpJS1dsw==}
+  '@posthog/types@1.390.0':
+    resolution: {integrity: sha512-zMjK6nrUWhAlL8ECrM4WldvgawqdoAE5B0ys7eA0lCoWuyzfFoSyh6zYtEuBSDRyN7fQLSfNCK+mQH4ngOl7Zw==}
 
   '@radix-ui/primitive@1.1.3':
     resolution: {integrity: sha512-JTF99U/6XIjCBo0wqkU5sK10glYe27MRRsfwoiq5zzOEZLHU3A3KCMa5X/azekYRCJ0HlwI0crAXS/5dEHTzDg==}
@@ -2657,32 +2657,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@sentry-internal/browser-utils@10.57.0':
-    resolution: {integrity: sha512-tXObp954rMTSYKlbftjVXHtNl4t/6ssks3jkqyzmKb+PDPWzabGQO7sWwqVuTjT8Kx/8A3FmriS1bGmqxiJy3A==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/feedback@10.57.0':
-    resolution: {integrity: sha512-ZcF4QhkqGX3iiQSXB2N0N3Awp+j5iqnDRu6PA/qyLFrWqH5ZiiAAgu59OLD9E6XAdg6iFtLYw19MAMZVK8qNOQ==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/replay-canvas@10.57.0':
-    resolution: {integrity: sha512-zsfa4JcfV0AEc9YhNxNabd5lSZL2Av84saAyexGAqcHs+67m9Gd0cGStOzMb/nCl7UAtmdP0aI+G7a3rcxxN/A==}
-    engines: {node: '>=18'}
-
-  '@sentry-internal/replay@10.57.0':
-    resolution: {integrity: sha512-Wmnx/6ABynVH1iwuoNUqJNyjIUqsqoGML7qsyivBRKb5Wo2YQtPOQlQYfxfZSvWzGpcoSVdInkRjDssUQxQEQg==}
-    engines: {node: '>=18'}
-
   '@sentry/babel-plugin-component-annotate@5.3.0':
     resolution: {integrity: sha512-p4q8gn8wcFqZGP/s2MnJCAAd8fTikaU6A0mM97RDHQgStcrYiaS0Sc5zUNfb1V+UOLPuvdEdL6MwyxfzjYJQTA==}
     engines: {node: '>= 18'}
 
   '@sentry/browser-utils@10.58.0':
     resolution: {integrity: sha512-TzXrhZq3Llj6qPSv0ZVG5N5c7C6qNN/aRKJXhq2LombJrLwiQrWdgizp7zdHA0FGlZ7F5YpyRA2JIpkhvrFqYA==}
-    engines: {node: '>=18'}
-
-  '@sentry/browser@10.57.0':
-    resolution: {integrity: sha512-s36AQy/CKXTfyY9Z+qUhzNomntZXgfs0rbaK7q9ffnFkqcPwzE8qQtVs58y3Suut56u+AhwSztgQtERcuZ5VIA==}
     engines: {node: '>=18'}
 
   '@sentry/browser@10.58.0':
@@ -2698,8 +2678,8 @@ packages:
     engines: {node: '>=10'}
     os: [darwin]
 
-  '@sentry/cli-darwin@3.5.0':
-    resolution: {integrity: sha512-Q7WIq+SNMh/7gddovgcHUBlgzsH2jASdkxinwxoDZVNcF96gqr35QllRHkxZTt1+nLM3JytL2A+Mh9JdvMWzsA==}
+  '@sentry/cli-darwin@3.5.1':
+    resolution: {integrity: sha512-GxHAtZaXRA650egcepQXU0pR0dZ8ZNvQS8eq3wBxhCK8os5VQpLyBABIaN6AdrE/b8M7UvqGjsuVm0giI1GZ7w==}
     engines: {node: '>=18'}
     os: [darwin]
 
@@ -2709,8 +2689,8 @@ packages:
     cpu: [arm64]
     os: [linux, freebsd, android]
 
-  '@sentry/cli-linux-arm64@3.5.0':
-    resolution: {integrity: sha512-nWlWo0qw1OqcOFR6GgcJ3KT+bMOlE3BFBtbMCxyURb4dTcT+NPy1Oe9Kk+JyWgRk1xm4CTaPXJNd2JD5V36FQA==}
+  '@sentry/cli-linux-arm64@3.5.1':
+    resolution: {integrity: sha512-Qa0NLXG/FSYWGhKjdm2mxp/GgpluFFkj/J+CpmVzwvezNC/Uy1omquv7J+VficqskNYuptjsoB4dNIPPcXpbxg==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [linux, freebsd, android]
@@ -2721,8 +2701,8 @@ packages:
     cpu: [arm]
     os: [linux, freebsd, android]
 
-  '@sentry/cli-linux-arm@3.5.0':
-    resolution: {integrity: sha512-d4U64gQikZiqr63XL3suWhd28e0NQg63GX+JumRiDYCDCAF3gmdUS6BRR43lyoZm2wqhHRQSms2bMArAPTDH/w==}
+  '@sentry/cli-linux-arm@3.5.1':
+    resolution: {integrity: sha512-JOfgXCDZKbxQpw8Z4Kbkt8Hl+ASW5pYVUYw8Hc2msPN3HtfTmsc1z0y6jq3TCUWDWbWpWbI1zfXa0v02vQf3gw==}
     engines: {node: '>=18'}
     cpu: [arm]
     os: [linux, freebsd, android]
@@ -2733,8 +2713,8 @@ packages:
     cpu: [x86, ia32]
     os: [linux, freebsd, android]
 
-  '@sentry/cli-linux-i686@3.5.0':
-    resolution: {integrity: sha512-HE8zFNvg/YWudGp+pBeJSNgF/siyarnlBkWbRxz6WApsFq7uvajXPk7EqwJ0onKnzPS14OPlTtTejA3iSUuCNg==}
+  '@sentry/cli-linux-i686@3.5.1':
+    resolution: {integrity: sha512-/Bqcl8EyS6T8RIjBeeMYUPgjMJ8kb4plF0w3QOG6TY+bUEqHEnZyfzKJWZY/OqhmrSgj+ZYynaSHIIR6dWluMA==}
     engines: {node: '>=18'}
     cpu: [x86, ia32]
     os: [linux, freebsd, android]
@@ -2745,8 +2725,8 @@ packages:
     cpu: [x64]
     os: [linux, freebsd, android]
 
-  '@sentry/cli-linux-x64@3.5.0':
-    resolution: {integrity: sha512-uU6h/b3SIoWysn0U6PoyUx/R5z9kU9+VcuvydjlqkZGDbbcRIxqp0T/wgB/jhXeFaSSPSFlmmkQCVYi8PXCrSw==}
+  '@sentry/cli-linux-x64@3.5.1':
+    resolution: {integrity: sha512-iUJT2GI/soc0myi1sSnXdu71oBkUER3fBeXn10bcEZX+UK9GomsqL40OLlygDipZZ6FqhODORqLeTxHdHbRuOw==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux, freebsd, android]
@@ -2757,8 +2737,8 @@ packages:
     cpu: [arm64]
     os: [win32]
 
-  '@sentry/cli-win32-arm64@3.5.0':
-    resolution: {integrity: sha512-P13w9Vc/ur6rnwtiBe4wzu4M81ODhdOGc8iWpkN51gzjldjz9FF4F2UEdS9UUYBxesWJU+UF62ZVQ4H73rhS4g==}
+  '@sentry/cli-win32-arm64@3.5.1':
+    resolution: {integrity: sha512-Hs4jHOsTKrrI2W8c4wEIvQzSuHqvrjsDHT7iwujHjp4oeAOnYjBUm+/BgDH2Eg1/jL5ilEnJbpnAn2AE2KQUXQ==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [win32]
@@ -2769,8 +2749,8 @@ packages:
     cpu: [x86, ia32]
     os: [win32]
 
-  '@sentry/cli-win32-i686@3.5.0':
-    resolution: {integrity: sha512-LZIEsJ5zMd0HAYlnG7G7OM6/AOvFaWkuBPdePZqYvtMLOUsfY7zeW8ubyZ9uCOWsj5Xc7UiDF4v0gZ45Strlkg==}
+  '@sentry/cli-win32-i686@3.5.1':
+    resolution: {integrity: sha512-Op+9MYAg0RbVWOQ9/NtFunWcknS8MlqhEa03ENFUrRDQE0m+iHioknGOagKrNXYXj1UbGEf0G9UzIMcRwB/UCQ==}
     engines: {node: '>=18'}
     cpu: [x86, ia32]
     os: [win32]
@@ -2781,8 +2761,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@sentry/cli-win32-x64@3.5.0':
-    resolution: {integrity: sha512-Dgkn60xoF7csXcKk+gRlmOA7s//7w0R3QlaXCo5RbX/c5VTbcV74r6ON7A+SKTFO9i4fEGblLlzQ0MLqrIo2sw==}
+  '@sentry/cli-win32-x64@3.5.1':
+    resolution: {integrity: sha512-Vf+CtFPkuGzjddD6dJoAVKszw5QB7P1ffc++yAbU54ditqJdgswo45oyTFOiQFO2isCmhgICzimqe8SkU+p2Mw==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
@@ -2792,21 +2772,17 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
-  '@sentry/cli@3.5.0':
-    resolution: {integrity: sha512-D3N3kULOnAClRkhHKqOAcOTtDnRe7hFacdHLlSsQXAZB11Qu6VAy8mGmM3654Lq/3LHl5h8CW590JGR9E0yahQ==}
+  '@sentry/cli@3.5.1':
+    resolution: {integrity: sha512-h710aEXT8At4lg7GbXDZkatDDq0uA5QKZmSiF/8Hy6jJZ/9dh6EBDZZpTYnDpNrwRvE8tqhnwEjTZDlHjOhPNQ==}
     engines: {node: '>= 18'}
     hasBin: true
-
-  '@sentry/core@10.57.0':
-    resolution: {integrity: sha512-kntItTA2kiT0YpL7encXaF6mkdZMB+y48lwj8w1wkfBpfJAC7sifdgrzLQZqmsqVNE3crg9VfufaAGA+78uFMg==}
-    engines: {node: '>=18'}
 
   '@sentry/core@10.58.0':
     resolution: {integrity: sha512-bkIbh2c6dzwhrWn/FGWu7j8hf6TAat2XxpkGM91LiN09fLYUXIMwcohVsXqze5l2cq35TnvqmSROAbRNr27GVw==}
     engines: {node: '>=18'}
 
-  '@sentry/expo-upload-sourcemaps@8.14.0':
-    resolution: {integrity: sha512-caPp11nVIAHtCTaM2kTqf3wG5aAui09EbeqoBEA9//NnRkuOVuRqapfX+ABTFlnnimbBSvn3MKrQt6HTMp/ELQ==}
+  '@sentry/expo-upload-sourcemaps@8.15.0':
+    resolution: {integrity: sha512-iFOm6RgI7l2QKPEJwLZU8ZfoE9Bai6AMNoOBmSlcIIDE4fwjbBGn+FACSpfMX2gXaTW2faYjQG6h21O1p+fcSg==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
@@ -2822,8 +2798,8 @@ packages:
     resolution: {integrity: sha512-VmIlR/0O0GXITbvgjPkQqd6yM0JDEk52WXv6Rs1kTdaIDU5h3Y64VDVN4MAbYVRHqSz7F1arjRRk2FkaKC7ZOQ==}
     engines: {node: '>=18'}
 
-  '@sentry/react-native@8.14.0':
-    resolution: {integrity: sha512-2OF5M1Easgo25qX5360I/zb/P8IPhu6YXTgvCQCA6AYHxZvLf/9w/Rzaa+BYl6wBnnUvserjtua1xXdSrQhQXA==}
+  '@sentry/react-native@8.15.0':
+    resolution: {integrity: sha512-mj/Ob6ssY9nQ2m0z7AcoaaCm1BOvxlzVxyCUJgNLDRFdxtssSYwSvQCQsDp4FjfHHUwjuyFb2lgtv6TOjGhKfQ==}
     hasBin: true
     peerDependencies:
       expo: '>=49.0.0'
@@ -2832,12 +2808,6 @@ packages:
     peerDependenciesMeta:
       expo:
         optional: true
-
-  '@sentry/react@10.57.0':
-    resolution: {integrity: sha512-6QThwQ4XWQ2rwKZEVQ9P9WKl7JlowC7S5LpAvmMdrwlfJBpLDFOsM7tycnIvbXTXf0ZOOuLFPa4L4YYbdyNGmA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      react: ^16.14.0 || 17.x || 18.x || 19.x
 
   '@sentry/react@10.58.0':
     resolution: {integrity: sha512-3FLRtnXrue30UZALrQ9wQZeuvVmZl/pTCA+RyPlaZ5GxcYTapN9CVbm1IvbQpK4w1bt80+JxaKM4HikvII6KpA==}
@@ -3024,8 +2994,8 @@ packages:
   '@tanstack/virtual-core@3.17.1':
     resolution: {integrity: sha512-VZyW2Uiml5tmBZwPGrSD3Sz73OxzljQMCmzYHsUTPEuTsERf5xwa+uWb01xEzkz3ZSYTjj8NEb/mKHvgKxyZdA==}
 
-  '@tauri-apps/api@2.11.0':
-    resolution: {integrity: sha512-7CinYODhky9lmO23xHnUFv0Xt43fbtWMyxZcLcRBlFkcgXKuEirBvHpmtJ89YMhyeGcq20Wuc47Fa4XjyniywA==}
+  '@tauri-apps/api@2.11.1':
+    resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
 
   '@tauri-apps/cli-darwin-arm64@2.11.2':
     resolution: {integrity: sha512-+4UZzLt+eOAEQCwgd+TqKgyUJMrvx+BgdXLLaqJYmPqzP+nE6YZr/hY6CWLYGQb8jFn99jEkmC6uA3tNvamA1w==}
@@ -3481,6 +3451,11 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
+  baseline-browser-mapping@2.10.38:
+    resolution: {integrity: sha512-31/02mVB4yuQU6adKk5SlY6m+mxDwUq5KZkyYgnLrrKl7TEm1+3PyDtDBz2kOv/wxZz41GHsvV1A/u6RmiyBvw==}
+    engines: {node: '>=6.0.0'}
+    hasBin: true
+
   better-opn@3.0.2:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
     engines: {node: '>=12.0.0'}
@@ -3857,8 +3832,8 @@ packages:
   dompurify@3.2.7:
     resolution: {integrity: sha512-WhL/YuveyGXJaerVlMYGWhvQswa7myDG17P7Vu65EWC05o8vfeNbvNf4d/BOvH99+ZW+LlQsc1GDKMa1vNK6dw==}
 
-  dompurify@3.4.10:
-    resolution: {integrity: sha512-0xzNv0e7oYC6yyuOGZIABPM4qtg3QxLFniDNPP4ZP90wR8Yq3zgwpRbrNiT4N3IKqDbbYFEJLV+JWEs19aZ//w==}
+  dompurify@3.4.11:
+    resolution: {integrity: sha512-zhlUV12GsaRzMsf9q5M254YhA4+VuF0fG+QFqu6aYpoGlKtz+w8//jBcGVYBgQkR5GHjUomejY84AV+/uPbWdw==}
 
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
@@ -3875,8 +3850,8 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  e2b@2.30.0:
-    resolution: {integrity: sha512-4kvfwh3QfPukrYmWEhrVLxL3WnQabzHabvhIRmvk6oU/YTWQtCrlZX+jaA9XBtVI/vQUbu5E5a6GlOhDXmcKzg==}
+  e2b@2.30.2:
+    resolution: {integrity: sha512-3W4U6+WRViLdG8hfd/EUmD5A9U6M1YL2tnlbPLEcQsKnV0rIxYbChynnGGb8AqufmOBk013X+KLgAK0Fqt1qGg==}
     engines: {node: '>=20.18.1'}
 
   ee-first@1.1.1:
@@ -5297,11 +5272,11 @@ packages:
     resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.386.8:
-    resolution: {integrity: sha512-L4cJD1sleUULE7K4mZQI5wpS24NHGtNmFw1rPHruc579unVzHuooHiVDEHp/qyNnhNxtNE6alBTiVORbYnRTSw==}
+  posthog-js@1.390.2:
+    resolution: {integrity: sha512-z1zh0mMokecCILXxabmo5Xag6uCVYEDhP2JnMYLNxwmKN7d7u1S94XYmhUTF3iyAo2JOg6c7n86mGaTXliz4MA==}
 
-  posthog-react-native@4.47.2:
-    resolution: {integrity: sha512-QdwGXjyoYdogt2a5UBJUzEEi7NeUnbvWuNqmmCaU8lbeXaj+4Y2+6ayE5+3jjmoucC4rOLR6SRK5ZXtMlxLIhQ==}
+  posthog-react-native@4.49.2:
+    resolution: {integrity: sha512-0KaS/3qxqV2x9ViT52hVjdkMgPAPvEGufehWG/59OAk7FWaWsWFav9Zydr0nd84QDSrdgwvi03r8p8Y0PUYc7Q==}
     peerDependencies:
       '@posthog/react-native-plugin': '>= 2.0.1'
       '@react-native-async-storage/async-storage': '>=1.0.0'
@@ -5498,15 +5473,15 @@ packages:
       '@types/react':
         optional: true
 
-  react-router-dom@7.17.0:
-    resolution: {integrity: sha512-fyU2yjGups/hE6Xz0I5ZYbVL8Gx29eCjgpHaRaTaVU+OOAdfRX05KsvyRm0GO8YQwOkhpU3MurW1jyMUJn+zSw==}
+  react-router-dom@7.18.0:
+    resolution: {integrity: sha512-Fi0yY6kgtKae/Th2xibdWK0KSdYZ4B53Gyf6wRtomOKWgpNm7H7+DyfDhncdz9FKbpS+1jmDhg3F4WoGJ+yFOA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
 
-  react-router@7.17.0:
-    resolution: {integrity: sha512-FDELK7rTMlCHO5+reyXsPlmfr7N1F91lPHsWYfMEGQm/KQ+F4JFM8jGoeQDmDvdTs93Fw9aSilH+uKRb4/jXvQ==}
+  react-router@7.18.0:
+    resolution: {integrity: sha512-pTTGt8J+ji1NOmYnjzT+bAJy/1zD+Jp4ziO6cL7T3ZLvXKtusO7BpFqlRXitqpcPVqllsIXFHRMt+2/k3Xn6HQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       react: '>=18'
@@ -8075,11 +8050,11 @@ snapshots:
   '@opentelemetry/api@1.9.0':
     optional: true
 
-  '@posthog/core@1.32.5':
+  '@posthog/core@1.35.1':
     dependencies:
-      '@posthog/types': 1.386.4
+      '@posthog/types': 1.390.0
 
-  '@posthog/types@1.386.4': {}
+  '@posthog/types@1.390.0': {}
 
   '@radix-ui/primitive@1.1.3': {}
 
@@ -8536,37 +8511,11 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.0':
     optional: true
 
-  '@sentry-internal/browser-utils@10.57.0':
-    dependencies:
-      '@sentry/core': 10.57.0
-
-  '@sentry-internal/feedback@10.57.0':
-    dependencies:
-      '@sentry/core': 10.57.0
-
-  '@sentry-internal/replay-canvas@10.57.0':
-    dependencies:
-      '@sentry-internal/replay': 10.57.0
-      '@sentry/core': 10.57.0
-
-  '@sentry-internal/replay@10.57.0':
-    dependencies:
-      '@sentry-internal/browser-utils': 10.57.0
-      '@sentry/core': 10.57.0
-
   '@sentry/babel-plugin-component-annotate@5.3.0': {}
 
   '@sentry/browser-utils@10.58.0':
     dependencies:
       '@sentry/core': 10.58.0
-
-  '@sentry/browser@10.57.0':
-    dependencies:
-      '@sentry-internal/browser-utils': 10.57.0
-      '@sentry-internal/feedback': 10.57.0
-      '@sentry-internal/replay': 10.57.0
-      '@sentry-internal/replay-canvas': 10.57.0
-      '@sentry/core': 10.57.0
 
   '@sentry/browser@10.58.0':
     dependencies:
@@ -8592,49 +8541,49 @@ snapshots:
   '@sentry/cli-darwin@2.58.6':
     optional: true
 
-  '@sentry/cli-darwin@3.5.0':
+  '@sentry/cli-darwin@3.5.1':
     optional: true
 
   '@sentry/cli-linux-arm64@2.58.6':
     optional: true
 
-  '@sentry/cli-linux-arm64@3.5.0':
+  '@sentry/cli-linux-arm64@3.5.1':
     optional: true
 
   '@sentry/cli-linux-arm@2.58.6':
     optional: true
 
-  '@sentry/cli-linux-arm@3.5.0':
+  '@sentry/cli-linux-arm@3.5.1':
     optional: true
 
   '@sentry/cli-linux-i686@2.58.6':
     optional: true
 
-  '@sentry/cli-linux-i686@3.5.0':
+  '@sentry/cli-linux-i686@3.5.1':
     optional: true
 
   '@sentry/cli-linux-x64@2.58.6':
     optional: true
 
-  '@sentry/cli-linux-x64@3.5.0':
+  '@sentry/cli-linux-x64@3.5.1':
     optional: true
 
   '@sentry/cli-win32-arm64@2.58.6':
     optional: true
 
-  '@sentry/cli-win32-arm64@3.5.0':
+  '@sentry/cli-win32-arm64@3.5.1':
     optional: true
 
   '@sentry/cli-win32-i686@2.58.6':
     optional: true
 
-  '@sentry/cli-win32-i686@3.5.0':
+  '@sentry/cli-win32-i686@3.5.1':
     optional: true
 
   '@sentry/cli-win32-x64@2.58.6':
     optional: true
 
-  '@sentry/cli-win32-x64@3.5.0':
+  '@sentry/cli-win32-x64@3.5.1':
     optional: true
 
   '@sentry/cli@2.58.6':
@@ -8657,29 +8606,27 @@ snapshots:
       - encoding
       - supports-color
 
-  '@sentry/cli@3.5.0':
+  '@sentry/cli@3.5.1':
     dependencies:
       progress: 2.0.3
       proxy-from-env: 1.1.0
       undici: 6.27.0
       which: 2.0.2
     optionalDependencies:
-      '@sentry/cli-darwin': 3.5.0
-      '@sentry/cli-linux-arm': 3.5.0
-      '@sentry/cli-linux-arm64': 3.5.0
-      '@sentry/cli-linux-i686': 3.5.0
-      '@sentry/cli-linux-x64': 3.5.0
-      '@sentry/cli-win32-arm64': 3.5.0
-      '@sentry/cli-win32-i686': 3.5.0
-      '@sentry/cli-win32-x64': 3.5.0
-
-  '@sentry/core@10.57.0': {}
+      '@sentry/cli-darwin': 3.5.1
+      '@sentry/cli-linux-arm': 3.5.1
+      '@sentry/cli-linux-arm64': 3.5.1
+      '@sentry/cli-linux-i686': 3.5.1
+      '@sentry/cli-linux-x64': 3.5.1
+      '@sentry/cli-win32-arm64': 3.5.1
+      '@sentry/cli-win32-i686': 3.5.1
+      '@sentry/cli-win32-x64': 3.5.1
 
   '@sentry/core@10.58.0': {}
 
-  '@sentry/expo-upload-sourcemaps@8.14.0(@expo/env@2.0.11)(dotenv@16.6.1)':
+  '@sentry/expo-upload-sourcemaps@8.15.0(@expo/env@2.0.11)(dotenv@16.6.1)':
     dependencies:
-      '@sentry/cli': 3.5.0
+      '@sentry/cli': 3.5.1
     optionalDependencies:
       '@expo/env': 2.0.11
       dotenv: 16.6.1
@@ -8688,14 +8635,14 @@ snapshots:
     dependencies:
       '@sentry/core': 10.58.0
 
-  '@sentry/react-native@8.14.0(@expo/env@2.0.11)(dotenv@16.6.1)(expo@54.0.34(@babel/core@7.29.7)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)':
+  '@sentry/react-native@8.15.0(@expo/env@2.0.11)(dotenv@16.6.1)(expo@54.0.34(@babel/core@7.29.7)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@sentry/babel-plugin-component-annotate': 5.3.0
-      '@sentry/browser': 10.57.0
-      '@sentry/cli': 3.5.0
-      '@sentry/core': 10.57.0
-      '@sentry/expo-upload-sourcemaps': 8.14.0(@expo/env@2.0.11)(dotenv@16.6.1)
-      '@sentry/react': 10.57.0(react@19.2.7)
+      '@sentry/browser': 10.58.0
+      '@sentry/cli': 3.5.1
+      '@sentry/core': 10.58.0
+      '@sentry/expo-upload-sourcemaps': 8.15.0(@expo/env@2.0.11)(dotenv@16.6.1)
+      '@sentry/react': 10.58.0(react@19.2.7)
       react: 19.2.7
       react-native: 0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7)
     optionalDependencies:
@@ -8703,12 +8650,6 @@ snapshots:
     transitivePeerDependencies:
       - '@expo/env'
       - dotenv
-
-  '@sentry/react@10.57.0(react@19.2.7)':
-    dependencies:
-      '@sentry/browser': 10.57.0
-      '@sentry/core': 10.57.0
-      react: 19.2.7
 
   '@sentry/react@10.58.0(react@19.2.7)':
     dependencies:
@@ -8888,7 +8829,7 @@ snapshots:
 
   '@tanstack/virtual-core@3.17.1': {}
 
-  '@tauri-apps/api@2.11.0': {}
+  '@tauri-apps/api@2.11.1': {}
 
   '@tauri-apps/cli-darwin-arm64@2.11.2':
     optional: true
@@ -8939,23 +8880,23 @@ snapshots:
 
   '@tauri-apps/plugin-deep-link@2.4.9':
     dependencies:
-      '@tauri-apps/api': 2.11.0
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-process@2.3.1':
     dependencies:
-      '@tauri-apps/api': 2.11.0
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-shell@2.3.5':
     dependencies:
-      '@tauri-apps/api': 2.11.0
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-store@2.4.3':
     dependencies:
-      '@tauri-apps/api': 2.11.0
+      '@tauri-apps/api': 2.11.1
 
   '@tauri-apps/plugin-updater@2.10.1':
     dependencies:
-      '@tauri-apps/api': 2.11.0
+      '@tauri-apps/api': 2.11.1
 
   '@testing-library/dom@10.4.1':
     dependencies:
@@ -9401,6 +9342,8 @@ snapshots:
 
   baseline-browser-mapping@2.10.37: {}
 
+  baseline-browser-mapping@2.10.38: {}
+
   better-opn@3.0.2:
     dependencies:
       open: 8.4.2
@@ -9775,7 +9718,7 @@ snapshots:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
-  dompurify@3.4.10:
+  dompurify@3.4.11:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -9793,7 +9736,7 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  e2b@2.30.0:
+  e2b@2.30.2:
     dependencies:
       '@bufbuild/protobuf': 2.12.0
       '@connectrpc/connect': 2.0.0-rc.3(@bufbuild/protobuf@2.12.0)
@@ -11448,7 +11391,7 @@ snapshots:
     dependencies:
       '@next/env': 16.2.1
       '@swc/helpers': 0.5.15
-      baseline-browser-mapping: 2.10.37
+      baseline-browser-mapping: 2.10.38
       caniuse-lite: 1.0.30001799
       postcss: 8.4.31
       react: 19.2.7
@@ -11698,21 +11641,21 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.386.8:
+  posthog-js@1.390.2:
     dependencies:
-      '@posthog/core': 1.32.5
-      '@posthog/types': 1.386.4
+      '@posthog/core': 1.35.1
+      '@posthog/types': 1.390.0
       core-js: 3.49.0
-      dompurify: 3.4.10
+      dompurify: 3.4.11
       fflate: 0.4.8
       preact: 10.29.2
       query-selector-shadow-dom: 1.0.1
       web-vitals: 5.3.0
 
-  posthog-react-native@4.47.2(e442f5734f9a7fd8f3ed758928670078):
+  posthog-react-native@4.49.2(e442f5734f9a7fd8f3ed758928670078):
     dependencies:
-      '@posthog/core': 1.32.5
-      '@posthog/types': 1.386.4
+      '@posthog/core': 1.35.1
+      '@posthog/types': 1.390.0
     optionalDependencies:
       expo-application: 7.0.8(expo@54.0.34(@babel/core@7.29.7)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))
       expo-device: 8.0.10(expo@54.0.34(@babel/core@7.29.7)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))
@@ -11924,13 +11867,13 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.17
 
-  react-router-dom@7.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  react-router-dom@7.18.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-      react-router: 7.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react-router: 7.18.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
 
-  react-router@7.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  react-router@7.18.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
       cookie: 1.1.1
       react: 19.2.7
