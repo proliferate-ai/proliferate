@@ -215,6 +215,11 @@ pub enum ReconcileJobStatus {
 pub struct ReconcileAgentsRequest {
     #[serde(default)]
     pub reinstall: bool,
+    /// When true, only agents already installed on disk are reconciled to the
+    /// catalog pins; missing agents are skipped (they install on demand at
+    /// session start). Defaults to false (full-scope reconcile).
+    #[serde(default)]
+    pub installed_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -241,4 +246,18 @@ pub struct ReconcileAgentsResponse {
     pub finished_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+}
+
+/// Coarse, low-cardinality reconcile status for `/health`. Per-agent detail
+/// stays on `GET /v1/agents/reconcile`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentReconcileSummary {
+    pub status: ReconcileJobStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_agent: Option<String>,
+    pub installed: u32,
+    pub already_installed: u32,
+    pub skipped: u32,
+    pub failed: u32,
 }

@@ -26,6 +26,13 @@ import { sessionLocatorFromSession } from "@/lib/domain/support/session-debug/se
 
 const generatedAt = "2026-04-16T18:30:00.000Z";
 const localHealth = {
+  agentReconcile: {
+    status: "idle",
+    installed: 0,
+    alreadyInstalled: 0,
+    skipped: 0,
+    failed: 0,
+  },
   agentSeed: {
     lastAction: "none",
     ownership: "not_configured",
@@ -241,6 +248,13 @@ describe("buildSessionDebugLocator", () => {
         location: "cloud",
         url: "https://runtime.example.test",
         health: {
+          agentReconcile: {
+            status: "idle",
+            installed: 0,
+            alreadyInstalled: 0,
+            skipped: 0,
+            failed: 0,
+          },
           agentSeed: {
             lastAction: "none",
             ownership: "not_configured",

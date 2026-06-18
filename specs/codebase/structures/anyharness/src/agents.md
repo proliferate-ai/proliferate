@@ -204,9 +204,11 @@ Important install cases:
 - managed npm readiness compares the installed package metadata against the
   bundled package spec; stale managed packages report `install_required` so
   normal setup/reconcile can update user-owned older ACP adapters
-- manual reinstall/reconcile is the update path for every installable agent
-  process recipe; the version + source come from the bundled catalog lockfile,
-  resolved at probe time by `scripts/agent-catalog/resolve-pins.mjs`
+- the update path for every installable agent process recipe is reconcile against
+  the catalog pins: the runtime startup pass does this automatically (installed-only),
+  and the desktop "update local installs" button / manual reinstall do it on demand. The
+  version + source come from the bundled catalog lockfile, resolved at probe time by
+  `scripts/agent-catalog/resolve-pins.mjs`
 - installer mutations are serialized by runtime-home file locks under
   `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
   write the same agent at the same time
@@ -249,7 +251,9 @@ vendor CLIs write their usual local auth files.
 Cloud target enrollment, Git bootstrap, and workspace materialization do not
 install agents. A fresh cloud/SSH target may report worker and AnyHarness
 online while `start_session` still fails with an install/readiness error until
-the requested agent is installed through this API.
+the requested agent is installed through this API. The runtime startup pass keeps
+*already-installed* agents on a cloud worker current with the catalog pins, but it
+does not eagerly install missing agents — those still install on demand here.
 
 ### ACP Registry Flow (probe-time only)
 
@@ -280,6 +284,23 @@ returning:
 
 This is the “make the runtime ready” bulk path, not the per-agent resolution
 path.
+
+Reconcile runs in two scopes, selected by the `installed_only` flag:
+
+- **full** (`installed_only=false`, the `POST /v1/agents/reconcile` default): attempt
+  managed install for every registry agent — installs missing ones too.
+- **installed-only** (`installed_only=true`): only agents already installed on disk
+  (`resolve_agent(..).agent_process.installed`) are reconciled to the catalog pins; a
+  missing agent is `skipped` (it installs on demand at session start). This is the scope
+  used by the runtime startup pass and the desktop "update local installs" button.
+
+The runtime drives reconcile itself at startup — `AgentRuntime::spawn_startup_pass`
+(kicked from `app/` wiring, runs on the desktop sidecar AND cloud workers): hydrate the
+bundled seed if pending, then run an installed-only reconcile. It is non-blocking (the
+HTTP server boots and answers `/health` while it runs), best-effort (failures land in the
+reconcile snapshot, never fatal), and idempotent (an up-to-date agent short-circuits with
+no network — see `install_policy` version-drift detection). The catalog-applied poke (a
+newer cloud catalog synced at runtime) also kicks an installed-only reconcile.
 
 ### Bundled Agent Seed Flow
 
@@ -342,9 +363,17 @@ Public health reports low-cardinality seed state only:
 - `lastAction`: `none`, `hydrated`, or `repaired`
 - artifact counts, target, seeded agent names, and a coarse `failureKind`
 
-Desktop auto-reconcile waits while the seed is `hydrating`, then uses the
-existing reconcile path for non-seeded or still-missing agents after the seed
-reaches `ready`, `partial`, `failed`, or `not_configured_dev`.
+`/health` also carries a coarse `agentReconcile` summary (status, current agent, and
+installed / already-installed / skipped / failed counts) for the startup reconcile. The
+per-agent detail stays on `GET /v1/agents/reconcile`.
+
+The runtime startup pass runs the installed-only reconcile after seed hydration
+settles (`AgentRuntime::spawn_startup_pass` awaits hydration, then reconciles), so
+already-installed agents track the catalog pins on both the desktop sidecar and cloud
+workers. The desktop frontend no longer triggers reconcile — it polls the reconcile
+snapshot (`GET /v1/agents/reconcile`) to display per-agent status and refreshes the agent
+list as the job transitions. Missing non-seeded agents are not auto-installed at startup;
+they install on demand at session start or via an explicit per-agent install.
 
 Seed hydration verifies the archive `.sha256`, validates the manifest target and
 schema, rejects unsafe tar entries, extracts into a staging directory under the

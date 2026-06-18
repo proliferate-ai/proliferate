@@ -225,7 +225,10 @@ pub async fn reconcile_agents(
     State(state): State<AppState>,
     Json(req): Json<ReconcileAgentsRequest>,
 ) -> (StatusCode, Json<ReconcileAgentsResponse>) {
-    let snapshot = state.agent_runtime.start_reconcile(req.reinstall).await;
+    let snapshot = state
+        .agent_runtime
+        .start_reconcile(req.reinstall, req.installed_only)
+        .await;
     (
         StatusCode::ACCEPTED,
         Json(reconcile_snapshot_to_contract(&snapshot)),

@@ -210,16 +210,42 @@ impl AgentRuntime {
         self.reconcile_service.snapshot().await
     }
 
-    pub async fn start_reconcile(&self, reinstall: bool) -> AgentReconcileJobSnapshot {
+    pub async fn start_reconcile(
+        &self,
+        reinstall: bool,
+        installed_only: bool,
+    ) -> AgentReconcileJobSnapshot {
         self.reconcile_service
             .start_or_get(
                 built_in_registry(),
                 self.runtime_home.clone(),
                 reinstall,
+                installed_only,
                 Some(self.seed_store.clone()),
                 Some(self.catalog_service.clone()),
             )
             .await
+    }
+
+    /// Runtime startup pass (desktop sidecar AND cloud workers): hydrate the
+    /// bundled agent seed if it hasn't been laid down yet, then run an
+    /// installed-only reconcile so already-installed agents track the catalog
+    /// pins. Non-blocking (boots the HTTP server immediately), best-effort
+    /// (failures are recorded in the seed/reconcile snapshots, never fatal),
+    /// and idempotent: missing non-seeded agents install on demand at session
+    /// start, and an up-to-date machine does no work.
+    pub fn spawn_startup_pass(self: Arc<Self>) {
+        tokio::spawn(async move {
+            if self.seed_store.hydration_pending() {
+                let home = self.runtime_home.clone();
+                let store = self.seed_store.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    installer::seed::hydrate_configured_agent_seed(&home, &store);
+                })
+                .await;
+            }
+            self.start_reconcile(false, true).await;
+        });
     }
 }
 

@@ -4,8 +4,8 @@
 use anyharness_contract::v1::{
     AgentCredentialState, AgentInstallState, AgentLaunchModelOption, AgentLaunchOption,
     AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
-    AgentReadinessState, AgentSummary, ArtifactStatus, InstallAgentRequest, ReconcileAgentResult,
-    ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
+    AgentReadinessState, AgentReconcileSummary, AgentSummary, ArtifactStatus, InstallAgentRequest,
+    ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
 
 use crate::domains::agents::auth::login_terminal::{
@@ -51,6 +51,40 @@ pub(super) fn reconcile_snapshot_to_contract(
         started_at: snapshot.started_at.clone(),
         finished_at: snapshot.finished_at.clone(),
         message: snapshot.message.clone(),
+    }
+}
+
+pub(super) fn reconcile_summary_to_contract(
+    snapshot: &AgentReconcileJobSnapshot,
+) -> AgentReconcileSummary {
+    let mut installed = 0u32;
+    let mut already_installed = 0u32;
+    let mut skipped = 0u32;
+    let mut failed = 0u32;
+    for result in &snapshot.results {
+        match result.outcome {
+            AgentReconcileOutcome::Installed => installed += 1,
+            AgentReconcileOutcome::AlreadyInstalled => already_installed += 1,
+            AgentReconcileOutcome::Skipped => skipped += 1,
+            AgentReconcileOutcome::Failed => failed += 1,
+        }
+    }
+    AgentReconcileSummary {
+        status: match snapshot.status {
+            AgentReconcileJobStatus::Idle => ReconcileJobStatus::Idle,
+            AgentReconcileJobStatus::Queued => ReconcileJobStatus::Queued,
+            AgentReconcileJobStatus::Running => ReconcileJobStatus::Running,
+            AgentReconcileJobStatus::Completed => ReconcileJobStatus::Completed,
+            AgentReconcileJobStatus::Failed => ReconcileJobStatus::Failed,
+        },
+        current_agent: snapshot
+            .current_agent
+            .as_ref()
+            .map(|kind| kind.as_str().to_string()),
+        installed,
+        already_installed,
+        skipped,
+        failed,
     }
 }
 

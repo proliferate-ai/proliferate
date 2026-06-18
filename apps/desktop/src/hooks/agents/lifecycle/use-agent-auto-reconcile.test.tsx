@@ -6,7 +6,6 @@ import { useAgentAutoReconcile } from "./use-agent-auto-reconcile";
 
 const mocks = vi.hoisted(() => ({
   invalidateAgentListResources: vi.fn(),
-  reconcileAgents: vi.fn(),
   useAgentCatalog: vi.fn(),
   useHarnessConnectionStore: vi.fn(),
   useRuntimeHealthQuery: vi.fn(),
@@ -28,12 +27,6 @@ vi.mock("@/hooks/access/anyharness/agents/use-agent-resources-cache", () => ({
 
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: mocks.useAgentCatalog,
-}));
-
-vi.mock("@/hooks/agents/workflows/use-agent-installation-actions", () => ({
-  useAgentInstallationActions: () => ({
-    reconcileAgents: mocks.reconcileAgents,
-  }),
 }));
 
 describe("useAgentAutoReconcile", () => {
@@ -64,39 +57,10 @@ describe("useAgentAutoReconcile", () => {
       .toHaveBeenLastCalledWith("http://runtime.test");
   });
 
-  it("auto-reconciles install-required agents after seed hydration is ready", async () => {
-    arrange();
-    setRuntimeHealth("ready", 1);
-    setAgentCatalog({
-      agentsNeedingSetup: [{ readiness: "install_required" }],
-    });
-
-    renderHook(() => useAgentAutoReconcile());
-
-    await waitFor(() => {
-      expect(mocks.reconcileAgents).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("does not auto-reconcile dev profiles without a configured seed", async () => {
-    arrange();
-    setRuntimeHealth("not_configured_dev", 1);
-    setAgentCatalog({
-      agentsNeedingSetup: [{ readiness: "install_required" }],
-    });
-
-    renderHook(() => useAgentAutoReconcile());
-
-    await waitFor(() => {
-      expect(mocks.useRuntimeHealthQuery).toHaveBeenCalled();
-    });
-    expect(mocks.reconcileAgents).not.toHaveBeenCalled();
-  });
 });
 
 function arrange() {
   mocks.invalidateAgentListResources.mockResolvedValue(undefined);
-  mocks.reconcileAgents.mockResolvedValue(undefined);
   mocks.useHarnessConnectionStore.mockImplementation((
     selector: (state: {
       connectionState: string;

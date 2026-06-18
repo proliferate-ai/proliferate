@@ -103,7 +103,9 @@ export function AgentDefaultsPane() {
   ]);
 
   const handleUpdateLocalInstalls = () => {
-    void reconcileAgents({ reinstall: true })
+    // Update the agents already installed on this machine to the catalog pins.
+    // installed_only: missing agents install on demand at session start, not here.
+    void reconcileAgents({ reinstall: true, installedOnly: true })
       .then(() => {
         showToast(AGENT_SETUP_COPY.updateInstallsStarted);
       })

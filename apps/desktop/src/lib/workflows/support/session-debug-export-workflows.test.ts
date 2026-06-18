@@ -21,6 +21,13 @@ import {
 const now = new Date("2026-04-16T18:30:05.000Z");
 const runtimeUrl = "http://127.0.0.1:7007";
 const health = {
+  agentReconcile: {
+    status: "idle",
+    installed: 0,
+    alreadyInstalled: 0,
+    skipped: 0,
+    failed: 0,
+  },
   agentSeed: {
     lastAction: "none",
     ownership: "not_configured",

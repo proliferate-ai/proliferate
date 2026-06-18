@@ -8,7 +8,8 @@ use uuid::Uuid;
 use super::{reconcile_agent, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
-use crate::domains::agents::model::{AgentDescriptor, AgentKind};
+use crate::domains::agents::model::{AgentDescriptor, AgentKind, ResolvedArtifact};
+use crate::domains::agents::readiness::service::resolve_agent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
@@ -24,6 +25,7 @@ pub struct AgentReconcileJobSnapshot {
     pub status: AgentReconcileJobStatus,
     pub job_id: Option<String>,
     pub reinstall: bool,
+    pub installed_only: bool,
     pub current_agent: Option<AgentKind>,
     pub results: Vec<AgentReconcileResult>,
     pub started_at: Option<String>,
@@ -36,6 +38,7 @@ struct AgentReconcileJob {
     job_id: String,
     status: AgentReconcileJobStatus,
     reinstall: bool,
+    installed_only: bool,
     current_agent: Option<AgentKind>,
     results: Vec<AgentReconcileResult>,
     started_at: Option<String>,
@@ -49,6 +52,7 @@ impl AgentReconcileJob {
             status: self.status.clone(),
             job_id: Some(self.job_id.clone()),
             reinstall: self.reinstall,
+            installed_only: self.installed_only,
             current_agent: self.current_agent.clone(),
             results: self.results.clone(),
             started_at: self.started_at.clone(),
@@ -81,6 +85,7 @@ impl AgentReconcileService {
         registry: Vec<AgentDescriptor>,
         runtime_home: PathBuf,
         reinstall: bool,
+        installed_only: bool,
         agent_seed_store: Option<AgentSeedStore>,
         catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
     ) -> AgentReconcileJobSnapshot {
@@ -91,13 +96,32 @@ impl AgentReconcileService {
                     existing.status,
                     AgentReconcileJobStatus::Queued | AgentReconcileJobStatus::Running
                 ) {
+                    // Reuse the in-flight job only if its scope COVERS this request.
+                    // A full job (installed_only=false) covers everything; an
+                    // installed-only job does NOT cover a full request — so a full
+                    // reconcile must supersede an in-flight installed-only pass,
+                    // otherwise missing agents would be silently skipped.
+                    let covers_request = !existing.installed_only || installed_only;
+                    if covers_request {
+                        tracing::info!(
+                            job_id = %existing.job_id,
+                            requested_reinstall = reinstall,
+                            job_reinstall = existing.reinstall,
+                            requested_installed_only = installed_only,
+                            job_installed_only = existing.installed_only,
+                            "agent reconcile request reused active job"
+                        );
+                        return existing.snapshot();
+                    }
                     tracing::info!(
-                        job_id = %existing.job_id,
-                        requested_reinstall = reinstall,
-                        job_reinstall = existing.reinstall,
-                        "agent reconcile request reused active job"
+                        superseded_job_id = %existing.job_id,
+                        job_installed_only = existing.installed_only,
+                        requested_installed_only = installed_only,
+                        "full agent reconcile supersedes in-flight installed-only job"
                     );
-                    return existing.snapshot();
+                    // Fall through: a new full job replaces the slot. The superseded
+                    // task's `update_job` calls no-op once the job_id changes, so it
+                    // self-terminates (its idempotent installs are harmless).
                 }
             }
 
@@ -106,6 +130,7 @@ impl AgentReconcileService {
                 job_id: job_id.clone(),
                 status: AgentReconcileJobStatus::Queued,
                 reinstall,
+                installed_only,
                 current_agent: None,
                 results: Vec::new(),
                 started_at: Some(chrono::Utc::now().to_rfc3339()),
@@ -134,6 +159,7 @@ impl AgentReconcileService {
                 registry,
                 runtime_home,
                 reinstall,
+                installed_only,
                 agent_seed_store,
                 catalog,
             )
@@ -150,6 +176,7 @@ impl AgentReconcileJobSnapshot {
             status: AgentReconcileJobStatus::Idle,
             job_id: None,
             reinstall: false,
+            installed_only: false,
             current_agent: None,
             results: Vec::new(),
             started_at: None,
@@ -165,6 +192,7 @@ async fn run_reconcile_job(
     registry: Vec<AgentDescriptor>,
     runtime_home: PathBuf,
     reinstall: bool,
+    installed_only: bool,
     agent_seed_store: Option<AgentSeedStore>,
     catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
 ) {
@@ -213,6 +241,29 @@ async fn run_reconcile_job(
         let options = options.clone();
         let agent_catalog = catalog.clone();
         let result = match tokio::task::spawn_blocking(move || {
+            // installed-only scope (startup pass): only reconcile agents WE manage
+            // in runtime_home — update those to the catalog pins. Skip agents that
+            // are absent or only present via PATH (source != "managed"); a managed
+            // install over a PATH-provided agent would fail, and missing agents
+            // install on demand at session start. resolve_agent is side-effect-free.
+            if installed_only {
+                let is_managed = |artifact: &ResolvedArtifact| {
+                    artifact.installed && artifact.source.as_deref() == Some("managed")
+                };
+                let resolved = resolve_agent(&descriptor, &agent_runtime_home);
+                let managed_installed = is_managed(&resolved.agent_process)
+                    || resolved.native.as_ref().map(is_managed).unwrap_or(false);
+                if !managed_installed {
+                    return AgentReconcileResult {
+                        kind: descriptor.kind.clone(),
+                        outcome: AgentReconcileOutcome::Skipped,
+                        message: Some(
+                            "not managed-installed; installs on demand at session start".into(),
+                        ),
+                        installed_artifacts: vec![],
+                    };
+                }
+            }
             let pins = agent_catalog
                 .as_ref()
                 .and_then(|catalog| catalog.pin_overrides(descriptor.kind.as_str()));
@@ -342,6 +393,7 @@ mod tests {
                 job_id: "existing-job".into(),
                 status: AgentReconcileJobStatus::Running,
                 reinstall: false,
+                installed_only: false,
                 current_agent: Some(AgentKind::Codex),
                 results: Vec::new(),
                 started_at: Some(chrono::Utc::now().to_rfc3339()),
@@ -355,6 +407,7 @@ mod tests {
                 Vec::new(),
                 PathBuf::from("/tmp/anyharness-test"),
                 true,
+                false,
                 None,
                 None,
             )
@@ -375,6 +428,7 @@ mod tests {
                 Vec::new(),
                 PathBuf::from("/tmp/anyharness-empty"),
                 true,
+                false,
                 None,
                 None,
             )
@@ -396,5 +450,119 @@ mod tests {
         assert_eq!(completed.status, AgentReconcileJobStatus::Completed);
         assert!(completed.results.is_empty());
         assert!(completed.finished_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn installed_only_skips_uninstalled_agents() {
+        // In a fresh empty runtime home no agent_process (ACP adapter) is installed —
+        // those are managed-only, never on system PATH — so installed-only reconcile must
+        // SKIP every agent and never attempt a (network) install.
+        let service = AgentReconcileService::new();
+        let home = std::env::temp_dir().join(format!("anyharness-installed-only-{}", Uuid::new_v4()));
+        let registry = crate::domains::agents::registry::built_in_registry();
+        assert!(!registry.is_empty(), "built-in registry must have agents");
+
+        service
+            .start_or_get(registry, home.clone(), false, true, None, None)
+            .await;
+
+        let completed = timeout(Duration::from_secs(5), async {
+            loop {
+                let snapshot = service.snapshot().await;
+                if snapshot.status == AgentReconcileJobStatus::Completed {
+                    return snapshot;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("installed-only reconcile should complete without network installs");
+
+        assert!(
+            completed
+                .results
+                .iter()
+                .all(|result| result.outcome == AgentReconcileOutcome::Skipped),
+            "installed_only must skip agents with no installed agent_process; got {:?}",
+            completed
+                .results
+                .iter()
+                .map(|result| (result.kind.as_str(), result.outcome.clone()))
+                .collect::<Vec<_>>()
+        );
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[tokio::test]
+    async fn full_reconcile_supersedes_in_flight_installed_only_job() {
+        // A full reconcile must NOT be silently swallowed by an in-flight
+        // installed-only startup pass (which skips missing agents).
+        let service = AgentReconcileService::new();
+        {
+            let mut job = service.job.lock().await;
+            *job = Some(AgentReconcileJob {
+                job_id: "startup-installed-only".into(),
+                status: AgentReconcileJobStatus::Running,
+                reinstall: false,
+                installed_only: true,
+                current_agent: None,
+                results: Vec::new(),
+                started_at: Some(chrono::Utc::now().to_rfc3339()),
+                finished_at: None,
+                message: None,
+            });
+        }
+
+        let snapshot = service
+            .start_or_get(
+                Vec::new(),
+                PathBuf::from("/tmp/anyharness-supersede"),
+                false,
+                false, // full scope
+                None,
+                None,
+            )
+            .await;
+
+        assert_ne!(
+            snapshot.job_id.as_deref(),
+            Some("startup-installed-only"),
+            "full reconcile must supersede the in-flight installed-only job, not reuse it"
+        );
+        assert!(!snapshot.installed_only, "the superseding job is full-scope");
+    }
+
+    #[tokio::test]
+    async fn installed_only_reuses_in_flight_installed_only_job() {
+        // Startup-style coalescing still holds: an installed-only request reuses
+        // a running installed-only job.
+        let service = AgentReconcileService::new();
+        {
+            let mut job = service.job.lock().await;
+            *job = Some(AgentReconcileJob {
+                job_id: "running-installed-only".into(),
+                status: AgentReconcileJobStatus::Running,
+                reinstall: false,
+                installed_only: true,
+                current_agent: None,
+                results: Vec::new(),
+                started_at: Some(chrono::Utc::now().to_rfc3339()),
+                finished_at: None,
+                message: None,
+            });
+        }
+
+        let snapshot = service
+            .start_or_get(
+                Vec::new(),
+                PathBuf::from("/tmp/anyharness-reuse"),
+                false,
+                true, // installed-only scope
+                None,
+                None,
+            )
+            .await;
+
+        assert_eq!(snapshot.job_id.as_deref(), Some("running-installed-only"));
     }
 }

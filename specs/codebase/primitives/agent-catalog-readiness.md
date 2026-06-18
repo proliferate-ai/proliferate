@@ -328,7 +328,12 @@ Low-level vendor mechanics belong under `integrations/agent_cli/**`.
 Owns batch repair/sync.
 
 It can iterate supported agents and call install/readiness flows to make the
-runtime match desired local state.
+runtime match desired local state. It runs in two scopes via an `installed_only`
+flag: full (install missing too) or installed-only (only update agents already on
+disk; skip missing ones). The runtime drives an installed-only reconcile at
+startup (`AgentRuntime::spawn_startup_pass`, after seed hydration) so installed
+agents track the catalog pins on desktop and cloud workers — non-blocking,
+best-effort, idempotent.
 
 It should not own per-provider install mechanics.
 
