@@ -104,8 +104,10 @@ describe("session intents", () => {
 
     // Held optimistically so the control does not briefly revert to the
     // not-yet-updated server value between the HTTP response and the SSE echo.
+    // Status is "settling" (not "submitting") so the held value shows no spinner
+    // — the backend already applied it; we are only awaiting the echo.
     expect(pendingConfigChangesForSessionIntents([acceptedApplied])).toMatchObject({
-      mode: { rawConfigId: "mode", value: "plan" },
+      mode: { rawConfigId: "mode", value: "plan", status: "settling" },
     });
 
     // Once the authoritative config_option_update reconciles the intent, the

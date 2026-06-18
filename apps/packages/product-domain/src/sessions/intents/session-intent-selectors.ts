@@ -322,7 +322,12 @@ function pendingConfigChangeFromIntent(
     return {
       rawConfigId: intent.configId,
       value: intent.value,
-      status: intent.applyState === "queued" ? "queued" : "submitting",
+      // applyState "queued" is still pending at the backend (mid-turn) → clock.
+      // Otherwise the backend already applied it and we are only holding the
+      // optimistic value until the live config echoes back → "settling" (no
+      // indicator), so a delayed/absent echo never leaves a stuck "updating"
+      // spinner. (No-op switches in particular emit no config_option_update.)
+      status: intent.applyState === "queued" ? "queued" : "settling",
       mutationId: Number.NaN,
     };
   }
