@@ -91,6 +91,12 @@ export async function dispatchConfigIntent(
           ?? null,
       } as const;
       if (effectiveLiveConfig) {
+        // Codex exposes two mode-like controls: collaborationMode (default/plan)
+        // and mode (permissions). Prefer collaborationMode when present so the
+        // current mode tracks plan<->default, mirroring useChatSessionControls.
+        const modeControl =
+          effectiveLiveConfig.normalizedControls.collaborationMode
+          ?? effectiveLiveConfig.normalizedControls.mode;
         patchSessionRecord(intent.clientSessionId, {
           ...nextPatch,
           liveConfig: effectiveLiveConfig,
@@ -100,14 +106,14 @@ export async function dispatchConfigIntent(
             ?? latestSlot.modelId
             ?? null,
           modeId:
-            effectiveLiveConfig.normalizedControls.mode?.currentValue
+            modeControl?.currentValue
             ?? response.session.modeId
             ?? latestSlot.modeId
             ?? null,
           transcript: {
             ...latestSlot.transcript,
             currentModeId:
-              effectiveLiveConfig.normalizedControls.mode?.currentValue
+              modeControl?.currentValue
               ?? response.session.modeId
               ?? latestSlot.transcript.currentModeId,
           },
@@ -116,9 +122,20 @@ export async function dispatchConfigIntent(
         patchSessionRecord(intent.clientSessionId, nextPatch);
       }
       if (response.applyState === "applied" && intent.persistDefaultPreference) {
+        // Only the permission `mode` control persists into the create-session
+        // mode_id store (defaultSessionModeByAgentKind). collaboration_mode
+        // (default/plan) is a live control whose default lives in a separate
+        // store (defaultLiveSessionControlValuesByAgentKind), so it must NOT
+        // pass this guard — otherwise toggling Plan/Default would write
+        // "plan"/"default" as an invalid permission mode_id.
+        const normalizedControls = effectiveLiveConfig?.normalizedControls;
+        const intentModeRawConfigId =
+          normalizedControls?.mode?.rawConfigId === intent.configId
+            ? normalizedControls.mode.rawConfigId
+            : null;
         persistDefaultSessionModePreference({
           agentKind: response.session.agentKind ?? latestSlot.agentKind,
-          liveConfigRawConfigId: effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
+          liveConfigRawConfigId: intentModeRawConfigId,
           rawConfigId: intent.configId,
           modeId: getAuthoritativeConfigValue(effectiveLiveConfig, intent.configId) ?? intent.value,
           workspaceSurface: deps.getWorkspaceSurface(workspaceId),

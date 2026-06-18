@@ -203,11 +203,17 @@ export function reduceEvent(
       s.currentModeId = evt.currentModeId;
       break;
 
-    case "config_option_update":
+    case "config_option_update": {
       s.liveConfig = evt.liveConfig;
-      s.currentModeId =
-        evt.liveConfig.normalizedControls.mode?.currentValue ?? s.currentModeId;
+      // Codex exposes two mode-like controls: collaborationMode (default/plan)
+      // and mode (permissions). Prefer collaborationMode when present so the
+      // current mode tracks plan<->default, mirroring useChatSessionControls.
+      const modeControl =
+        evt.liveConfig.normalizedControls.collaborationMode
+        ?? evt.liveConfig.normalizedControls.mode;
+      s.currentModeId = modeControl?.currentValue ?? s.currentModeId;
       break;
+    }
 
     case "session_state_update":
       break;

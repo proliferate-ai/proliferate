@@ -69,13 +69,17 @@ export function buildSessionStreamPatch({
     patch.liveConfig = event.liveConfig;
     patch.modelId =
       event.liveConfig.normalizedControls.model?.currentValue ?? slot.modelId;
-    patch.modeId =
-      event.liveConfig.normalizedControls.mode?.currentValue ?? slot.modeId;
+    // Codex exposes two mode-like controls: collaborationMode (default/plan) and
+    // mode (permissions). Prefer collaborationMode so plan<->default reflects in
+    // the badge/persistence on the stream-flush path too (matches the reducer +
+    // session-intent dispatch).
+    const nextModeId =
+      event.liveConfig.normalizedControls.collaborationMode?.currentValue
+      ?? event.liveConfig.normalizedControls.mode?.currentValue;
+    patch.modeId = nextModeId ?? slot.modeId;
     patch.transcript = {
       ...nextTranscript,
-      currentModeId:
-        event.liveConfig.normalizedControls.mode?.currentValue
-        ?? nextTranscript.currentModeId,
+      currentModeId: nextModeId ?? nextTranscript.currentModeId,
     };
   }
 
