@@ -16,13 +16,15 @@ export interface UseGitHubSignInResult {
 }
 
 // Owns GitHub sign-in form state and submit callback. Does not own auth availability access.
-export function useGitHubSignIn(): UseGitHubSignInResult {
+// `enabled` gates the availability poll so it only runs when sign-in is actually
+// shown (the persistent auth shell mounts this hook during the loading phase too).
+export function useGitHubSignIn(options?: { enabled?: boolean }): UseGitHubSignInResult {
   const { signInWithGitHub } = useAuthActions();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,
     isPending: githubDesktopAuthAvailabilityPending,
-  } = useGitHubDesktopAuthAvailability();
+  } = useGitHubDesktopAuthAvailability({ enabled: options?.enabled ?? true });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -3,6 +3,14 @@ export const AUTH_GATE_LABELS = {
   loadingSubtext: "Proliferate is restoring your account before opening the workspace.",
 } as const;
 
+// Shared by the persistent initial-page shell (loading -> auth). The heading is
+// identical in both modes so it never reflows; the loading hint sits in the
+// reserved action slot where the GitHub button lands.
+export const AUTH_SCREEN_LABELS = {
+  heading: "Let's get your life's work done.",
+  loadingHint: "Restoring your session…",
+} as const;
+
 export const AUTH_LOGIN_LABELS = {
   title: "Let's help you get your life's work done.",
   detail: "Start by signing in with GitHub.",

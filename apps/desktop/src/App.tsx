@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect } from "react"
 import { Navigate, Route, useLocation } from "react-router-dom"
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
-import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
 import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
@@ -69,6 +68,14 @@ const UpdatePlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/UpdatePlaygroundPage").then((m) => ({
         default: m.UpdatePlaygroundPage,
+      })),
+    )
+  : null
+
+const AuthPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/AuthPlaygroundPage").then((m) => ({
+        default: m.AuthPlaygroundPage,
       })),
     )
   : null
@@ -262,11 +269,12 @@ function AppRuntime() {
               <Route path="/login" element={<LoginPage />} />
             </Route>
             <Route element={<BootstrappedRoute />}>
-              <Route element={<AuthRequiredGate />}>
-                <Route path="/setup" element={<Navigate to="/" replace />} />
-                <Route element={<UserPreferencesGate />}>
-                  <Route path="*" element={<AuthenticatedAppHost />} />
-                </Route>
+              {/* BootstrappedRoute owns the auth-required gate: it shows the
+                  sign-in shell for anonymous users and only renders these
+                  routes once the workspace should be revealed. */}
+              <Route path="/setup" element={<Navigate to="/" replace />} />
+              <Route element={<UserPreferencesGate />}>
+                <Route path="*" element={<AuthenticatedAppHost />} />
               </Route>
             </Route>
             {import.meta.env.DEV && ChatPlaygroundPage && (
@@ -285,6 +293,16 @@ function AppRuntime() {
                 element={
                   <Suspense fallback={null}>
                     <UpdatePlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
+            {import.meta.env.DEV && AuthPlaygroundPage && (
+              <Route
+                path="/playground/auth"
+                element={
+                  <Suspense fallback={null}>
+                    <AuthPlaygroundPage />
                   </Suspense>
                 }
               />
