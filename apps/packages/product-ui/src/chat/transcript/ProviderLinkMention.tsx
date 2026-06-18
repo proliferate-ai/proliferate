@@ -103,23 +103,16 @@ export function linkHost(href: string): string | null {
 
 /**
  * Whether an href should be treated as an external web link (vs. a workspace
- * file path). True for `http(s)://…`, `www.…`, and bare `host.tld[/…]` forms.
+ * file path). Deliberately conservative: only `http(s)://…` and `www.…`.
+ *
+ * A bare `host.tld/path` form (`github.com/x`) is NOT claimed, because it is
+ * structurally indistinguishable from a relative file path with a dotted
+ * directory (`v1.2/notes.txt`, `CHANGELOG.md/x`) — claiming those would lose
+ * the file mention and fire a favicon fetch for a bogus host. Scheme-less URLs
+ * are rare in agent output (they almost always emit `https://`), so this trades
+ * that edge for never stealing a real file path.
  */
 export function isExternalHttpLink(href: string): boolean {
   const value = href.trim();
-  if (/^https?:\/\//i.test(value)) {
-    return true;
-  }
-  if (value.includes("://") || value.startsWith("//")) {
-    // any other scheme:// (ftp:, vscode:, …) or protocol-relative — not a
-    // workspace file path, but only http(s) gets an icon.
-    return false;
-  }
-  // Scheme-less `www.host…` is a strong web signal.
-  if (/^www\.[a-z0-9-]/i.test(value)) {
-    return true;
-  }
-  // Other scheme-less `host.tld/path` forms — require a trailing path slash so
-  // bare filenames like `README.md` (host.tld shaped) stay file references.
-  return /^[a-z0-9-]+(?:\.[a-z0-9-]+)+\/[^\s]/i.test(value);
+  return /^https?:\/\//i.test(value) || /^www\.[a-z0-9-]/i.test(value);
 }

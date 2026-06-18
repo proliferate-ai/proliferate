@@ -81,9 +81,14 @@ apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx
 
 apps/desktop/src/components/workspace/chat/transcript/transcript-markdown.tsx
   desktop renderers injected at TranscriptItemBlock, ClaudePlanCard, and
-  ConnectedProposedPlanItem: file-like link hrefs and path-like inline code
-  render FilePathLink mentions; fenced code renders shiki-highlighted HTML
-  inside the product-ui shell
+  ConnectedProposedPlanItem: only workspace file references render FilePathLink
+  mentions; external/web link hrefs defer to MarkdownBody's default anchor
+  (ProviderLinkMention); fenced code renders shiki-highlighted HTML in the shell
+
+apps/packages/product-ui/src/chat/transcript/ProviderLinkMention.tsx
+  shared inline provider-icon link mention + URL/host classification
+  (isExternalHttpLink, linkHost); rendered by MarkdownBody's default anchor, so
+  every surface (web + cloud chat included) gets icon links
 
 apps/desktop/src/lib/domain/files/path-detection.ts
   pure path heuristics (looksLikePath, looksLikeFileReferenceHref,
@@ -91,7 +96,8 @@ apps/desktop/src/lib/domain/files/path-detection.ts
   renders mentions
 
 anyharness .../domains/sessions/response_formatting.rs
-  the prompt-side instruction steering models toward markdown file links
+  the prompt-side instruction (FILE_REFERENCE_INSTRUCTIONS) requiring markdown
+  file links with the complete workspace-root path, never abbreviated
 ```
 
 Rules:
@@ -100,8 +106,16 @@ Rules:
   references in transcript items.
 - Mention labels display the workspace-relative path plus a `(line N)` suffix;
   raw absolute hrefs must not be shown as label text.
-- Web falls back to plain anchors and unhighlighted (identically styled) code
-  blocks; shiki stays out of the web bundle.
+- External/web link hrefs render as a shared inline provider-icon mention
+  (`ProviderLinkMention`): a GitHub brand SVG for github hosts, the site favicon
+  (Google s2 service, `Globe` on load error) otherwise. It is `MarkdownBody`'s
+  default anchor, so every surface gets it (web + cloud chat included); URL
+  detection (`isExternalHttpLink`) runs before file-path detection so a real
+  path is never mistaken for a link. NOTE: the favicon is an outbound request to
+  Google keyed on the linked host — a privacy consideration for internal/console
+  URLs on the web build, with no offline fallback beyond the error icon.
+- Web falls back to unhighlighted (identically styled) code blocks; shiki stays
+  out of the web bundle.
 
 ## Delegated-Work Receipts
 

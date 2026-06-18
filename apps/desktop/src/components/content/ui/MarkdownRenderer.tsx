@@ -10,7 +10,7 @@ import {
 } from "@proliferate/product-ui/chat/transcript/ProviderLinkMention";
 import { HighlightedCodePanel } from "./HighlightedCodePanel";
 import { FilePathLink } from "./FilePathLink";
-import { looksLikePath } from "@/lib/domain/files/path-detection";
+import { looksLikeFileReferenceHref } from "@/lib/domain/files/path-detection";
 
 type MdElementProps = HTMLAttributes<HTMLElement> & {
   node?: unknown;
@@ -118,9 +118,11 @@ export function MarkdownRenderer({
               ...rest
             } = props;
             if (href && !dangerouslySetInnerHTML) {
-              // Workspace file path -> openable mention; anything else (web URL
-              // or plain link) -> shared provider-icon mention.
-              if (!isExternalHttpLink(href) && looksLikePath(href)) {
+              // Workspace file reference -> openable mention; anything else (web
+              // URL or plain link) -> shared provider-icon mention. Use the
+              // markdown-link-aware predicate (matches the transcript renderer)
+              // so bare filenames like [README.md](README.md) stay file mentions.
+              if (!isExternalHttpLink(href) && looksLikeFileReferenceHref(href)) {
                 return <FilePathLink rawPath={href}>{children}</FilePathLink>;
               }
               return <ProviderLinkMention href={href}>{children}</ProviderLinkMention>;

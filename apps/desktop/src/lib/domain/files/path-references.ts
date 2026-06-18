@@ -42,13 +42,17 @@ export function pickFuzzyPathMatch(
   targetPath: string,
   candidatePaths: readonly string[],
 ): string | null {
-  if (!targetPath || candidatePaths.includes(targetPath)) {
+  // Compare case-insensitively (the workspace search is case-insensitive, and
+  // a ref may differ in case from the real file) but return the real casing.
+  const target = targetPath.toLowerCase();
+  if (!target || candidatePaths.some((candidate) => candidate.toLowerCase() === target)) {
     return null;
   }
-  const suffix = `/${targetPath}`;
-  const matches = candidatePaths.filter(
-    (candidate) => candidate === targetPath || candidate.endsWith(suffix),
-  );
+  const suffix = `/${target}`;
+  const matches = candidatePaths.filter((candidate) => {
+    const lower = candidate.toLowerCase();
+    return lower === target || lower.endsWith(suffix);
+  });
   return matches.length === 1 ? matches[0] : null;
 }
 

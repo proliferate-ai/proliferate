@@ -25,6 +25,11 @@ describe("pickFuzzyPathMatch", () => {
   it("returns null when nothing matches", () => {
     expect(pickFuzzyPathMatch("nope/Missing.tsx", tree)).toBeNull();
   });
+
+  it("matches case-insensitively but returns the real casing", () => {
+    expect(pickFuzzyPathMatch("content/ui/markdownrenderer.tsx", tree))
+      .toBe("apps/desktop/src/components/content/ui/MarkdownRenderer.tsx");
+  });
 });
 
 describe("resolveFileReference", () => {
