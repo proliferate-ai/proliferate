@@ -385,7 +385,13 @@ projection path.
 
 - The model selector reads the projected session selection first.
 - Pending config intents project over the current session config until the
-  runtime accepts and streams the real value.
+  authoritative live config reflects the requested value — released on the
+  `config_option_update` stream OR when the live config state already matches.
+  The state-match path is load-bearing: switching to the already-current value
+  (a no-op) emits no `config_option_update`, so optimism must release on the
+  state match or it would stay stuck. Optimism is therefore held through intent
+  `accepted` (so a real switch never reverts to the not-yet-updated value
+  mid-flight) and dropped the moment the authoritative value equals it.
 - If the projected session has no materialized runtime yet, display labels must
   still use the same label mapping as the final session.
 - Do not mix raw ids and presentation labels. For example, a reasoning setting

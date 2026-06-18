@@ -78,13 +78,10 @@ export function useActiveSessionLaunchState(): {
   ));
   const stableModelControl = useStableModelControl(slice.modelControl);
   const pendingConfigChanges = useMemo(
-    () => mergePendingConfigChanges(
+    () => composePendingConfigChanges(
+      slice.liveConfig,
       slice.directoryPendingConfigChanges,
-      // Release an optimistic intent change once the authoritative live config
-      // already reflects it (no-op switches clear immediately; real switches
-      // hold until the config_option_update lands). Only intent-pending is
-      // reconciled — server-side queued changes keep their pending state.
-      releaseOptimisticIntentChanges(slice.liveConfig, intentPendingConfigChanges),
+      intentPendingConfigChanges,
     ),
     [intentPendingConfigChanges, slice.directoryPendingConfigChanges, slice.liveConfig],
   );
@@ -167,9 +164,10 @@ export function useActiveSessionConfigState() {
   }));
   const stableNormalizedControls = useStableNormalizedControls(slice.normalizedControls);
   const pendingConfigChanges = useMemo(
-    () => mergePendingConfigChanges(
+    () => composePendingConfigChanges(
+      slice.liveConfig,
       slice.directoryPendingConfigChanges,
-      releaseOptimisticIntentChanges(slice.liveConfig, intentPendingConfigChanges),
+      intentPendingConfigChanges,
     ),
     [intentPendingConfigChanges, slice.directoryPendingConfigChanges, slice.liveConfig],
   );
@@ -216,6 +214,23 @@ function releaseOptimisticIntentChanges(
 ): PendingSessionConfigChanges {
   return reconcilePendingConfigChanges(liveConfig, intentPendingConfigChanges)
     .pendingConfigChanges;
+}
+
+/**
+ * The displayed pending-config map: optimistic intent changes (released once the
+ * authoritative live config reflects them) merged over server-side directory
+ * changes. Directory changes are intentionally NOT reconciled here — they keep
+ * their own pending state and reconcile at stream-flush. Exported for unit tests.
+ */
+export function composePendingConfigChanges(
+  liveConfig: SessionLiveConfigSnapshot | null | undefined,
+  directoryPendingConfigChanges: PendingSessionConfigChanges | null | undefined,
+  intentPendingConfigChanges: PendingSessionConfigChanges,
+): PendingSessionConfigChanges | null {
+  return mergePendingConfigChanges(
+    directoryPendingConfigChanges,
+    releaseOptimisticIntentChanges(liveConfig, intentPendingConfigChanges),
+  );
 }
 
 function mergePendingConfigChanges(
