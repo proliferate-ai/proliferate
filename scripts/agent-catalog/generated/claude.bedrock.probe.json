@@ -1,22 +1,21 @@
 {
-  "probedAt": "2026-06-10T04:16:44.787695+00:00",
+  "probedAt": "2026-06-18T02:52:37.457623+00:00",
   "agentKind": "claude",
   "authContext": "bedrock",
   "attestation": {
     "name": "@agentclientprotocol/claude-agent-acp",
-    "version": "0.29.0",
+    "version": "0.44.0",
     "title": "Claude Agent"
   },
-  "modelSource": "acpModels",
+  "modelSource": "modelConfigOption",
   "nativeCli": {
-    "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/claude/native/claude",
-    "version": "2.1.170 (Claude Code)"
+    "path": "/Users/pablohansen/.proliferate/anyharness/agents/claude/native/claude",
+    "version": "2.1.177 (Claude Code)"
   },
   "trials": [
     {
       "modelId": "global.anthropic.claude-fable-5",
       "accepted": true,
-      "name": "Fable",
       "configOptions": [
         {
           "category": "mode",
@@ -25,149 +24,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
-            {
-              "description": "Standard behavior, prompts for dangerous operations",
-              "name": "Default",
-              "value": "default"
-            },
-            {
-              "description": "Auto-accept file edit operations",
-              "name": "Accept Edits",
-              "value": "acceptEdits"
-            },
-            {
-              "description": "Planning mode, no actual tool execution",
-              "name": "Plan Mode",
-              "value": "plan"
-            },
-            {
-              "description": "Don't prompt for permissions, deny if not pre-approved",
-              "name": "Don't Ask",
-              "value": "dontAsk"
-            },
-            {
-              "description": "Bypass all permission checks",
-              "name": "Bypass Permissions",
-              "value": "bypassPermissions"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "model",
-          "currentValue": "global.anthropic.claude-fable-5",
-          "description": "AI model to use",
-          "id": "model",
-          "name": "Model",
-          "options": [
-            {
-              "description": "Sonnet 4.6 · Efficient for routine tasks",
-              "name": "Sonnet",
-              "value": "us.anthropic.claude-sonnet-4-6"
-            },
-            {
-              "description": "Sonnet 4.6 for long sessions",
-              "name": "Sonnet (1M context)",
-              "value": "us.anthropic.claude-sonnet-4-6[1m]"
-            },
-            {
-              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
-              "name": "Fable",
-              "value": "global.anthropic.claude-fable-5"
-            },
-            {
-              "description": "Opus 4.1 · Legacy",
-              "name": "Opus 4.1",
-              "value": "us.anthropic.claude-opus-4-1-20250805-v1:0"
-            },
-            {
-              "description": "Opus 4.8 · Best for everyday, complex tasks",
-              "name": "Opus",
-              "value": "us.anthropic.claude-opus-4-8"
-            },
-            {
-              "description": "Opus 4.8 for long sessions",
-              "name": "Opus (1M context)",
-              "value": "us.anthropic.claude-opus-4-8[1m]"
-            },
-            {
-              "description": "Opus 4.7 · Legacy",
-              "name": "Opus 4.7",
-              "value": "us.anthropic.claude-opus-4-7"
-            },
-            {
-              "description": "Opus 4.7 for long sessions",
-              "name": "Opus 4.7 (1M context)",
-              "value": "us.anthropic.claude-opus-4-7[1m]"
-            },
-            {
-              "description": "Opus 4.6 · Legacy",
-              "name": "Opus 4.6",
-              "value": "us.anthropic.claude-opus-4-6-v1"
-            },
-            {
-              "description": "Opus 4.6 for long sessions",
-              "name": "Opus 4.6 (1M context)",
-              "value": "us.anthropic.claude-opus-4-6-v1[1m]"
-            },
-            {
-              "description": "Haiku 4.5 · Fastest for quick answers",
-              "name": "Haiku",
-              "value": "haiku"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "X High",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "us.anthropic.claude-opus-4-8",
-      "accepted": true,
-      "name": "Opus",
-      "configOptions": [
-        {
-          "category": "mode",
-          "currentValue": "default",
-          "description": "Session permission mode",
-          "id": "mode",
-          "name": "Mode",
-          "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -203,6 +59,11 @@
           "id": "model",
           "name": "Model",
           "options": [
+            {
+              "description": "Use the default model (currently Sonnet 4.5)",
+              "name": "Default",
+              "value": "default"
+            },
             {
               "description": "Sonnet 4.6 · Efficient for routine tasks",
               "name": "Sonnet",
@@ -246,7 +107,7 @@
             {
               "description": "Opus 4.6 · Legacy",
               "name": "Opus 4.6",
-              "value": "us.anthropic.claude-opus-4-6-v1"
+              "value": "opus"
             },
             {
               "description": "Opus 4.6 for long sessions",
@@ -263,11 +124,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -281,8 +146,158 @@
               "value": "high"
             },
             {
-              "name": "X High",
+              "name": "Xhigh",
               "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "us.anthropic.claude-opus-4-8",
+      "accepted": true,
+      "name": "Opus",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "us.anthropic.claude-opus-4-8",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Use the default model (currently Sonnet 4.5)",
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "description": "Sonnet 4.6 · Efficient for routine tasks",
+              "name": "Sonnet",
+              "value": "us.anthropic.claude-sonnet-4-6"
+            },
+            {
+              "description": "Sonnet 4.6 for long sessions",
+              "name": "Sonnet (1M context)",
+              "value": "us.anthropic.claude-sonnet-4-6[1m]"
+            },
+            {
+              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
+              "name": "Fable",
+              "value": "us.anthropic.claude-fable-5"
+            },
+            {
+              "description": "Opus 4.1 · Legacy",
+              "name": "Opus 4.1",
+              "value": "us.anthropic.claude-opus-4-1-20250805-v1:0"
+            },
+            {
+              "description": "Opus 4.8 · Best for everyday, complex tasks",
+              "name": "Opus",
+              "value": "us.anthropic.claude-opus-4-8"
+            },
+            {
+              "description": "Opus 4.8 for long sessions",
+              "name": "Opus (1M context)",
+              "value": "us.anthropic.claude-opus-4-8[1m]"
+            },
+            {
+              "description": "Opus 4.7 · Legacy",
+              "name": "Opus 4.7",
+              "value": "us.anthropic.claude-opus-4-7"
+            },
+            {
+              "description": "Opus 4.7 for long sessions",
+              "name": "Opus 4.7 (1M context)",
+              "value": "us.anthropic.claude-opus-4-7[1m]"
+            },
+            {
+              "description": "Opus 4.6 · Legacy",
+              "name": "Opus 4.6",
+              "value": "opus"
+            },
+            {
+              "description": "Opus 4.6 for long sessions",
+              "name": "Opus 4.6 (1M context)",
+              "value": "us.anthropic.claude-opus-4-6-v1[1m]"
+            },
+            {
+              "description": "Haiku 4.5 · Fastest for quick answers",
+              "name": "Haiku",
+              "value": "haiku"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -290,15 +305,10 @@
       ]
     }
   ],
-  "currentModelId": "us.anthropic.claude-sonnet-4-6",
+  "currentModelId": null,
   "currentModeId": "default",
   "modes": {
     "availableModes": [
-      {
-        "description": "Use a model classifier to approve/deny permission prompts.",
-        "id": "auto",
-        "name": "Auto"
-      },
       {
         "description": "Standard behavior, prompts for dangerous operations",
         "id": "default",
@@ -336,11 +346,6 @@
       "name": "Mode",
       "options": [
         {
-          "description": "Use a model classifier to approve/deny permission prompts.",
-          "name": "Auto",
-          "value": "auto"
-        },
-        {
           "description": "Standard behavior, prompts for dangerous operations",
           "name": "Default",
           "value": "default"
@@ -370,11 +375,16 @@
     },
     {
       "category": "model",
-      "currentValue": "us.anthropic.claude-sonnet-4-6",
+      "currentValue": "us.anthropic.claude-opus-4-8",
       "description": "AI model to use",
       "id": "model",
       "name": "Model",
       "options": [
+        {
+          "description": "Use the default model (currently Sonnet 4.5)",
+          "name": "Default",
+          "value": "default"
+        },
         {
           "description": "Sonnet 4.6 · Efficient for routine tasks",
           "name": "Sonnet",
@@ -418,7 +428,7 @@
         {
           "description": "Opus 4.6 · Legacy",
           "name": "Opus 4.6",
-          "value": "us.anthropic.claude-opus-4-6-v1"
+          "value": "opus"
         },
         {
           "description": "Opus 4.6 for long sessions",
@@ -435,11 +445,15 @@
     },
     {
       "category": "thought_level",
-      "currentValue": "high",
-      "description": "Reasoning depth",
+      "currentValue": "default",
+      "description": "Available effort levels for this model",
       "id": "effort",
       "name": "Effort",
       "options": [
+        {
+          "name": "Default",
+          "value": "default"
+        },
         {
           "name": "Low",
           "value": "low"
@@ -451,12 +465,72 @@
         {
           "name": "High",
           "value": "high"
+        },
+        {
+          "name": "Xhigh",
+          "value": "xhigh"
+        },
+        {
+          "name": "Max",
+          "value": "max"
         }
       ],
       "type": "select"
     }
   ],
   "models": [
+    {
+      "modelId": "default",
+      "name": "Default",
+      "description": "Use the default model (currently Sonnet 4.5)",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "default",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        }
+      ]
+    },
     {
       "modelId": "us.anthropic.claude-sonnet-4-6",
       "name": "Sonnet",
@@ -469,11 +543,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -514,11 +583,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -530,6 +603,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -548,11 +625,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -593,11 +665,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -609,6 +685,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -627,11 +707,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -672,11 +747,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -690,8 +769,12 @@
               "value": "high"
             },
             {
-              "name": "X High",
+              "name": "Xhigh",
               "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -710,11 +793,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -768,11 +846,6 @@
           "name": "Mode",
           "options": [
             {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
-            {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
               "value": "default"
@@ -812,11 +885,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -830,8 +907,12 @@
               "value": "high"
             },
             {
-              "name": "X High",
+              "name": "Xhigh",
               "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -850,11 +931,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -895,11 +971,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -913,8 +993,12 @@
               "value": "high"
             },
             {
-              "name": "X High",
+              "name": "Xhigh",
               "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -933,11 +1017,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -978,11 +1057,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -996,8 +1079,12 @@
               "value": "high"
             },
             {
-              "name": "X High",
+              "name": "Xhigh",
               "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -1016,11 +1103,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -1061,11 +1143,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -1079,8 +1165,12 @@
               "value": "high"
             },
             {
-              "name": "X High",
+              "name": "Xhigh",
               "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -1088,7 +1178,7 @@
       ]
     },
     {
-      "modelId": "us.anthropic.claude-opus-4-6-v1",
+      "modelId": "opus",
       "name": "Opus 4.6",
       "description": "Opus 4.6 · Legacy",
       "configOptions": [
@@ -1099,11 +1189,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -1134,7 +1219,7 @@
         },
         {
           "category": "model",
-          "currentValue": "us.anthropic.claude-opus-4-6-v1",
+          "currentValue": "opus",
           "description": "AI model to use",
           "id": "model",
           "name": "Model",
@@ -1144,11 +1229,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -1160,6 +1249,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -1178,11 +1271,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -1223,11 +1311,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -1239,6 +1331,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -1257,11 +1353,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",

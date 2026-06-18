@@ -124,7 +124,7 @@
       "agentProcess": {
         "install": {
           "kind": "managed_npm_package",
-          "package": "git+https://github.com/proliferate-ai/codex-acp.git#988bd156960d038104ae60e5bbbf5d190502a0f3",
+          "package": "git+https://github.com/proliferate-ai/codex-acp.git#c66f9f3b9bf4811fa8ebdfc9ad908bf37845e50f",
           "packageSubdir": "npm",
           "sourceBuildBinaryName": null,
           "executableRelpath": "node_modules/.bin/codex-acp"
