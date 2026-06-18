@@ -6,6 +6,7 @@ export type SupportReportUploadFailureKind =
   | "local_payload_invalid"
   | "storage_unconfigured"
   | "upload_conflict"
+  | "upload_rejected"
   | "transient";
 
 export interface SupportReportUploadFailure {
@@ -130,6 +131,22 @@ export function describeSupportReportUploadFailure(
     };
   }
 
+  // Any other upload-invalid (HTTP 400) is a permanent server-side rejection of
+  // the request payload (diagnostics too large, object size mismatch, workspace
+  // selection, etc.). Retrying the same request can't fix it, so it is terminal
+  // rather than transient — otherwise it would retry until the age backstop.
+  if (code === "support_report_upload_invalid" || status === 400) {
+    return {
+      kind: "upload_rejected",
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage:
+        "This report was rejected and can't be sent as-is. Start a new report from Help.",
+      toastCooldownMs: 0,
+    };
+  }
+
   return {
     kind: "transient",
     message,
@@ -205,13 +222,21 @@ function isAlreadyCompletedError(message: string): boolean {
 // budget or aged out should be dropped rather than retried forever. This is the
 // systemic safety net for any failure that is misclassified as transient.
 export function supportReportRetriesExhausted(input: {
+  kind: SupportReportUploadFailureKind;
   attemptCount: number;
   createdAt?: string | null;
   nowMs: number;
 }): boolean {
-  if (input.attemptCount >= MAX_SUPPORT_REPORT_ATTEMPTS) {
+  // The attempt budget bounds only genuinely-transient failures. Blocked-on-user
+  // / config states (auth_required, cloud/storage unconfigured, dev_auth_bypass)
+  // burn attempts in minutes but resolve when the user signs in or the server is
+  // configured, so they are NOT attempt-capped — only the age backstop applies.
+  if (input.kind === "transient" && input.attemptCount >= MAX_SUPPORT_REPORT_ATTEMPTS) {
     return true;
   }
+  // Age backstop bounds every retryable failure so nothing retries forever — a
+  // report stuck for 48h is stale regardless of why (e.g. a server that will
+  // never be configured).
   const createdMs = input.createdAt ? Date.parse(input.createdAt) : Number.NaN;
   return Number.isFinite(createdMs)
     && input.nowMs - createdMs >= MAX_SUPPORT_REPORT_AGE_MS;

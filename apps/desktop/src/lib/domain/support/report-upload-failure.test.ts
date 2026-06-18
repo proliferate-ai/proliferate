@@ -133,26 +133,55 @@ describe("describeSupportReportUploadFailure", () => {
       expect(failure.retryable).toBe(false);
     }
   });
+
+  it("treats other upload-invalid 400s as terminal rejections, not transient retries", () => {
+    const failure = describeSupportReportUploadFailure(
+      {
+        message: "Diagnostics payload is too large.",
+        code: "support_report_upload_invalid",
+        status: 400,
+      },
+      2,
+    );
+
+    expect(failure.kind).toBe("upload_rejected");
+    expect(failure.retryable).toBe(false);
+  });
 });
 
 describe("supportReportRetriesExhausted", () => {
   const now = Date.parse("2026-06-17T00:00:00.000Z");
 
-  it("gives up once the attempt budget is spent", () => {
-    expect(supportReportRetriesExhausted({ attemptCount: 8, nowMs: now })).toBe(true);
-    expect(supportReportRetriesExhausted({ attemptCount: 3, nowMs: now })).toBe(false);
+  it("attempt-caps transient failures exactly at the boundary", () => {
+    expect(supportReportRetriesExhausted({ kind: "transient", attemptCount: 8, nowMs: now }))
+      .toBe(true);
+    expect(supportReportRetriesExhausted({ kind: "transient", attemptCount: 7, nowMs: now }))
+      .toBe(false);
   });
 
-  it("gives up on a job that has aged past the retry window", () => {
+  it("does not attempt-cap blocked-on-user states while they are still fresh", () => {
     expect(supportReportRetriesExhausted({
-      attemptCount: 1,
-      createdAt: "2026-06-02T00:00:00.000Z",
+      kind: "auth_required",
+      attemptCount: 50,
+      createdAt: "2026-06-16T18:00:00.000Z",
       nowMs: now,
-    })).toBe(true);
+    })).toBe(false);
+  });
+
+  it("age-caps every retryable failure once stale, including blocked states", () => {
+    for (const kind of ["transient", "auth_required", "storage_unconfigured"] as const) {
+      expect(supportReportRetriesExhausted({
+        kind,
+        attemptCount: 1,
+        createdAt: "2026-06-02T00:00:00.000Z",
+        nowMs: now,
+      })).toBe(true);
+    }
   });
 
   it("keeps retrying a fresh job within budget and age", () => {
     expect(supportReportRetriesExhausted({
+      kind: "transient",
       attemptCount: 2,
       createdAt: "2026-06-16T18:00:00.000Z",
       nowMs: now,

@@ -140,7 +140,8 @@ support-report "could not be sent" retry loop.
 `POST /v1/support/reports/{reportId}/complete` verifies uploaded object keys are
 inside the stored report prefix, requires every object in the stored manifest to
 be present exactly once, verifies completion object size and checksum values
-against the immutable upload manifest, verifies object sizes with S3 metadata,
+against the stored upload manifest (refreshed by the latest re-issue), verifies
+object sizes with S3 metadata,
 writes `complete.json`, marks the report completed, and posts the internal
 Slack notification once. Slack failure is logged server-side and does not fail
 an otherwise completed report.

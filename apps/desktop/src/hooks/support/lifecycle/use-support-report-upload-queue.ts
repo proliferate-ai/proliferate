@@ -169,16 +169,16 @@ async function drainSupportReportQueue(
         continue;
       }
 
-      // Cap only genuinely-transient failures. Blocked-on-user/config states
-      // (auth_required, cloud/storage unconfigured, dev_auth_bypass) stay queued
-      // until the user signs in or the server is configured — dropping them on a
-      // timer would silently lose a report the user can still send.
-      const exhausted = failure.kind === "transient"
-        && supportReportRetriesExhausted({
-          attemptCount,
-          createdAt: entry.job.createdAt,
-          nowMs: Date.now(),
-        });
+      // Drop only when retries are exhausted: a transient failure that spent its
+      // attempt budget, or any retryable failure (incl. blocked-on-user/config
+      // states) that has aged past the backstop. Blocked states are not
+      // attempt-capped, so they stay queued for the user instead of being lost.
+      const exhausted = supportReportRetriesExhausted({
+        kind: failure.kind,
+        attemptCount,
+        createdAt: entry.job.createdAt,
+        nowMs: Date.now(),
+      });
       if (!failure.retryable || exhausted) {
         removePersistedJob(entry.job.jobId);
         await deleteSupportReportJobAttachments(entry.job);

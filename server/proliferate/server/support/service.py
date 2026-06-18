@@ -225,8 +225,15 @@ async def create_support_report_upload_targets(
     report = await support_reports.get_report_by_id(db, report_id)
     if report is None or report.owner_user_id != sender_user_id:
         raise SupportReportUploadInvalid("Unknown support report upload.")
-    if report.status not in {"created", "uploading"}:
+    if report.status == "completed":
         raise SupportReportAlreadyCompleted("Support report upload is already completed.")
+    if report.status not in {"created", "uploading"}:
+        # failed / abandoned — terminal but NOT a success. Use the conflict code
+        # so the client tells the user to start a new report rather than treating
+        # it as "already sent" and silently discarding the (undelivered) report.
+        raise SupportReportUploadConflict(
+            "Support report upload is no longer accepting targets."
+        )
 
     _install_report_correlation(report)
     validate_upload_target_request(body)
