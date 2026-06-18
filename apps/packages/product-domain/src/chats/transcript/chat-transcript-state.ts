@@ -16,6 +16,12 @@ export interface ChatTranscriptState {
   selectedWorkspaceId: string | null;
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
+  /**
+   * True when the active session has reasoning mode on. When set, the trailing
+   * thinking indicator stays visible for the in-progress turn even if the
+   * coarse stream flag briefly drops or prose has already landed.
+   */
+  reasoningActive?: boolean;
   optimisticPrompt?: PendingPromptEntry | null;
   outboxEntries?: readonly PromptOutboxEntry[];
   history?: ChatTranscriptHistoryState;

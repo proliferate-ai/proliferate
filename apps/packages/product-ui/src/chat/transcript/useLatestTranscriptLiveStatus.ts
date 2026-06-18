@@ -40,6 +40,7 @@ export function useLatestTranscriptLiveStatus({
   virtualRows,
   outboxStartedAtByPromptId,
   sessionViewState,
+  reasoningActive = false,
   renderTurnTrailingStatus,
 }: {
   latestTurnId: string | null;
@@ -48,6 +49,7 @@ export function useLatestTranscriptLiveStatus({
   virtualRows: readonly TranscriptVirtualRow[];
   outboxStartedAtByPromptId: ReadonlyMap<string, string>;
   sessionViewState: SessionViewState;
+  reasoningActive?: boolean;
   renderTurnTrailingStatus?: (input: ChatTranscriptTurnStatusInput) => ReactNode;
 }): LatestTranscriptLiveStatus {
   const latestTurnInProgress = !!latestTurn && !latestTurn.completedAt;
@@ -99,6 +101,17 @@ export function useLatestTranscriptLiveStatus({
   const shouldShowImmediateOutboxLiveStatus =
     shouldShowDelayedLatestLiveStatus
     && latestTurnTiming?.isOutboxStartedAt === true;
+  // In reasoning mode the agent is always thinking for the duration of the
+  // turn, but transient thoughts are filtered out and the coarse stream flag
+  // can briefly drop (or prose lands) before the turn ends — which would hide
+  // the trailing indicator. Force it on for the whole in-progress turn so the
+  // thinking affordance never disappears mid-turn when reasoning is enabled.
+  const shouldForceReasoningLiveStatus = reasoningActive
+    && !!latestTurn
+    && latestTurnInProgress
+    && !latestLiveExplorationBlock
+    && !latestLiveWorkBlock
+    && !latestTurnHasActiveToolWork;
   const [showDelayedLatestLiveStatus, setShowDelayedLatestLiveStatus] = useState(false);
 
   useEffect(() => {
@@ -120,14 +133,20 @@ export function useLatestTranscriptLiveStatus({
     shouldShowDelayedLatestLiveStatus,
   ]);
 
-  const latestLiveStatus = latestTurn
-    && (showDelayedLatestLiveStatus || shouldShowImmediateOutboxLiveStatus)
-      ? renderTurnTrailingStatus?.({
-          startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,
-          sessionViewState,
-          transientStatusText: latestTransientText,
-        }) ?? null
-      : null;
+  const shouldShowLatestLiveStatus = showDelayedLatestLiveStatus
+    || shouldShowImmediateOutboxLiveStatus
+    || shouldForceReasoningLiveStatus;
+
+  const latestLiveStatus = latestTurn && shouldShowLatestLiveStatus
+    ? renderTurnTrailingStatus?.({
+        startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,
+        // Forcing reasoning keeps the thinking indicator alive even if the
+        // coarse view state briefly leaves "working"; the renderer only paints
+        // the indicator for the "working" state, so pin it here.
+        sessionViewState: shouldForceReasoningLiveStatus ? "working" : sessionViewState,
+        transientStatusText: latestTransientText,
+      }) ?? null
+    : null;
 
   return {
     latestLiveExplorationBlock,

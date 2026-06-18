@@ -610,6 +610,73 @@ describe("session activity", () => {
     expect(resolveSessionSidebarActivityState(awaitingSlot)).toBe("waiting_input");
   });
 
+  it("does not report iterating when the summary settled despite a stuck stream flag", () => {
+    // A backgrounded turn can miss its `turn_ended`, leaving `isStreaming`
+    // true. The authoritative execution summary has settled to idle, so the
+    // session must not read as a running/iterating turn.
+    const slot = {
+      status: "idle" as const,
+      executionSummary: {
+        phase: "idle" as const,
+        hasLiveHandle: false,
+        pendingInteractions: [],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("idle");
+    expect(resolveSessionViewState(slot)).toBe("idle");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("idle");
+    expect(isSessionSlotBusy(slot)).toBe(false);
+  });
+
+  it("treats a settled awaiting-interaction turn as not iterating", () => {
+    // Awaiting input with no actionable pending interaction (queued/awaiting)
+    // must not show as iterating even if the stream flag is still set.
+    const slot = {
+      status: "running" as const,
+      executionSummary: {
+        phase: "awaiting_interaction" as const,
+        hasLiveHandle: true,
+        pendingInteractions: [],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("idle");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("idle");
+  });
+
+  it("keeps iterating while the summary reports a running turn", () => {
+    const slot = {
+      status: "running" as const,
+      executionSummary: {
+        phase: "running" as const,
+        hasLiveHandle: true,
+        pendingInteractions: [],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("running");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("iterating");
+  });
+
   it("skips the initial restore stream only for cold idle sessions", () => {
     expect(shouldSkipColdIdleSessionStream({
       status: "idle",

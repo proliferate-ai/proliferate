@@ -34,6 +34,8 @@ import {
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,
 } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { useActiveSessionConfigState } from "@/hooks/chat/derived/use-active-session-config-state";
+import { isReasoningControlActive } from "@/lib/domain/chat/session-controls/session-controls";
 import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "./TranscriptContexts";
 import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "./TranscriptTurnRow";
@@ -86,6 +88,8 @@ export function MessageList({
   }), [retryPrompt, dismissPrompt]);
   const { openFile, openGitReviewPane } = useWorkspaceFileActions();
   const { openArtifact } = useOpenCoworkArtifact();
+  const { normalizedControls } = useActiveSessionConfigState();
+  const reasoningActive = isReasoningControlActive(normalizedControls?.reasoning);
   const transcriptViewState = useMemo<ChatTranscriptState>(() => ({
     activeSessionId,
     selectedWorkspaceId,
@@ -93,6 +97,7 @@ export function MessageList({
     outboxEntries,
     transcript,
     sessionViewState,
+    reasoningActive,
     history: {
       hasOlderHistory,
       isLoadingOlderHistory,
@@ -111,6 +116,7 @@ export function MessageList({
     onLoadOlderHistory,
     optimisticPrompt,
     outboxEntries,
+    reasoningActive,
     selectedWorkspaceId,
     sessionViewState,
     transcript,
