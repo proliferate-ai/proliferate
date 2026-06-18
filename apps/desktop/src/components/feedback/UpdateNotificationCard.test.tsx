@@ -60,7 +60,7 @@ describe("UpdateNotificationCard", () => {
     expect(screen.queryByLabelText("Desktop update is available")).toBeNull();
   });
 
-  it("renders downloading state without progress or duplicate update actions", () => {
+  it("renders downloading with the same structure and a loading action", () => {
     updaterMocks.phase = "downloading";
     updaterMocks.downloadProgress = 68;
 
@@ -69,10 +69,13 @@ describe("UpdateNotificationCard", () => {
     expect(screen.getByLabelText("Desktop update is downloading")).toBeTruthy();
     expect(screen.getByText("Downloading update")).toBeTruthy();
     expect(screen.getByText("Preparing the update in the background.")).toBeTruthy();
+    // the toast carries no raw percentage or progress bar
     expect(screen.queryByText("68%")).toBeNull();
     expect(screen.queryByRole("progressbar")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Dismiss update notification" })).toBeNull();
+    // same structure as the other phases: changelog link + a (disabled) loading action + dismiss
+    expect(screen.getByRole("button", { name: "See changes" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Downloading/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Dismiss update notification" })).toBeTruthy();
   });
 
   it("shows a ready reminder when the restart prompt is closed", () => {

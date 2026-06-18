@@ -21,6 +21,7 @@ import {
   DEV_UPDATER_MOCK_EVENT,
   isDevUpdaterMockSupported,
   readDevUpdaterMock,
+  seedDevUpdaterMockFromEnv,
   startDevUpdaterMockDownload,
   updateDevUpdaterMock,
   writeDevUpdaterMock,
@@ -28,7 +29,7 @@ import {
 } from "./updater-dev-mock";
 
 const INITIAL_CHECK_DELAY_MS = 10_000;
-const CHECK_INTERVAL_MS = 21_600_000; // 6 hours
+const CHECK_INTERVAL_MS = 1_800_000; // 30 minutes
 const UPDATER_METADATA_KEY = "updater_metadata";
 const LEGACY_LAST_CHECKED_KEY = "updater_lastCheckedAt";
 
@@ -184,6 +185,7 @@ export function useUpdater() {
   const storeErrorMessage = useUpdaterStore((s) => s.errorMessage);
   const storeDownloadProgress = useUpdaterStore((s) => s.downloadProgress);
   const storeRestartPromptOpen = useUpdaterStore((s) => s.restartPromptOpen);
+  const storeRestartWhenIdle = useUpdaterStore((s) => s.restartWhenIdle);
   const isPackaged = isTauriPackaged();
   const [devMock, setDevMock] = useState<DevUpdaterMockState | null>(() => readDevUpdaterMock());
 
@@ -193,12 +195,15 @@ export function useUpdater() {
   const errorMessage = devMock?.errorMessage ?? storeErrorMessage;
   const downloadProgress = devMock?.downloadProgress ?? storeDownloadProgress;
   const restartPromptOpen = devMock?.restartPromptOpen ?? storeRestartPromptOpen;
+  const restartWhenIdle = devMock ? false : storeRestartWhenIdle;
   const updatesSupported = isPackaged || devMock !== null;
 
   useEffect(() => {
     if (!isDevUpdaterMockSupported()) {
       return;
     }
+
+    seedDevUpdaterMockFromEnv();
 
     const syncDevMock = () => {
       setDevMock(readDevUpdaterMock());
@@ -261,6 +266,18 @@ export function useUpdater() {
     useUpdaterStore.getState().setRestartPromptOpen(false);
   }, [devMock]);
 
+  const scheduleRestartWhenIdle = useCallback(() => {
+    if (devMock) {
+      updateDevUpdaterMock((current) =>
+        current ? { ...current, restartPromptOpen: false } : current,
+      );
+      return;
+    }
+    const store = useUpdaterStore.getState();
+    store.setRestartWhenIdle(true);
+    store.setRestartPromptOpen(false);
+  }, [devMock]);
+
   const restartNow = useCallback(async () => {
     if (devMock) {
       clearDevUpdaterMockDownload();
@@ -300,11 +317,13 @@ export function useUpdater() {
     errorMessage,
     downloadProgress,
     restartPromptOpen,
+    restartWhenIdle,
     updatesSupported,
     checkNow,
     downloadUpdate,
     openRestartPrompt,
     closeRestartPrompt,
+    scheduleRestartWhenIdle,
     restartNow,
   };
 }

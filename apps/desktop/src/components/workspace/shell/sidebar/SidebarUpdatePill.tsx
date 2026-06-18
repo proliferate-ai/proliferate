@@ -1,9 +1,11 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, Spinner } from "@proliferate/ui/icons";
+import { Spinner } from "@proliferate/ui/icons";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SidebarUpdatePillProps {
   phase: UpdaterPhase;
+  // Accepted for compatibility with the shells that render the pill; the pill itself no
+  // longer surfaces a percentage (the spinner conveys progress).
   downloadProgress?: number | null;
   onDownloadUpdate: () => void | Promise<void>;
   onOpenRestartPrompt: () => void;
@@ -11,76 +13,47 @@ interface SidebarUpdatePillProps {
 
 export function SidebarUpdatePill({
   phase,
-  downloadProgress = null,
   onDownloadUpdate,
   onOpenRestartPrompt,
 }: SidebarUpdatePillProps) {
-  const show = phase === "available" || phase === "downloading" || phase === "ready";
-  if (!show) {
+  if (phase !== "available" && phase !== "downloading" && phase !== "ready") {
     return null;
   }
 
+  const isDownloading = phase === "downloading";
   const label =
-    phase === "downloading"
-      ? typeof downloadProgress === "number"
-        ? `Downloading ${downloadProgress}%`
-        : "Downloading"
-      : phase === "ready"
-        ? "Restart"
-        : "Update available";
-
-  const compactLabel =
-    phase === "downloading"
-      ? typeof downloadProgress === "number"
-        ? `${downloadProgress}%`
-        : ""
-      : phase === "ready"
-        ? "Restart"
+    phase === "available"
+      ? "Download Update"
+      : isDownloading
+        ? "Downloading update"
         : "Update";
-
-  const indicator =
-    phase === "downloading"
-      ? <Spinner className="size-3 text-sidebar-muted-foreground" />
-      : phase === "ready"
-        ? <Check className="size-3 text-info-foreground" />
-        : null;
-
-  const actionClassName =
-    "border-transparent bg-info text-info-foreground hover:bg-info/90 active:bg-info/80";
-  const pillClassName =
-    phase === "ready"
-      ? actionClassName
-      : phase === "downloading"
-        ? "cursor-default border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-muted-foreground"
-        : actionClassName;
 
   function handleClick() {
     if (phase === "available") {
       void onDownloadUpdate();
       return;
     }
-
     if (phase === "ready") {
       onOpenRestartPrompt();
     }
   }
 
+  const toneClass = isDownloading
+    ? "cursor-default bg-muted text-muted-foreground"
+    : "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80";
+
   return (
     <Button
-      variant="ghost"
-      size="md"
+      variant="unstyled"
+      size="unstyled"
       aria-label={label}
       title={label}
       onClick={handleClick}
-      disabled={phase === "downloading"}
-      className={`h-5 min-w-5 max-w-24 justify-center gap-1 overflow-hidden rounded-full border px-2 py-0 text-[10px] font-semibold leading-none shadow-none transition-[background-color,border-color,color] duration-150 disabled:pointer-events-auto disabled:opacity-100 ${pillClassName}`}
+      disabled={isDownloading}
+      className={`flex h-6 max-w-44 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium leading-none transition-colors disabled:opacity-100 ${toneClass}`}
     >
-      {indicator && (
-        <span className="flex size-3 shrink-0 items-center justify-center">
-          {indicator}
-        </span>
-      )}
-      {compactLabel && <span className="min-w-0 truncate">{compactLabel}</span>}
+      {isDownloading && <Spinner className="size-3 shrink-0" />}
+      <span className="truncate">{label}</span>
     </Button>
   );
 }
