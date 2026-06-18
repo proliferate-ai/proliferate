@@ -562,6 +562,53 @@ describe("transcript reducer", () => {
     expect(item.contentParts.filter((part) => part.type === "file_change")).toHaveLength(1);
   });
 
+  it("settles in-progress tool calls to failed when a turn is cancelled", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-1",
+          event: {
+            type: "item_started",
+            item: {
+              kind: "tool_invocation",
+              status: "in_progress",
+              sourceAgentKind: "claude",
+              toolCallId: "tool-1",
+              title: "Run command",
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-1",
+                  title: "Run command",
+                  toolKind: "bash",
+                },
+              ],
+            },
+          },
+        },
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-04-04T00:00:03Z",
+          turnId: "turn-1",
+          event: { type: "turn_ended", stopReason: "cancelled" },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-1"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.status).toBe("failed");
+    expect(item.completedAt).toBe("2026-04-04T00:00:03Z");
+    expect(state.turnsById["turn-1"]?.stopReason).toBe("cancelled");
+  });
+
   it("preserves file change truncation metadata through merge deltas", () => {
     const state = reduceEvents(
       [

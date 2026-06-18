@@ -6,7 +6,6 @@ import {
 } from "@/lib/access/anyharness/session-runtime";
 import {
   getSessionRecord,
-  patchSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -33,7 +32,10 @@ export function useSessionCancelActions() {
     try {
       const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
       await cancelSessionMutation.mutateAsync({ workspaceId, sessionId: materializedSessionId });
-      patchSessionRecord(sessionId, { status: "idle" });
+      // Don't optimistically flip to "idle": that races the authoritative
+      // turn_ended event (which carries the "cancelled" stop reason and closes
+      // the streaming/tool items). Let the reducer-driven state settle so the
+      // "You stopped after Ns" affordance and tool teardown stay consistent.
     } catch {
       // Cancel failed.
     }
