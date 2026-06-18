@@ -456,7 +456,7 @@ class TestSupportApi:
         )
 
         assert changed_upload_targets.status_code == 400
-        assert changed_upload_targets.json()["detail"]["code"] == "support_report_upload_invalid"
+        assert changed_upload_targets.json()["detail"]["code"] == "support_report_upload_conflict"
 
     @pytest.mark.asyncio
     async def test_support_report_upload_returns_503_when_storage_unconfigured(

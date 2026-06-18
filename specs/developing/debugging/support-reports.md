@@ -22,8 +22,8 @@ The normal lifecycle is:
 3. Server creates or returns a `support_report` row and writes `request.json`
    to S3.
 4. Client calls `POST /v1/support/reports/{reportId}/upload-targets`.
-5. Server stores the immutable upload manifest and returns presigned S3 `PUT`
-   URLs.
+5. Server stores/refreshes the upload manifest (object set fixed; content
+   metadata refreshed on re-issue) and returns presigned S3 `PUT` URLs.
 6. Client uploads `diagnostics.json` and attachments directly to S3.
 7. Client calls `POST /v1/support/reports/{reportId}/complete`.
 8. Server verifies object keys, sizes, and checksums, writes `complete.json`,
@@ -582,12 +582,16 @@ Row exists, `request_object_written_at` is null:
 - Compare `object_manifest_json` to S3 `list-objects-v2`.
 - Check CORS/network failures, upload URL expiration, object size caps, and
   Desktop Sentry.
-- A retry should refresh upload targets only when metadata matches the original
-  manifest.
+- A retry refreshes upload targets for the same object set; object keys and
+  upload intent (diagnostics flag + attachment count) must match, but re-captured
+  diagnostics content (size/sha256) may differ and is accepted. A mismatched
+  object set returns `support_report_upload_conflict` (terminal, non-retryable).
 
 `/complete` returns an upload-invalid error:
 
-- The completion payload did not match the immutable manifest.
+- The completion payload did not match the stored manifest. Note the manifest
+  is refreshed by the latest upload-targets re-issue, so a completion built from
+  an earlier re-issue can fail here on size/checksum.
 - Compare completed keys, sizes, and SHA-256 values to `object_manifest_json`.
 - Common causes are duplicate object keys, unknown keys, missing expected
   objects, size mismatches, checksum mismatches, or a key outside the report
@@ -677,7 +681,17 @@ Support reports are designed to be safely retried.
 
 - Report creation is idempotent by authenticated `owner_user_id` and
   `client_job_id`.
-- Upload targets are immutable after the first manifest is stored.
+- Upload targets can be re-issued while the report is uploadable: the object set
+  (keys + intent) is fixed, but per-object content metadata is refreshed so
+  re-captured diagnostics complete.
+- Terminal upload errors (non-retryable; the desktop stops retrying and tells the
+  user to start a new report): `support_report_upload_conflict` (object set or
+  intent changed), and the generic `support_report_upload_invalid` (payload
+  rejected). `support_report_already_completed` is terminal-but-success — the
+  report already landed on a prior attempt, so the desktop clears the queued job
+  silently. A report stuck on `created`/`uploading` against a `failed`/
+  `abandoned` server row returns `support_report_upload_conflict`, not
+  `already_completed`, so an undelivered report is never silently discarded.
 - Completion verifies exactly the objects in the stored manifest.
 - GitHub and Linear issue creation are idempotent by the hidden marker.
 - `tracker.json` lets S3-only audits see whether tracker reconciliation

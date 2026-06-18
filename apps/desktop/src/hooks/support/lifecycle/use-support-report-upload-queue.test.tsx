@@ -192,6 +192,137 @@ describe("useSupportReportUploadQueue", () => {
     });
   });
 
+  it("drops a transient job that has spent its attempt budget", async () => {
+    cloudSupportMocks.createSupportReport.mockRejectedValueOnce(
+      new Error("Upload failed with 503."),
+    );
+    // Fresh createdAt so the AGE backstop can't fire — this isolates the
+    // transient attempt cap (attemptCount 7 -> 8 on this failed attempt).
+    window.localStorage.setItem(
+      "proliferate.supportReportJobs.v1",
+      JSON.stringify([
+        {
+          job: makeSupportReportJob("job-capped", recentIso()),
+          attemptCount: 7,
+          nextAttemptAt: null,
+        },
+      ]),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+    });
+    expect(toastStoreMocks.show).toHaveBeenCalledWith(
+      "Couldn't send your report after several tries. Please try again from Help.",
+    );
+  });
+
+  it("keeps a fresh blocked-on-sign-in report queued past the attempt budget", async () => {
+    cloudSupportMocks.createSupportReport.mockRejectedValueOnce(
+      Object.assign(new Error("You must sign in."), { status: 401, code: "unauthorized" }),
+    );
+    // Fresh + far over the attempt budget: proves auth_required is exempt from
+    // the attempt cap (only age would drop it).
+    window.localStorage.setItem(
+      "proliferate.supportReportJobs.v1",
+      JSON.stringify([
+        {
+          job: makeSupportReportJob("job-blocked", recentIso()),
+          attemptCount: 20,
+          nextAttemptAt: null,
+        },
+      ]),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(diagnosticsMocks.logRendererEvent).toHaveBeenCalledWith({
+        source: "support_report_upload",
+        message: "failed.auth_required",
+      });
+    });
+    // Classified as auth_required AND still queued — the cap did not drop it.
+    const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+    expect(JSON.parse(raw ?? "[]")).toHaveLength(1);
+  });
+
+  it("drops a blocked report once it ages past the backstop", async () => {
+    cloudSupportMocks.createSupportReport.mockRejectedValueOnce(
+      Object.assign(new Error("You must sign in."), { status: 401, code: "unauthorized" }),
+    );
+    // Stale createdAt (the fixture default is 2026-05-31, > 48h ago): even a
+    // blocked state is dropped by the age backstop so nothing retries forever.
+    window.localStorage.setItem(
+      "proliferate.supportReportJobs.v1",
+      JSON.stringify([
+        { job: makeSupportReportJob("job-stale-auth"), attemptCount: 1, nextAttemptAt: null },
+      ]),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+    });
+    expect(toastStoreMocks.show).toHaveBeenCalledWith(
+      "Couldn't send your report after several tries. Please try again from Help.",
+    );
+  });
+
+  it("drops the job and warns the user when upload-targets reports a conflict", async () => {
+    cloudSupportMocks.createSupportReportUploadTargets.mockRejectedValueOnce(
+      Object.assign(
+        new Error("Support report upload targets already exist for different objects."),
+        { code: "support_report_upload_conflict" },
+      ),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(activeListeners()).toHaveLength(1);
+    });
+    activeListeners()[0]?.handler(makeSupportReportJob("job-conflict", recentIso()));
+
+    await waitFor(() => {
+      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+    });
+    // Terminal conflict shows the actionable copy, NOT the "already sent" success.
+    expect(toastStoreMocks.show).toHaveBeenCalledWith(
+      "This report can no longer be sent. Start a new report from Help if you still need support.",
+    );
+  });
+
+  it("clears the job quietly when upload-targets reports the report already completed", async () => {
+    cloudSupportMocks.createSupportReportUploadTargets.mockRejectedValueOnce(
+      Object.assign(new Error("Support report upload is already completed."), {
+        code: "support_report_already_completed",
+      }),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(activeListeners()).toHaveLength(1);
+    });
+    activeListeners()[0]?.handler(makeSupportReportJob("job-already-done"));
+
+    await waitFor(() => {
+      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+    });
+    expect(toastStoreMocks.show).toHaveBeenCalledWith(
+      "Report already sent. Support has the details.",
+      "info",
+    );
+  });
+
   it("cleans up a queued job when create returns an already completed report", async () => {
     cloudSupportMocks.createSupportReport.mockResolvedValueOnce({
       reportId: "report-1",
@@ -237,10 +368,17 @@ function sendingToastCalls() {
   );
 }
 
-function makeSupportReportJob(jobId: string): SupportReportJob {
+function recentIso(): string {
+  return new Date(Date.now() - 60_000).toISOString();
+}
+
+function makeSupportReportJob(
+  jobId: string,
+  createdAt = "2026-05-31T12:00:00.000Z",
+): SupportReportJob {
   return {
     jobId,
-    createdAt: "2026-05-31T12:00:00.000Z",
+    createdAt,
     message: "Help",
     scope: {
       kind: "app_only",

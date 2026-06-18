@@ -28,6 +28,7 @@ import type {
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
+  supportReportRetriesExhausted,
 } from "@/lib/domain/support/report-upload-failure";
 import {
   buildSupportReportPackage,
@@ -158,10 +159,40 @@ async function drainSupportReportQueue(
         source: "support_report_upload",
         message: `failed.${failure.kind}`,
       });
-      if (!failure.retryable) {
+
+      // Already completed on a prior attempt — this is success, not failure.
+      // Clean up the queued job quietly instead of nagging.
+      if (failure.kind === "already_completed") {
         removePersistedJob(entry.job.jobId);
         await deleteSupportReportJobAttachments(entry.job);
-        showToast(failure.toastMessage);
+        showToast(failure.toastMessage, "info");
+        continue;
+      }
+
+      // Drop only when retries are exhausted: a transient failure that spent its
+      // attempt budget, or any retryable failure (incl. blocked-on-user/config
+      // states) that has aged past the backstop. Blocked states are not
+      // attempt-capped, so they stay queued for the user instead of being lost.
+      const exhausted = supportReportRetriesExhausted({
+        kind: failure.kind,
+        attemptCount,
+        createdAt: entry.job.createdAt,
+        nowMs: Date.now(),
+      });
+      if (!failure.retryable || exhausted) {
+        removePersistedJob(entry.job.jobId);
+        await deleteSupportReportJobAttachments(entry.job);
+        if (exhausted) {
+          void logRendererEvent({
+            source: "support_report_upload",
+            message: "dropped.exhausted",
+          });
+          showToast(
+            "Couldn't send your report after several tries. Please try again from Help.",
+          );
+        } else {
+          showToast(failure.toastMessage);
+        }
         continue;
       }
 

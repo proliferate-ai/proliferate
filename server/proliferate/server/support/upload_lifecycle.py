@@ -8,6 +8,7 @@ from proliferate.db.store import support_reports
 from proliferate.server.support.domain.report_records import safe_file_name
 from proliferate.server.support.errors import (
     SupportReportStorageUnavailable,
+    SupportReportUploadConflict,
     SupportReportUploadInvalid,
 )
 from proliferate.server.support.models import (
@@ -71,11 +72,11 @@ def validate_uploads_match_expected_intent(
     expected_diagnostics = expected.get("diagnostics") is True
     expected_attachment_count = int_or_zero(expected.get("attachmentCount"))
     if (body.diagnostics is not None) != expected_diagnostics:
-        raise SupportReportUploadInvalid(
+        raise SupportReportUploadConflict(
             "Support report upload targets changed diagnostics intent."
         )
     if len(body.attachments) != expected_attachment_count:
-        raise SupportReportUploadInvalid(
+        raise SupportReportUploadConflict(
             "Support report upload targets changed attachment intent."
         )
 
@@ -97,6 +98,11 @@ def expected_completed_object_entry(
     size_bytes: int,
     sha256: str,
 ) -> ExpectedCompletedObject:
+    # Both `size_bytes`/`sha256` here and the manifest entry are client-supplied,
+    # so this is a consistency check (the completion call agrees with the
+    # upload-targets call), not an integrity check. Only the object *size* is
+    # independently verified against S3 in `verify_completed_support_object`;
+    # sha256 is not head-verified, so it is not a content-integrity guarantee.
     expected = expected_entries.get(object_key)
     expected_size = expected.get("sizeBytes") if expected else None
     expected_sha256 = expected.get("sha256") if expected else None
