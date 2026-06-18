@@ -75,6 +75,7 @@ export function VirtualizedTranscriptRowList({
     pinnedRef,
     onViewportScroll,
     scrollToBottom,
+    glueToBottom,
     handleScrollToBottomClick,
     notifyProgrammaticScroll,
     setPinned,
@@ -289,9 +290,15 @@ export function VirtualizedTranscriptRowList({
     if (!pinnedRef.current) {
       return;
     }
+    // Synchronous snap (pre-paint, no flash) + a glue loop that re-snaps until
+    // the measured height settles. A freshly appended/streamed row enters at its
+    // estimated height and corrects a frame later; the one-shot snap alone lands
+    // against the estimate and leaves a visible jump as the measurement lands.
     scrollToBottom();
+    glueToBottom();
   }, [
     bottomInsetPx,
+    glueToBottom,
     isSessionBusy,
     pendingPromptText,
     pinnedRef,
