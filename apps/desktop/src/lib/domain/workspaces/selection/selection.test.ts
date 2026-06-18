@@ -53,6 +53,22 @@ describe("choosePreferredWorkspaceSession", () => {
 
     expect(choosePreferredWorkspaceSession(sessions, null)?.id).toBe("session-2");
   });
+
+  it("never returns null for a non-empty list (bootstrap fallback guarantee)", () => {
+    // The bootstrap final-guarantee fallback calls this with a null last-viewed
+    // id; it must always resolve to a session so a workspace with >=1 session
+    // never strands the user on the empty hero (#14).
+    const sessions = [
+      { id: "no-timestamps" },
+      { id: "setup-only", updatedAt: "2026-04-07T20:00:00.000Z" },
+    ];
+
+    expect(choosePreferredWorkspaceSession(sessions, null)).not.toBeNull();
+  });
+
+  it("returns null only for an empty list", () => {
+    expect(choosePreferredWorkspaceSession([], null)).toBeNull();
+  });
 });
 
 describe("getLatestWorkspaceInteractionTimestamp", () => {
