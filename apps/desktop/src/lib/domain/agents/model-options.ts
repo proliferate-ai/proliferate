@@ -209,6 +209,42 @@ export function withUpdatedDefaultModelIdByAgentKind(
   };
 }
 
+// Drop a persisted default model for one agent kind (referentially stable when
+// there is nothing to clear). Used to self-heal a stored default that is no
+// longer valid in the user's active auth context — e.g. a bedrock
+// `us.anthropic.*` id left over after switching to oauth — so the "default no
+// longer available" warning stops re-firing on every new thread.
+export function withClearedDefaultModelIdByAgentKind(
+  defaultsByAgentKind: Record<string, string>,
+  agentKind: string,
+): Record<string, string> {
+  const trimmedAgentKind = agentKind.trim();
+  if (!trimmedAgentKind || !(trimmedAgentKind in defaultsByAgentKind)) {
+    return defaultsByAgentKind;
+  }
+  const { [trimmedAgentKind]: _removed, ...rest } = defaultsByAgentKind;
+  return rest;
+}
+
+// True when a stored default model id is no longer offered by the runtime's
+// context-gated launch options for an agent, so it should be self-healed
+// (cleared). `runtimeModels` must be the agent's launch models for the active
+// auth context, or null/undefined when the runtime does not (yet) list the
+// agent — in which case we never report stale, to avoid clearing a still-valid
+// default while options are loading or the agent is unclassified. A stored id
+// that matches a model's alias is considered valid (not stale).
+export function isStoredDefaultModelStale(
+  storedModelId: string | null | undefined,
+  runtimeModels: ReadonlyArray<{ id: string; aliases?: readonly string[] | null }> | null | undefined,
+): boolean {
+  if (!storedModelId || !runtimeModels) {
+    return false;
+  }
+  return !runtimeModels.some(
+    (model) => model.id === storedModelId || (model.aliases ?? []).includes(storedModelId),
+  );
+}
+
 export function resolveAgentModelInfo(
   groups: AgentModelGroup[],
   modelRegistries: AgentModelRegistry[],

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAgentModelGroups,
+  isStoredDefaultModelStale,
   resolveEffectiveAgentModelSelection,
+  withClearedDefaultModelIdByAgentKind,
   type AgentCatalogSummary,
   type AgentModelRegistry,
   type AgentModelRegistryModel,
@@ -234,5 +236,49 @@ describe("resolveEffectiveAgentModelSelection", () => {
       defaultAgentKind: "missing",
       defaultModelIdByAgentKind: {},
     })).toEqual({ kind: "codex", modelId: "first" });
+  });
+});
+
+describe("withClearedDefaultModelIdByAgentKind", () => {
+  it("removes the stored default for the given agent kind", () => {
+    expect(
+      withClearedDefaultModelIdByAgentKind(
+        { claude: "us.anthropic.claude-sonnet-4-6", codex: "gpt-5.5" },
+        "claude",
+      ),
+    ).toEqual({ codex: "gpt-5.5" });
+  });
+
+  it("returns the same reference when there is nothing to clear", () => {
+    const defaults = { codex: "gpt-5.5" };
+    expect(withClearedDefaultModelIdByAgentKind(defaults, "claude")).toBe(defaults);
+    expect(withClearedDefaultModelIdByAgentKind(defaults, "  ")).toBe(defaults);
+  });
+});
+
+describe("isStoredDefaultModelStale", () => {
+  const models = [
+    { id: "sonnet", aliases: ["claude-sonnet-4-6"] },
+    { id: "opus" },
+  ];
+
+  it("is stale when the stored id is absent from the gated runtime models", () => {
+    // e.g. a bedrock id left over after switching to oauth
+    expect(isStoredDefaultModelStale("us.anthropic.claude-sonnet-4-6", models)).toBe(true);
+  });
+
+  it("is not stale when the stored id matches a model id", () => {
+    expect(isStoredDefaultModelStale("opus", models)).toBe(false);
+  });
+
+  it("is not stale when the stored id matches a model alias", () => {
+    expect(isStoredDefaultModelStale("claude-sonnet-4-6", models)).toBe(false);
+  });
+
+  it("never reports stale without a stored id or runtime models (loading/unclassified guard)", () => {
+    expect(isStoredDefaultModelStale(undefined, models)).toBe(false);
+    expect(isStoredDefaultModelStale("", models)).toBe(false);
+    expect(isStoredDefaultModelStale("opus", null)).toBe(false);
+    expect(isStoredDefaultModelStale("opus", undefined)).toBe(false);
   });
 });
