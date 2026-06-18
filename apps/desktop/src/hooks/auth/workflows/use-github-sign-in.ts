@@ -16,26 +16,24 @@ export interface UseGitHubSignInResult {
 }
 
 // Owns GitHub sign-in form state and submit callback. Does not own auth availability access.
-// `enabled` can gate the availability poll for on-demand callers. The auth shell leaves it
-// enabled during the loading phase too, so the availability answer is warm before the sign-in
-// button morphs in — otherwise the first-load pending window flashes a "checking…" state
-// during the loading -> auth transition.
-export function useGitHubSignIn(options?: { enabled?: boolean }): UseGitHubSignInResult {
+// The availability probe runs whenever this hook is mounted — the persistent auth shell mounts
+// it during the loading phase too, so the answer is warm before the sign-in button morphs in,
+// otherwise the first-load pending window flashes a "checking…" state during the loading -> auth
+// transition. The query self-guards on control-plane reachability.
+export function useGitHubSignIn(): UseGitHubSignInResult {
   const { signInWithGitHub } = useAuthActions();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,
     isPending: githubDesktopAuthAvailabilityPending,
-  } = useGitHubDesktopAuthAvailability({ enabled: options?.enabled ?? true });
+  } = useGitHubDesktopAuthAvailability();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const signInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
   const signInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
-  const signInUnavailableDescription = signInChecking
-    ? CAPABILITY_COPY.githubAuthCheckingDescription
-    : cloudEnabled
-      ? CAPABILITY_COPY.githubAuthUnavailableDescription
+  const signInUnavailableDescription = cloudEnabled
+    ? CAPABILITY_COPY.githubAuthUnavailableDescription
     : CAPABILITY_COPY.githubLocalDescription;
 
   const signIn = useCallback(async (options?: GitHubDesktopSignInOptions) => {
