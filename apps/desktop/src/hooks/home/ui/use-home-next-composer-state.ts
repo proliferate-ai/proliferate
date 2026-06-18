@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { flushSync } from "react-dom";
 import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
 import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
 import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
@@ -9,13 +8,6 @@ import type {
   HomeNextModelSelection,
   ModelAvailabilityState,
 } from "@/lib/domain/home/home-next-launch";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-
-function waitForNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    scheduleAfterNextPaint(resolve);
-  });
-}
 
 interface UseHomeNextComposerStateArgs {
   targetDisabledReason: string | null;
@@ -38,10 +30,6 @@ export function useHomeNextComposerState({
 }: UseHomeNextComposerStateArgs) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState("");
-  const [submittedPreview, setSubmittedPreview] = useState<{
-    id: string;
-    text: string;
-  } | null>(null);
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const { isLaunching, launch } = useHomeNextLaunch();
@@ -62,7 +50,6 @@ export function useHomeNextComposerState({
     && canLaunchTarget
     && !!modelSelection
     && !!launchTarget
-    && submittedPreview === null
     && !isLaunching;
 
   useLayoutEffect(() => {
@@ -89,20 +76,11 @@ export function useHomeNextComposerState({
     if (!canSubmit || !modelSelection || !launchTarget) return;
 
     const submittedDraft = draft;
-    const submittedText = submittedDraft.trim();
-    const shouldShowHomeSubmittedPreview = launchTarget.kind !== "cowork";
-    flushSync(() => {
-      if (shouldShowHomeSubmittedPreview) {
-        setSubmittedPreview({
-          id: crypto.randomUUID(),
-          text: submittedText,
-        });
-      }
-      setDraft("");
-    });
-    if (shouldShowHomeSubmittedPreview) {
-      await waitForNextPaint();
-    }
+    // Navigate-first: launch() enters the pending-workspace shell and navigates
+    // before any optimistic paint, so the user's message renders on the
+    // destination session shell rather than flashing on home. We only clear the
+    // draft here; the projected pending session owns the optimistic preview.
+    setDraft("");
     const succeeded = await launch({
       text: submittedDraft,
       modelSelection,
@@ -111,7 +89,6 @@ export function useHomeNextComposerState({
       target: launchTarget,
     });
     if (!succeeded) {
-      setSubmittedPreview(null);
       setDraft(submittedDraft);
     }
   }, [
@@ -126,7 +103,6 @@ export function useHomeNextComposerState({
 
   const cancel = useCallback(() => {
     if (!isLaunching) {
-      setSubmittedPreview(null);
       setDraft("");
     }
   }, [isLaunching]);
@@ -159,7 +135,6 @@ export function useHomeNextComposerState({
     textareaRef,
     draft,
     setDraft,
-    submittedPreview,
     submitDisabledReason,
     canSubmit,
     isLaunching,

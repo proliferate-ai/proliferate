@@ -11,7 +11,6 @@ import { ChatComposerActions } from "@/components/workspace/chat/input/ChatCompo
 import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
-import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "@/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
@@ -213,20 +212,6 @@ export function HomeNextScreen() {
               onConfigureCloud={configureCloud}
             />
           </div>
-
-          {composer.submittedPreview ? (
-            <div
-              key={composer.submittedPreview.id}
-              className="mt-5"
-              data-home-submit-preview
-            >
-              <UserMessage
-                sessionId={null}
-                content={composer.submittedPreview.text}
-                contentParts={[{ type: "text", text: composer.submittedPreview.text }]}
-              />
-            </div>
-          ) : null}
 
           {modelAvailabilityNotice ? (
             <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
