@@ -12,18 +12,15 @@ import { GitHub } from "@proliferate/ui/icons";
  * `amazon.com` icon if the subdomain has none), then no icon at all. All
  * requests go to the linked site itself, so no host list leaks to a third party.
  *
- * Styling matches the product's normal links (full `text-link-foreground` with
- * a thin underline that darkens on hover), plus an inline provider icon sized to
- * one line-height. The underline is scoped to the label span so it doesn't cut
- * through the icon. Non-URL hrefs (mailto:, #anchor, relative paths) fall back
- * to a plain underlined link.
+ * Styling matches the desktop file-path mention (see FileReferenceBadge): a
+ * muted blue at rest with no underline, brightening to the foreground color and
+ * a dashed underline on hover, plus an inline provider icon sized to one
+ * line-height. Non-URL hrefs (mailto:, #anchor, relative paths) fall back to a
+ * plain underlined link.
  */
 
 const INLINE_MENTION_CLASS =
-  "group/inline-mention inline whitespace-normal break-words align-baseline font-medium leading-[inherit] text-link-foreground transition-colors focus-visible:outline-none focus-visible:underline";
-
-const MENTION_LABEL_CLASS =
-  "min-w-0 break-words underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors group-hover/inline-mention:decoration-opacity-100";
+  "group/inline-mention inline whitespace-normal break-words align-baseline font-medium leading-[inherit] text-[color:color-mix(in_srgb,var(--color-link-foreground)_80%,var(--color-foreground)_20%)] no-underline transition-colors hover:text-foreground hover:underline hover:decoration-current hover:decoration-dashed hover:decoration-[0.5px] hover:underline-offset-2 focus-visible:outline-none focus-visible:underline";
 
 const PLAIN_LINK_CLASS =
   "text-link-foreground underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors hover:decoration-opacity-100";
@@ -58,7 +55,7 @@ export function ProviderLinkMention({
       className={INLINE_MENTION_CLASS}
     >
       <LinkIcon host={host} />
-      <span className={MENTION_LABEL_CLASS}>{children}</span>
+      <span className="min-w-0 break-words">{children}</span>
     </a>
   );
 }
