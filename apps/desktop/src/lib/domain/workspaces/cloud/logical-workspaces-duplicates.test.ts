@@ -81,7 +81,7 @@ function makeMobilityWorkspace(args: {
 }
 
 describe("logical workspace duplicate local records", () => {
-  it("splits duplicate local workspaces while merging cloud and mobility only with canonical", () => {
+  it("gives every member of a multi-local bucket a distinct slot id and keeps cloud/mobility separate", () => {
     const repoRoot = makeRepoRoot();
     const olderLocal = makeWorkspace({
       id: "local-older",
@@ -113,7 +113,8 @@ describe("logical workspace duplicate local records", () => {
       "proliferate",
       "main",
     );
-    const slotId = buildLocalSlotLogicalWorkspaceId(newerLocal.id);
+    const newerSlotId = buildLocalSlotLogicalWorkspaceId(newerLocal.id);
+    const olderSlotId = buildLocalSlotLogicalWorkspaceId(olderLocal.id);
 
     const logicalWorkspaces = buildLogicalWorkspaces({
       localWorkspaces: [newerLocal, olderLocal],
@@ -123,19 +124,25 @@ describe("logical workspace duplicate local records", () => {
       currentSelectionId: null,
     });
 
+    // Every member of a multi-local bucket gets its own distinct `local-slot:` id
+    // (no member aliases the shared base id), so a new local workspace never
+    // inherits another's logical identity during the pending window (#11).
     const canonical = logicalWorkspaces.find((workspace) => workspace.id === canonicalId);
-    const slot = logicalWorkspaces.find((workspace) => workspace.id === slotId);
+    const newerSlot = logicalWorkspaces.find((workspace) => workspace.id === newerSlotId);
+    const olderSlot = logicalWorkspaces.find((workspace) => workspace.id === olderSlotId);
 
-    expect(logicalWorkspaces).toHaveLength(2);
-    expect(canonical?.localWorkspace?.id).toBe(olderLocal.id);
+    expect(logicalWorkspaces).toHaveLength(3);
+    expect(newerSlot?.localWorkspace?.id).toBe(newerLocal.id);
+    expect(newerSlot?.cloudWorkspace).toBeNull();
+    expect(newerSlot?.mobilityWorkspace).toBeNull();
+    expect(olderSlot?.localWorkspace?.id).toBe(olderLocal.id);
+    expect(olderSlot?.cloudWorkspace).toBeNull();
+    expect(olderSlot?.mobilityWorkspace).toBeNull();
+    // Cloud + mobility records for the same folder+branch collapse into their own
+    // canonical entry with no aliased local workspace.
+    expect(canonical?.localWorkspace).toBeNull();
     expect(canonical?.cloudWorkspace?.id).toBe(cloudWorkspace.id);
     expect(canonical?.mobilityWorkspace?.id).toBe(mobilityWorkspace.id);
-    expect(slot?.localWorkspace?.id).toBe(newerLocal.id);
-    expect(slot?.cloudWorkspace).toBeNull();
-    expect(slot?.mobilityWorkspace).toBeNull();
-    expect(logicalWorkspaceRelatedIds(canonical!)).toContain(
-      buildLocalSlotLogicalWorkspaceId(olderLocal.id),
-    );
   });
 
   it("keeps distinct local workspaces that each have their own chats", () => {

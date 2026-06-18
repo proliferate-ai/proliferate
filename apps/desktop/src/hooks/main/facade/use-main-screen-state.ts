@@ -332,7 +332,13 @@ export function useMainScreenState(): MainScreenState {
     [selectedCloudWorkspaceId, workspaceCollections?.cloudWorkspaces],
   );
 
-  const rightPanelSuppressed = Boolean(pendingWorkspaceEntry);
+  // Only suppress the right panel while entering a *home-originated* create (no
+  // prior workspace, so no panel to disturb). A workspace-originated create keeps
+  // the origin panel's durable state across the pending->materialized window, so
+  // an already-open panel never animates a close-then-open on create (#13).
+  const rightPanelSuppressed = Boolean(
+    pendingWorkspaceEntry && pendingWorkspaceEntry.originTarget.kind === "home",
+  );
   const userOpenOverrideActive = Boolean(
     rightPanelUserOpenOverride
     && rightPanelUserOpenOverride.materializedWorkspaceId === materializedWorkspaceId
