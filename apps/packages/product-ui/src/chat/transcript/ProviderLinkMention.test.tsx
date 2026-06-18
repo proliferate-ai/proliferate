@@ -4,7 +4,16 @@ import {
   ProviderLinkMention,
   isExternalHttpLink,
   linkHost,
+  rootDomain,
 } from "./ProviderLinkMention";
+
+describe("rootDomain", () => {
+  it("collapses subdomains to the last two labels", () => {
+    expect(rootDomain("console.aws.amazon.com")).toBe("amazon.com");
+    expect(rootDomain("github.com")).toBe("github.com");
+    expect(rootDomain("linear.app")).toBe("linear.app");
+  });
+});
 
 describe("isExternalHttpLink", () => {
   it("matches http(s) and www. web URLs", () => {
@@ -58,19 +67,18 @@ describe("ProviderLinkMention", () => {
     );
     expect(html).toContain("data-provider-link-host=\"github.com\"");
     expect(html).toContain("PR #737");
-    expect(html).not.toContain("favicons?domain");
+    expect(html).not.toContain("favicon.ico");
   });
 
-  it("uses the favicon service for other hosts", () => {
+  it("uses the host's own favicon for non-github hosts (no third party)", () => {
     const html = renderToStaticMarkup(
       <ProviderLinkMention href="https://console.aws.amazon.com/ecs/home">
         ECS
       </ProviderLinkMention>,
     );
     expect(html).toContain("data-provider-link-host=\"console.aws.amazon.com\"");
-    expect(html).toContain(
-      "https://www.google.com/s2/favicons?domain=console.aws.amazon.com",
-    );
+    expect(html).toContain("src=\"https://console.aws.amazon.com/favicon.ico\"");
+    expect(html).not.toContain("google.com/s2/favicons");
   });
 
   it("normalizes a scheme-less www host to https for the real href", () => {
