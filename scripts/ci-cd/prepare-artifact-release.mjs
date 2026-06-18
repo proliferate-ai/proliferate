@@ -175,6 +175,33 @@ function latestVersionForPrefix(prefix) {
   return latestVersionFromTags([...new Set([...remoteTags(prefix), ...localTags(prefix)])], prefix);
 }
 
+const RELEASE_TAG_PREFIXES = [
+  PRODUCT_TAG_PREFIX,
+  ...[...ARTIFACT_SURFACES].map((surface) => `${surface}-v`),
+];
+
+// The highest released version across the product tag AND every artifact tag.
+// The next bump must clear all of them: a manual hotfix on one surface (e.g.
+// `desktop-v0.2.13` cut without a matching `proliferate-v0.2.13`) must not let a
+// later train recompute a version that collides with that existing artifact tag
+// — which hard-fails `validateTagTargets` and blocks the whole release.
+export function latestReleasedVersionFromTags(tags) {
+  return (
+    RELEASE_TAG_PREFIXES.map((prefix) => latestVersionFromTags(tags, prefix))
+      .filter(Boolean)
+      .sort((left, right) => compareVersions(right, left))[0] || ""
+  );
+}
+
+function latestReleasedVersion() {
+  const tags = [
+    ...new Set(
+      RELEASE_TAG_PREFIXES.flatMap((prefix) => [...remoteTags(prefix), ...localTags(prefix)]),
+    ),
+  ];
+  return latestReleasedVersionFromTags(tags);
+}
+
 function readText(file) {
   return fs.readFileSync(file, "utf8").trim();
 }
@@ -360,7 +387,10 @@ export function buildArtifactPlan({
   releaseId,
   versionBump,
   dryRun,
-  latestProductTagVersion = latestVersionForPrefix(PRODUCT_TAG_PREFIX),
+  // The version floor the next bump must clear — the highest released version
+  // across the product AND all artifact tags, so a hotfix on any surface can't
+  // make a later train collide on an existing artifact tag.
+  latestProductTagVersion = latestReleasedVersion(),
 }) {
   validateVersionBumpForSurfaces({ surfaces, versionBump });
   const product = productVersionPlan({

@@ -10,6 +10,7 @@ import {
   incrementMajor,
   incrementMinor,
   incrementPatch,
+  latestReleasedVersionFromTags,
   latestVersionFromTags,
   nextVersion,
   nextPatchVersion,
@@ -47,6 +48,40 @@ test("extracts latest versions from lane tags", () => {
   assert.equal(tagVersion("desktop-v0.1.4", "desktop-v"), "0.1.4");
   assert.equal(tagVersion("runtime-v0.1.4", "desktop-v"), "");
   assert.equal(latestVersionFromTags(["runtime-v0.1.2", "runtime-v0.1.10"], "runtime-v"), "0.1.10");
+});
+
+test("latest released version clears all surface tags, not just the product tag", () => {
+  // A desktop hotfix (desktop-v0.2.13) ahead of the product tag must raise the
+  // floor, so the next train bumps past it instead of recomputing a colliding tag.
+  assert.equal(
+    latestReleasedVersionFromTags([
+      "proliferate-v0.2.11",
+      "desktop-v0.2.13",
+      "runtime-v0.2.12",
+      "server-v0.2.10",
+    ]),
+    "0.2.13",
+  );
+  assert.equal(latestReleasedVersionFromTags([]), "");
+});
+
+test("bumps past an artifact hotfix that outran the product tag", () => {
+  const root = writeFixtureRoot(); // VERSION fixture = 0.1.49
+  const plan = buildArtifactPlan({
+    root,
+    surfaces: new Set(["desktop", "runtime", "server"]),
+    releaseId: "release-2026-06-18",
+    versionBump: "patch",
+    dryRun: true,
+    latestProductTagVersion: "0.2.13", // a desktop hotfix already released 0.2.13
+  });
+
+  assert.equal(plan.productVersion, "0.2.14");
+  assert.deepEqual(plan.tags, {
+    desktop: "desktop-v0.2.14",
+    runtime: "runtime-v0.2.14",
+    server: "server-v0.2.14",
+  });
 });
 
 test("parses release tag CSV", () => {
