@@ -113,7 +113,12 @@ Rules:
   surface gets it (web + cloud chat included); URL detection
   (`isExternalHttpLink`) runs before file-path detection so a real path is never
   mistaken for a link. Favicon requests go to the linked site itself (no
-  third-party favicon service), so no list of linked hosts leaks anywhere.
+  third-party favicon service), so no list of linked hosts leaks anywhere. The
+  provider mention and the file-path mention share one inline-mention treatment
+  (muted link color, no underline at rest, brighten to foreground + dashed
+  underline on hover); this only renders because the global `a` reset lives in
+  `@layer base` (see the frontend styling guide) — unlayered, it would strip the
+  anchor's color/underline.
 - Web falls back to unhighlighted (identically styled) code blocks; shiki stays
   out of the web bundle.
 
