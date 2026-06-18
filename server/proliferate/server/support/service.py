@@ -231,9 +231,7 @@ async def create_support_report_upload_targets(
         # failed / abandoned — terminal but NOT a success. Use the conflict code
         # so the client tells the user to start a new report rather than treating
         # it as "already sent" and silently discarding the (undelivered) report.
-        raise SupportReportUploadConflict(
-            "Support report upload is no longer accepting targets."
-        )
+        raise SupportReportUploadConflict("Support report upload is no longer accepting targets.")
 
     _install_report_correlation(report)
     validate_upload_target_request(body)
@@ -252,10 +250,9 @@ async def create_support_report_upload_targets(
     # and upload intent (diagnostics flag + attachment count) is already
     # validated above — so only a genuinely different object set is a conflict.
     existing_manifest = report.object_manifest
-    if (
-        existing_manifest.get("schemaVersion") == 1
-        and expected_manifest_keys(existing_manifest) != expected_manifest_keys(manifest)
-    ):
+    if existing_manifest.get("schemaVersion") == 1 and expected_manifest_keys(
+        existing_manifest
+    ) != expected_manifest_keys(manifest):
         raise SupportReportUploadConflict(
             "Support report upload targets already exist for different objects."
         )
