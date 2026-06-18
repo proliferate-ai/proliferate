@@ -267,13 +267,17 @@ Fork invariants:
   fallback, bricks the session. Once `last_prompt_at` is set the child loads its
   own native id with no fallback (re-forking would drop the child's own turns).
   If a zero-turn child cannot resolve a parent native id, it falls back to its
-  own (possibly stale) native id rather than failing the launch. This decision
-  keys on `last_prompt_at`, not on `turn_started`: the transcript snapshot below
-  copies the parent's `turn_started` events into the child, so that signal is
-  always set for forks. Known limitation: re-fork is tip-only (see below), so a
-  zero-turn child re-forked after the parent advanced sees the parent's current
-  tip, not its frozen snapshot — strictly better than the prior permanent
-  failure; full fidelity needs ACP message-indexed fork, which is unavailable.
+  own (possibly stale) native id rather than failing the launch. This applies
+  to process-local-fork adapters (Claude); durable-fork adapters keep loading
+  their recorded native id. The decision keys on `last_prompt_at`, not on
+  `turn_started`: the transcript snapshot below copies the parent's
+  `turn_started` events into the child, so that signal is always set for forks.
+  Because re-fork is tip-only, a zero-turn child re-forked after the parent
+  advanced is seeded from the parent's current tip while its stored
+  `session_events` snapshot still reflects the fork-point prefix; the agent then
+  reasons over state the child transcript does not show. This is accepted as
+  better than the prior permanent failure, but it is a real divergence, not just
+  a fidelity gap.
 - for adapters that cannot replay the forked transcript through child
   `load_session`, AnyHarness snapshots the parent's durable `session_events`
   into the child before startup and appends child events after that prefix
