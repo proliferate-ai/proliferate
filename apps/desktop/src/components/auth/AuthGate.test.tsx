@@ -5,8 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { BootstrappedRoute } from "@/components/auth/AuthGate";
+import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
+
+// BootstrappedRoute renders <AuthShell>, which pulls in the GitHub sign-in
+// availability query + capability hooks. These BootstrappedRoute tests only care
+// about the overlay/reveal lifecycle, so stub the shell to a marker that echoes
+// the mode it was rendered with.
+vi.mock("@/components/auth/AuthShell", () => ({
+  AuthShell: ({ mode }: { mode: string }) => (
+    <div data-testid="auth-shell" data-mode={mode}>
+      shell
+    </div>
+  ),
+}));
 import {
   BRAILLE_SWEEP_DOT_FRAMES,
   BRAILLE_SWEEP_FRAME_INTERVAL_MS,
@@ -129,7 +142,7 @@ describe("BootstrappedRoute", () => {
     useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
   });
 
-  it("mounts the destination behind the session check overlay before fading it away", () => {
+  it("shows the loading shell and mounts the destination behind it before revealing", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
@@ -140,14 +153,58 @@ describe("BootstrappedRoute", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Checking your session")).toBeTruthy();
+    expect(screen.getByTestId("auth-shell").dataset.mode).toBe("loading");
     expect(screen.queryByTestId("workspace")).toBeNull();
 
     act(() => {
       useAuthStore.setState({ status: "authenticated" });
     });
 
+    // Workspace mounts behind the shell while it settles/fades.
     expect(screen.getByTestId("workspace")).toBeTruthy();
-    expect(screen.getByText("Checking your session")).toBeTruthy();
+    expect(screen.getByTestId("auth-shell")).toBeTruthy();
+  });
+});
+
+describe("AuthScreenLayout", () => {
+  it("keeps the heading constant and disables the action while loading", () => {
+    const { rerender } = render(<AuthScreenLayout mode="loading" />);
+
+    expect(screen.getByText("Let's get your life's work done.")).toBeTruthy();
+    expect(screen.getByText("Restoring your session…")).toBeTruthy();
+    expect(
+      screen.getByText("Continue with GitHub").closest("button")?.disabled,
+    ).toBe(true);
+
+    rerender(
+      <AuthScreenLayout mode="auth" githubSignInAvailable onGitHubSignIn={() => {}} />,
+    );
+
+    // Heading is identical across modes (no reflow), and the action is live.
+    expect(screen.getByText("Let's get your life's work done.")).toBeTruthy();
+    expect(
+      screen.getByText("Continue with GitHub").closest("button")?.disabled,
+    ).toBe(false);
+  });
+
+  it("offers the inline continue-locally action when allowed", () => {
+    render(
+      <AuthScreenLayout
+        mode="auth"
+        githubSignInAvailable
+        canContinueLocally
+        onContinueLocally={() => {}}
+        onGitHubSignIn={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("start locally")).toBeTruthy();
+  });
+
+  it("ignores user appearance text-size preferences", () => {
+    setRootToNonDefaultTextScale();
+    render(<AuthScreenLayout mode="auth" />);
+
+    expectDefaultAuthAppearance(getAuthAppearanceBoundary());
   });
 });
