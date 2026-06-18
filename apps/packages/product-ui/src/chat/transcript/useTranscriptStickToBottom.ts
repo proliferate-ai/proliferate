@@ -6,7 +6,19 @@ import {
   GLUE_STABLE_FRAMES,
   PROGRAMMATIC_MATCH_TOL_PX,
   REPIN_BOTTOM_THRESHOLD_PX,
+  SCROLLABLE_OVERFLOW_EPSILON_PX,
 } from "./TranscriptRowListShared";
+
+/**
+ * Whether the viewport actually has room to scroll. The pre-emptive
+ * intent-to-leave listeners must not unpin when the content fits entirely in the
+ * viewport: that gesture produces no scroll event, so `onViewportScroll` never
+ * runs to re-pin, leaving the engine stuck unpinned and the scroll-to-bottom
+ * button wrongly visible while already at the bottom.
+ */
+function viewportCanScroll(viewport: HTMLDivElement): boolean {
+  return viewport.scrollHeight - viewport.clientHeight > SCROLLABLE_OVERFLOW_EPSILON_PX;
+}
 
 export interface UseTranscriptStickToBottomOptions {
   /** The real scroll element ref (AutoHideScrollArea forwards its viewport here). */
@@ -194,13 +206,19 @@ export function useTranscriptStickToBottom({
       return;
     }
     let touchStartY = 0;
+    // All three listeners gate on `viewportCanScroll`: an intent to leave the
+    // bottom is meaningless when there is nowhere to scroll, and acting on it
+    // would strand the engine unpinned (no scroll event follows to re-pin).
     const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0) {
+      if (event.deltaY < 0 && viewportCanScroll(viewport)) {
         setPinned(false);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
+      if (
+        (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") &&
+        viewportCanScroll(viewport)
+      ) {
         setPinned(false);
       }
     };
@@ -210,7 +228,7 @@ export function useTranscriptStickToBottom({
     const onTouchMove = (event: TouchEvent) => {
       const y = event.touches[0]?.clientY ?? touchStartY;
       // Finger dragging down reveals content above (scrolls toward history).
-      if (y - touchStartY > DIRECTION_EPSILON_PX) {
+      if (y - touchStartY > DIRECTION_EPSILON_PX && viewportCanScroll(viewport)) {
         setPinned(false);
       }
     };
