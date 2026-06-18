@@ -20,6 +20,9 @@ type MdTag =
   | "h1"
   | "h2"
   | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
   | "p"
   | "ul"
   | "ol"
@@ -66,6 +69,10 @@ export function MarkdownRenderer({
     "[&_li>p]:my-0",
     "[&_li>ol]:mt-2",
     "[&_li>ul]:mt-2",
+    // GFM task lists: drop the stray disc bullet and align the checkbox inline.
+    "[&_ul.contains-task-list]:list-none [&_ul.contains-task-list]:pl-0",
+    "[&_li.task-list-item]:pl-0 [&_li.task-list-item]:flex [&_li.task-list-item]:items-start [&_li.task-list-item]:gap-2",
+    "[&_li.task-list-item>input]:mt-1 [&_li.task-list-item>input]:size-3.5 [&_li.task-list-item>input]:shrink-0 [&_li.task-list-item>input]:accent-link-foreground",
     className,
   ].filter(Boolean).join(" ");
 
@@ -75,11 +82,17 @@ export function MarkdownRenderer({
         remarkPlugins={[remarkGfm]}
         components={{
           h1: (props) =>
-            mdHtmlElement("h1", "mb-2 mt-3 text-chat leading-[var(--text-chat--line-height)] font-bold text-foreground", props),
+            mdHtmlElement("h1", "mb-3 mt-6 border-b border-border pb-1.5 text-[24px] font-semibold leading-[1.25] text-foreground first:mt-0", props),
           h2: (props) =>
-            mdHtmlElement("h2", "mb-2 mt-3 text-chat leading-[var(--text-chat--line-height)] font-bold text-foreground", props),
+            mdHtmlElement("h2", "mb-2.5 mt-5 border-b border-border pb-1 text-[20px] font-semibold leading-[1.25] text-foreground", props),
           h3: (props) =>
-            mdHtmlElement("h3", "mb-1 mt-2 text-chat leading-[var(--text-chat--line-height)] font-semibold text-foreground", props),
+            mdHtmlElement("h3", "mb-2 mt-5 text-[17px] font-semibold leading-[1.3] text-foreground", props),
+          h4: (props) =>
+            mdHtmlElement("h4", "mb-2 mt-4 text-[15px] font-semibold leading-[1.3] text-foreground", props),
+          h5: (props) =>
+            mdHtmlElement("h5", "mb-1.5 mt-4 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground", props),
+          h6: (props) =>
+            mdHtmlElement("h6", "mb-1.5 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground", props),
           p: (props) =>
             mdHtmlElement("p", "my-2 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
           ul: (props) =>

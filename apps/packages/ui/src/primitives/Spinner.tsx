@@ -10,20 +10,21 @@ export function Spinner({ className }: SpinnerProps) {
     >
       <svg
         aria-hidden="true"
-        className="size-full overflow-visible"
-        viewBox="0 0 20 20"
+        className="size-full"
+        viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <circle
-          cx="10"
-          cy="10"
-          r="7.25"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeDasharray="30 18"
-          opacity="0.72"
+        {/* Faint full-ring track. */}
+        <path
+          opacity="0.3"
+          d="M18 12C18 8.68629 15.3137 6 12 6C8.68629 6 6 8.68629 6 12C6 15.3137 8.68629 18 12 18C15.3137 18 18 15.3137 18 12ZM20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12Z"
+          fill="currentColor"
+        />
+        {/* Solid quarter arc that rotates over the track. */}
+        <path
+          d="M12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12H6C6 15.3137 8.68629 18 12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6V4Z"
+          fill="currentColor"
         />
       </svg>
     </div>
