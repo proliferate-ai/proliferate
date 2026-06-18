@@ -1,94 +1,40 @@
 import { useEffect, useRef } from "react";
-import {
-  useRuntimeHealthQuery,
-} from "@anyharness/sdk-react";
+import { useRuntimeHealthQuery } from "@anyharness/sdk-react";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 
 /**
- * Auto-triggers agent reconciliation on startup when agents need installation,
- * refreshes the agent list while the bundled seed hydrates, and keeps the list
- * current during reconciliation so the UI reflects progress as each agent
- * installs sequentially.
+ * Keeps the desktop agent list in sync with the runtime's OWN startup work.
  *
- * Owns the app-mounted agent reconcile lifecycle. Does not own manual install
- * actions or agent catalog derivation.
+ * The runtime now owns reconciliation: at startup it hydrates the bundled seed
+ * and runs an installed-only reconcile against the catalog pins (see
+ * AgentRuntime::spawn_startup_pass); the reconcile snapshot is polled via
+ * useAgentCatalog. This hook no longer TRIGGERS reconcile — it only refreshes
+ * the agent list while the seed hydrates and as the reconcile job transitions,
+ * so the UI reflects progress. Manual reconcile lives in the settings pane;
+ * missing agents install on demand at session start.
  */
 export function useAgentAutoReconcile() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const { invalidateAgentListResources } = useAgentResourcesCache();
   const {
-    agentsNeedingSetup,
     isReconciling,
-    isLoading: agentsLoading,
-    hasAgents,
     reconcileDataUpdatedAt,
     reconcileStatus,
   } = useAgentCatalog();
-  const {
-    reconcileAgents,
-  } = useAgentInstallationActions();
-  const hasTriggered = useRef(false);
   const previousReconcileStatus = useRef<string>("idle");
   const isHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
   const {
     data: runtimeHealth,
     dataUpdatedAt: runtimeHealthDataUpdatedAt,
-    isLoading: runtimeHealthLoading,
   } = useRuntimeHealthQuery({
     enabled: isHealthy,
     pollWhileAgentSeedHydrating: true,
   });
   const agentSeedStatus = runtimeHealth?.agentSeed?.status;
-  // `partial` can mean the seed preserved a user-owned Claude/Codex install.
-  // Normal reconcile is still safe because non-reinstall installs short-circuit
-  // when managed launchers already exist. `not_configured_dev` intentionally
-  // stays manual so local dev profiles do not start long network installs on
-  // app boot.
-  const seedAllowsReconcile =
-    !agentSeedStatus
-    || agentSeedStatus === "ready"
-    || agentSeedStatus === "partial"
-    || agentSeedStatus === "failed";
-
   const previousAgentSeedStatus = useRef<string | null>(null);
-
-  // Auto-trigger reconcile when agents need installation
-  useEffect(() => {
-    if (
-      !isHealthy
-      || runtimeHealthLoading
-      || agentSeedStatus === "hydrating"
-      || !seedAllowsReconcile
-      || agentsLoading
-      || !hasAgents
-      || hasTriggered.current
-      || reconcileStatus !== "idle"
-    ) {
-      return;
-    }
-
-    const needsInstall = agentsNeedingSetup.some(
-      (a) => a.readiness === "install_required",
-    );
-    if (!needsInstall) return;
-
-    hasTriggered.current = true;
-    void reconcileAgents();
-  }, [
-    isHealthy,
-    runtimeHealthLoading,
-    agentSeedStatus,
-    seedAllowsReconcile,
-    agentsLoading,
-    hasAgents,
-    agentsNeedingSetup,
-    reconcileStatus,
-    reconcileAgents,
-  ]);
 
   // Keep agents fresh during seed hydration and force one final refresh when hydration completes.
   useEffect(() => {

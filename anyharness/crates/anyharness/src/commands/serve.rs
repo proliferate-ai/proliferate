@@ -10,9 +10,7 @@ use tower_http::trace::TraceLayer;
 
 use anyharness_lib::api::router::build_router;
 use anyharness_lib::app::{default_runtime_home, ensure_runtime_home, AppState};
-use anyharness_lib::domains::agents::installer::seed::{
-    configured_agent_seed_store, hydrate_configured_agent_seed,
-};
+use anyharness_lib::domains::agents::installer::seed::configured_agent_seed_store;
 use anyharness_lib::persistence::Db;
 
 #[derive(Args)]
@@ -40,14 +38,10 @@ pub async fn run(args: ServeArgs) -> Result<()> {
         .unwrap_or_else(default_runtime_home);
 
     ensure_runtime_home(&runtime_home)?;
+    // Seed hydration + the installed-only startup reconcile run behind the
+    // AgentRuntime facade (kicked from AppState::new); the binary only
+    // constructs the store and hands it in, like the Db.
     let agent_seed_store = configured_agent_seed_store();
-    if agent_seed_store.hydration_pending() {
-        let hydration_runtime_home = runtime_home.clone();
-        let hydration_store = agent_seed_store.clone();
-        tokio::task::spawn_blocking(move || {
-            hydrate_configured_agent_seed(&hydration_runtime_home, &hydration_store);
-        });
-    }
 
     let db = Db::open(&runtime_home)?;
     let runtime_base_url = runtime_base_url(&args.host, args.port);

@@ -3276,6 +3276,7 @@ export interface components {
             outcome: components["schemas"]["ReconcileOutcome"];
         };
         ReconcileAgentsRequest: {
+            installedOnly?: boolean;
             reinstall?: boolean;
         };
         ReconcileAgentsResponse: {

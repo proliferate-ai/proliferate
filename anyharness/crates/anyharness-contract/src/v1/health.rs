@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::agents::AgentReconcileSummary;
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct HealthResponse {
@@ -9,6 +11,7 @@ pub struct HealthResponse {
     pub runtime_home: String,
     pub capabilities: RuntimeCapabilities,
     pub agent_seed: AgentSeedHealth,
+    pub agent_reconcile: AgentReconcileSummary,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

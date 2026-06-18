@@ -8,7 +8,8 @@ use uuid::Uuid;
 use super::{reconcile_agent, AgentReconcileOutcome, AgentReconcileResult};
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::installer::InstallOptions;
-use crate::domains::agents::model::{AgentDescriptor, AgentKind};
+use crate::domains::agents::model::{AgentDescriptor, AgentKind, ResolvedArtifact};
+use crate::domains::agents::readiness::service::resolve_agent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
@@ -81,6 +82,7 @@ impl AgentReconcileService {
         registry: Vec<AgentDescriptor>,
         runtime_home: PathBuf,
         reinstall: bool,
+        installed_only: bool,
         agent_seed_store: Option<AgentSeedStore>,
         catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
     ) -> AgentReconcileJobSnapshot {
@@ -134,6 +136,7 @@ impl AgentReconcileService {
                 registry,
                 runtime_home,
                 reinstall,
+                installed_only,
                 agent_seed_store,
                 catalog,
             )
@@ -165,6 +168,7 @@ async fn run_reconcile_job(
     registry: Vec<AgentDescriptor>,
     runtime_home: PathBuf,
     reinstall: bool,
+    installed_only: bool,
     agent_seed_store: Option<AgentSeedStore>,
     catalog: Option<crate::domains::agents::catalog::service::AgentCatalogService>,
 ) {
@@ -213,6 +217,29 @@ async fn run_reconcile_job(
         let options = options.clone();
         let agent_catalog = catalog.clone();
         let result = match tokio::task::spawn_blocking(move || {
+            // installed-only scope (startup pass): only reconcile agents WE manage
+            // in runtime_home — update those to the catalog pins. Skip agents that
+            // are absent or only present via PATH (source != "managed"); a managed
+            // install over a PATH-provided agent would fail, and missing agents
+            // install on demand at session start. resolve_agent is side-effect-free.
+            if installed_only {
+                let is_managed = |artifact: &ResolvedArtifact| {
+                    artifact.installed && artifact.source.as_deref() == Some("managed")
+                };
+                let resolved = resolve_agent(&descriptor, &agent_runtime_home);
+                let managed_installed = is_managed(&resolved.agent_process)
+                    || resolved.native.as_ref().map(is_managed).unwrap_or(false);
+                if !managed_installed {
+                    return AgentReconcileResult {
+                        kind: descriptor.kind.clone(),
+                        outcome: AgentReconcileOutcome::Skipped,
+                        message: Some(
+                            "not managed-installed; installs on demand at session start".into(),
+                        ),
+                        installed_artifacts: vec![],
+                    };
+                }
+            }
             let pins = agent_catalog
                 .as_ref()
                 .and_then(|catalog| catalog.pin_overrides(descriptor.kind.as_str()));
@@ -355,6 +382,7 @@ mod tests {
                 Vec::new(),
                 PathBuf::from("/tmp/anyharness-test"),
                 true,
+                false,
                 None,
                 None,
             )
@@ -375,6 +403,7 @@ mod tests {
                 Vec::new(),
                 PathBuf::from("/tmp/anyharness-empty"),
                 true,
+                false,
                 None,
                 None,
             )
@@ -396,5 +425,46 @@ mod tests {
         assert_eq!(completed.status, AgentReconcileJobStatus::Completed);
         assert!(completed.results.is_empty());
         assert!(completed.finished_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn installed_only_skips_uninstalled_agents() {
+        // In a fresh empty runtime home no agent_process (ACP adapter) is installed —
+        // those are managed-only, never on system PATH — so installed-only reconcile must
+        // SKIP every agent and never attempt a (network) install.
+        let service = AgentReconcileService::new();
+        let home = std::env::temp_dir().join(format!("anyharness-installed-only-{}", Uuid::new_v4()));
+        let registry = crate::domains::agents::registry::built_in_registry();
+        assert!(!registry.is_empty(), "built-in registry must have agents");
+
+        service
+            .start_or_get(registry, home.clone(), false, true, None, None)
+            .await;
+
+        let completed = timeout(Duration::from_secs(5), async {
+            loop {
+                let snapshot = service.snapshot().await;
+                if snapshot.status == AgentReconcileJobStatus::Completed {
+                    return snapshot;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("installed-only reconcile should complete without network installs");
+
+        assert!(
+            completed
+                .results
+                .iter()
+                .all(|result| result.outcome == AgentReconcileOutcome::Skipped),
+            "installed_only must skip agents with no installed agent_process; got {:?}",
+            completed
+                .results
+                .iter()
+                .map(|result| (result.kind.as_str(), result.outcome.clone()))
+                .collect::<Vec<_>>()
+        );
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

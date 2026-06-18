@@ -419,6 +419,11 @@ impl AppState {
             .map_err(AppStateInitError::InvalidProductMcpRegistry)?;
         #[cfg(not(test))]
         workspace_retention_service.clone().spawn_startup_pass();
+        // Hydrate the bundled agent seed (if pending) and run an installed-only
+        // reconcile against the catalog pins — desktop sidecar AND cloud workers,
+        // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
+        #[cfg(not(test))]
+        agent_runtime.clone().spawn_startup_pass();
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -475,7 +480,9 @@ fn catalog_applied_reconcile_poke(agent_runtime: Arc<AgentRuntime>) -> Arc<dyn F
     Arc::new(move || {
         let agent_runtime = agent_runtime.clone();
         tokio::spawn(async move {
-            agent_runtime.start_reconcile(false).await;
+            // installed-only: a cloud-catalog swap updates already-installed
+            // agents to the new pins; missing agents install on demand.
+            agent_runtime.start_reconcile(false, true).await;
         });
     })
 }

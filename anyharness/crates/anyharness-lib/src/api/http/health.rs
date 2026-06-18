@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{HealthResponse, RuntimeCapabilities};
 use axum::Json;
 
+use super::agents_contract::reconcile_summary_to_contract;
 use crate::app::AppState;
 
 #[utoipa::path(
@@ -22,5 +23,8 @@ pub async fn get_health(
             replay: crate::domains::sessions::replay::replay_enabled(),
         },
         agent_seed: state.agent_seed_store.health(),
+        agent_reconcile: reconcile_summary_to_contract(
+            &state.agent_runtime.reconcile_status().await,
+        ),
     })
 }
