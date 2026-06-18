@@ -28,6 +28,7 @@ import type {
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
+  supportReportRetriesExhausted,
 } from "@/lib/domain/support/report-upload-failure";
 import {
   buildSupportReportPackage,
@@ -158,10 +159,26 @@ async function drainSupportReportQueue(
         source: "support_report_upload",
         message: `failed.${failure.kind}`,
       });
-      if (!failure.retryable) {
+
+      const exhausted = supportReportRetriesExhausted({
+        attemptCount,
+        createdAt: entry.job.createdAt,
+        nowMs: Date.now(),
+      });
+      if (!failure.retryable || exhausted) {
         removePersistedJob(entry.job.jobId);
         await deleteSupportReportJobAttachments(entry.job);
-        showToast(failure.toastMessage);
+        if (exhausted && failure.retryable) {
+          void logRendererEvent({
+            source: "support_report_upload",
+            message: "dropped.exhausted",
+          });
+          showToast(
+            "Couldn't send your report after several tries. Please try again from Help.",
+          );
+        } else {
+          showToast(failure.toastMessage);
+        }
         continue;
       }
 

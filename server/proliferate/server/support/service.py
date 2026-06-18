@@ -23,6 +23,7 @@ from proliferate.server.support.domain.message import normalize_support_message
 from proliferate.server.support.domain.report_records import (
     cloud_workspace_ids_from_refs,
     expected_manifest_entries,
+    expected_manifest_keys,
     expected_upload_keys,
     now_iso,
     object_manifest_from_targets,
@@ -234,8 +235,18 @@ async def create_support_report_upload_targets(
         attachments=body.attachments,
         targets=targets,
     )
+    # Re-issuing targets for an already-manifested report must be idempotent by
+    # object *identity*, not content. Diagnostics are re-captured on every
+    # client retry, so their size/sha256 legitimately drift; gating on the full
+    # manifest rejected every retry forever ("targets already exist for
+    # different objects"). Object keys are deterministic from the stored prefix,
+    # and upload intent (diagnostics flag + attachment count) is already
+    # validated above — so only a genuinely different object set is a conflict.
     existing_manifest = report.object_manifest
-    if existing_manifest.get("schemaVersion") == 1 and existing_manifest != manifest:
+    if (
+        existing_manifest.get("schemaVersion") == 1
+        and expected_manifest_keys(existing_manifest) != expected_manifest_keys(manifest)
+    ):
         raise SupportReportUploadInvalid(
             "Support report upload targets already exist for different objects."
         )

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
+  supportReportRetriesExhausted,
 } from "./report-upload-failure";
 
 describe("describeSupportReportUploadFailure", () => {
@@ -82,6 +83,54 @@ describe("describeSupportReportUploadFailure", () => {
       retryDelayMs: 5 * 60_000,
       toastMessage: "Report could not be sent. We'll retry in the background.",
     });
+  });
+
+  it("treats a locked upload-target conflict as terminal instead of transient", () => {
+    const failure = describeSupportReportUploadFailure(
+      new Error("Support report upload targets already exist for different objects."),
+      379,
+    );
+
+    expect(failure).toMatchObject({
+      kind: "upload_conflict",
+      retryable: false,
+      retryDelayMs: null,
+    });
+  });
+
+  it("treats a changed-intent conflict as terminal", () => {
+    const failure = describeSupportReportUploadFailure(
+      new Error("Support report upload targets changed attachment intent."),
+      4,
+    );
+
+    expect(failure.kind).toBe("upload_conflict");
+    expect(failure.retryable).toBe(false);
+  });
+});
+
+describe("supportReportRetriesExhausted", () => {
+  const now = Date.parse("2026-06-17T00:00:00.000Z");
+
+  it("gives up once the attempt budget is spent", () => {
+    expect(supportReportRetriesExhausted({ attemptCount: 8, nowMs: now })).toBe(true);
+    expect(supportReportRetriesExhausted({ attemptCount: 3, nowMs: now })).toBe(false);
+  });
+
+  it("gives up on a job that has aged past the retry window", () => {
+    expect(supportReportRetriesExhausted({
+      attemptCount: 1,
+      createdAt: "2026-06-02T00:00:00.000Z",
+      nowMs: now,
+    })).toBe(true);
+  });
+
+  it("keeps retrying a fresh job within budget and age", () => {
+    expect(supportReportRetriesExhausted({
+      attemptCount: 2,
+      createdAt: "2026-06-16T18:00:00.000Z",
+      nowMs: now,
+    })).toBe(false);
   });
 });
 

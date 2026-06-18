@@ -192,6 +192,28 @@ describe("useSupportReportUploadQueue", () => {
     });
   });
 
+  it("drops a job that has exhausted its retry budget instead of retrying forever", async () => {
+    cloudSupportMocks.createSupportReport.mockRejectedValue(
+      new Error("Upload failed with 503."),
+    );
+    window.localStorage.setItem(
+      "proliferate.supportReportJobs.v1",
+      JSON.stringify([
+        { job: makeSupportReportJob("job-capped"), attemptCount: 7, nextAttemptAt: null },
+      ]),
+    );
+
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      const raw = window.localStorage.getItem("proliferate.supportReportJobs.v1");
+      expect(JSON.parse(raw ?? "[]")).toHaveLength(0);
+    });
+    expect(toastStoreMocks.show).toHaveBeenCalledWith(
+      "Couldn't send your report after several tries. Please try again from Help.",
+    );
+  });
+
   it("cleans up a queued job when create returns an already completed report", async () => {
     cloudSupportMocks.createSupportReport.mockResolvedValueOnce({
       reportId: "report-1",

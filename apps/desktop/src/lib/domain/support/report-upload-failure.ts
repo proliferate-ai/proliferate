@@ -4,6 +4,7 @@ export type SupportReportUploadFailureKind =
   | "dev_auth_bypass"
   | "local_payload_invalid"
   | "storage_unconfigured"
+  | "upload_conflict"
   | "transient";
 
 export interface SupportReportUploadFailure {
@@ -26,6 +27,11 @@ const RETRY_AFTER_SIGN_IN_DELAY_MS = 5 * 60_000;
 const CONFIG_RETRY_DELAY_MS = 30 * 60_000;
 const TRANSIENT_TOAST_COOLDOWN_MS = 5 * 60_000;
 const BLOCKED_TOAST_COOLDOWN_MS = 60 * 60_000;
+
+// A queued report that never succeeds must eventually be dropped — otherwise a
+// single un-completable report retries (and re-toasts) forever across restarts.
+const MAX_SUPPORT_REPORT_ATTEMPTS = 8;
+const MAX_SUPPORT_REPORT_AGE_MS = 48 * 60 * 60_000;
 
 export function describeSupportReportUploadFailure(
   error: unknown,
@@ -93,6 +99,21 @@ export function describeSupportReportUploadFailure(
     };
   }
 
+  // Server-side conflicts where retrying the same job can never succeed: the
+  // report's object set / intent is locked, or it already completed. Retrying
+  // these only re-toasts forever, so they are terminal.
+  if (isUploadConflictError(message)) {
+    return {
+      kind: "upload_conflict",
+      message,
+      retryable: false,
+      retryDelayMs: null,
+      toastMessage:
+        "This report can no longer be sent. Start a new report from Help if you still need support.",
+      toastCooldownMs: 0,
+    };
+  }
+
   return {
     kind: "transient",
     message,
@@ -151,6 +172,30 @@ function isLocalPayloadError(message: string): boolean {
     || message.startsWith("Attachments are too large")
     || message.startsWith("Attachment is too large:")
     || message.startsWith("Attachment data is missing:");
+}
+
+function isUploadConflictError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("targets already exist for different objects")
+    || normalized.includes("changed diagnostics intent")
+    || normalized.includes("changed attachment intent")
+    || normalized.includes("upload is already completed");
+}
+
+// Terminal-retry guard: a retryable failure that has exhausted its attempt
+// budget or aged out should be dropped rather than retried forever. This is the
+// systemic safety net for any failure that is misclassified as transient.
+export function supportReportRetriesExhausted(input: {
+  attemptCount: number;
+  createdAt?: string | null;
+  nowMs: number;
+}): boolean {
+  if (input.attemptCount >= MAX_SUPPORT_REPORT_ATTEMPTS) {
+    return true;
+  }
+  const createdMs = input.createdAt ? Date.parse(input.createdAt) : Number.NaN;
+  return Number.isFinite(createdMs)
+    && input.nowMs - createdMs >= MAX_SUPPORT_REPORT_AGE_MS;
 }
 
 function retryDelayMs(attemptCount: number): number {
