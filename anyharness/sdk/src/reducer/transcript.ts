@@ -152,6 +152,9 @@ export function reduceEvent(
     case "turn_ended": {
       const turn = ensureMutableTurn(s, turnId, ts);
       closeStreamingItems(s);
+      if (evt.stopReason === "cancelled") {
+        closeStrandedToolItems(s, turnId, ts, envelope.seq);
+      }
       turn.completedAt = ts;
       turn.stopReason = evt.stopReason;
       turn.fileBadges = collectFileBadges(s, turnId);
@@ -832,6 +835,34 @@ function closeStreamingPointer(s: TranscriptState, itemId: string): void {
 function closeStreamingItems(s: TranscriptState): void {
   closeAssistantPointer(s);
   closeThoughtPointer(s);
+}
+
+/**
+ * After a cancelled turn the agent never emits `item_completed` for any tool
+ * call that was still running, so without this the row stays visually "running"
+ * forever. Mark every in-progress tool call in the cancelled turn as failed so
+ * it settles to an "Interrupted" affordance instead.
+ */
+function closeStrandedToolItems(
+  s: TranscriptState,
+  turnId: string,
+  ts: string,
+  seq: number,
+): void {
+  const turn = s.turnsById[turnId];
+  if (!turn) return;
+  for (const itemId of turn.itemOrder) {
+    const item = s.itemsById[itemId];
+    if (item?.kind !== "tool_call" || item.status !== "in_progress") {
+      continue;
+    }
+    const nextItem = cloneKnownTranscriptItem(item);
+    nextItem.status = "failed";
+    nextItem.completedAt = ts;
+    nextItem.completedSeq = seq;
+    nextItem.lastUpdatedSeq = Math.max(nextItem.lastUpdatedSeq, seq);
+    setItem(s, itemId, nextItem);
+  }
 }
 
 function closeAssistantPointer(s: TranscriptState): void {

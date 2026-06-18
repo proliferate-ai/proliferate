@@ -2,10 +2,30 @@
 
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { TurnShell } from "./TranscriptTurnChrome";
+import { TurnShell, resolveTurnTrailingStatus } from "./TranscriptTurnChrome";
 
 afterEach(() => {
   cleanup();
+});
+
+describe("resolveTurnTrailingStatus", () => {
+  it("renders a muted, right-aligned 'You stopped after Ns' label when cancelled", () => {
+    const { container } = render(
+      <div>{resolveTurnTrailingStatus("2026-04-04T00:00:00Z", "idle", null, 12)}</div>,
+    );
+
+    expect(container.textContent).toContain("You stopped after 12s");
+    expect(container.innerHTML).toContain("justify-end");
+    expect(container.innerHTML).toContain("text-muted-foreground");
+  });
+
+  it("ignores the cancelled branch when no elapsed time is provided", () => {
+    const { container } = render(
+      <div>{resolveTurnTrailingStatus("2026-04-04T00:00:00Z", "idle", null)}</div>,
+    );
+
+    expect(container.textContent).not.toContain("You stopped after");
+  });
 });
 
 describe("TurnShell", () => {

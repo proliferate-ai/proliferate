@@ -86,7 +86,16 @@ export function resolveTurnTrailingStatus(
   startedAt: string,
   sessionViewState: SessionViewState,
   transientStatusText: string | null,
+  cancelledElapsedSeconds: number | null = null,
 ): ReactNode {
+  if (cancelledElapsedSeconds !== null) {
+    return (
+      <div className="flex justify-end py-1 text-xs text-muted-foreground">
+        <span>You stopped after {cancelledElapsedSeconds}s</span>
+      </div>
+    );
+  }
+
   if (sessionViewState === "working" && transientStatusText) {
     return (
       <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">

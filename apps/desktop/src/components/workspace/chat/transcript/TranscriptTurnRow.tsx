@@ -111,8 +111,17 @@ export function TranscriptTurnRow({
     transcript,
     outboxStartedAtByPromptId,
   );
+  // A cancelled turn settles to a completed row, so neither the live status nor
+  // the per-row resolver paints anything — surface the muted "You stopped"
+  // trailing label instead, keyed off the authoritative turn stop reason.
+  const cancelledElapsedSeconds = resolveCancelledTurnElapsedSeconds(
+    turn,
+    turnTiming.startedAt,
+  );
   const trailingStatus = !row.isLastTurnRow
     ? null
+    : cancelledElapsedSeconds !== null
+    ? resolveTurnTrailingStatus(turnTiming.startedAt, sessionViewState, null, cancelledElapsedSeconds)
     : isLatestTurn
     ? latestLiveStatus
     : shouldAllowTurnTrailingStatus({
@@ -259,6 +268,21 @@ function formatUndoError(error: unknown): string {
     return error.message;
   }
   return "Could not undo last turn file changes.";
+}
+
+function resolveCancelledTurnElapsedSeconds(
+  turn: TurnRecord,
+  startedAt: string,
+): number | null {
+  if (turn.stopReason !== "cancelled" || !turn.completedAt) {
+    return null;
+  }
+  const startedMs = Date.parse(startedAt);
+  const completedMs = Date.parse(turn.completedAt);
+  if (Number.isNaN(startedMs) || Number.isNaN(completedMs)) {
+    return null;
+  }
+  return Math.max(0, Math.round((completedMs - startedMs) / 1000));
 }
 
 function resolveTurnTrailingStatusForRow({
