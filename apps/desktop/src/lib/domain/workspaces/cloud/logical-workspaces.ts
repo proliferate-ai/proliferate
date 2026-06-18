@@ -240,9 +240,18 @@ export function buildLogicalWorkspaces(args: {
       args.currentSelectionId ?? null,
     )
       .sort((left, right) => compareLocalWorkspaceCanonicalOrder(left.workspace, right.workspace));
-    sortedBucket.forEach((collapsed, index) => {
+    // A singleton bucket keeps the shared base id so cloud/mobility records for
+    // the same folder+branch merge onto it. Every member of a multi-workspace
+    // bucket instead gets a stable, per-workspace `local-slot:${id}` id: keeping
+    // index 0 on the shared base id aliased two distinct local workspaces during
+    // the pending window (a new local workspace momentarily showed another's
+    // session/content as the canonical sort order shifted which member held the
+    // base id). Sidebar grouping is keyed off `repoKey`, not the logical id, so
+    // distinct slot ids leave grouping intact (#11).
+    const isSingletonBucket = sortedBucket.length === 1;
+    sortedBucket.forEach((collapsed) => {
       const { workspace } = collapsed;
-      const logicalId = index === 0
+      const logicalId = isSingletonBucket
         ? baseLogicalId
         : buildLocalSlotLogicalWorkspaceId(workspace.id);
       byId.set(logicalId, {
