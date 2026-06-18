@@ -41,7 +41,7 @@ logic in `commands/cloud_worker.rs`.
 2. Port selection uses `ANYHARNESS_PORT` when set, otherwise an available
    loopback port.
 3. During Tauri `setup`, the app builds sidecar launch env from:
-   - keychain-backed local secrets
+   - local secrets (see [Local Secrets](#local-secrets))
    - agent seed env from `agent_seed_env::launch_env`
 4. `sidecar::boot` starts one of two modes:
    - external runtime mode when `ANYHARNESS_DEV_URL` is set
@@ -86,12 +86,35 @@ Dev profiles use:
 The renderer should treat `get_runtime_info` and `/health` as the source of
 truth for the current sidecar URL and runtime home.
 
+## Local Secrets
+
+`commands/keychain.rs` resolves the secrets folded into sidecar launch env. Two
+storage backends, split by sensitivity:
+
+- **Recreatable secrets** — the desktop **auth session** + **pending OAuth state**
+  + **provider/env credentials** — are stored as **`0600` files under the durable
+  app home** (`~/.proliferate`, dev `~/.proliferate-local`): `auth-session.json`,
+  `pending-auth.json`, and an `env-secrets.json` `{name: value}` map. The app home
+  survives uninstall/reinstall and updates, so these persist across them. They are
+  deliberately **not** in the macOS keychain: a keychain item's ACL is bound to
+  the build's code signature, so a reinstalled/re-signed build can no longer read
+  it (the former "log in again after reinstall" bug).
+- **The anyharness data key** (`ANYHARNESS_DATA_KEY`) — an at-rest **encryption
+  key** that a plaintext file would defeat — stays in the **macOS keychain**
+  (`com.proliferate.app.runtime`). Generated on first use, injected into the
+  sidecar env.
+
+A one-time, best-effort purge clears secrets an older build left in the keychain.
+The desktop release matrix is macOS-only and the files are owner-only (`0600`) on
+unix; Windows/Linux desktop builds, if added, should revisit storage (Windows has
+no `0600` path, and both have user-scoped OS keychains that survive reinstall).
+
 ## Restart Rules
 
 `restart_runtime` must restart with the same classes of launch env as first
 boot:
 
-- keychain secrets
+- local secrets (see [Local Secrets](#local-secrets))
 - bundled/external agent seed env
 - sidecar-owned default env
 - shell `PATH`

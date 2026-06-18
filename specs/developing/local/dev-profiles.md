@@ -61,10 +61,11 @@ Postgres listener is not confused with a Homebrew Postgres bound to
 intentionally want to bypass the profile database for a one-off run, or
 `LOCAL_PGHOST=127.0.0.1` when you intentionally want a separate local Postgres.
 
-Desktop auth sessions and pending-auth entries are profile-scoped in the dev
-Keychain so per-profile databases do not reuse each other's login tokens.
-Provider API keys and the AnyHarness runtime data key stay shared in v1 because
-those credentials are user-level local secrets, not profile state.
+Desktop auth sessions, pending-auth entries, and stored provider API keys are
+profile-scoped `0600` files under the dev app home, so per-profile databases do
+not reuse each other's login tokens. The AnyHarness runtime data key stays
+shared in the keychain in v1 because it is a user-level secret, not profile
+state. (See the sidecar spec's Local Secrets for the storage model.)
 
 ## Agent Gateway Local Dev
 

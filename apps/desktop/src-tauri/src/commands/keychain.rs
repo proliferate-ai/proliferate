@@ -1,21 +1,30 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Mutex, OnceLock};
 
 use anyharness_credential_discovery::{export_portable_auth, PortableAuthExport, ProviderId};
 use base64::Engine;
 use getrandom::fill;
 use serde::{Deserialize, Serialize};
 
-use crate::app_config::{app_dir_path, native_dev_profile, read_json_file, write_json_file_atomic};
+use crate::app_config::{app_dir_path, read_json_file};
 
-const SERVICE: &str = "com.proliferate.app.env";
-const AUTH_SERVICE: &str = "com.proliferate.app.auth";
 const RUNTIME_SERVICE: &str = "com.proliferate.app.runtime";
-const AUTH_SESSION_ACCOUNT: &str = "desktop_session";
-const PENDING_AUTH_ACCOUNT: &str = "desktop_pending_auth";
 const ANYHARNESS_DATA_KEY_ACCOUNT: &str = "anyharness_data_key";
 const ANYHARNESS_DATA_KEY_ENV: &str = "ANYHARNESS_DATA_KEY";
+
+// Legacy keychain locations recreatable secrets used to live in, kept only so we
+// can purge orphaned items after migrating to file storage (see
+// `purge_legacy_keychain_secrets`).
+const LEGACY_ENV_SERVICE: &str = "com.proliferate.app.env";
+const LEGACY_AUTH_SERVICE: &str = "com.proliferate.app.auth";
+const LEGACY_AUTH_SESSION_ACCOUNT: &str = "desktop_session";
+const LEGACY_PENDING_AUTH_ACCOUNT: &str = "desktop_pending_auth";
+
+// Serializes writes to the secret files so concurrent Tauri commands cannot lose
+// an update (read-modify-write of env-secrets.json) or collide on a temp file.
+static SECRET_FILE_LOCK: Mutex<()> = Mutex::new(());
 
 const KNOWN_ENV_VARS: &[&str] = &[
     "ANTHROPIC_API_KEY",
@@ -27,10 +36,19 @@ const KNOWN_ENV_VARS: &[&str] = &[
     "AMP_API_KEY",
 ];
 
-// Dev builds are ad-hoc signed, so every rebuild is a different app to the
-// macOS keychain and items they create can never be durably readable. Dev
-// lanes therefore persist auth records as files under the per-profile app dir
-// (PROLIFERATE_DEV_HOME) instead of the keychain.
+// Recreatable secrets — the auth session, pending OAuth state, and provider/env
+// credentials — live as 0600 files under the durable app home (`~/.proliferate`,
+// dev: `~/.proliferate-local`). That directory survives uninstall/reinstall and
+// app updates, so the session persists across them. A macOS keychain item does
+// not: its ACL is bound to the build's code signature, so a reinstalled or
+// re-signed build can no longer read it (hence the "log in again after
+// reinstall" bug). Only the anyharness data key — an at-rest encryption key that
+// a plaintext file would defeat — stays in the keychain.
+//
+// The desktop release matrix is macOS-only; the file is owner-only (0600) on
+// unix. If Windows/Linux desktop builds are added, revisit storage there:
+// Windows has no 0600 path, and both have user-scoped OS keychains that survive
+// reinstall and could keep encrypting at rest.
 fn auth_session_file_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("auth-session.json"))
 }
@@ -39,14 +57,45 @@ fn pending_auth_file_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("pending-auth.json"))
 }
 
-fn write_dev_auth_record<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
-    write_json_file_atomic(path, value)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-            .map_err(|error| format!("Failed to set permissions on {}: {error}", path.display()))?;
+fn env_secrets_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("env-secrets.json"))
+}
+
+/// The `{ env_var_name: value }` map of stored provider/env credentials.
+/// A missing file is an empty map.
+fn read_env_secrets_map() -> Result<HashMap<String, String>, String> {
+    Ok(read_json_file(&env_secrets_path()?)?.unwrap_or_default())
+}
+
+/// Atomically write `value` as JSON with owner-only (0600) permissions set at
+/// creation, so the secret is never briefly world-readable (no chmod-after-write
+/// window). Callers hold `SECRET_FILE_LOCK`, so the shared temp path cannot
+/// collide. The writer for every recreatable secret file.
+fn write_secret_file<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
     }
+    let json = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("tmp");
+    {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options
+            .open(&tmp)
+            .map_err(|error| format!("Failed to open {}: {error}", tmp.display()))?;
+        use std::io::Write;
+        file.write_all(&json)
+            .map_err(|error| format!("Failed to write {}: {error}", tmp.display()))?;
+        file.sync_all().map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(&tmp, path)
+        .map_err(|error| format!("Failed to persist {}: {error}", path.display()))?;
     Ok(())
 }
 
@@ -160,7 +209,7 @@ const AGENT_AUTH_PROVIDERS: &[AgentAuthProviderSpec] = &[
 ];
 
 fn read_env_secret(name: &str) -> Result<Option<String>, String> {
-    read_password(SERVICE, name)
+    Ok(read_env_secrets_map()?.get(name).cloned())
 }
 
 enum KeychainRequest {
@@ -226,29 +275,12 @@ fn keychain_sender() -> &'static mpsc::Sender<KeychainRequest> {
                             value,
                             response,
                         } => {
+                            // The only writer left is the anyharness data key
+                            // (RUNTIME_SERVICE), which must never be pre-deleted —
+                            // losing it in a delete-add window would orphan the
+                            // data it encrypts. So this is a plain set.
                             let result = get_or_create_entry(&mut entries, &service, &account)
                                 .and_then(|entry| {
-                                    // Recreate the item on every write so its ACL trusts the
-                                    // current binary. set_password decrypts the existing item
-                                    // first, which fails forever once the item's ACL no longer
-                                    // trusts this app (e.g. it was written by a build with a
-                                    // different code signature). Deleting does not decrypt, so
-                                    // it succeeds even on those items. The runtime service is
-                                    // excluded: it holds the anyharness data key, which must
-                                    // never risk being lost in the delete-add window.
-                                    if service != RUNTIME_SERVICE {
-                                        match entry.delete_credential() {
-                                            Ok(()) | Err(keyring::Error::NoEntry) => {}
-                                            Err(error) => {
-                                                tracing::warn!(
-                                                    service = %service,
-                                                    account = %account,
-                                                    error = %error,
-                                                    "Keychain pre-delete failed; attempting set anyway"
-                                                );
-                                            }
-                                        }
-                                    }
                                     entry.set_password(&value).map_err(|e| e.to_string())
                                 });
                             let _ = response.send(result);
@@ -260,8 +292,7 @@ fn keychain_sender() -> &'static mpsc::Sender<KeychainRequest> {
                         } => {
                             let result = get_or_create_entry(&mut entries, &service, &account)
                                 .and_then(|entry| match entry.delete_credential() {
-                                    Ok(()) => Ok(()),
-                                    Err(keyring::Error::NoEntry) => Ok(()),
+                                    Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
                                     Err(error) => Err(error.to_string()),
                                 });
                             let _ = response.send(result);
@@ -317,6 +348,24 @@ fn delete_password(service: &str, account: &str) -> Result<(), String> {
         .map_err(|_| "Keychain worker did not return a result.".to_string())?
 }
 
+/// One-time, best-effort cleanup of the keychain items that recreatable secrets
+/// used to live in, so an old refresh token / provider key is not left orphaned
+/// after the move to file storage. Deleting a keychain item never decrypts it,
+/// so this succeeds even on items whose ACL no longer trusts this build. Runs at
+/// most once per process and ignores every error (a missing item is the norm on
+/// a fresh install).
+fn purge_legacy_keychain_secrets() {
+    static PURGED: AtomicBool = AtomicBool::new(false);
+    if PURGED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let _ = delete_password(LEGACY_AUTH_SERVICE, LEGACY_AUTH_SESSION_ACCOUNT);
+    let _ = delete_password(LEGACY_AUTH_SERVICE, LEGACY_PENDING_AUTH_ACCOUNT);
+    for &var in KNOWN_ENV_VARS {
+        let _ = delete_password(LEGACY_ENV_SERVICE, var);
+    }
+}
+
 fn ensure_runtime_data_key() -> Result<String, String> {
     if let Some(value) = read_password(RUNTIME_SERVICE, ANYHARNESS_DATA_KEY_ACCOUNT)? {
         return Ok(value);
@@ -337,83 +386,79 @@ fn home_dir() -> Result<PathBuf, String> {
 
 #[tauri::command]
 pub async fn list_configured_env_var_names() -> Result<Vec<String>, String> {
-    let mut names = Vec::new();
-    for &var in KNOWN_ENV_VARS {
-        if read_password(SERVICE, var)?.is_some() {
-            names.push(var.to_string());
-        }
-    }
-    Ok(names)
+    let map = read_env_secrets_map()?;
+    Ok(KNOWN_ENV_VARS
+        .iter()
+        .filter(|var| map.contains_key(**var))
+        .map(|var| var.to_string())
+        .collect())
 }
 
 #[tauri::command]
 pub async fn set_env_var_secret(name: String, value: String) -> Result<(), String> {
-    set_password(SERVICE, &name, &value)
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
+    let mut map = read_env_secrets_map()?;
+    map.insert(name, value);
+    write_secret_file(&env_secrets_path()?, &map)
 }
 
 #[tauri::command]
 pub async fn delete_env_var_secret(name: String) -> Result<(), String> {
-    delete_password(SERVICE, &name)
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
+    let mut map = read_env_secrets_map()?;
+    if map.remove(&name).is_some() {
+        write_secret_file(&env_secrets_path()?, &map)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
-    if native_dev_profile() {
-        return read_json_file(&auth_session_file_path()?);
-    }
-    match read_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)? {
-        Some(raw) => serde_json::from_str(&raw)
-            .map(Some)
-            .map_err(|e| e.to_string()),
-        None => Ok(None),
-    }
+    // The boot read is also the natural point to purge any session/creds an older
+    // build left in the keychain (runs at most once per process).
+    purge_legacy_keychain_secrets();
+    read_json_file(&auth_session_file_path()?)
 }
 
 #[tauri::command]
 pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> {
-    if native_dev_profile() {
-        return write_dev_auth_record(&auth_session_file_path()?, &session);
-    }
-    let raw = serde_json::to_string(&session).map_err(|e| e.to_string())?;
-    set_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT, &raw)
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
+    write_secret_file(&auth_session_file_path()?, &session)
 }
 
 #[tauri::command]
 pub async fn clear_auth_session() -> Result<(), String> {
-    if native_dev_profile() {
-        return delete_file_if_exists(&auth_session_file_path()?);
-    }
-    delete_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
+    delete_file_if_exists(&auth_session_file_path()?)
 }
 
 #[tauri::command]
 pub async fn get_pending_auth() -> Result<Option<PendingAuthRecord>, String> {
-    if native_dev_profile() {
-        return read_json_file(&pending_auth_file_path()?);
-    }
-    match read_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)? {
-        Some(raw) => serde_json::from_str(&raw)
-            .map(Some)
-            .map_err(|e| e.to_string()),
-        None => Ok(None),
-    }
+    read_json_file(&pending_auth_file_path()?)
 }
 
 #[tauri::command]
 pub async fn set_pending_auth(record: PendingAuthRecord) -> Result<(), String> {
-    if native_dev_profile() {
-        return write_dev_auth_record(&pending_auth_file_path()?, &record);
-    }
-    let raw = serde_json::to_string(&record).map_err(|e| e.to_string())?;
-    set_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT, &raw)
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
+    write_secret_file(&pending_auth_file_path()?, &record)
 }
 
 #[tauri::command]
 pub async fn clear_pending_auth() -> Result<(), String> {
-    if native_dev_profile() {
-        return delete_file_if_exists(&pending_auth_file_path()?);
-    }
-    delete_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
+    delete_file_if_exists(&pending_auth_file_path()?)
 }
 
 #[tauri::command]
@@ -576,9 +621,11 @@ fn portable_export_to_agent_auth_files(
 
 pub fn load_all_secrets_for_sidecar() -> HashMap<String, String> {
     let mut env = HashMap::new();
-    for &var in KNOWN_ENV_VARS {
-        if let Ok(Some(password)) = read_password(SERVICE, var) {
-            env.insert(var.to_string(), password);
+    if let Ok(map) = read_env_secrets_map() {
+        for &var in KNOWN_ENV_VARS {
+            if let Some(value) = map.get(var) {
+                env.insert(var.to_string(), value.clone());
+            }
         }
     }
     if let Ok(data_key) = ensure_runtime_data_key() {
@@ -610,7 +657,7 @@ mod tests {
     }
 
     #[test]
-    fn auth_session_record_round_trips_through_dev_file() {
+    fn auth_session_record_round_trips_through_file() {
         let path = temp_path("auth-session.json");
         let record = AuthSessionRecord {
             access_token: "access".to_string(),
@@ -623,7 +670,7 @@ mod tests {
             avatar_url: None,
         };
 
-        write_dev_auth_record(&path, &record).expect("write should succeed");
+        write_secret_file(&path, &record).expect("write should succeed");
         let parsed: AuthSessionRecord = read_json_file(&path)
             .expect("read should succeed")
             .expect("file should exist");
@@ -648,7 +695,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_auth_record_round_trips_through_dev_file() {
+    fn pending_auth_record_round_trips_through_file() {
         let path = temp_path("pending-auth.json");
         let record = PendingAuthRecord {
             state: "state".to_string(),
@@ -658,7 +705,7 @@ mod tests {
             last_handled_callback_url: None,
         };
 
-        write_dev_auth_record(&path, &record).expect("write should succeed");
+        write_secret_file(&path, &record).expect("write should succeed");
         let parsed: PendingAuthRecord = read_json_file(&path)
             .expect("read should succeed")
             .expect("file should exist");
@@ -680,6 +727,33 @@ mod tests {
         std::fs::write(&path, b"{}").expect("write should succeed");
         delete_file_if_exists(&path).expect("existing file should delete");
         assert!(!path.exists());
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn env_secrets_map_round_trips_through_file_at_0600() {
+        let path = temp_path("env-secrets.json");
+        let mut map = HashMap::new();
+        map.insert("ANTHROPIC_API_KEY".to_string(), "sk-ant-xxx".to_string());
+        map.insert("OPENAI_API_KEY".to_string(), "sk-openai-yyy".to_string());
+
+        write_secret_file(&path, &map).expect("write should succeed");
+        let parsed: HashMap<String, String> = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(parsed.get("ANTHROPIC_API_KEY").map(String::as_str), Some("sk-ant-xxx"));
+        assert_eq!(parsed.get("OPENAI_API_KEY").map(String::as_str), Some("sk-openai-yyy"));
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path)
+                .expect("metadata should be readable")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
 
         cleanup(&path);
     }

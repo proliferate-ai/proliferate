@@ -28,7 +28,7 @@ apps/desktop/src-tauri/
     commands/
       runtime.rs               # renderer commands for AnyHarness runtime status/restart
       cloud_worker.rs          # desktop dispatch worker process lifecycle
-      keychain.rs              # local secret storage and sidecar launch secrets
+      keychain.rs              # local secret storage (auth + env creds as 0600 files; data key in keychain) and sidecar launch secrets
       process.rs               # shell command helpers
       shell.rs                 # OS shell, editor, picker, and open actions
       diagnostics.rs           # renderer diagnostics bridge
@@ -49,6 +49,6 @@ apps/desktop/src-tauri/
 | AnyHarness sidecar | `src/sidecar.rs` is the only owner of local AnyHarness process discovery, spawn, health polling, restart, and runtime info persistence. |
 | Seed env | `src/agent_seed_env.rs` is the only Tauri-side owner of `ANYHARNESS_AGENT_SEED_*` launch env. Hydration logic stays in AnyHarness. |
 | Sidecar binaries | `build.rs` stages binaries; `tauri.conf.json` declares them. Do not add another packaging path for runtime binaries. |
-| Secrets | Sidecar launch secrets come from `commands/keychain.rs`; do not persist provider secrets in app config JSON. |
+| Secrets | Recreatable secrets (auth session, pending OAuth, provider env creds) are `0600` files in the durable app home; only the anyharness data key stays in the keychain (see the sidecar spec's Local Secrets). Sidecar launch secrets come from `commands/keychain.rs`; do not persist provider secrets in app config JSON. |
 | Desktop dispatch worker | `commands/cloud_worker.rs` owns the optional Proliferate Worker child process. It is separate from the always-on AnyHarness sidecar. |
 | Dev profiles | Profile-specific ports, Tauri config, app home, and runtime home come from `specs/developing/local/dev-profiles.md`; do not hard-code default ports into new Tauri flows. |
