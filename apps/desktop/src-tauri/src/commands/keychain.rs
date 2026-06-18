@@ -434,6 +434,9 @@ pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> 
 
 #[tauri::command]
 pub async fn clear_auth_session() -> Result<(), String> {
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
     delete_file_if_exists(&auth_session_file_path()?)
 }
 
@@ -452,6 +455,9 @@ pub async fn set_pending_auth(record: PendingAuthRecord) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn clear_pending_auth() -> Result<(), String> {
+    let _guard = SECRET_FILE_LOCK
+        .lock()
+        .map_err(|_| "secret file lock poisoned".to_string())?;
     delete_file_if_exists(&pending_auth_file_path()?)
 }
 

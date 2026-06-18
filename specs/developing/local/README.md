@@ -232,9 +232,10 @@ as:
 Proliferate (<name>)
 ```
 
-Desktop auth sessions and pending-auth entries are profile-scoped in the dev
-Keychain. Native provider credentials and AnyHarness runtime data keys remain
-user-level local secrets.
+Desktop auth sessions, pending-auth entries, and stored provider API keys are
+profile-scoped `0600` files under the dev app home. Native provider credential
+files (the user's own Claude/Codex/Gemini CLI auth) and the AnyHarness runtime
+data key (keychain) remain shared user-level secrets.
 
 ## Mobile Web Against A Profile
 
