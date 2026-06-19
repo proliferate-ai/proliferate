@@ -167,16 +167,16 @@ One-time setup:
 just bootstrap
 ```
 
-Daily workflow (run each in its own terminal):
+Daily workflow:
 
 ```bash
-# terminal 1 — backing services
+# start backing services (runs in the background)
 just infra-up
 
-# terminal 2 — FastAPI control plane
+# terminal 1 — FastAPI control plane
 just api
 
-# terminal 3 — Vite web app
+# terminal 2 — Vite web app
 just web
 ```
 
