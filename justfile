@@ -119,7 +119,7 @@ api:
 # Binds to 127.0.0.1 so WSL2 auto-forwards the port to Windows `localhost`.
 # Runs `pnpm dev` so all workspace packages (cloud-sdk, product-surfaces, etc.) are built first.
 web:
-    {{ venv }} && cd apps/web && \
+    cd apps/web && \
         VITE_PROLIFERATE_API_BASE_URL="http://127.0.0.1:{{ api_port }}" \
         VITE_PROLIFERATE_DEV_TOKEN_LOGIN=true \
         pnpm dev --port {{ web_port }} --host 127.0.0.1 --strictPort
