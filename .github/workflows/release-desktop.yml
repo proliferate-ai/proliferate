@@ -688,3 +688,57 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ vars.DESKTOP_CLOUDFRONT_DISTRIBUTION_ID }}" \
             --paths "/desktop/stable/latest.json" "/desktop/stable/installers.json"
+
+      - name: Bump Homebrew cask
+        env:
+          # contents:write PAT/App token scoped to the tap repo only. When unset
+          # (e.g. before the tap exists) this step no-ops instead of failing.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO || 'proliferate-ai/homebrew-tap' }}
+          INPUT_VERSION: ${{ inputs.version || '' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping Homebrew cask bump."
+            exit 0
+          fi
+
+          version="$INPUT_VERSION"
+          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
+            version="${GITHUB_REF_NAME#desktop-v}"
+          fi
+          : "${version:?Missing desktop release version.}"
+
+          # Compute sha256 from the build artifacts we just shipped (not the CDN,
+          # to avoid propagation races and verify the exact bytes published).
+          dmg_aarch64=$(find all-artifacts -type f -name "Proliferate_${version}_aarch64.dmg" | head -n 1)
+          dmg_x64=$(find all-artifacts -type f -name "Proliferate_${version}_x64.dmg" | head -n 1)
+          [[ -n "$dmg_aarch64" ]] || { echo "::error::Missing aarch64 DMG for cask bump"; exit 1; }
+          [[ -n "$dmg_x64" ]] || { echo "::error::Missing x64 DMG for cask bump"; exit 1; }
+          sha_aarch64=$(shasum -a 256 "$dmg_aarch64" | awk '{print $1}')
+          sha_x64=$(shasum -a 256 "$dmg_x64" | awk '{print $1}')
+
+          tap_dir="$(mktemp -d)"
+          git clone --depth 1 \
+            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git" \
+            "$tap_dir"
+
+          mkdir -p "$tap_dir/Casks"
+          node scripts/generate-homebrew-cask.mjs \
+            --version "$version" \
+            --sha-aarch64 "$sha_aarch64" \
+            --sha-x64 "$sha_x64" \
+            --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
+            --desc "Open-source AI IDE for running coding agents in parallel" \
+            --output "$tap_dir/Casks/proliferate.rb"
+
+          cd "$tap_dir"
+          if git diff --quiet -- Casks/proliferate.rb; then
+            echo "Cask already up to date at version $version; nothing to push."
+            exit 0
+          fi
+          git config user.name "proliferate-release-bot"
+          git config user.email "release-bot@proliferate.com"
+          git add Casks/proliferate.rb
+          git commit -m "proliferate ${version}"
+          git push origin HEAD
