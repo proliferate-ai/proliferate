@@ -733,12 +733,15 @@ jobs:
             --output "$tap_dir/Casks/proliferate.rb"
 
           cd "$tap_dir"
-          if git diff --quiet -- Casks/proliferate.rb; then
+          git config user.name "proliferate-release-bot"
+          git config user.email "release-bot@proliferate.com"
+          # Stage first, then diff the index: `git diff` alone ignores untracked
+          # files, so on the tap's first-ever cask it would wrongly report "no
+          # change" and skip the push.
+          git add Casks/proliferate.rb
+          if git diff --cached --quiet; then
             echo "Cask already up to date at version $version; nothing to push."
             exit 0
           fi
-          git config user.name "proliferate-release-bot"
-          git config user.email "release-bot@proliferate.com"
-          git add Casks/proliferate.rb
           git commit -m "proliferate ${version}"
           git push origin HEAD
