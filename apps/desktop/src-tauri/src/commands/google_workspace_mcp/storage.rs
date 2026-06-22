@@ -284,9 +284,5 @@ pub(super) fn validate_oauth_client_secret(value: &str) -> Result<String, ()> {
 }
 
 pub(super) fn resolve_command_path(command: &str) -> Result<PathBuf, ()> {
-    let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    if let Some(path) = crate::sidecar::resolve_shell_path() {
-        return which::which_in(command, Some(path), current_dir).map_err(|_| ());
-    }
-    which::which(command).map_err(|_| ())
+    crate::platform::resolve_executable(command).ok_or(())
 }

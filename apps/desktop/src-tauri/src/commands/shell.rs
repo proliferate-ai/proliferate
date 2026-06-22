@@ -1,4 +1,4 @@
-use crate::editors;
+use crate::{editors, platform};
 use std::io::Write;
 use std::process::Command;
 use std::process::Stdio;
@@ -15,64 +15,24 @@ pub fn open_in_editor(path: String, editor: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn path_is_directory(path: String) -> bool {
-    std::fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false)
+    std::fs::metadata(&path)
+        .map(|m| m.is_dir())
+        .unwrap_or(false)
 }
 
 #[tauri::command]
 pub fn reveal_in_finder(path: String) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg("-R")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to reveal in Finder: {e}"))?;
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = path;
-        Err("reveal_in_finder is only supported on macOS".to_string())
-    }
+    platform::reveal_path(path)
 }
 
 #[tauri::command]
 pub fn open_in_terminal(path: String) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg("-a")
-            .arg("Terminal")
-            .arg(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to open Terminal: {e}"))?;
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = path;
-        Err("open_in_terminal is only supported on macOS".to_string())
-    }
+    platform::open_terminal_at(path)
 }
 
 #[tauri::command]
 pub fn open_external(url: String) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(&url)
-            .spawn()
-            .map_err(|e| format!("Failed to open URL: {e}"))?;
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = url;
-        Err("open_external is only supported on macOS currently".to_string())
-    }
+    platform::open_url(&url)
 }
 
 #[tauri::command]

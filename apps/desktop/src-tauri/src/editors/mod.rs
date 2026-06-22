@@ -104,7 +104,7 @@ const EDITOR_DEFINITIONS: &[EditorDefinition] = &[
 ];
 
 trait EditorRuntime {
-    fn which(&self, bin: &str) -> Option<PathBuf>;
+    fn resolve_executable(&self, bin: &str) -> Option<PathBuf>;
     fn is_file(&self, path: &Path) -> bool;
     fn spawn_editor(&self, program: &Path, target_path: &str) -> Result<(), String>;
 }
@@ -112,8 +112,8 @@ trait EditorRuntime {
 struct SystemEditorRuntime;
 
 impl EditorRuntime for SystemEditorRuntime {
-    fn which(&self, bin: &str) -> Option<PathBuf> {
-        which::which(bin).ok()
+    fn resolve_executable(&self, bin: &str) -> Option<PathBuf> {
+        crate::platform::resolve_executable(bin)
     }
 
     fn is_file(&self, path: &Path) -> bool {
@@ -148,9 +148,9 @@ fn resolve_editor_bin_with(
     runtime: &impl EditorRuntime,
     definition: &EditorDefinition,
 ) -> Option<PathBuf> {
-    if let Some(path) = runtime.which(definition.bin) {
+    if let Some(path) = runtime.resolve_executable(definition.bin) {
         eprintln!(
-            "[editors] found {} on PATH: {}",
+            "[editors] found {} in executable search: {}",
             definition.id,
             path.display()
         );

@@ -17,8 +17,8 @@ use tokio::{
 
 use crate::{
     agent_seed_env::current_target_triple,
-    app_config,
-    sidecar::{resolve_shell_path, RuntimeStatus, SharedSidecar},
+    app_config, platform,
+    sidecar::{RuntimeStatus, SharedSidecar},
 };
 
 #[derive(Default)]
@@ -146,7 +146,7 @@ pub async fn ensure_desktop_dispatch_worker(
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit())
         .kill_on_drop(true);
-    if let Some(path) = resolve_shell_path() {
+    if let Some(path) = platform::resolve_shell_path() {
         command.env("PATH", path);
     }
 
