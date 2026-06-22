@@ -51,4 +51,22 @@ describe("control plane health", () => {
     expect(signal?.aborted).toBe(true);
     expect(getLastKnownControlPlaneReachable()).toBe(false);
   });
+
+  it("falls back even when the runtime ignores fetch abort", async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise<Response>(() => {});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const reachable = checkControlPlaneReachable();
+
+    await vi.advanceTimersByTimeAsync(2_500);
+
+    await expect(reachable).resolves.toBe(false);
+    expect(signal?.aborted).toBe(true);
+    expect(getLastKnownControlPlaneReachable()).toBe(false);
+  });
 });
