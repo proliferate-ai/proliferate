@@ -158,8 +158,16 @@ describe("CloudChatComposer", () => {
       />,
     );
 
-    const copyButton = screen.getByTitle("Copy branch name");
+    const copyButton = screen.getByRole("button", { name: /feature\/loading/i });
+    const tooltipTrigger = copyButton.parentElement;
+    expect(tooltipTrigger).toBeTruthy();
+    expect(copyButton.getAttribute("title")).toBeNull();
     expect(copyButton.querySelector(".lucide-git-branch")).toBeTruthy();
+
+    fireEvent.mouseEnter(tooltipTrigger!);
+    expect(screen.getByRole("tooltip").textContent).toBe("Copy branch name");
+    fireEvent.mouseLeave(tooltipTrigger!);
+
     fireEvent.click(copyButton);
 
     await act(async () => {
@@ -167,17 +175,22 @@ describe("CloudChatComposer", () => {
     });
 
     expect(onCopy).toHaveBeenCalledTimes(1);
-    expect(copyButton.title).toBe("Copied");
+    expect(copyButton.getAttribute("title")).toBeNull();
     expect(screen.getByRole("button", { name: "Copied branch name" })).toBe(copyButton);
     expect(screen.getByText("Copied branch name")).toBeTruthy();
     expect(copyButton.querySelector(".lucide-check")).toBeTruthy();
     expect(copyButton.querySelector(".lucide-git-branch")).toBeNull();
 
+    fireEvent.mouseEnter(tooltipTrigger!);
+    expect(screen.getByRole("tooltip").textContent).toBe("Copied");
+    fireEvent.mouseLeave(tooltipTrigger!);
+
     act(() => {
       vi.advanceTimersByTime(1400);
     });
 
-    expect(copyButton.title).toBe("Copy branch name");
+    expect(copyButton.getAttribute("title")).toBeNull();
+    expect(screen.getByRole("button", { name: /feature\/loading/i })).toBe(copyButton);
     expect(copyButton.querySelector(".lucide-git-branch")).toBeTruthy();
   });
 
@@ -209,7 +222,15 @@ describe("CloudChatComposer", () => {
       />,
     );
 
-    const copyButton = screen.getByTitle("Copy repository name");
+    const copyButton = screen.getByRole("button", { name: /proliferate-ai\/proliferate/i });
+    const tooltipTrigger = copyButton.parentElement;
+    expect(tooltipTrigger).toBeTruthy();
+    expect(copyButton.getAttribute("title")).toBeNull();
+
+    fireEvent.mouseEnter(tooltipTrigger!);
+    expect(screen.getByRole("tooltip").textContent).toBe("Copy repository name");
+    fireEvent.mouseLeave(tooltipTrigger!);
+
     fireEvent.click(copyButton);
 
     await act(async () => {
@@ -217,7 +238,7 @@ describe("CloudChatComposer", () => {
     });
 
     expect(onCopy).toHaveBeenCalledTimes(1);
-    expect(copyButton.title).toBe("Copy repository name");
+    expect(copyButton.getAttribute("title")).toBeNull();
     expect(copyButton.querySelector(".lucide-check")).toBeNull();
     expect(screen.queryByText("Copied repository name")).toBeNull();
   });
