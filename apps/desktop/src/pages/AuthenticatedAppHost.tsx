@@ -82,9 +82,8 @@ function LegacyRouteRedirect({
   includeParam?: string;
 }) {
   const location = useLocation();
-  const match = includeParam
-    ? location.pathname.split("/").filter(Boolean).at(-1)
-    : null;
+  const segments = includeParam ? location.pathname.split("/").filter(Boolean) : [];
+  const match = includeParam ? segments[segments.length - 1] ?? null : null;
   const suffix = match ? `/${encodeURIComponent(decodeURIComponent(match))}` : "";
   return <Navigate to={`${to}${suffix}${location.search}${location.hash}`} replace />;
 }
