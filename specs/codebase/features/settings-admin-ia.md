@@ -219,18 +219,17 @@ ownership boundary without adding duplicate or fake integration/model/limit
 backends.
 
 Personal Integrations and Workflows are top-level app pages rather than
-Settings sections. Existing top-level Plugins, Automations, and Support rows
+Settings sections. Existing legacy top-level Plugins and Automations rows
 remain visible for now but are marked `tbr` because they are outside this target
-IA.
+IA. Support is not `tbr`.
 
 Rows outside the target list are marked with a small `tbr` status pill until
 they are removed or explicitly re-scoped:
 
 ```text
-Main sidebar            Plugins, Automations, Support
+Main sidebar            Plugins, Automations
 Settings / Workspaces   Archived chats, Shared sandbox
 Settings / Agents       Review
-Settings / Help         Support, Desktop updates
 ```
 
 ## 5. Target Model
@@ -820,8 +819,8 @@ apps/desktop/src/lib/domain/telemetry/events.ts
    organization auto top up option alongside the existing billing controls.
 6. `ComputePane` is labeled `Personal compute`.
 7. Integrations and Workflows pages are top-level. Still-visible Plugins,
-   Automations, Support, Archived chats, Shared sandbox, Review, and Desktop
-   updates rows are marked `tbr`.
+   Automations, Archived chats, Shared sandbox, and Review rows are marked
+   `tbr`. Support and Desktop updates are not `tbr`.
 8. Deep-link params (`?section=…&target=…`, `&credential=…`,
    `&kind=…`, `&repo=…`) work: opening a deep link scrolls the focus
    element into view and opens the relevant detail card.

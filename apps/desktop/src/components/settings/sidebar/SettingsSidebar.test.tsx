@@ -165,7 +165,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
   it("marks visible settings rows outside the target IA as tbr", () => {
     renderSettingsSidebar();
 
-    expect(screen.getAllByText("tbr")).toHaveLength(3);
+    expect(screen.getAllByText("tbr")).toHaveLength(1);
   });
 
   it("disables admin-only rows for non-admins", () => {

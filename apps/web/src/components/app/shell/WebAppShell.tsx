@@ -182,7 +182,7 @@ function CollapsedSidebarRail({
     },
     {
       id: "support",
-      label: "Support tbr",
+      label: "Support",
       icon: <LifeBuoy className="size-4" />,
       active: pathname.startsWith(routes.support),
       onSelect: () => onNavigate(routes.support),

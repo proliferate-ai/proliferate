@@ -60,7 +60,6 @@ export function SidebarPrimaryNavigation({
       active: supportActive,
       icon: <LifeBuoy className="size-4" />,
       label: "Support",
-      status: <TbrPill />,
       shortcutLabel: shortcutLabels.support,
     },
   ];
@@ -90,17 +89,5 @@ export function SidebarPrimaryNavigation({
       onNavSelect={handleNavSelect}
       shortcutRevealVisible={shortcutRevealVisible}
     />
-  );
-}
-
-function TbrPill() {
-  return (
-    <span
-      aria-hidden="true"
-      title="To be removed"
-      className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
-    >
-      tbr
-    </span>
   );
 }

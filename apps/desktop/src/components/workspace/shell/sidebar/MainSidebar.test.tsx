@@ -253,10 +253,10 @@ function renderMainSidebar() {
 }
 
 describe("MainSidebar support window", () => {
-  it("marks legacy top-level rows outside the target IA as tbr", () => {
+  it("does not mark Support as tbr", () => {
     renderMainSidebar();
 
-    expect(screen.getAllByText("tbr")).toHaveLength(1);
+    expect(screen.queryByText("tbr")).toBeNull();
   });
 
   it("opens the support report window from Support", async () => {
