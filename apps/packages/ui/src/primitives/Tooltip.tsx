@@ -128,7 +128,7 @@ export function Tooltip({
           className={`pointer-events-none fixed z-[70] -translate-x-1/2 -translate-y-full border border-border/60 bg-popover/96 px-2.5 py-1 text-[11px] font-medium leading-tight text-popover-foreground shadow-floating backdrop-blur-lg ${
             singleLine
               ? "max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden text-ellipsis whitespace-nowrap rounded-full"
-              : "overflow-hidden rounded-md text-left"
+              : "overflow-hidden rounded-lg text-left"
           } ${
             measured ? "opacity-100" : "opacity-0"
           }`}
