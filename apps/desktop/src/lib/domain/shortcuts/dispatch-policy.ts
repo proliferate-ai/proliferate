@@ -119,7 +119,10 @@ function canBypassDefaultPrevented(
   }
 
   if (
-    (shortcut.id === SHORTCUTS.increaseTextSize.id || shortcut.id === SHORTCUTS.decreaseTextSize.id)
+    (
+      shortcut.id === SHORTCUTS.increaseWindowZoom.id
+      || shortcut.id === SHORTCUTS.decreaseWindowZoom.id
+    )
     && (event.metaKey || event.ctrlKey)
     && !event.altKey
     && (

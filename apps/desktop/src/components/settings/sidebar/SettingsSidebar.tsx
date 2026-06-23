@@ -64,7 +64,7 @@ const SETTINGS_GROUPS_CLASS = "flex flex-col";
 const SETTINGS_GROUP_CLASS = "flex flex-col gap-1";
 const SETTINGS_GROUP_SPACING_CLASS = "mt-5";
 const SETTINGS_GROUP_HEADING_CLASS =
-  "px-2.5 pb-1 pt-1.5 text-[11px] font-medium leading-4 tracking-normal text-sidebar-muted-foreground";
+  "px-2.5 pb-1 pt-1.5 text-base font-medium tracking-normal text-sidebar-muted-foreground";
 const SETTINGS_ROW_INACTIVE_CLASS =
   "!text-sidebar-foreground hover:!text-sidebar-foreground";
 const SETTINGS_BACK_ROW_CLASS =
@@ -168,7 +168,7 @@ function TbrPill() {
     <span
       aria-hidden="true"
       title="To be removed"
-      className="rounded-md border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
+      className="rounded-md border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 text-sm font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
     >
       tbr
     </span>
@@ -315,7 +315,7 @@ export function SettingsSidebar({
         </div>
       </nav>
       {appVersion ? (
-        <div className="shrink-0 border-t border-sidebar-border px-4 py-3 text-[11px] leading-4 text-sidebar-muted-foreground">
+        <div className="shrink-0 border-t border-sidebar-border px-4 py-3 text-base text-sidebar-muted-foreground">
           Proliferate v{appVersion}
         </div>
       ) : null}

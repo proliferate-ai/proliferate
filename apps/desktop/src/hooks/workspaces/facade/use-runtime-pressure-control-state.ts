@@ -64,6 +64,14 @@ const EMPTY_ROWS: WorktreeInventoryRow[] = [];
 
 export function useRuntimePressureControlState(): RuntimePressureControlState {
   const settings = useWorktreeSettingsTargets();
+  return useRuntimePressureControlStateFromSettings(settings);
+}
+
+type RuntimePressureSettingsState = ReturnType<typeof useWorktreeSettingsTargets>;
+
+export function useRuntimePressureControlStateFromSettings(
+  settings: RuntimePressureSettingsState,
+): RuntimePressureControlState {
   const selected = useSelectedLogicalWorkspace();
   const idealWorktreeCount = useUserPreferencesStore(
     (state) => state.worktreeAutoDeleteLimit ?? WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,

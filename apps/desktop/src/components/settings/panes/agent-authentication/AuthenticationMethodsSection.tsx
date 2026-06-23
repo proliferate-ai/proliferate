@@ -62,7 +62,7 @@ export function AuthenticationMethodsSection({
         </p>
       </div>
       <SettingsCard>
-        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] gap-3 border-b border-border-light bg-foreground/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] gap-3 border-b border-border-light bg-foreground/5 px-4 py-2 text-base font-semibold uppercase tracking-wide text-muted-foreground">
           <span>Method</span>
           <span>Provider</span>
           <span>Source</span>

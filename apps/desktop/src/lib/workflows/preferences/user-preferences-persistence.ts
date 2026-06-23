@@ -84,6 +84,7 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     colorMode: legacyTheme.colorMode ?? defaults.colorMode,
     uiFontSizeId: defaults.uiFontSizeId,
     readableCodeFontSizeId: defaults.readableCodeFontSizeId,
+    windowZoomId: defaults.windowZoomId,
     defaultChatAgentKind: legacyDefaultChatAgentKind ?? defaults.defaultChatAgentKind,
     ...(legacyDefaultChatModelId !== undefined
       ? { defaultChatModelId: legacyDefaultChatModelId }

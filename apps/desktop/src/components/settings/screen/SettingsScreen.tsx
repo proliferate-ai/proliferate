@@ -238,8 +238,8 @@ export function SettingsScreen({
           <div className="flex justify-center pb-8">
             <div
               className={`w-full space-y-6 ${
-                effectiveActiveSection === "billing" || effectiveActiveSection === "organization-integrations"
-                  ? "max-w-[76rem]"
+                effectiveActiveSection === "worktrees"
+                  ? "max-w-[58rem]"
                   : "max-w-[50rem]"
               }`}
             >

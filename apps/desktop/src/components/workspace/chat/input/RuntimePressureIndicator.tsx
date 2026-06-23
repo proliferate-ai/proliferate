@@ -56,7 +56,7 @@ export function RuntimePressureIndicator() {
           aria-haspopup="dialog"
           aria-expanded={open}
           icon={(
-            <PressureRing
+            <RuntimePressureRing
               tone={indicator.tone}
               progressPercent={indicator.ringProgressPercent}
               loading={pressure.isDiscovering || indicator.isLoading}
@@ -65,7 +65,7 @@ export function RuntimePressureIndicator() {
           onClick={() => setOpen(true)}
         />
       </Tooltip>
-      <RuntimePressureModal
+      <RuntimePressureDetailsDialog
         open={open}
         targetState={indicator}
         actions={pressure.actions}
@@ -75,7 +75,7 @@ export function RuntimePressureIndicator() {
   );
 }
 
-function RuntimePressureModal({
+export function RuntimePressureDetailsDialog({
   open,
   targetState,
   actions,
@@ -679,7 +679,7 @@ function formatByteEstimate(value: number | null | undefined): string {
   return `~${scaled.toFixed(digits)} ${units[unitIndex]}`;
 }
 
-function PressureRing({
+export function RuntimePressureRing({
   tone,
   progressPercent,
   loading = false,

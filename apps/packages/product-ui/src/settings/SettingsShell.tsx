@@ -66,7 +66,7 @@ export function SettingsShell({
           {groups.map((group, groupIndex) => (
             <div key={group.label ?? `settings-group-${groupIndex}`} className="space-y-1">
               {group.label ? (
-                <div className="px-2.5 pb-1 text-[11px] font-medium leading-4 tracking-normal text-sidebar-muted-foreground">
+                <div className="px-2.5 pb-1 text-base font-medium tracking-normal text-sidebar-muted-foreground">
                   {group.label}
                 </div>
               ) : null}

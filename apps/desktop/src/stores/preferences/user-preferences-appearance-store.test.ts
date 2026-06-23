@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { selectPersistedUserPreferencesSlice } from "@/lib/domain/preferences/persisted-metadata";
+import {
+  markModelVisibilityDefaultsReset,
+  selectPersistedUserPreferencesSlice,
+} from "@/lib/domain/preferences/persisted-metadata";
 import {
   USER_PREFERENCE_DEFAULTS,
   type UserPreferences,
@@ -50,18 +53,21 @@ describe("user appearance preference persistence", () => {
     });
   });
 
-  it("round-trips the appearance font preference bounds", async () => {
+  it("round-trips the appearance preference bounds", async () => {
     storeMocks.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
+      ...markModelVisibilityDefaultsReset({}),
       uiFontSizeId: "xxsmall",
       readableCodeFontSizeId: "xxxlarge",
-    } satisfies UserPreferences);
+      windowZoomId: "zoom120",
+    } as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.uiFontSizeId).toBe("xxsmall");
     expect(preferences.readableCodeFontSizeId).toBe("xxxlarge");
+    expect(preferences.windowZoomId).toBe("zoom120");
     expect(storeMocks.set).not.toHaveBeenCalled();
 
     preferences.set("turnEndSoundEnabled", true);
@@ -73,6 +79,7 @@ describe("user appearance preference persistence", () => {
     const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
     expect(persisted.uiFontSizeId).toBe("xxsmall");
     expect(persisted.readableCodeFontSizeId).toBe("xxxlarge");
+    expect(persisted.windowZoomId).toBe("zoom120");
     expect(persisted.turnEndSoundEnabled).toBe(true);
   });
 });
