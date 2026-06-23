@@ -36,7 +36,7 @@ interface AuthTokenContextValue {
   authRejectionCode: string | null;
   setToken: (token: string) => void;
   setSession: (session: AuthSessionResponse) => void;
-  clearToken: () => Promise<void>;
+  clearToken: (options?: { authRejectionCode?: string | null }) => Promise<void>;
 }
 
 const AuthTokenContext = createContext<AuthTokenContextValue | null>(null);
@@ -131,7 +131,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         setTokenState(session.accessToken);
         setUserState(session.user);
       },
-      async clearToken() {
+      async clearToken(options) {
         authEpochRef.current += 1;
         const csrfToken = readCookie("proliferate_web_csrf");
         if (csrfToken) {
@@ -146,7 +146,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         clearStoredAuthToken();
         setBootstrapping(false);
         setBootstrapUnreachable(false);
-        setAuthRejectionCode(null);
+        setAuthRejectionCode(options?.authRejectionCode ?? null);
         setTokenState(null);
         setUserState(null);
       },

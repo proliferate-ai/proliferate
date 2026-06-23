@@ -14,11 +14,13 @@ class WebBetaAccessDenied(PermissionDenied):
 
 
 def web_beta_gate_configured() -> bool:
-    return bool(_allowed_emails() or _allowed_domains())
+    allowed_emails, allowed_domains = _allowed_beta_config()
+    return bool(allowed_emails or allowed_domains)
 
 
 def ensure_web_beta_email_allowed(email: str | None) -> None:
-    if not web_beta_gate_configured():
+    allowed_emails, allowed_domains = _allowed_beta_config()
+    if not allowed_emails and not allowed_domains:
         return
 
     normalized_email = _normalize_email(email)
@@ -29,11 +31,11 @@ def ensure_web_beta_email_allowed(email: str | None) -> None:
             code=WEB_BETA_EMAIL_MISSING_CODE,
         )
 
-    if normalized_email in _allowed_emails():
+    if normalized_email in allowed_emails:
         return
 
     domain = normalized_email.rsplit("@", 1)[1]
-    if domain in _allowed_domains():
+    if domain in allowed_domains:
         return
 
     raise WebBetaAccessDenied(
@@ -70,3 +72,7 @@ def _allowed_domains() -> set[str]:
         if normalized and "@" not in normalized:
             domains.add(normalized)
     return domains
+
+
+def _allowed_beta_config() -> tuple[set[str], set[str]]:
+    return _allowed_emails(), _allowed_domains()
