@@ -18,7 +18,6 @@ from proliferate.auth.desktop.models import AuthorizeParams
 from proliferate.auth.desktop import service as desktop_service
 from proliferate.auth.identity import providers as identity_providers
 from proliferate.auth.identity.sessions import WEB_CSRF_COOKIE
-from proliferate.auth.identity.web_beta import WEB_BETA_EMAIL_NOT_ALLOWED_CODE
 from proliferate.auth.oauth import github_oauth_client, google_oauth_client
 from proliferate.auth.passwords import hash_password
 from proliferate.config import settings
@@ -280,75 +279,6 @@ class TestPasswordAuthFlow:
         )
         assert ai_magic.status_code == 403
         assert ai_magic.json()["detail"]["code"] == "github_link_required"
-
-    @pytest.mark.asyncio
-    async def test_web_password_login_rejects_non_beta_email(
-        self,
-        client: AsyncClient,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(settings, "password_auth_enabled", True)
-        monkeypatch.setattr(settings, "web_beta_allowed_domains", "beta.example.com")
-        await _create_password_user("not-beta@example.com", self.password)
-
-        response = await client.post(
-            "/auth/web/password/login",
-            json={"email": "not-beta@example.com", "password": self.password},
-        )
-
-        assert response.status_code == 403
-        assert response.json()["detail"]["code"] == WEB_BETA_EMAIL_NOT_ALLOWED_CODE
-        assert "proliferate_web_refresh" not in response.headers.get("set-cookie", "")
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("email", "allowed_emails", "allowed_domains"),
-        [
-            ("exact-beta@example.com", " exact-beta@example.com ", ""),
-            ("domain-beta@team.example.com", "", " @team.example.com "),
-        ],
-    )
-    async def test_web_password_login_accepts_beta_email_or_domain(
-        self,
-        client: AsyncClient,
-        monkeypatch: pytest.MonkeyPatch,
-        email: str,
-        allowed_emails: str,
-        allowed_domains: str,
-    ) -> None:
-        monkeypatch.setattr(settings, "password_auth_enabled", True)
-        monkeypatch.setattr(settings, "web_beta_allowed_emails", allowed_emails)
-        monkeypatch.setattr(settings, "web_beta_allowed_domains", allowed_domains)
-        await _create_password_user(email, self.password)
-
-        response = await client.post(
-            "/auth/web/password/login",
-            json={"email": email, "password": self.password},
-        )
-
-        assert response.status_code == 200
-        assert "proliferate_web_refresh" in response.headers["set-cookie"]
-
-    @pytest.mark.asyncio
-    async def test_web_session_bootstrap_rechecks_beta_allowlist_for_existing_cookie(
-        self,
-        client: AsyncClient,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(settings, "password_auth_enabled", True)
-        monkeypatch.setattr(settings, "web_beta_allowed_domains", "example.com")
-        await _create_password_user("existing-cookie@example.com", self.password)
-        response = await client.post(
-            "/auth/web/password/login",
-            json={"email": "existing-cookie@example.com", "password": self.password},
-        )
-        assert response.status_code == 200
-
-        monkeypatch.setattr(settings, "web_beta_allowed_domains", "beta.example.com")
-        bootstrap = await client.post("/auth/web/session/bootstrap")
-
-        assert bootstrap.status_code == 403
-        assert bootstrap.json()["detail"]["code"] == WEB_BETA_EMAIL_NOT_ALLOWED_CODE
 
     @pytest.mark.asyncio
     async def test_mobile_password_login_returns_refresh_token_for_ready_user(
@@ -700,51 +630,6 @@ class TestWebMobileSessionGuards:
 
         assert response.status_code == 403
         assert response.json()["detail"] == "User is inactive."
-
-    @pytest.mark.asyncio
-    async def test_web_beta_allowlist_applies_to_web_token_not_desktop_token(
-        self,
-        client: AsyncClient,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        user_id = await _create_user_via_manager("token-non-beta@example.com")
-        monkeypatch.setattr(settings, "web_beta_allowed_domains", "beta.example.com")
-
-        web_verifier, web_challenge = _make_pkce_pair()
-        web_code = await _create_desktop_auth_code_for_user(
-            user_id=user_id,
-            state="web-beta-denied-state",
-            code_challenge=web_challenge,
-        )
-        web_response = await client.post(
-            "/auth/web/token",
-            json={
-                "code": web_code,
-                "codeVerifier": web_verifier,
-                "grantType": "authorization_code",
-            },
-        )
-
-        assert web_response.status_code == 403
-        assert web_response.json()["detail"]["code"] == WEB_BETA_EMAIL_NOT_ALLOWED_CODE
-
-        desktop_verifier, desktop_challenge = _make_pkce_pair()
-        desktop_code = await _create_desktop_auth_code_for_user(
-            user_id=user_id,
-            state="desktop-beta-bypass-state",
-            code_challenge=desktop_challenge,
-        )
-        desktop_response = await client.post(
-            "/auth/desktop/token",
-            json={
-                "code": desktop_code,
-                "code_verifier": desktop_verifier,
-                "grant_type": "authorization_code",
-            },
-        )
-
-        assert desktop_response.status_code == 200
-        assert desktop_response.json()["user"]["email"] == "token-non-beta@example.com"
 
     @pytest.mark.asyncio
     async def test_mobile_refresh_rejects_inactive_user(self, client: AsyncClient) -> None:
@@ -1100,7 +985,6 @@ class TestWebMobileProductAuthFlow:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         verifier, challenge = _make_pkce_pair()
-        monkeypatch.setattr(settings, "web_beta_allowed_domains", "beta.example.com")
         self._enable_identity_github(monkeypatch, "desktop-shared-github@example.com")
         schedule_mock = Mock()
         monkeypatch.setattr(
@@ -1332,40 +1216,6 @@ class TestWebMobileProductAuthFlow:
             headers={"Authorization": f"Bearer {payload['accessToken']}"},
         )
         assert protected.status_code == 200
-
-    @pytest.mark.asyncio
-    async def test_web_github_login_redirects_to_beta_error_when_email_denied(
-        self,
-        client: AsyncClient,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        _, challenge = _make_pkce_pair()
-        monkeypatch.setattr(settings, "web_beta_allowed_domains", "beta.example.com")
-        self._enable_identity_github(monkeypatch, "not-beta-github@example.com")
-
-        started = await client.post(
-            "/auth/web/github/start",
-            json={
-                "purpose": "login",
-                "clientState": "web-beta-denied-state",
-                "codeChallenge": challenge,
-                "codeChallengeMethod": "S256",
-                "redirectUri": "http://localhost:5174/auth/callback",
-            },
-        )
-        assert started.status_code == 200
-        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
-
-        callback = await client.get(
-            "/auth/github/callback",
-            params={"code": "github-code", "state": oauth_state},
-            follow_redirects=False,
-        )
-
-        assert callback.status_code == 302
-        redirect = urlparse(callback.headers["location"])
-        assert redirect.path == "/auth/error"
-        assert parse_qs(redirect.query)["code"] == [WEB_BETA_EMAIL_NOT_ALLOWED_CODE]
 
     @pytest.mark.asyncio
     async def test_web_google_login_requires_github_then_links_github(

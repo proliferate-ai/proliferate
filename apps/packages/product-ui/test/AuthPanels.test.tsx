@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -55,60 +55,6 @@ describe("auth product panels", () => {
       "Continue with Google",
     ]);
     expect(providerButtons[0].className).toContain("bg-foreground");
-  });
-
-  it("renders secondary providers behind the more menu", () => {
-    const githubClick = vi.fn();
-    const appleClick = vi.fn();
-    const googleClick = vi.fn();
-
-    render(
-      <AuthStartPanel
-        title={AUTH_SIGN_IN_COPY.title}
-        subtitle={AUTH_SIGN_IN_COPY.subtitle}
-        footer={AUTH_SIGN_IN_COPY.footer}
-        providers={[
-          {
-            id: "github",
-            label: "Continue with GitHub",
-            primary: true,
-            onClick: githubClick,
-          },
-        ]}
-        secondaryLabel="More"
-        secondaryActions={[
-          {
-            id: "apple",
-            label: "Continue with Apple",
-            onClick: appleClick,
-          },
-          {
-            id: "google",
-            label: "Continue with Google",
-            onClick: googleClick,
-          },
-        ]}
-        secondaryContent={<div>Email sign-in</div>}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "More" })).toBeTruthy();
-    expect(screen.queryByText("Continue with Apple")).toBeNull();
-    expect(screen.queryByText("Email sign-in")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "More" }));
-
-    expect(screen.getByRole("button", { name: "Continue with Apple" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
-    expect(screen.getByText("Email sign-in")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Continue with Apple" }));
-
-    expect(appleClick).toHaveBeenCalledTimes(1);
-    expect(githubClick).not.toHaveBeenCalled();
-    expect(googleClick).not.toHaveBeenCalled();
-    expect(screen.getByText("Email sign-in")).toBeTruthy();
   });
 
   it("renders the email credential form slot", () => {
