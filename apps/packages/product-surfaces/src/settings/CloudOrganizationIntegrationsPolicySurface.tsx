@@ -6,7 +6,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import {
   buildOrganizationIntegrationPolicyItems,
-  type OrganizationIntegrationPolicyStatusFilter,
+  type OrganizationIntegrationPolicyCategoryFilter,
 } from "@proliferate/product-domain/plugins/organization-integration-policy";
 import { OrganizationIntegrationsPolicySurface } from "@proliferate/product-ui/plugins/OrganizationIntegrationsPolicySurface";
 
@@ -27,8 +27,8 @@ export function CloudOrganizationIntegrationsPolicySurface({
   );
   const actions = useCloudOrganizationIntegrationPolicyActions(organizationId);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<OrganizationIntegrationPolicyStatusFilter>("all");
+  const [categoryFilter, setCategoryFilter] =
+    useState<OrganizationIntegrationPolicyCategoryFilter>("all");
   const [pendingCatalogEntryIds, setPendingCatalogEntryIds] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -40,9 +40,9 @@ export function CloudOrganizationIntegrationsPolicySurface({
       catalog: catalog.data,
       policy: policy.data,
       query,
-      statusFilter,
+      categoryFilter,
     });
-  }, [catalog.data, policy.data, query, statusFilter]);
+  }, [catalog.data, policy.data, query, categoryFilter]);
 
   const loadError = organizationId
     ? firstErrorMessage(catalog.error, policy.error)
@@ -72,12 +72,12 @@ export function CloudOrganizationIntegrationsPolicySurface({
     <OrganizationIntegrationsPolicySurface
       items={items}
       query={query}
-      statusFilter={statusFilter}
+      categoryFilter={categoryFilter}
       loading={loading}
       error={error}
       pendingCatalogEntryIds={pendingCatalogEntryIds}
       onQueryChange={setQuery}
-      onStatusFilterChange={setStatusFilter}
+      onCategoryFilterChange={setCategoryFilter}
       onToggleIntegration={(catalogEntryId, value) => {
         void toggleIntegration(catalogEntryId, value);
       }}

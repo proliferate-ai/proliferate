@@ -10,10 +10,27 @@ import {
 import { normalizeQuery } from "./cloud-plugin-inventory-items";
 import type { PluginCatalogEntryView } from "./cloud-plugin-inventory-types";
 
-export type OrganizationIntegrationPolicyStatusFilter =
+export type OrganizationIntegrationPolicyCategoryFilter =
   | "all"
-  | "disabled"
-  | "enabled";
+  | "knowledge"
+  | "mcp"
+  | "observability"
+  | "project_management"
+  | "source_control";
+
+export interface OrganizationIntegrationPolicyFilterOption {
+  id: OrganizationIntegrationPolicyCategoryFilter;
+  label: string;
+}
+
+export const ORGANIZATION_INTEGRATION_POLICY_FILTER_OPTIONS: readonly OrganizationIntegrationPolicyFilterOption[] = [
+  { id: "all", label: "All" },
+  { id: "source_control", label: "Source control" },
+  { id: "project_management", label: "Project management" },
+  { id: "observability", label: "Observability" },
+  { id: "knowledge", label: "Knowledge" },
+  { id: "mcp", label: "MCP" },
+];
 
 export interface OrganizationIntegrationPolicyItem {
   catalogEntryId: string;
@@ -21,6 +38,7 @@ export interface OrganizationIntegrationPolicyItem {
   description: string;
   iconId: string;
   enabled: boolean;
+  categories: readonly OrganizationIntegrationPolicyCategoryFilter[];
   tags: readonly string[];
 }
 
@@ -28,14 +46,14 @@ export interface BuildOrganizationIntegrationPolicyItemsInput {
   catalog: CloudMcpCatalogResponse;
   policy?: CloudOrganizationIntegrationPolicyResponse | null;
   query?: string;
-  statusFilter?: OrganizationIntegrationPolicyStatusFilter;
+  categoryFilter?: OrganizationIntegrationPolicyCategoryFilter;
 }
 
 export function buildOrganizationIntegrationPolicyItems({
   catalog,
   policy = null,
   query,
-  statusFilter = "all",
+  categoryFilter = "all",
 }: BuildOrganizationIntegrationPolicyItemsInput): OrganizationIntegrationPolicyItem[] {
   const normalizedQuery = normalizeQuery(query);
   const packagesByCatalogEntryId = new Map(
@@ -49,7 +67,7 @@ export function buildOrganizationIntegrationPolicyItems({
     .map((entry) => catalogEntryView(entry, packagesByCatalogEntryId.get(entry.id)))
     .filter(isActiveCatalogEntry)
     .map((entry) => policyItem(entry, policy))
-    .filter((item) => matchesStatusFilter(item, statusFilter))
+    .filter((item) => matchesCategoryFilter(item, categoryFilter))
     .filter((item) => matchesQuery(item, normalizedQuery));
 }
 
@@ -69,48 +87,69 @@ function policyItem(
   entry: PluginCatalogEntryView,
   policy: CloudOrganizationIntegrationPolicyResponse | null,
 ): OrganizationIntegrationPolicyItem {
+  const categories = integrationCategories(entry);
   return {
     catalogEntryId: entry.id,
     name: entry.name,
     description: entry.oneLiner || entry.description,
     iconId: entry.iconId,
     enabled: organizationIntegrationPolicyEnabled(entry.id, policy),
-    tags: integrationTags(entry),
+    categories,
+    tags: integrationTags(categories),
   };
 }
 
-function integrationTags(entry: PluginCatalogEntryView): string[] {
-  return [
-    authTag(entry),
-    entry.availability === "local_only" ? "Desktop only" : null,
-    "MCP",
-  ].filter((tag): tag is string => Boolean(tag));
+function integrationCategories(
+  entry: PluginCatalogEntryView,
+): OrganizationIntegrationPolicyCategoryFilter[] {
+  const categories = new Set<OrganizationIntegrationPolicyCategoryFilter>(["mcp"]);
+  switch (entry.id) {
+    case "github":
+    case "gitlab":
+      categories.add("source_control");
+      break;
+    case "linear":
+      categories.add("project_management");
+      break;
+    case "axiom":
+    case "posthog":
+    case "render":
+    case "sentry":
+      categories.add("observability");
+      break;
+    case "cloudflare_docs":
+    case "context7":
+    case "exa":
+    case "gmail":
+    case "notion":
+    case "slack":
+    case "tavily":
+      categories.add("knowledge");
+      break;
+  }
+  return [...categories];
 }
 
-function authTag(entry: PluginCatalogEntryView): string {
-  if (entry.setupKind === "local_oauth") {
-    return "Local auth";
-  }
-  if (entry.authKind === "oauth") {
-    return "OAuth";
-  }
-  if (entry.authKind === "secret" || entry.requiredFields.length > 0) {
-    return "API key";
-  }
-  return "No setup";
+function integrationTags(
+  categories: readonly OrganizationIntegrationPolicyCategoryFilter[],
+): string[] {
+  const categoryLabels = new Map(
+    ORGANIZATION_INTEGRATION_POLICY_FILTER_OPTIONS.map((option) => [option.id, option.label]),
+  );
+  const ordered = ORGANIZATION_INTEGRATION_POLICY_FILTER_OPTIONS
+    .map((option) => option.id)
+    .filter((category) => category !== "all" && categories.includes(category));
+  return ordered.map((category) => categoryLabels.get(category) ?? category);
 }
 
-function matchesStatusFilter(
+function matchesCategoryFilter(
   item: OrganizationIntegrationPolicyItem,
-  statusFilter: OrganizationIntegrationPolicyStatusFilter,
+  categoryFilter: OrganizationIntegrationPolicyCategoryFilter,
 ): boolean {
-  if (statusFilter === "enabled") {
-    return item.enabled;
+  if (categoryFilter === "all") {
+    return true;
   }
-  if (statusFilter === "disabled") {
-    return !item.enabled;
-  }
-  return true;
+  return item.categories.includes(categoryFilter);
 }
 
 function matchesQuery(
