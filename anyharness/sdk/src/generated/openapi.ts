@@ -2564,6 +2564,7 @@ export interface components {
             agentReconcile: components["schemas"]["AgentReconcileSummary"];
             agentSeed: components["schemas"]["AgentSeedHealth"];
             capabilities: components["schemas"]["RuntimeCapabilities"];
+            resourcePressure?: null | components["schemas"]["RuntimeResourcePressure"];
             runtimeHome: string;
             status: string;
             version: string;
@@ -3604,6 +3605,16 @@ export interface components {
             currentRevision?: null | components["schemas"]["RuntimeConfigRevision"];
             manifest?: null | components["schemas"]["RuntimeConfigManifest"];
         };
+        RuntimeCpuPressure: {
+            /** Format: double */
+            idealMaxPercent: number;
+            /** Format: double */
+            loadAverage1m: number;
+            /** Format: int32 */
+            logicalCoreCount: number;
+            /** Format: double */
+            normalizedPercent: number;
+        };
         RuntimeCredentialRef: {
             credentialRef: string;
             fieldName: string;
@@ -3676,6 +3687,28 @@ export interface components {
             /** @enum {string} */
             kind: "template";
             parts: components["schemas"]["RuntimeMcpTemplatePart"][];
+        };
+        RuntimeMemoryPressure: {
+            /** Format: int64 */
+            availableBytes: number;
+            /** Format: double */
+            idealMaxPercent: number;
+            /** Format: double */
+            percent: number;
+            /** Format: int64 */
+            totalBytes: number;
+            /** Format: int64 */
+            usedBytes: number;
+        };
+        /** @enum {string} */
+        RuntimePressureLevel: "unknown" | "nominal" | "elevated" | "critical";
+        RuntimeResourcePressure: {
+            collectedAt: string;
+            cpu?: null | components["schemas"]["RuntimeCpuPressure"];
+            level: components["schemas"]["RuntimePressureLevel"];
+            memory?: null | components["schemas"]["RuntimeMemoryPressure"];
+            /** Format: double */
+            pressurePercent?: number | null;
         };
         RuntimeSkill: {
             credentialRefs?: string[];
@@ -4399,6 +4432,24 @@ export interface components {
         /** @enum {string} */
         WorktreeCheckoutMode: "new_branch" | "detached_ref";
         /** @enum {string} */
+        WorktreeGitStatusState: "clean" | "dirty" | "conflicted" | "unknown";
+        WorktreeGitStatusSummary: {
+            /** Format: int32 */
+            ahead: number;
+            /** Format: int32 */
+            behind: number;
+            branch?: string | null;
+            /** Format: int32 */
+            changedFileCount: number;
+            clean: boolean;
+            conflicted: boolean;
+            errorMessage?: string | null;
+            state: components["schemas"]["WorktreeGitStatusState"];
+            /** Format: int32 */
+            untrackedFileCount: number;
+            upstreamBranch?: string | null;
+        };
+        /** @enum {string} */
         WorktreeInventoryAction: "prune_checkout" | "delete_workspace_history" | "retry_purge" | "delete_orphan_checkout";
         WorktreeInventoryResponse: {
             rows: components["schemas"]["WorktreeInventoryRow"][];
@@ -4411,6 +4462,7 @@ export interface components {
             canonicalPath?: string | null;
             cleanupOperation?: null | components["schemas"]["WorkspaceCleanupOperation"];
             cleanupState?: null | components["schemas"]["WorkspaceCleanupState"];
+            gitStatus?: null | components["schemas"]["WorktreeGitStatusSummary"];
             id: string;
             managed: boolean;
             materialized: boolean;
@@ -4418,6 +4470,7 @@ export interface components {
             repoRootId?: string | null;
             repoRootName?: string | null;
             state: components["schemas"]["WorktreeInventoryState"];
+            storage?: null | components["schemas"]["WorktreeStorageEstimate"];
             totalSessionCount: number;
         };
         /** @enum {string} */
@@ -4447,6 +4500,14 @@ export interface components {
             path: string;
             repoRootId?: string | null;
             workspaceId: string;
+        };
+        WorktreeStorageEstimate: {
+            /** Format: int64 */
+            sqliteBytes?: number | null;
+            /** Format: int64 */
+            totalBytes?: number | null;
+            /** Format: int64 */
+            worktreeBytes?: number | null;
         };
         WriteWorkspaceFileRequest: {
             content: string;

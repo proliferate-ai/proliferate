@@ -103,6 +103,11 @@ impl SessionStore {
         })
     }
 
+    pub fn estimate_workspace_storage_bytes(&self, workspace_id: &str) -> anyhow::Result<u64> {
+        self.db
+            .with_conn(|conn| estimate_workspace_storage_bytes_in_tx(conn, workspace_id))
+    }
+
     pub(crate) fn list_workspace_session_activity(&self) -> anyhow::Result<Vec<(String, String)>> {
         self.db
             .with_conn(|conn| list_workspace_session_activity_in_tx(conn))
@@ -428,6 +433,47 @@ pub(crate) fn list_workspace_session_activity_in_tx(
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
     rows.collect()
+}
+
+pub(crate) fn estimate_workspace_storage_bytes_in_tx(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<u64> {
+    let session_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sessions WHERE workspace_id = ?1",
+        [workspace_id],
+        |row| row.get(0),
+    )?;
+    let mut total = (session_count.max(0) as u64).saturating_mul(512);
+
+    for sql in [
+        "SELECT COALESCE(SUM(LENGTH(payload_json) + LENGTH(event_type) + LENGTH(timestamp) + 64), 0)
+           FROM session_events
+          WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        "SELECT COALESCE(SUM(LENGTH(payload_json) + LENGTH(notification_kind) + LENGTH(timestamp) + 64), 0)
+           FROM session_raw_notifications
+          WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        "SELECT COALESCE(SUM(LENGTH(COALESCE(text, '')) + LENGTH(COALESCE(blocks_json, '')) + LENGTH(COALESCE(provenance_json, '')) + 128), 0)
+           FROM session_pending_prompts
+          WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        "SELECT COALESCE(SUM(LENGTH(COALESCE(raw_config_options_json, '')) + LENGTH(COALESCE(normalized_controls_json, '')) + 128), 0)
+           FROM session_live_config_snapshots
+          WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        "SELECT COALESCE(SUM(LENGTH(config_id) + LENGTH(value) + 96), 0)
+           FROM session_pending_config_changes
+          WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        "SELECT COALESCE(SUM(LENGTH(tool_call_id) + LENGTH(COALESCE(turn_id, '')) + LENGTH(tracker_kind) + LENGTH(source_agent_kind) + LENGTH(COALESCE(agent_id, '')) + LENGTH(COALESCE(output_file, '')) + 128), 0)
+           FROM session_background_work
+          WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        "SELECT COALESCE(SUM(LENGTH(attachment_id) + LENGTH(kind) + LENGTH(source) + LENGTH(COALESCE(mime_type, '')) + LENGTH(COALESCE(display_name, '')) + LENGTH(COALESCE(source_uri, '')) + LENGTH(COALESCE(storage_path, '')) + LENGTH(content) + 128), 0)
+           FROM session_prompt_attachments
+          WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+    ] {
+        let bytes: i64 = conn.query_row(sql, [workspace_id], |row| row.get(0))?;
+        total = total.saturating_add(bytes.max(0) as u64);
+    }
+
+    Ok(total)
 }
 
 pub(crate) fn delete_session_rows_in_tx(

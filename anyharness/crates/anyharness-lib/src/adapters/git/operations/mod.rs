@@ -10,4 +10,5 @@ pub mod revert_patches;
 pub mod staging;
 pub mod status;
 mod status_operation;
+pub mod status_summary;
 pub mod worktrees;

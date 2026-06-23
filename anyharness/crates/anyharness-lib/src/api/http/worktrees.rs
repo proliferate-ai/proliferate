@@ -3,11 +3,14 @@ use anyharness_contract::v1::{
     WorkspaceCleanupOperation as ContractWorkspaceCleanupOperation,
     WorkspaceCleanupState as ContractWorkspaceCleanupState, WorkspaceKind as ContractWorkspaceKind,
     WorkspaceLifecycleState as ContractWorkspaceLifecycleState, WorkspaceRetireBlocker,
+    WorktreeGitStatusState as ContractWorktreeGitStatusState,
+    WorktreeGitStatusSummary as ContractWorktreeGitStatusSummary,
     WorktreeInventoryAction as ContractWorktreeInventoryAction, WorktreeInventoryResponse,
     WorktreeInventoryRow as ContractWorktreeInventoryRow,
     WorktreeInventoryState as ContractWorktreeInventoryState,
     WorktreeInventoryWorkspaceSummary as ContractWorktreeInventoryWorkspaceSummary,
     WorktreeRetentionPolicy, WorktreeRetentionRunRow,
+    WorktreeStorageEstimate as ContractWorktreeStorageEstimate,
 };
 use axum::{extract::State, Json};
 
@@ -15,8 +18,9 @@ use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::workspaces::inventory::{
     WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorktreeInventory, WorktreeInventoryAction, WorktreeInventoryRow, WorktreeInventoryState,
-    WorktreeInventoryWorkspaceSummary,
+    WorktreeGitStatusState, WorktreeGitStatusSummary, WorktreeInventory, WorktreeInventoryAction,
+    WorktreeInventoryRow, WorktreeInventoryState, WorktreeInventoryWorkspaceSummary,
+    WorktreeStorageEstimate,
 };
 
 #[utoipa::path(
@@ -28,9 +32,10 @@ use crate::domains::workspaces::inventory::{
 pub async fn get_worktree_inventory(
     State(state): State<AppState>,
 ) -> Result<Json<WorktreeInventoryResponse>, ApiError> {
-    state
-        .worktree_inventory_service
-        .inventory()
+    let service = state.worktree_inventory_service.clone();
+    tokio::task::spawn_blocking(move || service.inventory())
+        .await
+        .map_err(|error| ApiError::internal(format!("worktree inventory task failed: {error}")))?
         .map(worktree_inventory_to_contract)
         .map(Json)
         .map_err(|error| ApiError::internal(error.to_string()))
@@ -178,6 +183,8 @@ fn worktree_inventory_row_to_contract(row: WorktreeInventoryRow) -> ContractWork
             .map(worktree_inventory_workspace_to_contract)
             .collect(),
         total_session_count: row.total_session_count,
+        git_status: row.git_status.map(worktree_git_status_to_contract),
+        storage: worktree_storage_to_contract(row.storage),
         blockers: Vec::<WorkspaceRetireBlocker>::new(),
         cleanup_operation: row
             .cleanup_operation
@@ -189,6 +196,44 @@ fn worktree_inventory_row_to_contract(row: WorktreeInventoryRow) -> ContractWork
             .map(worktree_inventory_action_to_contract)
             .collect(),
     }
+}
+
+fn worktree_git_status_to_contract(
+    status: WorktreeGitStatusSummary,
+) -> ContractWorktreeGitStatusSummary {
+    ContractWorktreeGitStatusSummary {
+        state: match status.state {
+            WorktreeGitStatusState::Clean => ContractWorktreeGitStatusState::Clean,
+            WorktreeGitStatusState::Dirty => ContractWorktreeGitStatusState::Dirty,
+            WorktreeGitStatusState::Conflicted => ContractWorktreeGitStatusState::Conflicted,
+            WorktreeGitStatusState::Unknown => ContractWorktreeGitStatusState::Unknown,
+        },
+        clean: status.clean,
+        conflicted: status.conflicted,
+        changed_file_count: status.changed_file_count,
+        untracked_file_count: status.untracked_file_count,
+        ahead: status.ahead,
+        behind: status.behind,
+        branch: status.branch,
+        upstream_branch: status.upstream_branch,
+        error_message: status.error_message,
+    }
+}
+
+fn worktree_storage_to_contract(
+    storage: WorktreeStorageEstimate,
+) -> Option<ContractWorktreeStorageEstimate> {
+    if storage.worktree_bytes.is_none()
+        && storage.sqlite_bytes.is_none()
+        && storage.total_bytes.is_none()
+    {
+        return None;
+    }
+    Some(ContractWorktreeStorageEstimate {
+        worktree_bytes: storage.worktree_bytes,
+        sqlite_bytes: storage.sqlite_bytes,
+        total_bytes: storage.total_bytes,
+    })
 }
 
 fn worktree_inventory_workspace_to_contract(
