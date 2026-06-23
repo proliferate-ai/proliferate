@@ -236,7 +236,7 @@ describe("agentAuthManagedCreditsCapabilityLabel", () => {
         }),
         "organization",
       ),
-    ).toBe("Managed credits are not enabled for shared cloud sandboxes.");
+    ).toBe("Managed credits are not enabled for organization cloud work.");
   });
 });
 

@@ -101,7 +101,7 @@ export function buildPluginSharedExposurePresentation(
     sourceLabel: configuredSourceLabel(items),
     sharedCloudLabel,
     sharedCloudDescription: hasPublicItems || isFullyPublic
-      ? "Public items can be used by team automations, Slack, and shared cloud work."
+      ? "Public items can be used by team workflows, Slack, and organization cloud work."
       : "Private items stay limited to personal cloud and local use.",
     sharedCloudTone,
     configuredItemCount: items.length,
@@ -185,7 +185,7 @@ function buildPluginComponents(
     {
       kind: "app",
       label: `${entry.name} connection`,
-      description: "Account, token, or local setup used by plugin capabilities.",
+      description: "Account, token, or local setup used by integration capabilities.",
       stateLabel: state.authState,
       stateTone: credentialStateTone(state.authState),
     },
@@ -216,7 +216,7 @@ function buildPluginComponents(
     {
       kind: "requirement",
       label: runtimeRequirementLabel(entry),
-      description: "Target-side runtime requirement for this plugin.",
+      description: "Target-side runtime requirement for this integration.",
       stateLabel: entry.availability === "cloud_only" ? "Cloud" : "Target",
       stateTone: "neutral",
     },

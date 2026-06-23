@@ -51,7 +51,7 @@ describe("AutomationSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: /Nightly skill index/u }));
     expect(onAutomationSelect).toHaveBeenCalledWith("auto-1");
 
-    fireEvent.click(screen.getByRole("button", { name: "Run automation now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run workflow now" }));
     expect(onRunNow).toHaveBeenCalledWith("auto-1");
   });
 
@@ -88,7 +88,7 @@ describe("AutomationSurface", () => {
     );
 
     const runButton = screen.getByRole("button", {
-      name: "Run automation now: Resume before queueing a run.",
+      name: "Run workflow now: Resume before queueing a run.",
     });
     fireEvent.click(runButton);
     expect(onRunNow).not.toHaveBeenCalled();
@@ -107,9 +107,9 @@ describe("AutomationSurface", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: /New automation/u })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Run automation now" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Automation actions" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /New workflow/u })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Run workflow now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Workflow actions" })).toBeNull();
   });
 
   it("renders calendar days and scheduled occurrences", () => {

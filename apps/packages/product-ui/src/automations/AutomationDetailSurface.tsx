@@ -51,7 +51,7 @@ export function AutomationDetailSurface({
   onResume,
   onRunSelect,
 }: AutomationDetailSurfaceProps) {
-  const title = automation?.title ?? "Automation";
+  const title = automation?.title ?? "Workflow";
 
   return (
     <ProductPageShell
@@ -73,13 +73,13 @@ export function AutomationDetailSurface({
       <div className="pb-8">
         <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 mb-4">
           <ArrowLeft className="size-4" aria-hidden />
-          Automations
+          Workflows
         </Button>
 
         {actionError ? (
           <ProductNotice
             tone="destructive"
-            title="Automation action failed"
+            title="Workflow action failed"
             description={actionError}
             className="mb-4"
           />
@@ -87,14 +87,14 @@ export function AutomationDetailSurface({
 
         {notFound ? (
           <section className="py-3">
-            <p className="text-sm font-medium text-foreground">Automation not found</p>
+            <p className="text-sm font-medium text-foreground">Workflow not found</p>
             <p className="mt-1 text-sm text-muted-foreground">
               It may have been deleted or you may not have access to it.
             </p>
           </section>
         ) : loadingAutomation && !automation ? (
           <div className="py-4 text-xs text-muted-foreground" role="status" aria-live="polite">
-            Loading automation
+            Loading workflow
           </div>
         ) : (
           <>
@@ -135,7 +135,7 @@ function AutomationSummaryPanel({
 
   return (
     <section
-      aria-label="Automation summary"
+      aria-label="Workflow summary"
       className="mb-4 rounded-[10px] bg-foreground/[0.035] px-3 py-3"
     >
       {prompt ? (

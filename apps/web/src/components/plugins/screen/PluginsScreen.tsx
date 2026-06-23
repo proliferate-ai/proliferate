@@ -23,7 +23,7 @@ export function PluginsScreen() {
       surface="web"
       completion={completion}
       onCompletionHandled={() => {
-        navigate(routes.plugins, { replace: true });
+        navigate(routes.integrations, { replace: true });
       }}
       prepareOAuthHandoff={() => {
         const popup = window.open("about:blank", "_blank");
@@ -44,7 +44,7 @@ export function PluginsScreen() {
         window.open(url, "_blank", "noopener,noreferrer") ?? window.location.assign(url);
       }}
       onOpenDesktop={() => {
-        window.location.assign(`${desktopDeepLinkScheme()}://plugins`);
+        window.location.assign(`${desktopDeepLinkScheme()}://integrations`);
       }}
     />
   );

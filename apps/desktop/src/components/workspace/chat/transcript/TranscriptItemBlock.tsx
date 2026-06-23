@@ -2,7 +2,6 @@ import type {
   TranscriptItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import {
@@ -12,7 +11,6 @@ import {
 import {
   isAgentSessionProvenance,
   isSubagentWakeProvenance,
-  resolveReviewFeedbackPromptReference,
 } from "@proliferate/product-domain/chats/subagents/provenance";
 import {
   hasProposedPlanForToolCallItem,
@@ -115,28 +113,6 @@ export function TranscriptItemBlock({
                 : undefined}
             />
           </div>
-        );
-      }
-
-      const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
-        item.promptProvenance,
-        item.text,
-      );
-      if (reviewFeedbackReference) {
-        const canOpenReviewSession = (reviewerSessionId: string) =>
-          !!openSession && (canOpenSession?.(reviewerSessionId, "linked-child") ?? true);
-        return (
-          <ReviewFeedbackSummary
-            reference={reviewFeedbackReference}
-            sessionId={sessionId}
-            onOpenReviewerSession={openSession
-              ? (reviewerSessionId) => {
-                if (canOpenReviewSession(reviewerSessionId)) {
-                  openSession(reviewerSessionId, "linked-child");
-                }
-              }
-              : undefined}
-          />
         );
       }
 

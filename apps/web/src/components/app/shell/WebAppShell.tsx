@@ -1,11 +1,10 @@
 import {
   Blocks,
-  CalendarClock,
-  Cloud,
   House,
   LifeBuoy,
   PanelLeftOpen,
   Settings,
+  Zap,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -168,30 +167,22 @@ function CollapsedSidebarRail({
       onSelect: () => onNavigate(routes.home),
     },
     {
-      id: "workspaces",
-      label: "Workspaces",
-      icon: <Cloud className="size-4" />,
-      active: pathname === routes.workspaces ||
-        pathname.startsWith("/cloud/workspaces"),
-      onSelect: () => onNavigate(routes.workspaces),
-    },
-    {
-      id: "plugins",
-      label: "Plugins",
+      id: "integrations",
+      label: "Integrations",
       icon: <Blocks className="size-4" />,
-      active: pathname.startsWith(routes.plugins),
-      onSelect: () => onNavigate(routes.plugins),
+      active: pathname.startsWith(routes.integrations),
+      onSelect: () => onNavigate(routes.integrations),
     },
     {
-      id: "automations",
-      label: "Automations",
-      icon: <CalendarClock className="size-4" />,
-      active: pathname.startsWith(routes.automations),
-      onSelect: () => onNavigate(routes.automations),
+      id: "workflows",
+      label: "Workflows",
+      icon: <Zap className="size-4" />,
+      active: pathname.startsWith(routes.workflows),
+      onSelect: () => onNavigate(routes.workflows),
     },
     {
       id: "support",
-      label: "Support",
+      label: "Support tbr",
       icon: <LifeBuoy className="size-4" />,
       active: pathname.startsWith(routes.support),
       onSelect: () => onNavigate(routes.support),

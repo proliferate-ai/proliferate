@@ -157,19 +157,20 @@ Verified against the current repository worktree on 2026-05-20.
 **Web app** at `apps/web/` (Vite + React):
 
 ```text
-Pages: HomePage, WorkspacesPage, ChatPage, AutomationsPage,
-       PluginsPage, SettingsPage, SupportPage,
+Pages: HomePage, ChatPage, IntegrationsPage, WorkflowsPage,
+       AutomationsPage, PluginsPage, SettingsPage, SupportPage,
        AuthCallbackPage, AuthErrorPage, DesktopHandoffPage
 
 Cloud API: WebCloudProvider wraps @tanstack/react-query
            QueryClientProvider + CloudClientProvider
            Hooks from @proliferate/cloud-sdk-react
-             (e.g. useCloudWorkspaces in WorkspacesScreen)
+             (e.g. useVisibleCloudWorkspaces in WebSidebarController)
 ```
 
-Web is partially wired: it lists workspaces today. It does NOT
-have a `usePublishedSessionPatches`-style hook over the SSE
-primitives; transcript views are not live.
+Web is partially wired: it lists cloud-visible work in Home/Recents today
+and routes workspace deep links into ChatPage. It does NOT have a
+`usePublishedSessionPatches`-style hook over the SSE primitives; transcript
+views are not live.
 
 **Mobile app** at `apps/mobile/` (React Native /
 Expo, EAS):
@@ -380,8 +381,7 @@ column.
 ### 5.3 Send prompt from web / mobile
 
 Web and mobile send prompts via the existing `POST /v1/cloud/commands`
-substrate. The composer in `WorkspacesScreen` / `MobileChatScreen`
-builds:
+substrate. The composer in `ChatPage` / `MobileChatScreen` builds:
 
 ```text
 {
@@ -870,18 +870,14 @@ apps/desktop/src/components/settings/panes/organization/
 Web:
 
 ```text
-apps/web/src/pages/WorkspacesPage.tsx
-  list with scope=exposed
-  exposure / claim / origin badges
+apps/web/src/components/app/navigation/WebSidebarController.tsx
+apps/web/src/components/home/screen/HomeScreen.tsx
+  list recent workspace/session rows with scope=exposed
+  exposure / claim / origin badges where the row model supports them
 
 apps/web/src/pages/ChatPage.tsx
   useSessionLive for transcript
   prompt composer -> POST commands with source='web'
-
-apps/web/src/components/workspaces/
-  ClaimButton.tsx                                                    (new)
-  RemoteAccessBadge.tsx                                              (new)
-  WorkspaceListItem.tsx                                              extend
 
 apps/web/src/pages/SettingsPage.tsx
   Account > API Keys section
@@ -924,9 +920,9 @@ apps/mobile/src/lib/fixtures/mobile-fixtures.ts                           kept f
    for web/mobile workspace lists is `exposed`.
 4. Workspace responses include `exposure`, `origin`,
    `sandbox_type`, `exposure_state`, and `last_session_summary`.
-5. Web `WorkspacesPage` and mobile `MobileWorkspacesScreen` list
-   from `useCloudWorkspaces({ scope: 'exposed' })`; mobile no
-   longer renders from fixtures.
+5. Web Home/Recents and mobile `MobileWorkspacesScreen` list from
+   `useCloudWorkspaces({ scope: 'exposed' })` or the equivalent visible-work
+   hook; mobile no longer renders from fixtures.
 6. Web `ChatPage` and mobile `MobileChatScreen` use
    `useSessionLive` for the transcript and `POST /v1/cloud/commands`
    for prompts. `source` is `'web'` or `'mobile'`.
@@ -1060,9 +1056,9 @@ cd apps/web && pnpm test -- --run && pnpm typecheck
 Targeted Web tests:
 
 ```text
-apps/web/src/pages/WorkspacesPage.test.tsx
-  - lists from scope=exposed
-  - claim button surfaces on shared_unclaimed
+apps/web/src/components/app/navigation/WebSidebarController.test.tsx
+  - lists recent work from scope=exposed
+  - active workspace/session rows route to ChatPage
 apps/web/src/pages/ChatPage.test.tsx
   - useSessionLive transcript renders
   - prompt composer enqueues command source='web'

@@ -17,33 +17,14 @@ import {
   buildAgentAuthGatewayCredentialRequest,
   type AgentAuthGatewayProviderChoice,
 } from "@/lib/domain/agent-auth/agent-auth-gateway-form";
-import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
-
-export interface OrganizationOption {
-  id: string;
-  name: string;
-  membership?: {
-    role?: "owner" | "admin" | "member";
-  } | null;
-}
 
 export interface CloudAgentAuthCredentialFormProps {
-  organizations: OrganizationOption[];
-  selectedOrganizationId: string | null;
-  onSelectedOrganizationChange: (organizationId: string | null) => void;
   agentGatewayCapabilities: AgentGatewayCapabilities | null;
-  allowedOwnerScopes?: readonly ("personal" | "organization")[];
 }
 
 export function CloudAgentAuthCredentialForm({
-  organizations,
-  selectedOrganizationId,
-  onSelectedOrganizationChange,
   agentGatewayCapabilities,
-  allowedOwnerScopes = ["personal", "organization"],
 }: CloudAgentAuthCredentialFormProps) {
-  const adminOrganizations = organizations.filter(isAdminOrganization);
-  const firstAdminOrganizationId = adminOrganizations[0]?.id ?? null;
   const mutations = useAgentAuthMutations();
   const providerOptions = useMemo(
     () => agentAuthGatewayProviderOptionsForCapabilities(agentGatewayCapabilities),
@@ -53,8 +34,6 @@ export function CloudAgentAuthCredentialForm({
   const [providerKind, setProviderKind] = useState<AgentAuthGatewayProviderChoice>(
     "anthropic_api_key",
   );
-  const [ownerScope, setOwnerScope] =
-    useState<"personal" | "organization">(allowedOwnerScopes[0] ?? "personal");
   const [displayName, setDisplayName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -62,20 +41,10 @@ export function CloudAgentAuthCredentialForm({
   const [region, setRegion] = useState("us-east-1");
   const [externalId, setExternalId] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
-  const selectedOrganizationCanOwnCredential = adminOrganizations.some(
-    (organization) => organization.id === selectedOrganizationId,
-  );
-  const credentialOrganizationId = ownerScope === "organization"
-    ? adminOrganizations.find((organization) => organization.id === selectedOrganizationId)?.id
-      ?? null
-    : null;
-  const ownerScopeAvailable = ownerScope === "organization"
-    ? agentGatewayCapabilities?.byokOrganizationEnabled === true
-    : agentGatewayCapabilities?.byokPersonalEnabled === true;
+  const personalByokAvailable = agentGatewayCapabilities?.byokPersonalEnabled === true;
   const canCreate =
     displayName.trim().length > 0
-    && ownerScopeAvailable
-    && (ownerScope === "personal" || Boolean(credentialOrganizationId))
+    && personalByokAvailable
     && agentAuthGatewayCreatePayloadReady(
       providerKind,
       { apiKey, baseUrl, roleArn, region, externalId },
@@ -87,17 +56,11 @@ export function CloudAgentAuthCredentialForm({
     }
   }, [providerKind, providerOptions]);
 
-  useEffect(() => {
-    if (!allowedOwnerScopes.includes(ownerScope)) {
-      setOwnerScope(allowedOwnerScopes[0] ?? "personal");
-    }
-  }, [allowedOwnerScopes, ownerScope]);
-
   async function handleCreateCredential() {
     const body = buildAgentAuthGatewayCredentialRequest({
       providerKind,
-      ownerScope,
-      organizationId: credentialOrganizationId,
+      ownerScope: "personal",
+      organizationId: null,
       displayName,
       values: { apiKey, baseUrl, roleArn, region, externalId },
     });
@@ -119,7 +82,7 @@ export function CloudAgentAuthCredentialForm({
     <SettingsCard>
       <SettingsCardRow
         label="Cloud API key credentials"
-        description={agentAuthByokCapabilityLabel(agentGatewayCapabilities, ownerScope)}
+        description={agentAuthByokCapabilityLabel(agentGatewayCapabilities, "personal")}
       >
         <Badge tone={gatewayByokEnabled ? "success" : "neutral"}>
           {gatewayByokEnabled ? "Available" : "Unavailable"}
@@ -129,66 +92,12 @@ export function CloudAgentAuthCredentialForm({
       {gatewayByokEnabled ? (
         <div className="space-y-3 border-t border-border-light p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            {allowedOwnerScopes.length > 1 ? (
-              <div>
-                <Label htmlFor="agent-auth-owner-scope">New credential owner</Label>
-                <Select
-                  id="agent-auth-owner-scope"
-                  value={ownerScope}
-                  onChange={(event) => {
-                    const nextOwnerScope = event.target.value as typeof ownerScope;
-                    setOwnerScope(nextOwnerScope);
-                    if (
-                      nextOwnerScope === "organization"
-                      && !selectedOrganizationCanOwnCredential
-                      && firstAdminOrganizationId
-                    ) {
-                      onSelectedOrganizationChange(firstAdminOrganizationId);
-                    }
-                  }}
-                >
-                  {allowedOwnerScopes.includes("personal") && (
-                    <option
-                      value="personal"
-                      disabled={agentGatewayCapabilities?.byokPersonalEnabled !== true}
-                    >
-                      Personal
-                    </option>
-                  )}
-                  {allowedOwnerScopes.includes("organization") && (
-                    <option
-                      value="organization"
-                      disabled={
-                        !firstAdminOrganizationId
-                        || agentGatewayCapabilities?.byokOrganizationEnabled !== true
-                      }
-                    >
-                      Organization
-                    </option>
-                  )}
-                </Select>
-                {ownerScope === "organization" && (
-                  <p className="mt-1 text-xs leading-4 text-muted-foreground">
-                    Saved to {selectedOrganizationName(organizations, selectedOrganizationId)
-                      ?? "the selected team"}.
-                  </p>
-                )}
+            <div>
+              <Label>New credential owner</Label>
+              <div className="mt-1 rounded-md border border-border-light bg-foreground/5 px-3 py-2 text-sm text-foreground">
+                Personal
               </div>
-            ) : (
-              <div>
-                <Label>New credential owner</Label>
-                <div className="mt-1 rounded-md border border-border-light bg-foreground/5 px-3 py-2 text-sm text-foreground">
-                  {ownerScope === "organization"
-                    ? selectedOrganizationName(organizations, selectedOrganizationId) ?? "Organization"
-                    : "Personal"}
-                </div>
-                {ownerScope === "organization" && (
-                  <p className="mt-1 text-xs leading-4 text-muted-foreground">
-                    Saved to the shared sandbox credential library.
-                  </p>
-                )}
-              </div>
-            )}
+            </div>
             <div>
               <Label htmlFor="agent-auth-provider-kind">Provider</Label>
               <Select
@@ -317,15 +226,4 @@ export function CloudAgentAuthCredentialForm({
       )}
     </SettingsCard>
   );
-}
-
-function isAdminOrganization(organization: OrganizationOption): boolean {
-  return isSettingsAdminRole(organization.membership?.role);
-}
-
-function selectedOrganizationName(
-  organizations: OrganizationOption[],
-  organizationId: string | null,
-): string | null {
-  return organizations.find((organization) => organization.id === organizationId)?.name ?? null;
 }

@@ -172,12 +172,12 @@ export function AutomationEditorModal({
       value: "organization" as const,
       label: "Team",
       description: organizationName
-        ? `Run in ${organizationName}'s shared cloud sandbox.`
-        : "Run in the shared cloud sandbox.",
+        ? `Run with ${organizationName}'s organization cloud setup.`
+        : "Run with the organization's cloud setup.",
       disabledReason: !organizationId
         ? "Select an organization first."
         : !canManageTeamAutomations
-          ? "Only organization admins can create team automations."
+          ? "Only organization admins can create team workflows."
           : null,
     },
   ], [canManageTeamAutomations, organizationId, organizationName]);
@@ -192,7 +192,7 @@ export function AutomationEditorModal({
     }))
     .filter((group) => group.rows.length > 0), [teamTargetSelection.groups]);
   const targetDisabledReason = isTeamAutomation
-    ? "Select a configured cloud workspace for team automation."
+    ? "Select a configured cloud workspace for team workflow."
     : activeTargetSelection.disabledReason;
   const canSubmitTarget = activeTargetSelection.canSubmit
     && (!isTeamAutomation || selectedTarget?.executionTarget !== "local");
@@ -220,11 +220,11 @@ export function AutomationEditorModal({
       return;
     }
     if (isTeamAutomation && !effectiveOrganizationId) {
-      setError("Select an organization before creating a team automation.");
+      setError("Select an organization before creating a team workflow.");
       return;
     }
     if (isTeamAutomation && !canManageTeamAutomations) {
-      setError("Only organization admins can create team automations.");
+      setError("Only organization admins can create team workflows.");
       return;
     }
     if (!canSubmitTarget || !selectedTarget) {
@@ -286,7 +286,7 @@ export function AutomationEditorModal({
         await agentRunConfigMutations.deleteMutation.mutateAsync(createdRunConfigId)
           .catch(() => undefined);
       }
-      setError(caught instanceof Error ? caught.message : "Failed to save automation.");
+      setError(caught instanceof Error ? caught.message : "Failed to save workflow.");
     }
   };
 

@@ -6,8 +6,12 @@ describe("resolveDesktopTelemetryRoute", () => {
     expect(resolveDesktopTelemetryRoute("/")).toBe("main");
     expect(resolveDesktopTelemetryRoute("/login")).toBe("login");
     expect(resolveDesktopTelemetryRoute("/settings")).toBe("settings");
-    expect(resolveDesktopTelemetryRoute("/automations")).toBe("automations");
-    expect(resolveDesktopTelemetryRoute("/automations/run-1")).toBe("automations");
+    expect(resolveDesktopTelemetryRoute("/integrations")).toBe("integrations");
+    expect(resolveDesktopTelemetryRoute("/plugins")).toBe("integrations");
+    expect(resolveDesktopTelemetryRoute("/workflows")).toBe("workflows");
+    expect(resolveDesktopTelemetryRoute("/workflows/run-1")).toBe("workflows");
+    expect(resolveDesktopTelemetryRoute("/automations")).toBe("workflows");
+    expect(resolveDesktopTelemetryRoute("/automations/run-1")).toBe("workflows");
   });
 
   it("falls back to unknown for unclassified routes", () => {

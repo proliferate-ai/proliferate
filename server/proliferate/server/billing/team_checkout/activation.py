@@ -54,7 +54,6 @@ from proliferate.server.billing.domain.webhooks import (
 )
 from proliferate.server.billing.models import BillingServiceError, coerce_utc, utcnow
 from proliferate.server.billing.pricing import billing_price_ids_from_settings
-from proliferate.server.cloud.sandbox_profiles.service import ensure_organization_for_activation
 
 logger = logging.getLogger("proliferate.billing.team_checkout.activation")
 
@@ -380,11 +379,6 @@ async def activate_team_checkout_from_stripe_session(
             stripe_subscription_id=subscription_id,
             stripe_customer_id=customer_id,
             webhook_event_id=webhook_event_id,
-        )
-        await ensure_organization_for_activation(
-            db,
-            organization_id=activated.organization.id,
-            created_by_user_id=created_by_user_id,
         )
         staged_invites = (
             activated.organization.id,

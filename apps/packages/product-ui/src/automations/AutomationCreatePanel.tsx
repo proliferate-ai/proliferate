@@ -78,16 +78,16 @@ export function AutomationCreatePanel({
       <form onSubmit={handleSubmit}>
         <div className="flex items-start justify-between gap-4 border-b border-border-light px-4 py-3">
           <div className="min-w-0 space-y-1">
-            <div className="text-sm font-medium text-foreground">New automation</div>
+            <div className="text-sm font-medium text-foreground">New workflow</div>
             <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
-              Schedule a cloud automation against a configured repo and agent harness.
+              Schedule a cloud workflow against a configured repo and agent harness.
             </p>
           </div>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Close create automation"
+            aria-label="Close create workflow"
             onClick={onCancel}
             disabled={submitting}
           >
@@ -105,7 +105,7 @@ export function AutomationCreatePanel({
           <div className="grid gap-3 sm:grid-cols-2">
             <Field title="Title">
               <Input
-                aria-label="Automation title"
+                aria-label="Workflow title"
                 value={values.title}
                 placeholder="Daily issue triage"
                 onChange={(event) => update("title", event.currentTarget.value)}
@@ -113,7 +113,7 @@ export function AutomationCreatePanel({
             </Field>
             <Field title="Owner">
               <Select
-                aria-label="Automation owner"
+                aria-label="Workflow owner"
                 value={values.ownerKey}
                 onChange={(event) => update("ownerKey", event.currentTarget.value)}
                 disabled={submitting || ownerOptions.length === 0}
@@ -132,7 +132,7 @@ export function AutomationCreatePanel({
             description="The scheduled run starts a cloud session with this prompt."
           >
             <Textarea
-              aria-label="Automation prompt"
+              aria-label="Workflow prompt"
               value={values.prompt}
               rows={5}
               className="resize-none"
@@ -144,7 +144,7 @@ export function AutomationCreatePanel({
           <div className="grid gap-3 sm:grid-cols-2">
             <Field title="Repo" icon={<GitBranch size={14} />}>
               <Select
-                aria-label="Automation repo"
+                aria-label="Workflow repo"
                 value={values.repoKey}
                 onChange={(event) => update("repoKey", event.currentTarget.value)}
                 disabled={submitting || loadingOptions || repoOptions.length === 0}
@@ -177,7 +177,7 @@ export function AutomationCreatePanel({
           <div className="grid gap-3 sm:grid-cols-[1fr_8rem_1.3fr]">
             <Field title="Schedule" icon={<CalendarClock size={14} />}>
               <Select
-                aria-label="Automation schedule"
+                aria-label="Workflow schedule"
                 value={values.schedulePreset}
                 onChange={(event) => update("schedulePreset", event.currentTarget.value)}
                 disabled={submitting}
@@ -191,7 +191,7 @@ export function AutomationCreatePanel({
             </Field>
             <Field title="Time">
               <Input
-                aria-label="Automation scheduled time"
+                aria-label="Workflow scheduled time"
                 type="time"
                 value={values.scheduleTime}
                 disabled={submitting || timeDisabled}
@@ -200,7 +200,7 @@ export function AutomationCreatePanel({
             </Field>
             <Field title="Timezone">
               <Select
-                aria-label="Automation timezone"
+                aria-label="Workflow timezone"
                 value={values.timezone}
                 onChange={(event) => update("timezone", event.currentTarget.value)}
                 disabled={submitting}
@@ -217,7 +217,7 @@ export function AutomationCreatePanel({
 
         <SettingsCardRow
           label="Create scheduled run"
-          description="Web supports cloud-backed automation creation and basic management. Local Desktop-only targets stay out of this flow."
+          description="Web supports cloud-backed workflow creation and basic management. Local Desktop-only targets stay out of this flow."
         >
           <div className="flex items-center justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>

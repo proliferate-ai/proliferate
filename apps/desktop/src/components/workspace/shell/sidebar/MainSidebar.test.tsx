@@ -170,10 +170,9 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
     handleCreateCloudWorkspace: vi.fn(),
     handleCreateLocalWorkspace: vi.fn(),
     handleCreateWorktreeWorkspace: vi.fn(),
-    handleGoAutomations: vi.fn(),
     handleGoHome: vi.fn(),
-    handleGoPlugins: vi.fn(),
-    handleGoWorkspaces: vi.fn(),
+    handleGoIntegrations: vi.fn(),
+    handleGoWorkflows: vi.fn(),
     handleMarkWorkspaceDone: vi.fn(),
     handleRetryWorkspaceCleanup: vi.fn(),
     handleSelectWorkspace: vi.fn(),
@@ -254,6 +253,11 @@ function renderMainSidebar() {
 }
 
 describe("MainSidebar support window", () => {
+  it("marks legacy top-level rows outside the target IA as tbr", () => {
+    renderMainSidebar();
+
+    expect(screen.getAllByText("tbr")).toHaveLength(1);
+  });
 
   it("opens the support report window from Support", async () => {
     renderMainSidebar();

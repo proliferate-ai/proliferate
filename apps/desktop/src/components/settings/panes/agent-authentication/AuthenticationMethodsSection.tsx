@@ -4,10 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Plus } from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import {
-  CloudAgentAuthCredentialForm,
-  type CloudAgentAuthCredentialFormProps,
-} from "@/components/settings/panes/agent-authentication/CloudAgentAuthCredentialForm";
+import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/agent-authentication/CloudAgentAuthCredentialForm";
 import {
   CredentialMethodRow,
   LocalMethodRow,
@@ -26,17 +23,10 @@ export function AuthenticationMethodsSection({
   personalCredentials,
   rescanning,
   revokingCredentialId,
-  revokingShareId,
-  sharingCredentialId,
   ensuringFreeCredits,
   syncingLocalProvider,
-  organizations,
-  selectedOrganizationId,
-  onSelectedOrganizationChange,
   onRescan,
   onRevokeCredential,
-  onRevokeShare,
-  onShareCredential,
   onEnsureFreeCredits,
   onSyncLocalCredential,
 }: {
@@ -46,17 +36,10 @@ export function AuthenticationMethodsSection({
   personalCredentials: AgentAuthCredential[];
   rescanning: boolean;
   revokingCredentialId: string | null;
-  revokingShareId: string | null;
-  sharingCredentialId: string | null;
   ensuringFreeCredits: boolean;
   syncingLocalProvider: AgentAuthProvider | null;
-  organizations: CloudAgentAuthCredentialFormProps["organizations"];
-  selectedOrganizationId: string | null;
-  onSelectedOrganizationChange: (organizationId: string | null) => void;
   onRescan: () => void;
   onRevokeCredential: (credential: AgentAuthCredential) => void;
-  onRevokeShare: (credential: AgentAuthCredential) => void;
-  onShareCredential: (credential: AgentAuthCredential) => void;
   onEnsureFreeCredits: () => void;
   onSyncLocalCredential: (provider: AgentAuthProvider) => void;
 }) {
@@ -118,11 +101,7 @@ export function AuthenticationMethodsSection({
             credential={credential}
             currentUserId={currentUserId}
             revoking={revokingCredentialId === credential.id}
-            revokingShare={credential.activeCredentialShareId === revokingShareId}
-            sharing={sharingCredentialId === credential.id}
             onRequestRevoke={setCredentialToRevoke}
-            onRevokeShare={onRevokeShare}
-            onShareCredential={onShareCredential}
           />
         ))}
         <Button
@@ -148,11 +127,7 @@ export function AuthenticationMethodsSection({
       </SettingsCard>
       {addingCredential && (
         <CloudAgentAuthCredentialForm
-          organizations={organizations}
-          selectedOrganizationId={selectedOrganizationId}
-          onSelectedOrganizationChange={onSelectedOrganizationChange}
           agentGatewayCapabilities={capabilities}
-          allowedOwnerScopes={["personal"]}
         />
       )}
       <ConfirmationDialog

@@ -10,7 +10,7 @@ import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
-import { ReviewSettingsPane } from "@/components/settings/panes/ReviewSettingsPane";
+import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 // SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
 // import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
@@ -19,7 +19,6 @@ import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignIn
 import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
 import { ComputePane } from "@/components/settings/panes/ComputePane";
 import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
-import { SharedEnvironmentsPane } from "@/components/settings/panes/SharedEnvironmentsPane";
 import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
 import {
   type SettingsRepositoryEntry,
@@ -30,6 +29,7 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-avail
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { isSettingsScaffoldPageId } from "@/copy/settings/settings-scaffold-copy";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;
@@ -63,9 +63,6 @@ function renderSettingsSection(
   if (activeSection === "general") {
     return <GeneralPane />;
   }
-  if (activeSection === "review") {
-    return <ReviewSettingsPane />;
-  }
   if (activeSection === "appearance") {
     return <AppearancePane />;
   }
@@ -81,6 +78,9 @@ function renderSettingsSection(
   if (activeSection === "organization") {
     return <OrganizationPane />;
   }
+  if (isSettingsScaffoldPageId(activeSection)) {
+    return <SettingsScaffoldPane pageId={activeSection} />;
+  }
   if (activeSection === "agent-authentication") {
     if (!cloudEnabled) {
       return <CloudUnavailablePane />;
@@ -88,31 +88,6 @@ function renderSettingsSection(
 
     if (cloudActive) {
       return <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
-  if (activeSection === "shared-environments") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return (
-        <SharedEnvironmentsPane
-          isAdmin={adminAccess.isAdmin}
-          isCheckingAdmin={adminAccess.isLoading}
-          role={adminAccess.role}
-          activeOrganizationId={activeOrganizationId}
-          repositories={repositories}
-          focus={focus}
-          onOpenSettingsSection={onSelectSection}
-        />
-      );
     }
 
     if (cloudSignInChecking) {
@@ -208,7 +183,6 @@ export function SettingsScreen({
         onSelectSection={onSelectSection}
         disabledSections={{
           "agent-authentication": !cloudEnabled,
-          "shared-environments": !cloudEnabled,
           compute: !cloudEnabled,
           // SLACK BOT PARKED: section is not registered while the flow is disabled.
           // "slack-bot": !cloudEnabled,

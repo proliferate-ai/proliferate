@@ -5,8 +5,6 @@ import {
   useMemo,
 } from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
-import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
-import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
@@ -326,8 +324,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                               onClose={actions.closePublishDialog}
                               onViewPr={actions.handlePublishDialogViewPr}
                             />
-                            <ConnectedReviewSetupDialog />
-                            <ConnectedReviewCritiqueDialog />
                           </>
                         )}
                       </>

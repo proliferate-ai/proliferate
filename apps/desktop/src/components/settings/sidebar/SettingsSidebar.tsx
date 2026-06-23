@@ -1,10 +1,11 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import {
   Archive,
   ArrowLeft,
+  Blocks,
   Building2,
+  Brain,
   CircleUser,
-  ClipboardList,
   CreditCard,
   FolderList,
   Keyboard,
@@ -16,7 +17,6 @@ import {
   Shield,
   SlidersHorizontal,
   Tree,
-  UsersRound,
 } from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
@@ -86,8 +86,9 @@ const SETTINGS_NAV_ICONS = {
   general: Settings,
   keyboard: Keyboard,
   organization: Building2,
-  review: ClipboardList,
-  "shared-environments": UsersRound,
+  "organization-integrations": Blocks,
+  "organization-limits": SlidersHorizontal,
+  "organization-model-policy": Brain,
   support: LifeBuoy,
   worktrees: Tree,
 } satisfies Record<SettingsNavIconId, typeof Settings>;
@@ -122,26 +123,34 @@ function settingsItemStatus(
   item: SettingsNavItem,
   updateActionState: SettingsSidebarProps["updateActionState"],
 ) {
+  const statusItems: ReactNode[] = [];
   if (item.kind === "section" && item.adminOnly === true) {
-    return <AdminPill />;
+    statusItems.push(<AdminPill key="admin" />);
   }
-  if (item.kind !== "action" || item.id !== "checkForUpdates") {
-    return null;
+  if (item.tbr === true) {
+    statusItems.push(<TbrPill key="tbr" />);
   }
 
-  if (!updateActionState.updatesSupported) {
-    return "Packaged only";
+  if (item.kind === "action" && item.id === "checkForUpdates") {
+    if (!updateActionState.updatesSupported) {
+      statusItems.push(<span key="updates">Packaged only</span>);
+    } else if (updateActionState.isChecking) {
+      statusItems.push(<span key="updates">Checking...</span>);
+    } else if (updateActionState.phase === "downloading") {
+      statusItems.push(<span key="updates">Downloading</span>);
+    } else if (updateActionState.hasAvailableUpdate) {
+      statusItems.push(<span key="updates">Available</span>);
+    }
   }
-  if (updateActionState.isChecking) {
-    return "Checking...";
+
+  return renderStatusItems(statusItems);
+}
+
+function renderStatusItems(items: ReactNode[]) {
+  if (items.length === 0) {
+    return null;
   }
-  if (updateActionState.phase === "downloading") {
-    return "Downloading";
-  }
-  if (updateActionState.hasAvailableUpdate) {
-    return "Available";
-  }
-  return null;
+  return <span className="flex items-center gap-1">{items}</span>;
 }
 
 function settingsItemDisabledReason(
@@ -166,6 +175,18 @@ function AdminPill() {
   return (
     <span className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-sidebar-muted-foreground">
       Admin
+    </span>
+  );
+}
+
+function TbrPill() {
+  return (
+    <span
+      aria-hidden="true"
+      title="To be removed"
+      className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
+    >
+      tbr
     </span>
   );
 }

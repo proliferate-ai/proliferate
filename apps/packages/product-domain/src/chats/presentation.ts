@@ -24,8 +24,8 @@ const chatKindPresentationByKind: Record<ChatKind, ChatKindPresentation> = {
     tone: "green",
   },
   "shared-auto": {
-    label: "Automation",
-    description: "Team automation run",
+    label: "Workflow",
+    description: "Team workflow run",
     iconId: "calendar-clock",
     tone: "blue",
   },

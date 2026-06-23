@@ -102,17 +102,16 @@ Use these terms consistently in code, copy, and review notes.
   related cloud workspace inventory rules.
 - `apps/packages/product-ui/src/sidebar/ProductSidebar.tsx` is the shared sidebar
   presentation currently used by Web.
-- `apps/web/src/components/workspaces/screen/WorkspacesScreen.tsx` and
-  `apps/packages/product-ui/src/workspaces/WorkspacesSurface.tsx` own the current
-  Web workspaces inventory.
+- Web no longer has a standalone Workspaces inventory page. Home and the
+  sidebar Recents surface cloud-visible workspace/session rows.
 
 ### Desktop Reference Points
 
 - `apps/desktop/src/components/workspace/shell/topbar/HeaderTabs.tsx` and
   `apps/desktop/src/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model.ts`
   show how Desktop makes multiple sessions/tabs in one workspace explicit.
-- `apps/desktop/src/components/workspaces/inventory/CloudWorkspacesScreen.tsx`
-  already consumes the shared `WorkspacesSurface`.
+- Desktop no longer has a standalone Cloud Workspaces inventory page. The
+  workspace shell sidebar owns recent workspace/session navigation.
 - Desktop settings live under `apps/desktop/src/components/settings/**`,
   `apps/desktop/src/hooks/settings/**`, and `apps/desktop/src/config/settings.ts`.
 
@@ -249,8 +248,8 @@ The sidebar should follow the spirit of
 - The default sidebar should not permanently group by every taxonomy.
 - A group/filter popover lets the user filter by source, owner, status, repo,
   runtime location, or attention state.
-- A "Show more" or "All workspaces" action navigates to the Workspaces view
-  instead of expanding the sidebar into a second inventory product.
+- Recents remains the primary workspace/session inventory in Web and Desktop;
+  do not add a second standalone Workspaces inventory route.
 - Session rows and workspace rows may appear together, but each row must carry
   a clear row kind. Opening a session row opens that session. Opening a
   workspace row opens the workspace with its best/default session selected, or
@@ -280,18 +279,18 @@ or cloud-hosted.
 
 ### 2. Workspace Inventory
 
-The Workspaces view is the full inventory. The top of the view should align
-with the sidebar model:
+Home and sidebar Recents are the default Web/Desktop inventory surfaces. They
+should align on the same model:
 
-- It should preserve the same source/runtime vocabulary as Recents.
-- It should provide richer filtering, grouping, and sorting than the sidebar.
-- It should make "local Desktop exposure" versus "cloud sandbox" visible.
+- They should preserve the same source/runtime vocabulary.
+- They should provide filtering that keeps the sidebar compact.
+- They should make "local Desktop exposure" versus "cloud sandbox" visible.
 - Opening a row should land in the workspace, with the best session selected
   by default when one exists.
 - If no session exists, the empty state should be "Start a session in this
   workspace", not "No active session" with no workspace context.
 
-The top area of the Workspaces view and the chat header should use the same
+The Home recent-work area and the chat header should use the same
 workspace/session identity components where possible.
 
 ### 3. Chat Header And Session Switching
@@ -592,7 +591,8 @@ Shared product-domain code must stay pure:
 - Source/type indicator appears at the left edge of every recent row.
 - Runtime location and Cloud access are distinguishable.
 - Active row remains stable after reload.
-- "Show more" opens the Workspaces view.
+- Recents remains the primary workspace/session inventory; there is no
+  standalone Web/Desktop Workspaces page.
 - Grouping/filter popover can slice by source and runtime location.
 
 ### Web Chat
@@ -734,8 +734,8 @@ These should be decided during implementation, not left implicit:
 
 - Exact source icon set and tooltip copy for Desktop, Web, mobile, automation,
   Slack/API, and cloud sandbox.
-- Whether "Show more" expands a few additional recents before routing, or
-  always routes to Workspaces.
+- Whether Recents should grow into a richer Home inventory surface or remain
+  a compact sidebar-first model.
 - Which Desktop settings sections have Cloud meaning after the shared sandbox
   and agent-auth gateway work lands.
 - Whether the local sidebar HTML reference should be moved into `specs/**` as a

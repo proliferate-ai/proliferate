@@ -126,11 +126,11 @@ export function AddSshTargetDialog({
             >
               <option value="personal">Personal cloud</option>
               <option value="organization">
-                {activeOrganization ? `${activeOrganization.name} shared cloud` : "Team cloud"}
+                {activeOrganization ? `${activeOrganization.name} organization cloud` : "Team cloud"}
               </option>
             </Select>
             <p className="mt-1 text-xs leading-4 text-muted-foreground">
-              Team targets can be used by shared automations, Slack, and claimed shared workspaces.
+              Team targets can be used by organization workflows, Slack, and claimed organization workspaces.
             </p>
           </div>
         )}

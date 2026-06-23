@@ -70,7 +70,7 @@ export function AutomationRunLocationSelector({
   const teamDisabledReason =
     teamOption?.disabledReason
     ?? teamDefaultRow?.disabledReason
-    ?? (teamDefaultRow ? null : "No shared team workspace configured.");
+    ?? (teamDefaultRow ? null : "No organization cloud environment configured.");
   const personalDisabledReason =
     personalOption?.disabledReason
     ?? (personalDefaultRow ? null : "No personal workspace target.");
@@ -78,7 +78,7 @@ export function AutomationRunLocationSelector({
     ? "Team"
     : selectedRow?.label ?? (isLoading ? "Loading targets" : "Personal");
   const triggerDetail = ownerScope === "organization"
-    ? selectedRow?.repoLabel ?? "Shared workspace"
+    ? selectedRow?.repoLabel ?? "Organization cloud"
     : selectedRow?.repoLabel ?? null;
   const triggerIcon = ownerScope === "organization"
     ? selectedRow
@@ -91,10 +91,10 @@ export function AutomationRunLocationSelector({
   const activeOption = ownerScope === "organization" ? teamOption : personalOption;
   const activeOwnerDisabledReason = activeOption?.disabledReason ?? null;
   const activeEmptyLabel = ownerScope === "organization"
-    ? disabledReason ?? "No shared team workspace configured."
+    ? disabledReason ?? "No organization cloud environment configured."
     : disabledReason ?? "No personal workspace target.";
   const activeWorkspaceLabel = ownerScope === "organization"
-    ? "Team workspace"
+    ? "Organization cloud"
     : "Personal workspace";
 
   return (
@@ -143,9 +143,9 @@ export function AutomationRunLocationSelector({
                     disabled={Boolean(teamDisabledReason)}
                     icon={<CloudIcon className="size-full" />}
                     label="Team"
-                    detail="Shared workspace"
+                    detail="Organization cloud"
                     selected={ownerScope === "organization"}
-                    title={teamDisabledReason ?? "Run in the shared team workspace."}
+                    title={teamDisabledReason ?? "Run in organization cloud."}
                     onClick={() => {
                       if (teamDisabledReason) {
                         return;

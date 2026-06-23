@@ -2,29 +2,35 @@ import { describe, expect, it } from "vitest";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 
 describe("desktopNavigationTarget", () => {
-  it("routes plugins deep links and preserves OAuth handoff query params", () => {
+  it("routes integration deep links and preserves OAuth handoff query params", () => {
+    expect(
+      desktopNavigationTarget(
+        "proliferate://integrations?source=mcp_oauth_callback&status=completed",
+      ),
+    ).toBe("/integrations?source=mcp_oauth_callback&status=completed");
     expect(
       desktopNavigationTarget(
         "proliferate://plugins?source=mcp_oauth_callback&status=completed",
       ),
-    ).toBe("/plugins?source=mcp_oauth_callback&status=completed");
+    ).toBe("/integrations?source=mcp_oauth_callback&status=completed");
     expect(
       desktopNavigationTarget(
         "proliferate-local://plugins?source=mcp_oauth_callback&status=failed",
       ),
-    ).toBe("/plugins?source=mcp_oauth_callback&status=failed");
+    ).toBe("/integrations?source=mcp_oauth_callback&status=failed");
   });
 
-  it("accepts a defensive plugins slash form", () => {
-    expect(desktopNavigationTarget("proliferate://plugins/")).toBe("/plugins");
+  it("accepts defensive integration and plugin slash forms", () => {
+    expect(desktopNavigationTarget("proliferate://integrations/")).toBe("/integrations");
+    expect(desktopNavigationTarget("proliferate://plugins/")).toBe("/integrations");
   });
 
-  it("keeps legacy powers handoff deep links compatible with the plugins route", () => {
+  it("keeps legacy powers handoff deep links compatible with integrations", () => {
     expect(
       desktopNavigationTarget(
         "proliferate://powers?source=mcp_oauth_callback&status=completed",
       ),
-    ).toBe("/plugins?source=mcp_oauth_callback&status=completed");
+    ).toBe("/integrations?source=mcp_oauth_callback&status=completed");
   });
 
   it("routes workspace deep links to the desktop workspace opener", () => {

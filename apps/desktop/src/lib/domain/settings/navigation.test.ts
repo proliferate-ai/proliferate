@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildCloudRepoSettingsHref,
   buildCloudSettingsHref,
-  buildSharedCloudRepoSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
@@ -82,16 +81,34 @@ describe("settings navigation", () => {
     });
   });
 
-  it("resolves the review settings section", () => {
+  it("falls removed review settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "review",
       repositories: [],
     })).toEqual({
-      activeSection: "review",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
       inviteHandoff: null,
     });
+  });
+
+  it("resolves the Admin settings sections", () => {
+    for (const section of [
+      "organization-integrations",
+      "organization-model-policy",
+      "organization-limits",
+    ]) {
+      expect(resolveSettingsSelection({
+        rawSection: section,
+        repositories: [],
+      })).toEqual({
+        activeSection: section,
+        activeRepoSourceRoot: null,
+        focus: {},
+        inviteHandoff: null,
+      });
+    }
   });
 
   it("preserves checkout return focus on billing settings", () => {
@@ -314,9 +331,6 @@ describe("settings navigation", () => {
     expect(buildCloudSettingsHref()).toBe("/settings?section=agent-authentication");
     expect(buildCloudRepoSettingsHref("owner", "name")).toBe(
       "/settings?section=environments&cloudRepoOwner=owner&cloudRepoName=name",
-    );
-    expect(buildSharedCloudRepoSettingsHref("owner", "name")).toBe(
-      "/settings?section=shared-environments&cloudRepoOwner=owner&cloudRepoName=name",
     );
   });
 
