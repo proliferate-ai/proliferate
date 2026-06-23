@@ -204,7 +204,7 @@ export function CloudAgentAuthCredentialForm({
           )}
 
           <div className="flex items-center justify-between gap-3">
-            <p className="min-w-0 text-xs text-muted-foreground">
+            <p className="min-w-0 text-sm text-muted-foreground">
               {feedback ?? "Secrets stay in Cloud and are never injected into hosted sandboxes."}
             </p>
             <Button
@@ -219,7 +219,7 @@ export function CloudAgentAuthCredentialForm({
           </div>
         </div>
       ) : (
-        <div className="border-t border-border-light px-4 py-3 text-xs leading-4 text-muted-foreground">
+        <div className="border-t border-border-light px-4 py-3 text-sm leading-5 text-muted-foreground">
           API key, OpenAI-compatible, and Bedrock credential forms appear here when
           this deployment enables provider BYOK support.
         </div>

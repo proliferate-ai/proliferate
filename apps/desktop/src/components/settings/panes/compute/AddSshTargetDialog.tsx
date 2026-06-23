@@ -129,7 +129,7 @@ export function AddSshTargetDialog({
                 {activeOrganization ? `${activeOrganization.name} organization cloud` : "Team cloud"}
               </option>
             </Select>
-            <p className="mt-1 text-xs leading-4 text-muted-foreground">
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
               Team targets can be used by organization workflows, Slack, and claimed organization workspaces.
             </p>
           </div>
@@ -263,7 +263,7 @@ export function AddSshTargetDialog({
         {phaseState && (
           <div className="rounded-md border border-border/60 bg-foreground/5 p-3 text-sm">
             <div className="font-medium text-foreground">{phaseState.label}</div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
               {phaseHelp(phaseState.phase)}
             </p>
           </div>
