@@ -87,8 +87,8 @@ export function useScratchCodeMirrorEditor({
   // Owns the imperative CodeMirror editor lifecycle and keeps React as the source of saved text.
   const extensions = useMemo(() => [
     history(),
-    // Replaces the native contentEditable caret (whose height we can't control
-    // and which spans the full line box) with a styleable .cm-cursor element.
+    // Keeps cursor and selection rendering in CodeMirror's measured overlay so
+    // heading line geometry can drive caret placement.
     drawSelection(),
     scratchMarkdownLanguage(),
     syntaxHighlighting(scratchHighlightStyle),
