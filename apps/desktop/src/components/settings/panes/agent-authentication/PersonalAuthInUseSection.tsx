@@ -79,7 +79,7 @@ export function PersonalAuthInUseSection({
       <div className="flex items-end justify-between gap-3">
         <div className="space-y-1">
           <h2 className="text-sm font-medium text-foreground">In use</h2>
-          <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
+          <p className="max-w-2xl text-sm leading-5 text-muted-foreground">
             Pick the credential each harness uses in local and personal cloud sandboxes.
           </p>
         </div>
@@ -150,7 +150,7 @@ function HarnessIdentity({ slot }: { slot: AgentAuthSlotDefinition }) {
         <span className="block text-sm font-medium text-foreground">
           {agentAuthSlotLabel(slot)}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+        <span className="mt-0.5 block truncate text-sm text-muted-foreground">
           {agentAuthHarnessDescription(slot.agentKind)}
         </span>
       </span>

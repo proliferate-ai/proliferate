@@ -56,7 +56,7 @@ export function AuthenticationMethodsSection({
     <section className="space-y-3">
       <div className="space-y-1">
         <h2 className="text-sm font-medium text-foreground">Authentication methods</h2>
-        <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
+        <p className="max-w-2xl text-sm leading-5 text-muted-foreground">
           Detected local credentials, synced credentials, cloud API keys, BYOK,
           and managed credits available to your personal sandboxes.
         </p>
@@ -91,7 +91,7 @@ export function AuthenticationMethodsSection({
           onEnsureFreeCredits={onEnsureFreeCredits}
         />
         {userManagedCredentials.length === 0 ? (
-          <div className="border-t border-border-light px-4 py-3 text-xs text-muted-foreground">
+          <div className="border-t border-border-light px-4 py-3 text-sm text-muted-foreground">
             No synced or BYOK credentials have been saved yet.
           </div>
         ) : userManagedCredentials.map((credential) => (
@@ -116,7 +116,7 @@ export function AuthenticationMethodsSection({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-medium text-foreground">Add credential</span>
-            <span className="block text-xs leading-4 text-muted-foreground">
+            <span className="block text-sm leading-5 text-muted-foreground">
               Add Anthropic, OpenAI, Gemini, or Bedrock credentials for a harness.
             </span>
           </span>

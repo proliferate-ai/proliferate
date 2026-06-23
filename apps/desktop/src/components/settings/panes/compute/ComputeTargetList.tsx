@@ -51,7 +51,7 @@ export function ComputeTargetList({
                 <Badge tone="neutral">{targetCountLabel(targets.length)}</Badge>
               ) : null}
             </div>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
               Select an SSH target to inspect setup, readiness, local access, and auth.
             </p>
           </div>
@@ -113,7 +113,7 @@ function TargetGroup({
         <h4 className="text-base font-medium uppercase tracking-normal text-muted-foreground/90">
           {group.label}
         </h4>
-        <p className="text-xs leading-5 text-muted-foreground">{group.description}</p>
+        <p className="text-sm leading-5 text-muted-foreground">{group.description}</p>
       </div>
       <div className="space-y-2">
         {group.targets.map((target) => (

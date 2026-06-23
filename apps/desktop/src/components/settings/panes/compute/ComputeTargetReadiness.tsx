@@ -41,7 +41,7 @@ export function ComputeTargetReadiness({
     <div className="space-y-2">
       <div>
         <div className="text-sm font-medium text-foreground">Readiness</div>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           Tooling and target state required for cloud-dispatched work.
         </p>
       </div>
@@ -52,7 +52,7 @@ export function ComputeTargetReadiness({
             <div key={item.key} className="flex items-center justify-between gap-3 p-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground">{item.label}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">{item.detail}</div>
+                <div className="mt-0.5 text-sm text-muted-foreground">{item.detail}</div>
               </div>
               <Badge tone={READINESS_TONE[item.status]}>{badgeLabel}</Badge>
             </div>
