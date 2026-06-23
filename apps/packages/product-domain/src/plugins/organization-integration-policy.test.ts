@@ -22,22 +22,23 @@ describe("organization integration policy", () => {
         catalogEntryId: "github",
         enabled: true,
         name: "GitHub",
-        tags: ["OAuth", "MCP"],
+        tags: ["Source control", "MCP"],
       }),
     ]);
   });
 
-  it("applies policy and filters disabled entries", () => {
+  it("applies policy and filters by category", () => {
     const items = buildOrganizationIntegrationPolicyItems({
       catalog: catalog([
         entry({ id: "github", name: "GitHub" }),
-        entry({ id: "linear", name: "Linear" }),
+        entry({ id: "posthog", name: "PostHog", oneLiner: "Product analytics" }),
       ]),
-      policy: policy([{ catalogEntryId: "linear", enabled: false }]),
-      statusFilter: "disabled",
+      policy: policy([{ catalogEntryId: "posthog", enabled: false }]),
+      categoryFilter: "observability",
     });
 
-    expect(items.map((item) => item.catalogEntryId)).toEqual(["linear"]);
+    expect(items.map((item) => item.catalogEntryId)).toEqual(["posthog"]);
+    expect(items[0]?.enabled).toBe(false);
     expect(organizationIntegrationPolicyEnabled("github", policy([]))).toBe(true);
   });
 
@@ -52,7 +53,7 @@ describe("organization integration policy", () => {
           oneLiner: "Product analytics",
         }),
       ]),
-      query: "api key",
+      query: "observability",
     });
 
     expect(items.map((item) => item.catalogEntryId)).toEqual(["posthog"]);
