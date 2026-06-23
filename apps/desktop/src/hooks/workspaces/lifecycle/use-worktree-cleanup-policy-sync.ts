@@ -15,7 +15,6 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 
 const seededCloudPolicyRuntimeKeys = new Set<string>();
 const syncedPolicyKeys = new Set<string>();
-const deferredRunKeys = new Set<string>();
 
 export type SyncPolicyToTarget = (
   target: WorktreeSettingsTarget,
@@ -36,7 +35,7 @@ export interface WorktreeCleanupPolicySyncState {
   statusMessage: string | null;
 }
 
-// Owns background adoption/synchronization for the global worktree cleanup policy.
+// Owns background adoption/synchronization for the global worktree pruning preference.
 // The settings pane facade owns user-edit draft state and the explicit Apply action.
 export function useWorktreeCleanupPolicySync(
   targets: WorktreeCleanupPolicySyncTargetState[],
@@ -163,18 +162,8 @@ export function useWorktreeCleanupPolicySync(
         continue;
       }
       syncedPolicyKeys.add(key);
-      const runKey = targetState.target.key;
-      const runDeferredCleanup = !deferredRunKeys.has(runKey);
-      if (runDeferredCleanup) {
-        deferredRunKeys.add(runKey);
-      }
-      void syncPolicyToTarget(targetState.target, resolvedValue, {
-        runDeferredCleanup,
-      }).catch((error) => {
+      void syncPolicyToTarget(targetState.target, resolvedValue).catch((error) => {
         syncedPolicyKeys.delete(key);
-        if (runDeferredCleanup) {
-          deferredRunKeys.delete(runKey);
-        }
         setLocalErrorMessage(error instanceof Error ? error.message : String(error));
       });
     }

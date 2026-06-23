@@ -40,6 +40,44 @@ pub struct WorktreeInventoryWorkspaceSummary {
     pub session_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorktreeGitStatusState {
+    Clean,
+    Dirty,
+    Conflicted,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeGitStatusSummary {
+    pub state: WorktreeGitStatusState,
+    pub clean: bool,
+    pub conflicted: bool,
+    pub changed_file_count: u32,
+    pub untracked_file_count: u32,
+    pub ahead: u32,
+    pub behind: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upstream_branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeStorageEstimate {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sqlite_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_bytes: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeInventoryRow {
@@ -58,6 +96,10 @@ pub struct WorktreeInventoryRow {
     pub branch: Option<String>,
     pub associated_workspaces: Vec<WorktreeInventoryWorkspaceSummary>,
     pub total_session_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git_status: Option<WorktreeGitStatusSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage: Option<WorktreeStorageEstimate>,
     pub blockers: Vec<WorkspaceRetireBlocker>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cleanup_operation: Option<WorkspaceCleanupOperation>,

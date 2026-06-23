@@ -11,6 +11,10 @@ import type { components } from "../generated/openapi.js";
 
 export type HealthResponse = components["schemas"]["HealthResponse"];
 export type RuntimeCapabilities = components["schemas"]["RuntimeCapabilities"];
+export type RuntimePressureLevel = components["schemas"]["RuntimePressureLevel"];
+export type RuntimeCpuPressure = components["schemas"]["RuntimeCpuPressure"];
+export type RuntimeMemoryPressure = components["schemas"]["RuntimeMemoryPressure"];
+export type RuntimeResourcePressure = components["schemas"]["RuntimeResourcePressure"];
 export type AgentSeedHealth = components["schemas"]["AgentSeedHealth"];
 export type AgentSeedStatus = components["schemas"]["AgentSeedStatus"];
 export type AgentSeedSource = components["schemas"]["AgentSeedSource"];

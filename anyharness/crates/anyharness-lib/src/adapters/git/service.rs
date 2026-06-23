@@ -5,12 +5,12 @@ use super::default_branch;
 use super::executor::resolve_git_repo_root;
 use super::operations::{
     branches, commit, commit_all, diff, diff_files, push, revert_patches, staging, status,
-    worktrees,
+    status_summary, worktrees,
 };
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
     GitRevertPatchEntry, GitRevertPatchesError, GitRevertPatchesResult, GitStatusSnapshot,
-    PushError,
+    GitStatusSummarySnapshot, PushError,
 };
 
 pub struct GitService;
@@ -22,6 +22,10 @@ impl GitService {
 
     pub fn status(workspace_id: &str, workspace_path: &Path) -> anyhow::Result<GitStatusSnapshot> {
         status::status(workspace_id, workspace_path)
+    }
+
+    pub fn status_summary(workspace_path: &Path) -> GitStatusSummarySnapshot {
+        status_summary::status_summary(workspace_path)
     }
 
     pub fn diff_for_path(workspace_path: &Path, file_path: &str) -> anyhow::Result<GitDiffResult> {

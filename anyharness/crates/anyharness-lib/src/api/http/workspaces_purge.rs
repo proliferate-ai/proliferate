@@ -1,5 +1,5 @@
 use anyharness_contract::v1::{
-    Workspace, WorkspacePurgeOutcome, WorkspacePurgePreflightResponse, WorkspacePurgeResponse,
+    WorkspacePurgeOutcome, WorkspacePurgePreflightResponse, WorkspacePurgeResponse,
 };
 use axum::{
     extract::{Path, State},
@@ -45,31 +45,9 @@ pub async fn purge_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
-    let preflight = match state
-        .workspace_runtime
-        .get_workspace(&workspace_id)
-        .map_err(|error| ApiError::internal(error.to_string()))?
-    {
-        Some(_) => Some(build_purge_preflight(&state, &workspace_id).await?),
-        None => None,
-    };
-    if let Some(preflight) = preflight.as_ref() {
-        if !preflight.can_purge {
-            let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
-            return Ok(Json(WorkspacePurgeResponse {
-                outcome: WorkspacePurgeOutcome::Blocked,
-                workspace: Some(workspace),
-                preflight: Some(preflight.clone()),
-                already_deleted: false,
-                cleanup_attempted: false,
-                cleanup_succeeded: false,
-                cleanup_message: None,
-            }));
-        }
-    }
     purge_response_from_service_outcome(
         &state,
-        preflight,
+        None,
         state
             .workspace_purge_service
             .purge(&workspace_id, false)
@@ -94,24 +72,10 @@ pub async fn retry_purge_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
-    let preflight = Some(build_purge_preflight(&state, &workspace_id).await?);
-    if let Some(preflight) = preflight.as_ref() {
-        if !preflight.can_purge {
-            let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
-            return Ok(Json(WorkspacePurgeResponse {
-                outcome: WorkspacePurgeOutcome::Blocked,
-                workspace: Some(workspace),
-                preflight: Some(preflight.clone()),
-                already_deleted: false,
-                cleanup_attempted: false,
-                cleanup_succeeded: false,
-                cleanup_message: None,
-            }));
-        }
-    }
+    let _ = build_purge_preflight(&state, &workspace_id).await?;
     purge_response_from_service_outcome(
         &state,
-        preflight,
+        None,
         state
             .workspace_purge_service
             .purge(&workspace_id, true)
@@ -193,20 +157,6 @@ async fn purge_response_from_service_outcome(
             })
         }
     }
-}
-
-async fn workspace_contract_by_id(
-    state: &AppState,
-    workspace_id: &str,
-) -> Result<Workspace, ApiError> {
-    let record = state
-        .workspace_runtime
-        .get_workspace(workspace_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
-        })?;
-    workspace_to_contract(state, record).await
 }
 
 #[cfg(test)]

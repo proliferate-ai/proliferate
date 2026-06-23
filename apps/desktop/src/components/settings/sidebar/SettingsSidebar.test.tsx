@@ -135,7 +135,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Workspaces",
       "Environments",
       "Personal compute",
-      "Worktrees",
+      "Pruning",
       "Archived chats",
       "Agents",
       "Authentication",

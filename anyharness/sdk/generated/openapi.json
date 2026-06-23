@@ -9324,6 +9324,16 @@
           "capabilities": {
             "$ref": "#/components/schemas/RuntimeCapabilities"
           },
+          "resourcePressure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeResourcePressure"
+              }
+            ]
+          },
           "runtimeHome": {
             "type": "string"
           },
@@ -13821,6 +13831,34 @@
           }
         }
       },
+      "RuntimeCpuPressure": {
+        "type": "object",
+        "required": [
+          "loadAverage1m",
+          "normalizedPercent",
+          "idealMaxPercent",
+          "logicalCoreCount"
+        ],
+        "properties": {
+          "idealMaxPercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "loadAverage1m": {
+            "type": "number",
+            "format": "double"
+          },
+          "logicalCoreCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "normalizedPercent": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "RuntimeCredentialRef": {
         "type": "object",
         "required": [
@@ -14143,6 +14181,92 @@
             }
           }
         ]
+      },
+      "RuntimeMemoryPressure": {
+        "type": "object",
+        "required": [
+          "usedBytes",
+          "totalBytes",
+          "availableBytes",
+          "percent",
+          "idealMaxPercent"
+        ],
+        "properties": {
+          "availableBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "idealMaxPercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "percent": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "RuntimePressureLevel": {
+        "type": "string",
+        "enum": [
+          "unknown",
+          "nominal",
+          "elevated",
+          "critical"
+        ]
+      },
+      "RuntimeResourcePressure": {
+        "type": "object",
+        "required": [
+          "level",
+          "collectedAt"
+        ],
+        "properties": {
+          "collectedAt": {
+            "type": "string"
+          },
+          "cpu": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeCpuPressure"
+              }
+            ]
+          },
+          "level": {
+            "$ref": "#/components/schemas/RuntimePressureLevel"
+          },
+          "memory": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeMemoryPressure"
+              }
+            ]
+          },
+          "pressurePercent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
       },
       "RuntimeSkill": {
         "type": "object",
@@ -17433,6 +17557,76 @@
           "detached_ref"
         ]
       },
+      "WorktreeGitStatusState": {
+        "type": "string",
+        "enum": [
+          "clean",
+          "dirty",
+          "conflicted",
+          "unknown"
+        ]
+      },
+      "WorktreeGitStatusSummary": {
+        "type": "object",
+        "required": [
+          "state",
+          "clean",
+          "conflicted",
+          "changedFileCount",
+          "untrackedFileCount",
+          "ahead",
+          "behind"
+        ],
+        "properties": {
+          "ahead": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "behind": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changedFileCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "clean": {
+            "type": "boolean"
+          },
+          "conflicted": {
+            "type": "boolean"
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorktreeGitStatusState"
+          },
+          "untrackedFileCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "upstreamBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "WorktreeInventoryAction": {
         "type": "string",
         "enum": [
@@ -17520,6 +17714,16 @@
               }
             ]
           },
+          "gitStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeGitStatusSummary"
+              }
+            ]
+          },
           "id": {
             "type": "string"
           },
@@ -17546,6 +17750,16 @@
           },
           "state": {
             "$ref": "#/components/schemas/WorktreeInventoryState"
+          },
+          "storage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeStorageEstimate"
+              }
+            ]
           },
           "totalSessionCount": {
             "type": "integer",
@@ -17672,6 +17886,35 @@
           },
           "workspaceId": {
             "type": "string"
+          }
+        }
+      },
+      "WorktreeStorageEstimate": {
+        "type": "object",
+        "properties": {
+          "sqliteBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "totalBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "worktreeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
           }
         }
       },

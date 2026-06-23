@@ -341,6 +341,7 @@ impl AppState {
         ));
         let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
             workspace_runtime.clone(),
+            session_runtime.clone(),
             workspace_delete_workflow.clone(),
             SessionStore::new(db.clone()),
             PromptAttachmentStorage::new(runtime_home.clone()),

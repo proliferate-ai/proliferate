@@ -26,6 +26,8 @@ const RETENTION_MAX_CONSIDERED_PER_PASS: usize = 200;
 const RETENTION_MAX_ATTEMPTS_PER_PASS: usize = 50;
 const RETENTION_OPERATION_GATE_TIMEOUT: Duration = Duration::from_millis(150);
 pub const ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: &str = "ANYHARNESS_DEFER_STARTUP_RETENTION";
+pub const ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV: &str =
+    "ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION";
 
 #[derive(Clone)]
 pub struct WorkspaceRetentionService {
@@ -39,7 +41,7 @@ pub struct WorkspaceRetentionService {
     checkout_gate: Arc<CheckoutDeletionGate>,
     runtime_home: std::path::PathBuf,
     running: Arc<AtomicBool>,
-    enabled: bool,
+    auto_run_enabled: bool,
     defer_startup_pass: bool,
 }
 
@@ -78,7 +80,9 @@ impl WorkspaceRetentionService {
         checkout_gate: Arc<CheckoutDeletionGate>,
         runtime_home: std::path::PathBuf,
     ) -> Self {
-        let enabled = std::env::var_os("ANYHARNESS_DISABLE_WORKTREE_RETENTION").is_none();
+        let auto_run_enabled = std::env::var_os(ANYHARNESS_ENABLE_AUTOMATIC_WORKTREE_RETENTION_ENV)
+            .is_some()
+            && std::env::var_os("ANYHARNESS_DISABLE_WORKTREE_RETENTION").is_none();
         let defer_startup_pass = std::env::var_os(ANYHARNESS_DEFER_STARTUP_RETENTION_ENV).is_some();
         Self {
             workspace_runtime,
@@ -91,13 +95,13 @@ impl WorkspaceRetentionService {
             checkout_gate,
             runtime_home,
             running: Arc::new(AtomicBool::new(false)),
-            enabled,
+            auto_run_enabled,
             defer_startup_pass,
         }
     }
 
     pub fn spawn_startup_pass(self: Arc<Self>) {
-        if !should_spawn_startup_pass(self.enabled, self.defer_startup_pass) {
+        if !should_spawn_startup_pass(self.auto_run_enabled, self.defer_startup_pass) {
             return;
         }
         tokio::spawn(async move {
@@ -108,7 +112,7 @@ impl WorkspaceRetentionService {
     }
 
     pub fn spawn_post_create_pass(self: Arc<Self>, excluded_workspace_id: String) {
-        if !self.enabled {
+        if !self.auto_run_enabled {
             return;
         }
         tokio::spawn(async move {

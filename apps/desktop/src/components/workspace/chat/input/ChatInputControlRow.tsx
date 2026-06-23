@@ -4,6 +4,7 @@ import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerModelConfigSelector } from "./ComposerModelConfigSelector";
 import type { ModelSelector } from "./ModelSelector";
 import type { SessionConfigControls } from "./SessionConfigControls";
+import { RuntimePressureIndicator } from "./RuntimePressureIndicator";
 import { SessionModeControl } from "./SessionModeControl";
 import {
   buildComposerSessionControlGroups,
@@ -103,17 +104,18 @@ export function ChatInputControlRow({
       )}
       trailing={(
         <>
-        <div
-          className={`flex min-w-0 items-center gap-[5px] ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerModelConfigSelector
-            modelSelectorProps={modelSelectorProps}
-            agentKind={agentKind}
-            controls={controlGroups.modelConfigControls}
-          />
-        </div>
+          <RuntimePressureIndicator />
+          <div
+            className={`flex min-w-0 items-center gap-[5px] ${
+              runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+            }`}
+          >
+            <ComposerModelConfigSelector
+              modelSelectorProps={modelSelectorProps}
+              agentKind={agentKind}
+              controls={controlGroups.modelConfigControls}
+            />
+          </div>
         </>
       )}
       action={(
