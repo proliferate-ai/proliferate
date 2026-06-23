@@ -10,11 +10,11 @@ export function AgentDefaultsSection({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">{title}</h2>
+    <div className="space-y-2.5">
+      <div className="space-y-1">
+        <h2 className="text-base font-semibold leading-6 tracking-normal text-foreground">{title}</h2>
         {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-xs leading-5 text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {children}
