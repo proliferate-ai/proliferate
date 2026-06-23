@@ -277,7 +277,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
 
   return (
     <DebugProfiler id="header-tabs">
-      <div className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-hidden px-1">
+      <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden pl-1">
         <DebugProfiler id="header-tabs-strip">
           <WorkspaceTabStrip
             label="Workspace tabs"
