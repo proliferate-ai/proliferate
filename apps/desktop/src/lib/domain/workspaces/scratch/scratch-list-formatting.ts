@@ -1,4 +1,4 @@
-export type ScratchListKind = "bullet" | "task";
+export type ScratchListKind = "bullet" | "ordered" | "task";
 
 export interface ScratchListPrefix {
   kind: ScratchListKind;
@@ -27,7 +27,7 @@ export interface ScratchListEnterResult {
   };
 }
 
-const MARKDOWN_LIST_LINE_PATTERN = /^(\s*)([-*])\s+(?:(\[([ xX])\])(?:\s+(.*))?|(.*))$/;
+const MARKDOWN_LIST_LINE_PATTERN = /^(\s*)(?:(\d+[.)])|([-*]))\s+(?:(\[([ xX])\])(?:\s+(.*))?|(.*))$/;
 const LITERAL_LIST_LINE_PATTERN = /^(\s*)(?:([•◦])\s+|([☐☑])\s+)(.*)$/;
 
 export function parseScratchMarkdownListPrefix(line: string): ScratchListPrefix | null {
@@ -37,9 +37,23 @@ export function parseScratchMarkdownListPrefix(line: string): ScratchListPrefix 
   }
 
   const indent = match[1] ?? "";
-  const marker = match[2] ?? "-";
-  const taskState = match[4];
-  const body = match[5] ?? match[6] ?? "";
+  const orderedMarker = match[2];
+  const unorderedMarker = match[3];
+  const marker = orderedMarker ?? unorderedMarker ?? "-";
+  const taskState = match[5];
+  const body = match[6] ?? match[7] ?? "";
+
+  if (orderedMarker !== undefined) {
+    return {
+      kind: "ordered",
+      checked: false,
+      indent,
+      marker,
+      prefixLength: indent.length + marker.length + 1,
+      checkboxOffset: null,
+      body,
+    };
+  }
 
   if (taskState === undefined) {
     return {
@@ -86,7 +100,7 @@ export function applyScratchListEnterFormatting({
     }
     return applyListEnter(value, start, end, lineStart, lineEnd, {
       indent: markdownPrefix.indent,
-      marker: markdownPrefix.kind === "task" ? `${markdownPrefix.marker} [ ] ` : `${markdownPrefix.marker} `,
+      marker: markerForNextMarkdownListItem(markdownPrefix),
       body: markdownPrefix.body,
       prefixLength: markdownPrefix.prefixLength,
     });
@@ -100,6 +114,18 @@ export function applyScratchListEnterFormatting({
   }
 
   return null;
+}
+
+function markerForNextMarkdownListItem(prefix: ScratchListPrefix) {
+  if (prefix.kind === "task") {
+    return `${prefix.marker} [ ] `;
+  }
+  if (prefix.kind === "ordered") {
+    const number = Number(prefix.marker.slice(0, -1));
+    const delimiter = prefix.marker.slice(-1);
+    return `${number + 1}${delimiter} `;
+  }
+  return `${prefix.marker} `;
 }
 
 function parseLiteralListPrefix(line: string) {

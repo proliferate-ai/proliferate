@@ -121,6 +121,11 @@ export const scratchEditorTheme = EditorView.theme({
     justifyContent: "center",
     color: "var(--color-sidebar-muted-foreground)",
   },
+  ".scratch-list-marker--ordered": {
+    width: "auto",
+    justifyContent: "flex-start",
+    fontVariantNumeric: "tabular-nums",
+  },
   ".scratch-task-checkbox": {
     display: "inline-block",
     width: "var(--scratch-list-marker-width)",
@@ -199,12 +204,7 @@ function buildScratchListDecorations(view: EditorView) {
       if (prefix) {
         const markerFrom = line.from + prefix.indent.length;
         const markerTo = line.from + prefix.prefixLength;
-        const widget = prefix.kind === "task"
-          ? new ScratchTaskWidget({
-            checked: prefix.checked,
-            checkboxPosition: line.from + (prefix.checkboxOffset ?? 0),
-          })
-          : new ScratchBulletWidget();
+        const widget = listMarkerWidget(prefix, line.from);
         decorations.push(Decoration.replace({
           widget,
           inclusive: false,
@@ -219,6 +219,22 @@ function buildScratchListDecorations(view: EditorView) {
   return Decoration.set(decorations, true);
 }
 
+function listMarkerWidget(
+  prefix: NonNullable<ReturnType<typeof parseScratchMarkdownListPrefix>>,
+  lineFrom: number,
+) {
+  if (prefix.kind === "task") {
+    return new ScratchTaskWidget({
+      checked: prefix.checked,
+      checkboxPosition: lineFrom + (prefix.checkboxOffset ?? 0),
+    });
+  }
+  if (prefix.kind === "ordered") {
+    return new ScratchOrderedListWidget(prefix.marker);
+  }
+  return new ScratchBulletWidget();
+}
+
 class ScratchBulletWidget extends WidgetType {
   eq() {
     return true;
@@ -228,6 +244,23 @@ class ScratchBulletWidget extends WidgetType {
     const marker = document.createElement("span");
     marker.className = "scratch-list-marker";
     marker.textContent = "•";
+    return marker;
+  }
+}
+
+class ScratchOrderedListWidget extends WidgetType {
+  constructor(private readonly markerText: string) {
+    super();
+  }
+
+  eq(other: ScratchOrderedListWidget) {
+    return this.markerText === other.markerText;
+  }
+
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = "scratch-list-marker scratch-list-marker--ordered";
+    marker.textContent = `${this.markerText} `;
     return marker;
   }
 }

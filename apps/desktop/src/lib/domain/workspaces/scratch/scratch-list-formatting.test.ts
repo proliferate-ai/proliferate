@@ -17,6 +17,18 @@ describe("parseScratchMarkdownListPrefix", () => {
     });
   });
 
+  it("parses markdown ordered prefixes", () => {
+    expect(parseScratchMarkdownListPrefix("  12) nested")).toEqual({
+      kind: "ordered",
+      checked: false,
+      indent: "  ",
+      marker: "12)",
+      prefixLength: 6,
+      checkboxOffset: null,
+      body: "nested",
+    });
+  });
+
   it("parses markdown task prefixes", () => {
     expect(parseScratchMarkdownListPrefix("- [x] done")).toEqual({
       kind: "task",
@@ -44,6 +56,38 @@ describe("applyScratchListEnterFormatting", () => {
         from: 7,
         to: 7,
         insert: "\n- ",
+      },
+    });
+  });
+
+  it("continues markdown ordered lists while preserving delimiter style", () => {
+    expect(applyScratchListEnterFormatting({
+      value: "1. first",
+      selectionStart: 8,
+      selectionEnd: 8,
+    })).toEqual({
+      value: "1. first\n2. ",
+      selectionStart: 12,
+      selectionEnd: 12,
+      changes: {
+        from: 8,
+        to: 8,
+        insert: "\n2. ",
+      },
+    });
+
+    expect(applyScratchListEnterFormatting({
+      value: "1) first",
+      selectionStart: 8,
+      selectionEnd: 8,
+    })).toEqual({
+      value: "1) first\n2) ",
+      selectionStart: 12,
+      selectionEnd: 12,
+      changes: {
+        from: 8,
+        to: 8,
+        insert: "\n2) ",
       },
     });
   });
@@ -99,6 +143,23 @@ describe("applyScratchListEnterFormatting", () => {
     });
   });
 
+  it("preserves indentation for continued markdown ordered lists", () => {
+    expect(applyScratchListEnterFormatting({
+      value: "  9. nested",
+      selectionStart: 11,
+      selectionEnd: 11,
+    })).toEqual({
+      value: "  9. nested\n  10. ",
+      selectionStart: 18,
+      selectionEnd: 18,
+      changes: {
+        from: 11,
+        to: 11,
+        insert: "\n  10. ",
+      },
+    });
+  });
+
   it("removes an empty markdown bullet marker to exit the list", () => {
     expect(applyScratchListEnterFormatting({
       value: "- first\n- ",
@@ -111,6 +172,23 @@ describe("applyScratchListEnterFormatting", () => {
       changes: {
         from: 8,
         to: 10,
+        insert: "",
+      },
+    });
+  });
+
+  it("removes an empty markdown ordered marker to exit the list", () => {
+    expect(applyScratchListEnterFormatting({
+      value: "1. first\n2. ",
+      selectionStart: 12,
+      selectionEnd: 12,
+    })).toEqual({
+      value: "1. first\n",
+      selectionStart: 9,
+      selectionEnd: 9,
+      changes: {
+        from: 9,
+        to: 12,
         insert: "",
       },
     });
