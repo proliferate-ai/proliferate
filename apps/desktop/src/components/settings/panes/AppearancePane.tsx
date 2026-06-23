@@ -128,13 +128,12 @@ export function AppearancePane() {
             <SettingsMenu
               label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
               className="w-40"
-              menuClassName="w-60"
+              menuClassName="w-48"
               groups={[{
                 id: "ui-font-size",
                 options: UI_FONT_SIZE_OPTIONS.map((option) => ({
                   id: option.id,
                   label: option.label,
-                  detail: option.detail,
                   selected: option.id === uiFontSizeId,
                   onSelect: () => setPreference("uiFontSizeId", option.id),
                 })),
@@ -149,13 +148,12 @@ export function AppearancePane() {
             <SettingsMenu
               label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
               className="w-40"
-              menuClassName="w-60"
+              menuClassName="w-48"
               groups={[{
                 id: "readable-code-font-size",
                 options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({
                   id: option.id,
                   label: option.label,
-                  detail: option.detail,
                   selected: option.id === readableCodeFontSizeId,
                   onSelect: () => setPreference("readableCodeFontSizeId", option.id),
                 })),
