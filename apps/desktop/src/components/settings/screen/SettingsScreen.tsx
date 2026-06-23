@@ -225,15 +225,15 @@ export function SettingsScreen({
         }}
       />
 
-      <div className="relative flex-1 bg-background">
+      <div className="relative min-w-0 flex-1 bg-background">
         <div className="absolute left-0 right-0 top-0 h-10" data-tauri-drag-region="true" />
-        <AutoHideScrollArea className="h-full" viewportClassName="px-8 pt-12">
-          <div className="flex justify-center pb-16">
+        <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-14">
+          <div className="flex justify-center pb-8">
             <div
-              className={`w-full space-y-7 ${
+              className={`w-full space-y-6 ${
                 effectiveActiveSection === "billing" || effectiveActiveSection === "organization-integrations"
-                  ? "max-w-[72rem]"
-                  : "max-w-[46rem]"
+                  ? "max-w-[76rem]"
+                  : "max-w-[50rem]"
               }`}
             >
               <SettingsContentBoundary section={effectiveActiveSection}>
