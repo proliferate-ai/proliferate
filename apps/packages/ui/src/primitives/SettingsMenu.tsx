@@ -32,7 +32,7 @@ export function SettingsMenu({
   label,
   leading,
   groups,
-  className = "w-44",
+  className = "w-[240px]",
   menuClassName = "w-60",
 }: SettingsMenuProps) {
   return (
@@ -44,7 +44,7 @@ export function SettingsMenu({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-8 justify-between rounded-md border-transparent bg-surface-control px-2.5 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-list-hover data-[state=open]:bg-list-hover ${className}`}
+          className={`h-8 justify-between rounded-lg border-transparent bg-foreground/5 px-2.5 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-foreground/10 data-[state=open]:bg-foreground/10 ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>

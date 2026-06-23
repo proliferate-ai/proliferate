@@ -87,14 +87,14 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
       )}
 
       <div
-        className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
+        className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
       >
         <div
-          className={chromeClasses.header}
+          className="absolute left-0 right-0 top-0 z-20 h-10"
           data-tauri-drag-region="true"
         >
           {!sidebarOpen && (
-            <div className="flex items-center gap-2 pl-[82px] pr-2">
+            <div className="flex h-full items-center gap-2 pl-[82px] pr-2">
               <IconButton
                 size="sm"
                 onClick={() => setSidebarOpen(true)}

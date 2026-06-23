@@ -223,7 +223,7 @@ export function AgentDefaultsPane() {
             >
               <SettingsMenu
                 label={primaryHarnessLabel}
-                className="w-56"
+                className="w-[240px]"
                 menuClassName="w-64"
                 groups={[{
                   id: "harnesses",

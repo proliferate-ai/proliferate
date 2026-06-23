@@ -11,7 +11,7 @@ import { requestRightPanelTabByIndex } from "@/lib/workflows/workspaces/right-pa
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { stepAppearanceFontSizes } from "@/lib/domain/preferences/appearance";
+import { stepWindowZoomId } from "@/lib/domain/preferences/appearance";
 import {
   runRedoCommand,
   runSelectAllCommand,
@@ -56,12 +56,12 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     actions.showKeyboardShortcuts.execute("shortcut");
   });
 
-  useShortcutHandler("app.increase-text-size", () => {
-    stepTextSizePreference(1);
+  useShortcutHandler("app.increase-window-zoom", () => {
+    stepWindowZoomPreference(1);
   });
 
-  useShortcutHandler("app.decrease-text-size", () => {
-    stepTextSizePreference(-1);
+  useShortcutHandler("app.decrease-window-zoom", () => {
+    stepWindowZoomPreference(-1);
   });
 
   useShortcutHandler("app.select-all", () => {
@@ -155,10 +155,7 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   });
 }
 
-function stepTextSizePreference(delta: -1 | 1): void {
+function stepWindowZoomPreference(delta: -1 | 1): void {
   const preferences = useUserPreferencesStore.getState();
-  preferences.setMultiple(stepAppearanceFontSizes({
-    uiFontSizeId: preferences.uiFontSizeId,
-    readableCodeFontSizeId: preferences.readableCodeFontSizeId,
-  }, delta));
+  preferences.set("windowZoomId", stepWindowZoomId(preferences.windowZoomId, delta));
 }

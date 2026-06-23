@@ -12,9 +12,9 @@ export function SettingsPageHeader({
   action,
 }: SettingsPageHeaderProps) {
   return (
-    <header className="flex min-h-[4.25rem] flex-col gap-3 border-b border-border-light pb-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 space-y-2">
-        <h1 className="text-xl font-semibold leading-7 tracking-normal text-foreground">{title}</h1>
+    <header className="flex min-h-[4.25rem] flex-col gap-2 pb-0 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 space-y-1.5">
+        <h1 className="text-[length:calc(var(--text-xl)_+_0.875rem)] font-semibold leading-[calc(var(--text-xl--line-height)_+_0.5rem)] tracking-normal text-foreground">{title}</h1>
         {description ? (
           <p className="max-w-3xl text-sm leading-5 text-muted-foreground">{description}</p>
         ) : null}

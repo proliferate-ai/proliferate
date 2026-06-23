@@ -20,3 +20,12 @@ export async function applyMacWindowChrome(): Promise<void> {
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("apply_macos_window_chrome");
 }
+
+export async function setWebviewZoom(scaleFactor: number): Promise<void> {
+  if (!isTauriWindowApiAvailable()) {
+    return;
+  }
+
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("set_webview_zoom", { scaleFactor });
+}

@@ -110,7 +110,7 @@ function TargetGroup({
   return (
     <div className="space-y-2">
       <div className="space-y-0.5 px-1">
-        <h4 className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground/90">
+        <h4 className="text-base font-medium uppercase tracking-normal text-muted-foreground/90">
           {group.label}
         </h4>
         <p className="text-xs leading-5 text-muted-foreground">{group.description}</p>
@@ -174,7 +174,7 @@ function TargetRow({
           <span aria-hidden="true">·</span>
           <span>{computeTargetOwnerLabel(target.ownerScope)}</span>
         </span>
-        <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">
+        <span className="mt-1 block truncate font-mono text-base text-muted-foreground">
           {target.defaultWorkspaceRoot ?? "Workspace root not set"}
         </span>
       </span>

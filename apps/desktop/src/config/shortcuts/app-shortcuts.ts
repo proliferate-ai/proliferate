@@ -65,29 +65,29 @@ export const APP_SHORTCUTS = {
     match: { kind: "fixed-code", code: "Slash", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
-  increaseTextSize: {
-    id: "app.increase-text-size",
+  increaseWindowZoom: {
+    id: "app.increase-window-zoom",
     label: "⌘+",
     nonMacLabel: "Ctrl+Plus",
-    description: "Increase text size",
+    description: "Zoom in",
     owner: "js",
     match: { kind: "fixed-code", code: "Equal", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
-  increaseTextSizeEqualAlias: {
-    id: "app.increase-text-size",
+  increaseWindowZoomEqualAlias: {
+    id: "app.increase-window-zoom",
     label: "⌘=",
     nonMacLabel: "Ctrl+=",
-    description: "Increase text size",
+    description: "Zoom in",
     owner: "js",
     match: { kind: "fixed-code", code: "Equal", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
-  decreaseTextSize: {
-    id: "app.decrease-text-size",
+  decreaseWindowZoom: {
+    id: "app.decrease-window-zoom",
     label: "⌘-",
     nonMacLabel: "Ctrl+-",
-    description: "Decrease text size",
+    description: "Zoom out",
     owner: "js",
     match: { kind: "fixed-code", code: "Minus", meta: true, shift: false, alt: false },
     allowInInputs: true,
