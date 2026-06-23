@@ -1,6 +1,7 @@
 import type {
   CloudMcpCatalogResponse,
   CloudMcpConnection,
+  CloudOrganizationIntegrationPolicyResponse,
   CloudPluginConfiguredItem,
   CloudSkillConfiguredItem,
 } from "@proliferate/cloud-sdk";
@@ -122,6 +123,7 @@ export interface PluginInventoryItem {
 
 export interface BuildCloudPluginInventoryInput {
   catalog: CloudMcpCatalogResponse;
+  integrationPolicy?: CloudOrganizationIntegrationPolicyResponse | null;
   connections: readonly CloudMcpConnection[];
   configuredPlugins: readonly CloudPluginConfiguredItem[];
   configuredSkills: readonly CloudSkillConfiguredItem[];
