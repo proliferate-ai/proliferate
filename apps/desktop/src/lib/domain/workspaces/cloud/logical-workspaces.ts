@@ -14,9 +14,7 @@ import {
   buildRemoteLogicalWorkspaceId,
   normalizeLogicalWorkspaceBranchKey,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
-import {
-  resolvePreferredLogicalWorkspaceMaterialization,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import { resolvePreferredLogicalWorkspaceMaterialization } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   buildBaseLogicalWorkspaceIdForLocalWorkspace,
@@ -95,10 +93,7 @@ interface CollapsedLocalWorkspace {
 }
 
 function localWorkspaceIdentityIds(workspace: Workspace): string[] {
-  return [
-    workspace.id,
-    buildLocalSlotLogicalWorkspaceId(workspace.id),
-  ];
+  return [workspace.id, buildLocalSlotLogicalWorkspaceId(workspace.id)];
 }
 
 function localWorkspaceMatchesSelection(
@@ -141,19 +136,9 @@ function collapseExactLocalWorkspaceDuplicates(
     }
   }
 
-  // Distinct local workspaces for the same folder+branch are kept separate so
-  // each "project/feature thread" gets its own sidebar entry. Within a bucket,
-  // a workspace is surfaced as its own distinct entry when it has its own chats
-  // OR it is the current selection (covers a just-created workspace that has no
-  // chats yet — `createLocalWorkspaceAndEnter` selects it immediately). Only
-  // genuinely-empty, unselected (setup-only / stale) duplicates are folded onto
-  // the top distinct entry so they don't show as junk rows but stay selectable.
   return Array.from(byMaterialization.values()).flatMap((bucket): CollapsedLocalWorkspace[] => {
     if (bucket.length === 1) {
-      return [{
-        workspace: bucket[0]!,
-        aliasIds: [],
-      }];
+      return [{ workspace: bucket[0]!, aliasIds: [] }];
     }
 
     const distinct = bucket.filter(
@@ -168,8 +153,6 @@ function collapseExactLocalWorkspaceDuplicates(
     );
 
     if (distinct.length === 0) {
-      // No chats and nothing selected in this folder+branch yet: keep a single
-      // representative (preferring history/selection), aliasing the rest.
       const representative = [...foldable]
         .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
       return [{
