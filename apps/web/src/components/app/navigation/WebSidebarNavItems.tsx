@@ -34,19 +34,6 @@ export function buildNavItems(pathname: string): SidebarNavItemView[] {
       label: "Support",
       icon: <LifeBuoy className="size-4" />,
       active: pathname.startsWith(routes.support),
-      status: <TbrPill />,
     },
   ];
-}
-
-function TbrPill() {
-  return (
-    <span
-      aria-hidden="true"
-      title="To be removed"
-      className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
-    >
-      tbr
-    </span>
-  );
 }

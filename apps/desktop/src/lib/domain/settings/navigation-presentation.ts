@@ -140,13 +140,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     id: "help",
     heading: "Help",
     items: [
-      { kind: "action", id: "support", label: "Support", iconId: "support", tbr: true },
+      { kind: "action", id: "support", label: "Support", iconId: "support" },
       {
         kind: "action",
         id: "checkForUpdates",
         label: "Desktop updates",
         iconId: "check-for-updates",
-        tbr: true,
       },
     ],
   },
