@@ -87,8 +87,8 @@ function creatorDetailIndicator(workspace: LogicalWorkspace): SidebarDetailIndic
     return {
       kind: "automation",
       tooltip: label
-        ? `Created by automation · ${label}`
-        : "Created by automation",
+        ? `Created by workflow · ${label}`
+        : "Created by workflow",
       action: {
         kind: "open_automations",
         automationId: creatorContext.automationId ?? null,
@@ -123,7 +123,7 @@ function creatorDetailIndicator(workspace: LogicalWorkspace): SidebarDetailIndic
     if (cloudWorkspace && cloudWorkspaceCreatedByAutomation(cloudWorkspace)) {
       return {
         kind: "automation",
-        tooltip: "Created by automation",
+        tooltip: "Created by workflow",
         action: { kind: "open_automations" },
       };
     }
@@ -132,7 +132,7 @@ function creatorDetailIndicator(workspace: LogicalWorkspace): SidebarDetailIndic
     if (localWorkspace && localWorkspaceCreatedByAutomation(localWorkspace)) {
       return {
         kind: "automation",
-        tooltip: "Created by automation",
+        tooltip: "Created by workflow",
         action: { kind: "open_automations" },
       };
     }

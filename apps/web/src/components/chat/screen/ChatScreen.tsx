@@ -16,7 +16,7 @@ export function ChatScreen() {
     return (
       <CloudChatMissingState
         title={screen.title}
-        onOpenWorkspaces={() => navigate(routes.workspaces)}
+        onOpenHome={() => navigate(routes.home)}
       />
     );
   }

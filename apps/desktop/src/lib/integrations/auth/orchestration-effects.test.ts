@@ -31,7 +31,7 @@ describe("handleDesktopNavigationUrl", () => {
 
     expect(handled).toBe(true);
     expect(deps.navigateDesktopRoute).toHaveBeenCalledWith(
-      "/plugins?source=mcp_oauth_callback&status=completed",
+      "/integrations?source=mcp_oauth_callback&status=completed",
     );
   });
 

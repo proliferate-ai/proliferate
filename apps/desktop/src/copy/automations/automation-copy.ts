@@ -38,6 +38,6 @@ export const AUTOMATION_RUN_COPY = {
 
 export const AUTOMATION_PREEXECUTOR_COPY = {
   pageDescription: "Schedule recurring cloud or local agent sessions.",
-  emptyState: "Create an automation to queue scheduled runs.",
-  modalDescription: "Cloud automations start a new cloud workspace and session for each run.",
+  emptyState: "Create a workflow to queue scheduled runs.",
+  modalDescription: "Cloud workflows start a new cloud workspace and session for each run.",
 } as const;

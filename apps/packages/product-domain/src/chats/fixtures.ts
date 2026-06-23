@@ -8,7 +8,7 @@ export const demoCurrentUser: ProductUser = {
 export const demoWorkspaces: ProductWorkspace[] = [
   {
     id: "shared-cloud",
-    name: "Shared cloud",
+    name: "Organization cloud",
     repoLabel: "proliferate-ai/proliferate",
     branchLabel: "main",
     kind: "shared",

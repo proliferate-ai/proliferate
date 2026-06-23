@@ -37,11 +37,11 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   });
 
   useShortcutHandler("app.go-plugins", () => {
-    actions.goPlugins.execute("shortcut");
+    actions.goIntegrations.execute("shortcut");
   });
 
   useShortcutHandler("app.go-automations", () => {
-    actions.goAutomations.execute("shortcut");
+    actions.goWorkflows.execute("shortcut");
   });
 
   useShortcutHandler("app.open-web", () => {

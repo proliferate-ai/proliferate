@@ -6,35 +6,20 @@ import {
   ArrowLeft,
   ClipboardList,
   FilePlus,
-  GitPullRequest,
   Plus,
-  Settings,
 } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PlanPickerContentBody } from "./PlanPickerPopover";
-
-interface ReviewAnchor {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-  width: number;
-  height: number;
-}
 
 interface ComposerAddActionPopoverProps {
   canAttachFile: boolean;
   attachFileDetail: string;
   canAttachPlan: boolean;
   attachPlanDetail: string;
-  canStartReview: boolean;
-  reviewDetail: string;
   workspaceUiKey: string | null;
   sdkWorkspaceId: string | null;
   onAttachFile: () => void;
-  onStartReview: () => void;
-  onConfigureReview: (anchor: ReviewAnchor) => void;
 }
 
 type AddActionView = "menu" | "plans";
@@ -44,13 +29,9 @@ export function ComposerAddActionPopover({
   attachFileDetail,
   canAttachPlan,
   attachPlanDetail,
-  canStartReview,
-  reviewDetail,
   workspaceUiKey,
   sdkWorkspaceId,
   onAttachFile,
-  onStartReview,
-  onConfigureReview,
 }: ComposerAddActionPopoverProps) {
   const [view, setView] = useState<AddActionView>("menu");
 
@@ -61,8 +42,8 @@ export function ComposerAddActionPopover({
           iconOnly
           icon={<Plus className="size-4" />}
           label="Add"
-          title="Add file, plan, or review agents"
-          aria-label="Add file, plan, or review agents"
+          title="Add file or plan"
+          aria-label="Add file or plan"
         />
       )}
       align="end"
@@ -125,32 +106,6 @@ export function ComposerAddActionPopover({
                 disabled={!canAttachPlan}
                 onClick={() => setView("plans")}
               />
-              <ComposerActionRow
-                icon={<GitPullRequest className="size-4 text-muted-foreground" />}
-                label="Code review agents"
-                detail={reviewDetail}
-                disabled={!canStartReview}
-                trailing={(
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={!canStartReview}
-                    title="Configure code review agents"
-                    className="h-7 rounded-lg px-2"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onConfigureReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()));
-                    }}
-                  >
-                    <Settings className="size-3.5" />
-                  </Button>
-                )}
-                onClick={() => {
-                  onStartReview();
-                  close();
-                }}
-              />
             </div>
           )}
         </ComposerPopoverSurface>
@@ -164,14 +119,12 @@ function ComposerActionRow({
   label,
   detail,
   disabled,
-  trailing,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   detail: string;
   disabled: boolean;
-  trailing?: ReactNode;
   onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
@@ -187,18 +140,6 @@ function ComposerActionRow({
           {detail}
         </span>
       </PopoverMenuItem>
-      {trailing}
     </div>
   );
-}
-
-function rectToReviewAnchor(rect: DOMRect): ReviewAnchor {
-  return {
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.bottom,
-    left: rect.left,
-    width: rect.width,
-    height: rect.height,
-  };
 }

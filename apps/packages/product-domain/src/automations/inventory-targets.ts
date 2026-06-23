@@ -40,7 +40,7 @@ export function automationTargetLabel(
     return "Local";
   }
   if (targetMode === "shared_cloud") {
-    return "Shared cloud";
+    return "Organization cloud";
   }
   if (targetMode === "personal_cloud") {
     return "Personal cloud";

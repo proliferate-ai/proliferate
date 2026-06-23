@@ -37,8 +37,6 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
-from proliferate.db.models.cloud.agent_auth import SandboxProfile
-from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import (
@@ -542,7 +540,7 @@ class TestBillingApi:
         assert intent.stripe_checkout_session_id == "cs_team_checkout_2"
 
     @pytest.mark.asyncio
-    async def test_team_checkout_activation_creates_team_and_shared_sandbox(
+    async def test_team_checkout_activation_creates_team_and_sends_invites(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -684,18 +682,6 @@ class TestBillingApi:
             )
         ).scalar_one()
         assert subscription.billing_subject_id == billing_subject_id
-        profile = (
-            await db_session.execute(
-                select(SandboxProfile).where(SandboxProfile.organization_id == organization.id)
-            )
-        ).scalar_one()
-        target = (
-            await db_session.execute(
-                select(CloudTarget).where(CloudTarget.sandbox_profile_id == profile.id)
-            )
-        ).scalar_one()
-        assert target.display_name == "Shared cloud sandbox"
-        assert target.profile_target_role == "primary"
         invitation = (
             await db_session.execute(
                 select(OrganizationInvitation).where(

@@ -21,27 +21,14 @@ import {
   agentAuthSlotDomId,
 } from "@/lib/domain/agent-auth/auth-slots";
 import { useAgentAuthLocalSources } from "./agent-auth-library/use-agent-auth-local-sources";
-import { useAgentAuthLibraryOrganizationSelection } from "./agent-auth-library/use-agent-auth-library-organization-selection";
 import { useAgentAuthLibraryProfiles } from "./agent-auth-library/use-agent-auth-library-profiles";
 
 export function useAgentAuthLibraryActions(
   initialAgentKind: AgentAuthAgentKind | null,
-  initialOrganizationId: string | null = null,
   options: { autoLoadPersonalProfile?: boolean } = {},
 ) {
   const autoLoadPersonalProfile = options.autoLoadPersonalProfile ?? true;
-  const {
-    organizationOptions,
-    selectedOrganizationId,
-    selectedOrganization,
-    setSelectedOrganizationId,
-    isAdminForSelectedOrganization,
-  } = useAgentAuthLibraryOrganizationSelection(initialOrganizationId);
   const personalCredentials = useAgentAuthCredentials({ organizationId: null });
-  const organizationCredentials = useAgentAuthCredentials({
-    organizationId: selectedOrganizationId,
-    enabled: selectedOrganizationId !== null,
-  });
   const { data: capabilities } = useCloudCapabilities();
   const agentGatewayCapabilities = capabilities?.agentGateway ?? null;
   const mutations = useAgentAuthMutations();
@@ -60,31 +47,22 @@ export function useAgentAuthLibraryActions(
     listSyncableAgentAuthCredentials,
     setFeedback,
   });
-  const [sharingCredentialId, setSharingCredentialId] = useState<string | null>(null);
-  const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
   const [revokingCredentialId, setRevokingCredentialId] = useState<string | null>(null);
   const [syncingLocalProvider, setSyncingLocalProvider] = useState<AgentAuthProvider | null>(
     null,
   );
   const {
-    organizationProfile,
-    setOrganizationProfile,
     personalProfile,
     setPersonalProfile,
-    organizationProfileLoading,
     personalProfileLoading,
   } = useAgentAuthLibraryProfiles({
     autoLoadPersonalProfile,
-    initialOrganizationId,
-    selectedOrganizationId,
-    ensureOrganizationProfile: mutations.ensureOrganizationProfile,
     ensurePersonalProfile: mutations.ensurePersonalProfile,
     setFeedback,
   });
   const [focusedAgentKind, setFocusedAgentKind] = useState<AgentAuthAgentKind | null>(
     initialAgentKind,
   );
-  const selections = useSandboxAgentAuthSelections(organizationProfile?.id ?? null);
   const personalSelections = useSandboxAgentAuthSelections(personalProfile?.id ?? null);
   const personalCredentialsByProvider = useMemo(
     () => groupAgentAuthCredentialsByProvider(personalCredentials.data ?? []),
@@ -121,42 +99,6 @@ export function useAgentAuthLibraryActions(
     }
   }
 
-  async function handleShareCredential(credential: AgentAuthCredential) {
-    if (!selectedOrganizationId) {
-      setFeedback("Select a team before allowing team use.");
-      return;
-    }
-    setSharingCredentialId(credential.id);
-    setFeedback(null);
-    try {
-      await mutations.createShare({
-        credentialId: credential.id,
-        organizationId: selectedOrganizationId,
-      });
-      setFeedback(`${credential.displayName} can now be used by ${selectedOrganization?.name ?? "the team"}.`);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not allow team use.");
-    } finally {
-      setSharingCredentialId(null);
-    }
-  }
-
-  async function handleRevokeShare(credential: AgentAuthCredential) {
-    if (!credential.activeCredentialShareId) {
-      return;
-    }
-    setRevokingShareId(credential.activeCredentialShareId);
-    setFeedback(null);
-    try {
-      await mutations.deleteShare(credential.activeCredentialShareId);
-      setFeedback(`${credential.displayName} team use revoked.`);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not revoke team use.");
-    } finally {
-      setRevokingShareId(null);
-    }
-  }
-
   async function handleRevokeCredential(credential: AgentAuthCredential) {
     setRevokingCredentialId(credential.id);
     setFeedback(null);
@@ -168,36 +110,6 @@ export function useAgentAuthLibraryActions(
     } finally {
       setRevokingCredentialId(null);
     }
-  }
-
-  async function handleEnsureOrganizationProfile() {
-    if (!selectedOrganizationId) {
-      return;
-    }
-    setFeedback(null);
-    try {
-      const nextProfile = await mutations.ensureOrganizationProfile({
-        organizationId: selectedOrganizationId,
-      });
-      setOrganizationProfile(nextProfile);
-      setFeedback("Shared sandbox auth refreshed.");
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not load shared sandbox auth.");
-    }
-  }
-
-  async function ensureOrganizationProfileLoaded() {
-    if (organizationProfile) {
-      return organizationProfile;
-    }
-    if (!selectedOrganizationId) {
-      throw new Error("Select a team before choosing shared sandbox auth.");
-    }
-    const nextProfile = await mutations.ensureOrganizationProfile({
-      organizationId: selectedOrganizationId,
-    });
-    setOrganizationProfile(nextProfile);
-    return nextProfile;
   }
 
   async function ensurePersonalProfileLoaded() {
@@ -245,21 +157,6 @@ export function useAgentAuthLibraryActions(
     }
   }
 
-  async function handleEnsureManagedCredits() {
-    if (!selectedOrganizationId) {
-      return;
-    }
-    setFeedback(null);
-    try {
-      await mutations.ensureManagedCredits({
-        organizationId: selectedOrganizationId,
-      });
-      setFeedback("Managed credits are ready for the team.");
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not provision managed credits.");
-    }
-  }
-
   async function handleEnsureFreeCredits() {
     setFeedback(null);
     try {
@@ -275,80 +172,31 @@ export function useAgentAuthLibraryActions(
     }
   }
 
-  async function handleSelectTeamDefault(
-    agentKind: AgentAuthAgentKind,
-    authSlotId: AgentAuthCredentialProviderId | string,
-    credentialId: string,
-  ) {
-    if (!credentialId) {
-      return;
-    }
-    setFeedback(null);
-    try {
-      const profile = await ensureOrganizationProfileLoaded();
-      const selectedCredential = (organizationCredentials.data ?? []).find(
-        (credential) => credential.id === credentialId,
-      );
-      await mutations.selectCredential({
-        sandboxProfileId: profile.id,
-        agentKind,
-        authSlotId,
-        selection: {
-          credentialId,
-          credentialShareId: selectedCredential?.activeCredentialShareId ?? null,
-        },
-      });
-      setFeedback("Team default saved.");
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Could not save team default.");
-    }
-  }
-
   return {
-    organizationOptions,
-    selectedOrganizationId,
-    selectedOrganization,
-    setSelectedOrganizationId,
     currentUserId,
     feedback,
     localSourceError,
     localSourcesByProvider,
     personalCredentialsByProvider,
-    organizationCredentials: organizationCredentials.data ?? [],
-    organizationCredentialsLoading: organizationCredentials.isLoading,
-    organizationSelectionsLoading: organizationProfileLoading
-      || (organizationProfile !== null && (selections.isLoading || selections.isFetching)),
     personalCredentialsLoading: personalCredentials.isLoading,
     personalSelectionsLoading: personalProfileLoading
       || (personalProfile !== null && (personalSelections.isLoading || personalSelections.isFetching)),
-    organizationCredentialsError: organizationCredentials.error,
     personalCredentialsError: personalCredentials.error,
     capabilities: agentGatewayCapabilities,
     personalProfile,
     personalSelections: personalSelections.data ?? [],
-    organizationProfile,
-    selections: selections.data ?? [],
-    isAdminForSelectedOrganization,
     focusedAgentKind,
     syncingLocalProvider,
     rescanning,
-    sharingCredentialId,
-    revokingShareId,
     revokingCredentialId,
     ensuringProfile: mutations.isEnsuringProfile,
-    ensuringManagedCredits: mutations.isEnsuringManagedCredits,
     ensuringFreeCredits: mutations.isEnsuringFreeCredits,
-    selectingTeamDefault: mutations.isSelectingCredential,
+    selectingPersonalDefault: mutations.isSelectingCredential,
     handleRescan,
     handleSyncLocalCredential,
-    handleShareCredential,
-    handleRevokeShare,
     handleRevokeCredential,
-    handleEnsureOrganizationProfile,
     handleEnsurePersonalProfile,
-    handleEnsureManagedCredits,
     handleEnsureFreeCredits,
     handleSelectPersonalDefault,
-    handleSelectTeamDefault,
   };
 }

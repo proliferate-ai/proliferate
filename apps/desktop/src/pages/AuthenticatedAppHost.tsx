@@ -1,13 +1,11 @@
 import { useEffect, useRef, type ComponentType } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes";
-import { AutomationDetailPage } from "@/pages/AutomationDetailPage";
-import { AutomationsPage } from "@/pages/AutomationsPage";
-import { CloudWorkspacesPage } from "@/pages/CloudWorkspacesPage";
 import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPage";
+import { IntegrationsPage } from "@/pages/IntegrationsPage";
 import { MainPage } from "@/pages/MainPage";
-import { PluginsPage } from "@/pages/PluginsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { WorkflowsPage } from "@/pages/WorkflowsPage";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
 type SettingsRouteComponent = ComponentType<{ returnTo?: string }>;
@@ -59,16 +57,34 @@ export function AuthenticatedAppHost({
           <Route path="setup" element={<Navigate to={APP_ROUTES.home} replace />} />
           <Route
             path={LEGACY_POWERS_ROUTE}
-            element={<Navigate to={APP_ROUTES.plugins} replace />}
+            element={<LegacyRouteRedirect to={APP_ROUTES.integrations} />}
           />
-          <Route path="plugins" element={<PluginsPage />} />
-          <Route path="automations" element={<AutomationsPage />} />
-          <Route path="automations/:automationId" element={<AutomationDetailPage />} />
-          <Route path="workspaces" element={<CloudWorkspacesPage />} />
+          <Route path="plugins" element={<LegacyRouteRedirect to={APP_ROUTES.integrations} />} />
+          <Route path="integrations" element={<IntegrationsPage />} />
+          <Route path="workflows" element={<WorkflowsPage />} />
+          <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
+          <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
+          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} includeParam="workflowId" />} />
+          <Route path="workspaces" element={<Navigate to={APP_ROUTES.home} replace />} />
           <Route path="workspaces/:workspaceId" element={<DesktopWorkspaceDeepLinkPage />} />
           <Route path="*" element={<Navigate to={APP_ROUTES.home} replace />} />
         </Routes>
       )}
     </>
   );
+}
+
+function LegacyRouteRedirect({
+  to,
+  includeParam,
+}: {
+  to: string;
+  includeParam?: string;
+}) {
+  const location = useLocation();
+  const match = includeParam
+    ? location.pathname.split("/").filter(Boolean).at(-1)
+    : null;
+  const suffix = match ? `/${encodeURIComponent(decodeURIComponent(match))}` : "";
+  return <Navigate to={`${to}${suffix}${location.search}${location.hash}`} replace />;
 }

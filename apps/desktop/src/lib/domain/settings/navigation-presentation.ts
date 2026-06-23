@@ -13,8 +13,9 @@ export type SettingsNavIconId =
   | "general"
   | "keyboard"
   | "organization"
-  | "review"
-  | "shared-environments"
+  | "organization-integrations"
+  | "organization-limits"
+  | "organization-model-policy"
   | "support"
   | "worktrees";
 
@@ -25,68 +26,100 @@ export type SettingsNavItem =
     label: string;
     iconId: SettingsNavIconId;
     adminOnly?: boolean;
+    tbr?: boolean;
   }
   | {
     kind: "action";
     id: "checkForUpdates" | "support";
     label: string;
     iconId: SettingsNavIconId;
+    tbr?: boolean;
   };
 
 export interface SettingsNavGroup {
-  id: "preferences" | "organization_account" | "workspace" | "agents" | "help";
+  id:
+    | "admin"
+    | "individual_settings"
+    | "workspaces"
+    | "agents"
+    | "help";
   heading: string | null;
   items: SettingsNavItem[];
 }
 
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
-    id: "preferences",
-    heading: "Preferences",
+    id: "admin",
+    heading: "Admin",
+    items: [
+      {
+        kind: "section",
+        id: "organization",
+        label: "Organization settings",
+        iconId: "organization",
+        adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "billing",
+        label: "Plan + billing",
+        iconId: "billing",
+        adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "organization-integrations",
+        label: "Integrations",
+        iconId: "organization-integrations",
+        adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "organization-model-policy",
+        label: "Model policy",
+        iconId: "organization-model-policy",
+        adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "organization-limits",
+        label: "Limits",
+        iconId: "organization-limits",
+        adminOnly: true,
+      },
+    ],
+  },
+  {
+    id: "individual_settings",
+    heading: "Settings",
     items: [
       { kind: "section", id: "general", label: "General", iconId: "general" },
       { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
-      { kind: "section", id: "keyboard", label: "Keyboard", iconId: "keyboard" },
-    ],
-  },
-  {
-    id: "organization_account",
-    heading: "Organization & Account",
-    items: [
+      { kind: "section", id: "keyboard", label: "Keyboard shortcuts", iconId: "keyboard" },
       { kind: "section", id: "account", label: "Account", iconId: "account" },
-      { kind: "section", id: "organization", label: "Organization", iconId: "organization" },
-      { kind: "section", id: "billing", label: "Billing", iconId: "billing" },
     ],
   },
   {
-    id: "workspace",
-    heading: "Workspace",
+    id: "workspaces",
+    heading: "Workspaces",
     items: [
       { kind: "section", id: "environments", label: "Environments", iconId: "environments" },
+      { kind: "section", id: "compute", label: "Personal compute", iconId: "compute" },
       { kind: "section", id: "worktrees", label: "Worktrees", iconId: "worktrees" },
-      { kind: "section", id: "archived-chats", label: "Archived chats", iconId: "archived-chats" },
-      {
-        kind: "section",
-        id: "shared-environments",
-        label: "Shared Sandbox",
-        iconId: "shared-environments",
-        adminOnly: true,
-      },
-      { kind: "section", id: "compute", label: "Compute", iconId: "compute" },
+      { kind: "section", id: "archived-chats", label: "Archived chats", iconId: "archived-chats", tbr: true },
     ],
   },
   {
     id: "agents",
     heading: "Agents",
     items: [
-      { kind: "section", id: "agent-defaults", label: "Agent Defaults", iconId: "agent-defaults" },
       {
         kind: "section",
         id: "agent-authentication",
-        label: "Agent Authentication",
+        label: "Authentication",
         iconId: "agent-authentication",
       },
-      { kind: "section", id: "review", label: "Review", iconId: "review" },
+      { kind: "section", id: "agent-defaults", label: "Defaults", iconId: "agent-defaults" },
     ],
   },
   // SLACK BOT PARKED: navigation entry is intentionally unregistered while the flow is disabled.
@@ -107,12 +140,13 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     id: "help",
     heading: "Help",
     items: [
-      { kind: "action", id: "support", label: "Support", iconId: "support" },
+      { kind: "action", id: "support", label: "Support", iconId: "support", tbr: true },
       {
         kind: "action",
         id: "checkForUpdates",
         label: "Desktop updates",
         iconId: "check-for-updates",
+        tbr: true,
       },
     ],
   },

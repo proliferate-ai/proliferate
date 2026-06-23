@@ -14,8 +14,8 @@ export type AppNavigationCommandActions = Pick<
   | "openSettings"
   | "showKeyboardShortcuts"
   | "goHome"
-  | "goPlugins"
-  | "goAutomations"
+  | "goIntegrations"
+  | "goWorkflows"
   | "openWebApp"
   | "openSupport"
 >;
@@ -36,11 +36,11 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const goHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
-  const goPlugins = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.plugins);
+  const goIntegrations = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.integrations);
   }, [goToTopLevelRoute]);
-  const goAutomations = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.automations);
+  const goWorkflows = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
   const openWebApp = useCallback(() => {
     showToast("Opening web app...", "info");
@@ -65,12 +65,12 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
       execute: goHome,
       disabledReason: null,
     },
-    goPlugins: {
-      execute: goPlugins,
+    goIntegrations: {
+      execute: goIntegrations,
       disabledReason: null,
     },
-    goAutomations: {
-      execute: goAutomations,
+    goWorkflows: {
+      execute: goWorkflows,
       disabledReason: null,
     },
     openWebApp: {
@@ -82,9 +82,9 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
       disabledReason: null,
     },
   }), [
-    goAutomations,
     goHome,
-    goPlugins,
+    goIntegrations,
+    goWorkflows,
     openSettings,
     openSupport,
     openWebApp,

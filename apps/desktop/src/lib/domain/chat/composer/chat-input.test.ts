@@ -118,7 +118,7 @@ describe("resolveChatInputAvailability", () => {
     });
   });
 
-  it("keeps parent input enabled while review automation runs in the background", () => {
+  it("keeps parent input enabled while background session work runs", () => {
     expect(resolveChatInputAvailability({
       selectedWorkspaceId: "workspace-1",
       isCloudWorkspaceSelected: false,

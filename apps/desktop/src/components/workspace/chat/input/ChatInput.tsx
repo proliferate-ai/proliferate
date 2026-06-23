@@ -29,8 +29,6 @@ import { useComposerSubmitGate } from "@/hooks/chat/ui/use-composer-submit-gate"
 import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/facade/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/ui/use-queued-prompt-edit";
-import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
-import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/composer/file-mention-draft-model";
@@ -106,8 +104,6 @@ export function ChatInput({
       ?? null;
   const { handleSubmit, handleCancel } = useChatPromptActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
-  const reviewActions = useReviewActions();
-  const activeReview = useActiveReviewRun();
   const {
     isEditing: isEditingQueuedPrompt,
     editDraft,
@@ -362,14 +358,8 @@ export function ChatInput({
               activeSessionId={activeSessionIdForUi}
               workspaceUiKey={workspaceUiKey}
               sdkWorkspaceId={materializedWorkspaceId}
-              suppressActiveSessionState={suppressActiveSessionState}
-              canStartCodeReview={reviewActions.canStartCodeReview}
-              hasBlockingReview={activeReview.hasBlockingReview}
-              startingReview={!!activeReview.startingReview}
               hasUnresolvedPlans={planAttachments.hasUnresolvedPlans}
               onAttachFile={() => fileInputRef.current?.click()}
-              onStartReview={reviewActions.startCodeReview}
-              onConfigureReview={reviewActions.configureCodeReview}
               isRunning={isRunningForUi}
               isEmpty={effectiveIsEmpty}
               onSubmit={onSubmit}

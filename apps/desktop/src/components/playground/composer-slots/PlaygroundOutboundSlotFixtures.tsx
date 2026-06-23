@@ -5,8 +5,6 @@ import {
   PENDING_PROMPTS_MULTI,
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
-  PENDING_REVIEW_COMPLETE,
-  PENDING_REVIEW_FEEDBACK_READY,
 } from "@/lib/domain/chat/__fixtures__/playground/outbound-slot-fixtures";
 import {
   PLAYGROUND_SUBAGENT_WAKE_QUEUE,
@@ -40,22 +38,6 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
       return (
         <PendingPromptList
           entries={pendingQueueRows(PENDING_PROMPTS_WITH_EDITING)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
-    case "pending-review-feedback-ready":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PENDING_REVIEW_FEEDBACK_READY)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
-    case "pending-review-complete":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PENDING_REVIEW_COMPLETE)}
           onBeginEdit={noop}
           onDelete={noop}
         />

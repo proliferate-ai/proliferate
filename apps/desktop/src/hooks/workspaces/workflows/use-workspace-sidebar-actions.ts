@@ -45,16 +45,12 @@ export function useWorkspaceSidebarActions() {
     goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
 
-  const handleGoPlugins = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.plugins);
+  const handleGoIntegrations = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.integrations);
   }, [goToTopLevelRoute]);
 
-  const handleGoAutomations = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.automations);
-  }, [goToTopLevelRoute]);
-
-  const handleGoWorkspaces = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.workspaces);
+  const handleGoWorkflows = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
 
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
@@ -68,8 +64,8 @@ export function useWorkspaceSidebarActions() {
         return;
       case "open_automations":
         goToTopLevelRoute(action.automationId
-          ? `/automations/${encodeURIComponent(action.automationId)}`
-          : "/automations");
+          ? `/workflows/${encodeURIComponent(action.automationId)}`
+          : "/workflows");
         return;
       case "open_source_session": {
         if (mobility.selectionLocked && action.workspaceId !== mobility.selectedLogicalWorkspaceId) {
@@ -194,9 +190,8 @@ export function useWorkspaceSidebarActions() {
   return {
     handleAddRepo,
     handleGoHome,
-    handleGoPlugins,
-    handleGoAutomations,
-    handleGoWorkspaces,
+    handleGoIntegrations,
+    handleGoWorkflows,
     handleSidebarIndicatorAction,
     handleMarkWorkspaceDone,
     handleRetryWorkspaceCleanup,

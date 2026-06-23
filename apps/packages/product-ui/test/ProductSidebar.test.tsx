@@ -27,7 +27,7 @@ describe("ProductSidebar", () => {
           {
             id: "shared",
             sectionLabel: "Shared",
-            label: "Shared cloud",
+            label: "Organization cloud",
             count: 1,
             collapsed: false,
             actions: [{ id: "new", label: "New chat" }],
@@ -50,7 +50,7 @@ describe("ProductSidebar", () => {
           {
             id: "claim-1",
             label: "Claimable Slack thread",
-            subtitle: "Shared cloud",
+            subtitle: "Organization cloud",
             trailingLabel: "Claimable",
           },
         ]}
@@ -73,7 +73,7 @@ describe("ProductSidebar", () => {
     expect(container.innerHTML).not.toContain("bg-sidebar-background");
     expect(screen.getByText("Proliferate")).toBeTruthy();
     expect(screen.getByText("Home")).toBeTruthy();
-    expect(screen.getAllByText("Shared cloud").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Organization cloud").length).toBeGreaterThan(0);
     expect(screen.getByText("Investigate worker CI")).toBeTruthy();
     expect(screen.getByText("Claimable Slack thread")).toBeTruthy();
     expect(

@@ -20,7 +20,7 @@ export function errorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Plugin action could not be completed.";
+  return "Integration action could not be completed.";
 }
 
 export function applyLocalOAuthStatuses(
@@ -48,7 +48,7 @@ export function oauthFailureMessage(failureCode?: string | null): string {
     case "expired":
       return "Authorization expired.";
     case "connection_deleted":
-      return "The plugin connection was deleted before authorization finished.";
+      return "The integration connection was deleted before authorization finished.";
     case "superseded":
       return "A newer authorization attempt replaced this one.";
     default:

@@ -118,8 +118,8 @@ export function AutomationEditorDialog({
         open={open}
         onClose={onClose}
         disableClose={busy || pendingConfigureTarget !== null}
-        title={automation ? "Edit automation" : "Create automation"}
-        description="Create a scheduled automation."
+        title={automation ? "Edit workflow" : "Create workflow"}
+        description="Create a scheduled workflow."
         sizeClassName="max-h-[95vh] max-w-[800px]"
         bodyClassName="flex min-h-[24rem] flex-col px-5 pb-5 pt-0"
         panelClassName="border-border bg-background/95 shadow-lg backdrop-blur-xl"
@@ -130,8 +130,8 @@ export function AutomationEditorDialog({
               data-testid="automation-title-input"
               value={title}
               onChange={(event) => onTitleChange(event.target.value)}
-              aria-label="Automation title"
-              placeholder="Automation title"
+              aria-label="Workflow title"
+              placeholder="Workflow title"
               className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 pr-2 text-lg leading-tight shadow-none outline-none placeholder:text-muted-foreground focus:ring-0"
             />
             <AutomationTemplatePopover
@@ -224,8 +224,8 @@ export function AutomationEditorDialog({
         open={pendingConfigureTarget !== null}
         onClose={onCancelConfigureTarget}
         onConfirm={onConfirmConfigureTarget}
-        title="Discard automation draft?"
-        description="Opening cloud repo settings will close this automation draft."
+        title="Discard workflow draft?"
+        description="Opening cloud repo settings will close this workflow draft."
         confirmLabel="Open settings"
       />
     </>

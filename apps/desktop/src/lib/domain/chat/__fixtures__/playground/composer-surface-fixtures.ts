@@ -4,14 +4,6 @@ import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-con
 
 export const PLAYGROUND_SLASH_COMMANDS: SessionSlashCommandViewModel[] = [
   {
-    id: "review",
-    name: "review",
-    displayName: "/review",
-    description: "Review the current changes",
-    inputHint: null,
-    group: "Commands",
-  },
-  {
     id: "compact",
     name: "compact",
     displayName: "/compact",

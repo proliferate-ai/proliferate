@@ -157,7 +157,7 @@ export function validateAutomationRrule(rrule: string): string | null {
   if (!normalized.includes("FREQ=")) return "RRULE must include FREQ.";
   const unsupportedTokens = ["DTSTART", "RDATE", "EXDATE", "COUNT=", "UNTIL=", "BYSECOND="];
   if (unsupportedTokens.some((token) => normalized.includes(token))) {
-    return "This RRULE uses an option that automations do not support yet.";
+    return "This RRULE uses an option that workflows do not support yet.";
   }
   return null;
 }

@@ -86,8 +86,8 @@ export function BillingSettingsSurface({
   return (
     <section className="space-y-6">
       <SettingsPageHeader
-        title="Billing"
-        description="Review account credits and manage Team billing, seats, shared cloud runtime, overage, and plan changes."
+        title="Plan + billing"
+        description="Review account credits and manage organization plan, seats, cloud runtime, auto top up, overage, and plan changes."
       />
       <BillingSettingsPane
         checkoutReturnState={checkoutReturnState}
@@ -137,7 +137,7 @@ export function BillingSettingsSurface({
           <SettingsCard>
             <SettingsCardRow
               label="Team billing"
-              description="Create a team from Organization settings to add seats, shared cloud, Slack work, and org admin controls."
+              description="Create a team from Organization settings to add seats, organization cloud, Slack work, and org admin controls."
             >
               <Button
                 type="button"
@@ -152,18 +152,30 @@ export function BillingSettingsSurface({
         ) : null}
 
         {organization?.canManageBilling ? (
-          <BillingOwnerController
-            key={organization.id}
-            title={`${organization.name} billing`}
-            description="Applies to shared cloud workspaces, team automations, Slack sessions, and shared sandbox usage."
-            iconKind="organization"
-            owner={{ ownerScope: "organization", organizationId: organization.id }}
-            checkoutReturnState={checkoutReturnState}
-            actionsEnabled
-            enabled={enabled}
-            billingReturnSurface={billingReturnSurface}
-            onOpenUrl={onOpenUrl}
-          />
+          <>
+            <BillingOwnerController
+              key={organization.id}
+              title={`${organization.name} billing`}
+              description="Applies to organization cloud workspaces, team workflows, Slack sessions, and cloud usage."
+              iconKind="organization"
+              owner={{ ownerScope: "organization", organizationId: organization.id }}
+              checkoutReturnState={checkoutReturnState}
+              actionsEnabled
+              enabled={enabled}
+              billingReturnSurface={billingReturnSurface}
+              onOpenUrl={onOpenUrl}
+            />
+            <SettingsCard>
+              <SettingsCardRow
+                label="Auto top up"
+                description="Automatically refill organization-managed credits when balance reaches a threshold."
+              >
+                <Button type="button" size="sm" variant="secondary" disabled>
+                  Configure
+                </Button>
+              </SettingsCardRow>
+            </SettingsCard>
+          </>
         ) : organization ? (
           <SettingsCard>
             <SettingsCardRow

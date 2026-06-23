@@ -9,8 +9,8 @@ export interface AppCommandActions {
   openSettings: AppCommandAction;
   showKeyboardShortcuts: AppCommandAction;
   goHome: AppCommandAction;
-  goPlugins: AppCommandAction;
-  goAutomations: AppCommandAction;
+  goIntegrations: AppCommandAction;
+  goWorkflows: AppCommandAction;
   openWebApp: AppCommandAction;
   openSupport: AppCommandAction;
   addRepository: AppCommandAction;

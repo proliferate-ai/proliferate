@@ -47,7 +47,7 @@ export function AutomationSurface({
   busyAutomationId = null,
   busyAction = null,
   actionsDisabled = false,
-  description = "Create scheduled work against local, personal cloud, and shared cloud targets.",
+  description = "Create scheduled work against local, personal cloud, and organization cloud targets.",
   maxWidthClassName = "max-w-none",
   onModeChange,
   onIncludePausedChange,
@@ -63,12 +63,12 @@ export function AutomationSurface({
 
   return (
     <ProductPageShell
-      title="Automations"
+      title="Workflows"
       description={description}
       actions={onNew ? (
         <Button type="button" onClick={onNew}>
           <Plus className="size-4" aria-hidden />
-          New automation
+          New workflow
         </Button>
       ) : null}
       maxWidthClassName={maxWidthClassName}
@@ -92,11 +92,11 @@ export function AutomationSurface({
 
       {loading ? (
         <div className="py-4 text-xs text-muted-foreground" role="status" aria-live="polite">
-          Loading automations
+          Loading workflows
         </div>
       ) : error ? (
         <EmptyState
-          title="Could not load automations"
+          title="Could not load workflows"
           description="Refresh the page or sign in again."
           action={onRetry ? (
             <Button type="button" size="sm" variant="secondary" onClick={onRetry}>
@@ -107,14 +107,14 @@ export function AutomationSurface({
         />
       ) : itemCount === 0 ? (
         <EmptyState
-          title="No automations yet"
+          title="No workflows yet"
           description={onNew
-            ? "Create a scheduled automation for a configured repo."
-            : "Automations created from supported clients appear here."}
+            ? "Create a scheduled workflow for a configured repo."
+            : "Workflows created from supported clients appear here."}
           action={onNew ? (
             <Button type="button" size="sm" variant="secondary" onClick={onNew}>
               <Plus size={13} aria-hidden />
-              New automation
+              New workflow
             </Button>
           ) : null}
         />

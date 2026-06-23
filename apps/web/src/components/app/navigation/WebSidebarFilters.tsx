@@ -17,8 +17,8 @@ const SOURCE_FILTERS: readonly { id: SourceFilter; label: string }[] = [
   { id: "cloud_sandbox", label: "Cloud sandbox" },
   { id: "web", label: "Web" },
   { id: "mobile", label: "Mobile" },
-  { id: "personal_automation", label: "Personal automation" },
-  { id: "team_automation", label: "Team automation" },
+  { id: "personal_automation", label: "Personal workflow" },
+  { id: "team_automation", label: "Team workflow" },
   { id: "slack", label: "Slack" },
   { id: "api", label: "API" },
 ];
@@ -42,7 +42,6 @@ export function RecentFilterPopover({
   onSourceFilterChange,
   onRuntimeFilterChange,
   onClear,
-  onOpenAll,
 }: {
   open: boolean;
   activeFilterCount: number;
@@ -53,7 +52,6 @@ export function RecentFilterPopover({
   onSourceFilterChange: (filter: SourceFilter) => void;
   onRuntimeFilterChange: (filter: RuntimeFilter) => void;
   onClear: () => void;
-  onOpenAll: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -123,11 +121,6 @@ export function RecentFilterPopover({
             label="Clear filters"
             disabled={activeFilterCount === 0}
             onClick={onClear}
-          />
-          <PopoverMenuItem
-            variant="sidebar"
-            label="Open workspaces"
-            onClick={onOpenAll}
           />
         </div>
       ) : null}

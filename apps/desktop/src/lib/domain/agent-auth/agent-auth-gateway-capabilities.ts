@@ -15,8 +15,8 @@ export function agentAuthManagedCreditsCapabilityLabel(
   }
   if (ownerScope === "organization") {
     return capabilities.managedCreditsOrganizationEnabled
-      ? "Managed credits can be provisioned for shared cloud sandboxes."
-      : "Managed credits are not enabled for shared cloud sandboxes.";
+      ? "Managed credits can be provisioned for organization cloud work."
+      : "Managed credits are not enabled for organization cloud work.";
   }
   return capabilities.managedCreditsPersonalEnabled
     ? "Managed credits can be used by personal cloud sandboxes."

@@ -34,7 +34,7 @@ export function AutomationRunsList({
   }
 
   return (
-    <div className="w-full min-w-0 overflow-hidden pb-8" role="list" aria-label="Automation run history">
+    <div className="w-full min-w-0 overflow-hidden pb-8" role="list" aria-label="Workflow run history">
       {runs.map((run) => (
         <AutomationRunRow
           key={run.id}

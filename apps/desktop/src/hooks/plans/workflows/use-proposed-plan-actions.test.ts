@@ -66,12 +66,12 @@ describe("executePlanImplementation", () => {
   it("toasts and does not start a flow when chat availability is disabled", async () => {
     const deps = depsForStates([state()], {
       isChatDisabled: true,
-      chatDisabledReason: "Review automation is running.",
+      chatDisabledReason: "Session is busy.",
     });
 
     await executePlanImplementation({ plan: plan(), ...deps });
 
-    expect(deps.showToast).toHaveBeenCalledWith("Review automation is running.");
+    expect(deps.showToast).toHaveBeenCalledWith("Session is busy.");
     expect(deps.startLatencyFlow).not.toHaveBeenCalled();
     expect(deps.setActiveSessionConfigOption).not.toHaveBeenCalled();
     expect(deps.promptActiveSession).not.toHaveBeenCalled();

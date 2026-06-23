@@ -17,7 +17,7 @@ export function AccountSettingsSection() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Account & providers"
-        description="Manage the product identity Web uses for cloud sessions, automations, and provider linking."
+        description="Manage the product identity Web uses for cloud sessions, workflows, and provider linking."
       />
       <AccountSettingsPane
         {...buildAccountSettingsProps({
@@ -70,8 +70,8 @@ function buildAccountSettingsProps({
     email: user?.email ?? "Signed in",
     avatarUrl: user?.avatar_url ?? null,
     profileSummary: viewer?.githubConnected
-      ? "Ready for cloud workspaces and automations."
-      : "GitHub is required before cloud workspaces and automations can run end to end.",
+      ? "Ready for cloud workspaces and workflows."
+      : "GitHub is required before cloud workspaces and workflows can run end to end.",
     githubLabel,
     providers: buildProviderViews(linkedProviders, providerAvailability, Boolean(viewer?.githubConnected)),
     passwordCredential: {

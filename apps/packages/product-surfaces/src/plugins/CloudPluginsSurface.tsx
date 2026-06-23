@@ -15,8 +15,8 @@ export function CloudPluginsSurface(props: CloudPluginsSurfaceProps) {
 
   return (
     <ProductPageShell
-      title="Plugins"
-      description="Packages of apps, MCP tools, and skills agents can use in sessions."
+      title="Integrations"
+      description="Apps, MCP tools, and skills agents can use in sessions."
       maxWidthClassName="max-w-6xl"
       telemetryBlocked
     >

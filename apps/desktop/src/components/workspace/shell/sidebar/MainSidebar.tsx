@@ -97,9 +97,8 @@ export const MainSidebar = memo(function MainSidebar() {
     restoreCloudWorkspace: restoreCloudWorkspaceRequest,
   } = useCloudWorkspaceActions();
 
-  const isOnPlugins = location.pathname === APP_ROUTES.plugins;
-  const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
-  const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
+  const isOnIntegrations = location.pathname === APP_ROUTES.integrations;
+  const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
   const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
@@ -256,11 +255,8 @@ export const MainSidebar = memo(function MainSidebar() {
   );
   const primaryNavShortcutLabels = useMemo(() => ({
     home: getShortcutDisplayLabel(SHORTCUTS.goHome),
-    plugins: getShortcutDisplayLabel(SHORTCUTS.goPlugins),
-    automations: getShortcutDisplayLabel(SHORTCUTS.goAutomations),
     support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
   }), []);
-  const handleGoWorkspaces = actions.handleGoWorkspaces;
 
   return (
     <DebugProfiler id="workspace-sidebar">
@@ -273,14 +269,12 @@ export const MainSidebar = memo(function MainSidebar() {
         <DebugProfiler id="workspace-sidebar-primary-nav">
           <SidebarPrimaryNavigation
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-            pluginsActive={isOnPlugins}
-            automationsActive={isOnAutomations}
-            workspacesActive={isOnWorkspaces}
+            integrationsActive={isOnIntegrations}
+            workflowsActive={isOnWorkflows}
             supportActive={false}
             onGoHome={actions.handleGoHome}
-            onGoPlugins={actions.handleGoPlugins}
-            onGoAutomations={actions.handleGoAutomations}
-            onGoWorkspaces={handleGoWorkspaces}
+            onGoIntegrations={actions.handleGoIntegrations}
+            onGoWorkflows={actions.handleGoWorkflows}
             onOpenSupport={handleOpenSupport}
             shortcutRevealVisible={shortcutRevealVisible}
             shortcutLabels={primaryNavShortcutLabels}

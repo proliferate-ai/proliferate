@@ -1,11 +1,12 @@
 export const APP_ROUTES = {
   home: "/",
-  plugins: "/plugins",
-  automations: "/automations",
-  workspaces: "/workspaces",
+  integrations: "/integrations",
+  workflows: "/workflows",
   settings: "/settings",
 } as const;
 
 export const LEGACY_APP_ROUTES = {
+  automations: "/automations",
+  plugins: "/plugins",
   powers: "/powers",
 } as const;

@@ -34,7 +34,7 @@ export function pluginComponentRows(item: PluginInventoryItem): PluginComponentR
     {
       key: "app",
       label: `${item.entry.name} connection`,
-      description: "Account, token, or local setup used by plugin capabilities.",
+      description: "Account, token, or local setup used by integration capabilities.",
       stateLabel: pluginConnectionStateLabel(item),
       ...publicChip(item.connection),
     },
@@ -61,7 +61,7 @@ export function pluginComponentRows(item: PluginInventoryItem): PluginComponentR
   rows.push({
     key: "requirement",
     label: runtimeRequirementLabel(item.entry),
-    description: "Target-side runtime requirement for this plugin.",
+    description: "Target-side runtime requirement for this integration.",
     stateLabel: item.entry.availability === "cloud_only" ? "Cloud" : "Target",
   });
 

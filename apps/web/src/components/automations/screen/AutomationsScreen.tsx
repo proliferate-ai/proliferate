@@ -70,7 +70,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     || (teamOrganizationId !== null && Boolean(teamAutomations.error));
   const hasAutomationLoadError = automationsError && automations.length === 0;
   const partialAutomationLoadError = automationsError && automations.length > 0
-    ? "Some automations could not load. The list may be incomplete."
+    ? "Some workflows could not load. The list may be incomplete."
     : null;
 
   const selectedFromList = useMemo(
@@ -162,7 +162,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
         loadingAutomation={selectedDetail.isLoading}
         loadingRuns={selectedDetail.isLoading || runs.isLoading}
         notFound={Boolean(selectedDetail.error)}
-        onBack={() => navigate(routes.automations)}
+        onBack={() => navigate(routes.workflows)}
         onRunSelect={openRun}
       />
     );
@@ -187,7 +187,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
           void teamAutomations.refetch();
         }
       }}
-      onAutomationSelect={(automationId) => navigate(routes.automation(automationId))}
+      onAutomationSelect={(automationId) => navigate(routes.workflow(automationId))}
     />
   );
 }
