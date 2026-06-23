@@ -1,42 +1,49 @@
 import { KeyRound } from "lucide-react";
 import { useState } from "react";
 
-import { loginWebWithPassword, type AuthProviderName } from "@proliferate/cloud-sdk";
+import { type AuthProviderName } from "@proliferate/cloud-sdk";
 import {
   AUTH_PROVIDER_ORDER,
   AUTH_SIGN_IN_COPY,
   authProviderPresentation,
 } from "@proliferate/product-domain/auth/presentation";
 import { AuthStartPanel } from "@proliferate/product-ui/auth/AuthStartPanel";
-import { PasswordCredentialForm } from "@proliferate/product-ui/auth/PasswordCredentialForm";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { ProliferateMark } from "@proliferate/product-ui/brand/ProliferateMark";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 
 import { webEnv } from "../../../config/env";
+import { WEB_AUTH_COPY } from "../../../copy/auth/web-auth-copy";
 import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
-import { createWebCloudClient } from "../../../lib/access/cloud/client";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
+const WEB_SIGN_IN_PROVIDERS = new Set<AuthProviderName>(["github", "google"]);
+
 export function AuthScreen() {
-  const { setToken, setSession, bootstrapUnreachable } = useAuthToken();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { setToken, bootstrapUnreachable } = useAuthToken();
   const [manualToken, setManualToken] = useState("");
   const [showDevAccess, setShowDevAccess] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | null>(null);
-  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [providerError, setProviderError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const busy = Boolean(loadingProvider) || passwordSubmitting;
+  const busy = Boolean(loadingProvider);
+  const providerActions = AUTH_PROVIDER_ORDER
+    .filter((provider) => WEB_SIGN_IN_PROVIDERS.has(provider))
+    .map((provider) => ({
+      id: provider,
+      label: authProviderPresentation(provider).actionLabel,
+      icon: providerIcon(provider),
+      loading: loadingProvider === provider,
+      disabled: busy,
+      primary: provider === "github",
+      onClick: () => void signIn(provider),
+    }));
 
   async function signIn(provider: AuthProviderName) {
     if (busy) {
       return;
     }
     setProviderError(null);
-    setPasswordError(null);
     setLoadingProvider(provider);
     try {
       await startWebAuthFlow({ provider });
@@ -46,58 +53,18 @@ export function AuthScreen() {
     }
   }
 
-  async function signInWithPassword() {
-    if (busy) {
-      return;
-    }
-    setProviderError(null);
-    setPasswordError(null);
-    setPasswordSubmitting(true);
-    try {
-      const client = createWebCloudClient(webEnv.apiBaseUrl, null);
-      const session = await loginWebWithPassword(
-        {
-          email: email.trim(),
-          password,
-        },
-        client,
-      );
-      setSession(session);
-    } catch (authError) {
-      setPasswordError(authError instanceof Error ? authError.message : "Email sign in failed.");
-    } finally {
-      setPasswordSubmitting(false);
-    }
-  }
-
   return (
     <AuthStartPanel
       mark={<ProliferateMark size={36} />}
       title={AUTH_SIGN_IN_COPY.title}
-      subtitle={AUTH_SIGN_IN_COPY.subtitle}
-      footer={<span className="block text-faint">{AUTH_SIGN_IN_COPY.footer}</span>}
-      credentialForm={(
-        <PasswordCredentialForm
-          email={email}
-          password={password}
-          submitting={passwordSubmitting}
-          disabled={Boolean(loadingProvider)}
-          error={passwordError}
-          onEmailChange={setEmail}
-          onPasswordChange={setPassword}
-          onSubmit={() => { void signInWithPassword(); }}
-        />
+      subtitle={(
+        <span>
+          <span className="font-medium text-foreground/80">{WEB_AUTH_COPY.betaLabel}.</span>{" "}
+          {WEB_AUTH_COPY.subtitle}
+        </span>
       )}
-      providers={AUTH_PROVIDER_ORDER.map((provider) => ({
-        id: provider,
-        label: authProviderPresentation(provider).actionLabel,
-        icon: providerIcon(provider),
-        loading: loadingProvider === provider,
-        disabled: busy,
-        primary: provider === "github",
-        onClick: () => void signIn(provider),
-      }))}
-      note={AUTH_SIGN_IN_COPY.note}
+      footer={<span className="block text-faint">{AUTH_SIGN_IN_COPY.footer}</span>}
+      providers={providerActions}
       error={providerError ?? (bootstrapUnreachable ? localApiUnreachableNotice() : null)}
       devAccess={webEnv.devAccessTokenLogin ? (
         <div className="mt-2 border-t border-border pt-4">

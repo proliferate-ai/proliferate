@@ -13,6 +13,16 @@ import { createWebCloudClient } from "../client";
 
 const PENDING_WEB_AUTH_KEY = "proliferate.web.pendingAuth";
 
+export class WebAuthFlowError extends Error {
+  code: string | null;
+
+  constructor(message: string, code: string | null) {
+    super(message);
+    this.name = "WebAuthFlowError";
+    this.code = code;
+  }
+}
+
 interface PendingWebAuth {
   provider: AuthProviderName;
   purpose: AuthPurpose;
@@ -63,7 +73,7 @@ export async function completeWebAuthFlow(
 ): Promise<AuthSessionResponse> {
   const error = searchParams.get("error");
   if (error) {
-    throw new Error(error);
+    throw new WebAuthFlowError(authCallbackErrorMessage(error), error);
   }
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -84,6 +94,31 @@ export async function completeWebAuthFlow(
     },
     client,
   );
+}
+
+export function webAuthFlowErrorCode(error: unknown): string | null {
+  if (error instanceof WebAuthFlowError) {
+    return error.code;
+  }
+  if (
+    error
+    && typeof error === "object"
+    && "code" in error
+    && typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+  return null;
+}
+
+function authCallbackErrorMessage(code: string): string {
+  switch (code) {
+    case "web_beta_email_missing":
+    case "web_beta_email_not_allowed":
+      return "Hosted web access is currently limited to beta users.";
+    default:
+      return code;
+  }
 }
 
 function writePendingWebAuth(pending: PendingWebAuth): void {

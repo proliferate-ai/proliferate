@@ -5,7 +5,10 @@ import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCal
 import { ProliferateMark } from "@proliferate/product-ui/brand/ProliferateMark";
 
 import { routes } from "../config/routes";
-import { completeWebAuthFlow } from "../lib/access/cloud/auth/web-auth-flow";
+import {
+  completeWebAuthFlow,
+  webAuthFlowErrorCode,
+} from "../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../providers/WebCloudProvider";
 
 export function AuthCallbackPage() {
@@ -26,12 +29,13 @@ export function AuthCallbackPage() {
         navigate(routes.home, { replace: true });
       })
       .catch((callbackError) => {
+        const code = webAuthFlowErrorCode(callbackError);
         const message =
           callbackError instanceof Error
             ? callbackError.message
             : "The sign-in callback could not be completed.";
         setError(message);
-        navigate(`${routes.authError}?code=${encodeURIComponent(message)}`, {
+        navigate(`${routes.authError}?code=${encodeURIComponent(code ?? message)}`, {
           replace: true,
         });
       });
