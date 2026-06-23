@@ -53,11 +53,12 @@ export function OrganizationIntegrationsPolicySurface({
   onAddMcpIntegration,
 }: OrganizationIntegrationsPolicySurfaceProps) {
   const pendingIds = new Set(pendingCatalogEntryIds);
-  const hasActiveFilter = query.trim().length > 0 || categoryFilter !== "all";
+  const trimmedQuery = query.trim();
+  const hasActiveFilter = trimmedQuery.length > 0 || categoryFilter !== "all";
   const filteredEmpty = !loading && !error && hasActiveFilter && items.length === 0;
   const empty = !loading && !error && !hasActiveFilter && items.length === 0;
-  const filteredEmptyTitle = query.trim().length > 0
-    ? `No integrations match "${query}"`
+  const filteredEmptyTitle = trimmedQuery.length > 0
+    ? `No integrations match "${trimmedQuery}"`
     : "No integrations match these filters";
 
   return (
