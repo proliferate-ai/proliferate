@@ -30,6 +30,7 @@ from proliferate.auth.identity.types import (
     AuthSession,
     VerifiedProviderIdentity,
 )
+from proliferate.auth.identity.web_beta import ensure_web_beta_email_allowed
 from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_REDIRECT_SCHEMES,
@@ -199,6 +200,8 @@ async def complete_oauth_provider_callback(
             request, provider=provider, surface=callback_surface
         ),
     )
+    if callback_surface == "web" and challenge.purpose == "login":
+        ensure_web_beta_email_allowed(verified.email)
     desktop_github_account_or_email_exists = True
     if callback_surface == "desktop" and provider == "github":
         desktop_github_account_or_email_exists = await _desktop_github_account_or_email_exists(
@@ -336,6 +339,8 @@ async def complete_apple_web_callback(
         email_hint=email,
         display_name_hint=display_name,
     )
+    if challenge.purpose == "login":
+        ensure_web_beta_email_allowed(verified.email)
     user = await resolve_provider_user(db, verified=verified, challenge=challenge)
     auth_code = await create_auth_code(
         db,

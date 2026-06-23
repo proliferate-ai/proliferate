@@ -171,6 +171,18 @@
   description: Comma-separated proxy IPs or CIDRs allowed to supply x-forwarded-for for password login throttling
   tags: [self-hosted, production]
 
+- name: WEB_BETA_ALLOWED_EMAILS
+  secret: false
+  default: ""
+  description: Comma-separated exact email addresses allowed to create or refresh hosted web sessions
+  tags: [local-dev, self-hosted, production]
+
+- name: WEB_BETA_ALLOWED_DOMAINS
+  secret: false
+  default: ""
+  description: Comma-separated exact email domains allowed to create or refresh hosted web sessions
+  tags: [local-dev, self-hosted, production]
+
 - name: MOBILE_REDIRECT_URI
   secret: false
   default: "proliferate://auth/callback"

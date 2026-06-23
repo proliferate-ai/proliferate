@@ -27,6 +27,27 @@ GitHub remains the product-readiness provider. A password-only user is signed in
 but limited until the existing GitHub readiness check succeeds. Do not add a
 hidden bypass for normal users.
 
+## Web Beta Access
+
+Hosted web access is beta-gated. The server enforces the gate when issuing or
+refreshing a web session; Desktop and Mobile OAuth/token flows are not blocked
+by this web-only policy.
+
+Beta membership is configured with:
+
+- `WEB_BETA_ALLOWED_EMAILS` for exact email addresses
+- `WEB_BETA_ALLOWED_DOMAINS` for all emails at an exact domain
+
+Both lists are comma-separated and normalized case-insensitively. A user is
+eligible when their account email matches either an exact email or the domain
+after `@`. Existing users do not bypass the web beta gate. If the beta allowlist
+is not configured, the server does not apply the web beta restriction for local
+and unconfigured deployments.
+
+Denied web sessions return a stable `403` error code. OAuth callback denials
+redirect back to the web auth error route with the same stable code so the web
+app can render beta-specific copy and point the user to Desktop.
+
 ## Email/Password
 
 Email/password auth is a controlled sign-in method for accounts that already
@@ -85,11 +106,13 @@ CIDRs listed in `PASSWORD_AUTH_TRUSTED_PROXY_HOSTS`.
 
 Web signed out:
 
-- Shows email/password as a default sign-in option.
-- Keeps `Continue with GitHub` as the primary provider action because GitHub is
-  still required for full product readiness.
-- On password success, adopts the web session through `setSession`.
+- Shows `Continue with GitHub` as the primary provider action.
+- Shows `Continue with Google` as the secondary visible provider action.
+- Shows web beta copy before sign-in.
+- Does not currently show Apple or email/password sign-in on the web auth page.
 - If readiness is missing, the existing Connect GitHub gate is shown.
+- If web beta access is denied, shows a beta-only rejection state with Desktop
+  app handoff and alternate-account actions.
 
 Mobile signed out:
 

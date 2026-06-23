@@ -54,6 +54,10 @@ from proliferate.auth.identity.sessions import (
     refresh_auth_session,
 )
 from proliferate.auth.identity.types import AuthProviderName
+from proliferate.auth.identity.web_beta import (
+    WebBetaAccessDenied,
+    ensure_web_beta_email_allowed,
+)
 from proliferate.config import settings
 from proliferate.constants.auth import REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.engine import get_async_session
@@ -188,14 +192,18 @@ async def oauth_callback(
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
     if state is None or code is None:
         return RedirectResponse(_auth_error_url("missing_callback_params"), status_code=302)
-    redirect_url = await complete_oauth_provider_callback(
-        db,
-        request,
-        provider=provider,
-        surface=surface,
-        state=state,
-        code=code,
-    )
+    try:
+        redirect_url = await complete_oauth_provider_callback(
+            db,
+            request,
+            provider=provider,
+            surface=surface,
+            state=state,
+            code=code,
+        )
+    except WebBetaAccessDenied as exc:
+        await db.rollback()
+        return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
     await db.commit()
     return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
 
@@ -228,14 +236,18 @@ async def oauth_shared_provider_callback(
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
     if state is None or code is None:
         return RedirectResponse(_auth_error_url("missing_callback_params"), status_code=302)
-    redirect_url = await complete_oauth_provider_callback(
-        db,
-        request,
-        provider=provider,
-        surface=None,
-        state=state,
-        code=code,
-    )
+    try:
+        redirect_url = await complete_oauth_provider_callback(
+            db,
+            request,
+            provider=provider,
+            surface=None,
+            state=state,
+            code=code,
+        )
+    except WebBetaAccessDenied as exc:
+        await db.rollback()
+        return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
     await db.commit()
     return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
 
@@ -263,13 +275,17 @@ async def apple_web_callback(
                     display_name = " ".join(part for part in parts if part) or None
         except json.JSONDecodeError:
             pass
-    redirect_url = await complete_apple_web_callback(
-        db,
-        state=state,
-        identity_token=id_token,
-        email=email,
-        display_name=display_name,
-    )
+    try:
+        redirect_url = await complete_apple_web_callback(
+            db,
+            state=state,
+            identity_token=id_token,
+            email=email,
+            display_name=display_name,
+        )
+    except WebBetaAccessDenied as exc:
+        await db.rollback()
+        return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
     await db.commit()
     return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
 
@@ -304,6 +320,7 @@ async def web_password_login(
             password=body.password,
             client_ip=_request_client_ip(request),
         )
+        ensure_web_beta_email_allowed(session.email)
     except HTTPException:
         await db.commit()
         raise
@@ -355,6 +372,7 @@ async def web_token(
     db: AsyncSession = Depends(get_async_session),
 ) -> AuthSessionResponse:
     session = await exchange_auth_code(db, code=body.code, code_verifier=body.code_verifier)
+    ensure_web_beta_email_allowed(session.email)
     await db.commit()
     _set_web_session_cookies(response, session.refresh_token)
     return auth_session_response(session, include_refresh_token=False)
@@ -379,6 +397,7 @@ async def web_session_bootstrap(
     if not refresh_token:
         raise HTTPException(status_code=401, detail="No web session.")
     session = await refresh_auth_session(db, refresh_token=refresh_token)
+    ensure_web_beta_email_allowed(session.email)
     _set_web_session_cookies(response, session.refresh_token)
     return auth_session_response(session, include_refresh_token=False)
 
@@ -395,6 +414,7 @@ async def web_session_refresh(
     if not refresh_token:
         raise HTTPException(status_code=401, detail="No web session.")
     session = await refresh_auth_session(db, refresh_token=refresh_token)
+    ensure_web_beta_email_allowed(session.email)
     _set_web_session_cookies(response, session.refresh_token)
     return auth_session_response(session, include_refresh_token=False)
 
