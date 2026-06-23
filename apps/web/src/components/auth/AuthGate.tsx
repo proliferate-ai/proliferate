@@ -14,13 +14,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const viewer = useAuthViewer(!bootstrapping && Boolean(token));
   const authError = viewer.error instanceof ProliferateClientError ? viewer.error : null;
   const invalidToken = authError?.status === 401;
-  const betaDenied = isWebBetaAuthErrorCode(authError?.code ?? null);
+  const betaDeniedCode = isWebBetaAuthErrorCode(authError?.code ?? null)
+    ? authError?.code ?? null
+    : null;
+  const betaDenied = betaDeniedCode !== null;
 
   useEffect(() => {
-    if (invalidToken || betaDenied) {
+    if (betaDeniedCode) {
+      void clearToken({ authRejectionCode: betaDeniedCode });
+      return;
+    }
+    if (invalidToken) {
       void clearToken();
     }
-  }, [betaDenied, clearToken, invalidToken]);
+  }, [betaDeniedCode, clearToken, invalidToken]);
 
   if (bootstrapping) {
     return <AuthLoadingScreen />;

@@ -321,6 +321,9 @@ async def web_password_login(
             client_ip=_request_client_ip(request),
         )
         ensure_web_beta_email_allowed(session.email)
+    except WebBetaAccessDenied:
+        await db.rollback()
+        raise
     except HTTPException:
         await db.commit()
         raise

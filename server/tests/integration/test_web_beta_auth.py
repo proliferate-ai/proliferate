@@ -118,8 +118,7 @@ def _enable_identity_github(monkeypatch: pytest.MonkeyPatch, email: str) -> None
         assert code_challenge_method is None
         assert state is not None
         return (
-            "https://github.com/login/oauth/authorize"
-            f"?state={state}&redirect_uri={redirect_uri}"
+            f"https://github.com/login/oauth/authorize?state={state}&redirect_uri={redirect_uri}"
         )
 
     async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
