@@ -61,6 +61,31 @@ describe("OrganizationIntegrationsPolicySurface", () => {
     expect(screen.getByText("Source control")).toBeTruthy();
     expect(screen.getByText("MCP")).toBeTruthy();
   });
+
+  it("emits search query changes", () => {
+    const onQueryChange = vi.fn();
+
+    render(
+      <OrganizationIntegrationsPolicySurface
+        items={[policyItem()]}
+        query=""
+        categoryFilter="all"
+        loading={false}
+        error={null}
+        pendingCatalogEntryIds={[]}
+        onQueryChange={onQueryChange}
+        onCategoryFilterChange={vi.fn()}
+        onToggleIntegration={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Search integrations"), {
+      target: { value: "github" },
+    });
+
+    expect(onQueryChange).toHaveBeenCalledWith("github");
+  });
 });
 
 function policyItem(): OrganizationIntegrationPolicyItem {
