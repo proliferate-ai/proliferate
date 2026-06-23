@@ -173,6 +173,18 @@ describe("RightPanel terminal activation", () => {
     expect(document.activeElement).toBe(terminalButton);
   });
 
+  it("keeps the new tab trigger outside the scrollable right-panel tab strip", () => {
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
+
+    const scrollableTabs = container.querySelector(".ui-tab-system-tabs__scrollable");
+    const newTabSlot = container.querySelector(".ui-tab-system-new-tab-sticky");
+
+    expect(scrollableTabs).toBeTruthy();
+    expect(newTabSlot).toBeTruthy();
+    expect(scrollableTabs?.contains(newTabSlot)).toBe(false);
+    expect(newTabSlot?.querySelector("button")).toBeTruthy();
+  });
+
   it("creates and activates a browser tab from a right-panel browser request", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
 
