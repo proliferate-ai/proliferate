@@ -27,7 +27,7 @@ export interface ScratchListEnterResult {
   };
 }
 
-const MARKDOWN_LIST_LINE_PATTERN = /^(\s*)(?:(\d+[.)])|([-*]))\s+(?:(\[([ xX])\])(?:\s+(.*))?|(.*))$/;
+const MARKDOWN_LIST_LINE_PATTERN = /^(\s*)(?:(\d+[.)])|([-*]))\s+(?:(\[([ xX])\]\s+)(.*)|(.*))$/;
 const LITERAL_LIST_LINE_PATTERN = /^(\s*)(?:([•◦])\s+|([☐☑])\s+)(.*)$/;
 
 export function parseScratchMarkdownListPrefix(line: string): ScratchListPrefix | null {

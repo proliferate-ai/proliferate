@@ -40,6 +40,18 @@ describe("parseScratchMarkdownListPrefix", () => {
       body: "done",
     });
   });
+
+  it("does not parse markdown task prefixes until the trailing space is typed", () => {
+    expect(parseScratchMarkdownListPrefix("- [ ]")).toEqual({
+      kind: "bullet",
+      checked: false,
+      indent: "",
+      marker: "-",
+      prefixLength: 2,
+      checkboxOffset: null,
+      body: "[ ]",
+    });
+  });
 });
 
 describe("applyScratchListEnterFormatting", () => {
