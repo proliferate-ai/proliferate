@@ -1,7 +1,8 @@
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check, Search } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { ProductNotice } from "../layout/ProductNotice";
 import { PluginList, PluginListMessage, PluginRow } from "./PluginCards";
 import { PluginConnectionModal } from "./PluginConnectionModal";
@@ -18,6 +19,7 @@ export type {
 
 export function PluginsSurface({
   items,
+  query,
   loading,
   error,
   surface,
@@ -35,6 +37,7 @@ export function PluginsSurface({
   deleteTarget,
   deletePending,
   renderIcon,
+  onQueryChange,
   onRetry,
   onOpenItem,
   onCloseItem,
@@ -51,11 +54,25 @@ export function PluginsSurface({
   onConfirmDelete,
 }: PluginsSurfaceProps) {
   const pendingIds = useMemo(() => new Set(pendingItemIds), [pendingItemIds]);
-  const empty = !loading && !error && items.length === 0;
+  const trimmedQuery = query.trim();
+  const hasQuery = trimmedQuery.length > 0;
+  const searchEmpty = !loading && !error && items.length === 0 && hasQuery;
+  const empty = !loading && !error && items.length === 0 && !hasQuery;
 
   return (
     <>
       <section className="space-y-6">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search integrations..."
+            className="pl-9"
+            aria-label="Search integrations"
+          />
+        </div>
+
         {completionNotice ? (
           <ProductNotice
             tone={completionNotice.tone}
@@ -77,6 +94,13 @@ export function PluginsSurface({
 
         {empty ? (
           <PluginListMessage title="No integrations are available right now." />
+        ) : null}
+
+        {searchEmpty ? (
+          <PluginListMessage
+            title={`No integrations match "${trimmedQuery}"`}
+            description="Try a different search term."
+          />
         ) : null}
 
         {items.length > 0 ? (

@@ -32,6 +32,24 @@ describe("PluginsSurface", () => {
 
     expect(onRequestDelete).toHaveBeenCalledWith(item);
   });
+
+  it("emits search query changes", () => {
+    const onQueryChange = vi.fn();
+
+    renderSurface({ onQueryChange });
+
+    fireEvent.change(screen.getByLabelText("Search integrations"), {
+      target: { value: "notion" },
+    });
+
+    expect(onQueryChange).toHaveBeenCalledWith("notion");
+  });
+
+  it("shows a searched-empty state", () => {
+    renderSurface({ query: "missing" });
+
+    expect(screen.getByText('No integrations match "missing"')).toBeTruthy();
+  });
 });
 
 function renderSurface(overrides: Partial<PluginsSurfaceProps> = {}) {
