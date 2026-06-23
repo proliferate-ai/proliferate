@@ -34,6 +34,16 @@ export function cloudMcpCatalogKey() {
   return [...cloudPluginInventoryRootKey(), "mcp-catalog", "v1"] as const;
 }
 
+export function cloudOrganizationIntegrationPolicyKey(
+  organizationId: string | null,
+) {
+  return [
+    ...cloudPluginInventoryRootKey(),
+    "organization-integration-policy",
+    organizationId,
+  ] as const;
+}
+
 export function cloudMcpConnectionsKey() {
   return [...cloudPluginInventoryRootKey(), "mcp-connections"] as const;
 }

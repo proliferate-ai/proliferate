@@ -3,6 +3,7 @@ import type {
   CloudMcpCatalogEntry,
   CloudMcpCatalogResponse,
   CloudMcpConnection,
+  CloudOrganizationIntegrationPolicyResponse,
   CloudPluginConfiguredItem,
   CloudSkillConfiguredItem,
 } from "@proliferate/cloud-sdk";
@@ -56,6 +57,19 @@ describe("cloud plugin inventory", () => {
     });
   });
 
+  it("hides integrations disabled by organization policy", () => {
+    const inventory = buildCloudPluginInventory({
+      catalog: catalog([githubEntry(), posthogEntry()], []),
+      integrationPolicy: integrationPolicy([{ catalogEntryId: "github", enabled: false }]),
+      connections: [],
+      configuredPlugins: [],
+      configuredSkills: [],
+      surface: "desktop",
+    });
+
+    expect(inventory.map((item) => item.entry.id)).toEqual(["posthog"]);
+  });
+
   it("marks broken browser auth as reconnectable", () => {
     const inventory = buildCloudPluginInventory({
       catalog: catalog([githubEntry()], []),
@@ -104,6 +118,19 @@ function catalog(
     catalogVersion: "test",
     entries,
     pluginPackages,
+  };
+}
+
+function integrationPolicy(
+  entries: Array<{ catalogEntryId: string; enabled: boolean }>,
+): CloudOrganizationIntegrationPolicyResponse {
+  return {
+    organizationId: "org_1",
+    entries: entries.map((entry) => ({
+      ...entry,
+      updatedAt: null,
+      updatedByUserId: null,
+    })),
   };
 }
 

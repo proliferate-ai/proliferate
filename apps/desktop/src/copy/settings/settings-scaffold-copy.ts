@@ -1,5 +1,4 @@
 export const SETTINGS_SCAFFOLD_PAGE_IDS = [
-  "organization-integrations",
   "organization-model-policy",
   "organization-limits",
 ] as const;
@@ -18,24 +17,6 @@ export interface SettingsScaffoldPageCopy {
 }
 
 export const SETTINGS_SCAFFOLD_COPY: Record<SettingsScaffoldPageId, SettingsScaffoldPageCopy> = {
-  "organization-integrations": {
-    title: "Organization integrations",
-    description: "Team-wide connections used by organization cloud work, workflows, Slack, and API-dispatched sessions.",
-    rows: [
-      {
-        label: "Connected services",
-        description: "Organization-owned GitHub, Slack, MCP, integration, and provider connections for shared work.",
-      },
-      {
-        label: "Access and visibility",
-        description: "Admin-managed availability for organization work and member access.",
-      },
-      {
-        label: "Audit surface",
-        description: "Connection status, last validation time, and usage references for each integration.",
-      },
-    ],
-  },
   "organization-model-policy": {
     title: "Model policy",
     description: "Organization-wide model availability and default model choices for shared work.",

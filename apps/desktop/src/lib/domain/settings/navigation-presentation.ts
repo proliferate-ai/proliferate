@@ -150,3 +150,15 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
 ];
+
+const SETTINGS_ADMIN_ONLY_SECTIONS = new Set<SettingsSection>(
+  SETTINGS_NAV_GROUPS.flatMap((group) =>
+    group.items.flatMap((item) =>
+      item.kind === "section" && item.adminOnly === true ? [item.id] : []
+    )
+  ),
+);
+
+export function isSettingsAdminOnlySection(section: SettingsSection): boolean {
+  return SETTINGS_ADMIN_ONLY_SECTIONS.has(section);
+}

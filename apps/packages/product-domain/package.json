@@ -199,6 +199,10 @@
       "types": "./dist/plugins/cloud-plugin-inventory.d.ts",
       "import": "./dist/plugins/cloud-plugin-inventory.js"
     },
+    "./plugins/organization-integration-policy": {
+      "types": "./dist/plugins/organization-integration-policy.d.ts",
+      "import": "./dist/plugins/organization-integration-policy.js"
+    },
     "./workspaces/model": {
       "types": "./dist/workspaces/model.d.ts",
       "import": "./dist/workspaces/model.js"

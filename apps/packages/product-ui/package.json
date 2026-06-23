@@ -183,6 +183,10 @@
       "types": "./dist/plugins/PluginsSurface.d.ts",
       "import": "./dist/plugins/PluginsSurface.js"
     },
+    "./plugins/OrganizationIntegrationsPolicySurface": {
+      "types": "./dist/plugins/OrganizationIntegrationsPolicySurface.d.ts",
+      "import": "./dist/plugins/OrganizationIntegrationsPolicySurface.js"
+    },
     "./settings/SettingsCard": {
       "types": "./dist/settings/SettingsCard.d.ts",
       "import": "./dist/settings/SettingsCard.js"

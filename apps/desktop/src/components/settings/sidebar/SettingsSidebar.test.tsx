@@ -154,11 +154,11 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.queryByRole("button", { name: "Cloud" })).toBeNull();
   });
 
-  it("renders admin tags for admin-only settings rows", () => {
+  it("does not render admin tags for admin-only settings rows", () => {
     renderSettingsSidebar();
 
     const adminPills = screen.getAllByText("Admin").filter((element) => element.tagName === "SPAN");
-    expect(adminPills).toHaveLength(5);
+    expect(adminPills).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /Slack bot/ })).toBeNull();
   });
 
@@ -168,19 +168,43 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.getAllByText("tbr")).toHaveLength(1);
   });
 
-  it("disables admin-only rows for non-admins", () => {
+  it("hides admin-only rows for non-admins", () => {
     const onSelectSection = vi.fn();
     renderSettingsSidebar({
       adminAccess: { isAdmin: false, isLoading: false },
       onSelectSection,
     });
 
-    const organizationIntegrations = screen.getByRole("button", { name: /Integrations/ }) as HTMLButtonElement;
-    expect(organizationIntegrations.disabled).toBe(true);
-    expect(organizationIntegrations.getAttribute("title")).toBe("Admin access required");
+    expect(screen.queryByText("Admin")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Plan \+ billing/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Integrations/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Model policy/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Limits/ })).toBeNull();
+  });
 
-    fireEvent.click(organizationIntegrations);
-    expect(onSelectSection).not.toHaveBeenCalledWith("organization-integrations");
+  it("uses visible settings rows for non-admin shortcut numbering", async () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    const onSelectSection = vi.fn();
+    renderSettingsSidebar({
+      adminAccess: { isAdmin: false, isLoading: false },
+      onSelectSection,
+    });
+
+    await waitFor(() => {
+      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
+    });
+
+    expect(screen.getByText("⌘1")).toBeTruthy();
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 1,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 
   it("keeps the back row full width", () => {
