@@ -247,7 +247,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 9,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("account");
+    expect(onSelectSection).toHaveBeenLastCalledWith("agent-defaults");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {
