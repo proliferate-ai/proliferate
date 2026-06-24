@@ -253,6 +253,46 @@ async fn blocking_remove_discards_live_and_pending_handles() {
 }
 
 #[tokio::test]
+async fn async_remove_discards_live_and_pending_handles() {
+    let manager = manager_for_store(&SessionStore::new(Db::open_in_memory().expect("open db")));
+    let (command_tx, _command_rx) = mpsc::channel(4);
+    let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+    let handle = Arc::new(LiveSessionHandle::new_for_test(
+        "session-1",
+        command_tx,
+        event_tx,
+        Some("old-native".to_string()),
+        SessionExecutionPhase::Idle,
+    ));
+    let (_ready_tx, ready_rx) = watch::channel::<super::StartupReadinessState>(None);
+    manager
+        .live_sessions
+        .write()
+        .await
+        .insert("session-1".to_string(), handle);
+    manager
+        .pending_startups
+        .write()
+        .await
+        .insert("session-1".to_string(), ready_rx);
+
+    manager.remove_session("session-1").await;
+
+    assert!(manager
+        .live_sessions
+        .read()
+        .await
+        .get("session-1")
+        .is_none());
+    assert!(manager
+        .pending_startups
+        .read()
+        .await
+        .get("session-1")
+        .is_none());
+}
+
+#[tokio::test]
 async fn offline_runtime_event_injection_appends_with_next_sequence() {
     let store = seeded_session_store();
     let manager = manager_for_store(&store);

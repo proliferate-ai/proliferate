@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::domains::agents::portability::delete_session_agent_artifacts;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
@@ -32,6 +33,7 @@ pub enum WorkspacePurgeServiceOutcome {
 #[derive(Clone)]
 pub struct WorkspacePurgeService {
     workspace_runtime: Arc<WorkspaceRuntime>,
+    session_runtime: Arc<SessionRuntime>,
     delete_workflow: WorkspaceDeleteWorkflow,
     session_store: SessionStore,
     attachment_storage: PromptAttachmentStorage,
@@ -44,6 +46,7 @@ pub struct WorkspacePurgeService {
 impl WorkspacePurgeService {
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
+        session_runtime: Arc<SessionRuntime>,
         delete_workflow: WorkspaceDeleteWorkflow,
         session_store: SessionStore,
         attachment_storage: PromptAttachmentStorage,
@@ -54,6 +57,7 @@ impl WorkspacePurgeService {
     ) -> Self {
         Self {
             workspace_runtime,
+            session_runtime,
             delete_workflow,
             session_store,
             attachment_storage,
@@ -83,6 +87,9 @@ impl WorkspacePurgeService {
                     .to_string(),
             });
         }
+        self.session_runtime
+            .force_retire_workspace_live_sessions_for_purge(workspace_id)
+            .await?;
         let preflight = self
             .preflight_checker
             .check_workspace(workspace.clone(), RetirePreflightMode::Purge)
@@ -161,12 +168,14 @@ impl WorkspacePurgeService {
         {
             return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
         }
+
         for session_id in session_ids {
             if let Err(error) = self.attachment_storage.delete_session_dir(&session_id) {
                 tracing::warn!(
-                    session_id = %session_id,
+                    workspace_id,
+                    session_id,
                     error = %error,
-                    "failed to delete session prompt attachment directory during workspace purge"
+                    "workspace purge left prompt attachment files behind after durable cleanup"
                 );
             }
         }

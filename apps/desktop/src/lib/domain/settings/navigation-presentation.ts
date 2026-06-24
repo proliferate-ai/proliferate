@@ -105,7 +105,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       { kind: "section", id: "environments", label: "Environments", iconId: "environments" },
       { kind: "section", id: "compute", label: "Personal compute", iconId: "compute" },
-      { kind: "section", id: "worktrees", label: "Worktrees", iconId: "worktrees" },
+      { kind: "section", id: "worktrees", label: "Pruning", iconId: "worktrees" },
       { kind: "section", id: "archived-chats", label: "Archived chats", iconId: "archived-chats", tbr: true },
     ],
   },

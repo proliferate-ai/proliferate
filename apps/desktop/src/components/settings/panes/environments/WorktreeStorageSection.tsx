@@ -1,10 +1,12 @@
 import { useState } from "react";
 import type { WorktreeInventoryRow } from "@anyharness/sdk";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { RefreshCw, Trash, Tree } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import {
   EnvironmentField,
   EnvironmentPanel,
@@ -20,6 +22,12 @@ import {
   worktreeRetentionRunMessage,
   worktreeSettingsActionFailureMessage,
 } from "@/lib/domain/workspaces/sidebar/worktree-settings-actions";
+import {
+  formatWorktreeStorage,
+  formatWorktreeStorageDetail,
+  worktreeGitStatusView,
+  worktreeRowLabel,
+} from "@/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_ROWS: WorktreeInventoryRow[] = [];
@@ -34,6 +42,7 @@ export function WorktreeStorageSection() {
   const [confirmDelete, setConfirmDelete] = useState<{
     target: WorktreeSettingsTargetState["target"];
     workspaceId: string;
+    label: string;
   } | null>(null);
 
   const runAction = <TResult,>(
@@ -64,7 +73,7 @@ export function WorktreeStorageSection() {
         statusMessage={cleanupPolicy.statusMessage}
         onApply={() => runAction(
           cleanupPolicy.apply,
-          "Worktree cleanup policy updated.",
+          "Pruning preference updated.",
         )}
       />
 
@@ -93,7 +102,14 @@ export function WorktreeStorageSection() {
             "Workspace checkout removed.",
           )}
           onPurgeWorkspace={(workspaceId) => {
-            setConfirmDelete({ target: targetState.target, workspaceId });
+            const row = (targetState.inventory?.rows ?? EMPTY_ROWS).find((candidate) => (
+              candidate.associatedWorkspaces.some((workspace) => workspace.id === workspaceId)
+            ));
+            setConfirmDelete({
+              target: targetState.target,
+              workspaceId,
+              label: row ? worktreeRowLabel(row) : "this workspace",
+            });
           }}
           onRetryPurge={(workspaceId) => runAction(
             () => settings.retryPurge(targetState.target, workspaceId),
@@ -104,8 +120,8 @@ export function WorktreeStorageSection() {
 
       <ConfirmationDialog
         open={confirmDelete !== null}
-        title="Delete workspace history?"
-        description="This removes the workspace checkout, AnyHarness workspace/session history, and local agent artifacts from the owning runtime. Uncommitted changes in the checkout will be lost. Git commits, branches, and pull requests are preserved."
+        title={`Delete runtime history for ${confirmDelete?.label ?? "this workspace"}?`}
+        description="This removes the AnyHarness runtime workspace record, chats, raw events, normalized events, checkout, and local agent artifacts from the owning runtime. Uncommitted changes in the checkout will be lost. Git commits, branches, pull requests, and Cloud product records are preserved."
         confirmLabel="Delete"
         confirmVariant="destructive"
         onClose={() => setConfirmDelete(null)}
@@ -117,7 +133,7 @@ export function WorktreeStorageSection() {
           setConfirmDelete(null);
           runAction(
             () => settings.purgeWorkspace(pending.target, pending.workspaceId),
-            "Workspace deleted.",
+            "Runtime workspace history deleted.",
           );
         }}
       />
@@ -142,18 +158,18 @@ function AutomaticCleanupSection({
 }) {
   return (
     <EnvironmentSection
-      title="Worktree cleanup"
-      description="Automatic cleanup only removes clean Proliferate-managed checkouts; it does not snapshot, push, or back up work before deleting a checkout."
+      title="Pruning"
+      description="Set the ideal worktree count used by the composer pressure indicator. Cleanup only runs when you explicitly ask for it."
     >
       <EnvironmentPanel>
         <EnvironmentPanelRow>
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <EnvironmentField
-              label="Keep up to N materialized managed checkouts per repo"
-              description="When a repo exceeds this limit, Proliferate retires the oldest clean managed checkouts first. Workspace and session history stay available unless you explicitly delete the workspace."
+              label="Ideal materialized managed worktrees per repo"
+              description="When a repo exceeds this count, the composer pressure circle moves toward warning or red. Manual cleanup retires the oldest clean managed checkouts first; workspace history stays available unless you explicitly delete the workspace."
             >
               <div className="w-full max-w-64 space-y-1.5">
-                <Label htmlFor="worktree-policy-global">Auto-delete limit</Label>
+                <Label htmlFor="worktree-policy-global">Ideal worktrees</Label>
                 <Input
                   id="worktree-policy-global"
                   type="number"
@@ -163,8 +179,9 @@ function AutomaticCleanupSection({
                   onChange={(event) => onDraftValueChange(event.target.value)}
                 />
                 <p className="text-xs leading-4 text-muted-foreground">
-                  Default is 20; minimum is 10. Commits, branches, and pull requests are
-                  preserved by Git; dirty worktrees are skipped.
+                  Default is 20; minimum is 10. This does not prune automatically.
+                  Commits, branches, and pull requests are preserved by Git; dirty
+                  worktrees are skipped.
                 </p>
                 {statusMessage ? (
                   <p className="text-xs leading-4 text-muted-foreground">{statusMessage}</p>
@@ -220,13 +237,15 @@ function RuntimeWorktreesSection({
             <div className="space-y-1">
               <h3 className="text-sm font-medium text-foreground">Current worktrees</h3>
               <p className="text-sm text-muted-foreground">
-                Review managed checkouts, orphaned paths, and workspace history in this runtime.
+                Review managed checkouts, orphaned paths, git status, storage, and workspace history in this runtime.
               </p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={onRunCleanup}>
-              <RefreshCw className="size-4" />
-              Run cleanup
-            </Button>
+            <Tooltip content={RUN_CLEANUP_TOOLTIP}>
+              <Button type="button" variant="outline" size="sm" onClick={onRunCleanup}>
+                <RefreshCw className="size-4" />
+                Run cleanup
+              </Button>
+            </Tooltip>
           </div>
         </EnvironmentPanelRow>
         {targetState.isLoading ? (
@@ -273,11 +292,10 @@ function WorktreeRow({
   onRetryPurge: (workspaceId: string) => void;
 }) {
   const primaryWorkspace = row.associatedWorkspaces[0] ?? null;
-  const label = primaryWorkspace?.displayName
-    ?? primaryWorkspace?.branch
-    ?? row.branch
-    ?? row.state.replaceAll("_", " ");
+  const label = worktreeRowLabel(row);
   const stateLabel = row.state.replaceAll("_", " ");
+  const status = worktreeGitStatusView(row.gitStatus);
+  const storageDetail = formatWorktreeStorageDetail(row.storage);
 
   return (
     <div className="flex items-center justify-between gap-4">
@@ -286,35 +304,47 @@ function WorktreeRow({
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-foreground">{label}</span>
-            <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[11px] uppercase tracking-normal text-muted-foreground">
+            <Badge tone="neutral" className="rounded-sm uppercase">
               {stateLabel}
-            </span>
+            </Badge>
+            <Badge tone={status.tone} className="rounded-sm">
+              {status.label}
+            </Badge>
             {row.cleanupOperation ? (
-              <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[11px] uppercase tracking-normal text-muted-foreground">
+              <Badge tone="neutral" className="rounded-sm uppercase">
                 {row.cleanupOperation}
-              </span>
+              </Badge>
             ) : null}
           </div>
           <div className="truncate text-xs text-muted-foreground">{row.path}</div>
           <div className="text-xs text-muted-foreground">
-            {row.totalSessionCount} sessions - {row.materialized ? "checkout present" : "checkout missing"}
+            {row.totalSessionCount} sessions - {row.materialized ? "checkout present" : "checkout missing"} - {formatWorktreeStorage(row.storage)}
           </div>
+          {status.detail || storageDetail || primaryWorkspace?.cleanupOperation ? (
+            <div className="text-xs text-muted-foreground">
+              {[status.detail, storageDetail, primaryWorkspace?.cleanupOperation].filter(Boolean).join(" - ")}
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {row.state === "orphan_checkout" && row.availableActions.includes("delete_orphan_checkout") ? (
-          <Button type="button" variant="outline" size="sm" onClick={onPruneOrphan}>
-            <Trash className="size-4" />
-            Prune
-          </Button>
+          <Tooltip content={PRUNE_ORPHAN_TOOLTIP}>
+            <Button type="button" variant="outline" size="sm" onClick={onPruneOrphan}>
+              <Trash className="size-4" />
+              Prune
+            </Button>
+          </Tooltip>
         ) : null}
         {row.associatedWorkspaces.map((workspace) => (
           <div key={workspace.id} className="flex items-center gap-2">
             {row.state !== "conflict" && row.availableActions.includes("prune_checkout") ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => onPruneWorkspace(workspace.id)}>
-                <Trash className="size-4" />
-                Prune
-              </Button>
+              <Tooltip content={PRUNE_WORKSPACE_TOOLTIP}>
+                <Button type="button" variant="outline" size="sm" onClick={() => onPruneWorkspace(workspace.id)}>
+                  <Trash className="size-4" />
+                  Prune
+                </Button>
+              </Tooltip>
             ) : null}
             {workspace.cleanupOperation === "purge"
               && (workspace.cleanupState === "pending" || workspace.cleanupState === "failed") ? (
@@ -335,3 +365,21 @@ function WorktreeRow({
     </div>
   );
 }
+
+const RUN_CLEANUP_TOOLTIP = [
+  "Run cleanup",
+  "Removes only clean managed checkout directories above the ideal per-repo count.",
+  "Skips dirty or conflicted worktrees and keeps workspace history.",
+].join("\n");
+
+const PRUNE_WORKSPACE_TOOLTIP = [
+  "Prune checkout",
+  "Removes only this checkout directory.",
+  "Keeps the workspace record, chats, raw events, normalized events, and Cloud product records.",
+].join("\n");
+
+const PRUNE_ORPHAN_TOOLTIP = [
+  "Prune orphan checkout",
+  "Deletes this orphan checkout directory.",
+  "No workspace record or chat history is attached to this row.",
+].join("\n");

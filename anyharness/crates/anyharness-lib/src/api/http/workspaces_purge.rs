@@ -1,5 +1,5 @@
 use anyharness_contract::v1::{
-    Workspace, WorkspacePurgeOutcome, WorkspacePurgePreflightResponse, WorkspacePurgeResponse,
+    WorkspacePurgeOutcome, WorkspacePurgePreflightResponse, WorkspacePurgeResponse,
 };
 use axum::{
     extract::{Path, State},
@@ -45,31 +45,9 @@ pub async fn purge_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
-    let preflight = match state
-        .workspace_runtime
-        .get_workspace(&workspace_id)
-        .map_err(|error| ApiError::internal(error.to_string()))?
-    {
-        Some(_) => Some(build_purge_preflight(&state, &workspace_id).await?),
-        None => None,
-    };
-    if let Some(preflight) = preflight.as_ref() {
-        if !preflight.can_purge {
-            let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
-            return Ok(Json(WorkspacePurgeResponse {
-                outcome: WorkspacePurgeOutcome::Blocked,
-                workspace: Some(workspace),
-                preflight: Some(preflight.clone()),
-                already_deleted: false,
-                cleanup_attempted: false,
-                cleanup_succeeded: false,
-                cleanup_message: None,
-            }));
-        }
-    }
     purge_response_from_service_outcome(
         &state,
-        preflight,
+        None,
         state
             .workspace_purge_service
             .purge(&workspace_id, false)
@@ -94,24 +72,9 @@ pub async fn retry_purge_workspace(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
-    let preflight = Some(build_purge_preflight(&state, &workspace_id).await?);
-    if let Some(preflight) = preflight.as_ref() {
-        if !preflight.can_purge {
-            let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
-            return Ok(Json(WorkspacePurgeResponse {
-                outcome: WorkspacePurgeOutcome::Blocked,
-                workspace: Some(workspace),
-                preflight: Some(preflight.clone()),
-                already_deleted: false,
-                cleanup_attempted: false,
-                cleanup_succeeded: false,
-                cleanup_message: None,
-            }));
-        }
-    }
     purge_response_from_service_outcome(
         &state,
-        preflight,
+        None,
         state
             .workspace_purge_service
             .purge(&workspace_id, true)
@@ -195,20 +158,6 @@ async fn purge_response_from_service_outcome(
     }
 }
 
-async fn workspace_contract_by_id(
-    state: &AppState,
-    workspace_id: &str,
-) -> Result<Workspace, ApiError> {
-    let record = state
-        .workspace_runtime
-        .get_workspace(workspace_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
-        })?;
-    workspace_to_contract(state, record).await
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -217,6 +166,8 @@ mod tests {
     use super::*;
     use crate::app::test_support;
     use crate::domains::agents::installer::seed::AgentSeedStore;
+    use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+    use crate::domains::sessions::store::SessionStore;
     use crate::domains::workspaces::model::{
         WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
         WorkspaceRecord, WorkspaceSurface,
@@ -350,6 +301,57 @@ mod tests {
             .any(|blocker| blocker.code == WorkspaceRetireBlockerCode::RunningCommand));
     }
 
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_retry_deletes_rows_when_attachment_cleanup_fails() {
+        let state = test_state("purge-attachment-cleanup-failure");
+        let workspace = workspace_record(
+            "workspace-purge-attachment-failure",
+            "retired",
+            "failed",
+            Some("purge"),
+        );
+        let workspace_store = WorkspaceStore::new(state.db.clone());
+        workspace_store
+            .insert(&workspace)
+            .expect("insert workspace");
+
+        let session = session_record("session-attachment-cleanup-failure", &workspace.id);
+        let session_store = SessionStore::new(state.db.clone());
+        session_store.insert(&session).expect("insert session");
+
+        let attachment_path = state
+            .runtime_home
+            .join("attachments")
+            .join("sessions")
+            .join(&session.id);
+        std::fs::create_dir_all(attachment_path.parent().expect("attachment parent"))
+            .expect("create attachment parent");
+        std::fs::write(&attachment_path, "not a directory").expect("write attachment file");
+
+        let outcome = state
+            .workspace_purge_service
+            .purge(&workspace.id, true)
+            .await
+            .expect("purge workspace");
+
+        assert!(matches!(
+            outcome,
+            WorkspacePurgeServiceOutcome::Deleted {
+                already_deleted: false,
+                cleanup_attempted: true,
+            }
+        ));
+        assert!(workspace_store
+            .find_by_id(&workspace.id)
+            .expect("find workspace")
+            .is_none());
+        assert!(session_store
+            .find_by_id(&session.id)
+            .expect("find session")
+            .is_none());
+        assert!(attachment_path.is_file());
+    }
+
     fn test_state(name: &str) -> AppState {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
@@ -380,6 +382,38 @@ mod tests {
             AgentSeedStore::not_configured_dev(),
         )
         .expect("app state")
+    }
+
+    fn session_record(id: &str, workspace_id: &str) -> SessionRecord {
+        SessionRecord {
+            id: id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            agent_kind: "claude".to_string(),
+            native_session_id: None,
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
+            agent_auth_contexts: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+            updated_at: "2026-03-25T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+            system_prompt_append: None,
+            subagents_enabled: true,
+            action_capabilities_json: None,
+            origin: None,
+        }
     }
 
     fn workspace_record(

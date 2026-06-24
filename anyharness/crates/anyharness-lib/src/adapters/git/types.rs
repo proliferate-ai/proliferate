@@ -94,6 +94,28 @@ pub struct GitStatusSnapshot {
     pub files: Vec<GitChangedFile>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitStatusSummaryState {
+    Clean,
+    Dirty,
+    Conflicted,
+    Unknown,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitStatusSummarySnapshot {
+    pub state: GitStatusSummaryState,
+    pub clean: bool,
+    pub conflicted: bool,
+    pub changed_file_count: u32,
+    pub untracked_file_count: u32,
+    pub ahead: u32,
+    pub behind: u32,
+    pub branch: Option<String>,
+    pub upstream_branch: Option<String>,
+    pub error_message: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct GitDiffResult {
     pub path: String,

@@ -10,6 +10,16 @@ export function worktreeSettingsTargetInventoryKey(target: WorktreeSettingsTarge
   ] as const;
 }
 
+export function worktreeSettingsTargetHealthKey(target: WorktreeSettingsTarget) {
+  return [
+    "worktree-settings",
+    "health",
+    target.location,
+    target.environmentId ?? target.runtimeUrl,
+    target.runtimeGeneration,
+  ] as const;
+}
+
 export function worktreeSettingsTargetRetentionPolicyKey(target: WorktreeSettingsTarget) {
   return [
     "worktree-settings",

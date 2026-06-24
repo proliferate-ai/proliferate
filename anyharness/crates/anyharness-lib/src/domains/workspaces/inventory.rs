@@ -2,6 +2,11 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::adapters::git::types::{
+    GitStatusSummarySnapshot as AdapterGitStatusSummarySnapshot,
+    GitStatusSummaryState as AdapterGitStatusSummaryState,
+};
+use crate::adapters::git::GitService;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
@@ -45,6 +50,35 @@ pub struct WorktreeInventoryWorkspaceSummary {
     pub session_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorktreeGitStatusState {
+    Clean,
+    Dirty,
+    Conflicted,
+    Unknown,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorktreeGitStatusSummary {
+    pub state: WorktreeGitStatusState,
+    pub clean: bool,
+    pub conflicted: bool,
+    pub changed_file_count: u32,
+    pub untracked_file_count: u32,
+    pub ahead: u32,
+    pub behind: u32,
+    pub branch: Option<String>,
+    pub upstream_branch: Option<String>,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorktreeStorageEstimate {
+    pub worktree_bytes: Option<u64>,
+    pub sqlite_bytes: Option<u64>,
+    pub total_bytes: Option<u64>,
+}
+
 #[derive(Debug, Clone)]
 pub struct WorktreeInventoryRow {
     pub id: String,
@@ -58,6 +92,8 @@ pub struct WorktreeInventoryRow {
     pub branch: Option<String>,
     pub associated_workspaces: Vec<WorktreeInventoryWorkspaceSummary>,
     pub total_session_count: usize,
+    pub git_status: Option<WorktreeGitStatusSummary>,
+    pub storage: WorktreeStorageEstimate,
     pub cleanup_operation: Option<WorkspaceCleanupOperation>,
     pub cleanup_state: Option<WorkspaceCleanupState>,
     pub available_actions: Vec<WorktreeInventoryAction>,
@@ -168,6 +204,20 @@ impl WorktreeInventoryService {
                 })
                 .collect::<Vec<_>>();
             let total_session_count = summaries.iter().map(|summary| summary.session_count).sum();
+            let sqlite_bytes = estimate_sqlite_bytes(&self.session_store, &associated);
+            let worktree_bytes = if materialized {
+                directory_size_bytes(Path::new(&path)).ok()
+            } else {
+                None
+            };
+            let total_bytes = combine_optional_bytes(worktree_bytes, sqlite_bytes);
+            let git_status = if materialized {
+                Some(worktree_git_status(GitService::status_summary(Path::new(
+                    &path,
+                ))))
+            } else {
+                None
+            };
             let mut actions = Vec::new();
             if matches!(state, WorktreeInventoryState::Associated) && materialized {
                 actions.push(WorktreeInventoryAction::PruneCheckout);
@@ -206,6 +256,12 @@ impl WorktreeInventoryService {
                     .map(|workspace| workspace_cleanup(workspace.cleanup_state)),
                 associated_workspaces: summaries,
                 total_session_count,
+                git_status,
+                storage: WorktreeStorageEstimate {
+                    worktree_bytes,
+                    sqlite_bytes,
+                    total_bytes,
+                },
                 available_actions: actions,
             });
             known_paths.insert(path);
@@ -222,6 +278,7 @@ impl WorktreeInventoryService {
                 if known_paths.contains(&path_string) {
                     continue;
                 }
+                let worktree_bytes = directory_size_bytes(&path).ok();
                 rows.push(WorktreeInventoryRow {
                     id: format!("orphan:{path_string}"),
                     state: WorktreeInventoryState::OrphanCheckout,
@@ -236,6 +293,12 @@ impl WorktreeInventoryService {
                     branch: None,
                     associated_workspaces: Vec::new(),
                     total_session_count: 0,
+                    git_status: Some(worktree_git_status(GitService::status_summary(&path))),
+                    storage: WorktreeStorageEstimate {
+                        worktree_bytes,
+                        sqlite_bytes: None,
+                        total_bytes: worktree_bytes,
+                    },
                     cleanup_operation: None,
                     cleanup_state: None,
                     available_actions: vec![WorktreeInventoryAction::DeleteOrphanCheckout],
@@ -332,6 +395,73 @@ impl WorktreeInventoryService {
             }
         }
         Ok(false)
+    }
+}
+
+fn estimate_sqlite_bytes(
+    session_store: &SessionStore,
+    workspaces: &[crate::domains::workspaces::model::WorkspaceRecord],
+) -> Option<u64> {
+    let mut total = 0_u64;
+    let mut has_value = false;
+    for workspace in workspaces {
+        if let Ok(bytes) = session_store.estimate_workspace_storage_bytes(&workspace.id) {
+            total = total.saturating_add(bytes);
+            has_value = true;
+        }
+    }
+    has_value.then_some(total)
+}
+
+fn combine_optional_bytes(left: Option<u64>, right: Option<u64>) -> Option<u64> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.saturating_add(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
+}
+
+fn directory_size_bytes(path: &Path) -> anyhow::Result<u64> {
+    fn visit(path: &Path, total: &mut u64) -> anyhow::Result<()> {
+        for entry in std::fs::read_dir(path)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            if file_type.is_dir() {
+                visit(&entry.path(), total)?;
+            } else if file_type.is_file() {
+                let metadata = entry.metadata()?;
+                *total = total.saturating_add(metadata.len());
+            }
+        }
+        Ok(())
+    }
+
+    let mut total = 0_u64;
+    visit(path, &mut total)?;
+    Ok(total)
+}
+
+fn worktree_git_status(status: AdapterGitStatusSummarySnapshot) -> WorktreeGitStatusSummary {
+    WorktreeGitStatusSummary {
+        state: match status.state {
+            AdapterGitStatusSummaryState::Clean => WorktreeGitStatusState::Clean,
+            AdapterGitStatusSummaryState::Dirty => WorktreeGitStatusState::Dirty,
+            AdapterGitStatusSummaryState::Conflicted => WorktreeGitStatusState::Conflicted,
+            AdapterGitStatusSummaryState::Unknown => WorktreeGitStatusState::Unknown,
+        },
+        clean: status.clean,
+        conflicted: status.conflicted,
+        changed_file_count: status.changed_file_count,
+        untracked_file_count: status.untracked_file_count,
+        ahead: status.ahead,
+        behind: status.behind,
+        branch: status.branch,
+        upstream_branch: status.upstream_branch,
+        error_message: status.error_message,
     }
 }
 
