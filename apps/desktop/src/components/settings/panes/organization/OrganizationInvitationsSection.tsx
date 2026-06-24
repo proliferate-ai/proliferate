@@ -1,8 +1,13 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { Copy, Plus } from "@proliferate/ui/icons";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
+import { OrganizationSelectMenu } from "@/components/settings/panes/organization/OrganizationSelectMenu";
+
+const INVITE_ROLE_OPTIONS = [
+  { value: "member", label: "Member" },
+  { value: "admin", label: "Admin" },
+];
 
 export function OrganizationInvitationsSection({
   canManage,
@@ -80,14 +85,12 @@ export function OrganizationInvitationsSection({
             className="min-w-0 flex-1 bg-background"
           />
           <div className="w-full sm:w-32">
-            <Select
+            <OrganizationSelectMenu
               value={inviteRole}
-              onChange={(event) => onInviteRoleChange(event.currentTarget.value as "admin" | "member")}
-              aria-label="Invite role"
-            >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </Select>
+              ariaLabel="Invite role"
+              options={INVITE_ROLE_OPTIONS}
+              onChange={(value) => onInviteRoleChange(value as "admin" | "member")}
+            />
           </div>
           <Button
             type="submit"

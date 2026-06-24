@@ -124,7 +124,7 @@ function MemberRow({
         <Avatar member={member} />
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-medium text-foreground" title={row.name}>
+            <span className="truncate text-sm font-medium leading-5 text-foreground" title={row.name}>
               {row.name}
             </span>
             {isCurrentUser ? <Badge tone="success">me</Badge> : null}
@@ -194,7 +194,7 @@ function InvitationRow({
           <Mail className="size-4" />
         </span>
         <div className="min-w-0">
-          <div className="truncate font-medium text-foreground" title={row.name}>
+          <div className="truncate text-sm font-medium leading-5 text-foreground" title={row.name}>
             {row.name}
           </div>
           <div className="truncate text-sm text-muted-foreground" title={row.email}>

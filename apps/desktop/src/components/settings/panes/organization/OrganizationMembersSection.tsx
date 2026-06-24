@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
 import {
   OrganizationMembersList,
   buildMemberRows,
 } from "@/components/settings/panes/organization/OrganizationMembersList";
+import { OrganizationSelectMenu } from "@/components/settings/panes/organization/OrganizationSelectMenu";
 import type {
   OrganizationInvitationRecord,
   OrganizationMemberRecord,
@@ -15,6 +15,19 @@ import type {
 
 type RoleFilter = "all" | OrganizationRole;
 type StatusFilter = "all" | "active" | "invited";
+
+const ROLE_FILTER_OPTIONS = [
+  { value: "all", label: "All roles" },
+  { value: "owner", label: "Owner" },
+  { value: "admin", label: "Admin" },
+  { value: "member", label: "Member" },
+];
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All status" },
+  { value: "active", label: "Active" },
+  { value: "invited", label: "Invited" },
+];
 
 export function OrganizationMembersSection({
   members,
@@ -68,25 +81,18 @@ export function OrganizationMembersSection({
             />
           </div>
           <div className="grid grid-cols-2 gap-2 lg:w-[22rem]">
-            <Select
+            <OrganizationSelectMenu
               value={roleFilter}
-              onChange={(event) => setRoleFilter(event.currentTarget.value as RoleFilter)}
-              aria-label="Filter by role"
-            >
-              <option value="all">All roles</option>
-              <option value="owner">Owner</option>
-              <option value="admin">Admin</option>
-              <option value="member">Member</option>
-            </Select>
-            <Select
+              ariaLabel="Filter by role"
+              options={ROLE_FILTER_OPTIONS}
+              onChange={(value) => setRoleFilter(value as RoleFilter)}
+            />
+            <OrganizationSelectMenu
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.currentTarget.value as StatusFilter)}
-              aria-label="Filter by status"
-            >
-              <option value="all">All status</option>
-              <option value="active">Active</option>
-              <option value="invited">Invited</option>
-            </Select>
+              ariaLabel="Filter by status"
+              options={STATUS_FILTER_OPTIONS}
+              onChange={(value) => setStatusFilter(value as StatusFilter)}
+            />
           </div>
         </div>
 
