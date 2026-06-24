@@ -18,9 +18,21 @@ function collectStyleText() {
   return rules.join("\n");
 }
 
+function installRangeMeasurementStub() {
+  if (!window.Range || typeof window.Range.prototype.getClientRects === "function") {
+    return;
+  }
+  Object.defineProperty(window.Range.prototype, "getClientRects", {
+    configurable: true,
+    value: () => [],
+  });
+}
+
 describe("ScratchCodeMirrorEditor", () => {
 
-  it("keeps empty-state typography and caret sizing independent from diff styling", () => {
+  it("keeps empty-state typography and uses CodeMirror cursor geometry", () => {
+    installRangeMeasurementStub();
+
     render(
       <ScratchCodeMirrorEditor
         value=""
@@ -38,7 +50,9 @@ describe("ScratchCodeMirrorEditor", () => {
     expect(styleText).toContain("font-size: var(--scratch-font-size)");
     expect(styleText).toContain("line-height: var(--scratch-line-height)");
     expect(styleText).toContain("white-space: normal");
-    expect(styleText).toContain("height: 1em !important");
+    expect(styleText).toContain("border-left-color: var(--color-foreground)");
+    expect(styleText).not.toContain("height: 1em !important");
+    expect(styleText).not.toContain("margin-top: 0.33em");
     expect(styleText).not.toContain("min-height: 1.1em");
   });
 });

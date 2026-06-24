@@ -9,7 +9,10 @@ import {
 } from "@codemirror/view";
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import {
+  applyScratchListIndentFormatting,
   applyScratchListEnterFormatting,
+  applyScratchListOutdentFormatting,
+  shouldScratchBackspaceOutdent,
 } from "@/lib/domain/workspaces/scratch/scratch-list-formatting";
 import {
   disabledExtensions,
@@ -87,8 +90,8 @@ export function useScratchCodeMirrorEditor({
   // Owns the imperative CodeMirror editor lifecycle and keeps React as the source of saved text.
   const extensions = useMemo(() => [
     history(),
-    // Replaces the native contentEditable caret (whose height we can't control
-    // and which spans the full line box) with a styleable .cm-cursor element.
+    // Keeps cursor and selection rendering in CodeMirror's measured overlay so
+    // heading line geometry can drive caret placement.
     drawSelection(),
     scratchMarkdownLanguage(),
     syntaxHighlighting(scratchHighlightStyle),
@@ -112,6 +115,89 @@ export function useScratchCodeMirrorEditor({
       onChangeRef.current(next);
     }),
     keymap.of([
+      {
+        key: "Backspace",
+        run: (view) => {
+          if (disabledRef.current) {
+            return false;
+          }
+          const selection = view.state.selection.main;
+          const value = view.state.doc.toString();
+          const input = {
+            value,
+            selectionStart: selection.from,
+            selectionEnd: selection.to,
+          };
+          if (!shouldScratchBackspaceOutdent(input)) {
+            return false;
+          }
+          const result = applyScratchListOutdentFormatting(input);
+          if (!result) {
+            return false;
+          }
+          view.dispatch({
+            changes: result.changes,
+            selection: {
+              anchor: result.selectionStart,
+              head: result.selectionEnd,
+            },
+            scrollIntoView: true,
+          });
+          return true;
+        },
+      },
+      {
+        key: "Tab",
+        run: (view) => {
+          if (disabledRef.current) {
+            return false;
+          }
+          const selection = view.state.selection.main;
+          const result = applyScratchListIndentFormatting({
+            value: view.state.doc.toString(),
+            selectionStart: selection.from,
+            selectionEnd: selection.to,
+          });
+          if (!result) {
+            return false;
+          }
+          view.dispatch({
+            changes: result.changes,
+            selection: {
+              anchor: result.selectionStart,
+              head: result.selectionEnd,
+            },
+            scrollIntoView: true,
+          });
+          return true;
+        },
+      },
+      {
+        key: "Shift-Tab",
+        run: (view) => {
+          if (disabledRef.current) {
+            return false;
+          }
+          const selection = view.state.selection.main;
+          const result = applyScratchListOutdentFormatting({
+            value: view.state.doc.toString(),
+            selectionStart: selection.from,
+            selectionEnd: selection.to,
+          });
+          if (!result) {
+            return false;
+          }
+          view.dispatch({
+            changes: result.changes,
+            selection: {
+              anchor: result.selectionStart,
+              head: result.selectionEnd,
+            },
+            scrollIntoView: true,
+          });
+          return true;
+        },
+      },
       {
         key: "Enter",
         run: (view) => {
