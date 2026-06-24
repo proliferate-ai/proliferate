@@ -12,6 +12,38 @@ const FRIENDLY_NAMES = [
   "Priya",
   "Alex",
   "Maya",
+  "Leo",
+  "Vera",
+  "Omar",
+  "Iris",
+  "Hugo",
+  "Tara",
+  "Ravi",
+  "Elsa",
+  "Cole",
+  "Anya",
+  "Felix",
+  "Noor",
+  "Dean",
+  "Lena",
+  "Kira",
+  "Marco",
+  "Sana",
+  "Theo",
+  "June",
+  "Raj",
+  "Bella",
+  "Ivan",
+  "Zara",
+  "Luca",
+  "Gwen",
+  "Otto",
+  "Mira",
+  "Neil",
+  "Rosa",
+  "Emil",
+  "Yuki",
+  "Dora",
 ];
 
 const COLOR_IDENTITIES = [
@@ -84,9 +116,13 @@ export interface DelegatedWorkVisualIdentity {
 }
 
 export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIdentity {
-  const index = stableIndex(id);
-  const generatedName = FRIENDLY_NAMES[index % FRIENDLY_NAMES.length] ?? "Mary";
-  const color = COLOR_IDENTITIES[index % COLOR_IDENTITIES.length] ?? COLOR_IDENTITIES[0];
+  // Name and color come from the same seed but are decoupled: the color uses an
+  // avalanche mix of the seed hash so a name collision does not also force a color
+  // collision. A naive second hash stays correlated here because there are 8 colors
+  // and 40 names (8 divides 40), so the color must depend on the hash's high bits.
+  const seedHash = stableIndex(id);
+  const generatedName = FRIENDLY_NAMES[seedHash % FRIENDLY_NAMES.length] ?? "Mary";
+  const color = COLOR_IDENTITIES[mixHash(seedHash) % COLOR_IDENTITIES.length] ?? COLOR_IDENTITIES[0];
   return {
     generatedName,
     initial: generatedName.slice(0, 1),
@@ -157,4 +193,14 @@ function stableIndex(value: string): number {
     hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   }
   return hash;
+}
+
+// 32-bit avalanche finalizer (splitmix-style): spreads every input bit across the
+// output so a value derived from it (the color index) does not stay correlated with
+// the low bits that the name index already consumes.
+function mixHash(hash: number): number {
+  let value = hash >>> 0;
+  value = Math.imul(value ^ (value >>> 16), 0x7feb352d) >>> 0;
+  value = Math.imul(value ^ (value >>> 15), 0x846ca68b) >>> 0;
+  return (value ^ (value >>> 16)) >>> 0;
 }
