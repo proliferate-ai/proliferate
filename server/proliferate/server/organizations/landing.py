@@ -18,8 +18,6 @@ def build_join_landing_html(organization_name: str, organization_id: UUID) -> st
         action_href=deep_link,
         action_visible=False,
         launch_url=deep_link,
-        fallback_message=(
-            "If Proliferate did not open automatically, use the button below."
-        ),
+        fallback_message=("If Proliferate did not open automatically, use the button below."),
         variant="handoff",
     )

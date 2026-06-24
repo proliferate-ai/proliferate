@@ -198,10 +198,7 @@ async def list_pending_invitations_for_email(
             .order_by(OrganizationInvitation.created_at.desc())
         )
     ).all()
-    return [
-        invitation_record(invitation, organization)
-        for invitation, organization in rows
-    ]
+    return [invitation_record(invitation, organization) for invitation, organization in rows]
 
 
 async def revoke_organization_invitation(

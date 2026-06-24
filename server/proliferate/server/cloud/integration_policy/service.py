@@ -20,9 +20,7 @@ from proliferate.server.cloud.mcp_catalog.catalog import build_connector_catalog
 
 def _configured_catalog_entry_ids() -> tuple[str, ...]:
     return tuple(
-        entry.id
-        for entry in build_connector_catalog()
-        if catalog_entry_is_configured(entry)
+        entry.id for entry in build_connector_catalog() if catalog_entry_is_configured(entry)
     )
 
 

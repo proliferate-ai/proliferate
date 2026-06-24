@@ -37,9 +37,7 @@ def _entry_payload(
         catalog_entry_id=entry.catalog_entry_id,
         enabled=entry.enabled,
         updated_at=entry.updated_at.isoformat() if entry.updated_at else None,
-        updated_by_user_id=(
-            str(entry.updated_by_user_id) if entry.updated_by_user_id else None
-        ),
+        updated_by_user_id=(str(entry.updated_by_user_id) if entry.updated_by_user_id else None),
     )
 
 
