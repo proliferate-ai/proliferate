@@ -26,7 +26,6 @@ from proliferate.db.store.managed_sandboxes import (
 )
 from proliferate.integrations.sandbox import (
     SandboxProvider,
-    SandboxProviderError,
     get_configured_sandbox_provider,
 )
 from proliferate.server.cloud.errors import CloudApiError
@@ -329,12 +328,6 @@ async def destroy_managed_sandbox(
                 last_error=message,
             )
             await commit_managed_sandbox_session(db)
-            if isinstance(exc, SandboxProviderError):
-                raise CloudApiError(
-                    "managed_sandbox_destroy_failed",
-                    message or "Managed cloud sandbox destroy failed.",
-                    status_code=502,
-                ) from exc
             raise CloudApiError(
                 "managed_sandbox_destroy_failed",
                 message or "Managed cloud sandbox destroy failed.",
