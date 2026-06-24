@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Protocol
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -15,7 +16,6 @@ from proliferate.auth.sso.service import (
     test_oidc_connection,
 )
 from proliferate.config import settings
-from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.errors import NotFoundError
@@ -26,10 +26,14 @@ from proliferate.server.organizations.sso.models import (
 )
 
 
+class OrganizationSsoActor(Protocol):
+    id: UUID
+
+
 async def list_organization_sso_connections(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
 ) -> list[sso_store.SsoConnectionRecord]:
     await _require_org_admin(db, actor_user=actor_user, organization_id=organization_id)
@@ -42,7 +46,7 @@ async def list_organization_sso_connections(
 async def create_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
     body: OrganizationSsoConnectionRequest,
 ) -> sso_store.SsoConnectionRecord:
@@ -79,7 +83,7 @@ async def create_organization_sso_connection(
 async def update_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
     connection_id: UUID,
     body: OrganizationSsoConnectionUpdateRequest,
@@ -134,7 +138,7 @@ async def update_organization_sso_connection(
 async def test_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
@@ -184,7 +188,7 @@ async def test_organization_sso_connection(
 async def enable_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
@@ -212,7 +216,7 @@ async def enable_organization_sso_connection(
 async def disable_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
@@ -233,7 +237,7 @@ async def disable_organization_sso_connection(
 async def delete_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
@@ -273,7 +277,7 @@ def organization_sso_urls(request: Request, connection_id: UUID) -> tuple[str, s
 async def _require_org_admin(
     db: AsyncSession,
     *,
-    actor_user: User,
+    actor_user: OrganizationSsoActor,
     organization_id: UUID,
 ) -> None:
     record = await organization_store.get_organization_with_membership(

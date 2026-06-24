@@ -10,7 +10,7 @@ import {
 
 import { routes } from "../../../../config/routes";
 import { webEnv } from "../../../../config/env";
-import { createOAuthState, createPkcePair } from "../../../infra/auth/pkce";
+import { createOAuthState, createPkcePair, hashOAuthSecret } from "../../../infra/auth/pkce";
 import { createWebCloudClient } from "../client";
 
 const PENDING_WEB_AUTH_KEY = "proliferate.web.pendingAuth";
@@ -28,7 +28,7 @@ export class WebAuthFlowError extends Error {
 interface PendingWebAuth {
   provider: AuthProviderName | "sso";
   purpose: AuthPurpose;
-  state: string;
+  stateHash: string;
   codeVerifier: string;
   createdAt: number;
 }
@@ -63,7 +63,7 @@ export async function startWebAuthFlow(input: {
   writePendingWebAuth({
     provider: input.provider,
     purpose,
-    state: clientState,
+    stateHash: await hashOAuthSecret(clientState),
     codeVerifier: pkce.verifier,
     createdAt: Date.now(),
   });
@@ -100,7 +100,7 @@ export async function startWebSsoFlow(input: { email: string }): Promise<void> {
   writePendingWebAuth({
     provider: "sso",
     purpose: "login",
-    state: clientState,
+    stateHash: await hashOAuthSecret(clientState),
     codeVerifier: pkce.verifier,
     createdAt: Date.now(),
   });
@@ -121,7 +121,7 @@ export async function completeWebAuthFlow(
   }
   const pending = readPendingWebAuth();
   clearPendingWebAuth();
-  if (!pending || pending.state !== state) {
+  if (!pending || pending.stateHash !== await hashOAuthSecret(state)) {
     throw new Error("The auth callback state did not match this browser session.");
   }
   const client = createWebCloudClient(webEnv.apiBaseUrl, null);

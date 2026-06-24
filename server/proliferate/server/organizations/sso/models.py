@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from datetime import datetime
+from typing import Literal, Protocol
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.auth.sso.types import DEFAULT_OIDC_SCOPES
-from proliferate.db.store.auth_sso import SsoConnectionRecord
 
 SsoProtocolName = Literal["oidc", "saml"]
 SsoStatusName = Literal["draft", "enabled", "disabled"]
@@ -15,6 +16,38 @@ SsoLoginPolicyName = Literal["optional", "required"]
 SsoJitPolicyName = Literal["disabled", "existing_user", "create_member"]
 SsoDefaultRoleName = Literal["owner", "admin", "member"]
 OidcTokenEndpointAuthMethod = Literal["client_secret_basic", "client_secret_post", "none"]
+
+
+class SsoConnectionRecord(Protocol):
+    id: UUID
+    organization_id: UUID | None
+    protocol: str
+    status: str
+    display_name: str
+    login_policy: str
+    jit_policy: str
+    default_role: str
+    allowed_domains: tuple[str, ...]
+    oidc_issuer_url: str | None
+    oidc_discovery_url: str | None
+    oidc_authorization_endpoint: str | None
+    oidc_token_endpoint: str | None
+    oidc_jwks_uri: str | None
+    oidc_userinfo_endpoint: str | None
+    oidc_client_id: str | None
+    oidc_client_secret_configured: bool
+    oidc_scopes: tuple[str, ...]
+    oidc_token_endpoint_auth_method: str
+    saml_idp_metadata_url: str | None
+    saml_idp_metadata_xml_configured: bool
+    saml_idp_entity_id: str | None
+    saml_sso_url: str | None
+    saml_x509_cert_configured: bool
+    saml_email_attribute: str | None
+    tested_at: datetime | None
+    last_error: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class OrganizationSsoBaseModel(BaseModel):

@@ -27,8 +27,7 @@ def test_sso_auth_error_url_encodes_provider_error(
     monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
 
     assert sso_api._auth_error_url("access_denied&next=https://evil.test") == (
-        "https://app.example.test/auth/error?"
-        "code=access_denied%26next%3Dhttps%3A%2F%2Fevil.test"
+        "https://app.example.test/auth/error?code=access_denied%26next%3Dhttps%3A%2F%2Fevil.test"
     )
 
 

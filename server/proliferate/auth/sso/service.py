@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import NoReturn
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -47,6 +48,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth import create_auth_code
+from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import (
     build_oidc_authorization_url,
     exchange_oidc_code,
@@ -151,7 +153,10 @@ async def start_sso_auth(
     if connection.protocol != SsoProtocol.OIDC:
         raise HTTPException(status_code=400, detail="Only OIDC SSO is currently supported.")
     _require_oidc_configured(connection)
-    metadata = await resolve_oidc_metadata(connection)
+    try:
+        metadata = await resolve_oidc_metadata(connection)
+    except SsoIntegrationError as exc:
+        _raise_sso_integration_error(exc)
 
     state = providers.new_secret()
     nonce = providers.new_secret()
@@ -215,21 +220,24 @@ async def complete_oidc_sso_callback(
     connection = await _connection_for_challenge(db, challenge)
     if connection.protocol != SsoProtocol.OIDC:
         raise HTTPException(status_code=400, detail="SSO callback protocol mismatch.")
-    metadata = await resolve_oidc_metadata(connection)
-    token = await exchange_oidc_code(
-        metadata=metadata,
-        client_id=connection.oidc_client_id or "",
-        client_secret=connection.oidc_client_secret,
-        token_endpoint_auth_method=connection.oidc_token_endpoint_auth_method,
-        code=code,
-        redirect_uri=_oidc_callback_url(request),
-    )
-    verified = await verify_oidc_identity(
-        connection=connection,
-        metadata=metadata,
-        token=token,
-        nonce_hash=challenge.nonce_hash,
-    )
+    try:
+        metadata = await resolve_oidc_metadata(connection)
+        token = await exchange_oidc_code(
+            metadata=metadata,
+            client_id=connection.oidc_client_id or "",
+            client_secret=connection.oidc_client_secret,
+            token_endpoint_auth_method=connection.oidc_token_endpoint_auth_method,
+            code=code,
+            redirect_uri=_oidc_callback_url(request),
+        )
+        verified = await verify_oidc_identity(
+            connection=connection,
+            metadata=metadata,
+            token=token,
+            nonce_hash=challenge.nonce_hash,
+        )
+    except SsoIntegrationError as exc:
+        _raise_sso_integration_error(exc)
     if challenge.surface == "web" and connection.scope == SsoScope.DEPLOYMENT:
         ensure_web_beta_email_allowed(verified.email)
     user = await resolve_sso_user(db, connection=connection, verified=verified)
@@ -308,7 +316,10 @@ async def test_oidc_connection(
     if connection.protocol != SsoProtocol.OIDC:
         raise HTTPException(status_code=400, detail="Only OIDC connection tests are supported.")
     _require_oidc_configured(connection)
-    metadata = await resolve_oidc_metadata(connection)
+    try:
+        metadata = await resolve_oidc_metadata(connection)
+    except SsoIntegrationError as exc:
+        _raise_sso_integration_error(exc)
     return {
         "issuer": metadata.issuer,
         "authorization_endpoint": metadata.authorization_endpoint,
@@ -504,8 +515,10 @@ def _require_oidc_configured(
 ) -> None:
     if not connection.oidc_client_id:
         raise HTTPException(status_code=400, detail="OIDC client ID is required.")
-    if require_secret and not connection.oidc_client_secret and (
-        connection.oidc_token_endpoint_auth_method != "none"
+    if (
+        require_secret
+        and not connection.oidc_client_secret
+        and (connection.oidc_token_endpoint_auth_method != "none")
     ):
         raise HTTPException(status_code=400, detail="OIDC client secret is required.")
     has_static_endpoints = (
@@ -529,6 +542,10 @@ def _email_hint_allowed_for_discovery(email: str, allowed_domains: tuple[str, ..
 def _ensure_active_user(user: User) -> None:
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive.")
+
+
+def _raise_sso_integration_error(exc: SsoIntegrationError) -> NoReturn:
+    raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 def _oidc_callback_url(request: Request) -> str:

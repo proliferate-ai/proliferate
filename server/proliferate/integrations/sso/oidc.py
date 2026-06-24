@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from urllib.parse import urlencode, urlparse
 
 import httpx
-from fastapi import HTTPException, status
 from jose import JWTError, jwt
 
 from proliferate.auth.identity import providers
@@ -18,6 +17,7 @@ from proliferate.auth.identity.service import hash_secret
 from proliferate.auth.sso.policy import oidc_discovery_url
 from proliferate.auth.sso.types import SsoConnectionSnapshot, VerifiedSsoIdentity
 from proliferate.config import settings
+from proliferate.integrations.sso.errors import SsoIntegrationError
 
 OIDC_SIGNING_ALGORITHMS = [
     "RS256",
@@ -69,7 +69,7 @@ async def resolve_oidc_metadata(connection: SsoConnectionSnapshot) -> OidcMetada
 
     source_url = connection.oidc_discovery_url or connection.oidc_issuer_url
     if not source_url:
-        raise HTTPException(status_code=400, detail="OIDC issuer or discovery URL is required.")
+        raise SsoIntegrationError("OIDC issuer or discovery URL is required.")
     discovery_url = oidc_discovery_url(source_url)
     await _validate_oidc_url(discovery_url, "discovery_url")
     try:
@@ -78,12 +78,9 @@ async def resolve_oidc_metadata(connection: SsoConnectionSnapshot) -> OidcMetada
             response.raise_for_status()
             payload = response.json()
     except (ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OIDC discovery metadata could not be loaded.",
-        ) from exc
+        raise SsoIntegrationError("OIDC discovery metadata could not be loaded.") from exc
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="OIDC discovery metadata is invalid.")
+        raise SsoIntegrationError("OIDC discovery metadata is invalid.")
 
     issuer = _required_string(payload, "issuer")
     authorization_endpoint = _required_string(payload, "authorization_endpoint")
@@ -149,7 +146,7 @@ async def exchange_oidc_code(
     auth_method = token_endpoint_auth_method or "client_secret_basic"
     if auth_method == "client_secret_basic":
         if not client_secret:
-            raise HTTPException(status_code=400, detail="OIDC client secret is required.")
+            raise SsoIntegrationError("OIDC client secret is required.")
         auth = (client_id, client_secret)
     elif auth_method == "client_secret_post":
         data["client_id"] = client_id
@@ -158,7 +155,7 @@ async def exchange_oidc_code(
     elif auth_method == "none":
         data["client_id"] = client_id
     else:
-        raise HTTPException(status_code=400, detail="Unsupported OIDC token auth method.")
+        raise SsoIntegrationError("Unsupported OIDC token auth method.")
     await _validate_oidc_url(metadata.token_endpoint, "token_endpoint")
 
     try:
@@ -167,15 +164,12 @@ async def exchange_oidc_code(
             response.raise_for_status()
             payload = response.json()
     except (ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OIDC token exchange failed.",
-        ) from exc
+        raise SsoIntegrationError("OIDC token exchange failed.") from exc
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="OIDC token response is invalid.")
+        raise SsoIntegrationError("OIDC token response is invalid.")
     id_token = payload.get("id_token")
     if not isinstance(id_token, str) or not id_token:
-        raise HTTPException(status_code=400, detail="OIDC token response is missing id_token.")
+        raise SsoIntegrationError("OIDC token response is missing id_token.")
     access_token = payload.get("access_token")
     refresh_token = payload.get("refresh_token")
     expires_in = payload.get("expires_in")
@@ -211,7 +205,7 @@ async def verify_oidc_identity(
         claims = {**userinfo, **claims}
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
-        raise HTTPException(status_code=400, detail="OIDC subject is missing.")
+        raise SsoIntegrationError("OIDC subject is missing.")
     email = claims.get("email") if isinstance(claims.get("email"), str) else None
     display_name = claims.get("name") if isinstance(claims.get("name"), str) else None
     avatar_url = claims.get("picture") if isinstance(claims.get("picture"), str) else None
@@ -241,10 +235,10 @@ async def _decode_oidc_id_token(
             response.raise_for_status()
             jwks = response.json()
     except (ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=400, detail="OIDC JWKS could not be loaded.") from exc
+        raise SsoIntegrationError("OIDC JWKS could not be loaded.") from exc
     keys = jwks.get("keys") if isinstance(jwks, dict) else None
     if not isinstance(keys, list):
-        raise HTTPException(status_code=400, detail="OIDC JWKS is invalid.")
+        raise SsoIntegrationError("OIDC JWKS is invalid.")
 
     # Prefer the key whose kid matches the token header so verification failures surface
     # the real claim error instead of a signature mismatch from an unrelated key.
@@ -276,10 +270,7 @@ async def _decode_oidc_id_token(
             return dict(claims)
         except JWTError as exc:
             last_error = exc
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="OIDC identity token could not be verified.",
-    ) from last_error
+    raise SsoIntegrationError("OIDC identity token could not be verified.") from last_error
 
 
 async def _fetch_userinfo(userinfo_endpoint: str, access_token: str) -> dict[str, object]:
@@ -293,22 +284,22 @@ async def _fetch_userinfo(userinfo_endpoint: str, access_token: str) -> dict[str
             response.raise_for_status()
             payload = response.json()
     except (ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=400, detail="OIDC userinfo request failed.") from exc
+        raise SsoIntegrationError("OIDC userinfo request failed.") from exc
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="OIDC userinfo response is invalid.")
+        raise SsoIntegrationError("OIDC userinfo response is invalid.")
     return payload
 
 
 def _validate_nonce(claims: dict[str, object], nonce_hash: str) -> None:
     nonce = claims.get("nonce")
     if not isinstance(nonce, str) or hash_secret(nonce) != nonce_hash:
-        raise HTTPException(status_code=400, detail="OIDC nonce mismatch.")
+        raise SsoIntegrationError("OIDC nonce mismatch.")
 
 
 def _required_string(payload: dict[str, object], key: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or not value:
-        raise HTTPException(status_code=400, detail=f"OIDC metadata is missing {key}.")
+        raise SsoIntegrationError(f"OIDC metadata is missing {key}.")
     return value
 
 
@@ -323,25 +314,22 @@ def _claim_bool(value: object, *, default: bool) -> bool:
 async def _validate_oidc_url(value: str, field: str) -> None:
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise HTTPException(status_code=400, detail=f"OIDC {field} URL is invalid.")
+        raise SsoIntegrationError(f"OIDC {field} URL is invalid.")
     if parsed.username or parsed.password or parsed.fragment:
-        raise HTTPException(status_code=400, detail=f"OIDC {field} URL is invalid.")
+        raise SsoIntegrationError(f"OIDC {field} URL is invalid.")
     if settings.telemetry_mode != "hosted_product":
         return
     if parsed.scheme != "https":
-        raise HTTPException(status_code=400, detail=f"OIDC {field} URL must use HTTPS.")
+        raise SsoIntegrationError(f"OIDC {field} URL must use HTTPS.")
     if await _host_resolves_to_private_address(parsed.hostname):
-        raise HTTPException(status_code=400, detail=f"OIDC {field} URL host is not allowed.")
+        raise SsoIntegrationError(f"OIDC {field} URL host is not allowed.")
 
 
 async def _host_resolves_to_private_address(hostname: str) -> bool:
     try:
         addrinfo = await asyncio.to_thread(socket.getaddrinfo, hostname, None)
     except socket.gaierror as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="OIDC URL host could not be resolved.",
-        ) from exc
+        raise SsoIntegrationError("OIDC URL host could not be resolved.") from exc
     for entry in addrinfo:
         address = entry[4][0]
         try:

@@ -3,10 +3,10 @@ import {
   useOrganizationSsoConnections,
   useOrganizationSsoMutations,
 } from "@proliferate/cloud-sdk-react";
-import {
-  type OrganizationSsoConnectionRequest,
-  type OrganizationSsoConnectionResponse,
-  type OrganizationSsoConnectionUpdateRequest,
+import type {
+  OrganizationSsoConnectionRequest,
+  OrganizationSsoConnectionResponse,
+  OrganizationSsoConnectionUpdateRequest,
 } from "@proliferate/cloud-sdk";
 import {
   OrganizationSsoSettingsSurface,

@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import optional_current_active_user
+from proliferate.auth.identity.service import validate_redirect_uri
 from proliferate.auth.identity.web_beta import WebBetaAccessDenied
 from proliferate.auth.sso.models import (
     SsoDiscoveryResponse,
@@ -103,7 +104,7 @@ async def oidc_sso_callback(
             try:
                 redirect_url = await complete_sso_error_callback(db, state=state, error=error)
                 await db.commit()
-                return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+                return _auth_redirect_response(redirect_url)
             except HTTPException:
                 await db.rollback()
         return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
@@ -115,7 +116,7 @@ async def oidc_sso_callback(
         await db.rollback()
         return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
     await db.commit()
-    return RedirectResponse(redirect_url, status_code=status.HTTP_302_FOUND)
+    return _auth_redirect_response(redirect_url)
 
 
 def _optional_uuid(value: str | None, *, field: str) -> UUID | None:
@@ -130,3 +131,20 @@ def _optional_uuid(value: str | None, *, field: str) -> UUID | None:
 def _auth_error_url(code: str) -> str:
     base = settings.frontend_base_url.strip().rstrip("/") or "http://localhost:5174"
     return f"{base}/auth/error?{urlencode({'code': code})}"
+
+
+def _auth_redirect_response(redirect_url: str) -> RedirectResponse:
+    safe_redirect_url = _validated_auth_redirect_url(redirect_url)
+    # lgtm[py/url-redirection] The callback target was checked against the
+    # product auth redirect allowlist immediately above.
+    return RedirectResponse(safe_redirect_url, status_code=status.HTTP_302_FOUND)
+
+
+def _validated_auth_redirect_url(redirect_url: str) -> str:
+    for surface in ("web", "mobile", "desktop"):
+        try:
+            validate_redirect_uri(surface, redirect_url)
+        except HTTPException:
+            continue
+        return redirect_url
+    raise HTTPException(status_code=400, detail="Auth redirect URI is not allowed.")
