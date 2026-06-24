@@ -207,8 +207,11 @@ def create_app() -> FastAPI:
 
     # ── Auth: Desktop PKCE flow ──
     app.include_router(desktop_router, prefix=f"{api_prefix}/auth", tags=["auth"])
-    app.include_router(identity_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+    # SSO routes use literal `sso`/`oidc` path segments and must be registered before
+    # the generic identity `/{surface}/{provider}/start` and `/{provider}/callback`
+    # routes, which would otherwise shadow them (capturing `sso`/`oidc` as `{provider}`).
     app.include_router(sso_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+    app.include_router(identity_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(auth_viewer_router, prefix=f"{api_prefix}/v1", tags=["auth"])
 
     # ── Domain routes ──

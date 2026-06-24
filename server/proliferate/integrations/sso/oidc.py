@@ -203,6 +203,7 @@ async def verify_oidc_identity(
         jwks_uri=metadata.jwks_uri,
         issuer=metadata.issuer,
         audience=connection.oidc_client_id or "",
+        access_token=token.access_token,
     )
     _validate_nonce(claims, nonce_hash)
     if claims.get("email") is None and token.access_token and metadata.userinfo_endpoint:
@@ -231,6 +232,7 @@ async def _decode_oidc_id_token(
     jwks_uri: str,
     issuer: str,
     audience: str,
+    access_token: str | None = None,
 ) -> dict[str, object]:
     await _validate_oidc_url(jwks_uri, "jwks_uri")
     try:
@@ -244,10 +246,23 @@ async def _decode_oidc_id_token(
     if not isinstance(keys, list):
         raise HTTPException(status_code=400, detail="OIDC JWKS is invalid.")
 
+    # Prefer the key whose kid matches the token header so verification failures surface
+    # the real claim error instead of a signature mismatch from an unrelated key.
+    try:
+        token_kid = jwt.get_unverified_header(id_token).get("kid")
+    except JWTError:
+        token_kid = None
+    candidate_keys = [k for k in keys if isinstance(k, dict)]
+    matching = [k for k in candidate_keys if k.get("kid") == token_kid]
+    ordered_keys = matching + [k for k in candidate_keys if k not in matching]
+
+    # python-jose validates the `at_hash` claim whenever it is present (Google always
+    # includes it), which requires the access token from the code exchange. Pass it so
+    # the check can run; skip it only when no access token is available.
+    options = {"verify_at_hash": access_token is not None}
+
     last_error: Exception | None = None
-    for key in keys:
-        if not isinstance(key, dict):
-            continue
+    for key in ordered_keys:
         try:
             claims = jwt.decode(
                 id_token,
@@ -255,6 +270,8 @@ async def _decode_oidc_id_token(
                 algorithms=OIDC_SIGNING_ALGORITHMS,
                 audience=audience,
                 issuer=issuer,
+                access_token=access_token,
+                options=options,
             )
             return dict(claims)
         except JWTError as exc:
