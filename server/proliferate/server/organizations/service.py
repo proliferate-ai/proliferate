@@ -12,13 +12,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.authorization import (
-    OwnerContext,
-    OwnerSelection,
-    PolicyDenied,
-    PolicyVerdict,
-    require_org_role,
-)
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
@@ -27,6 +20,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN,
     ORGANIZATION_INVITE_TOKEN_DOMAIN,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+    ORGANIZATION_ROLE_OWNER,
 )
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
@@ -37,6 +31,11 @@ from proliferate.db.store.organization_records import (
     OrganizationWithMembershipRecord,
     normalize_invitation_email,
 )
+from proliferate.permissions import (
+    CurrentOrgUser,
+    OwnerContext,
+    OwnerSelection,
+)
 from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment,
 )
@@ -46,8 +45,6 @@ from proliferate.server.billing.subjects import (
 )
 from proliferate.server.organizations import invitation_delivery
 from proliferate.server.organizations.domain.policy import (
-    can_modify_membership,
-    can_modify_owner_memberships,
     is_membership_update_status,
     is_organization_role,
     organization_admin_roles,
@@ -95,12 +92,12 @@ def _raise_organization_issue(issue: OrganizationProfileIssue | None) -> None:
         )
 
 
-def _raise_if_denied(verdict: PolicyVerdict) -> None:
-    if isinstance(verdict, PolicyDenied):
+def _require_current_org_role(org_user: CurrentOrgUser, roles: frozenset[str]) -> None:
+    if org_user.role not in roles:
         raise OrganizationServiceError(
-            verdict.code,
-            verdict.message,
-            status_code=verdict.status_code,
+            "organization_permission_denied",
+            "You do not have permission to manage this organization.",
+            status_code=403,
         )
 
 
@@ -217,30 +214,6 @@ async def resolve_owner_context(
     )
 
 
-async def _resolve_organization_owner_context(
-    db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
-) -> OwnerContext:
-    record = await organization_store.get_organization_with_membership(
-        db,
-        organization_id=organization_id,
-        user_id=actor_user.id,
-    )
-    if record is None:
-        raise _org_not_found()
-    subject = await ensure_organization_billing_subject_state(db, organization_id)
-    return OwnerContext(
-        owner_scope="organization",
-        actor_user_id=actor_user.id,
-        owner_user_id=None,
-        organization_id=organization_id,
-        membership_id=record.membership.id,
-        membership_role=record.membership.role,
-        billing_subject_id=subject.billing_subject_id,
-    )
-
-
 async def list_organizations(
     db: AsyncSession,
     actor_user: OrganizationActor,
@@ -264,13 +237,12 @@ async def list_organizations(
 
 async def get_organization(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
 ) -> OrganizationWithMembershipRecord:
     record = await organization_store.get_organization_with_membership(
         db,
-        organization_id=organization_id,
-        user_id=actor_user.id,
+        organization_id=org_user.organization_id,
+        user_id=org_user.actor_user_id,
     )
     if record is None:
         raise _org_not_found()
@@ -279,22 +251,16 @@ async def get_organization(
 
 async def update_organization(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
     *,
     name: str | None,
     logo_image: str | None,
     update_logo_image: bool,
 ) -> OrganizationWithMembershipRecord:
-    context = await _resolve_organization_owner_context(
-        db,
-        actor_user,
-        organization_id,
-    )
-    require_org_role(context, organization_admin_roles())
+    _require_current_org_role(org_user, organization_admin_roles())
     updated = await organization_store.update_organization_settings(
         db,
-        organization_id=organization_id,
+        organization_id=org_user.organization_id,
         name=_clean_organization_name(name) if name is not None else None,
         logo_image=_sanitize_logo_image(logo_image) if update_logo_image else None,
         update_logo_image=update_logo_image,
@@ -303,32 +269,33 @@ async def update_organization(
         raise _org_not_found()
     return OrganizationWithMembershipRecord(
         organization=updated,
-        membership=(await get_organization(db, actor_user, organization_id)).membership,
+        membership=(await get_organization(db, org_user)).membership,
     )
 
 
 async def list_members(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
 ) -> list[MemberRecord]:
-    await _resolve_organization_owner_context(db, actor_user, organization_id)
-    return await organization_store.list_organization_members(db, organization_id)
+    return await organization_store.list_organization_members(db, org_user.organization_id)
 
 
 async def update_membership(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
     membership_id: UUID,
     *,
     role: str | None,
     status: str | None,
 ) -> MembershipRecord:
-    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
-    require_org_role(context, organization_admin_roles())
-    _raise_if_denied(can_modify_membership(context, membership_id))
-    can_modify_owner = can_modify_owner_memberships(context)
+    _require_current_org_role(org_user, organization_admin_roles())
+    if org_user.membership_id == membership_id:
+        raise OrganizationServiceError(
+            "cannot_modify_own_membership",
+            "You cannot modify your own organization membership.",
+            status_code=403,
+        )
+    can_modify_owner = org_user.role == ORGANIZATION_ROLE_OWNER
     if role is not None:
         _require_role(role)
     if status is not None and not is_membership_update_status(status):
@@ -339,7 +306,7 @@ async def update_membership(
         )
     membership, error = await organization_store.update_organization_membership(
         db,
-        organization_id=organization_id,
+        organization_id=org_user.organization_id,
         membership_id=membership_id,
         role=role,
         status=status,
@@ -368,7 +335,7 @@ async def update_membership(
     if status is not None:
         await maybe_create_organization_seat_adjustment(
             db,
-            organization_id=organization_id,
+            organization_id=org_user.organization_id,
             membership_id=membership.id,
         )
     return membership
@@ -376,14 +343,12 @@ async def update_membership(
 
 async def remove_membership(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
     membership_id: UUID,
 ) -> MembershipRecord:
     return await update_membership(
         db,
-        actor_user,
-        organization_id,
+        org_user,
         membership_id,
         role=None,
         status=ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
@@ -392,25 +357,24 @@ async def remove_membership(
 
 async def create_invitation(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
     *,
+    inviter_email: str,
     email: str,
     role: str,
 ) -> OrganizationInvitationEmailResult:
-    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
-    require_org_role(context, required_roles_for_invitation_role(role))
+    _require_current_org_role(org_user, required_roles_for_invitation_role(role))
     normalized_email = normalize_invitation_email(email)
     token = _new_token()
     result = await invitation_delivery.create_and_send_invitation(
-        organization_id=organization_id,
+        organization_id=org_user.organization_id,
         email=normalized_email,
         role=_require_role(role),
         token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
-        invited_by_user_id=actor_user.id,
+        invited_by_user_id=org_user.actor_user_id,
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
         token=token,
-        inviter_email=actor_user.email,
+        inviter_email=inviter_email,
     )
     if result is None:
         raise _org_not_found()
@@ -422,20 +386,20 @@ async def create_invitation(
 
 async def resend_invitation(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
     invitation_id: UUID,
+    *,
+    inviter_email: str,
 ) -> OrganizationInvitationEmailResult:
-    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
-    require_org_role(context, organization_admin_roles())
+    _require_current_org_role(org_user, organization_admin_roles())
     token = _new_token()
     result = await invitation_delivery.rotate_and_send_invitation(
-        organization_id=organization_id,
+        organization_id=org_user.organization_id,
         invitation_id=invitation_id,
         token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
         token=token,
-        inviter_email=actor_user.email,
+        inviter_email=inviter_email,
     )
     if result is None:
         raise OrganizationServiceError(
@@ -451,11 +415,9 @@ async def resend_invitation(
 
 async def list_invitations(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
 ) -> list[InvitationRecord]:
-    await _resolve_organization_owner_context(db, actor_user, organization_id)
-    return await invitation_store.list_organization_invitations(db, organization_id)
+    return await invitation_store.list_organization_invitations(db, org_user.organization_id)
 
 
 async def list_current_user_invitations(
@@ -467,15 +429,13 @@ async def list_current_user_invitations(
 
 async def revoke_invitation(
     db: AsyncSession,
-    actor_user: OrganizationActor,
-    organization_id: UUID,
+    org_user: CurrentOrgUser,
     invitation_id: UUID,
 ) -> InvitationRecord:
-    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
-    require_org_role(context, organization_admin_roles())
+    _require_current_org_role(org_user, organization_admin_roles())
     invitation = await invitation_store.revoke_organization_invitation(
         db,
-        organization_id=organization_id,
+        organization_id=org_user.organization_id,
         invitation_id=invitation_id,
     )
     if invitation is None:
