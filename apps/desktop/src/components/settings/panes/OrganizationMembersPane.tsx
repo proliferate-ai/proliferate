@@ -41,9 +41,7 @@ export function OrganizationMembersPane() {
   const membersQuery = useOrganizationMembers(activeOrganizationId);
   const invitationsQuery = useOrganizationInvitations(activeOrganizationId);
   const joinLinkQuery = useOrganizationJoinLink(activeOrganizationId, admin.isAdmin);
-  const shouldLoadPendingInvitations = authStatus === "authenticated"
-    && organizationsQuery.isSuccess
-    && !activeOrganization;
+  const shouldLoadPendingInvitations = authStatus === "authenticated";
   const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
     shouldLoadPendingInvitations,
   );
@@ -51,10 +49,7 @@ export function OrganizationMembersPane() {
   const showToast = useToastStore((state) => state.show);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
-  const joinFlow = useOrganizationJoinInvitationFlow({
-    acceptInvitation: actions.acceptInvitation,
-    setActiveOrganizationId,
-  });
+  const joinFlow = useOrganizationJoinInvitationFlow();
 
   const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
   const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
@@ -73,7 +68,9 @@ export function OrganizationMembersPane() {
     try {
       const response = await actions.acceptCurrentInvitation(invitationId);
       setActiveOrganizationId(response.organization.id);
+      joinFlow.clearJoinTarget();
       joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
+      showToast(`Joined ${response.organization.name}.`, "info");
     } catch {
       joinFlow.setStatusMessage("Invitation could not be accepted.");
     }
@@ -109,8 +106,7 @@ export function OrganizationMembersPane() {
     && organizationsQuery.isSuccess
     && organizations.length === 0
     && pendingInvitations.length === 0;
-  const shouldShowPendingInvitations = shouldLoadPendingInvitations
-    && pendingInvitations.length > 0;
+  const shouldShowPendingInvitations = pendingInvitations.length > 0;
 
   return (
     <section className="space-y-6">
@@ -166,6 +162,7 @@ export function OrganizationMembersPane() {
         <CurrentUserInvitationsSection
           invitations={pendingInvitations}
           accepting={actions.acceptingCurrentInvitation}
+          focusedOrganizationId={joinFlow.joinOrganizationId}
           onAccept={(invitationId) => {
             void handleAcceptCurrentInvitation(invitationId);
           }}

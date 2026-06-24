@@ -179,7 +179,7 @@ async def test_organization_member_list_and_last_owner_protection(
 
 
 @pytest.mark.asyncio
-async def test_list_organizations_has_no_creation_side_effect(
+async def test_list_organizations_ensures_default_owned_organization(
     client: AsyncClient,
 ) -> None:
     user = await _create_user_and_get_tokens(client, email="no-team@acme.dev")
@@ -187,13 +187,17 @@ async def test_list_organizations_has_no_creation_side_effect(
     response = await client.get("/v1/organizations", headers=_headers(user))
 
     assert response.status_code == 200
-    assert response.json() == {"organizations": []}
+    organizations = response.json()["organizations"]
+    assert len(organizations) == 1
+    assert organizations[0]["name"] == "Acme"
+    assert organizations[0]["logoDomain"] == "acme.dev"
+    assert organizations[0]["membership"]["role"] == "owner"
 
     from proliferate.db import engine as engine_module
 
     async with engine_module.async_session_factory() as session:
         organization_count = await session.scalar(select(Organization).limit(1))
-    assert organization_count is None
+    assert organization_count is not None
 
 
 @pytest.mark.asyncio
@@ -496,7 +500,7 @@ async def test_current_user_can_accept_pending_invitation(
 
 
 @pytest.mark.asyncio
-async def test_invitation_accept_conflicts_when_user_already_has_team(
+async def test_invitation_accept_adds_membership_when_user_already_has_team(
     client: AsyncClient,
 ) -> None:
     owner = await _create_user_and_get_tokens(client, email="owner-conflict@acme.dev")
@@ -518,17 +522,22 @@ async def test_invitation_accept_conflicts_when_user_already_has_team(
         headers=_headers(invited),
         json={"organizationId": organization_id},
     )
-    assert response.status_code == 409
-    detail = response.json()["detail"]
-    assert detail["code"] == "already_in_organization"
-    assert detail["currentOrganization"]["name"] == "Existing Team"
+    assert response.status_code == 200
+    accepted = response.json()["organization"]
+    assert accepted["id"] == organization_id
+    assert accepted["membership"]["role"] == "member"
+
+    response = await client.get("/v1/organizations", headers=_headers(invited))
+    assert response.status_code == 200
+    organization_names = sorted(item["name"] for item in response.json()["organizations"])
+    assert organization_names == ["Existing Team", "Inviting Team"]
 
     response = await client.get(
         f"/v1/organizations/{organization_id}/invitations",
         headers=_headers(owner),
     )
     assert response.status_code == 200
-    assert response.json()["invitations"][0]["status"] == "pending"
+    assert response.json()["invitations"][0]["status"] == "accepted"
 
 
 @pytest.mark.asyncio

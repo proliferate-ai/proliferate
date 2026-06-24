@@ -1,5 +1,7 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
@@ -22,6 +24,7 @@ import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/orga
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -44,15 +47,19 @@ export function AppSidebarFooter() {
   );
   const actions = useOrganizationActions(activeOrganizationId);
   const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? [];
+  const [acceptTarget, setAcceptTarget] = useState<OrganizationInvitationRecord | null>(null);
 
   const activeLabel = activeOrganization?.name ?? "Organization";
   const activeInitial = activeLabel.trim().charAt(0).toUpperCase() || "O";
 
-  async function handleAcceptInvitation(invitationId: string, close: () => void) {
+  async function handleAcceptInvitation() {
+    if (!acceptTarget) {
+      return;
+    }
     try {
-      const response = await actions.acceptCurrentInvitation(invitationId);
+      const response = await actions.acceptCurrentInvitation(acceptTarget.id);
       setActiveOrganizationId(response.organization.id);
-      close();
+      setAcceptTarget(null);
       showToast(`Joined ${response.organization.name}.`, "info");
     } catch {
       showToast("Invitation could not be accepted.");
@@ -117,7 +124,8 @@ export function AppSidebarFooter() {
                       icon={<Mail className="size-3.5" />}
                       trailing={<Check className="size-3.5" />}
                       onClick={() => {
-                        void handleAcceptInvitation(invitation.id, close);
+                        setAcceptTarget(invitation);
+                        close();
                       }}
                     />
                   ))}
@@ -203,6 +211,22 @@ export function AppSidebarFooter() {
           )}
         </PopoverButton>
       </div>
+      <ConfirmationDialog
+        open={acceptTarget !== null}
+        title={acceptTarget ? `Join ${acceptTarget.organizationName ?? "organization"}?` : "Join organization?"}
+        description={
+          acceptTarget
+            ? `Accept this invitation for ${acceptTarget.email} and join as ${acceptTarget.role}.`
+            : "Accept this invitation and join the organization."
+        }
+        confirmLabel="Accept invitation"
+        loading={actions.acceptingCurrentInvitation}
+        disableClose={actions.acceptingCurrentInvitation}
+        onClose={() => setAcceptTarget(null)}
+        onConfirm={() => {
+          void handleAcceptInvitation();
+        }}
+      />
     </div>
   );
 }

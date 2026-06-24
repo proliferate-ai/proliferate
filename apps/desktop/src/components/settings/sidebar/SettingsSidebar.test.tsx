@@ -180,8 +180,8 @@ describe("SettingsSidebar layout and shortcuts", () => {
       onSelectSection,
     });
 
-    expect(screen.getByText("Admin")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Members/ })).toBeTruthy();
+    expect(screen.queryByText("Admin")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Members/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Plan \+ billing/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Integrations/ })).toBeNull();
@@ -210,7 +210,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 1,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 
   it("keeps the back row full width", () => {

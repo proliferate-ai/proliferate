@@ -36,7 +36,7 @@ from proliferate.db.store.organization_records import (
 )
 from proliferate.db.store.organizations import (
     acquire_membership_activation_lock,
-    get_current_membership_for_user,
+    get_organization_with_membership,
 )
 from proliferate.utils.time import utcnow
 
@@ -330,8 +330,12 @@ async def accept_pending_invitation_for_email(
         ).one_or_none()
         if invitation_row is not None:
             invitation, _organization = invitation_row
-            current = await get_current_membership_for_user(db, authenticated_user_id)
-            if current is not None and current.organization.id == invitation.organization_id:
+            current = await get_organization_with_membership(
+                db,
+                organization_id=invitation.organization_id,
+                user_id=authenticated_user_id,
+            )
+            if current is not None:
                 return (
                     InvitationAcceptRecord(
                         organization=current.organization,
@@ -376,8 +380,12 @@ async def accept_pending_invitation_for_organization_email(
         )
     ).one_or_none()
     if row is None:
-        current = await get_current_membership_for_user(db, authenticated_user_id)
-        if current is not None and current.organization.id == organization_id:
+        current = await get_organization_with_membership(
+            db,
+            organization_id=organization_id,
+            user_id=authenticated_user_id,
+        )
+        if current is not None:
             return (
                 InvitationAcceptRecord(
                     organization=current.organization,
@@ -424,11 +432,12 @@ async def _accept_locked_invitation(
         return None, "invitation_email_mismatch"
 
     await acquire_membership_activation_lock(db, authenticated_user_id)
-    current = await get_current_membership_for_user(db, authenticated_user_id)
-    if current is not None and current.organization.id != invitation.organization_id:
-        return None, "already_in_organization"
-
-    if current is not None and current.organization.id == invitation.organization_id:
+    current = await get_organization_with_membership(
+        db,
+        organization_id=invitation.organization_id,
+        user_id=authenticated_user_id,
+    )
+    if current is not None:
         membership = (
             await db.execute(
                 select(OrganizationMembership).where(

@@ -179,7 +179,7 @@ export function SettingsScreen({
   onSelectCloudEnvironment,
 }: SettingsScreenProps) {
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
-  const { activeOrganizationId } = useActiveOrganization();
+  const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
   const {
     phase,
@@ -190,10 +190,11 @@ export function SettingsScreen({
     (repository) => repository.sourceRoot === activeRepoSourceRoot,
   ) ?? null;
   const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
+  const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
   const shouldRedirectAdminSection =
-    activeSectionIsAdminOnly && !admin.isLoading && admin.isAdmin !== true;
+    activeSectionIsAdminOnly && !adminAccessLoading && admin.isAdmin !== true;
   const effectiveActiveSection =
-    activeSectionIsAdminOnly && admin.isAdmin !== true
+    activeSectionIsAdminOnly && !adminAccessLoading && admin.isAdmin !== true
       ? SETTINGS_DEFAULT_SECTION
       : activeSection;
   const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);

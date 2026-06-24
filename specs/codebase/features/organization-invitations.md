@@ -67,10 +67,10 @@ Desktop maps the deep link to:
 /settings?section=organization-members&joinOrganizationId={organizationId}
 ```
 
-If the Desktop user is signed in, Desktop calls the organization invitation
-accept endpoint with `organizationId`. If the Desktop user is signed out,
-Desktop starts the normal sign-in path and preserves the join target so the
-accept flow resumes after authentication.
+If the Desktop user is signed in, Desktop preserves the join target and shows an
+explicit accept-invitation action for the matching pending invitation. If the
+Desktop user is signed out, Desktop starts the normal sign-in path and preserves
+the join target so the same explicit accept flow resumes after authentication.
 
 ## Admin UX
 
@@ -112,8 +112,7 @@ Accepting an organization invitation must:
 - normalize the signed-in email before matching
 - accept only pending, unexpired invitations for the target organization
 - reject email mismatches with a stable forbidden error
-- reject users already active in another organization with the existing
-  conflict error
+- allow users to belong to more than one organization
 - be idempotent for a user already active in the target organization
 - mark the invitation accepted and create/reinstate the active membership in the
   invited role

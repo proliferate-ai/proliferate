@@ -65,6 +65,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: "organization-members",
         label: "Members",
         iconId: "organization-members",
+        adminOnly: true,
       },
       {
         kind: "section",

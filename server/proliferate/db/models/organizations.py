@@ -61,12 +61,6 @@ class OrganizationMembership(Base):
             "status IN ('active', 'removed')",
             name="ck_organization_membership_status",
         ),
-        Index(
-            "uq_organization_membership_active_user",
-            "user_id",
-            unique=True,
-            postgresql_where=text("status = 'active'"),
-        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
