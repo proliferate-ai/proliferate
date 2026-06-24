@@ -37,7 +37,7 @@ async def get_organization_integration_policy_endpoint(
             organization_id=organization_id,
         )
     except CloudApiError as error:
-        raise_cloud_error(error)
+        return raise_cloud_error(error)
     return organization_integration_policy_payload(snapshot)
 
 
@@ -56,5 +56,5 @@ async def patch_organization_integration_policy_endpoint(
             body=body,
         )
     except CloudApiError as error:
-        raise_cloud_error(error)
+        return raise_cloud_error(error)
     return organization_integration_policy_payload(snapshot)

@@ -22,19 +22,18 @@ from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_c
 from proliferate.server.cloud.mcp_catalog.catalog import build_connector_catalog
 
 
-def _require_org_member(membership: MembershipRecord | None) -> None:
+def _require_org_member(membership: MembershipRecord | None) -> MembershipRecord:
     if membership is None:
         raise CloudApiError(
             "organization_not_found",
             "Organization not found.",
             status_code=404,
         )
+    return membership
 
 
 def _require_org_admin(membership: MembershipRecord | None) -> None:
-    _require_org_member(membership)
-    if membership is None:
-        return
+    membership = _require_org_member(membership)
     if membership.role not in {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}:
         raise CloudApiError(
             "organization_permission_denied",

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { SETTINGS_DEFAULT_SECTION, type SettingsSection } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
@@ -192,12 +192,19 @@ export function SettingsScreen({
     activeSectionIsAdminOnly && admin.isAdmin !== true
       ? SETTINGS_DEFAULT_SECTION
       : activeSection;
+  const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);
 
   useEffect(() => {
-    if (shouldRedirectAdminSection) {
-      onSelectSection(SETTINGS_DEFAULT_SECTION);
+    if (!shouldRedirectAdminSection) {
+      redirectedAdminSectionRef.current = null;
+      return;
     }
-  }, [onSelectSection, shouldRedirectAdminSection]);
+    if (redirectedAdminSectionRef.current === activeSection) {
+      return;
+    }
+    redirectedAdminSectionRef.current = activeSection;
+    onSelectSection(SETTINGS_DEFAULT_SECTION);
+  }, [activeSection, onSelectSection, shouldRedirectAdminSection]);
 
   return (
     <div className="flex h-screen bg-surface-under text-foreground" data-telemetry-block>
