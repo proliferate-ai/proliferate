@@ -119,16 +119,16 @@ export function RightPanelHeaderTabs({
             <span aria-hidden="true" />
             <div className="ui-tab-system-tabs__spacer" aria-hidden="true" />
             <div className="ui-tab-system-tabs__edge ui-tab-system-tabs__edge--end" aria-hidden="true" />
-            <div className="ui-tab-system-new-tab-sticky">
-              <RightPanelNewTabMenu
-                open={newTabMenuOpen}
-                defaultKind={newTabMenuDefaultKind}
-                isWorkspaceReady={isWorkspaceReady}
-                onOpenChange={setNewTabMenuOpen}
-                onCreateTerminal={onCreateTerminal}
-                onCreateBrowser={onCreateBrowser}
-              />
-            </div>
+          </div>
+          <div className="ui-tab-system-new-tab-sticky">
+            <RightPanelNewTabMenu
+              open={newTabMenuOpen}
+              defaultKind={newTabMenuDefaultKind}
+              isWorkspaceReady={isWorkspaceReady}
+              onOpenChange={setNewTabMenuOpen}
+              onCreateTerminal={onCreateTerminal}
+              onCreateBrowser={onCreateBrowser}
+            />
           </div>
         </div>
 
