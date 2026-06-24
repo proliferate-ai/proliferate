@@ -401,9 +401,10 @@ async def consume_sso_challenge(
         if challenge.expires_at.tzinfo
         else challenge.expires_at.replace(tzinfo=UTC)
     )
-    if expires_at < _now():
-        return None
     challenge.consumed_at = _now()
+    if expires_at < _now():
+        await db.flush()
+        return None
     await db.flush()
     return sso_challenge_record(challenge)
 
