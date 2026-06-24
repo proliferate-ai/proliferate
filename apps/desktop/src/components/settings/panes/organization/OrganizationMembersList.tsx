@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Mail, MoreHorizontal, Trash } from "@proliferate/ui/icons";
+import { Check, Mail, MoreHorizontal, Trash } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
@@ -7,11 +7,8 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { Avatar } from "@/components/settings/panes/organization/OrganizationLogo";
 import {
-  invitationStatusBadge,
   membershipStatusBadge,
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
@@ -54,8 +51,15 @@ export function OrganizationMembersList({
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
   return (
-    <SettingsCard>
-      <div className="divide-y divide-border-light">
+    <div className="overflow-x-auto">
+      <div className="min-w-[780px]">
+        <div className="grid grid-cols-[minmax(20rem,1fr)_11rem_11rem_14rem_3rem] items-center border-b border-border-light pb-3 text-sm font-medium text-foreground">
+          <span>Name</span>
+          <span>Date joined</span>
+          <span>Role</span>
+          <span>Authenticated with</span>
+          <span aria-label="Actions" />
+        </div>
         {rows.map((row) => row.kind === "member" && row.member ? (
           <MemberRow
             key={row.key}
@@ -85,7 +89,7 @@ export function OrganizationMembersList({
           <EmptyPeopleRow label="No members yet." />
         ) : null}
       </div>
-    </SettingsCard>
+    </div>
   );
 }
 
@@ -109,13 +113,13 @@ function MemberRow({
   onRemove: (membershipId: string) => void;
 }) {
   const isCurrentUser = member.userId === currentUserId;
-  const roleDisabled = !canManage || isCurrentUser || (member.role === "owner" && !canManageOwners);
+  const canChangeRole = canManage && !isCurrentUser && (member.role !== "owner" || canManageOwners);
   const removeDisabled = !canManage || isCurrentUser;
   const status = membershipStatusBadge(member.status);
   const showStatusBadge = status.label !== "Active";
 
   return (
-    <div className="grid gap-3 px-4 py-3 hover:bg-foreground/5 lg:grid-cols-[minmax(0,1fr)_7rem_9rem_8rem_2.5rem] lg:items-center">
+    <div className="grid min-h-[5.25rem] grid-cols-[minmax(20rem,1fr)_11rem_11rem_14rem_3rem] items-center border-b border-border-light py-5 last:border-b-0">
       <div className="flex min-w-0 items-center gap-3">
         <Avatar member={member} />
         <div className="min-w-0">
@@ -123,34 +127,18 @@ function MemberRow({
             <span className="truncate font-medium text-foreground" title={row.name}>
               {row.name}
             </span>
-            {isCurrentUser ? <Badge tone="info">You</Badge> : null}
+            {isCurrentUser ? <Badge tone="success">me</Badge> : null}
           </div>
           <div className="truncate text-sm text-muted-foreground" title={row.email}>
             {row.email}
           </div>
         </div>
       </div>
-      <MemberMeta label="Joined" value={row.dateLabel} />
-      <div className="min-w-0">
-        <div className="mb-1 text-xs text-muted-foreground lg:hidden">Role</div>
-        <Select
-          value={member.role}
-          disabled={roleDisabled || updating}
-          onChange={(event) => onRoleChange(member.membershipId, event.currentTarget.value as OrganizationRole)}
-          aria-label={`Role for ${member.email}`}
-          className="h-8"
-        >
-          <option value="member">Member</option>
-          <option value="admin">Admin</option>
-          <option value="owner" disabled={!canManageOwners}>Owner</option>
-        </Select>
-      </div>
-      <div className="min-w-0">
-        <div className="text-xs text-muted-foreground lg:hidden">Auth method</div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="truncate text-sm text-foreground">{row.authLabel}</span>
-          {showStatusBadge ? <Badge tone={status.tone}>{status.label}</Badge> : null}
-        </div>
+      <MemberMeta value={row.dateLabel} />
+      <MemberMeta value={roleLabel(member.role)} />
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="truncate text-sm text-foreground">{row.authLabel}</span>
+        {showStatusBadge ? <Badge tone={status.tone}>{status.label}</Badge> : null}
       </div>
       <div className="flex justify-end">
         <RowActionMenu
@@ -158,15 +146,27 @@ function MemberRow({
           disabled={!canManage}
         >
           {(close) => (
-            <PopoverMenuItem
-              label="Remove"
-              icon={<Trash className="size-3.5" />}
-              disabled={removeDisabled || updating}
-              onClick={() => {
-                onRemove(member.membershipId);
-                close();
-              }}
-            />
+            <>
+              <RoleMenuItems
+                currentRole={member.role}
+                disabled={!canChangeRole || updating}
+                canManageOwners={canManageOwners}
+                onSelect={(role) => {
+                  onRoleChange(member.membershipId, role);
+                  close();
+                }}
+              />
+              <MenuSeparator />
+              <PopoverMenuItem
+                label="Remove"
+                icon={<Trash className="size-3.5" />}
+                disabled={removeDisabled || updating}
+                onClick={() => {
+                  onRemove(member.membershipId);
+                  close();
+                }}
+              />
+            </>
           )}
         </RowActionMenu>
       </div>
@@ -187,10 +187,8 @@ function InvitationRow({
   updating: boolean;
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
-  const status = invitationStatusBadge(invitation.status);
-
   return (
-    <div className="grid gap-3 px-4 py-3 hover:bg-foreground/5 lg:grid-cols-[minmax(0,1fr)_7rem_9rem_8rem_2.5rem] lg:items-center">
+    <div className="grid min-h-[5.25rem] grid-cols-[minmax(20rem,1fr)_11rem_11rem_14rem_3rem] items-center border-b border-border-light py-5 last:border-b-0">
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-muted-foreground">
           <Mail className="size-4" />
@@ -204,15 +202,9 @@ function InvitationRow({
           </div>
         </div>
       </div>
-      <MemberMeta label="Joined" value={row.dateLabel} />
-      <MemberMeta label="Role" value={roleLabel(invitation.role)} />
-      <div className="min-w-0">
-        <div className="text-xs text-muted-foreground lg:hidden">Auth method</div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="truncate text-sm text-foreground">{row.authLabel}</span>
-          <Badge tone={status.tone}>{status.label}</Badge>
-        </div>
-      </div>
+      <MemberMeta value={row.dateLabel} />
+      <MemberMeta value={roleLabel(invitation.role)} />
+      <MemberMeta value={row.authLabel} />
       <div className="flex justify-end">
         <RowActionMenu
           label={`Actions for ${invitation.email}`}
@@ -270,16 +262,9 @@ export function buildMemberRows(
   ];
 }
 
-function MemberMeta({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function MemberMeta({ value }: { value: ReactNode }) {
   return (
     <div className="min-w-0">
-      <div className="text-xs text-muted-foreground lg:hidden">{label}</div>
       <div className="truncate text-sm text-foreground">{value}</div>
     </div>
   );
@@ -287,9 +272,38 @@ function MemberMeta({
 
 function EmptyPeopleRow({ label }: { label: string }) {
   return (
-    <div className="px-4 py-6 text-sm text-muted-foreground">
+    <div className="border-b border-border-light py-6 text-sm text-muted-foreground last:border-b-0">
       {label}
     </div>
+  );
+}
+
+function RoleMenuItems({
+  currentRole,
+  disabled,
+  canManageOwners,
+  onSelect,
+}: {
+  currentRole: OrganizationRole;
+  disabled: boolean;
+  canManageOwners: boolean;
+  onSelect: (role: OrganizationRole) => void;
+}) {
+  const roles: OrganizationRole[] = ["owner", "admin", "member"];
+  return (
+    <>
+      {roles.map((role) => (
+        <PopoverMenuItem
+          key={role}
+          label={`Make ${roleLabel(role).toLowerCase()}`}
+          disabled={disabled || role === currentRole || (role === "owner" && !canManageOwners)}
+          trailing={role === currentRole ? <Check className="size-3.5" /> : null}
+          onClick={() => {
+            onSelect(role);
+          }}
+        />
+      ))}
+    </>
   );
 }
 
@@ -324,6 +338,10 @@ function RowActionMenu({
   );
 }
 
+function MenuSeparator() {
+  return <div className="my-1 h-px bg-border/60" />;
+}
+
 function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
   if (role === "admin") return "Admin";
@@ -339,7 +357,7 @@ function formatJoinedDate(value: string | null | undefined): string {
     return "Joined";
   }
   return date.toLocaleDateString(undefined, {
-    month: "short",
+    month: "numeric",
     day: "numeric",
     year: "numeric",
   });
