@@ -17,6 +17,10 @@ export const AUTH_LOGIN_LABELS = {
   detailWithLocalPrefix: "Continue with GitHub, or",
   signIn: "Continue with GitHub",
   waiting: "Waiting for GitHub...",
+  ssoSignIn: (displayName?: string | null) => (
+    displayName ? `Continue with ${displayName}` : "Continue with SSO"
+  ),
+  ssoWaiting: "Waiting for SSO...",
   continueLocally: "Start locally",
   continueLocallyInline: "start locally",
 } as const;

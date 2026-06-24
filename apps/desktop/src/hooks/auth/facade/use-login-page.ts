@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
 import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { getRedirectTarget } from "@/lib/domain/auth/login-redirect";
@@ -17,14 +18,32 @@ export function useLoginPage() {
     signInChecking: githubSignInChecking,
     signInUnavailableDescription: githubSignInUnavailableDescription,
   } = useGitHubSignIn();
+  const {
+    signIn: signInWithSso,
+    submitting: ssoSubmitting,
+    error: ssoError,
+    signInAvailable: ssoSignInAvailable,
+    signInChecking: ssoSignInChecking,
+    signInUnavailableDescription: ssoSignInUnavailableDescription,
+    displayName: ssoDisplayName,
+  } = useSsoSignIn();
   const canContinueLocally = !isProductAuthRequired();
 
   const redirectTarget = getRedirectTarget(location.state);
-  const busy = submitting || status === "bootstrapping";
+  const busy = submitting || ssoSubmitting || status === "bootstrapping";
 
   async function handleGitHubSignIn() {
     try {
       await signIn();
+      navigate(redirectTarget, { replace: true });
+    } catch {
+      // error is already surfaced via the hook's `error` state
+    }
+  }
+
+  async function handleSsoSignIn() {
+    try {
+      await signInWithSso();
       navigate(redirectTarget, { replace: true });
     } catch {
       // error is already surfaced via the hook's `error` state
@@ -37,12 +56,18 @@ export function useLoginPage() {
 
   return {
     submitting,
-    error,
+    error: error ?? ssoError,
     busy,
     githubSignInAvailable,
     githubSignInChecking,
     githubSignInUnavailableDescription,
+    ssoSubmitting,
+    ssoSignInAvailable,
+    ssoSignInChecking,
+    ssoSignInUnavailableDescription,
+    ssoDisplayName,
     handleGitHubSignIn,
+    handleSsoSignIn,
     handleContinueLocally,
     canContinueLocally,
   };

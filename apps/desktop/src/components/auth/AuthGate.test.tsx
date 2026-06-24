@@ -255,6 +255,22 @@ describe("AuthScreenLayout", () => {
     expect(screen.getByText("start locally")).toBeTruthy();
   });
 
+  it("shows the SSO action when deployment SSO is available", () => {
+    render(
+      <AuthScreenLayout
+        mode="auth"
+        githubSignInAvailable
+        ssoSignInAvailable
+        ssoDisplayName="Google SSO"
+        onGitHubSignIn={() => {}}
+        onSsoSignIn={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Continue with GitHub")).toBeTruthy();
+    expect(screen.getByText("Continue with Google SSO")).toBeTruthy();
+  });
+
   it("ignores user appearance text-size preferences", () => {
     setRootToNonDefaultTextScale();
     render(<AuthScreenLayout mode="auth" />);

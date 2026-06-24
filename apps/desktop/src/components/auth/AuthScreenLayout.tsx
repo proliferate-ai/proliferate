@@ -1,7 +1,7 @@
 import { twMerge } from "tailwind-merge";
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
-import { ArrowRight, GitHub } from "@proliferate/ui/icons";
+import { ArrowRight, GitHub, Shield } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS } from "@/copy/auth/auth-copy";
 
@@ -26,6 +26,12 @@ export interface AuthScreenLayoutProps {
   githubSignInChecking?: boolean;
   githubSignInUnavailableDescription?: string;
   onGitHubSignIn?: () => void;
+  ssoSubmitting?: boolean;
+  ssoSignInAvailable?: boolean;
+  ssoSignInChecking?: boolean;
+  ssoSignInUnavailableDescription?: string;
+  ssoDisplayName?: string | null;
+  onSsoSignIn?: () => void;
   canContinueLocally?: boolean;
   onContinueLocally?: () => void;
 }
@@ -42,10 +48,22 @@ export function AuthScreenLayout({
   githubSignInChecking = false,
   githubSignInUnavailableDescription = "",
   onGitHubSignIn,
+  ssoSubmitting = false,
+  ssoSignInAvailable = false,
+  ssoSignInChecking = false,
+  ssoSignInUnavailableDescription = "",
+  ssoDisplayName = null,
+  onSsoSignIn,
   canContinueLocally = false,
   onContinueLocally,
 }: AuthScreenLayoutProps) {
   const showAuth = mode === "auth";
+  const showSso = showAuth && ssoSignInAvailable;
+  const showUnavailableMessage = showAuth
+    && !ssoSignInChecking
+    && !ssoSignInAvailable
+    && !githubSignInChecking
+    && !githubSignInAvailable;
 
   return (
     <AuthAppearanceBoundary
@@ -64,7 +82,7 @@ export function AuthScreenLayout({
 
         {/* Reserved actions slot: identical height in both modes so the block
             above never shifts. Two absolutely-positioned layers cross-fade. */}
-        <div className="relative h-11">
+        <div className={twMerge("relative", ssoSignInAvailable ? "h-[5.875rem]" : "h-11")}>
           {/* Loading layer: a skeleton sitting where the button will land.
               On exit it slides up so nothing drifts downward. */}
           <div
@@ -95,24 +113,45 @@ export function AuthScreenLayout({
             )}
             aria-hidden={!showAuth}
           >
-            <Button
-              type="button"
-              size="md"
-              loading={submitting}
-              onClick={onGitHubSignIn}
-              disabled={
-                !showAuth
-                || busy
-                || githubSignInChecking
-                || !githubSignInAvailable
-              }
-              tabIndex={showAuth ? 0 : -1}
-              className="h-11 w-full"
-            >
-              {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
-              {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
-              {!submitting && <ArrowRight className="h-4 w-4" />}
-            </Button>
+            <div className="grid gap-2">
+              <Button
+                type="button"
+                size="md"
+                loading={submitting}
+                onClick={onGitHubSignIn}
+                disabled={
+                  !showAuth
+                  || busy
+                  || githubSignInChecking
+                  || !githubSignInAvailable
+                }
+                tabIndex={showAuth ? 0 : -1}
+                className="h-11 w-full"
+              >
+                {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
+                {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
+                {!submitting && <ArrowRight className="h-4 w-4" />}
+              </Button>
+
+              {showSso ? (
+                <Button
+                  type="button"
+                  size="md"
+                  variant="secondary"
+                  loading={ssoSubmitting}
+                  onClick={onSsoSignIn}
+                  disabled={!showAuth || busy}
+                  tabIndex={showAuth ? 0 : -1}
+                  className="h-11 w-full"
+                >
+                  {!ssoSubmitting && <Shield className="h-4 w-4 shrink-0" />}
+                  {ssoSubmitting
+                    ? AUTH_LOGIN_LABELS.ssoWaiting
+                    : AUTH_LOGIN_LABELS.ssoSignIn(ssoDisplayName)}
+                  {!ssoSubmitting && <ArrowRight className="h-4 w-4" />}
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {/* Message line is absolutely anchored below the action slot so error /
@@ -121,10 +160,10 @@ export function AuthScreenLayout({
           <div className="absolute inset-x-0 top-full mt-3 text-center">
             {showAuth && error
               ? <p className="text-sm text-destructive">{error}</p>
-              : showAuth && !githubSignInChecking && !githubSignInAvailable
+              : showUnavailableMessage
                 ? (
                   <p className="text-sm text-muted-foreground">
-                    {githubSignInUnavailableDescription}
+                    {ssoSignInUnavailableDescription || githubSignInUnavailableDescription}
                   </p>
                 )
                 : showAuth && canContinueLocally
