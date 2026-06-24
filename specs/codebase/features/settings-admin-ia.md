@@ -240,8 +240,9 @@ Target visible `SETTINGS_NAV_GROUPS` after the owning panes ship:
 
 ```text
 Admin
-  organization             OrganizationPane               members, invitation emails,
-                                                           invite link, org profile
+  organization             OrganizationPane               org profile and Team setup
+  organization-members     OrganizationMembersPane        members, invitation emails,
+                                                           invite link
   billing                  BillingPane                    plan + billing as an org,
                                                            including auto top up option
   organization-integrations SettingsScaffoldPane           org-owned integrations

@@ -10,6 +10,7 @@ import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
+import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 // SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
@@ -77,6 +78,9 @@ function renderSettingsSection(
   }
   if (activeSection === "organization") {
     return <OrganizationPane />;
+  }
+  if (activeSection === "organization-members") {
+    return <OrganizationMembersPane />;
   }
   if (activeSection === "organization-integrations") {
     if (!cloudEnabled) {

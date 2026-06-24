@@ -164,10 +164,11 @@ Fields: `id`, `organization_id`, `created_by_user_id`, `billing_subject_id`,
 
 #### `organization_invitation`
 
-Row: staged or delivered invite into the newly activated Team.
+Row: staged or delivered invite into the newly activated Team. Invite links are
+organization-scoped join URLs; the invitation row is accepted by matching the
+authenticated user's email to a pending invitation for that organization.
 
-Fields: `id`, `organization_id`, `email`, `role`, `status`, `token_hash`,
-`handoff_token_hash`, `handoff_expires_at`, `delivery_status`,
+Fields: `id`, `organization_id`, `email`, `role`, `status`, `delivery_status`,
 `delivery_error`, `delivered_at`, `invited_by_user_id`, `accepted_by_user_id`,
 `expires_at`, `accepted_at`, `revoked_at`, `expired_at`, `created_at`,
 `updated_at`.

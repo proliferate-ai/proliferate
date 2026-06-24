@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
@@ -20,6 +19,7 @@ from proliferate.server.organizations.models import (
     OrganizationInvitationResponse,
     OrganizationInvitationsResponse,
     OrganizationInviteRequest,
+    OrganizationJoinLinkResponse,
     OrganizationListResponse,
     OrganizationMembershipResponse,
     OrganizationMembershipUpdateRequest,
@@ -35,7 +35,7 @@ from proliferate.server.organizations.service import (
     accept_current_user_invitation,
     accept_invitation,
     create_invitation,
-    create_invitation_landing_handoff,
+    get_organization_join_link,
     get_organization,
     list_current_user_invitations,
     list_invitations,
@@ -51,26 +51,17 @@ from proliferate.server.organizations.service import (
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
-@router.get(
-    "/invitations/landing",
-    response_class=HTMLResponse,
-    include_in_schema=False,
-)
-async def organization_invitation_landing(
-    token: str,
-    db: AsyncSession = Depends(get_async_session),
-) -> HTMLResponse:
-    html = await create_invitation_landing_handoff(db, token)
-    return HTMLResponse(html)
-
-
 @router.post("/invitations/accept", response_model=OrganizationInvitationAcceptResponse)
 async def accept_organization_invitation_endpoint(
     body: OrganizationInvitationAcceptRequest,
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationAcceptResponse:
-    record = await accept_invitation(db, user, body.invite_handoff)
+    record = await accept_invitation(
+        db,
+        user,
+        organization_id=body.organization_id,
+    )
     return OrganizationInvitationAcceptResponse(
         organization=organization_with_membership_response(record),
     )
@@ -189,6 +180,13 @@ async def list_organization_invitations_endpoint(
     return OrganizationInvitationsResponse(
         invitations=[invitation_response(invitation) for invitation in invitations],
     )
+
+
+@router.get("/{organization_id}/join-link", response_model=OrganizationJoinLinkResponse)
+async def get_organization_join_link_endpoint(
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
+) -> OrganizationJoinLinkResponse:
+    return OrganizationJoinLinkResponse(url=get_organization_join_link(org_admin.organization_id))
 
 
 @router.post(

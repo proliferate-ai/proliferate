@@ -697,10 +697,8 @@ class TestBillingApi:
         assert sent_invites[0]["to_email"] == "new.member@example.com"
         assert sent_invites[0]["organization_name"] == "Activation Team"
         assert sent_invites[0]["inviter_email"] == "billing-team-activation@example.com"
-        invite_base_url = (settings.api_base_url or settings.frontend_base_url).rstrip("/")
-        assert sent_invites[0]["invite_url"].startswith(
-            f"{invite_base_url}/v1/organizations/invitations/landing?token="
-        )
+        invite_base_url = (settings.frontend_base_url or settings.api_base_url).rstrip("/")
+        assert sent_invites[0]["invite_url"] == f"{invite_base_url}/join/{organization.id}"
 
         organizations = await client.get("/v1/organizations", headers=headers)
         assert organizations.status_code == 200

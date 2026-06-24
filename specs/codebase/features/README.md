@@ -13,6 +13,7 @@ low-level runtime contracts.
 | --- | --- | --- |
 | Onboarding | Signed-out to product-ready account handoff, provider readiness, billing/credit readiness, agent auth setup, and first workspace transition. | [onboarding.md](onboarding.md) |
 | Product auth | Account sign-in, linked providers, email/password, product-readiness gates, reviewer accounts, and auth surface UX. | [product-auth.md](product-auth.md) |
+| Organization invitations | Organization invite links, pending invitation grants, desktop join behavior, and admin member/invite UX. | [organization-invitations.md](organization-invitations.md) |
 | Pending workspace shell | Pending workspace entry, projected session shell, optimistic prompts, and workspace/session materialization handoff. | [pending-workspace-shell.md](pending-workspace-shell.md) |
 | Cloud access / dispatch | Web/Mobile/Desktop cloud workspace access, dispatch UX, direct/open-in-desktop flows, commandability, and cloud/local parity. | [cloud-dispatch.md](cloud-dispatch.md), [web-cloud-local-parity.md](web-cloud-local-parity.md) |
 | Chat composer | Composer controls, model/config selection, dock slots, review/plan/subagent composer states, and dev playground scenarios. | [chat-composer.md](chat-composer.md) |

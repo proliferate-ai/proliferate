@@ -166,6 +166,8 @@ export type OrganizationInvitationResponse =
   components["schemas"]["OrganizationInvitationResponse"];
 export type OrganizationInvitationsResponse =
   components["schemas"]["OrganizationInvitationsResponse"];
+export type OrganizationJoinLinkResponse =
+  components["schemas"]["OrganizationJoinLinkResponse"];
 export type OrganizationInvitationAcceptResponse =
   components["schemas"]["OrganizationInvitationAcceptResponse"];
 export interface TeamCheckoutRequest {

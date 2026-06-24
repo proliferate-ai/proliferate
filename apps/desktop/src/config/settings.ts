@@ -1,5 +1,6 @@
 export const SETTINGS_CONTENT_SECTIONS = [
   "organization",
+  "organization-members",
   "billing",
   "organization-integrations",
   "organization-model-policy",
@@ -24,6 +25,7 @@ export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "organization",
+  "organization-members",
   "billing",
   "organization-integrations",
   "organization-model-policy",

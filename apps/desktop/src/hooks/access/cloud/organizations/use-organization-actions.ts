@@ -87,7 +87,8 @@ export function useOrganizationActions(organizationId: string | null) {
   });
 
   const acceptInvitationMutation = useMutation({
-    mutationFn: (inviteHandoff: string) => acceptOrganizationInvitation({ inviteHandoff }),
+    mutationFn: (joinOrganizationId: string) =>
+      acceptOrganizationInvitation({ organizationId: joinOrganizationId }),
     onSuccess: async (response) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: organizationsListKey() }),

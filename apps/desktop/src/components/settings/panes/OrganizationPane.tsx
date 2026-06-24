@@ -1,28 +1,19 @@
 import {
   useEffect,
-  useMemo,
   useState,
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
-import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
-import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
-import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
-import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
-import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
-import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import {
   useCurrentTeamCheckout,
   useTeamCheckoutActions,
@@ -30,17 +21,8 @@ import {
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { TEAM_UPGRADE_GATE_COPY } from "@/copy/billing/upgrade-gate-copy";
-import {
-  type OrganizationInvitationRecord,
-  type OrganizationMemberRecord,
-  type OrganizationRole,
-} from "@/lib/domain/organizations/organization-records";
 import { organizationLogoImageValidationError } from "@/lib/domain/organizations/logo-image";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useAuthStore } from "@/stores/auth/auth-store";
-
-const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
-const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -52,75 +34,23 @@ function readLogoImage(file: File): Promise<string> {
 }
 
 export function OrganizationPane() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const initialInviteHandoff = useMemo(
-    () => searchParams.get("inviteHandoff"),
-    [searchParams],
-  );
-  const [transientInviteHandoff] = useState(initialInviteHandoff);
   const authStatus = useAuthStore((state) => state.status);
   const {
     activeOrganization,
     activeOrganizationId,
-    setActiveOrganizationId,
     organizations,
     organizationsQuery,
   } = useActiveOrganization();
   const { openExternal } = useTauriShellActions();
   const actions = useOrganizationActions(activeOrganizationId);
-  const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
-    authStatus === "authenticated",
-  );
-  const membersQuery = useOrganizationMembers(activeOrganizationId);
-  const admin = useIsAdmin(activeOrganizationId);
-  const invitationsQuery = useOrganizationInvitations(activeOrganizationId);
-  const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
-  const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
-  const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
-  const currentUser = useAuthStore((state) => state.user);
-  const canManage = admin.isAdmin;
-  const canManageOwners = admin.isOwner;
   const [settingsName, setSettingsName] = useState("");
   const [settingsLogoImage, setSettingsLogoImage] = useState<string | null>(null);
   const [logoImageError, setLogoImageError] = useState<string | null>(null);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [newTeamName, setNewTeamName] = useState("");
   const [teamUpgradeGateOpen, setTeamUpgradeGateOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const teamCheckoutQuery = useCurrentTeamCheckout(authStatus === "authenticated");
   const teamCheckoutActions = useTeamCheckoutActions();
-
-  useEffect(() => {
-    if (!initialInviteHandoff) return;
-    navigate(buildSettingsHref({ section: "organization" }), { replace: true });
-  }, [initialInviteHandoff, navigate]);
-
-  useEffect(() => {
-    if (!transientInviteHandoff || authStatus !== "authenticated") {
-      return;
-    }
-    let cancelled = false;
-    void actions.acceptInvitation(transientInviteHandoff)
-      .then((response) => {
-        if (cancelled) return;
-        setActiveOrganizationId(response.organization.id);
-        setStatusMessage(`Joined ${response.organization.name}.`);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStatusMessage("Invitation could not be accepted. Reopen the email link to try again.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    actions.acceptInvitation,
-    authStatus,
-    setActiveOrganizationId,
-    transientInviteHandoff,
-  ]);
 
   useEffect(() => {
     setSettingsName(activeOrganization?.name ?? "");
@@ -153,23 +83,6 @@ export function OrganizationPane() {
     }
   }
 
-  async function handleInvite() {
-    await actions.createInvitation({ email: inviteEmail, role: inviteRole });
-    setInviteEmail("");
-    setInviteRole("member");
-  }
-
-  async function handleAcceptCurrentInvitation(invitationId: string) {
-    setStatusMessage(null);
-    try {
-      const response = await actions.acceptCurrentInvitation(invitationId);
-      setActiveOrganizationId(response.organization.id);
-      setStatusMessage(`Joined ${response.organization.name}.`);
-    } catch {
-      setStatusMessage("Invitation could not be accepted.");
-    }
-  }
-
   async function handleCreateTeamCheckout(event: FormEvent) {
     event.preventDefault();
     if (!newTeamName.trim()) {
@@ -199,41 +112,26 @@ export function OrganizationPane() {
     await openExternal(url);
   }
 
-  function updateMemberRole(membershipId: string, role: OrganizationRole) {
-    void actions.updateMembership({
-      membershipId,
-      input: { role },
-    });
-  }
-
-  const unauthenticatedHandoff = transientInviteHandoff && authStatus !== "authenticated";
-  const shouldShowSignInState = authStatus !== "authenticated" && !unauthenticatedHandoff;
+  const shouldShowSignInState = authStatus !== "authenticated";
   const shouldShowLoadingState = authStatus === "authenticated" && organizationsQuery.isLoading;
   const shouldShowErrorState = authStatus === "authenticated" && organizationsQuery.isError;
   const shouldShowEmptyState = authStatus === "authenticated"
     && organizationsQuery.isSuccess
     && organizations.length === 0;
-  const shouldShowPendingInvitations = authStatus === "authenticated"
-    && !activeOrganization
-    && pendingInvitations.length > 0;
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader
         title="Organization"
-        description="Team membership, invitations, and organization settings."
+        description="Organization profile, Team setup, and billing."
       />
 
       {statusMessage ? (
         <OrganizationNotice>{statusMessage}</OrganizationNotice>
       ) : null}
 
-      {unauthenticatedHandoff ? (
-        <OrganizationNotice>Sign in, then reopen the invitation email link to accept it.</OrganizationNotice>
-      ) : null}
-
       {shouldShowSignInState ? (
-        <OrganizationSection title="Membership" description="Organization access is tied to your signed-in account.">
+        <OrganizationSection title="Organization" description="Organization access is tied to your signed-in account.">
           <SettingsCard>
             <div className="p-4 text-sm text-muted-foreground">
               Sign in to view your organization.
@@ -247,7 +145,7 @@ export function OrganizationPane() {
       ) : null}
 
       {shouldShowErrorState ? (
-        <OrganizationSection title="Membership">
+        <OrganizationSection title="Organization">
           <SettingsCard>
             <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-muted-foreground">
@@ -267,18 +165,8 @@ export function OrganizationPane() {
         </OrganizationSection>
       ) : null}
 
-      {shouldShowPendingInvitations ? (
-        <CurrentUserInvitationsSection
-          invitations={pendingInvitations}
-          accepting={actions.acceptingCurrentInvitation}
-          onAccept={(invitationId) => {
-            void handleAcceptCurrentInvitation(invitationId);
-          }}
-        />
-      ) : null}
-
       {shouldShowEmptyState ? (
-        <OrganizationSection title="Membership">
+        <OrganizationSection title="Team">
           <SettingsCard>
             {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
               <SettingsCardRow
@@ -368,7 +256,7 @@ export function OrganizationPane() {
             settingsName={settingsName}
             settingsLogoImage={settingsLogoImage}
             logoImageError={logoImageError}
-            canManage={canManage}
+            canManage
             saving={actions.updatingOrganization}
             onNameChange={setSettingsName}
             onLogoImageChange={setSettingsLogoImage}
@@ -377,36 +265,6 @@ export function OrganizationPane() {
           />
 
           <OrganizationBillingLinkSection />
-
-          <OrganizationMembersSection
-            members={members}
-            canManage={canManage}
-            canManageOwners={canManageOwners}
-            currentUserId={currentUser?.id ?? null}
-            updating={actions.updatingMembership || actions.removingMembership}
-            onRoleChange={updateMemberRole}
-            onRemove={(membershipId) => {
-              void actions.removeMembership(membershipId);
-            }}
-          />
-
-          <OrganizationInvitationsSection
-            invitations={invitations}
-            canManage={canManage}
-            inviteEmail={inviteEmail}
-            inviteRole={inviteRole}
-            creatingInvitation={actions.creatingInvitation}
-            working={actions.resendingInvitation || actions.revokingInvitation}
-            onInviteEmailChange={setInviteEmail}
-            onInviteRoleChange={setInviteRole}
-            onInviteSubmit={handleInvite}
-            onResend={(invitationId) => {
-              void actions.resendInvitation(invitationId);
-            }}
-            onRevoke={(invitationId) => {
-              void actions.revokeInvitation(invitationId);
-            }}
-          />
         </>
       ) : null}
     </section>

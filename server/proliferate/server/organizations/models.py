@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -47,7 +48,11 @@ class OrganizationMembershipUpdateRequest(OrganizationBaseModel):
 
 
 class OrganizationInvitationAcceptRequest(OrganizationBaseModel):
-    invite_handoff: str = Field(alias="inviteHandoff")
+    organization_id: UUID = Field(alias="organizationId")
+
+
+class OrganizationJoinLinkResponse(OrganizationBaseModel):
+    url: str
 
 
 class OrganizationMembershipResponse(OrganizationBaseModel):

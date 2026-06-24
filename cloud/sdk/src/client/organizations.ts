@@ -5,6 +5,7 @@ import type {
   OrganizationInvitationResponse,
   OrganizationInvitationsResponse,
   OrganizationInviteRequest,
+  OrganizationJoinLinkResponse,
   OrganizationListResponse,
   OrganizationMembersResponse,
   OrganizationMembershipResponse,
@@ -85,6 +86,17 @@ export async function listOrganizationInvitations(
 ): Promise<OrganizationInvitationsResponse> {
   return (
     await client.GET("/v1/organizations/{organization_id}/invitations", {
+      params: { path: { organization_id: organizationId } },
+    })
+  ).data!;
+}
+
+export async function getOrganizationJoinLink(
+  organizationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<OrganizationJoinLinkResponse> {
+  return (
+    await client.GET("/v1/organizations/{organization_id}/join-link", {
       params: { path: { organization_id: organizationId } },
     })
   ).data!;

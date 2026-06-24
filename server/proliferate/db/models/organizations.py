@@ -181,13 +181,6 @@ class OrganizationInvitation(Base):
             unique=True,
             postgresql_where=text("status = 'pending'"),
         ),
-        Index("ix_organization_invitation_token_hash", "token_hash", unique=True),
-        Index(
-            "ix_organization_invitation_handoff_token_hash",
-            "handoff_token_hash",
-            unique=True,
-            postgresql_where=text("handoff_token_hash IS NOT NULL"),
-        ),
         CheckConstraint(
             "role IN ('owner', 'admin', 'member')",
             name="ck_organization_invitation_role",
@@ -210,12 +203,6 @@ class OrganizationInvitation(Base):
     email: Mapped[str] = mapped_column(String(320), index=True)
     role: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), index=True)
-    token_hash: Mapped[str] = mapped_column(String(64))
-    handoff_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    handoff_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
     delivery_status: Mapped[str] = mapped_column(String(32))
     delivery_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

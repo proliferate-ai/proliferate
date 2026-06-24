@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Protocol
@@ -12,13 +9,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITE_EXPIRES_DAYS,
-    ORGANIZATION_INVITE_HANDOFF_EXPIRES_MINUTES,
-    ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN,
-    ORGANIZATION_INVITE_TOKEN_DOMAIN,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_OWNER,
 )
@@ -58,7 +51,8 @@ from proliferate.server.organizations.domain.profile import (
     sanitize_logo_image,
 )
 from proliferate.server.organizations.errors import OrganizationServiceError
-from proliferate.server.organizations.landing import build_landing_html
+from proliferate.server.organizations.join_links import organization_join_url
+from proliferate.server.organizations.landing import build_join_landing_html
 from proliferate.utils.time import utcnow
 
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
@@ -120,18 +114,6 @@ def _require_role(role: str) -> str:
             status_code=400,
         )
     return role
-
-
-def _hash_token(raw_token: str, domain: str) -> str:
-    return hmac.new(
-        settings.cloud_secret_key.encode("utf-8"),
-        f"{domain}:{raw_token}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def _new_token() -> str:
-    return secrets.token_urlsafe(32)
 
 
 def _require_uuid(value: str | UUID | None, *, field: str) -> UUID:
@@ -365,15 +347,12 @@ async def create_invitation(
 ) -> OrganizationInvitationEmailResult:
     _require_current_org_role(org_user, required_roles_for_invitation_role(role))
     normalized_email = normalize_invitation_email(email)
-    token = _new_token()
     result = await invitation_delivery.create_and_send_invitation(
         organization_id=org_user.organization_id,
         email=normalized_email,
         role=_require_role(role),
-        token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         invited_by_user_id=org_user.actor_user_id,
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
-        token=token,
         inviter_email=inviter_email,
     )
     if result is None:
@@ -392,13 +371,10 @@ async def resend_invitation(
     inviter_email: str,
 ) -> OrganizationInvitationEmailResult:
     _require_current_org_role(org_user, organization_admin_roles())
-    token = _new_token()
     result = await invitation_delivery.rotate_and_send_invitation(
         organization_id=org_user.organization_id,
         invitation_id=invitation_id,
-        token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
-        token=token,
         inviter_email=inviter_email,
     )
     if result is None:
@@ -472,33 +448,29 @@ async def revoke_invitation(
     return invitation
 
 
-async def create_invitation_landing_handoff(db: AsyncSession, raw_token: str) -> str:
-    handoff_token = _new_token()
-    handoff = await invitation_store.create_invitation_handoff(
-        db,
-        token_hash=_hash_token(raw_token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
-        handoff_token_hash=_hash_token(handoff_token, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
-        handoff_token=handoff_token,
-        handoff_expires_at=utcnow()
-        + timedelta(minutes=ORGANIZATION_INVITE_HANDOFF_EXPIRES_MINUTES),
-    )
-    if handoff is None:
-        raise OrganizationServiceError(
-            "invitation_not_found",
-            "Organization invitation not found or expired.",
-            status_code=404,
-        )
-    return build_landing_html(handoff.organization_name, handoff.handoff_token)
+def get_organization_join_link(organization_id: UUID) -> str:
+    return organization_join_url(organization_id)
+
+
+async def create_organization_join_landing(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> str:
+    organization = await organization_store.get_organization(db, organization_id)
+    if organization is None:
+        raise _org_not_found()
+    return build_join_landing_html(organization.name, organization.id)
 
 
 async def accept_invitation(
     db: AsyncSession,
     actor_user: OrganizationActor,
-    invite_handoff: str,
+    *,
+    organization_id: UUID,
 ) -> OrganizationWithMembershipRecord:
-    accepted, error = await invitation_store.accept_invitation_handoff(
+    accepted, error = await invitation_store.accept_pending_invitation_for_organization_email(
         db,
-        handoff_token_hash=_hash_token(invite_handoff, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
+        organization_id=organization_id,
         authenticated_user_id=actor_user.id,
         authenticated_email=actor_user.email,
     )

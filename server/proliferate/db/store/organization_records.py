@@ -78,14 +78,6 @@ class InvitationCreateRecord:
 
 
 @dataclass(frozen=True)
-class InvitationHandoffRecord:
-    organization_id: UUID
-    organization_name: str
-    invite_email: str
-    handoff_token: str
-
-
-@dataclass(frozen=True)
 class InvitationAcceptRecord:
     organization: OrganizationRecord
     membership: MembershipRecord

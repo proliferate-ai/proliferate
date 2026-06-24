@@ -19,6 +19,10 @@ vi.mock("@/lib/access/tauri/support", () => ({
   openSupportReportWindow,
 }));
 
+vi.mock("@/components/app/sidebar/AppSidebarFooter", () => ({
+  AppSidebarFooter: () => <div data-testid="app-sidebar-footer" />,
+}));
+
 vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   useSupportReportSnapshot: () => ({
     openedAt: "2026-05-30T00:00:00.000Z",
@@ -123,6 +127,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
     const expectedOrder = [
       "Admin",
       "Organization settings",
+      "Members",
       "Plan + billing",
       "Integrations",
       "Model policy",
@@ -175,7 +180,8 @@ describe("SettingsSidebar layout and shortcuts", () => {
       onSelectSection,
     });
 
-    expect(screen.queryByText("Admin")).toBeNull();
+    expect(screen.getByText("Admin")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Members/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Plan \+ billing/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Integrations/ })).toBeNull();
@@ -204,7 +210,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 1,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("general");
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
   });
 
   it("keeps the back row full width", () => {
@@ -265,7 +271,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("billing");
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
@@ -290,17 +296,17 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
-    expect(screen.getByText("⌘6")).toBeTruthy();
+    expect(screen.getByText("⌘7")).toBeTruthy();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 6,
+      digit: 7,
     })).toBe(false);
     expect(onSelectSection).not.toHaveBeenCalled();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 7,
+      digit: 8,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
   });

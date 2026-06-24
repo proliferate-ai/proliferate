@@ -17,8 +17,10 @@ import {
   Shield,
   SlidersHorizontal,
   Tree,
+  UsersRound,
 } from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
+import { AppSidebarFooter } from "@/components/app/sidebar/AppSidebarFooter";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
@@ -89,6 +91,7 @@ const SETTINGS_NAV_ICONS = {
   organization: Building2,
   "organization-integrations": Blocks,
   "organization-limits": SlidersHorizontal,
+  "organization-members": UsersRound,
   "organization-model-policy": Brain,
   support: LifeBuoy,
   worktrees: Tree,
@@ -319,6 +322,7 @@ export function SettingsSidebar({
           Proliferate v{appVersion}
         </div>
       ) : null}
+      <AppSidebarFooter />
     </div>
   );
 }

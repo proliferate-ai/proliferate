@@ -15,6 +15,7 @@ export interface OrganizationMemberRecord {
   displayName?: string | null;
   email: string;
   avatarUrl?: string | null;
+  joinedAt?: string | null;
 }
 
 export interface OrganizationInvitationRecord {

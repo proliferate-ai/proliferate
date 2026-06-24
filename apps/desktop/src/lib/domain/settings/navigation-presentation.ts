@@ -15,6 +15,7 @@ export type SettingsNavIconId =
   | "organization"
   | "organization-integrations"
   | "organization-limits"
+  | "organization-members"
   | "organization-model-policy"
   | "support"
   | "worktrees";
@@ -58,6 +59,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: "Organization settings",
         iconId: "organization",
         adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "organization-members",
+        label: "Members",
+        iconId: "organization-members",
       },
       {
         kind: "section",

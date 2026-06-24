@@ -3202,6 +3202,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/{organization_id}/join-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Organization Join Link Endpoint */
+        get: operations["get_organization_join_link_endpoint_v1_organizations__organization_id__join_link_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/organizations/{organization_id}/invitations/{invitation_id}/resend": {
         parameters: {
             query?: never;
@@ -6410,8 +6427,11 @@ export interface components {
         };
         /** OrganizationInvitationAcceptRequest */
         OrganizationInvitationAcceptRequest: {
-            /** Invitehandoff */
-            inviteHandoff: string;
+            /**
+             * Organizationid
+             * Format: uuid
+             */
+            organizationId: string;
         };
         /** OrganizationInvitationAcceptResponse */
         OrganizationInvitationAcceptResponse: {
@@ -6463,6 +6483,11 @@ export interface components {
         OrganizationInvitationsResponse: {
             /** Invitations */
             invitations: components["schemas"]["OrganizationInvitationResponse"][];
+        };
+        /** OrganizationJoinLinkResponse */
+        OrganizationJoinLinkResponse: {
+            /** Url */
+            url: string;
         };
         /** OrganizationInviteRequest */
         OrganizationInviteRequest: {
@@ -15947,6 +15972,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationInvitationsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_organization_join_link_endpoint_v1_organizations__organization_id__join_link_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationJoinLinkResponse"];
                 };
             };
             /** @description Validation Error */

@@ -117,6 +117,21 @@ async def list_organizations_for_user(
     return await _list_organizations_for_user(db, user_id)
 
 
+async def get_organization(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> OrganizationRecord | None:
+    organization = (
+        await db.execute(
+            select(Organization).where(
+                Organization.id == organization_id,
+                Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
+            )
+        )
+    ).scalar_one_or_none()
+    return organization_record(organization) if organization is not None else None
+
+
 async def get_current_membership_for_user(
     db: AsyncSession,
     user_id: UUID,
