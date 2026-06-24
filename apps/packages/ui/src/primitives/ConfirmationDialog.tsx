@@ -33,19 +33,38 @@ export function ConfirmationDialog({
       disableClose={disableClose}
       title={title}
       description={description}
-      sizeClassName="max-w-md"
+      headerContent={(
+        <div className="py-1">
+          <div className="text-base font-[560] leading-5 text-foreground">{title}</div>
+          {description ? (
+            <div className="mt-1.5 text-sm leading-5 text-muted-foreground">
+              {description}
+            </div>
+          ) : null}
+        </div>
+      )}
+      sizeClassName="max-w-[26rem]"
       bodyClassName="hidden"
       overlayClassName="bg-background/60 backdrop-blur-[2px]"
-      panelClassName="border-border/70 bg-background/95 shadow-floating"
+      panelClassName="!rounded-xl border-border/70 bg-background/95 shadow-floating"
+      footerClassName="flex shrink-0 items-center justify-end gap-2 px-5 pb-5 pt-1"
       footer={(
         <>
-          <Button type="button" variant="ghost" size="md" disabled={loading} onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="px-3"
+            disabled={loading}
+            onClick={onClose}
+          >
             {cancelLabel}
           </Button>
           <Button
             type="button"
             variant={confirmVariant}
-            size="md"
+            size="sm"
+            className="min-w-28"
             loading={loading}
             disabled={loading}
             onClick={onConfirm}
