@@ -66,11 +66,15 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
-      if (trackedFilePaths.length > 0 && !runtimeUrl.trim()) {
+      const canReadTrackedFiles =
+        repository.availability !== "cloud" && trackedFilePaths.length > 0;
+      if (canReadTrackedFiles && !runtimeUrl.trim()) {
         throw new Error("Local runtime is not connected.");
       }
 
-      const files = await buildTrackedFilesPayload(runtimeUrl, repository, trackedFilePaths);
+      const files = canReadTrackedFiles
+        ? await buildTrackedFilesPayload(runtimeUrl, repository, trackedFilePaths)
+        : undefined;
       return await saveCloudRepoConfig(repository.gitOwner, repository.gitRepoName, {
         configured,
         defaultBranch,

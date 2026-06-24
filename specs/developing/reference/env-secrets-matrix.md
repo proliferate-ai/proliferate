@@ -221,18 +221,13 @@ installed-app OAuth.
 
 | Variable | Secret | Required | Used for |
 | --- | --- | --- | --- |
-| `SANDBOX_PROVIDER` | No | Yes for cloud-enabled deployments | Selects `e2b` or `daytona` |
-| `E2B_API_KEY` | Yes | When `SANDBOX_PROVIDER=e2b` | E2B provisioning auth |
+| `E2B_API_KEY` | Yes | Yes for cloud-enabled deployments | E2B provisioning auth |
 | `E2B_TEMPLATE_NAME` | No | Required for non-debug E2B deployments | Explicit E2B template ref, typically `TEAM_SLUG/proliferate-runtime-cloud:production` |
 | `E2B_WEBHOOK_SIGNATURE_SECRET` | Yes | No | E2B webhook verification |
-| `DAYTONA_API_KEY` | Yes | When `SANDBOX_PROVIDER=daytona` | Daytona provisioning auth |
-| `DAYTONA_SERVER_URL` | No | No | Daytona API base URL |
-| `DAYTONA_TARGET` | No | No | Daytona target/region |
 
 Sandbox timeout defaults, runtime ports, workdirs, and target paths now live in
-`server/proliferate/constants/sandbox/e2b.py` and
-`server/proliferate/constants/sandbox/daytona.py`. They are code defaults, not
-env overrides.
+`server/proliferate/constants/sandbox/e2b.py`. They are code defaults, not env
+overrides.
 
 ## Remote AnyHarness Injection
 

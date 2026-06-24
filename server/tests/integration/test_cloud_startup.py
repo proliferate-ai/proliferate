@@ -87,7 +87,6 @@ async def test_app_startup_fails_fast_when_e2b_billing_lacks_api_key(
     engine_module.async_session_factory = async_session
 
     try:
-        monkeypatch.setattr(settings, "sandbox_provider", "e2b")
         monkeypatch.setattr(settings, "cloud_billing_mode", billing_mode)
         monkeypatch.setattr(settings, "e2b_api_key", "")
 
@@ -118,7 +117,6 @@ async def test_app_startup_fails_fast_when_production_e2b_template_is_unset(
 
     try:
         monkeypatch.setattr(settings, "debug", False)
-        monkeypatch.setattr(settings, "sandbox_provider", "e2b")
         monkeypatch.setattr(settings, "e2b_api_key", "e2b_test_key")
         monkeypatch.setattr(settings, "e2b_template_name", "")
 

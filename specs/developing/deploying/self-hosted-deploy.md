@@ -110,8 +110,8 @@ The Proliferate API talks to the protected Bifrost management API through
    - `PROLIFERATE_SERVER_IMAGE_TAG`
    - `GITHUB_OAUTH_CLIENT_ID`
    - `GITHUB_OAUTH_CLIENT_SECRET`
-   - `SANDBOX_PROVIDER`
-   - `E2B_API_KEY` or `DAYTONA_API_KEY`
+   - `E2B_API_KEY`
+   - `E2B_TEMPLATE_NAME`
    - optional agent gateway:
      - `AGENT_GATEWAY_ENABLED=true`
      - `AGENT_GATEWAY_BIFROST_BASE_URL=https://bifrost-admin.company.com`

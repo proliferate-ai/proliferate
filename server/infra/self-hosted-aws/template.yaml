@@ -97,38 +97,16 @@ Parameters:
     Default: ""
     Description: GitHub OAuth client secret for the shared sign-in callback.
 
-  SandboxProvider:
-    Type: String
-    Default: e2b
-    AllowedValues: [e2b, daytona]
-    Description: Cloud sandbox provider used for remote workspaces.
-
   E2BApiKey:
     Type: String
     NoEcho: true
     Default: ""
-    Description: E2B API key when SandboxProvider is e2b.
+    Description: E2B API key for managed cloud sandboxes.
 
   E2BTemplateName:
     Type: String
     Default: ""
-    Description: E2B template ref when SandboxProvider is e2b, for example team-slug/proliferate-runtime-cloud:production.
-
-  DaytonaApiKey:
-    Type: String
-    NoEcho: true
-    Default: ""
-    Description: Daytona API key when SandboxProvider is daytona.
-
-  DaytonaServerUrl:
-    Type: String
-    Default: https://app.daytona.io/api
-    Description: Daytona API base URL when SandboxProvider is daytona.
-
-  DaytonaTarget:
-    Type: String
-    Default: us
-    Description: Daytona target/region when SandboxProvider is daytona.
+    Description: E2B template ref, for example team-slug/proliferate-runtime-cloud:production.
 
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
@@ -1017,13 +995,9 @@ Resources:
                 AGENT_GATEWAY_RECONCILER_ENABLED=false
                 AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS=300.0
                 AGENT_GATEWAY_RECONCILER_BATCH_SIZE=50
-                SANDBOX_PROVIDER=e2b
                 E2B_API_KEY=
                 # Use the published cloud runtime template for hosted E2B workspaces.
                 E2B_TEMPLATE_NAME=TEAM_SLUG/proliferate-runtime-cloud:production
-                DAYTONA_API_KEY=
-                DAYTONA_SERVER_URL=https://app.daytona.io/api
-                DAYTONA_TARGET=us
                 SUPPORT_SLACK_WEBHOOK_URL=
                 SIGNUPS_SLACK_WEBHOOK_URL=
                 BILLING_POSITIVE_SLACK_WEBHOOK_URL=
@@ -1098,12 +1072,8 @@ Resources:
                   AGENT_GATEWAY_RECONCILER_ENABLED=false
                   AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS=300.0
                   AGENT_GATEWAY_RECONCILER_BATCH_SIZE=50
-                  SANDBOX_PROVIDER=${SandboxProvider}
                   E2B_API_KEY=${E2BApiKey}
                   E2B_TEMPLATE_NAME=${E2BTemplateName}
-                  DAYTONA_API_KEY=${DaytonaApiKey}
-                  DAYTONA_SERVER_URL=${DaytonaServerUrl}
-                  DAYTONA_TARGET=${DaytonaTarget}
                   CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
                   CLOUD_WORKER_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-worker-linux
                   CLOUD_SUPERVISOR_SOURCE_BINARY_PATH=/opt/proliferate/bin/proliferate-supervisor-linux

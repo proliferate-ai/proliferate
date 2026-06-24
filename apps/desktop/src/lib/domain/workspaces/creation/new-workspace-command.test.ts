@@ -42,6 +42,8 @@ const repository = {
   gitProvider: "github",
   gitOwner: "proliferate-ai",
   gitRepoName: "proliferate",
+  cloudConfigured: false,
+  availability: "local",
 } satisfies SettingsRepositoryEntry;
 
 describe("new workspace command targets", () => {

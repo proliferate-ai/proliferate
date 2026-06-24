@@ -64,7 +64,7 @@ async def test_create_and_connect_sandbox_binds_usage_before_connect(
         async def create_sandbox(self, *, metadata: dict[str, str]):
             calls.append(("create", metadata))
             return SimpleNamespace(
-                provider=SandboxProviderKind.daytona,
+                provider=SandboxProviderKind.e2b,
                 sandbox_id="sandbox-123",
                 template_version="v1",
             )
@@ -107,7 +107,7 @@ async def test_create_and_connect_sandbox_binds_usage_before_connect(
     result = await sandbox_lifecycle.create_and_connect_sandbox(
         _FakeTracker(),
         ctx,
-        _Provider(kind=SandboxProviderKind.daytona, template_version="v1"),
+        _Provider(kind=SandboxProviderKind.e2b, template_version="v1"),
         sandbox_record=sandbox_record,
         set_workspace_status=_set_workspace_status,
     )
@@ -137,7 +137,7 @@ async def test_connect_existing_profile_sandbox_resumes_and_persists_access(
     active_sandbox = SimpleNamespace(
         id=uuid.uuid4(),
         external_sandbox_id="sandbox-123",
-        provider=SandboxProviderKind.daytona.value,
+        provider=SandboxProviderKind.e2b.value,
         template_version="template-v2",
     )
     runtime_access = SimpleNamespace(
@@ -223,7 +223,7 @@ async def test_connect_existing_profile_sandbox_resumes_and_persists_access(
     result = await sandbox_lifecycle.connect_existing_profile_sandbox(
         _FakeTracker(),
         ctx,
-        _Provider(kind=SandboxProviderKind.daytona, template_version="v1"),
+        _Provider(kind=SandboxProviderKind.e2b, template_version="v1"),
     )
 
     assert result is not None

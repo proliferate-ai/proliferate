@@ -11,12 +11,6 @@ from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigValue,
     CloudRepoFileValue,
 )
-from proliferate.server.cloud.repo_config.domain.workspace_status import (
-    RepoConfigTrackedFileStatus,
-    ResyncWorkspaceRepoConfigStatus,
-    RunWorkspaceSetupStatus,
-    WorkspaceRepoConfigStatus,
-)
 
 
 def _to_iso(value: datetime | None) -> str | None:
@@ -83,34 +77,6 @@ class PutCloudRepoFileRequest(BaseModel):
     content: str
 
 
-class CloudWorkspaceRepoConfigStatusResponse(BaseModel):
-    current_repo_files_version: int = Field(serialization_alias="currentRepoFilesVersion")
-    repo_files_applied_version: int = Field(serialization_alias="repoFilesAppliedVersion")
-    repo_files_applied_at: str | None = Field(serialization_alias="repoFilesAppliedAt")
-    files_out_of_sync: bool = Field(serialization_alias="filesOutOfSync")
-    tracked_files: list[CloudRepoFileMetadata] = Field(serialization_alias="trackedFiles")
-    env_var_keys: list[str] = Field(serialization_alias="envVarKeys")
-    post_ready_phase: str = Field(serialization_alias="postReadyPhase")
-    post_ready_files_total: int = Field(serialization_alias="postReadyFilesTotal")
-    post_ready_files_applied: int = Field(serialization_alias="postReadyFilesApplied")
-    post_ready_started_at: str | None = Field(serialization_alias="postReadyStartedAt")
-    post_ready_completed_at: str | None = Field(serialization_alias="postReadyCompletedAt")
-    last_apply_failed_path: str | None = Field(serialization_alias="lastApplyFailedPath")
-    last_apply_error: str | None = Field(serialization_alias="lastApplyError")
-
-
-class ResyncCloudWorkspaceFilesResponse(CloudWorkspaceRepoConfigStatusResponse):
-    workspace_id: str = Field(serialization_alias="workspaceId")
-
-
-class RunCloudWorkspaceSetupResponse(BaseModel):
-    workspace_id: str = Field(serialization_alias="workspaceId")
-    command: str
-    terminal_id: str | None = Field(default=None, serialization_alias="terminalId")
-    command_run_id: str | None = Field(default=None, serialization_alias="commandRunId")
-    status: str
-
-
 def repo_config_summary_payload(value: CloudRepoConfigSummaryValue) -> CloudRepoConfigSummary:
     return CloudRepoConfigSummary(
         git_owner=value.git_owner,
@@ -122,7 +88,7 @@ def repo_config_summary_payload(value: CloudRepoConfigSummaryValue) -> CloudRepo
 
 
 def repo_file_metadata_payload(
-    value: CloudRepoFileValue | RepoConfigTrackedFileStatus,
+    value: CloudRepoFileValue,
     *,
     include_content: bool = False,
 ) -> CloudRepoFileMetadata:
@@ -132,9 +98,7 @@ def repo_file_metadata_payload(
         byte_size=value.byte_size,
         updated_at=value.updated_at.isoformat(),
         last_synced_at=value.last_synced_at.isoformat(),
-        content=value.content
-        if include_content and isinstance(value, CloudRepoFileValue)
-        else None,
+        content=value.content if include_content else None,
     )
 
 
@@ -155,58 +119,4 @@ def repo_config_payload(
             repo_file_metadata_payload(item, include_content=include_file_content)
             for item in value.tracked_files
         ],
-    )
-
-
-def workspace_repo_config_status_payload(
-    status: WorkspaceRepoConfigStatus,
-) -> CloudWorkspaceRepoConfigStatusResponse:
-    return CloudWorkspaceRepoConfigStatusResponse(
-        current_repo_files_version=status.current_repo_files_version,
-        repo_files_applied_version=status.repo_files_applied_version,
-        repo_files_applied_at=_to_iso(status.repo_files_applied_at),
-        files_out_of_sync=status.files_out_of_sync,
-        tracked_files=[repo_file_metadata_payload(item) for item in status.tracked_files],
-        env_var_keys=list(status.env_var_keys),
-        post_ready_phase=status.post_ready_phase,
-        post_ready_files_total=status.post_ready_files_total,
-        post_ready_files_applied=status.post_ready_files_applied,
-        post_ready_started_at=_to_iso(status.post_ready_started_at),
-        post_ready_completed_at=_to_iso(status.post_ready_completed_at),
-        last_apply_failed_path=status.last_apply_failed_path,
-        last_apply_error=status.last_apply_error,
-    )
-
-
-def resync_cloud_workspace_files_payload(
-    status: ResyncWorkspaceRepoConfigStatus,
-) -> ResyncCloudWorkspaceFilesResponse:
-    response = workspace_repo_config_status_payload(status.status)
-    return ResyncCloudWorkspaceFilesResponse(
-        workspace_id=str(status.workspace_id),
-        current_repo_files_version=response.current_repo_files_version,
-        repo_files_applied_version=response.repo_files_applied_version,
-        repo_files_applied_at=response.repo_files_applied_at,
-        files_out_of_sync=response.files_out_of_sync,
-        tracked_files=response.tracked_files,
-        env_var_keys=response.env_var_keys,
-        post_ready_phase=response.post_ready_phase,
-        post_ready_files_total=response.post_ready_files_total,
-        post_ready_files_applied=response.post_ready_files_applied,
-        post_ready_started_at=response.post_ready_started_at,
-        post_ready_completed_at=response.post_ready_completed_at,
-        last_apply_failed_path=response.last_apply_failed_path,
-        last_apply_error=response.last_apply_error,
-    )
-
-
-def run_cloud_workspace_setup_payload(
-    status: RunWorkspaceSetupStatus,
-) -> RunCloudWorkspaceSetupResponse:
-    return RunCloudWorkspaceSetupResponse(
-        workspace_id=str(status.workspace_id),
-        command=status.command,
-        terminal_id=status.terminal_id,
-        command_run_id=status.command_run_id,
-        status=status.status,
     )

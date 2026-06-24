@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 
-type CloudProviderKind = "e2b" | "daytona";
+type CloudProviderKind = "e2b";
 
 interface CloudRuntimeDescription {
   provider: CloudProviderKind;
@@ -52,10 +52,10 @@ async function main(): Promise<void> {
 }
 
 function parseProvider(value: string | undefined): CloudProviderKind {
-  if (value === "e2b" || value === "daytona") {
+  if (value === "e2b") {
     return value;
   }
-  throw new Error("expected provider argument: e2b | daytona");
+  throw new Error("expected provider argument: e2b");
 }
 
 function isProviderUnavailable(error: unknown): boolean {

@@ -16,6 +16,7 @@ export * from "./client/events.js";
 export * from "./client/integration_policy.js";
 export * from "./client/deep-links.js";
 export * from "./client/live.js";
+export * from "./client/managed-sandboxes.js";
 export * from "./client/mcp_catalog.js";
 export * from "./client/mcp_connections.js";
 export * from "./client/mcp_oauth.js";

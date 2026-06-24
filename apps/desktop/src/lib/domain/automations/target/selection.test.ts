@@ -38,6 +38,8 @@ function localRepository(
     gitProvider: overrides.gitProvider ?? "github",
     gitOwner: overrides.gitOwner,
     gitRepoName: overrides.gitRepoName,
+    cloudConfigured: overrides.cloudConfigured ?? false,
+    availability: overrides.availability ?? "local",
   };
 }
 

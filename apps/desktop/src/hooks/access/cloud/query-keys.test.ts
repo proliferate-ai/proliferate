@@ -3,9 +3,7 @@ import {
   cloudBillingKey,
   cloudWorktreeRetentionPolicyKey,
   cloudWorkspaceConnectionKey,
-  cloudWorkspaceRepoConfigStatusKey,
   isCloudWorkspaceConnectionQueryKey,
-  isCloudWorkspaceRepoConfigStatusQueryKey,
 } from "./query-keys";
 
 describe("cloud query keys", () => {
@@ -30,7 +28,7 @@ describe("cloud query keys", () => {
     ]);
   });
 
-  it("scopes workspace connection and repo config keys by owner", () => {
+  it("scopes workspace connection keys by owner", () => {
     const owner = { ownerScope: "organization" as const, organizationId: "org-1" };
 
     expect(cloudWorkspaceConnectionKey("workspace-1", owner)).toEqual([
@@ -41,22 +39,11 @@ describe("cloud query keys", () => {
       "organization",
       "org-1",
     ]);
-    expect(cloudWorkspaceRepoConfigStatusKey("workspace-1", owner)).toEqual([
-      "cloud",
-      "workspaces",
-      "workspace-1",
-      "repo-config-status",
-      "organization",
-      "org-1",
-    ]);
   });
 
   it("recognizes scoped invalidation predicates", () => {
     expect(isCloudWorkspaceConnectionQueryKey(
       cloudWorkspaceConnectionKey("workspace-1"),
-    )).toBe(true);
-    expect(isCloudWorkspaceRepoConfigStatusQueryKey(
-      cloudWorkspaceRepoConfigStatusKey("workspace-1"),
     )).toBe(true);
   });
 });

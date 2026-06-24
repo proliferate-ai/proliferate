@@ -83,7 +83,7 @@ def _build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--base-url", required=True)
-    parser.add_argument("--provider", required=True, choices=("e2b", "daytona"))
+    parser.add_argument("--provider", required=True, choices=("e2b",))
     parser.add_argument("--git-owner", required=True)
     parser.add_argument("--git-repo", required=True)
     parser.add_argument("--base-branch", required=True)

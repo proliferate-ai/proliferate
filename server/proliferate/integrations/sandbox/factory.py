@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from proliferate.config import settings
 from proliferate.integrations.sandbox.base import (
     SandboxProvider,
     SandboxProviderError,
@@ -11,7 +10,9 @@ from proliferate.integrations.sandbox.base import (
 
 
 def get_configured_sandbox_provider() -> SandboxProvider:
-    return get_sandbox_provider(settings.sandbox_provider)
+    from proliferate.integrations.sandbox.e2b import E2BSandboxProvider
+
+    return E2BSandboxProvider()
 
 
 def get_sandbox_provider(kind: SandboxProviderKind | str) -> SandboxProvider:
@@ -24,10 +25,5 @@ def get_sandbox_provider(kind: SandboxProviderKind | str) -> SandboxProvider:
         from proliferate.integrations.sandbox.e2b import E2BSandboxProvider
 
         return E2BSandboxProvider()
-
-    if resolved is SandboxProviderKind.daytona:
-        from proliferate.integrations.sandbox.daytona import DaytonaSandboxProvider
-
-        return DaytonaSandboxProvider()
 
     raise SandboxProviderError(f"Unsupported sandbox provider: {resolved}")

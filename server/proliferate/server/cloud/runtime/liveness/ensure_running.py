@@ -164,9 +164,9 @@ async def ensure_workspace_runtime_ready(
     )
 
     endpoint = await provider.resolve_runtime_endpoint(sandbox)
-    # Daytona preview URLs are signed and may rotate even while the same
-    # sandbox and AnyHarness process remain healthy. Probe the fresh endpoint
-    # before deciding that the runtime itself needs a restart.
+    # Provider runtime URLs may rotate even while the same sandbox and
+    # AnyHarness process remain healthy. Probe the fresh endpoint before
+    # deciding that the runtime itself needs a restart.
     endpoint_probe = endpoint_health_wait_config(
         sandbox_record.provider,
     )

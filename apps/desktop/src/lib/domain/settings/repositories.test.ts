@@ -48,6 +48,8 @@ describe("buildSettingsRepositoryEntries", () => {
       localWorkspaceId: "repo-1",
       workspaceCount: 2,
       sourceRoot: "/tmp/repo",
+      cloudConfigured: false,
+      availability: "local",
     });
   });
 
@@ -61,6 +63,8 @@ describe("buildSettingsRepositoryEntries", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0].workspaceCount).toBe(1);
+    expect(entries[0].availability).toBe("local");
+    expect(entries[0].cloudConfigured).toBe(false);
   });
 
   it("uses the source root as a secondary label when display names collide", () => {
@@ -82,5 +86,53 @@ describe("buildSettingsRepositoryEntries", () => {
       "/tmp/a/proliferate",
       "/tmp/b/proliferate",
     ]);
+  });
+
+  it("marks local GitHub repos that also have cloud config", () => {
+    const entries = buildSettingsRepositoryEntries([], [
+      makeRepoRoot({
+        remoteOwner: "proliferate-ai",
+        remoteRepoName: "proliferate",
+        remoteProvider: "github",
+      }),
+    ], [{
+      gitOwner: "proliferate-ai",
+      gitRepoName: "proliferate",
+      configured: true,
+      configuredAt: "2026-06-24T00:00:00.000Z",
+      filesVersion: 1,
+    }]);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      gitOwner: "proliferate-ai",
+      gitRepoName: "proliferate",
+      cloudConfigured: true,
+      availability: "local_cloud",
+    });
+  });
+
+  it("includes configured cloud repos without a local checkout", () => {
+    const entries = buildSettingsRepositoryEntries([], [], [{
+      gitOwner: "proliferate-ai",
+      gitRepoName: "cloud-only",
+      configured: true,
+      configuredAt: "2026-06-24T00:00:00.000Z",
+      filesVersion: 3,
+    }]);
+
+    expect(entries).toEqual([expect.objectContaining({
+      sourceRoot: "cloud:proliferate-ai/cloud-only",
+      name: "cloud-only",
+      secondaryLabel: null,
+      workspaceCount: 0,
+      repoRootId: "",
+      localWorkspaceId: null,
+      gitProvider: "github",
+      gitOwner: "proliferate-ai",
+      gitRepoName: "cloud-only",
+      cloudConfigured: true,
+      availability: "cloud",
+    })]);
   });
 });

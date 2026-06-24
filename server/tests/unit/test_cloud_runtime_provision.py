@@ -625,7 +625,7 @@ class TestCheckBinaryPreinstalled:
 
 
 class TestBuildRuntimeLaunchScript:
-    def test_daytona_launch_disables_runtime_cors(self) -> None:
+    def test_e2b_launch_uses_runtime_cors_policy(self) -> None:
         script = runtime_bootstrap.build_runtime_launch_script(
             SimpleNamespace(runtime_port=8457, runtime_endpoint_handles_cors=True),
             SimpleNamespace(
@@ -1049,7 +1049,7 @@ class TestProvisionWorkspaceGitSetup:
         allocation_attempts: list[str] = []
         errors: list[str] = []
         provider = SimpleNamespace(
-            kind=SandboxProviderKind.daytona,
+            kind=SandboxProviderKind.e2b,
             template_version="v1",
         )
 
@@ -1134,7 +1134,7 @@ class TestProvisionWorkspaceGitSetup:
         runtime_state_kwargs: list[dict[str, object]] = []
         ctx = _make_provision_input(codex_enabled=True)
         provider = SimpleNamespace(
-            kind=SandboxProviderKind.daytona,
+            kind=SandboxProviderKind.e2b,
             template_version="v1",
         )
         profile_record = SimpleNamespace(billing_subject_id=uuid.uuid4())
@@ -1143,7 +1143,7 @@ class TestProvisionWorkspaceGitSetup:
         connected = SimpleNamespace(
             handle=SimpleNamespace(
                 sandbox_id="sandbox-123",
-                provider=SimpleNamespace(value="daytona"),
+                provider=SimpleNamespace(value="e2b"),
                 template_version="v1",
             ),
             sandbox=object(),
@@ -1316,14 +1316,14 @@ class TestProvisionWorkspaceGitSetup:
         runtime_state_kwargs: list[dict[str, object]] = []
         ctx = _make_provision_input(codex_enabled=True)
         provider = SimpleNamespace(
-            kind=SandboxProviderKind.daytona,
+            kind=SandboxProviderKind.e2b,
             template_version="v1",
         )
         sandbox_record_id = uuid.uuid4()
         connected = SimpleNamespace(
             handle=SimpleNamespace(
                 sandbox_id="sandbox-123",
-                provider=SimpleNamespace(value="daytona"),
+                provider=SimpleNamespace(value="e2b"),
                 template_version="v1",
             ),
             sandbox=object(),
@@ -1499,7 +1499,7 @@ class TestProvisionWorkspaceGitSetup:
             )
 
         provider = SimpleNamespace(
-            kind=SandboxProviderKind.daytona,
+            kind=SandboxProviderKind.e2b,
             template_version="v1",
         )
 
@@ -1571,7 +1571,7 @@ class TestProvisionWorkspaceGitSetup:
                 destroyed.append(sandbox_id)
 
         provider = _Provider(
-            kind=SandboxProviderKind.daytona,
+            kind=SandboxProviderKind.e2b,
             template_version="v1",
         )
 
@@ -1721,7 +1721,7 @@ class TestProvisionWorkspaceGitSetup:
                 destroyed.append(sandbox_id)
 
         provider = _Provider(
-            kind=SandboxProviderKind.daytona,
+            kind=SandboxProviderKind.e2b,
             template_version="v1",
         )
 

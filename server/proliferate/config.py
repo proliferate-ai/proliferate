@@ -278,7 +278,6 @@ class Settings(BaseSettings):
     stripe_checkout_success_url: str = ""
     stripe_checkout_cancel_url: str = ""
     stripe_customer_portal_return_url: str = ""
-    sandbox_provider: str = "e2b"
     cloud_worker_base_url: str = ""
     cloud_runtime_source_binary_path: str = ""
     cloud_worker_source_binary_path: str = ""
@@ -352,9 +351,6 @@ class Settings(BaseSettings):
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
-    daytona_api_key: str = ""
-    daytona_server_url: str = "https://app.daytona.io/api"
-    daytona_target: str = "us"
     proliferate_target_installer_url: str = (
         "https://raw.githubusercontent.com/proliferate-ai/proliferate/main/"
         "install/proliferate-target-install.sh"

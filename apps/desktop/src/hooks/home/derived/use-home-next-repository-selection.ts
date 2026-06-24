@@ -62,8 +62,9 @@ export function useHomeNextRepositorySelection({
         workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
       ),
       repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
+      cloudRepoConfigsQuery.data?.configs ?? [],
     );
-  }, [hiddenRepoRootIds, localWorkspaces, repoRoots]);
+  }, [cloudRepoConfigsQuery.data?.configs, hiddenRepoRootIds, localWorkspaces, repoRoots]);
 
   const selectedRepository = useMemo(() => (
     destination === "repository"
@@ -79,7 +80,7 @@ export function useHomeNextRepositorySelection({
 
   const branchQuery = useRepoRootGitBranchesQuery({
     repoRootId: selectedRepository?.repoRootId ?? null,
-    enabled: !!selectedRepository && repoLaunchKind !== "local",
+    enabled: !!selectedRepository?.repoRootId && repoLaunchKind !== "local",
   });
   const branchRefs = branchQuery.data ?? EMPTY_BRANCH_REFS;
   const branchOptions = useMemo(

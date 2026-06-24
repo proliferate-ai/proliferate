@@ -175,22 +175,24 @@ function CloudRepoSettingsEditor({
         onRemoveRow={draft.removeEnvVarRow}
       />
 
-      <RepoTrackedFilesCard
-        trackedFilePaths={draft.trackedFilePaths}
-        trackedFiles={savedConfig?.trackedFiles ?? []}
-        suggestedPaths={suggestedPaths}
-        canSyncTrackedFiles={cloudActive && configured && draft.configured}
-        syncPathInFlight={
-          resyncFileMutation.isPending
-            ? (resyncFileMutation.variables?.relativePath ?? null)
-            : null
-        }
-        onAddTrackedFile={draft.addTrackedFile}
-        onRemoveTrackedFile={draft.removeTrackedFile}
-        onResyncTrackedFile={(relativePath) => {
-          void resyncFileMutation.mutateAsync({ relativePath });
-        }}
-      />
+      {repository.availability !== "cloud" && (
+        <RepoTrackedFilesCard
+          trackedFilePaths={draft.trackedFilePaths}
+          trackedFiles={savedConfig?.trackedFiles ?? []}
+          suggestedPaths={suggestedPaths}
+          canSyncTrackedFiles={cloudActive && configured && draft.configured}
+          syncPathInFlight={
+            resyncFileMutation.isPending
+              ? (resyncFileMutation.variables?.relativePath ?? null)
+              : null
+          }
+          onAddTrackedFile={draft.addTrackedFile}
+          onRemoveTrackedFile={draft.removeTrackedFile}
+          onResyncTrackedFile={(relativePath) => {
+            void resyncFileMutation.mutateAsync({ relativePath });
+          }}
+        />
+      )}
     </EnvironmentSection>
   );
 }
