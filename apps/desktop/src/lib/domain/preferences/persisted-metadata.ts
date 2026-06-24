@@ -49,6 +49,7 @@ export function selectPersistedUserPreferencesSlice(
     colorMode: preferences.colorMode,
     uiFontSizeId: preferences.uiFontSizeId,
     readableCodeFontSizeId: preferences.readableCodeFontSizeId,
+    windowZoomId: preferences.windowZoomId,
     defaultChatAgentKind: preferences.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: preferences.defaultChatModelIdByAgentKind,
     chatModelVisibilityOverridesByAgentKind:

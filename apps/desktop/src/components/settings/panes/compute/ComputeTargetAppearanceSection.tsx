@@ -30,7 +30,7 @@ export function ComputeTargetAppearanceSection({
     <section className="space-y-3">
       <div>
         <div className="text-sm font-medium text-foreground">Appearance</div>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {COMPUTE_COPY.appearanceHelp}
         </p>
       </div>

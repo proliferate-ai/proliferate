@@ -146,6 +146,7 @@ describe("user preference migration", () => {
       defaultNewWorkspaceMode: "cloud" as unknown as typeof USER_PREFERENCE_DEFAULTS.defaultNewWorkspaceMode,
       uiFontSizeId: "giant" as typeof USER_PREFERENCE_DEFAULTS.uiFontSizeId,
       readableCodeFontSizeId: "tiny" as typeof USER_PREFERENCE_DEFAULTS.readableCodeFontSizeId,
+      windowZoomId: "zoom200" as typeof USER_PREFERENCE_DEFAULTS.windowZoomId,
     });
 
     expect(result.changed).toBe(true);
@@ -158,6 +159,7 @@ describe("user preference migration", () => {
     expect(result.preferences.defaultOpenInTargetId).toBe("cursor");
     expect(result.preferences.uiFontSizeId).toBe("default");
     expect(result.preferences.readableCodeFontSizeId).toBe("default");
+    expect(result.preferences.windowZoomId).toBe("default");
     expect(USER_PREFERENCE_DEFAULTS.transparentChromeEnabled).toBe(false);
   });
 

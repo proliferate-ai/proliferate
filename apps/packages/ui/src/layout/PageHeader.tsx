@@ -27,7 +27,7 @@ export function PageHeader({
       {...props}
     >
       <div className="min-w-0">
-        <h1 className="truncate text-lg font-semibold text-foreground">{title}</h1>
+        <h1 className="text-[length:calc(var(--text-xl)_+_0.875rem)] font-semibold leading-[calc(var(--text-xl--line-height)_+_0.5rem)] tracking-normal text-foreground">{title}</h1>
         {description && (
           <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
             {description}

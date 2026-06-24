@@ -17,15 +17,15 @@ export function SettingsCardRow({
   return (
     <div
       className={twMerge(
-        "flex min-h-[4rem] flex-col gap-3 border-b border-border-light px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
+        "flex min-h-[3.75rem] flex-col gap-2.5 border-b border-border-light px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
       {...props}
     >
-      <div className="min-w-0 space-y-1.5">
+      <div className="min-w-0 space-y-1">
         <div className="text-sm font-semibold leading-5 tracking-normal text-foreground">{label}</div>
         {description ? (
-          <div className="max-w-2xl text-xs leading-5 text-muted-foreground">{description}</div>
+          <div className="max-w-2xl text-sm leading-5 text-muted-foreground">{description}</div>
         ) : null}
       </div>
       {children ? <div className="flex shrink-0 items-center sm:justify-end">{children}</div> : null}

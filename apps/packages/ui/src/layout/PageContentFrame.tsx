@@ -67,7 +67,7 @@ export function PageContentFrame({
       )}
       <div
         className={twMerge(
-          "mx-auto flex min-h-full w-full min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6",
+          "mx-auto flex min-h-full w-full min-w-0 flex-col gap-5 px-10 pb-12 pt-14",
           maxWidthClassName,
         )}
       >

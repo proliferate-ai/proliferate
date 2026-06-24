@@ -1,11 +1,15 @@
 import {
   buildUiTextScaleCssVariables,
   DEFAULT_APPEARANCE_SIZE_ID,
+  DEFAULT_WINDOW_ZOOM_ID,
   resolveAppearanceSizeId,
   resolveReadableCodeFontScale,
   resolveUiFontScale,
+  resolveWindowZoomId,
+  resolveWindowZoomScale,
   type ReadableCodeFontSizeId,
   type UiFontSizeId,
+  type WindowZoomId,
 } from "@/lib/domain/preferences/appearance";
 
 // ---------------------------------------------------------------------------
@@ -71,6 +75,7 @@ export interface AppearancePreference {
   colorMode: ColorMode;
   uiFontSizeId: UiFontSizeId;
   readableCodeFontSizeId: ReadableCodeFontSizeId;
+  windowZoomId: WindowZoomId;
 }
 
 export function applyAppearancePreference({
@@ -78,16 +83,20 @@ export function applyAppearancePreference({
   colorMode,
   uiFontSizeId,
   readableCodeFontSizeId,
+  windowZoomId,
 }: AppearancePreference) {
   const root = document.documentElement;
   const resolvedUiFontSizeId = resolveAppearanceSizeId(uiFontSizeId);
   const resolvedReadableCodeFontSizeId = resolveAppearanceSizeId(readableCodeFontSizeId);
+  const resolvedWindowZoomId = resolveWindowZoomId(windowZoomId);
   const uiScale = resolveUiFontScale(resolvedUiFontSizeId);
   const readableCodeScale = resolveReadableCodeFontScale(resolvedReadableCodeFontSizeId);
+  const windowZoomScale = resolveWindowZoomScale(resolvedWindowZoomId);
 
   root.dataset.theme = themePreset;
   root.dataset.uiFontSize = resolvedUiFontSizeId;
   root.dataset.readableCodeFontSize = resolvedReadableCodeFontSizeId;
+  root.dataset.windowZoom = resolvedWindowZoomId;
   applyMode(colorMode, themePreset);
 
   for (const [property, value] of Object.entries(buildUiTextScaleCssVariables(uiScale))) {
@@ -98,6 +107,7 @@ export function applyAppearancePreference({
   root.style.setProperty("--diffs-line-height", readableCodeScale.diffsLineHeight);
   root.style.setProperty("--readable-code-font-size", readableCodeScale.codeFontSize);
   root.style.setProperty("--readable-code-line-height", readableCodeScale.codeLineHeight);
+  root.style.setProperty("--proliferate-window-zoom", windowZoomScale.cssValue);
 
   notify();
 }
@@ -110,6 +120,7 @@ export function initializeTheme(
   applyMode(mode, preset);
   document.documentElement.dataset.uiFontSize = DEFAULT_APPEARANCE_SIZE_ID;
   document.documentElement.dataset.readableCodeFontSize = DEFAULT_APPEARANCE_SIZE_ID;
+  document.documentElement.dataset.windowZoom = DEFAULT_WINDOW_ZOOM_ID;
 }
 
 // ---------------------------------------------------------------------------

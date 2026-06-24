@@ -195,8 +195,8 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
     <div className="space-y-3 border-t border-border/40 pt-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <h4 className="text-xs font-medium text-foreground">Agent auth</h4>
-          <p className="text-xs text-muted-foreground">
+          <h4 className="text-sm font-medium text-foreground">Agent auth</h4>
+          <p className="text-sm text-muted-foreground">
             Select launch credentials for agent harnesses on this target.
           </p>
         </div>
@@ -209,7 +209,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
 
       {!profile ? (
         <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 p-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {feedback ?? (sharedTarget && !canManageAgentAuth
               ? "Shared target auth can only be configured by an organization admin."
               : "Initialize this target's sandbox profile before selecting auth.")}
@@ -262,7 +262,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
               />
             );
           })}
-          {feedback && <p className="px-3 py-2 text-xs text-muted-foreground">{feedback}</p>}
+          {feedback && <p className="px-3 py-2 text-sm text-muted-foreground">{feedback}</p>}
         </div>
       )}
     </div>

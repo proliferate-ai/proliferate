@@ -5,9 +5,12 @@ import {
   READABLE_CODE_FONT_SCALES,
   type TextTokenScale,
   resolveAppearanceSizeId,
+  resolveWindowZoomId,
   stepAppearanceFontSizes,
   stepAppearanceSizeId,
+  stepWindowZoomId,
   UI_FONT_SCALES,
+  WINDOW_ZOOM_SCALES,
 } from "./appearance";
 
 function cssLengthToPx(value: string): number {
@@ -60,6 +63,22 @@ describe("appearance preferences", () => {
     expect(stepAppearanceSizeId("xxxlarge", 1)).toBe("xxxlarge");
     expect(stepAppearanceSizeId("xsmall", -1)).toBe("xxsmall");
     expect(stepAppearanceSizeId("xxsmall", -1)).toBe("xxsmall");
+  });
+
+  it("resolves invalid window zoom ids to default", () => {
+    expect(resolveWindowZoomId("zoom90")).toBe("zoom90");
+    expect(resolveWindowZoomId("zoom120")).toBe("zoom120");
+    expect(resolveWindowZoomId("unknown")).toBe("default");
+    expect(resolveWindowZoomId(undefined)).toBe("default");
+  });
+
+  it("steps window zoom ids within bounds", () => {
+    expect(stepWindowZoomId("default", 1)).toBe("zoom110");
+    expect(stepWindowZoomId("default", -1)).toBe("zoom90");
+    expect(stepWindowZoomId("zoom110", 1)).toBe("zoom120");
+    expect(stepWindowZoomId("zoom120", 1)).toBe("zoom120");
+    expect(stepWindowZoomId("zoom90", -1)).toBe("zoom80");
+    expect(stepWindowZoomId("zoom80", -1)).toBe("zoom80");
   });
 
   it("steps UI and readable code font sizes independently", () => {
@@ -166,6 +185,16 @@ describe("appearance preferences", () => {
       diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
       codeFontSize: "0.6875rem",
       codeLineHeight: "1.625",
+    });
+  });
+
+  it("defines window zoom values separately from font scales", () => {
+    expect(WINDOW_ZOOM_SCALES).toEqual({
+      zoom80: { factor: 0.8, cssValue: "0.8" },
+      zoom90: { factor: 0.9, cssValue: "0.9" },
+      default: { factor: 1, cssValue: "1" },
+      zoom110: { factor: 1.1, cssValue: "1.1" },
+      zoom120: { factor: 1.2, cssValue: "1.2" },
     });
   });
 

@@ -135,7 +135,7 @@ export function RepoRoutingSection({
                       <span className="block text-sm font-medium text-foreground">
                         {repoLabel(profile)}
                       </span>
-                      <span className="block text-xs text-muted-foreground">
+                      <span className="block text-sm text-muted-foreground">
                         {profile.languages.length > 0
                           ? profile.languages.join(", ")
                           : "No language metadata cached"}

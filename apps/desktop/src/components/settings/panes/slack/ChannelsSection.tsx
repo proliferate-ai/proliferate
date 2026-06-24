@@ -87,7 +87,7 @@ export function ChannelsSection({
                 <span className="block text-sm font-medium text-foreground">
                   #{channel.name}
                 </span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block text-sm text-muted-foreground">
                   {channel.isArchived
                     ? "Archived"
                     : channel.isPrivate

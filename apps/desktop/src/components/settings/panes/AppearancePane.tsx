@@ -6,14 +6,19 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
-import { Monitor, Moon, Sun } from "@proliferate/ui/icons";
+import { Minus, Monitor, Moon, Plus, Sun } from "@proliferate/ui/icons";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import {
   READABLE_CODE_FONT_SIZE_LABELS,
   READABLE_CODE_FONT_SIZE_OPTIONS,
   UI_FONT_SIZE_LABELS,
   UI_FONT_SIZE_OPTIONS,
+  WINDOW_ZOOM_LABELS,
 } from "@/lib/domain/preferences/appearance-presentation";
+import {
+  stepWindowZoomId,
+  WINDOW_ZOOM_IDS,
+} from "@/lib/domain/preferences/appearance";
 import {
   COLOR_MODES,
   isModeLockedPreset,
@@ -43,6 +48,9 @@ const MODE_ICONS: Record<ColorMode, FC<{ className?: string }>> = {
   system: Monitor,
 };
 
+const SETTINGS_CONTROL_WIDTH_CLASS = "w-[240px]";
+const SETTINGS_CONTROL_MENU_CLASS = "w-[240px]";
+
 const PREVIEW_DIFF = `@@ -1,5 +1,5 @@
  export const environment = {
 -  branch: "develop",
@@ -56,9 +64,12 @@ export function AppearancePane() {
   const transparentChromeEnabled = useUserPreferencesStore((state) => state.transparentChromeEnabled);
   const uiFontSizeId = useUserPreferencesStore((state) => state.uiFontSizeId);
   const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
+  const windowZoomId = useUserPreferencesStore((state) => state.windowZoomId);
   const setPreference = useUserPreferencesStore((state) => state.set);
   const modeLocked = isModeLockedPreset(preset);
   const displayedMode: ColorMode = modeLocked ? "dark" : mode;
+  const canDecreaseZoom = windowZoomId !== WINDOW_ZOOM_IDS[0];
+  const canIncreaseZoom = windowZoomId !== WINDOW_ZOOM_IDS[WINDOW_ZOOM_IDS.length - 1];
 
   return (
     <section className="space-y-5">
@@ -107,8 +118,8 @@ export function AppearancePane() {
           >
             <SettingsMenu
               label={PRESET_LABELS[preset]}
-              className="w-40"
-              menuClassName="w-48"
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName={SETTINGS_CONTROL_MENU_CLASS}
               groups={[{
                 id: "theme-presets",
                 options: THEME_PRESETS.map((themePreset) => ({
@@ -122,13 +133,48 @@ export function AppearancePane() {
           </SettingsCardRow>
 
           <SettingsCardRow
+            label="Window zoom"
+            description="Scale the app window without changing saved font sizes"
+          >
+            <div
+              className={`grid h-8 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[2rem_minmax(0,1fr)_2rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Zoom out"
+                disabled={!canDecreaseZoom}
+                className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, -1))}
+              >
+                <Minus className="size-3.5" />
+              </Button>
+              <div className="flex h-8 min-w-16 items-center justify-center border-x border-border-light px-3 text-sm font-[430] leading-4 text-foreground">
+                {WINDOW_ZOOM_LABELS[windowZoomId]}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Zoom in"
+                disabled={!canIncreaseZoom}
+                className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                onClick={() => setPreference("windowZoomId", stepWindowZoomId(windowZoomId, 1))}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          </SettingsCardRow>
+
+          <SettingsCardRow
             label="UI font size"
             description="Scale app and chat text"
           >
             <SettingsMenu
               label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
-              className="w-40"
-              menuClassName="w-48"
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName={SETTINGS_CONTROL_MENU_CLASS}
               groups={[{
                 id: "ui-font-size",
                 options: UI_FONT_SIZE_OPTIONS.map((option) => ({
@@ -147,8 +193,8 @@ export function AppearancePane() {
           >
             <SettingsMenu
               label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
-              className="w-40"
-              menuClassName="w-48"
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName={SETTINGS_CONTROL_MENU_CLASS}
               groups={[{
                 id: "readable-code-font-size",
                 options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({
@@ -189,7 +235,7 @@ function AppearanceSection({
 }) {
   return (
     <div className="space-y-2">
-      <h2 className="text-sm font-medium text-foreground">{title}</h2>
+      <h2 className="text-base font-medium text-foreground">{title}</h2>
       {children}
     </div>
   );

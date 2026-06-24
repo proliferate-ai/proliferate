@@ -69,30 +69,33 @@ describe("useAppShortcuts", () => {
     vi.clearAllMocks();
   });
 
-  it("steps appearance font sizes through the registered app shortcuts", () => {
+  it("steps window zoom through the registered app shortcuts without changing font sizes", () => {
     renderHook(() => useAppShortcuts(commandActions()));
 
     useUserPreferencesStore.setState({
+      windowZoomId: "zoom90",
       uiFontSizeId: "xsmall",
       readableCodeFontSizeId: "xsmall",
     });
 
-    expect(runShortcutHandler("app.decrease-text-size", { source: "keyboard" })).toBe(true);
-    expect(useUserPreferencesStore.getState().uiFontSizeId).toBe("xxsmall");
-    expect(useUserPreferencesStore.getState().readableCodeFontSizeId).toBe("xxsmall");
+    expect(runShortcutHandler("app.decrease-window-zoom", { source: "keyboard" })).toBe(true);
+    expect(useUserPreferencesStore.getState().windowZoomId).toBe("zoom80");
+    expect(useUserPreferencesStore.getState().uiFontSizeId).toBe("xsmall");
+    expect(useUserPreferencesStore.getState().readableCodeFontSizeId).toBe("xsmall");
 
-    expect(runShortcutHandler("app.decrease-text-size", { source: "keyboard" })).toBe(true);
-    expect(useUserPreferencesStore.getState().uiFontSizeId).toBe("xxsmall");
-    expect(useUserPreferencesStore.getState().readableCodeFontSizeId).toBe("xxsmall");
+    expect(runShortcutHandler("app.decrease-window-zoom", { source: "keyboard" })).toBe(true);
+    expect(useUserPreferencesStore.getState().windowZoomId).toBe("zoom80");
 
     useUserPreferencesStore.setState({
+      windowZoomId: "zoom110",
       uiFontSizeId: "xxxlarge",
       readableCodeFontSizeId: "large",
     });
 
-    expect(runShortcutHandler("app.increase-text-size", { source: "keyboard" })).toBe(true);
+    expect(runShortcutHandler("app.increase-window-zoom", { source: "keyboard" })).toBe(true);
+    expect(useUserPreferencesStore.getState().windowZoomId).toBe("zoom120");
     expect(useUserPreferencesStore.getState().uiFontSizeId).toBe("xxxlarge");
-    expect(useUserPreferencesStore.getState().readableCodeFontSizeId).toBe("xlarge");
+    expect(useUserPreferencesStore.getState().readableCodeFontSizeId).toBe("large");
   });
 
   it("routes option-number shortcuts to the right panel when right-panel focus is active", () => {
