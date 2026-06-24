@@ -39,7 +39,7 @@ server/proliferate/constants/cloud.py 614 existing cloud constants module with c
 server/tests/integration/schema_migration_assertions.py 885 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
-server/tests/integration/test_billing_api.py 2040 existing server oversized integration test
+server/tests/integration/test_billing_api.py 2038 existing server oversized integration test
 server/tests/integration/test_cloud_agent_auth_api.py 1897 existing server oversized integration test
 server/tests/integration/test_cloud_api.py 2580 existing server oversized integration test
 server/tests/integration/test_cloud_commands_api.py 4889 existing server oversized integration test
