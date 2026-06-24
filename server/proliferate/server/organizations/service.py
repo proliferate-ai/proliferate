@@ -427,6 +427,31 @@ async def list_current_user_invitations(
     return await invitation_store.list_pending_invitations_for_email(db, actor_user.email)
 
 
+async def accept_current_user_invitation(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    invitation_id: UUID,
+) -> OrganizationWithMembershipRecord:
+    accepted, error = await invitation_store.accept_pending_invitation_for_email(
+        db,
+        invitation_id=invitation_id,
+        authenticated_user_id=actor_user.id,
+        authenticated_email=actor_user.email,
+    )
+    if accepted is None:
+        accept_error = await _build_invitation_accept_error(db, actor_user, error)
+        raise accept_error
+    await maybe_create_organization_seat_adjustment(
+        db,
+        organization_id=accepted.organization.id,
+        membership_id=accepted.membership.id,
+    )
+    return OrganizationWithMembershipRecord(
+        organization=accepted.organization,
+        membership=accepted.membership,
+    )
+
+
 async def revoke_invitation(
     db: AsyncSession,
     org_user: CurrentOrgUser,
@@ -478,31 +503,8 @@ async def accept_invitation(
         authenticated_email=actor_user.email,
     )
     if accepted is None:
-        if error == "already_in_organization":
-            current = await organization_store.get_current_membership_for_user(db, actor_user.id)
-            extra_detail: dict[str, object] = {}
-            if current is not None:
-                extra_detail["currentOrganization"] = {
-                    "id": str(current.organization.id),
-                    "name": current.organization.name,
-                }
-            raise OrganizationServiceError(
-                "already_in_organization",
-                "You already belong to a team. Leave your current team before joining this one.",
-                status_code=409,
-                extra_detail=extra_detail,
-            )
-        status_code = 403 if error == "invitation_email_mismatch" else 404
-        message = (
-            "This invitation was sent to a different email address."
-            if error == "invitation_email_mismatch"
-            else "Organization invitation not found or expired."
-        )
-        raise OrganizationServiceError(
-            error or "invalid_invitation",
-            message,
-            status_code=status_code,
-        )
+        accept_error = await _build_invitation_accept_error(db, actor_user, error)
+        raise accept_error
     await maybe_create_organization_seat_adjustment(
         db,
         organization_id=accepted.organization.id,
@@ -511,4 +513,36 @@ async def accept_invitation(
     return OrganizationWithMembershipRecord(
         organization=accepted.organization,
         membership=accepted.membership,
+    )
+
+
+async def _build_invitation_accept_error(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    error: str | None,
+) -> OrganizationServiceError:
+    if error == "already_in_organization":
+        current = await organization_store.get_current_membership_for_user(db, actor_user.id)
+        extra_detail: dict[str, object] = {}
+        if current is not None:
+            extra_detail["currentOrganization"] = {
+                "id": str(current.organization.id),
+                "name": current.organization.name,
+            }
+        return OrganizationServiceError(
+            "already_in_organization",
+            "You already belong to a team. Leave your current team before joining this one.",
+            status_code=409,
+            extra_detail=extra_detail,
+        )
+    status_code = 403 if error == "invitation_email_mismatch" else 404
+    message = (
+        "This invitation was sent to a different email address."
+        if error == "invitation_email_mismatch"
+        else "Organization invitation not found or expired."
+    )
+    return OrganizationServiceError(
+        error or "invalid_invitation",
+        message,
+        status_code=status_code,
     )

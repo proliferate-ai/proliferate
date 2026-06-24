@@ -19,6 +19,8 @@ export interface OrganizationMemberRecord {
 
 export interface OrganizationInvitationRecord {
   id: string;
+  organizationId?: string | null;
+  organizationName?: string | null;
   email: string;
   role: string;
   status: string;

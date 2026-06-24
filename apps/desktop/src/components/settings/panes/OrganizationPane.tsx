@@ -9,6 +9,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
+import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
@@ -17,6 +18,7 @@ import { OrganizationSection } from "@/components/settings/panes/organization/Or
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
@@ -61,16 +63,21 @@ export function OrganizationPane() {
   const {
     activeOrganization,
     activeOrganizationId,
+    setActiveOrganizationId,
     organizations,
     organizationsQuery,
   } = useActiveOrganization();
   const { openExternal } = useTauriShellActions();
   const actions = useOrganizationActions(activeOrganizationId);
+  const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
+    authStatus === "authenticated",
+  );
   const membersQuery = useOrganizationMembers(activeOrganizationId);
   const admin = useIsAdmin(activeOrganizationId);
   const invitationsQuery = useOrganizationInvitations(activeOrganizationId);
   const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
   const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
+  const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
   const currentUser = useAuthStore((state) => state.user);
   const canManage = admin.isAdmin;
   const canManageOwners = admin.isOwner;
@@ -98,6 +105,7 @@ export function OrganizationPane() {
     void actions.acceptInvitation(transientInviteHandoff)
       .then((response) => {
         if (cancelled) return;
+        setActiveOrganizationId(response.organization.id);
         setStatusMessage(`Joined ${response.organization.name}.`);
       })
       .catch(() => {
@@ -110,6 +118,7 @@ export function OrganizationPane() {
   }, [
     actions.acceptInvitation,
     authStatus,
+    setActiveOrganizationId,
     transientInviteHandoff,
   ]);
 
@@ -148,6 +157,17 @@ export function OrganizationPane() {
     await actions.createInvitation({ email: inviteEmail, role: inviteRole });
     setInviteEmail("");
     setInviteRole("member");
+  }
+
+  async function handleAcceptCurrentInvitation(invitationId: string) {
+    setStatusMessage(null);
+    try {
+      const response = await actions.acceptCurrentInvitation(invitationId);
+      setActiveOrganizationId(response.organization.id);
+      setStatusMessage(`Joined ${response.organization.name}.`);
+    } catch {
+      setStatusMessage("Invitation could not be accepted.");
+    }
   }
 
   async function handleCreateTeamCheckout(event: FormEvent) {
@@ -193,6 +213,9 @@ export function OrganizationPane() {
   const shouldShowEmptyState = authStatus === "authenticated"
     && organizationsQuery.isSuccess
     && organizations.length === 0;
+  const shouldShowPendingInvitations = authStatus === "authenticated"
+    && !activeOrganization
+    && pendingInvitations.length > 0;
 
   return (
     <section className="space-y-6">
@@ -242,6 +265,16 @@ export function OrganizationPane() {
             </div>
           </SettingsCard>
         </OrganizationSection>
+      ) : null}
+
+      {shouldShowPendingInvitations ? (
+        <CurrentUserInvitationsSection
+          invitations={pendingInvitations}
+          accepting={actions.acceptingCurrentInvitation}
+          onAccept={(invitationId) => {
+            void handleAcceptCurrentInvitation(invitationId);
+          }}
+        />
       ) : null}
 
       {shouldShowEmptyState ? (

@@ -457,6 +457,65 @@ async def test_invitation_handoff_accepts_matching_email_and_rejects_replay(
 
 
 @pytest.mark.asyncio
+async def test_current_user_can_accept_pending_invitation(
+    client: AsyncClient,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="owner-current@acme.dev")
+    invited = await _create_user_and_get_tokens(client, email="current-member@acme.dev")
+    wrong_user = await _create_user_and_get_tokens(client, email="wrong-current@acme.dev")
+
+    await _create_organization_for_user(user_id=owner["user_id"])
+    organization_id = (await _default_organization(client, owner))["id"]
+
+    response = await client.post(
+        f"/v1/organizations/{organization_id}/invitations",
+        headers=_headers(owner),
+        json={"email": "current-member@acme.dev", "role": "member"},
+    )
+    assert response.status_code == 201
+    invitation = response.json()
+
+    response = await client.get(
+        "/v1/organizations/invitations/current",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 200
+    current_invitations = response.json()["invitations"]
+    assert [item["id"] for item in current_invitations] == [invitation["id"]]
+    assert current_invitations[0]["organizationName"] == "Acme"
+
+    response = await client.post(
+        f"/v1/organizations/invitations/current/{invitation['id']}/accept",
+        headers=_headers(wrong_user),
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "invalid_invitation"
+
+    response = await client.post(
+        f"/v1/organizations/invitations/current/{invitation['id']}/accept",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 200
+    accepted = response.json()["organization"]
+    assert accepted["id"] == organization_id
+    assert accepted["membership"]["role"] == "member"
+
+    response = await client.get(
+        "/v1/organizations/invitations/current",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 200
+    assert response.json()["invitations"] == []
+
+    response = await client.post(
+        f"/v1/organizations/invitations/current/{invitation['id']}/accept",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["code"] == "invalid_invitation"
+
+
+@pytest.mark.asyncio
 async def test_invitation_accept_conflicts_when_user_already_has_team(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

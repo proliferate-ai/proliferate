@@ -84,6 +84,7 @@ class OrganizationMemberResponse(OrganizationBaseModel):
 class OrganizationInvitationResponse(OrganizationBaseModel):
     id: str
     organization_id: str = Field(alias="organizationId")
+    organization_name: str | None = Field(default=None, alias="organizationName")
     email: str
     role: OrganizationRole
     status: OrganizationInvitationStatus
@@ -169,6 +170,7 @@ def invitation_response(record: InvitationRecord) -> OrganizationInvitationRespo
     return OrganizationInvitationResponse(
         id=str(record.id),
         organization_id=str(record.organization_id),
+        organization_name=record.organization_name,
         email=record.email,
         role=record.role,  # type: ignore[arg-type]
         status=record.status,  # type: ignore[arg-type]

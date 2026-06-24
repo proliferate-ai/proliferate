@@ -3097,6 +3097,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/invitations/current/{invitation_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Current User Organization Invitation Endpoint */
+        post: operations["accept_current_user_organization_invitation_endpoint_v1_organizations_invitations_current__invitation_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/organizations": {
         parameters: {
             query?: never;
@@ -6406,6 +6423,8 @@ export interface components {
             id: string;
             /** Organizationid */
             organizationId: string;
+            /** Organizationname */
+            organizationName?: string | null;
             /** Email */
             email: string;
             /**
@@ -15407,12 +15426,17 @@ export interface operations {
     get_cloud_plan_endpoint_v1_billing_cloud_plan_get: {
         parameters: {
             query?: {
-                ownerScope?: "personal" | "organization";
+                ownerScope?: ("personal" | "organization") | null;
                 organizationId?: string | null;
             };
-            header?: never;
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -15439,12 +15463,17 @@ export interface operations {
     get_overview_v1_billing_overview_get: {
         parameters: {
             query?: {
-                ownerScope?: "personal" | "organization";
+                ownerScope?: ("personal" | "organization") | null;
                 organizationId?: string | null;
             };
-            header?: never;
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -15684,6 +15713,37 @@ export interface operations {
             };
         };
     };
+    accept_current_user_organization_invitation_endpoint_v1_organizations_invitations_current__invitation_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationInvitationAcceptResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_organizations_endpoint_v1_organizations_get: {
         parameters: {
             query?: never;
@@ -15806,8 +15866,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 membership_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -15838,8 +15898,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 membership_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -15940,8 +16000,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 invitation_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -15972,8 +16032,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 invitation_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };

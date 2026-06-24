@@ -142,7 +142,7 @@ async def create_or_rotate_organization_invitation(
         raise RuntimeError("Organization invitation disappeared after creation.")
     await db.flush()
     return InvitationCreateRecord(
-        invitation=invitation_record(invitation),
+        invitation=invitation_record(invitation, organization),
         organization=organization_record(organization),
     )
 
@@ -200,15 +200,22 @@ async def list_pending_invitations_for_email(
     )
     rows = (
         await db.execute(
-            select(OrganizationInvitation)
+            select(OrganizationInvitation, Organization)
+            .join(
+                Organization,
+                Organization.id == OrganizationInvitation.organization_id,
+            )
             .where(
                 OrganizationInvitation.email == normalized_email,
                 OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
             )
             .order_by(OrganizationInvitation.created_at.desc())
         )
-    ).scalars()
-    return [invitation_record(invitation) for invitation in rows.all()]
+    ).all()
+    return [
+        invitation_record(invitation, organization)
+        for invitation, organization in rows
+    ]
 
 
 async def revoke_organization_invitation(
@@ -272,7 +279,7 @@ async def rotate_organization_invitation(
     invitation.updated_at = now
     await db.flush()
     return InvitationCreateRecord(
-        invitation=invitation_record(invitation),
+        invitation=invitation_record(invitation, organization),
         organization=organization_record(organization),
     )
 
@@ -356,7 +363,6 @@ async def accept_invitation_handoff(
     authenticated_email: str,
 ) -> tuple[InvitationAcceptRecord | None, str | None]:
     now = utcnow()
-    normalized_email = normalize_invitation_email(authenticated_email)
     row = (
         await db.execute(
             select(OrganizationInvitation, Organization)
@@ -374,6 +380,66 @@ async def accept_invitation_handoff(
     if row is None:
         return None, "invalid_invitation"
     invitation, organization = row
+    return await _accept_locked_invitation(
+        db,
+        invitation=invitation,
+        organization=organization,
+        now=now,
+        authenticated_user_id=authenticated_user_id,
+        authenticated_email=authenticated_email,
+        require_valid_handoff=True,
+    )
+
+
+async def accept_pending_invitation_for_email(
+    db: AsyncSession,
+    *,
+    invitation_id: UUID,
+    authenticated_user_id: UUID,
+    authenticated_email: str,
+) -> tuple[InvitationAcceptRecord | None, str | None]:
+    now = utcnow()
+    normalized_email = normalize_invitation_email(authenticated_email)
+    row = (
+        await db.execute(
+            select(OrganizationInvitation, Organization)
+            .join(
+                Organization,
+                Organization.id == OrganizationInvitation.organization_id,
+            )
+            .where(
+                OrganizationInvitation.id == invitation_id,
+                OrganizationInvitation.email == normalized_email,
+                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+            )
+            .with_for_update()
+        )
+    ).one_or_none()
+    if row is None:
+        return None, "invalid_invitation"
+    invitation, organization = row
+    return await _accept_locked_invitation(
+        db,
+        invitation=invitation,
+        organization=organization,
+        now=now,
+        authenticated_user_id=authenticated_user_id,
+        authenticated_email=authenticated_email,
+        require_valid_handoff=False,
+    )
+
+
+async def _accept_locked_invitation(
+    db: AsyncSession,
+    *,
+    invitation: OrganizationInvitation,
+    organization: Organization,
+    now: datetime,
+    authenticated_user_id: UUID,
+    authenticated_email: str,
+    require_valid_handoff: bool,
+) -> tuple[InvitationAcceptRecord | None, str | None]:
+    normalized_email = normalize_invitation_email(authenticated_email)
     if invitation.expires_at <= now:
         invitation.status = ORGANIZATION_INVITATION_STATUS_EXPIRED
         invitation.expired_at = now
@@ -381,7 +447,10 @@ async def accept_invitation_handoff(
         invitation.handoff_expires_at = None
         invitation.updated_at = now
         return None, "invitation_expired"
-    if invitation.handoff_expires_at is None or invitation.handoff_expires_at <= now:
+    if (
+        require_valid_handoff
+        and (invitation.handoff_expires_at is None or invitation.handoff_expires_at <= now)
+    ):
         invitation.handoff_token_hash = None
         invitation.handoff_expires_at = None
         invitation.updated_at = now

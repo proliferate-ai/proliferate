@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  acceptCurrentUserOrganizationInvitation,
   acceptOrganizationInvitation,
   createOrganizationInvitation,
   removeOrganizationMembership,
@@ -14,6 +15,7 @@ import type {
   OrganizationUpdateRequest,
 } from "@/lib/access/cloud/client";
 import {
+  currentUserOrganizationInvitationsKey,
   organizationInvitationsKey,
   organizationMembersKey,
   organizationsListKey,
@@ -86,8 +88,30 @@ export function useOrganizationActions(organizationId: string | null) {
 
   const acceptInvitationMutation = useMutation({
     mutationFn: (inviteHandoff: string) => acceptOrganizationInvitation({ inviteHandoff }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: organizationsListKey() });
+    onSuccess: async (response) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: organizationsListKey() }),
+        queryClient.invalidateQueries({ queryKey: currentUserOrganizationInvitationsKey() }),
+        queryClient.invalidateQueries({
+          queryKey: organizationMembersKey(response.organization.id),
+        }),
+      ]);
+    },
+  });
+
+  const acceptCurrentInvitationMutation = useMutation({
+    mutationFn: (invitationId: string) => acceptCurrentUserOrganizationInvitation(invitationId),
+    onSuccess: async (response) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: organizationsListKey() }),
+        queryClient.invalidateQueries({ queryKey: currentUserOrganizationInvitationsKey() }),
+        queryClient.invalidateQueries({
+          queryKey: organizationMembersKey(response.organization.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: organizationInvitationsKey(response.organization.id),
+        }),
+      ]);
     },
   });
 
@@ -107,5 +131,8 @@ export function useOrganizationActions(organizationId: string | null) {
     acceptInvitation: acceptInvitationMutation.mutateAsync,
     acceptingInvitation: acceptInvitationMutation.isPending,
     acceptInvitationError: acceptInvitationMutation.error,
+    acceptCurrentInvitation: acceptCurrentInvitationMutation.mutateAsync,
+    acceptingCurrentInvitation: acceptCurrentInvitationMutation.isPending,
+    acceptCurrentInvitationError: acceptCurrentInvitationMutation.error,
   };
 }

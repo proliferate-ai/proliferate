@@ -48,6 +48,7 @@ class MemberRecord:
 class InvitationRecord:
     id: UUID
     organization_id: UUID
+    organization_name: str | None
     email: str
     role: str
     status: str
@@ -150,10 +151,14 @@ def membership_record(membership: OrganizationMembership) -> MembershipRecord:
     )
 
 
-def invitation_record(invitation: OrganizationInvitation) -> InvitationRecord:
+def invitation_record(
+    invitation: OrganizationInvitation,
+    organization: Organization | None = None,
+) -> InvitationRecord:
     return InvitationRecord(
         id=invitation.id,
         organization_id=invitation.organization_id,
+        organization_name=organization.name if organization is not None else None,
         email=invitation.email,
         role=invitation.role,
         status=invitation.status,
