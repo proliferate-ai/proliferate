@@ -4,9 +4,9 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
 import {
-  OrganizationMembersTable,
+  OrganizationMembersList,
   buildMemberRows,
-} from "@/components/settings/panes/organization/OrganizationMembersTable";
+} from "@/components/settings/panes/organization/OrganizationMembersList";
 import type {
   OrganizationInvitationRecord,
   OrganizationMemberRecord,
@@ -90,7 +90,7 @@ export function OrganizationMembersSection({
           </div>
         </div>
 
-        <OrganizationMembersTable
+        <OrganizationMembersList
           rows={visibleRows}
           hasRows={rows.length > 0}
           canManage={canManage}

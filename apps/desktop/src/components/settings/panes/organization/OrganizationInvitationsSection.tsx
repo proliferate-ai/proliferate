@@ -39,18 +39,18 @@ export function OrganizationInvitationsSection({
           title="Invite link"
           description="Share this link with people who already have an invitation for this organization."
         >
-          <SettingsCard className="p-4">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={inviteLinkUrl ?? ""}
-                readOnly
-                placeholder={copyingInviteLink ? "Loading invite link..." : "Invite link unavailable"}
-                aria-label="Organization invite link"
-                className="min-w-0 flex-1 font-mono text-xs sm:text-sm"
-              />
+          <SettingsCard className="bg-background p-4">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row">
+              <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-3 text-sm text-foreground">
+                <span className="min-w-0 truncate font-mono text-xs sm:text-sm">
+                  {inviteLinkUrl || (copyingInviteLink ? "Loading invite link..." : "Invite link unavailable")}
+                </span>
+              </div>
               <Button
                 type="button"
                 variant="secondary"
+                size="md"
+                className="h-9 shrink-0"
                 loading={copyingInviteLink}
                 onClick={onCopyInviteLink}
                 disabled={!inviteLinkUrl && !copyingInviteLink}
