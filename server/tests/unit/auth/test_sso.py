@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.sso import api as sso_api
@@ -29,6 +29,56 @@ def test_sso_auth_error_url_encodes_provider_error(
     assert sso_api._auth_error_url("access_denied&next=https://evil.test") == (
         "https://app.example.test/auth/error?code=access_denied%26next%3Dhttps%3A%2F%2Fevil.test"
     )
+
+
+@pytest.mark.asyncio
+async def test_oidc_sso_callback_uses_static_error_for_unbound_provider_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
+
+    response = await sso_api.oidc_sso_callback(
+        cast(Request, object()),
+        error="access_denied&next=https://evil.test",
+        db=cast(AsyncSession, _FakeDb()),
+    )
+
+    assert response.status_code == 302
+    assert (
+        response.headers["location"] == "https://app.example.test/auth/error?code=provider_error"
+    )
+
+
+@pytest.mark.asyncio
+async def test_oidc_sso_callback_redirects_processing_http_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
+
+    async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
+        raise HTTPException(status_code=400, detail="Invalid or expired SSO state.")
+
+    monkeypatch.setattr(
+        sso_api,
+        "complete_oidc_sso_callback",
+        fake_complete_oidc_sso_callback,
+    )
+    db = _FakeDb()
+
+    response = await sso_api.oidc_sso_callback(
+        cast(Request, object()),
+        state="state",
+        code="code",
+        db=cast(AsyncSession, db),
+    )
+
+    assert response.status_code == 302
+    assert (
+        response.headers["location"]
+        == "https://app.example.test/auth/error?code=sso_callback_failed"
+    )
+    assert db.rolled_back is True
+    assert db.committed is False
 
 
 @pytest.mark.asyncio
@@ -99,6 +149,18 @@ async def test_resolve_sso_user_rechecks_allowed_domain_before_identity_lookup(
 
     assert exc_info.value.status_code == 403
     assert identity_lookup_called is False
+
+
+class _FakeDb:
+    def __init__(self) -> None:
+        self.committed = False
+        self.rolled_back = False
+
+    async def commit(self) -> None:
+        self.committed = True
+
+    async def rollback(self) -> None:
+        self.rolled_back = True
 
 
 def _connection(*, allowed_domains: tuple[str, ...]) -> SsoConnectionSnapshot:

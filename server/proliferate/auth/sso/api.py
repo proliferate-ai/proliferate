@@ -107,7 +107,9 @@ async def oidc_sso_callback(
                 return _auth_redirect_response(redirect_url)
             except HTTPException:
                 await db.rollback()
-        return RedirectResponse(_auth_error_url(error), status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(
+            _auth_error_url("provider_error"), status_code=status.HTTP_302_FOUND
+        )
     if state is None or code is None:
         return RedirectResponse(_auth_error_url("missing_callback_params"), status_code=302)
     try:
@@ -115,6 +117,11 @@ async def oidc_sso_callback(
     except WebBetaAccessDenied as exc:
         await db.rollback()
         return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
+    except HTTPException:
+        await db.rollback()
+        return RedirectResponse(
+            _auth_error_url("sso_callback_failed"), status_code=status.HTTP_302_FOUND
+        )
     await db.commit()
     return _auth_redirect_response(redirect_url)
 
