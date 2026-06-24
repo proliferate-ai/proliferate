@@ -18,6 +18,12 @@ describe("organization selection cookie", () => {
     expect(readSelectedOrganizationCookie()).toBe("org_123");
   });
 
+  it("preserves raw equals signs in cookie values", () => {
+    document.cookie = "proliferate_org_id=org=123; path=/";
+
+    expect(readSelectedOrganizationCookie()).toBe("org=123");
+  });
+
   it("clears the selected organization id", () => {
     writeSelectedOrganizationCookie("org_123");
     clearSelectedOrganizationCookie();

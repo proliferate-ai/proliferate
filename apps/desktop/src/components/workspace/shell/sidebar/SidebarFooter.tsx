@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { LogOut } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,
@@ -6,7 +7,6 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
-  ArrowRight,
   Building2,
   Check,
   ChevronUpDown,
@@ -149,7 +149,7 @@ export function SidebarFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Log out"
-                  icon={<ArrowRight className="size-3.5" />}
+                  icon={<LogOut className="size-3.5" />}
                   onClick={() => {
                     handleSignOut();
                     close();

@@ -11,7 +11,10 @@ export function readSelectedOrganizationCookie(): string | null {
   }
   const cookies = document.cookie.split(";");
   for (const cookie of cookies) {
-    const [name, value = ""] = cookie.trim().split("=");
+    const trimmed = cookie.trim();
+    const eqIndex = trimmed.indexOf("=");
+    const name = eqIndex >= 0 ? trimmed.slice(0, eqIndex) : trimmed;
+    const value = eqIndex >= 0 ? trimmed.slice(eqIndex + 1) : "";
     if (name !== SELECTED_ORGANIZATION_COOKIE) {
       continue;
     }
