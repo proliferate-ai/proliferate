@@ -124,7 +124,6 @@ fn memory_pressure(used_bytes: u64, total_bytes: u64) -> Option<RuntimeMemoryPre
     }
     let used_bytes = used_bytes.min(total_bytes);
     let available_bytes = total_bytes.saturating_sub(used_bytes);
-    let used_bytes = total_bytes.saturating_sub(available_bytes);
     let percent = (used_bytes as f64 / total_bytes as f64) * 100.0;
     Some(RuntimeMemoryPressure {
         used_bytes,

@@ -162,23 +162,22 @@ impl WorkspacePurgeService {
             return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
         }
 
-        for session_id in session_ids {
-            if let Err(error) = self.attachment_storage.delete_session_dir(&session_id) {
-                return self.cleanup_failed(
-                    workspace_id,
-                    &pending,
-                    &attempted_at,
-                    error.context(format!(
-                        "failed to delete session prompt attachment directory for {session_id}"
-                    )),
-                );
-            }
-        }
         if let Err(error) = self
             .delete_workflow
             .purge_workspace_with_sessions(workspace_id)
         {
             return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
+        }
+
+        for session_id in session_ids {
+            if let Err(error) = self.attachment_storage.delete_session_dir(&session_id) {
+                tracing::warn!(
+                    workspace_id,
+                    session_id,
+                    error = %error,
+                    "workspace purge left prompt attachment files behind after durable cleanup"
+                );
+            }
         }
 
         Ok(WorkspacePurgeServiceOutcome::Deleted {
