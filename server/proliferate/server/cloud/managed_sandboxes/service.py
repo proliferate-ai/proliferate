@@ -6,15 +6,13 @@ import asyncio
 import secrets
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.config import settings
-from proliferate.db import engine as db_session
-from proliferate.db.models.auth import User
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.managed_sandboxes import (
     ManagedSandboxValue,
@@ -33,6 +31,9 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.managed_sandboxes.transactions import (
+    commit_managed_sandbox_session,
+)
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
     build_runtime_launch_script,
@@ -56,6 +57,10 @@ _IN_FLIGHT_STATUSES = {"creating", "starting", "destroying"}
 _STARTING_LEASE_SECONDS = 10 * 60
 _WAIT_ATTEMPTS = 120
 _WAIT_DELAY_SECONDS = 1.0
+
+
+class _UserWithId(Protocol):
+    id: UUID
 
 
 @dataclass(frozen=True)
@@ -93,7 +98,7 @@ def _in_flight_status_is_fresh(sandbox: ManagedSandboxValue) -> bool:
 async def _claim_managed_sandbox_start(
     db: AsyncSession,
     *,
-    user: User,
+    user: _UserWithId,
     billing_subject_id: UUID,
     template_ref: str,
     allow_reuse: bool = True,
@@ -119,11 +124,11 @@ async def _claim_managed_sandbox_start(
             status="starting",
             last_error=None,
         )
-        await db_session.commit_session(db)
+        await commit_managed_sandbox_session(db)
         return _SandboxStartClaim(sandbox=claimed or created, action="start")
 
     if _in_flight_status_is_fresh(existing):
-        await db_session.commit_session(db)
+        await commit_managed_sandbox_session(db)
         return _SandboxStartClaim(sandbox=existing, action="wait")
 
     if (
@@ -132,7 +137,7 @@ async def _claim_managed_sandbox_start(
         and existing.e2b_template_ref == template_ref
         and _runtime_access_ready(existing)
     ):
-        await db_session.commit_session(db)
+        await commit_managed_sandbox_session(db)
         return _SandboxStartClaim(sandbox=existing, action="reuse")
 
     claimed = await update_managed_sandbox_status(
@@ -141,13 +146,13 @@ async def _claim_managed_sandbox_start(
         status="starting",
         last_error=None,
     )
-    await db_session.commit_session(db)
+    await commit_managed_sandbox_session(db)
     return _SandboxStartClaim(sandbox=claimed or existing, action="start")
 
 
 async def _wait_for_in_flight_sandbox(
     db: AsyncSession,
-    user: User,
+    user: _UserWithId,
 ) -> ManagedSandboxValue | None:
     for _ in range(_WAIT_ATTEMPTS):
         await asyncio.sleep(_WAIT_DELAY_SECONDS)
@@ -166,14 +171,14 @@ async def _wait_for_in_flight_sandbox(
 
 async def get_managed_sandbox_detail(
     db: AsyncSession,
-    user: User,
+    user: _UserWithId,
 ) -> ManagedSandboxValue | None:
     return await load_personal_managed_sandbox(db, user.id)
 
 
 async def ensure_managed_sandbox_ready(
     db: AsyncSession,
-    user: User,
+    user: _UserWithId,
 ) -> ManagedSandboxValue:
     provider = get_configured_sandbox_provider()
     template_ref = _template_ref()
@@ -251,7 +256,7 @@ async def ensure_managed_sandbox_ready(
                 status="error",
                 last_error=message,
             )
-            await db_session.commit_session(db)
+            await commit_managed_sandbox_session(db)
             if isinstance(exc, CloudApiError):
                 raise
             raise CloudApiError(
@@ -273,11 +278,14 @@ async def ensure_managed_sandbox_ready(
     )
 
 
-async def wake_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandboxValue:
+async def wake_managed_sandbox(db: AsyncSession, user: _UserWithId) -> ManagedSandboxValue:
     return await ensure_managed_sandbox_ready(db, user)
 
 
-async def destroy_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandboxValue | None:
+async def destroy_managed_sandbox(
+    db: AsyncSession,
+    user: _UserWithId,
+) -> ManagedSandboxValue | None:
     await acquire_managed_sandbox_owner_lock(
         db,
         owner_scope="personal",
@@ -299,7 +307,7 @@ async def destroy_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandbo
         status="destroying",
         last_error=None,
     )
-    await db_session.commit_session(db)
+    await commit_managed_sandbox_session(db)
     sandbox = destroying or sandbox
     provider = get_configured_sandbox_provider()
     if sandbox.e2b_sandbox_id:
@@ -320,7 +328,7 @@ async def destroy_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandbo
                 status="error",
                 last_error=message,
             )
-            await db_session.commit_session(db)
+            await commit_managed_sandbox_session(db)
             if isinstance(exc, SandboxProviderError):
                 raise CloudApiError(
                     "managed_sandbox_destroy_failed",
@@ -333,7 +341,7 @@ async def destroy_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandbo
                 status_code=502,
             ) from exc
     destroyed = await mark_managed_sandbox_destroyed(db, sandbox.id)
-    await db_session.commit_session(db)
+    await commit_managed_sandbox_session(db)
     return destroyed
 
 
@@ -384,7 +392,7 @@ async def _reuse_ready_runtime_if_possible(
             anyharness_bearer_token_ciphertext=sandbox.anyharness_bearer_token_ciphertext or "",
             anyharness_data_key_ciphertext=sandbox.anyharness_data_key_ciphertext or "",
         )
-        await db_session.commit_session(db)
+        await commit_managed_sandbox_session(db)
         return updated
     except Exception as exc:
         log_cloud_event(
@@ -413,7 +421,7 @@ async def _reuse_ready_runtime_if_possible(
             anyharness_bearer_token_ciphertext=sandbox.anyharness_bearer_token_ciphertext or "",
             anyharness_data_key_ciphertext=sandbox.anyharness_data_key_ciphertext or "",
         )
-        await db_session.commit_session(db)
+        await commit_managed_sandbox_session(db)
         return updated
     except Exception as exc:
         log_cloud_event(
@@ -485,7 +493,7 @@ async def _create_or_launch_runtime(
                 status_code=404,
             )
         sandbox = recorded
-        await db_session.commit_session(db)
+        await commit_managed_sandbox_session(db)
         provider_sandbox = await provider.connect_running_sandbox(e2b_sandbox_id)
 
     runtime_context = await provider.resolve_runtime_context(provider_sandbox)
@@ -565,7 +573,7 @@ async def _create_or_launch_runtime(
             "Managed sandbox disappeared during provisioning.",
             status_code=404,
         )
-    await db_session.commit_session(db)
+    await commit_managed_sandbox_session(db)
     await _best_effort_reconcile_repos(db, user_id=ready.owner_user_id, sandbox=ready)
     return ready
 
@@ -592,7 +600,7 @@ async def _best_effort_reconcile_repos(
             github_token=github_grant.access_token,
             run_setup=False,
         )
-        await db_session.commit_session(db)
+        await commit_managed_sandbox_session(db)
     except Exception as exc:
         log_cloud_event(
             "managed sandbox repo reconciliation failed",

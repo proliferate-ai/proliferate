@@ -141,7 +141,7 @@ async def create_ready_cloud_workspace(
     branch_prefix: str,
 ) -> tuple[str, dict[str, object]]:
     last_error: Exception | None = None
-    for attempt in range(2):
+    for _attempt in range(2):
         branch_name = unique_branch_name(branch_prefix)
         workspace: dict[str, object] | None = None
         try:
