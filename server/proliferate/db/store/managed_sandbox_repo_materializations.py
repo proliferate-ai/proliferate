@@ -102,9 +102,7 @@ async def begin_repo_materialization(
     repo_path: str,
 ) -> ManagedSandboxRepoMaterializationValue:
     now = utcnow()
-    generation_changed = (
-        ManagedSandboxRepoMaterialization.sandbox_generation != sandbox_generation
-    )
+    generation_changed = ManagedSandboxRepoMaterialization.sandbox_generation != sandbox_generation
     row = (
         await db.execute(
             pg_insert(ManagedSandboxRepoMaterialization)
