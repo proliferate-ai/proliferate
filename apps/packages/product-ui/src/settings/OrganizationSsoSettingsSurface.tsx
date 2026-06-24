@@ -1,6 +1,8 @@
 import { Copy, RotateCw, ShieldCheck, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { SettingsCard } from "./SettingsCard";
@@ -36,6 +38,7 @@ interface OrganizationSsoSettingsSurfaceProps {
   enabling?: boolean;
   disabling?: boolean;
   deleting?: boolean;
+  hasUnsavedChanges?: boolean;
   error?: string | null;
   onFormChange: (form: OrganizationSsoFormState) => void;
   onSave: () => void;
@@ -56,6 +59,7 @@ export function OrganizationSsoSettingsSurface({
   enabling = false,
   disabling = false,
   deleting = false,
+  hasUnsavedChanges = false,
   error = null,
   onFormChange,
   onSave,
@@ -66,7 +70,9 @@ export function OrganizationSsoSettingsSurface({
   onRetry,
   onCopyRedirectUri,
 }: OrganizationSsoSettingsSurfaceProps) {
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const busy = saving || testing || enabling || disabling || deleting;
+  const statusActionDisabled = busy || hasUnsavedChanges;
 
   return (
     <div className="space-y-5">
@@ -218,7 +224,7 @@ export function OrganizationSsoSettingsSurface({
             size="sm"
             loading={deleting}
             disabled={busy}
-            onClick={onDelete}
+            onClick={() => setDeleteConfirmOpen(true)}
           >
             <Trash2 size={14} />
             Delete
@@ -229,7 +235,7 @@ export function OrganizationSsoSettingsSurface({
             variant="outline"
             size="sm"
             loading={testing}
-            disabled={busy}
+            disabled={statusActionDisabled}
             onClick={onTest}
           >
             Test
@@ -250,7 +256,7 @@ export function OrganizationSsoSettingsSurface({
             variant="secondary"
             size="sm"
             loading={enabling}
-            disabled={busy}
+            disabled={statusActionDisabled}
             onClick={onEnable}
           >
             <ShieldCheck size={14} />
@@ -272,6 +278,18 @@ export function OrganizationSsoSettingsSurface({
           {connection.lastError}
         </div>
       ) : null}
+      <ConfirmationDialog
+        open={deleteConfirmOpen}
+        title={connection ? `Delete ${connection.displayName}?` : "Delete SSO connection?"}
+        description="Organization SSO sign-in will stop using this connection until an admin saves and enables another one."
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          setDeleteConfirmOpen(false);
+          onDelete();
+        }}
+      />
     </div>
   );
 }

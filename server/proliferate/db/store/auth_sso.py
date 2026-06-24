@@ -65,31 +65,6 @@ async def get_sso_connection(
     return sso_connection_record(row) if row is not None else None
 
 
-async def find_enabled_sso_connection_for_domain(
-    db: AsyncSession,
-    *,
-    domain: str,
-) -> SsoConnectionRecord | None:
-    normalized_domain = domain.strip().lower()
-    rows = (
-        await db.execute(
-            select(SsoConnection)
-            .where(
-                SsoConnection.scope == "organization",
-                SsoConnection.status == "enabled",
-                SsoConnection.deleted_at.is_(None),
-            )
-            .order_by(SsoConnection.created_at.asc())
-        )
-    ).scalars()
-    for row in rows:
-        record = sso_connection_record(row)
-        allowed = {item.strip().lower() for item in record.allowed_domains}
-        if normalized_domain in allowed:
-            return record
-    return None
-
-
 async def create_sso_connection(
     db: AsyncSession,
     *,

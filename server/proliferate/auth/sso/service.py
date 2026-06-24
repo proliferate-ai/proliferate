@@ -416,15 +416,7 @@ async def _connection_for_start(
         )
         connection = _first_enabled_or_first(records)
     else:
-        connection = None
-        domain = email_domain(email)
-        if domain:
-            record = await sso_store.find_enabled_sso_connection_for_domain(db, domain=domain)
-            connection = (
-                snapshot_from_sso_connection_record(record) if record is not None else None
-            )
-        if connection is None:
-            connection = deployment_sso_connection()
+        connection = deployment_sso_connection()
 
     if connection is None:
         return None

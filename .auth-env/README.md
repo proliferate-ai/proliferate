@@ -22,6 +22,8 @@ PROLIFERATE_SSO_OIDC_CLIENT_ID="..."
 PROLIFERATE_SSO_OIDC_CLIENT_SECRET="..."
 PROLIFERATE_SSO_OIDC_SCOPES="openid email profile"
 PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD="client_secret_basic"
+# Only set this for local/private IdPs. Public providers should leave it false.
+PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS=false
 ```
 
 Run deployment/self-hosted SSO with:

@@ -18,13 +18,13 @@ from proliferate.server.organizations.sso.models import (
 async def create_organization_sso_connection_and_commit(
     db: AsyncSession,
     *,
-    actor_user: service.OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     body: OrganizationSsoConnectionRequest,
 ) -> sso_store.SsoConnectionRecord:
     record = await service.create_organization_sso_connection(
         db,
-        actor_user=actor_user,
+        actor_user_id=actor_user_id,
         organization_id=organization_id,
         body=body,
     )
@@ -35,14 +35,14 @@ async def create_organization_sso_connection_and_commit(
 async def update_organization_sso_connection_and_commit(
     db: AsyncSession,
     *,
-    actor_user: service.OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
     body: OrganizationSsoConnectionUpdateRequest,
 ) -> sso_store.SsoConnectionRecord:
     record = await service.update_organization_sso_connection(
         db,
-        actor_user=actor_user,
+        actor_user_id=actor_user_id,
         organization_id=organization_id,
         connection_id=connection_id,
         body=body,
@@ -54,13 +54,13 @@ async def update_organization_sso_connection_and_commit(
 async def test_organization_sso_connection_and_commit(
     db: AsyncSession,
     *,
-    actor_user: service.OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
     record = await service.test_organization_sso_connection(
         db,
-        actor_user=actor_user,
+        actor_user_id=actor_user_id,
         organization_id=organization_id,
         connection_id=connection_id,
     )
@@ -71,13 +71,13 @@ async def test_organization_sso_connection_and_commit(
 async def enable_organization_sso_connection_and_commit(
     db: AsyncSession,
     *,
-    actor_user: service.OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
     record = await service.enable_organization_sso_connection(
         db,
-        actor_user=actor_user,
+        actor_user_id=actor_user_id,
         organization_id=organization_id,
         connection_id=connection_id,
     )
@@ -88,13 +88,13 @@ async def enable_organization_sso_connection_and_commit(
 async def disable_organization_sso_connection_and_commit(
     db: AsyncSession,
     *,
-    actor_user: service.OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
     record = await service.disable_organization_sso_connection(
         db,
-        actor_user=actor_user,
+        actor_user_id=actor_user_id,
         organization_id=organization_id,
         connection_id=connection_id,
     )
@@ -105,13 +105,13 @@ async def disable_organization_sso_connection_and_commit(
 async def delete_organization_sso_connection_and_commit(
     db: AsyncSession,
     *,
-    actor_user: service.OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
     record = await service.delete_organization_sso_connection(
         db,
-        actor_user=actor_user,
+        actor_user_id=actor_user_id,
         organization_id=organization_id,
         connection_id=connection_id,
     )

@@ -20,7 +20,6 @@ BIFROST_LOG_LEVEL ?= info
 AGENT_GATEWAY_TUNNEL ?= 0
 CLOUD_WORKER_TUNNEL ?= 0
 AUTH_PROFILE ?=
-AUTH ?=
 SSO_STATUS ?= enabled
 AGENT_GATEWAY_FREE_CREDIT_USD ?= 5
 AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS ?= claude,codex
@@ -59,7 +58,6 @@ STRIPE_LOCAL_SECRET_ENV = if [ -z "$${STRIPE_SECRET_KEY:-}" ] && command -v stri
 	fi; \
 fi;
 AUTH_PROFILE_ENV_SOURCE = auth_profile="$(AUTH_PROFILE)"; \
-	if [ -z "$$auth_profile" ]; then auth_profile="$(AUTH)"; fi; \
 	if [ -n "$$auth_profile" ]; then \
 		case "$$auth_profile" in *[!A-Za-z0-9_-]* ) \
 			echo "AUTH_PROFILE must contain only letters, numbers, underscores, or hyphens."; \

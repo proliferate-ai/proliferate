@@ -39,6 +39,7 @@ export function CloudOrganizationSsoSettingsSurface({
   const [loadedConnectionId, setLoadedConnectionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const connection = query.data?.connections[0] ?? null;
+  const hasUnsavedChanges = connection ? isFormDirty(form, connection) : false;
 
   useEffect(() => {
     const nextConnectionId = connection?.id ?? null;
@@ -63,12 +64,16 @@ export function CloudOrganizationSsoSettingsSurface({
     setActionError(null);
     try {
       if (connection) {
-        await actions.updateConnection({
+        const updated = await actions.updateConnection({
           connectionId: connection.id,
           input: updateRequestFromForm(form),
         });
+        setLoadedConnectionId(updated.id);
+        setForm(formFromConnection(updated));
       } else {
-        await actions.createConnection(createRequestFromForm(form));
+        const created = await actions.createConnection(createRequestFromForm(form));
+        setLoadedConnectionId(created.id);
+        setForm(formFromConnection(created));
       }
     } catch (error_) {
       setActionError(errorMessage(error_));
@@ -77,6 +82,10 @@ export function CloudOrganizationSsoSettingsSurface({
 
   async function runConnectionAction(action: (connectionId: string) => Promise<unknown>) {
     if (!connection) {
+      return;
+    }
+    if (hasUnsavedChanges) {
+      setActionError("Save SSO changes before testing or enabling the connection.");
       return;
     }
     setActionError(null);
@@ -97,6 +106,7 @@ export function CloudOrganizationSsoSettingsSurface({
       enabling={actions.enablingConnection}
       disabling={actions.disablingConnection}
       deleting={actions.deletingConnection}
+      hasUnsavedChanges={hasUnsavedChanges}
       error={error}
       onFormChange={setForm}
       onSave={() => { void save(); }}
@@ -174,6 +184,19 @@ function updateRequestFromForm(
     request.oidcClientSecret = form.oidcClientSecret.trim();
   }
   return request;
+}
+
+function isFormDirty(
+  form: OrganizationSsoFormState,
+  connection: OrganizationSsoConnectionResponse,
+): boolean {
+  return form.displayName !== connection.displayName
+    || splitList(form.allowedDomains).join(",") !== connection.allowedDomains.join(",")
+    || (form.oidcIssuerUrl.trim() || null) !== connection.oidcIssuerUrl
+    || form.oidcClientId.trim() !== (connection.oidcClientId ?? "")
+    || form.oidcClientSecret.trim().length > 0
+    || splitScopes(form.oidcScopes).join(" ") !== connection.oidcScopes.join(" ")
+    || form.oidcTokenEndpointAuthMethod !== connection.oidcTokenEndpointAuthMethod;
 }
 
 function splitList(value: string): string[] {

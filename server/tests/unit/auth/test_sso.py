@@ -19,6 +19,8 @@ from proliferate.auth.sso.types import (
     VerifiedSsoIdentity,
 )
 from proliferate.config import settings
+from proliferate.integrations.sso import oidc as oidc_integration
+from proliferate.integrations.sso.errors import SsoIntegrationError
 
 
 def test_sso_auth_error_url_encodes_provider_error(
@@ -28,6 +30,39 @@ def test_sso_auth_error_url_encodes_provider_error(
 
     assert sso_api._auth_error_url("access_denied&next=https://evil.test") == (
         "https://app.example.test/auth/error?code=access_denied%26next%3Dhttps%3A%2F%2Fevil.test"
+    )
+
+
+def test_oidc_discovery_rejects_mismatched_configured_issuer() -> None:
+    with pytest.raises(SsoIntegrationError, match="discovery issuer"):
+        oidc_integration._validate_discovered_issuer(
+            _connection(allowed_domains=("example.com",)),
+            "https://other-idp.example.test",
+        )
+
+
+@pytest.mark.asyncio
+async def test_oidc_url_validation_rejects_private_http_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "sso_oidc_allow_private_provider_urls", False)
+
+    with pytest.raises(SsoIntegrationError, match="must use HTTPS"):
+        await oidc_integration._validate_oidc_url(
+            "http://127.0.0.1:5555/.well-known/openid-configuration",
+            "discovery_url",
+        )
+
+
+@pytest.mark.asyncio
+async def test_oidc_url_validation_can_allow_private_provider_urls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "sso_oidc_allow_private_provider_urls", True)
+
+    await oidc_integration._validate_oidc_url(
+        "http://127.0.0.1:5555/.well-known/openid-configuration",
+        "discovery_url",
     )
 
 

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Protocol
 from uuid import UUID
 
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.authorization import OwnerContext, require_org_role
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.sso.policy import normalize_domains
 from proliferate.auth.sso.service import (
@@ -17,26 +15,18 @@ from proliferate.auth.sso.service import (
 )
 from proliferate.config import settings
 from proliferate.db.store import auth_sso as sso_store
-from proliferate.db.store import organizations as organization_store
 from proliferate.errors import NotFoundError
-from proliferate.server.organizations.domain.policy import organization_admin_roles
 from proliferate.server.organizations.sso.models import (
     OrganizationSsoConnectionRequest,
     OrganizationSsoConnectionUpdateRequest,
 )
 
 
-class OrganizationSsoActor(Protocol):
-    id: UUID
-
-
 async def list_organization_sso_connections(
     db: AsyncSession,
     *,
-    actor_user: OrganizationSsoActor,
     organization_id: UUID,
 ) -> list[sso_store.SsoConnectionRecord]:
-    await _require_org_admin(db, actor_user=actor_user, organization_id=organization_id)
     return await sso_store.list_sso_connections_for_organization(
         db,
         organization_id=organization_id,
@@ -46,11 +36,10 @@ async def list_organization_sso_connections(
 async def create_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     body: OrganizationSsoConnectionRequest,
 ) -> sso_store.SsoConnectionRecord:
-    await _require_org_admin(db, actor_user=actor_user, organization_id=organization_id)
     return await sso_store.create_sso_connection(
         db,
         organization_id=organization_id,
@@ -76,19 +65,18 @@ async def create_organization_sso_connection(
         saml_sso_url=_clean_optional(body.saml_sso_url),
         saml_x509_cert=_clean_optional(body.saml_x509_cert),
         saml_email_attribute=_clean_optional(body.saml_email_attribute),
-        actor_user_id=actor_user.id,
+        actor_user_id=actor_user_id,
     )
 
 
 async def update_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
     body: OrganizationSsoConnectionUpdateRequest,
 ) -> sso_store.SsoConnectionRecord:
-    await _require_org_admin(db, actor_user=actor_user, organization_id=organization_id)
     values: dict[str, object] = {}
     fields = body.model_fields_set
     if "display_name" in fields:
@@ -128,7 +116,7 @@ async def update_organization_sso_connection(
         connection_id=connection_id,
         organization_id=organization_id,
         values=values,
-        actor_user_id=actor_user.id,
+        actor_user_id=actor_user_id,
     )
     if updated is None:
         raise NotFoundError("SSO connection not found.", code="sso_connection_not_found")
@@ -138,11 +126,10 @@ async def update_organization_sso_connection(
 async def test_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
-    await _require_org_admin(db, actor_user=actor_user, organization_id=organization_id)
     record = await sso_store.get_sso_connection(
         db,
         connection_id=connection_id,
@@ -163,7 +150,7 @@ async def test_organization_sso_connection(
             success=False,
             error=str(exc.detail),
             discovered=None,
-            actor_user_id=actor_user.id,
+            actor_user_id=actor_user_id,
         )
         if updated is None:
             raise NotFoundError(
@@ -178,7 +165,7 @@ async def test_organization_sso_connection(
         success=True,
         error=None,
         discovered=discovered,
-        actor_user_id=actor_user.id,
+        actor_user_id=actor_user_id,
     )
     if updated is None:
         raise NotFoundError("SSO connection not found.", code="sso_connection_not_found")
@@ -188,13 +175,13 @@ async def test_organization_sso_connection(
 async def enable_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
     tested = await test_organization_sso_connection(
         db,
-        actor_user=actor_user,
+        actor_user_id=actor_user_id,
         organization_id=organization_id,
         connection_id=connection_id,
     )
@@ -205,7 +192,7 @@ async def enable_organization_sso_connection(
         connection_id=connection_id,
         organization_id=organization_id,
         status="enabled",
-        actor_user_id=actor_user.id,
+        actor_user_id=actor_user_id,
         last_error=None,
     )
     if enabled is None:
@@ -216,17 +203,16 @@ async def enable_organization_sso_connection(
 async def disable_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
-    await _require_org_admin(db, actor_user=actor_user, organization_id=organization_id)
     disabled = await sso_store.set_sso_connection_status(
         db,
         connection_id=connection_id,
         organization_id=organization_id,
         status="disabled",
-        actor_user_id=actor_user.id,
+        actor_user_id=actor_user_id,
         last_error=None,
     )
     if disabled is None:
@@ -237,16 +223,15 @@ async def disable_organization_sso_connection(
 async def delete_organization_sso_connection(
     db: AsyncSession,
     *,
-    actor_user: OrganizationSsoActor,
+    actor_user_id: UUID,
     organization_id: UUID,
     connection_id: UUID,
 ) -> sso_store.SsoConnectionRecord:
-    await _require_org_admin(db, actor_user=actor_user, organization_id=organization_id)
     deleted = await sso_store.soft_delete_sso_connection(
         db,
         connection_id=connection_id,
         organization_id=organization_id,
-        actor_user_id=actor_user.id,
+        actor_user_id=actor_user_id,
     )
     if deleted is None:
         raise NotFoundError("SSO connection not found.", code="sso_connection_not_found")
@@ -271,33 +256,6 @@ def organization_sso_urls(request: Request, connection_id: UUID) -> tuple[str, s
         f"{base}{saml_acs_path}",
         f"urn:proliferate:sso:{connection_id}",
         f"{base}{saml_metadata_path}",
-    )
-
-
-async def _require_org_admin(
-    db: AsyncSession,
-    *,
-    actor_user: OrganizationSsoActor,
-    organization_id: UUID,
-) -> None:
-    record = await organization_store.get_organization_with_membership(
-        db,
-        organization_id=organization_id,
-        user_id=actor_user.id,
-    )
-    if record is None:
-        raise NotFoundError("Organization not found.", code="organization_not_found")
-    require_org_role(
-        OwnerContext(
-            owner_scope="organization",
-            actor_user_id=actor_user.id,
-            owner_user_id=None,
-            organization_id=organization_id,
-            membership_id=record.membership.id,
-            membership_role=record.membership.role,
-            billing_subject_id=organization_id,
-        ),
-        organization_admin_roles(),
     )
 
 

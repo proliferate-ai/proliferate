@@ -15,6 +15,8 @@ from proliferate.auth.sso.types import DEFAULT_OIDC_SCOPES
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from proliferate.db.store.auth_sso_records import SsoConnectionRecord
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -50,15 +52,7 @@ async def seed_sso(*, org_id: UUID, status: str) -> None:
             db,
             organization_id=org_id,
         )
-        existing = next(
-            (
-                record
-                for record in records
-                if record.protocol == "oidc"
-                and record.display_name == connection_input["display_name"]
-            ),
-            None,
-        )
+        existing = _matching_seeded_connection(records, connection_input)
 
         if existing is None:
             record = await sso_store.create_sso_connection(
@@ -92,6 +86,19 @@ async def seed_sso(*, org_id: UUID, status: str) -> None:
             if updated is None:
                 raise SystemExit(f"SSO connection disappeared while setting status: {record.id}")
             record = updated
+        stale_connections = _stale_enabled_connections(
+            records, current_id=record.id, input=connection_input
+        )
+        auth_profile = _env("AUTH_PROFILE", default="sso")
+        for stale in stale_connections:
+            await sso_store.set_sso_connection_status(
+                db,
+                connection_id=stale.id,
+                organization_id=org_id,
+                status="disabled",
+                actor_user_id=actor_user_id,
+                last_error=f"Disabled by seed-sso for AUTH_PROFILE={auth_profile}.",
+            )
 
     callback_url = (
         f"{_env('API_BASE_URL', default='http://127.0.0.1:8000')}/auth/sso/oidc/callback"
@@ -100,6 +107,43 @@ async def seed_sso(*, org_id: UUID, status: str) -> None:
     print(f"Connection: {record.id}")
     print(f"Status: {record.status}")
     print(f"Callback URL: {callback_url}")
+
+
+def _matching_seeded_connection(
+    records: list[SsoConnectionRecord],
+    input: dict[str, object],
+) -> SsoConnectionRecord | None:
+    display_name = input["display_name"]
+    oidc_client_id = input["oidc_client_id"]
+    for record in records:
+        if record.protocol != "oidc":
+            continue
+        if record.display_name == display_name:
+            return record
+        if oidc_client_id and record.oidc_client_id == oidc_client_id:
+            return record
+    return None
+
+
+def _stale_enabled_connections(
+    records: list[SsoConnectionRecord],
+    *,
+    current_id: UUID,
+    input: dict[str, object],
+) -> list[SsoConnectionRecord]:
+    allowed_domains = set(input["allowed_domains"])
+    if not allowed_domains:
+        return []
+    stale: list[SsoConnectionRecord] = []
+    for record in records:
+        if record.id == current_id:
+            continue
+        if record.protocol != "oidc" or record.status != "enabled":
+            continue
+        record_domains = set(record.allowed_domains)
+        if allowed_domains & record_domains:
+            stale.append(record)
+    return stale
 
 
 def _connection_input() -> dict[str, object]:

@@ -83,6 +83,7 @@ async def resolve_oidc_metadata(connection: SsoConnectionSnapshot) -> OidcMetada
         raise SsoIntegrationError("OIDC discovery metadata is invalid.")
 
     issuer = _required_string(payload, "issuer")
+    _validate_discovered_issuer(connection, issuer)
     authorization_endpoint = _required_string(payload, "authorization_endpoint")
     token_endpoint = _required_string(payload, "token_endpoint")
     jwks_uri = _required_string(payload, "jwks_uri")
@@ -311,13 +312,25 @@ def _claim_bool(value: object, *, default: bool) -> bool:
     return default
 
 
+def _validate_discovered_issuer(connection: SsoConnectionSnapshot, issuer: str) -> None:
+    expected = connection.oidc_issuer_url
+    if not expected:
+        return
+    if _normalize_issuer(issuer) != _normalize_issuer(expected):
+        raise SsoIntegrationError("OIDC discovery issuer does not match configured issuer.")
+
+
+def _normalize_issuer(value: str) -> str:
+    return value.strip().rstrip("/")
+
+
 async def _validate_oidc_url(value: str, field: str) -> None:
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise SsoIntegrationError(f"OIDC {field} URL is invalid.")
     if parsed.username or parsed.password or parsed.fragment:
         raise SsoIntegrationError(f"OIDC {field} URL is invalid.")
-    if settings.telemetry_mode != "hosted_product":
+    if settings.sso_oidc_allow_private_provider_urls:
         return
     if parsed.scheme != "https":
         raise SsoIntegrationError(f"OIDC {field} URL must use HTTPS.")
