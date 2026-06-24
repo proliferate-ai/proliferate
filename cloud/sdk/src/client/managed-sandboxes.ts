@@ -3,6 +3,19 @@ import type { ManagedSandboxResponse } from "../types/generated.js";
 
 export type { ManagedSandboxResponse } from "../types/generated.js";
 
+export interface ManagedSandboxRepoRuntimeConnectionResponse {
+  anyharnessWorkspaceId: string;
+  anyharnessRepoRootId: string | null;
+  runtimeGeneration: number;
+}
+
+export interface ManagedSandboxRepoRuntimeConnection {
+  gatewayAnyHarnessBaseUrl: string;
+  anyharnessWorkspaceId: string;
+  anyharnessRepoRootId: string | null;
+  runtimeGeneration: number;
+}
+
 export async function getManagedSandbox(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<ManagedSandboxResponse | null> {
@@ -37,4 +50,22 @@ export async function destroyManagedSandbox(
     method: "DELETE",
     path: "/v1/cloud/managed-sandbox",
   });
+}
+
+export async function ensureManagedSandboxRepoRuntimeConnection(
+  gitOwner: string,
+  gitRepoName: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<ManagedSandboxRepoRuntimeConnection> {
+  const response = await client.requestJson<ManagedSandboxRepoRuntimeConnectionResponse>({
+    method: "POST",
+    path: `/v1/cloud/managed-sandbox/repos/${encodeURIComponent(gitOwner)}/${encodeURIComponent(
+      gitRepoName,
+    )}/runtime-connection`,
+  });
+
+  return {
+    ...response,
+    gatewayAnyHarnessBaseUrl: client.buildUrl("/v1/gateway/managed-sandbox/anyharness"),
+  };
 }

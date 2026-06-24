@@ -40,6 +40,7 @@ import { useWebCloudPendingHomePromptLifecycle } from "../lifecycle/use-web-clou
 import { useWebCloudTranscriptLifecycle } from "../lifecycle/use-web-cloud-transcript-lifecycle";
 import { useWebCloudComposerControls } from "../ui/use-web-cloud-composer-controls";
 import { useWebCloudChatActions } from "../workflows/use-web-cloud-chat-actions";
+import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 export type WebCloudChatScreenState =
   | { kind: "missing"; title: string }
@@ -73,6 +74,7 @@ export function useWebCloudChatScreen(): WebCloudChatScreenState {
     pendingInteractions,
     sessionEvents,
   } = useWebCloudChatData();
+  const { token: productToken } = useAuthToken();
   const [draft, setDraft] = useState("");
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
     agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
@@ -167,6 +169,7 @@ export function useWebCloudChatScreen(): WebCloudChatScreenState {
     openNewSessionDraft,
   } = useWebCloudChatActions({
     client,
+    productToken,
     workspace,
     session,
     draft,

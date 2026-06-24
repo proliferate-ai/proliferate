@@ -18,6 +18,7 @@ import {
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+import type { Session } from "@anyharness/sdk";
 
 import { routes } from "../../../config/routes";
 import {
@@ -49,6 +50,10 @@ import {
   clearWebCloudSessionDraft,
   type WebCloudSessionDraft,
 } from "../../../stores/cloud/web-cloud-session-draft-store";
+import {
+  getWebManagedSandboxAnyHarnessClient,
+  isWebManagedSandboxWorkspace,
+} from "../../../lib/access/anyharness/managed-sandbox-runtime";
 
 type EnqueueCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
@@ -56,6 +61,7 @@ type EnqueueCommand<TPayload> = (
 
 export function useWebCloudPromptActions(input: {
   client: ProliferateCloudClient;
+  productToken: string | null;
   workspace: CloudWorkspaceDetail | null;
   session: CloudSessionProjection | null;
   draft: string;
@@ -90,6 +96,7 @@ export function useWebCloudPromptActions(input: {
 }) {
   const {
     client,
+    productToken,
     workspace,
     session,
     draft,
@@ -132,10 +139,12 @@ export function useWebCloudPromptActions(input: {
       setPendingHomePromptStatus("Claim this shared workspace before sending prompts.");
       return;
     }
-    const readiness = cloudCommandReadiness(workspace);
-    if (!readiness.commandable) {
-      setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
-      return;
+    if (!isWebManagedSandboxWorkspace(workspace)) {
+      const readiness = cloudCommandReadiness(workspace);
+      if (!readiness.commandable) {
+        setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+        return;
+      }
     }
     if (!session) {
       await submitPromptToNewSession(text);
@@ -201,18 +210,28 @@ export function useWebCloudPromptActions(input: {
     };
     savePendingHomePrompt(workspace.id, pendingPrompt);
     try {
-      const result = await dispatchPendingHomePrompt({
-        client,
-        workspace,
-        pendingPrompt,
-        modelId: pendingPrompt.modelId,
-        enqueueStartSession,
-        enqueueConfig,
-        enqueuePrompt,
-        setLatestCommandId,
-        onStatus: setPendingHomePromptStatus,
-        shouldContinue: () => mountedRef.current,
-      });
+      const result = isWebManagedSandboxWorkspace(workspace)
+        ? await dispatchManagedSandboxPendingHomePrompt({
+          client,
+          productToken,
+          workspace,
+          pendingPrompt,
+          fallbackAgentKind: promptSelection.agentKind,
+          onStatus: setPendingHomePromptStatus,
+          shouldContinue: () => mountedRef.current,
+        })
+        : await dispatchPendingHomePrompt({
+          client,
+          workspace,
+          pendingPrompt,
+          modelId: pendingPrompt.modelId,
+          enqueueStartSession,
+          enqueueConfig,
+          enqueuePrompt,
+          setLatestCommandId,
+          onStatus: setPendingHomePromptStatus,
+          shouldContinue: () => mountedRef.current,
+        });
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
           prompt.id === optimisticPrompt.id
@@ -220,7 +239,7 @@ export function useWebCloudPromptActions(input: {
               ...prompt,
               sessionId: result.sessionId,
               status: "queued",
-              commandId: result.sendCommandId,
+              commandId: result.sendCommandId ?? prompt.commandId,
             }
             : prompt
         )
@@ -276,6 +295,29 @@ export function useWebCloudPromptActions(input: {
     setDraft("");
     setPendingHomePromptStatus(null);
     try {
+      if (isWebManagedSandboxWorkspace(workspace)) {
+        const { anyharness } = await getWebManagedSandboxAnyHarnessClient({
+          workspace,
+          productToken,
+          client,
+        });
+        await anyharness.sessions.prompt(activeSession.sessionId, {
+          blocks: [{ type: "text", text }],
+          promptId: optimisticPrompt.id,
+        });
+        if (!mountedRef.current) {
+          return;
+        }
+        setOptimisticPrompts((current) =>
+          current.map((prompt) =>
+            prompt.id === optimisticPrompt.id ? { ...prompt, status: "queued" } : prompt
+          )
+        );
+        setPendingHomePromptStatus(null);
+        void transcriptRefetch();
+        void sessionEventsRefetch();
+        return;
+      }
       const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
         client,
         workspace,
@@ -337,4 +379,56 @@ export function useWebCloudPromptActions(input: {
   }
 
   return { submitPrompt };
+}
+
+async function dispatchManagedSandboxPendingHomePrompt(args: {
+  client: ProliferateCloudClient;
+  productToken: string | null;
+  workspace: CloudWorkspaceDetail;
+  pendingPrompt: PendingHomePrompt;
+  fallbackAgentKind: string;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<{ sessionId: string; sendCommandId?: string }> {
+  args.onStatus("Preparing managed sandbox runtime.");
+  const { connection, anyharness } = await getWebManagedSandboxAnyHarnessClient({
+    workspace: args.workspace,
+    productToken: args.productToken,
+    client: args.client,
+  });
+  assertManagedWebActionCurrent(args.shouldContinue);
+  args.onStatus("Starting session.");
+  const session = await anyharness.sessions.create({
+    workspaceId: connection.anyharnessWorkspaceId,
+    agentKind: args.pendingPrompt.agentKind ?? args.fallbackAgentKind,
+    ...(args.pendingPrompt.modelId ? { modelId: args.pendingPrompt.modelId } : {}),
+    ...(args.pendingPrompt.modeId ? { modeId: args.pendingPrompt.modeId } : {}),
+    subagentsEnabled: false,
+    origin: { kind: "system", entrypoint: "cloud" },
+  });
+  await applyManagedSandboxSessionConfigUpdates(anyharness, session, args.pendingPrompt);
+  assertManagedWebActionCurrent(args.shouldContinue);
+  args.onStatus("Sending prompt.");
+  await anyharness.sessions.prompt(session.id, {
+    blocks: [{ type: "text", text: args.pendingPrompt.text }],
+    promptId: args.pendingPrompt.id,
+  });
+  args.onStatus("Queued prompt; waiting for transcript.");
+  return { sessionId: session.id };
+}
+
+async function applyManagedSandboxSessionConfigUpdates(
+  anyharness: Awaited<ReturnType<typeof getWebManagedSandboxAnyHarnessClient>>["anyharness"],
+  session: Session,
+  pendingPrompt: PendingHomePrompt,
+): Promise<void> {
+  for (const update of pendingPrompt.sessionConfigUpdates ?? []) {
+    await anyharness.sessions.setConfigOption(session.id, update);
+  }
+}
+
+function assertManagedWebActionCurrent(shouldContinue: () => boolean): void {
+  if (!shouldContinue()) {
+    throw new Error("Action was cancelled.");
+  }
 }

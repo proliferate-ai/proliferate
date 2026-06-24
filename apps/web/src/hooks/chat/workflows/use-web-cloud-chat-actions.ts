@@ -39,6 +39,7 @@ type EnqueueCommand<TPayload> = (
 
 export function useWebCloudChatActions(input: {
   client: ProliferateCloudClient;
+  productToken: string | null;
   workspace: CloudWorkspaceDetail | null;
   session: CloudSessionProjection | null;
   draft: string;
@@ -86,6 +87,7 @@ export function useWebCloudChatActions(input: {
 }) {
   const {
     client,
+    productToken,
     workspace,
     session,
     draft,
@@ -129,6 +131,7 @@ export function useWebCloudChatActions(input: {
     transcriptPlanActions,
   } = useWebCloudPlanDecisionActions({
     client,
+    productToken,
     workspace,
     session,
     isUnclaimed,
@@ -143,6 +146,7 @@ export function useWebCloudChatActions(input: {
   });
   const { submitPrompt } = useWebCloudPromptActions({
     client,
+    productToken,
     workspace,
     session,
     draft,
@@ -177,6 +181,7 @@ export function useWebCloudChatActions(input: {
   });
   const { submitSessionConfig } = useWebCloudSessionConfigActions({
     client,
+    productToken,
     workspace,
     session,
     isUnclaimed,
