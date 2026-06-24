@@ -122,7 +122,8 @@ export function AppSidebarFooter() {
                       variant="sidebar"
                       label={invitation.organizationName ?? invitation.email}
                       icon={<Mail className="size-3.5" />}
-                      trailing={<Check className="size-3.5" />}
+                      trailing={<span className="font-[520]">Accept</span>}
+                      trailingClassName="text-sidebar-muted-foreground group-hover/menu-item:text-sidebar-foreground group-focus/menu-item:text-sidebar-foreground"
                       onClick={() => {
                         setAcceptTarget(invitation);
                         close();
