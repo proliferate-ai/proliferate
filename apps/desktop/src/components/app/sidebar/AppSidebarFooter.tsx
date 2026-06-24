@@ -13,17 +13,15 @@ import {
   ExternalLink,
   LifeBuoy,
   Mail,
-  Plus,
   Settings,
 } from "@proliferate/ui/icons";
 import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
+import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -31,7 +29,7 @@ export function AppSidebarFooter() {
   const navigate = useNavigate();
   const authStatus = useAuthStore((state) => state.status);
   const { openExternal } = useTauriShellActions();
-  const { signOut } = useAuthActions();
+  const handleSignOut = useAppSidebarSignOutAction();
   const openSupport = useOpenSupportReportWindow({ source: "sidebar" });
   const showToast = useToastStore((state) => state.show);
   const {
@@ -40,7 +38,6 @@ export function AppSidebarFooter() {
     organizations,
     organizationsQuery,
     setActiveOrganizationId,
-    clearActiveOrganizationId,
   } = useActiveOrganization();
   const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
     authStatus === "authenticated",
@@ -50,25 +47,6 @@ export function AppSidebarFooter() {
 
   const activeLabel = activeOrganization?.name ?? "Organization";
   const activeInitial = activeLabel.trim().charAt(0).toUpperCase() || "O";
-
-  const openOrganizationSettings = () => {
-    navigate(buildSettingsHref({ section: "organization" }));
-  };
-
-  const openMembersSettings = () => {
-    navigate(buildSettingsHref({ section: "organization-members" }));
-  };
-
-  const handleSignOut = () => {
-    void signOut()
-      .then(() => {
-        clearActiveOrganizationId();
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : "Could not sign out.";
-        showToast(message);
-      });
-  };
 
   async function handleAcceptInvitation(invitationId: string, close: () => void) {
     try {
@@ -181,33 +159,6 @@ export function AppSidebarFooter() {
               </div>
 
               <div className="border-t border-border-light py-1">
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Create organization"
-                  icon={<Plus className="size-3.5" />}
-                  onClick={() => {
-                    openOrganizationSettings();
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Members"
-                  icon={<Mail className="size-3.5" />}
-                  onClick={() => {
-                    openMembersSettings();
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Organization settings"
-                  icon={<Building2 className="size-3.5" />}
-                  onClick={() => {
-                    openOrganizationSettings();
-                    close();
-                  }}
-                />
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Settings"

@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
@@ -20,19 +13,13 @@ import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/u
 import { useOrganizationJoinLink } from "@/hooks/access/cloud/organizations/use-organization-join-link";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import {
-  clearPendingOrganizationJoinTarget,
-  readPendingOrganizationJoinTarget,
-  writePendingOrganizationJoinTarget,
-} from "@/lib/access/browser/organization-join-target";
+import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import {
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
   type OrganizationRole,
 } from "@/lib/domain/organizations/organization-records";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -40,15 +27,6 @@ const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 export function OrganizationMembersPane() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const joinOrganizationId = useMemo(
-    () => searchParams.get("joinOrganizationId"),
-    [searchParams],
-  );
-  const [transientJoinOrganizationId, setTransientJoinOrganizationId] = useState(
-    () => joinOrganizationId ?? readPendingOrganizationJoinTarget(),
-  );
   const authStatus = useAuthStore((state) => state.status);
   const currentUser = useAuthStore((state) => state.user);
   const {
@@ -66,78 +44,20 @@ export function OrganizationMembersPane() {
   const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
     authStatus === "authenticated",
   );
-  const { signInWithGitHub } = useAuthActions();
   const { copyText } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
-  const signInStartedRef = useRef(false);
-  const joinAttemptedRef = useRef(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const joinFlow = useOrganizationJoinInvitationFlow({
+    acceptInvitation: actions.acceptInvitation,
+    setActiveOrganizationId,
+  });
 
   const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
   const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
   const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
   const canManage = admin.isAdmin;
   const canManageOwners = admin.isOwner;
-
-  useEffect(() => {
-    if (!joinOrganizationId) return;
-    writePendingOrganizationJoinTarget(joinOrganizationId);
-    joinAttemptedRef.current = false;
-    setTransientJoinOrganizationId(joinOrganizationId);
-    navigate(buildSettingsHref({ section: "organization-members" }), { replace: true });
-  }, [joinOrganizationId, navigate]);
-
-  useEffect(() => {
-    if (
-      !transientJoinOrganizationId
-      || authStatus !== "authenticated"
-      || joinAttemptedRef.current
-    ) {
-      return;
-    }
-    let cancelled = false;
-    joinAttemptedRef.current = true;
-    void actions.acceptInvitation(transientJoinOrganizationId)
-      .then((response) => {
-        if (cancelled) return;
-        clearPendingOrganizationJoinTarget();
-        setTransientJoinOrganizationId(null);
-        setActiveOrganizationId(response.organization.id);
-        setStatusMessage(`Joined ${response.organization.name}.`);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        clearPendingOrganizationJoinTarget();
-        setTransientJoinOrganizationId(null);
-        setStatusMessage("Invitation could not be accepted.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    actions.acceptInvitation,
-    authStatus,
-    setActiveOrganizationId,
-    transientJoinOrganizationId,
-  ]);
-
-  useEffect(() => {
-    if (
-      !transientJoinOrganizationId
-      || authStatus !== "anonymous"
-      || signInStartedRef.current
-    ) {
-      return;
-    }
-    signInStartedRef.current = true;
-    setStatusMessage("Opening sign-in to accept this invitation.");
-    void signInWithGitHub()
-      .catch(() => {
-        setStatusMessage("Sign in could not start. Use Account settings to sign in, then reopen the invite link.");
-      });
-  }, [authStatus, signInWithGitHub, transientJoinOrganizationId]);
 
   async function handleInvite() {
     await actions.createInvitation({ email: inviteEmail, role: inviteRole });
@@ -146,13 +66,13 @@ export function OrganizationMembersPane() {
   }
 
   async function handleAcceptCurrentInvitation(invitationId: string) {
-    setStatusMessage(null);
+    joinFlow.setStatusMessage(null);
     try {
       const response = await actions.acceptCurrentInvitation(invitationId);
       setActiveOrganizationId(response.organization.id);
-      setStatusMessage(`Joined ${response.organization.name}.`);
+      joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
     } catch {
-      setStatusMessage("Invitation could not be accepted.");
+      joinFlow.setStatusMessage("Invitation could not be accepted.");
     }
   }
 
@@ -179,8 +99,7 @@ export function OrganizationMembersPane() {
     });
   }
 
-  const unauthenticatedJoin = transientJoinOrganizationId && authStatus !== "authenticated";
-  const shouldShowSignInState = authStatus !== "authenticated" && !unauthenticatedJoin;
+  const shouldShowSignInState = authStatus !== "authenticated" && !joinFlow.unauthenticatedJoin;
   const shouldShowLoadingState = authStatus === "authenticated" && organizationsQuery.isLoading;
   const shouldShowErrorState = authStatus === "authenticated" && organizationsQuery.isError;
   const shouldShowEmptyState = authStatus === "authenticated"
@@ -197,12 +116,12 @@ export function OrganizationMembersPane() {
         description="Invite teammates, copy the organization join link, and manage access."
       />
 
-      {statusMessage ? (
-        <OrganizationNotice>{statusMessage}</OrganizationNotice>
+      {joinFlow.statusMessage ? (
+        <OrganizationNotice>{joinFlow.statusMessage}</OrganizationNotice>
       ) : null}
 
-      {unauthenticatedJoin ? (
-      <OrganizationNotice>Finish sign-in to accept this organization invitation.</OrganizationNotice>
+      {joinFlow.unauthenticatedJoin ? (
+        <OrganizationNotice>Finish sign-in to accept this organization invitation.</OrganizationNotice>
       ) : null}
 
       {shouldShowSignInState ? (
@@ -280,6 +199,7 @@ export function OrganizationMembersPane() {
 
           <OrganizationInvitationsSection
             canManage={canManage}
+            inviteLinkUrl={joinLinkQuery.data?.url ?? null}
             inviteEmail={inviteEmail}
             inviteRole={inviteRole}
             creatingInvitation={actions.creatingInvitation}

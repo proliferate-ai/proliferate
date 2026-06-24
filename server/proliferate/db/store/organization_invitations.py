@@ -318,6 +318,30 @@ async def accept_pending_invitation_for_email(
         )
     ).one_or_none()
     if row is None:
+        invitation_row = (
+            await db.execute(
+                select(OrganizationInvitation, Organization)
+                .join(
+                    Organization,
+                    Organization.id == OrganizationInvitation.organization_id,
+                )
+                .where(
+                    OrganizationInvitation.id == invitation_id,
+                    OrganizationInvitation.email == normalized_email,
+                )
+            )
+        ).one_or_none()
+        if invitation_row is not None:
+            invitation, _organization = invitation_row
+            current = await get_current_membership_for_user(db, authenticated_user_id)
+            if current is not None and current.organization.id == invitation.organization_id:
+                return (
+                    InvitationAcceptRecord(
+                        organization=current.organization,
+                        membership=current.membership,
+                    ),
+                    None,
+                )
         return None, "invalid_invitation"
     invitation, organization = row
     return await _accept_locked_invitation(

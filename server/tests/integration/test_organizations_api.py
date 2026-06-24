@@ -489,8 +489,10 @@ async def test_current_user_can_accept_pending_invitation(
         f"/v1/organizations/invitations/current/{invitation['id']}/accept",
         headers=_headers(invited),
     )
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "invalid_invitation"
+    assert response.status_code == 200
+    replayed = response.json()["organization"]
+    assert replayed["id"] == organization_id
+    assert replayed["membership"]["id"] == accepted["membership"]["id"]
 
 
 @pytest.mark.asyncio
