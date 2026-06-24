@@ -66,6 +66,7 @@ export interface BillingOwnerCardView {
 export interface BillingSettingsPaneProps {
   children: ReactNode;
   planComparisonAction?: BillingActionView;
+  enterprisePlanAction?: BillingActionView;
   currentPlanKey?: BillingPlanColumn["key"] | null;
   checkoutReturnState?: "success" | "cancel" | null;
 }

@@ -34,6 +34,7 @@ export interface BillingSettingsSurfaceProps {
   billingReturnSurface?: BillingReturnSurface;
   checkoutReturnState?: BillingCheckoutReturnState;
   onOpenUrl: (url: string) => void | Promise<void>;
+  onOpenPricingPage?: () => void | Promise<void>;
   onOpenOrganizationSettings: () => void;
 }
 
@@ -44,6 +45,7 @@ export function BillingSettingsSurface({
   billingReturnSurface = "web",
   checkoutReturnState = null,
   onOpenUrl,
+  onOpenPricingPage,
   onOpenOrganizationSettings,
 }: BillingSettingsSurfaceProps) {
   const billingReturnOptions = { returnSurface: billingReturnSurface };
@@ -53,6 +55,7 @@ export function BillingSettingsSurface({
   const comparisonBilling = useCloudBilling(comparisonOwner, enabled);
   const comparisonActions = useCloudBillingActions(comparisonOwner, billingReturnOptions);
   const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
+  const [planManagementOpen, setPlanManagementOpen] = useState(false);
 
   useEffect(() => {
     if (checkoutReturnState !== "success") {
@@ -61,18 +64,31 @@ export function BillingSettingsSurface({
     void comparisonBilling.refetch();
   }, [checkoutReturnState, comparisonBilling.refetch]);
 
-  async function openComparisonBillingAction() {
+  function openPlanManagement() {
     setComparisonActionError(null);
     if (!organization) {
       onOpenOrganizationSettings();
       return;
     }
     if (!organization.canManageBilling) {
-      setComparisonActionError("Team billing is managed by owners and admins.");
+      setComparisonActionError("Organization billing is managed by owners and admins.");
+      return;
+    }
+    setPlanManagementOpen(true);
+  }
+
+  async function openComparisonBillingAction(action: "checkout" | "portal") {
+    setComparisonActionError(null);
+    if (!organization) {
+      onOpenOrganizationSettings();
+      return;
+    }
+    if (!organization.canManageBilling) {
+      setComparisonActionError("Organization billing is managed by owners and admins.");
       return;
     }
     try {
-      const response = comparisonBilling.data?.isPaidCloud
+      const response = action === "portal"
         ? await comparisonActions.createBillingPortal()
         : await comparisonActions.createCloudCheckout();
       await onOpenUrl(response.url);
@@ -83,31 +99,77 @@ export function BillingSettingsSurface({
     }
   }
 
+  function openPricingPage() {
+    if (!onOpenPricingPage) {
+      return;
+    }
+    void onOpenPricingPage();
+  }
+
+  const currentPlanKey = planKeyForBilling(comparisonBilling.data);
+  const comparisonActionDisabled = !enabled
+    || organizationLoading
+    || (organization?.canManageBilling ? comparisonBilling.isLoading : false);
+  const coreActionLoading = comparisonBilling.data?.isPaidCloud
+    ? comparisonActions.creatingBillingPortal
+    : comparisonActions.creatingCloudCheckout;
+
   return (
     <section className="space-y-6">
       <SettingsPageHeader
         title="Plan + billing"
-        description="Review account credits and manage organization plan, seats, cloud runtime, auto top up, overage, and plan changes."
+        description="Review account credits, organization plan, Core memberships, top up, and Stripe billing portal access."
       />
       <BillingSettingsPane
         checkoutReturnState={checkoutReturnState}
-        currentPlanKey={planKeyForBilling(comparisonBilling.data)}
+        currentPlanKey={currentPlanKey}
         planComparisonAction={{
-          label: !organization
-            ? "Create Team"
-            : comparisonBilling.data?.isPaidCloud
-              ? "Manage Team billing"
-              : "Upgrade Team",
-          loading: comparisonBilling.data?.isPaidCloud
-            ? comparisonActions.creatingBillingPortal
-            : comparisonActions.creatingCloudCheckout,
-          disabled: !enabled
-            || organizationLoading
-            || (organization?.canManageBilling ? comparisonBilling.isLoading : false),
+          label: !organization ? "Create organization" : "Manage plan",
+          disabled: comparisonActionDisabled,
           onClick: () => {
-            void openComparisonBillingAction();
+            openPlanManagement();
           },
         }}
+        enterprisePlanAction={onOpenPricingPage ? {
+          label: "Request trial",
+          onClick: openPricingPage,
+        } : undefined}
+        planManagementDialog={organization?.canManageBilling ? {
+          open: planManagementOpen,
+          onClose: () => {
+            setPlanManagementOpen(false);
+          },
+          currentPlanKey,
+          organizationName: organization.name,
+          coreAction: {
+            label: comparisonBilling.data?.isPaidCloud ? "Manage Core membership" : "Upgrade to Core",
+            loading: coreActionLoading,
+            disabled: comparisonActionDisabled,
+            onClick: () => {
+              void openComparisonBillingAction(
+                comparisonBilling.data?.isPaidCloud ? "portal" : "checkout",
+              );
+            },
+          },
+          portalAction: comparisonBilling.data?.isPaidCloud
+            ? {
+                label: "Billing portal",
+                loading: comparisonActions.creatingBillingPortal,
+                disabled: comparisonActionDisabled,
+                onClick: () => {
+                  void openComparisonBillingAction("portal");
+                },
+              }
+            : undefined,
+          enterpriseAction: onOpenPricingPage ? {
+            label: "Request trial",
+            onClick: openPricingPage,
+          } : undefined,
+          pricingAction: onOpenPricingPage ? {
+            label: "Learn more about pricing",
+            onClick: openPricingPage,
+          } : undefined,
+        } : undefined}
       >
         {comparisonActionError ? (
           <SettingsCard>
@@ -129,15 +191,15 @@ export function BillingSettingsSurface({
 
         {organizationLoading ? (
           <SettingsCard>
-            <SettingsCardRow label="Team billing" description="Loading team..." />
+            <SettingsCardRow label="Organization billing" description="Loading organization..." />
           </SettingsCard>
         ) : null}
 
         {!organizationLoading && !organization ? (
           <SettingsCard>
             <SettingsCardRow
-              label="Team billing"
-              description="Create a team from Organization settings to add seats, organization cloud, Slack work, and org admin controls."
+              label="Organization billing"
+              description="Create an organization from Organization settings to add seats, Core memberships, and org admin controls."
             >
               <Button
                 type="button"
@@ -152,35 +214,23 @@ export function BillingSettingsSurface({
         ) : null}
 
         {organization?.canManageBilling ? (
-          <>
-            <BillingOwnerController
-              key={organization.id}
-              title={`${organization.name} billing`}
-              description="Applies to organization cloud workspaces, team workflows, Slack sessions, and cloud usage."
-              iconKind="organization"
-              owner={{ ownerScope: "organization", organizationId: organization.id }}
-              checkoutReturnState={checkoutReturnState}
-              actionsEnabled
-              enabled={enabled}
-              billingReturnSurface={billingReturnSurface}
-              onOpenUrl={onOpenUrl}
-            />
-            <SettingsCard>
-              <SettingsCardRow
-                label="Auto top up"
-                description="Automatically refill organization-managed credits when balance reaches a threshold."
-              >
-                <Button type="button" size="sm" variant="secondary" disabled>
-                  Configure
-                </Button>
-              </SettingsCardRow>
-            </SettingsCard>
-          </>
+          <BillingOwnerController
+            key={organization.id}
+            title={`${organization.name} billing`}
+            description="Applies to organization cloud workspaces, shared workflows, and Core credit usage."
+            iconKind="organization"
+            owner={{ ownerScope: "organization", organizationId: organization.id }}
+            checkoutReturnState={checkoutReturnState}
+            actionsEnabled
+            enabled={enabled}
+            billingReturnSurface={billingReturnSurface}
+            onOpenUrl={onOpenUrl}
+          />
         ) : organization ? (
           <SettingsCard>
             <SettingsCardRow
               label={`${organization.name} billing`}
-              description="Team billing is managed by owners and admins."
+              description="Organization billing is managed by owners and admins."
             />
           </SettingsCard>
         ) : null}
@@ -282,7 +332,7 @@ function BillingOwnerController({
       : undefined,
     manageAction: actionsEnabled && !accountCreditsOnly
       ? {
-          label: "Manage billing",
+          label: "Billing portal",
           loading: billingActions.creatingBillingPortal,
           onClick: () => {
             void openBillingAction("portal");
@@ -291,7 +341,7 @@ function BillingOwnerController({
       : undefined,
     upgradeAction: actionsEnabled && !accountCreditsOnly
       ? {
-          label: "Upgrade Team",
+          label: "Upgrade to Core",
           loading: billingActions.creatingCloudCheckout,
           onClick: () => {
             void openBillingAction("checkout");
@@ -304,7 +354,7 @@ function BillingOwnerController({
       && !billingPlan.proBillingEnabled
       && !billingPlan.hasUnlimitedCloudHours
       ? {
-          label: "Refill 10h",
+          label: "Add credits",
           loading: billingActions.creatingRefillCheckout,
           onClick: () => {
             void openBillingAction("refill");
@@ -338,7 +388,7 @@ function planKeyForBilling(plan: BillingPlanView | null | undefined) {
   if (plan.isUnlimited && !plan.isPaidCloud) {
     return "enterprise";
   }
-  return plan.isPaidCloud ? "team" : "free";
+  return plan.isPaidCloud ? "core" : "free";
 }
 
 function overageActionForPlan({
@@ -361,7 +411,7 @@ function overageActionForPlan({
   if (plan.proBillingEnabled) {
     const nextEnabled = !plan.managedCloudOverageEnabled;
     return {
-      label: nextEnabled ? "Turn on overage" : "Turn off overage",
+      label: nextEnabled ? "Enable top up" : "Disable top up",
       loading,
       onClick: () => {
         void onUpdate(nextEnabled);
@@ -375,7 +425,7 @@ function overageActionForPlan({
 
   const nextEnabled = !plan.overageEnabled;
   return {
-    label: nextEnabled ? "Turn on overage" : "Turn off overage",
+    label: nextEnabled ? "Enable top up" : "Disable top up",
     loading,
     onClick: () => {
       void onUpdate(nextEnabled);

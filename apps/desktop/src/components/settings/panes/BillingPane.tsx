@@ -4,6 +4,7 @@ import {
   type BillingCheckoutReturnState,
 } from "@proliferate/product-surfaces/settings/BillingSettingsSurface";
 
+import { PROLIFERATE_PRICING_URL } from "@/config/capabilities";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
@@ -39,6 +40,7 @@ export function BillingPane() {
       organizationLoading={organizationsQuery.isLoading || (activeOrganization ? admin.isLoading : false)}
       checkoutReturnState={checkoutReturnStateFromParams(searchParams)}
       onOpenUrl={openExternal}
+      onOpenPricingPage={() => openExternal(PROLIFERATE_PRICING_URL)}
       onOpenOrganizationSettings={() => {
         navigate(buildSettingsHref({ section: "organization" }));
       }}

@@ -8,4 +8,6 @@ export const CLOUD_SETUP_DOCS_URL =
 
 export const PROLIFERATE_DOCS_URL = "https://proliferate.com/docs";
 
+export const PROLIFERATE_PRICING_URL = "https://proliferate.com/pricing";
+
 export const SUPPORT_EMAIL_ADDRESS = "support@proliferate.com";

@@ -14,7 +14,7 @@ export function planStatus(plan: BillingPlanView): {
     return { label: "Unlimited", tone: "success" };
   }
   if (plan.isPaidCloud) {
-    return { label: "Team", tone: "success" };
+    return { label: "Core", tone: "success" };
   }
   return { label: "Free", tone: "neutral" };
 }
@@ -43,11 +43,49 @@ export function runtimeUsage(plan: BillingPlanView): {
     : null;
 
   return {
-    label: plan.proBillingEnabled && plan.isPaidCloud ? "Managed cloud left" : "Cloud runtime left",
-    primary: formatHours(remaining),
-    detail: `${formatHours(used)} used${total ? ` of ${formatHours(total)}` : ""}`,
+    label: "Proliferate Credits available",
+    primary: formatCredits(remaining),
+    detail: `${formatCredits(used)} used${total ? ` of ${formatCredits(total)}` : ""}`,
     percent,
     progressLabel: total ? `${Math.round(percent ?? 0)}% used this period` : "Usage is not capped for this plan",
+  };
+}
+
+export function proliferateCreditBalance(plan: BillingPlanView): {
+  purchased: string;
+  available: string;
+  used: string;
+} {
+  const visible = visibleGrantAllocations(plan.grantAllocations);
+  if (visible.length > 0) {
+    return {
+      purchased: formatCredits(visible.reduce(
+        (total, grant) => total + secondsToHours(grant.totalSeconds),
+        0,
+      )),
+      available: formatCredits(visible.reduce(
+        (total, grant) => total + secondsToHours(grant.remainingSeconds),
+        0,
+      )),
+      used: formatCredits(visible.reduce(
+        (total, grant) => total + secondsToHours(grant.consumedSeconds),
+        0,
+      )),
+    };
+  }
+
+  const remaining = plan.proBillingEnabled && plan.isPaidCloud
+    ? plan.remainingManagedCloudHours
+    : plan.remainingSandboxHours;
+  const included = plan.proBillingEnabled && plan.isPaidCloud
+    ? plan.includedManagedCloudHours
+    : plan.freeSandboxHours;
+  const used = managedUsedHours(plan) ?? plan.usedSandboxHours ?? null;
+
+  return {
+    purchased: formatCredits(included),
+    available: formatCredits(remaining),
+    used: formatCredits(used),
   };
 }
 
@@ -107,11 +145,11 @@ export function grantTypeLabel(grantType: string): string {
     case "cloud_monthly":
       return "Monthly cloud credits";
     case "pro_period":
-      return "Team period credits";
+      return "Core period credits";
     case "pro_seat_proration":
       return "Seat adjustment credits";
     case "refill_10h":
-      return "Refill credits";
+      return "Top-up credits";
     default:
       return grantType.replace(/_/g, " ");
   }
@@ -127,18 +165,18 @@ export function overageSummary(plan: BillingPlanView): {
   }
   if (plan.proBillingEnabled && !plan.legacyCloudSubscription) {
     return {
-      title: "Managed cloud overage",
+      title: "Credit top up",
       enabled: plan.managedCloudOverageEnabled,
       description: `${formatCurrency(plan.managedCloudOverageUsedCents)} used of ${formatCurrency(
         plan.managedCloudOverageCapCents,
-      )} at ${formatCurrency(plan.overagePricePerHourCents)} per hour.`,
+      )} at ${formatCurrency(plan.overagePricePerHourCents)} per PCU.`,
     };
   }
   if (!plan.proBillingEnabled && !plan.hasUnlimitedCloudHours) {
     return {
-      title: "Overage billing",
+      title: "Credit top up",
       enabled: plan.overageEnabled,
-      description: "Allow additional cloud runtime after prepaid hours are exhausted.",
+      description: "Allow additional Proliferate Credits after prepaid credits are exhausted.",
     };
   }
   return null;
@@ -166,6 +204,19 @@ export function formatHours(value: number | null | undefined): string {
     minimumFractionDigits: Number.isInteger(rounded) ? 0 : 2,
   });
   return `${formatted} ${rounded === 1 ? "hour" : "hours"}`;
+}
+
+export function formatCredits(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "Unlimited";
+  }
+
+  const rounded = Math.round(Math.max(value, 0) * 100) / 100;
+  const formatted = rounded.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(rounded) ? 0 : 2,
+  });
+  return `${formatted} ${rounded === 1 ? "PCU" : "PCUs"}`;
 }
 
 export function formatCurrency(value: number | null | undefined): string {
@@ -198,9 +249,9 @@ export function startBlockTitle(reason: string | null | undefined): string {
 export function startBlockDescription(reason: string | null | undefined): string {
   switch (reason) {
     case "credits_exhausted":
-      return "Included cloud runtime has been used for this period.";
+      return "Included Proliferate Credits have been used for this period.";
     case "overage_disabled":
-      return "Turn on capped overage or wait for the next billing period.";
+      return "Enable top up or wait for the next billing period.";
     case "cap_exhausted":
       return "Raise the overage cap or wait for the next billing period.";
     case "payment_failed":

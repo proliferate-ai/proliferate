@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BillingSettingsSurface } from "./BillingSettingsSurface";
 
@@ -61,7 +61,7 @@ describe("BillingSettingsSurface", () => {
     cloudHooks.updateOverageEnabled.mockResolvedValue({});
     cloudHooks.useCloudBilling.mockImplementation((owner: { ownerScope?: string } | undefined) => ({
       data: owner?.ownerScope === "organization"
-        ? billingPlan({ plan: "team", isPaidCloud: true, repoEnvironmentLimit: 20 })
+        ? billingPlan({ plan: "pro", isPaidCloud: true, repoEnvironmentLimit: 20 })
         : billingPlan(),
       isLoading: false,
       isError: false,
@@ -84,7 +84,7 @@ describe("BillingSettingsSurface", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the no-team state and delegates organization navigation", () => {
+  it("renders the no-organization state and delegates organization navigation", () => {
     const onOpenOrganizationSettings = vi.fn();
 
     render(
@@ -95,7 +95,7 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    expect(screen.queryByText("Team billing")).not.toBeNull();
+    expect(screen.queryByText("Organization billing")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Organization" }));
 
     expect(onOpenOrganizationSettings).toHaveBeenCalledTimes(1);
@@ -118,10 +118,13 @@ describe("BillingSettingsSurface", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Plan + billing" })).toBeTruthy();
-    expect(screen.getByText("Auto top up")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Configure" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getAllByText("Credit top up").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Enable top up" })).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Manage Team billing" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Manage plan" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "Manage plan" });
+    expect(dialog).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Billing portal" }));
 
     await waitFor(() => {
       expect(onOpenUrl).toHaveBeenCalledWith("https://billing.example/portal");
@@ -176,7 +179,11 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Upgrade Team" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Manage plan" })[0]);
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Manage plan" }))
+        .getByRole("button", { name: "Upgrade to Core" }),
+    );
 
     await waitFor(() => {
       expect(screen.queryByText("checkout offline")).not.toBeNull();
