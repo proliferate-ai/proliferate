@@ -21,13 +21,12 @@ export interface AccountProfileSummaryInput {
 export interface GitHubStatusLabelInput {
   cloudSignInChecking: boolean;
   devAuthBypassed: boolean;
-  isAuthenticated: boolean;
   localMode: boolean;
   signInUnavailable: boolean;
 }
 
 export interface AccountActionDescriptionInput extends AccountProfileSummaryInput {
-  githubLogin: string | null;
+  githubConnected: boolean;
 }
 
 export function getAccountDisplayName({
@@ -84,7 +83,6 @@ export function getAccountProfileSummary({
 export function getGitHubStatusLabel({
   cloudSignInChecking,
   devAuthBypassed,
-  isAuthenticated,
   localMode,
   signInUnavailable,
 }: GitHubStatusLabelInput): string {
@@ -97,7 +95,7 @@ export function getGitHubStatusLabel({
   if (localMode || signInUnavailable) {
     return "Unavailable";
   }
-  return isAuthenticated ? "Username unavailable" : "Not connected";
+  return "Not connected";
 }
 
 export function getAccountActionDescription({
@@ -106,18 +104,20 @@ export function getAccountActionDescription({
   localMode,
   signInUnavailable,
   signedInWhileCloudUnavailable,
-  githubLogin,
+  githubConnected,
 }: AccountActionDescriptionInput): string {
   if (devAuthBypassed) {
     return "Auth is bypassed for this local development build.";
   }
   if (signedInWhileCloudUnavailable) {
-    return "Cloud is unavailable, but you can still manage GitHub access or sign out.";
+    return githubConnected
+      ? "Cloud is unavailable, but you can still manage GitHub access or sign out."
+      : "Cloud is unavailable, but you can still sign out from this device.";
   }
   if (isAuthenticated) {
-    return githubLogin
+    return githubConnected
       ? "Reconnect GitHub, manage repository access, or sign out from this device."
-      : "Reconnect GitHub to refresh account details, or sign out from this device.";
+      : "Connect GitHub to enable repository access, or sign out from this device.";
   }
   if (localMode || signInUnavailable) {
     return "Cloud sign-in is unavailable in this environment.";

@@ -62,6 +62,8 @@ describe("AccountSettingsPane", () => {
 
     fireEvent.click(screen.getByText("Connect GitHub"));
     expect(connectGitHub).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Primary")).toBeNull();
+    expect(screen.getByText("Not connected")).toBeTruthy();
   });
 
   it("renders multiple linked providers", () => {

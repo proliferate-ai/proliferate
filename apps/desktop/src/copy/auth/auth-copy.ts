@@ -40,6 +40,8 @@ export const AUTH_ACCOUNT_LABELS = {
   signIn: "Sign in",
   checkingSignIn: "Checking GitHub...",
   signingIn: "Waiting for GitHub...",
+  connectGitHub: "Connect GitHub",
+  connectingGitHub: "Waiting for GitHub...",
   reconnect: "Reconnect",
   reconnecting: "Reconnecting...",
   manageAccess: "Manage access",

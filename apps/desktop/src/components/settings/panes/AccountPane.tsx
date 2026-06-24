@@ -5,6 +5,7 @@ import {
   type AccountPasswordCredentialSubmit,
   type AccountProviderView,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { setPasswordCredential } from "@proliferate/cloud-sdk";
 import { ExternalLink, Link2, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
@@ -62,9 +63,21 @@ export function AccountPane() {
   const googleAvailability = authViewer.data?.providerAvailability.find((provider) => (
     provider.provider === "google"
   ));
+  const githubLogin = user?.github_login?.trim() || null;
+  const githubConnected = Boolean(authViewer.data?.githubConnected || linkedGitHub || githubLogin);
+  const githubAccountLabel = githubLogin
+    ? `@${githubLogin}`
+    : linkedGitHub?.accountEmail ?? linkedGitHub?.accountId ?? null;
   const localMode = cloudUnavailable && !devAuthBypassed && !isAuthenticated;
-  const canReconnectGitHub = isAuthenticated && cloudSignInAvailable && !cloudSignInChecking;
-  const canOpenGitHubSettings = isAuthenticated && !devAuthBypassed;
+  const canConnectGitHub = isAuthenticated
+    && !githubConnected
+    && cloudSignInAvailable
+    && !cloudSignInChecking;
+  const canReconnectGitHub = isAuthenticated
+    && githubConnected
+    && cloudSignInAvailable
+    && !cloudSignInChecking;
+  const canOpenGitHubSettings = isAuthenticated && !devAuthBypassed && githubConnected;
   const canLinkGoogle = isAuthenticated
     && cloudSignInAvailable
     && !cloudSignInChecking
@@ -75,7 +88,6 @@ export function AccountPane() {
     && !cloudSignInAvailable
     && !isAuthenticated;
   const signedInWhileCloudUnavailable = cloudUnavailable && isAuthenticated;
-  const githubLogin = user?.github_login?.trim() || null;
   const displayName = getAccountDisplayName({
     email: user?.email,
     displayName: user?.display_name,
@@ -144,10 +156,9 @@ export function AccountPane() {
         displayName={displayName}
         email={user?.email ?? "Not signed in"}
         avatarUrl={profileAvatarUrl}
-        githubLabel={githubLogin ? `@${githubLogin}` : getGitHubStatusLabel({
+        githubLabel={githubAccountLabel ?? getGitHubStatusLabel({
           cloudSignInChecking,
           devAuthBypassed,
-          isAuthenticated,
           localMode,
           signInUnavailable,
         })}
@@ -158,11 +169,11 @@ export function AccountPane() {
           localMode,
           signInUnavailable,
           signedInWhileCloudUnavailable,
-          githubLogin,
+          githubConnected,
         })}
         providers={buildAccountProviderViews({
-          githubLogin,
-          linkedGitHub,
+          githubAccountLabel,
+          githubConnected,
           googleAccounts,
           googleAvailable: googleAvailability?.enabled !== false,
           showProviders: isAuthenticated && !devAuthBypassed,
@@ -195,6 +206,17 @@ export function AccountPane() {
                   ? AUTH_ACCOUNT_LABELS.reconnecting
                   : AUTH_ACCOUNT_LABELS.reconnect,
                 icon: <RefreshCw className="size-3" />,
+                loading: signingIn,
+                disabled: signingIn || signInChecking,
+                onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
+              }
+            : undefined,
+          connectGitHub: canConnectGitHub
+            ? {
+                label: signingIn
+                  ? AUTH_ACCOUNT_LABELS.connectingGitHub
+                  : AUTH_ACCOUNT_LABELS.connectGitHub,
+                icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
                 loading: signingIn,
                 disabled: signingIn || signInChecking,
                 onClick: () => { void signInWithGitHub({ prompt: "select_account" }); },
@@ -233,14 +255,14 @@ export function AccountPane() {
 }
 
 function buildAccountProviderViews({
-  githubLogin,
-  linkedGitHub,
+  githubAccountLabel,
+  githubConnected,
   googleAccounts,
   googleAvailable,
   showProviders,
 }: {
-  githubLogin: string | null;
-  linkedGitHub: { accountEmail?: string | null; accountId?: string | null } | undefined;
+  githubAccountLabel: string | null;
+  githubConnected: boolean;
   googleAccounts: Array<{ accountEmail?: string | null; accountId?: string | null }>;
   googleAvailable: boolean;
   showProviders: boolean;
@@ -252,7 +274,7 @@ function buildAccountProviderViews({
         label: "GitHub",
         accountLabel: "Not signed in",
         connected: false,
-        primary: true,
+        primary: false,
       },
     ];
   }
@@ -261,9 +283,9 @@ function buildAccountProviderViews({
     {
       provider: "github",
       label: "GitHub",
-      accountLabel: githubLogin ? `@${githubLogin}` : linkedGitHub?.accountEmail ?? "Connected",
-      connected: Boolean(linkedGitHub) || Boolean(githubLogin),
-      primary: true,
+      accountLabel: githubConnected ? githubAccountLabel ?? "Connected" : "Not connected",
+      connected: githubConnected,
+      primary: githubConnected,
     },
   ];
 

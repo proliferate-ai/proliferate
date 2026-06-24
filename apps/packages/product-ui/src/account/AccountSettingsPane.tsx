@@ -248,7 +248,7 @@ function ProviderRow({ provider }: { provider: AccountProviderView }) {
       <div className="min-w-0">
         <div className="flex items-center gap-2 font-medium text-foreground">
           <span>{provider.label}</span>
-          {provider.primary ? (
+          {provider.primary && provider.connected ? (
             <Badge tone="neutral">Primary</Badge>
           ) : null}
         </div>

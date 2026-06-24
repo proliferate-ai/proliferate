@@ -129,7 +129,7 @@ function buildProviderViews(
     label: "GitHub",
     accountLabel: github?.accountEmail ?? github?.accountId ?? (githubConnected ? "Connected" : "Required"),
     connected: githubConnected,
-    primary: true,
+    primary: githubConnected,
   });
 
   const googleProviders = linkedProviders.filter((provider) => provider.provider === "google");
