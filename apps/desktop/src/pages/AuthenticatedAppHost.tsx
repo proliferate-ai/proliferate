@@ -6,6 +6,7 @@ import { IntegrationsPage } from "@/pages/IntegrationsPage";
 import { MainPage } from "@/pages/MainPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { WorkflowsPage } from "@/pages/WorkflowsPage";
+import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
 type SettingsRouteComponent = ComponentType<{ returnTo?: string }>;
@@ -20,6 +21,7 @@ export function AuthenticatedAppHost({
   MainComponent = MainPage,
   SettingsComponent = SettingsPage,
 }: AuthenticatedAppHostProps = {}) {
+  useOrganizationSelectionLifecycle();
   const location = useLocation();
   const isSettingsRoute = location.pathname === APP_ROUTES.settings;
   const lastNonSettingsHrefRef = useRef<string>(APP_ROUTES.home);

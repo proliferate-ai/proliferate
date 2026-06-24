@@ -3,10 +3,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import {
-  RuntimePressureDetailsDialog,
-  RuntimePressureRing,
-} from "@/components/workspace/chat/input/RuntimePressureIndicator";
+import { RuntimePressureDetailsDialog } from "@/components/workspace/chat/input/RuntimePressureDetailsDialog";
+import { RuntimePressureRing } from "@/components/workspace/chat/input/RuntimePressureIndicator";
 import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";
 import {
   type RuntimePressureTargetState,

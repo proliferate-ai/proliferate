@@ -168,14 +168,16 @@ function IntegrationCategoryFilterDropdown({
   return (
     <PopoverButton
       trigger={(
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-surface-control px-3 text-left text-sm text-foreground shadow-none outline-none transition-colors hover:bg-list-hover focus:outline-none focus:ring-1 focus:ring-ring data-[state=open]:bg-list-hover data-[state=open]:ring-1 data-[state=open]:ring-ring"
           aria-label={`Filter integrations: ${selectedOption.label}`}
         >
           <span className="min-w-0 truncate">{selectedOption.label}</span>
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-        </button>
+        </Button>
       )}
       align="end"
       side="bottom"
