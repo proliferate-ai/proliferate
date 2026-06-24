@@ -49,7 +49,7 @@ export function App() {
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={routes.workflows} />} />
-          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} includeParam="workflowId" />} />
+          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} extractLastSegment />} />
           <Route path="plugins" element={<LegacyRouteRedirect to={routes.integrations} />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="settings" element={<SettingsPage />} />
@@ -91,13 +91,13 @@ function isSettingsPath(pathname: string): boolean {
 
 function LegacyRouteRedirect({
   to,
-  includeParam,
+  extractLastSegment = false,
 }: {
   to: string;
-  includeParam?: string;
+  extractLastSegment?: boolean;
 }) {
   const location = useLocation();
-  const match = includeParam
+  const match = extractLastSegment
     ? location.pathname.split("/").filter(Boolean).at(-1)
     : null;
   const suffix = match ? `/${encodeURIComponent(decodeURIComponent(match))}` : "";
