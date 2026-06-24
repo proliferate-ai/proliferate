@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound, Shield } from "lucide-react";
 import { useState } from "react";
 
 import { type AuthProviderName } from "@proliferate/cloud-sdk";
@@ -15,16 +15,21 @@ import { Input } from "@proliferate/ui/primitives/Input";
 
 import { webEnv } from "../../../config/env";
 import { WEB_AUTH_COPY } from "../../../copy/auth/web-auth-copy";
-import { startWebAuthFlow } from "../../../lib/access/cloud/auth/web-auth-flow";
+import {
+  startWebAuthFlow,
+  startWebSsoFlow,
+} from "../../../lib/access/cloud/auth/web-auth-flow";
 import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 const WEB_SIGN_IN_PROVIDERS = new Set<AuthProviderName>(["github", "google"]);
+type LoadingAuthTarget = AuthProviderName | "sso";
 
 export function AuthScreen() {
   const { setToken, bootstrapUnreachable } = useAuthToken();
   const [manualToken, setManualToken] = useState("");
+  const [ssoEmail, setSsoEmail] = useState("");
   const [showDevAccess, setShowDevAccess] = useState(false);
-  const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | null>(null);
+  const [loadingProvider, setLoadingProvider] = useState<LoadingAuthTarget | null>(null);
   const [providerError, setProviderError] = useState<string | null>(null);
   const busy = Boolean(loadingProvider);
   const providerActions = AUTH_PROVIDER_ORDER
@@ -53,6 +58,20 @@ export function AuthScreen() {
     }
   }
 
+  async function signInWithSso() {
+    if (busy) {
+      return;
+    }
+    setProviderError(null);
+    setLoadingProvider("sso");
+    try {
+      await startWebSsoFlow({ email: ssoEmail });
+    } catch (authError) {
+      setLoadingProvider(null);
+      setProviderError(authError instanceof Error ? authError.message : "SSO could not start.");
+    }
+  }
+
   return (
     <AuthStartPanel
       mark={<ProliferateMark size={36} />}
@@ -64,6 +83,36 @@ export function AuthScreen() {
         </span>
       )}
       footer={<span className="block text-faint">{AUTH_SIGN_IN_COPY.footer}</span>}
+      credentialForm={(
+        <form
+          className="grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void signInWithSso();
+          }}
+        >
+          <Input
+            type="email"
+            value={ssoEmail}
+            onChange={(event) => setSsoEmail(event.target.value)}
+            placeholder="name@company.com"
+            className="text-sm"
+            disabled={busy}
+            autoComplete="email"
+          />
+          <Button
+            type="submit"
+            size="md"
+            variant="secondary"
+            className="w-full"
+            loading={loadingProvider === "sso"}
+            disabled={busy || !ssoEmail.trim()}
+          >
+            <Shield size={15} />
+            Continue with SSO
+          </Button>
+        </form>
+      )}
       providers={providerActions}
       error={providerError ?? (bootstrapUnreachable ? localApiUnreachableNotice() : null)}
       devAccess={webEnv.devAccessTokenLogin ? (

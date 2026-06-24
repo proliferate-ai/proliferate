@@ -2,6 +2,7 @@ export type CloudSettingsSectionId =
   | "account"
   | "environments"
   | "organization"
+  | "sso"
   | "teams"
   | "billing"
   | "support";
@@ -12,6 +13,7 @@ export type CloudSettingsIconToken =
   | "account"
   | "branch"
   | "organization"
+  | "sso"
   | "billing"
   | "support";
 
@@ -42,6 +44,12 @@ export const WEB_CLOUD_SETTINGS_SECTIONS: readonly CloudSettingsSectionDefinitio
     mobileRelevant: true,
   },
   {
+    id: "sso",
+    label: "Single sign-on",
+    iconToken: "sso",
+    mobileRelevant: true,
+  },
+  {
     id: "billing",
     label: "Billing",
     iconToken: "billing",
@@ -59,6 +67,7 @@ const SECTION_IDS = new Set<CloudSettingsSectionId>([
   "account",
   "environments",
   "organization",
+  "sso",
   "teams",
   "billing",
   "support",

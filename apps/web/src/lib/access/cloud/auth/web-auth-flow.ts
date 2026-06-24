@@ -1,5 +1,7 @@
 import {
+  discoverSso,
   exchangeWebAuthCode,
+  startSsoAuth,
   startAuthProvider,
   type AuthProviderName,
   type AuthPurpose,
@@ -24,7 +26,7 @@ export class WebAuthFlowError extends Error {
 }
 
 interface PendingWebAuth {
-  provider: AuthProviderName;
+  provider: AuthProviderName | "sso";
   purpose: AuthPurpose;
   state: string;
   codeVerifier: string;
@@ -61,6 +63,43 @@ export async function startWebAuthFlow(input: {
   writePendingWebAuth({
     provider: input.provider,
     purpose,
+    state: clientState,
+    codeVerifier: pkce.verifier,
+    createdAt: Date.now(),
+  });
+  window.location.assign(response.authorizationUrl);
+}
+
+export async function startWebSsoFlow(input: { email: string }): Promise<void> {
+  const email = input.email.trim();
+  if (!email) {
+    throw new Error("Enter your work email to continue with SSO.");
+  }
+  const client = createWebCloudClient(webEnv.apiBaseUrl, null);
+  const discovery = await discoverSso({ email }, client);
+  if (!discovery.enabled) {
+    throw new Error("SSO is not configured for this email domain.");
+  }
+  const pkce = await createPkcePair();
+  const clientState = createOAuthState();
+  const redirectUri = new URL(routes.authCallback, window.location.origin).toString();
+  const response = await startSsoAuth(
+    "web",
+    {
+      clientState,
+      codeChallenge: pkce.challenge,
+      codeChallengeMethod: "S256",
+      redirectUri,
+      email,
+      organizationId: discovery.organizationId ?? undefined,
+      connectionId: discovery.connectionId ?? undefined,
+      prompt: "select_account",
+    },
+    client,
+  );
+  writePendingWebAuth({
+    provider: "sso",
+    purpose: "login",
     state: clientState,
     codeVerifier: pkce.verifier,
     createdAt: Date.now(),
@@ -116,6 +155,9 @@ function authCallbackErrorMessage(code: string): string {
     case "web_beta_email_missing":
     case "web_beta_email_not_allowed":
       return "Hosted web access is currently limited to beta users.";
+    case "sso_connection_not_found":
+    case "not_configured":
+      return "SSO is not configured for this account.";
     default:
       return code;
   }

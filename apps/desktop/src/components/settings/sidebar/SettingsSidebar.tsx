@@ -90,6 +90,7 @@ const SETTINGS_NAV_ICONS = {
   "organization-integrations": Blocks,
   "organization-limits": SlidersHorizontal,
   "organization-model-policy": Brain,
+  "organization-sso": Shield,
   support: LifeBuoy,
   worktrees: Tree,
 } satisfies Record<SettingsNavIconId, typeof Settings>;
