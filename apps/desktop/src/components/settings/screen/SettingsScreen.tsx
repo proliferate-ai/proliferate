@@ -18,6 +18,7 @@ import { OrganizationIntegrationsPane } from "@/components/settings/panes/Organi
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
+import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 // SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
 // import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
@@ -107,6 +108,21 @@ function renderSettingsSection(
   // if (activeSection === "organization-limits") {
   //   return <OrganizationBudgetsPane />;
   // }
+  if (activeSection === "organization-sso") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <OrganizationSsoPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
   }
@@ -240,6 +256,7 @@ export function SettingsScreen({
         disabledSections={{
           "agent-authentication": !cloudEnabled,
           "organization-integrations": !cloudEnabled,
+          "organization-sso": !cloudEnabled,
           compute: !cloudEnabled,
           // SLACK BOT PARKED: section is not registered while the flow is disabled.
           // "slack-bot": !cloudEnabled,

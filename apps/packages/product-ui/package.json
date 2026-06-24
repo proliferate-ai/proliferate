@@ -203,6 +203,10 @@
       "types": "./dist/settings/SettingsShell.d.ts",
       "import": "./dist/settings/SettingsShell.js"
     },
+    "./settings/OrganizationSsoSettingsSurface": {
+      "types": "./dist/settings/OrganizationSsoSettingsSurface.d.ts",
+      "import": "./dist/settings/OrganizationSsoSettingsSurface.js"
+    },
     "./sidebar/ProductSidebar": {
       "types": "./dist/sidebar/ProductSidebar.d.ts",
       "import": "./dist/sidebar/ProductSidebar.js"

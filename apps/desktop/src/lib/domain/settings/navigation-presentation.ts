@@ -17,6 +17,7 @@ export type SettingsNavIconId =
   | "organization-limits"
   | "organization-members"
   | "organization-model-policy"
+  | "organization-sso"
   | "support"
   | "worktrees";
 
@@ -82,6 +83,13 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: "billing",
         label: "Billing",
         iconId: "billing",
+        adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "organization-sso",
+        label: "Single sign-on",
+        iconId: "organization-sso",
         adminOnly: true,
       },
       {
