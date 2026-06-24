@@ -313,15 +313,15 @@ export function SettingsSidebar({
                   </Fragment>
                 );
               })}
+              {group.id === "help" && appVersion ? (
+                <div className="px-2.5 py-2 text-base leading-5 text-sidebar-muted-foreground">
+                  Proliferate v{appVersion}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
       </nav>
-      {appVersion ? (
-        <div className="shrink-0 border-t border-sidebar-border px-4 py-3 text-base text-sidebar-muted-foreground">
-          Proliferate v{appVersion}
-        </div>
-      ) : null}
       <AppSidebarFooter />
     </div>
   );

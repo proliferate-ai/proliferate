@@ -211,6 +211,7 @@ function InvitationRow({
       <div className="flex justify-end">
         <RowActionMenu
           label={`Actions for ${invitation.email}`}
+          title="Invitation"
           disabled={!canManage || !onRevokeInvitation}
         >
           {(close) => (
@@ -312,10 +313,12 @@ function RoleMenuItems({
 
 function RowActionMenu({
   label,
+  title,
   disabled,
   children,
 }: {
   label: string;
+  title?: string;
   disabled: boolean;
   children: (close: () => void) => ReactNode;
 }) {
@@ -336,8 +339,21 @@ function RowActionMenu({
       )}
       className={`w-48 ${POPOVER_SURFACE_CLASS}`}
     >
-      {children}
+      {(close) => (
+        <>
+          {title ? <MenuTitle>{title}</MenuTitle> : null}
+          {children(close)}
+        </>
+      )}
     </PopoverButton>
+  );
+}
+
+function MenuTitle({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-3 pb-1.5 pt-2 text-xs font-medium leading-4 text-muted-foreground">
+      {children}
+    </div>
   );
 }
 

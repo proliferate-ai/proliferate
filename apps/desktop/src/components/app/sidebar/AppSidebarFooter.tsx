@@ -68,7 +68,7 @@ export function AppSidebarFooter() {
 
   return (
     <div className="shrink-0">
-      <div className="flex items-center border-t !border-sidebar-border/75 px-2 py-2 shrink-0">
+      <div className="flex shrink-0 items-center border-t !border-sidebar-border/75 px-3 py-3">
         <PopoverButton
           align="start"
           side="top"
@@ -78,7 +78,7 @@ export function AppSidebarFooter() {
               type="button"
               variant="unstyled"
               size="unstyled"
-              className="h-9 w-full min-w-0 justify-start rounded-lg px-2 text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
+              className="h-10 w-full min-w-0 justify-start rounded-lg px-2 text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
               title={activeLabel}
             >
               <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-sm font-[520] leading-none text-sidebar-foreground">
