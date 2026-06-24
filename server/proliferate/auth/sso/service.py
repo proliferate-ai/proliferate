@@ -250,6 +250,7 @@ async def resolve_sso_user(
     connection: SsoConnectionSnapshot,
     verified: VerifiedSsoIdentity,
 ) -> User:
+    _require_verified_allowed_email(connection=connection, verified=verified)
     existing_identity = await sso_store.get_sso_identity_by_connection_subject(
         db,
         connection_key=connection.connection_key,
@@ -262,12 +263,6 @@ async def resolve_sso_user(
         _ensure_active_user(user)
         await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
         return user
-
-    if not verified.email:
-        raise HTTPException(status_code=400, detail="SSO did not return an email address.")
-    if not verified.email_verified:
-        raise HTTPException(status_code=403, detail="SSO email address is not verified.")
-    require_email_domain_allowed(verified.email, connection.allowed_domains)
 
     user = await get_user_by_email(db, verified.email)
     if connection.scope == SsoScope.ORGANIZATION:
@@ -291,6 +286,18 @@ async def resolve_sso_user(
 
     await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
     return user
+
+
+def _require_verified_allowed_email(
+    *,
+    connection: SsoConnectionSnapshot,
+    verified: VerifiedSsoIdentity,
+) -> None:
+    if not verified.email:
+        raise HTTPException(status_code=400, detail="SSO did not return an email address.")
+    if not verified.email_verified:
+        raise HTTPException(status_code=403, detail="SSO email address is not verified.")
+    require_email_domain_allowed(verified.email, connection.allowed_domains)
 
 
 async def test_oidc_connection(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -128,4 +129,4 @@ def _optional_uuid(value: str | None, *, field: str) -> UUID | None:
 
 def _auth_error_url(code: str) -> str:
     base = settings.frontend_base_url.strip().rstrip("/") or "http://localhost:5174"
-    return f"{base}/auth/error?code={code}"
+    return f"{base}/auth/error?{urlencode({'code': code})}"
