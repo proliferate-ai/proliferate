@@ -6,12 +6,12 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
-  ArrowRight,
   Building2,
   Check,
   ChevronUpDown,
   ExternalLink,
   LifeBuoy,
+  LogOut,
   Mail,
   Settings,
 } from "@proliferate/ui/icons";
@@ -192,7 +192,7 @@ export function AppSidebarFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Log out"
-                  icon={<ArrowRight className="size-3.5" />}
+                  icon={<LogOut className="size-3.5" />}
                   onClick={() => {
                     handleSignOut();
                     close();
