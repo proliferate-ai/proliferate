@@ -42,23 +42,47 @@ afterEach(() => {
 });
 
 describe("scratchListDecorations", () => {
+  it("renders unordered markdown markers with shared marker spacing", () => {
+    const editor = createView("- first");
+
+    const marker = editor.contentDOM.querySelector(".scratch-list-marker");
+    expect(marker?.textContent).toBe("•");
+    expect(editor.contentDOM.textContent).toContain("• first");
+
+    const styleText = collectStyleText();
+    expect(styleText).toContain("padding-left: var(--scratch-list-marker-leading-space)");
+  });
+
   it("renders ordered markdown markers as ordered markers", () => {
     const editor = createView("1. first");
 
     const marker = editor.contentDOM.querySelector(".scratch-list-marker--ordered");
-    expect(marker?.textContent).toBe("1. ");
+    expect(marker?.textContent).toBe("1.");
+    expect(editor.contentDOM.textContent).toContain("1. first");
     expect(editor.contentDOM.textContent).not.toContain("•");
 
     const styleText = collectStyleText();
     expect(styleText).toContain("font-variant-numeric: tabular-nums");
-    expect(styleText).toContain("justify-content: flex-start");
+    expect(styleText).toContain("padding-left: var(--scratch-list-marker-leading-space)");
   });
 
   it("renders parenthesized ordered markdown markers as ordered markers", () => {
     const editor = createView("1) first");
 
     const marker = editor.contentDOM.querySelector(".scratch-list-marker--ordered");
-    expect(marker?.textContent).toBe("1) ");
+    expect(marker?.textContent).toBe("1)");
     expect(editor.contentDOM.textContent).not.toContain("•");
+  });
+
+  it("renders task markers with shared marker spacing", () => {
+    const editor = createView("- [ ] first");
+
+    const marker = editor.contentDOM.querySelector(".scratch-task-checkbox");
+    expect(marker).not.toBeNull();
+    expect(editor.contentDOM.textContent).toContain(" first");
+
+    const styleText = collectStyleText();
+    expect(styleText).toContain("margin: 0");
+    expect(styleText).toContain("padding-left: var(--scratch-list-marker-leading-space)");
   });
 });

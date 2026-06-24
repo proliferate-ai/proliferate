@@ -117,21 +117,23 @@ export const scratchEditorTheme = EditorView.theme({
   },
   ".scratch-list-marker": {
     display: "inline-flex",
-    width: "var(--scratch-list-marker-width)",
-    justifyContent: "center",
+    boxSizing: "border-box",
+    paddingLeft: "var(--scratch-list-marker-leading-space)",
+    justifyContent: "flex-start",
     color: "var(--color-sidebar-muted-foreground)",
   },
   ".scratch-list-marker--ordered": {
     width: "auto",
-    justifyContent: "flex-start",
     fontVariantNumeric: "tabular-nums",
   },
   ".scratch-task-checkbox": {
-    display: "inline-block",
-    width: "var(--scratch-list-marker-width)",
+    display: "inline-flex",
     height: "1em",
-    margin: "0 0.1em 0 0",
+    margin: "0",
+    paddingLeft: "var(--scratch-list-marker-leading-space)",
     boxSizing: "border-box",
+    alignItems: "center",
+    justifyContent: "flex-start",
     lineHeight: "1",
     position: "relative",
     verticalAlign: "-0.1em",
@@ -141,14 +143,11 @@ export const scratchEditorTheme = EditorView.theme({
     width: "var(--scratch-task-box-size)",
     height: "var(--scratch-task-box-size)",
     boxSizing: "border-box",
-    position: "absolute",
-    left: "50%",
-    top: "50%",
+    position: "relative",
     border: "1px solid color-mix(in oklab, var(--color-sidebar-muted-foreground) 72%, transparent)",
     borderRadius: "0.18em",
     background: "transparent",
     color: "transparent",
-    transform: "translate(-50%, -50%)",
   },
   ".scratch-task-checkbox[data-checked=\"true\"] .scratch-task-box": {
     borderColor: "color-mix(in oklab, var(--color-foreground) 68%, transparent)",
@@ -203,7 +202,7 @@ function buildScratchListDecorations(view: EditorView) {
       const prefix = parseScratchMarkdownListPrefix(line.text);
       if (prefix) {
         const markerFrom = line.from + prefix.indent.length;
-        const markerTo = line.from + prefix.prefixLength;
+        const markerTo = line.from + prefix.indent.length + markerReplacementLength(prefix);
         const widget = listMarkerWidget(prefix, line.from);
         decorations.push(Decoration.replace({
           widget,
@@ -217,6 +216,13 @@ function buildScratchListDecorations(view: EditorView) {
     }
   }
   return Decoration.set(decorations, true);
+}
+
+function markerReplacementLength(prefix: NonNullable<ReturnType<typeof parseScratchMarkdownListPrefix>>) {
+  if (prefix.kind === "task") {
+    return prefix.marker.length + 1 + 3;
+  }
+  return prefix.marker.length;
 }
 
 function listMarkerWidget(
@@ -260,7 +266,7 @@ class ScratchOrderedListWidget extends WidgetType {
   toDOM() {
     const marker = document.createElement("span");
     marker.className = "scratch-list-marker scratch-list-marker--ordered";
-    marker.textContent = `${this.markerText} `;
+    marker.textContent = this.markerText;
     return marker;
   }
 }

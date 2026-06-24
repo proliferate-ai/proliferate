@@ -325,7 +325,7 @@
   --scratch-code-font-family: var(--font-mono);
   --scratch-font-size: var(--text-chat, 12px);
   --scratch-line-height: var(--text-chat--line-height, 20px);
-  --scratch-list-marker-width: 1.35em;
+  --scratch-list-marker-leading-space: 0.48em;
   --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.6875rem;
   --readable-code-line-height: 1.625;

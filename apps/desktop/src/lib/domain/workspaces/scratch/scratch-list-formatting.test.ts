@@ -35,7 +35,7 @@ describe("parseScratchMarkdownListPrefix", () => {
       checked: true,
       indent: "",
       marker: "-",
-      prefixLength: 5,
+      prefixLength: 6,
       checkboxOffset: 3,
       body: "done",
     });

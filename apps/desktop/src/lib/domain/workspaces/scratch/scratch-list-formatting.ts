@@ -40,6 +40,7 @@ export function parseScratchMarkdownListPrefix(line: string): ScratchListPrefix 
   const orderedMarker = match[2];
   const unorderedMarker = match[3];
   const marker = orderedMarker ?? unorderedMarker ?? "-";
+  const checkboxToken = match[4];
   const taskState = match[5];
   const body = match[6] ?? match[7] ?? "";
 
@@ -73,7 +74,7 @@ export function parseScratchMarkdownListPrefix(line: string): ScratchListPrefix 
     checked: taskState !== " ",
     indent,
     marker,
-    prefixLength: indent.length + marker.length + 1 + 3,
+    prefixLength: indent.length + marker.length + 1 + (checkboxToken?.length ?? 3),
     checkboxOffset,
     body,
   };
