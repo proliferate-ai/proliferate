@@ -705,6 +705,247 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Workspaces Endpoint */
+        get: operations["list_cloud_workspaces_endpoint_v1_cloud_workspaces_get"];
+        put?: never;
+        /** Create Cloud Workspace Endpoint */
+        post: operations["create_cloud_workspace_endpoint_v1_cloud_workspaces_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Cloud Workspace Endpoint */
+        post: operations["start_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/target-launch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Launch Workspace On Target Endpoint */
+        post: operations["launch_workspace_on_target_endpoint_v1_cloud_workspaces_target_launch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/remote-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bootstrap Workspace Remote Access Endpoint */
+        post: operations["bootstrap_workspace_remote_access_endpoint_v1_cloud_workspaces_remote_access_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Workspace Connection Endpoint */
+        get: operations["get_cloud_workspace_connection_endpoint_v1_cloud_workspaces__workspace_id__connection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/remote-access/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Cloud Workspace Remote Access Endpoint */
+        post: operations["enable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/remote-access/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Cloud Workspace Remote Access Endpoint */
+        post: operations["disable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Cloud Workspace Endpoint */
+        post: operations["stop_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Cloud Workspace Endpoint */
+        post: operations["archive_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Cloud Workspace Endpoint */
+        post: operations["restore_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Purge Cloud Workspace Endpoint */
+        post: operations["purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_post"];
+        /** Purge Cloud Workspace Endpoint */
+        delete: operations["purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Workspace Endpoint */
+        get: operations["get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Cloud Workspace Endpoint */
+        delete: operations["delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/branch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Cloud Workspace Branch Endpoint */
+        patch: operations["update_cloud_workspace_branch_endpoint_v1_cloud_workspaces__workspace_id__branch_patch"];
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/display-name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Cloud Workspace Display Name Endpoint */
+        patch: operations["update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch"];
+        trace?: never;
+    };
     "/v1/cloud/worktree-retention-policy": {
         parameters: {
             query?: never;
@@ -4634,6 +4875,21 @@ export interface components {
             /** User */
             user?: string | null;
         };
+        /** BootstrapWorkspaceRemoteAccessRequest */
+        BootstrapWorkspaceRemoteAccessRequest: {
+            /**
+             * Targetid
+             * Format: uuid
+             */
+            targetId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnesssessionid */
+            anyharnessSessionId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
+            repo?: components["schemas"]["RemoteAccessRepoRef"] | null;
+        };
         /** ClaimWorkspaceRequest */
         ClaimWorkspaceRequest: {
             /**
@@ -5000,6 +5256,8 @@ export interface components {
             configured: boolean;
             /** Configuredat */
             configuredAt: string | null;
+            /** Defaultbranch */
+            defaultBranch: string | null;
             /** Filesversion */
             filesVersion: number;
         };
@@ -5661,6 +5919,38 @@ export interface components {
              */
             enabled: boolean;
         };
+        /** CreateCloudWorkspaceRequest */
+        CreateCloudWorkspaceRequest: {
+            /**
+             * Gitprovider
+             * @constant
+             */
+            gitProvider: "github";
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Basebranch */
+            baseBranch?: string | null;
+            /** Branchname */
+            branchName: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Generatedname */
+            generatedName?: boolean | null;
+            /**
+             * Ownerscope
+             * @default personal
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Requiredagentkind */
+            requiredAgentKind?: string | null;
+            /** Source */
+            source?: ("desktop" | "web" | "mobile") | null;
+        };
         /** CreateGatewayCredentialRequest */
         CreateGatewayCredentialRequest: {
             /**
@@ -5964,6 +6254,52 @@ export interface components {
             /** Preview */
             preview?: string | null;
         };
+        /** LaunchWorkspaceOnTargetRequest */
+        LaunchWorkspaceOnTargetRequest: {
+            /**
+             * Targetid
+             * Format: uuid
+             */
+            targetId: string;
+            /**
+             * Gitprovider
+             * @constant
+             */
+            gitProvider: "github";
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Basebranch */
+            baseBranch?: string | null;
+            /** Branchname */
+            branchName: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Generatedname */
+            generatedName?: boolean | null;
+            /** Prompt */
+            prompt: string;
+            /** Promptid */
+            promptId?: string | null;
+            /**
+             * Agentkind
+             * @default claude
+             */
+            agentKind: string;
+            /** Modelid */
+            modelId?: string | null;
+            /** Modeid */
+            modeId?: string | null;
+            /** Sessionconfigupdates */
+            sessionConfigUpdates?: components["schemas"]["WorkspaceTargetLaunchSessionConfigUpdate"][];
+            /**
+             * Source
+             * @default mobile
+             * @enum {string}
+             */
+            source: "mobile" | "web" | "api";
+        };
         /** LocalAutomationAttachSessionRequest */
         LocalAutomationAttachSessionRequest: {
             /** Executorid */
@@ -6106,12 +6442,8 @@ export interface components {
             status: string;
             /** Lasterror */
             lastError: string | null;
-            /** E2Bsandboxid */
-            e2bSandboxId: string | null;
             /** E2Btemplateref */
             e2bTemplateRef: string;
-            /** Anyharnessbaseurl */
-            anyharnessBaseUrl: string | null;
             /** Runtimegeneration */
             runtimeGeneration: number;
             /** Createdat */
@@ -6987,6 +7319,28 @@ export interface components {
              * @default manual_refresh
              */
             reason: string;
+        };
+        /** RemoteAccessRepoRef */
+        RemoteAccessRepoRef: {
+            /**
+             * Provider
+             * @default local
+             */
+            provider: string;
+            /**
+             * Owner
+             * @default local
+             */
+            owner: string;
+            /** Name */
+            name: string;
+            /**
+             * Branch
+             * @default default
+             */
+            branch: string;
+            /** Basebranch */
+            baseBranch?: string | null;
         };
         /** RepairWorkspaceMobilityHandoffRequest */
         RepairWorkspaceMobilityHandoffRequest: {
@@ -8136,6 +8490,22 @@ export interface components {
             /** Cloudagentrunconfigid */
             cloudAgentRunConfigId?: string | null;
         };
+        /** UpdateCloudWorkspaceBranchRequest */
+        UpdateCloudWorkspaceBranchRequest: {
+            /** Branchname */
+            branchName: string;
+        };
+        /**
+         * UpdateCloudWorkspaceDisplayNameRequest
+         * @description Set or clear the user-provided cloud workspace display name.
+         *
+         *     `None` (or an empty/whitespace string) clears the override and restores
+         *     the default branch- or repo-derived label in the sidebar.
+         */
+        UpdateCloudWorkspaceDisplayNameRequest: {
+            /** Displayname */
+            displayName?: string | null;
+        };
         /** UpdateWorkspaceMobilityHandoffPhaseRequest */
         UpdateWorkspaceMobilityHandoffPhaseRequest: {
             /** Phase */
@@ -9081,6 +9451,22 @@ export interface components {
             /** Commandable */
             commandable: boolean;
         };
+        /** WorkspaceConnection */
+        WorkspaceConnection: {
+            /** Runtimeurl */
+            runtimeUrl: string;
+            /** Accesstoken */
+            accessToken: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
+            /** Allowedagentkinds */
+            allowedAgentKinds: ("claude" | "codex" | "opencode" | "gemini" | "grok")[];
+            /** Readyagentkinds */
+            readyAgentKinds: string[];
+            runtimeAuth: components["schemas"]["WorkspaceRuntimeAuthState"];
+        };
         /**
          * WorkspaceCreatorContext
          * @description Display/navigation provenance for workspace creators.
@@ -9247,6 +9633,14 @@ export interface components {
              */
             status: "active" | "paused" | "stale" | "revoked";
         };
+        /** WorkspaceLifecycleMutationResponse */
+        WorkspaceLifecycleMutationResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
         /** WorkspaceMaterializationSummary */
         WorkspaceMaterializationSummary: {
             /** Id */
@@ -9360,6 +9754,125 @@ export interface components {
             actionBlockKind?: string | null;
             /** Actionblockreason */
             actionBlockReason?: string | null;
+        };
+        /** WorkspaceSummary */
+        WorkspaceSummary: {
+            /** Id */
+            id: string;
+            /** Targetid */
+            targetId?: string | null;
+            /** Displayname */
+            displayName: string | null;
+            repo: components["schemas"]["RepoRef"];
+            /**
+             * Workspacestatus
+             * @enum {string}
+             */
+            workspaceStatus: "pending" | "materializing" | "needs_rematerialization" | "ready" | "archived" | "error";
+            /**
+             * Productlifecycle
+             * @enum {string}
+             */
+            productLifecycle: "active" | "archived" | "deleted";
+            runtime: components["schemas"]["WorkspaceRuntimeSummary"];
+            executionTarget: components["schemas"]["WorkspaceExecutionTargetSummary"];
+            /** Selectedmaterializationid */
+            selectedMaterializationId?: string | null;
+            primaryMaterialization?: components["schemas"]["WorkspaceMaterializationSummary"] | null;
+            cloudAccess: components["schemas"]["WorkspaceCloudAccessSummary"];
+            /** Statusdetail */
+            statusDetail: string | null;
+            /** Lasterror */
+            lastError: string | null;
+            /** Templateversion */
+            templateVersion: string | null;
+            /** Updatedat */
+            updatedAt: string | null;
+            /** Createdat */
+            createdAt: string | null;
+            /** Readyat */
+            readyAt: string | null;
+            /** Actionblockkind */
+            actionBlockKind?: string | null;
+            /** Actionblockreason */
+            actionBlockReason?: string | null;
+            /** Postreadyphase */
+            postReadyPhase: string;
+            /** Postreadyfilestotal */
+            postReadyFilesTotal: number;
+            /** Postreadyfilesapplied */
+            postReadyFilesApplied: number;
+            /** Postreadystartedat */
+            postReadyStartedAt: string | null;
+            /** Postreadycompletedat */
+            postReadyCompletedAt: string | null;
+            /** Repofileslastfailedpath */
+            repoFilesLastFailedPath?: string | null;
+            origin?: components["schemas"]["OriginContext"] | null;
+            creatorContext?: components["schemas"]["WorkspaceCreatorContext"] | null;
+            directTargetContext?: components["schemas"]["WorkspaceDirectTargetContext"] | null;
+            /**
+             * Visibility
+             * @default private
+             * @enum {string}
+             */
+            visibility: "private" | "shared_unclaimed" | "claimed" | "archived";
+            exposure?: components["schemas"]["WorkspaceExposureSummary"] | null;
+            /**
+             * Exposurestate
+             * @default untracked
+             * @enum {string}
+             */
+            exposureState: "untracked" | "tracked" | "live" | "paused" | "stale" | "revoked";
+            /**
+             * Sandboxtype
+             * @default managed_personal
+             * @enum {string}
+             */
+            sandboxType: "local" | "ssh" | "managed_personal" | "managed_shared" | "self_hosted";
+            /** Lastactivityat */
+            lastActivityAt?: string | null;
+            lastSessionSummary?: components["schemas"]["LastSessionSummary"] | null;
+            /** Claimedbyuserid */
+            claimedByUserId?: string | null;
+            /** Claimid */
+            claimId?: string | null;
+            /** Claimedat */
+            claimedAt?: string | null;
+            /** Claimsourcekind */
+            claimSourceKind?: string | null;
+            billing?: components["schemas"]["WorkspaceBillingSummary"] | null;
+        };
+        /** WorkspaceTargetLaunchCommandIds */
+        WorkspaceTargetLaunchCommandIds: {
+            /** Ensurerepocheckout */
+            ensureRepoCheckout: string;
+            /** Materializeroot */
+            materializeRoot: string;
+            /** Materializeworktree */
+            materializeWorktree: string;
+            /** Startsession */
+            startSession: string;
+            /** Sendprompt */
+            sendPrompt: string;
+            /** Updatesessionconfig */
+            updateSessionConfig?: string[];
+        };
+        /** WorkspaceTargetLaunchResponse */
+        WorkspaceTargetLaunchResponse: {
+            workspace: components["schemas"]["WorkspaceDetail"];
+            /** Sessionid */
+            sessionId: string;
+            /** Sendcommandid */
+            sendCommandId: string;
+            commandIds: components["schemas"]["WorkspaceTargetLaunchCommandIds"];
+        };
+        /** WorkspaceTargetLaunchSessionConfigUpdate */
+        WorkspaceTargetLaunchSessionConfigUpdate: {
+            /** Configid */
+            configId: string;
+            /** Value */
+            value: string;
         };
     };
     responses: never;
@@ -10710,6 +11223,550 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedSandboxResponse"];
+                };
+            };
+        };
+    };
+    list_cloud_workspaces_endpoint_v1_cloud_workspaces_get: {
+        parameters: {
+            query?: {
+                ownerScope?: "personal" | "organization";
+                organizationId?: string | null;
+                scope?: ("my" | "unclaimed" | "claimable" | "org-all" | "exposed") | null;
+                lifecycle?: "active" | "archived" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_cloud_workspace_endpoint_v1_cloud_workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCloudWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    launch_workspace_on_target_endpoint_v1_cloud_workspaces_target_launch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchWorkspaceOnTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTargetLaunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bootstrap_workspace_remote_access_endpoint_v1_cloud_workspaces_remote_access_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BootstrapWorkspaceRemoteAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_workspace_connection_endpoint_v1_cloud_workspaces__workspace_id__connection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceConnection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceLifecycleMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceLifecycleMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceLifecycleMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_cloud_workspace_branch_endpoint_v1_cloud_workspaces__workspace_id__branch_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCloudWorkspaceBranchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCloudWorkspaceDisplayNameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

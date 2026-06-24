@@ -22,6 +22,7 @@ class CloudRepoConfigSummary(BaseModel):
     git_repo_name: str = Field(serialization_alias="gitRepoName")
     configured: bool
     configured_at: str | None = Field(serialization_alias="configuredAt")
+    default_branch: str | None = Field(serialization_alias="defaultBranch")
     files_version: int = Field(serialization_alias="filesVersion")
 
 
@@ -83,6 +84,7 @@ def repo_config_summary_payload(value: CloudRepoConfigSummaryValue) -> CloudRepo
         git_repo_name=value.git_repo_name,
         configured=value.configured,
         configured_at=_to_iso(value.configured_at),
+        default_branch=value.default_branch,
         files_version=value.files_version,
     )
 

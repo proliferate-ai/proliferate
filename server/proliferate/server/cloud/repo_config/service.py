@@ -29,6 +29,7 @@ from proliferate.server.billing.snapshots import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.repo_config.access import require_organization_repo_config_admin
 from proliferate.server.cloud.repo_config.models import (
     PutCloudRepoFileRequest,
@@ -390,13 +391,24 @@ def _schedule_managed_sandbox_repo_materialization(
                 ensure_repo_materialized,
             )
 
-            await ensure_repo_materialized(
-                fresh_db,
-                sandbox=sandbox,
-                repo_config=repo_config,
-                github_token=github_grant.access_token,
-                run_setup=False,
-            )
+            try:
+                await ensure_repo_materialized(
+                    fresh_db,
+                    sandbox=sandbox,
+                    repo_config=repo_config,
+                    github_token=github_grant.access_token,
+                    run_setup=False,
+                )
+            except Exception as exc:
+                log_cloud_event(
+                    "managed sandbox repo materialization failed after repo config save",
+                    managed_sandbox_id=sandbox.id,
+                    cloud_repo_config_id=repo_config.id,
+                    repo=f"{git_owner}/{git_repo_name}",
+                    error=format_exception_message(exc),
+                    error_type=exc.__class__.__name__,
+                )
+                return
             await db_engine.commit_session(fresh_db)
 
     db_engine.defer_after_commit(db, _run)

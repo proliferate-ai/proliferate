@@ -302,6 +302,7 @@ class TestListCloudRepositories:
                 git_repo_name="rocket",
                 configured=True,
                 configured_at=None,
+                default_branch="main",
                 files_version=0,
             ),
             CloudRepoConfigSummaryValue(
@@ -313,6 +314,7 @@ class TestListCloudRepositories:
                 git_repo_name="disabled",
                 configured=False,
                 configured_at=None,
+                default_branch="main",
                 files_version=0,
             ),
         ]

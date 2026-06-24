@@ -24,7 +24,7 @@ class ManagedSandbox(Base):
             name="ck_managed_sandbox_owner_fields",
         ),
         CheckConstraint(
-            "status IN ('creating', 'starting', 'ready', 'paused', 'error', 'destroyed')",
+            "status IN ('creating', 'starting', 'ready', 'paused', 'error', 'destroying', 'destroyed')",
             name="ck_managed_sandbox_status",
         ),
         Index(

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import secrets
-from typing import Any
+from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +22,8 @@ from proliferate.db.store.managed_sandboxes import (
     ensure_personal_managed_sandbox,
     load_personal_managed_sandbox,
     mark_managed_sandbox_destroyed,
-    mark_managed_sandbox_health,
     mark_managed_sandbox_ready,
+    record_managed_sandbox_provider_sandbox,
     update_managed_sandbox_status,
 )
 from proliferate.integrations.sandbox import (
@@ -47,6 +50,18 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     runtime_launcher_path,
 )
 from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.utils.time import utcnow
+
+_IN_FLIGHT_STATUSES = {"creating", "starting", "destroying"}
+_STARTING_LEASE_SECONDS = 10 * 60
+_WAIT_ATTEMPTS = 120
+_WAIT_DELAY_SECONDS = 1.0
+
+
+@dataclass(frozen=True)
+class _SandboxStartClaim:
+    sandbox: ManagedSandboxValue
+    action: Literal["start", "reuse", "wait"]
 
 
 def _template_ref() -> str:
@@ -69,6 +84,86 @@ def _runtime_access_ready(sandbox: ManagedSandboxValue) -> bool:
     )
 
 
+def _in_flight_status_is_fresh(sandbox: ManagedSandboxValue) -> bool:
+    if sandbox.status not in _IN_FLIGHT_STATUSES:
+        return False
+    return utcnow() - sandbox.updated_at < timedelta(seconds=_STARTING_LEASE_SECONDS)
+
+
+async def _claim_managed_sandbox_start(
+    db: AsyncSession,
+    *,
+    user: User,
+    billing_subject_id: UUID,
+    template_ref: str,
+    allow_reuse: bool = True,
+) -> _SandboxStartClaim:
+    await acquire_managed_sandbox_owner_lock(
+        db,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+    )
+    existing = await load_personal_managed_sandbox(db, user.id, lock_row=True)
+    if existing is None:
+        created = await ensure_personal_managed_sandbox(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            billing_subject_id=billing_subject_id,
+            e2b_template_ref=template_ref,
+        )
+        claimed = await update_managed_sandbox_status(
+            db,
+            created.id,
+            status="starting",
+            last_error=None,
+        )
+        await db_session.commit_session(db)
+        return _SandboxStartClaim(sandbox=claimed or created, action="start")
+
+    if _in_flight_status_is_fresh(existing):
+        await db_session.commit_session(db)
+        return _SandboxStartClaim(sandbox=existing, action="wait")
+
+    if (
+        allow_reuse
+        and existing.status == "ready"
+        and existing.e2b_template_ref == template_ref
+        and _runtime_access_ready(existing)
+    ):
+        await db_session.commit_session(db)
+        return _SandboxStartClaim(sandbox=existing, action="reuse")
+
+    claimed = await update_managed_sandbox_status(
+        db,
+        existing.id,
+        status="starting",
+        last_error=None,
+    )
+    await db_session.commit_session(db)
+    return _SandboxStartClaim(sandbox=claimed or existing, action="start")
+
+
+async def _wait_for_in_flight_sandbox(
+    db: AsyncSession,
+    user: User,
+) -> ManagedSandboxValue | None:
+    for _ in range(_WAIT_ATTEMPTS):
+        await asyncio.sleep(_WAIT_DELAY_SECONDS)
+        current = await load_personal_managed_sandbox(db, user.id)
+        if current is None:
+            return None
+        if current.status == "ready" and _runtime_access_ready(current):
+            return current
+        if current.status == "error":
+            return None
+        if current.status in _IN_FLIGHT_STATUSES and _in_flight_status_is_fresh(current):
+            continue
+        return None
+    return None
+
+
 async def get_managed_sandbox_detail(
     db: AsyncSession,
     user: User,
@@ -83,40 +178,99 @@ async def ensure_managed_sandbox_ready(
     provider = get_configured_sandbox_provider()
     template_ref = _template_ref()
     billing_subject = await ensure_personal_billing_subject(db, user.id)
-    await acquire_managed_sandbox_owner_lock(
-        db,
-        owner_scope="personal",
-        owner_user_id=user.id,
-        organization_id=None,
-    )
-    sandbox = await ensure_personal_managed_sandbox(
-        db,
-        user_id=user.id,
-        created_by_user_id=user.id,
-        billing_subject_id=billing_subject.id,
-        e2b_template_ref=template_ref,
-    )
-    await db_session.commit_session(db)
+    last_claim: _SandboxStartClaim | None = None
 
-    try:
-        ready = await _reuse_ready_runtime_if_possible(db, provider, sandbox)
-        if ready is not None:
-            return ready
+    for _ in range(2):
+        claim = await _claim_managed_sandbox_start(
+            db,
+            user=user,
+            billing_subject_id=billing_subject.id,
+            template_ref=template_ref,
+        )
+        last_claim = claim
+        if claim.action == "wait":
+            waited = await _wait_for_in_flight_sandbox(db, user)
+            if waited is not None:
+                ready = await _reuse_ready_runtime_if_possible(
+                    db,
+                    provider,
+                    waited,
+                    template_ref=template_ref,
+                )
+                if ready is not None:
+                    await _best_effort_reconcile_repos(
+                        db,
+                        user_id=ready.owner_user_id,
+                        sandbox=ready,
+                    )
+                    return ready
+                claim = await _claim_managed_sandbox_start(
+                    db,
+                    user=user,
+                    billing_subject_id=billing_subject.id,
+                    template_ref=template_ref,
+                    allow_reuse=False,
+                )
+                if claim.action != "start":
+                    continue
+            else:
+                continue
 
-        await update_managed_sandbox_status(db, sandbox.id, status="starting", last_error=None)
-        await db_session.commit_session(db)
-        return await _create_or_launch_runtime(db, provider, sandbox, template_ref=template_ref)
-    except Exception as exc:
-        message = format_exception_message(exc)
-        await update_managed_sandbox_status(db, sandbox.id, status="error", last_error=message)
-        await db_session.commit_session(db)
-        if isinstance(exc, CloudApiError):
-            raise
+        if claim.action == "reuse":
+            ready = await _reuse_ready_runtime_if_possible(
+                db,
+                provider,
+                claim.sandbox,
+                template_ref=template_ref,
+            )
+            if ready is not None:
+                await _best_effort_reconcile_repos(db, user_id=ready.owner_user_id, sandbox=ready)
+                return ready
+            claim = await _claim_managed_sandbox_start(
+                db,
+                user=user,
+                billing_subject_id=billing_subject.id,
+                template_ref=template_ref,
+                allow_reuse=False,
+            )
+            if claim.action != "start":
+                continue
+
+        try:
+            return await _create_or_launch_runtime(
+                db,
+                provider,
+                claim.sandbox,
+                template_ref=template_ref,
+            )
+        except Exception as exc:
+            message = format_exception_message(exc)
+            await update_managed_sandbox_status(
+                db,
+                claim.sandbox.id,
+                status="error",
+                last_error=message,
+            )
+            await db_session.commit_session(db)
+            if isinstance(exc, CloudApiError):
+                raise
+            raise CloudApiError(
+                "managed_sandbox_start_failed",
+                message or "Managed cloud sandbox failed to start.",
+                status_code=502,
+            ) from exc
+
+    if last_claim is not None and last_claim.action == "wait":
         raise CloudApiError(
-            "managed_sandbox_start_failed",
-            message or "Managed cloud sandbox failed to start.",
-            status_code=502,
-        ) from exc
+            "managed_sandbox_start_in_progress",
+            "Managed cloud sandbox is still starting. Try again shortly.",
+            status_code=409,
+        )
+    raise CloudApiError(
+        "managed_sandbox_start_failed",
+        "Managed cloud sandbox failed to reach a usable runtime.",
+        status_code=502,
+    )
 
 
 async def wake_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandboxValue:
@@ -124,24 +278,63 @@ async def wake_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandboxVa
 
 
 async def destroy_managed_sandbox(db: AsyncSession, user: User) -> ManagedSandboxValue | None:
+    await acquire_managed_sandbox_owner_lock(
+        db,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+    )
     sandbox = await load_personal_managed_sandbox(db, user.id, lock_row=True)
     if sandbox is None:
         return None
+    if sandbox.status in {"creating", "starting"} and _in_flight_status_is_fresh(sandbox):
+        raise CloudApiError(
+            "managed_sandbox_lifecycle_busy",
+            "Managed cloud sandbox is still starting. Try destroy again after startup finishes.",
+            status_code=409,
+        )
+    destroying = await update_managed_sandbox_status(
+        db,
+        sandbox.id,
+        status="destroying",
+        last_error=None,
+    )
+    await db_session.commit_session(db)
+    sandbox = destroying or sandbox
     provider = get_configured_sandbox_provider()
     if sandbox.e2b_sandbox_id:
         try:
             await provider.destroy_sandbox(sandbox.e2b_sandbox_id)
-        except SandboxProviderError:
-            raise
         except Exception as exc:
+            message = format_exception_message(exc)
             log_cloud_event(
                 "managed sandbox destroy provider call failed",
                 managed_sandbox_id=sandbox.id,
                 e2b_sandbox_id=sandbox.e2b_sandbox_id,
-                error=format_exception_message(exc),
+                error=message,
                 error_type=exc.__class__.__name__,
             )
-    return await mark_managed_sandbox_destroyed(db, sandbox.id)
+            await update_managed_sandbox_status(
+                db,
+                sandbox.id,
+                status="error",
+                last_error=message,
+            )
+            await db_session.commit_session(db)
+            if isinstance(exc, SandboxProviderError):
+                raise CloudApiError(
+                    "managed_sandbox_destroy_failed",
+                    message or "Managed cloud sandbox destroy failed.",
+                    status_code=502,
+                ) from exc
+            raise CloudApiError(
+                "managed_sandbox_destroy_failed",
+                message or "Managed cloud sandbox destroy failed.",
+                status_code=502,
+            ) from exc
+    destroyed = await mark_managed_sandbox_destroyed(db, sandbox.id)
+    await db_session.commit_session(db)
+    return destroyed
 
 
 async def load_managed_sandbox_runtime_access(
@@ -164,7 +357,11 @@ async def _reuse_ready_runtime_if_possible(
     db: AsyncSession,
     provider: SandboxProvider,
     sandbox: ManagedSandboxValue,
+    *,
+    template_ref: str,
 ) -> ManagedSandboxValue | None:
+    if sandbox.e2b_template_ref != template_ref:
+        return None
     if not _runtime_access_ready(sandbox):
         return None
     token = decrypt_text(sandbox.anyharness_bearer_token_ciphertext or "")
@@ -178,7 +375,15 @@ async def _reuse_ready_runtime_if_possible(
             delay_seconds=0.25,
         )
         await verify_runtime_auth_enforced(endpoint.runtime_url, token)
-        updated = await mark_managed_sandbox_health(db, sandbox.id)
+        updated = await mark_managed_sandbox_ready(
+            db,
+            sandbox.id,
+            e2b_sandbox_id=sandbox.e2b_sandbox_id or "",
+            e2b_template_ref=template_ref,
+            anyharness_base_url=endpoint.runtime_url,
+            anyharness_bearer_token_ciphertext=sandbox.anyharness_bearer_token_ciphertext or "",
+            anyharness_data_key_ciphertext=sandbox.anyharness_data_key_ciphertext or "",
+        )
         await db_session.commit_session(db)
         return updated
     except Exception as exc:
@@ -199,7 +404,15 @@ async def _reuse_ready_runtime_if_possible(
             delay_seconds=0.5,
         )
         await verify_runtime_auth_enforced(endpoint.runtime_url, token)
-        updated = await mark_managed_sandbox_health(db, sandbox.id)
+        updated = await mark_managed_sandbox_ready(
+            db,
+            sandbox.id,
+            e2b_sandbox_id=sandbox.e2b_sandbox_id or "",
+            e2b_template_ref=template_ref,
+            anyharness_base_url=endpoint.runtime_url,
+            anyharness_bearer_token_ciphertext=sandbox.anyharness_bearer_token_ciphertext or "",
+            anyharness_data_key_ciphertext=sandbox.anyharness_data_key_ciphertext or "",
+        )
         await db_session.commit_session(db)
         return updated
     except Exception as exc:
@@ -222,6 +435,20 @@ async def _create_or_launch_runtime(
 ) -> ManagedSandboxValue:
     provider_sandbox: Any | None = None
     e2b_sandbox_id = sandbox.e2b_sandbox_id
+    if e2b_sandbox_id and sandbox.e2b_template_ref != template_ref:
+        try:
+            await provider.destroy_sandbox(e2b_sandbox_id)
+        except Exception as exc:
+            log_cloud_event(
+                "managed sandbox old template destroy failed",
+                managed_sandbox_id=sandbox.id,
+                e2b_sandbox_id=e2b_sandbox_id,
+                old_template_ref=sandbox.e2b_template_ref,
+                new_template_ref=template_ref,
+                error=format_exception_message(exc),
+                error_type=exc.__class__.__name__,
+            )
+        e2b_sandbox_id = None
     if e2b_sandbox_id:
         try:
             provider_sandbox = await provider.resume_sandbox(e2b_sandbox_id)
@@ -235,6 +462,30 @@ async def _create_or_launch_runtime(
             }
         )
         e2b_sandbox_id = handle.sandbox_id
+        recorded = await record_managed_sandbox_provider_sandbox(
+            db,
+            sandbox.id,
+            e2b_sandbox_id=e2b_sandbox_id,
+            e2b_template_ref=template_ref,
+        )
+        if recorded is None:
+            try:
+                await provider.destroy_sandbox(e2b_sandbox_id)
+            except Exception as exc:
+                log_cloud_event(
+                    "managed sandbox orphan cleanup failed after row disappeared",
+                    managed_sandbox_id=sandbox.id,
+                    e2b_sandbox_id=e2b_sandbox_id,
+                    error=format_exception_message(exc),
+                    error_type=exc.__class__.__name__,
+                )
+            raise CloudApiError(
+                "managed_sandbox_not_found",
+                "Managed sandbox disappeared during provisioning.",
+                status_code=404,
+            )
+        sandbox = recorded
+        await db_session.commit_session(db)
         provider_sandbox = await provider.connect_running_sandbox(e2b_sandbox_id)
 
     runtime_context = await provider.resolve_runtime_context(provider_sandbox)

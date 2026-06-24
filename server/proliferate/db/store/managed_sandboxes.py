@@ -221,6 +221,24 @@ async def update_managed_sandbox_status(
     return managed_sandbox_value(row)
 
 
+async def record_managed_sandbox_provider_sandbox(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    e2b_sandbox_id: str,
+    e2b_template_ref: str,
+) -> ManagedSandboxValue | None:
+    row = await db.get(ManagedSandbox, sandbox_id)
+    if row is None or row.destroyed_at is not None:
+        return None
+    row.e2b_sandbox_id = e2b_sandbox_id
+    row.e2b_template_ref = e2b_template_ref
+    row.status = "starting"
+    row.updated_at = utcnow()
+    await db.flush()
+    return managed_sandbox_value(row)
+
+
 async def mark_managed_sandbox_ready(
     db: AsyncSession,
     sandbox_id: UUID,
@@ -232,7 +250,7 @@ async def mark_managed_sandbox_ready(
     anyharness_data_key_ciphertext: str,
 ) -> ManagedSandboxValue | None:
     row = await db.get(ManagedSandbox, sandbox_id)
-    if row is None:
+    if row is None or row.destroyed_at is not None:
         return None
     now = utcnow()
     was_same_runtime = (
@@ -262,7 +280,7 @@ async def mark_managed_sandbox_health(
     sandbox_id: UUID,
 ) -> ManagedSandboxValue | None:
     row = await db.get(ManagedSandbox, sandbox_id)
-    if row is None:
+    if row is None or row.destroyed_at is not None:
         return None
     row.last_health_at = utcnow()
     row.updated_at = row.last_health_at

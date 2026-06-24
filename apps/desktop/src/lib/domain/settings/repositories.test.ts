@@ -100,6 +100,7 @@ describe("buildSettingsRepositoryEntries", () => {
       gitRepoName: "proliferate",
       configured: true,
       configuredAt: "2026-06-24T00:00:00.000Z",
+      defaultBranch: "main",
       filesVersion: 1,
     }]);
 
@@ -118,6 +119,7 @@ describe("buildSettingsRepositoryEntries", () => {
       gitRepoName: "cloud-only",
       configured: true,
       configuredAt: "2026-06-24T00:00:00.000Z",
+      defaultBranch: "main",
       filesVersion: 3,
     }]);
 
@@ -131,6 +133,7 @@ describe("buildSettingsRepositoryEntries", () => {
       gitProvider: "github",
       gitOwner: "proliferate-ai",
       gitRepoName: "cloud-only",
+      defaultBranch: "main",
       cloudConfigured: true,
       availability: "cloud",
     })]);

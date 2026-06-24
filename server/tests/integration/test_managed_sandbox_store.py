@@ -25,6 +25,7 @@ from proliferate.db.store.managed_sandboxes import (
     mark_managed_sandbox_destroyed,
     mark_managed_sandbox_health,
     mark_managed_sandbox_ready,
+    record_managed_sandbox_provider_sandbox,
     update_managed_sandbox_status,
 )
 
@@ -75,6 +76,16 @@ async def test_personal_managed_sandbox_lifecycle(db_session: AsyncSession) -> N
     )
     assert starting is not None
     assert starting.status == "starting"
+
+    provider_recorded = await record_managed_sandbox_provider_sandbox(
+        db_session,
+        first.id,
+        e2b_sandbox_id="e2b-sbx-0",
+        e2b_template_ref="tpl_v1",
+    )
+    assert provider_recorded is not None
+    assert provider_recorded.e2b_sandbox_id == "e2b-sbx-0"
+    assert provider_recorded.status == "starting"
 
     ready = await mark_managed_sandbox_ready(
         db_session,
@@ -128,6 +139,15 @@ async def test_personal_managed_sandbox_lifecycle(db_session: AsyncSession) -> N
     assert destroyed.status == "destroyed"
     assert destroyed.destroyed_at is not None
     assert destroyed.last_error == "user requested destroy"
+    assert await mark_managed_sandbox_ready(
+        db_session,
+        first.id,
+        e2b_sandbox_id="e2b-sbx-3",
+        e2b_template_ref="tpl_v1",
+        anyharness_base_url="https://3000-e2b-sbx-3.e2b.dev",
+        anyharness_bearer_token_ciphertext="token:v3",
+        anyharness_data_key_ciphertext="data-key:v3",
+    ) is None
     assert await load_personal_managed_sandbox(db_session, user.id) is None
 
     replacement = await ensure_personal_managed_sandbox(
