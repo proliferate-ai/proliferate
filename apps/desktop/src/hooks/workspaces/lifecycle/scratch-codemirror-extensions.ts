@@ -28,6 +28,7 @@ export const scratchHighlightStyle = HighlightStyle.define([
   // Heading scale/spacing lives on the line (see scratchEditorTheme) so it
   // survives the caret revealing the raw "#"; here we only carry weight/colour.
   { tag: tags.heading, color: "var(--color-foreground)", fontWeight: "600" },
+  { tag: tags.processingInstruction, color: "var(--color-sidebar-muted-foreground)" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "600" },
   { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--color-muted-foreground)" },
