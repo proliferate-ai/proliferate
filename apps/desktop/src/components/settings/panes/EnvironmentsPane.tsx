@@ -51,13 +51,15 @@ export function EnvironmentsPane({
           cloudSignInChecking,
           cloudSignInAvailable,
         })}
-        localCheckouts={repositories.map((repository) => ({
-          id: repository.sourceRoot,
-          name: repository.name,
-          description: repository.secondaryLabel ?? repository.sourceRoot,
-          gitOwner: repository.gitOwner,
-          gitRepoName: repository.gitRepoName,
-        }))}
+        localCheckouts={repositories
+          .filter((repository) => repository.availability !== "cloud")
+          .map((repository) => ({
+            id: repository.sourceRoot,
+            name: repository.name,
+            description: repository.secondaryLabel ?? repository.sourceRoot,
+            gitOwner: repository.gitOwner,
+            gitRepoName: repository.gitRepoName,
+          }))}
         selectedCloudRepo={selectedCloudRepo}
         onSelectLocalCheckout={onSelectRepository}
         onSelectCloudEnvironment={(repo) => {
@@ -87,7 +89,9 @@ export function EnvironmentsPane({
         />
       </div>
 
-      <LocalRepoSection repository={selectedRepository} />
+      {selectedRepository.availability !== "cloud" ? (
+        <LocalRepoSection repository={selectedRepository} />
+      ) : null}
       <CloudRepoSection
         repository={selectedRepository}
         cloudEnabled={cloudEnabled}

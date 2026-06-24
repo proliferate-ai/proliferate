@@ -18,6 +18,8 @@ function repo(overrides: Partial<SettingsRepositoryEntry>): SettingsRepositoryEn
     gitProvider: "github",
     gitOwner: "owner",
     gitRepoName: "name",
+    cloudConfigured: false,
+    availability: "local",
     ...overrides,
   };
 }

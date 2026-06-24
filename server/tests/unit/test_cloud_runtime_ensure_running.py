@@ -61,7 +61,7 @@ async def test_ensure_workspace_runtime_ready_rotates_to_fresh_endpoint_without_
 ) -> None:
     workspace = _make_workspace(runtime_url="https://expired.invalid")
     sandbox_record = SimpleNamespace(
-        provider="daytona",
+        provider="e2b",
         external_sandbox_id="sandbox-123",
     )
     provider_calls: list[str] = []
@@ -719,7 +719,7 @@ async def test_ensure_workspace_runtime_ready_relaunches_only_after_fresh_endpoi
 ) -> None:
     workspace = _make_workspace(runtime_url="https://expired.invalid")
     sandbox_record = SimpleNamespace(
-        provider="daytona",
+        provider="e2b",
         external_sandbox_id="sandbox-123",
     )
     events: list[str] = []
@@ -824,7 +824,7 @@ async def test_ensure_workspace_runtime_ready_raises_when_restart_is_disallowed(
 ) -> None:
     workspace = _make_workspace(runtime_url="https://expired.invalid")
     sandbox_record = SimpleNamespace(
-        provider="daytona",
+        provider="e2b",
         external_sandbox_id="sandbox-123",
     )
 

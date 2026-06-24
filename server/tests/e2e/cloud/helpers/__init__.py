@@ -70,7 +70,6 @@ from tests.e2e.cloud.helpers.webhooks import (
     wait_for_sandbox_event_receipt,
 )
 from tests.e2e.cloud.helpers.workspaces import (
-    cleanup_stale_daytona_test_sandboxes,
     cleanup_stale_provider_test_workspaces,
     create_cloud_workspace,
     create_ready_cloud_workspace,
@@ -94,7 +93,6 @@ __all__ = [
     "WorkspaceHandle",
     "build_signed_e2b_webhook",
     "build_sync_payload",
-    "cleanup_stale_daytona_test_sandboxes",
     "cleanup_stale_provider_test_workspaces",
     "claude_relative_path",
     "configure_cloud_settings_for_provider",

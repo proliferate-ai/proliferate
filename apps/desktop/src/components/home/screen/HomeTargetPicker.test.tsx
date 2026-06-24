@@ -15,6 +15,8 @@ const keystoneRepository: SettingsRepositoryEntry = {
   gitProvider: "github",
   gitOwner: "withkeystone",
   gitRepoName: "landing",
+  cloudConfigured: false,
+  availability: "local",
 };
 
 const productRepository: SettingsRepositoryEntry = {
@@ -27,6 +29,8 @@ const productRepository: SettingsRepositoryEntry = {
   gitProvider: "github",
   gitOwner: "proliferate-ai",
   gitRepoName: "proliferate",
+  cloudConfigured: false,
+  availability: "local",
 };
 
 function renderPicker(overrides: Partial<Parameters<typeof HomeTargetPicker>[0]> = {}) {

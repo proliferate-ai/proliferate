@@ -55,6 +55,8 @@ function repository(overrides: Partial<SettingsRepositoryEntry> = {}): SettingsR
     gitProvider: "github",
     gitOwner: "octo",
     gitRepoName: "desktop-cloud",
+    cloudConfigured: false,
+    availability: "local",
     ...overrides,
   };
 }
@@ -94,6 +96,39 @@ describe("EnvironmentsPane", () => {
         gitOwner: "octo",
         gitRepoName: "desktop-cloud",
       })],
+    }));
+  });
+
+  it("does not pass cloud-only repositories as local checkouts", () => {
+    render(
+      <EnvironmentsPane
+        repositories={[
+          repository(),
+          repository({
+            sourceRoot: "cloud:octo/cloud-only",
+            name: "cloud-only",
+            secondaryLabel: "octo",
+            workspaceCount: 0,
+            repoRootId: "",
+            localWorkspaceId: null,
+            cloudConfigured: true,
+            availability: "cloud",
+          }),
+        ]}
+        selectedRepository={null}
+        cloudEnabled
+        cloudActive
+        cloudSignInChecking={false}
+        cloudSignInAvailable
+        focus={{}}
+        onSelectRepository={vi.fn()}
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    expect(cloudSurfacePropsMock).toHaveBeenCalledWith(expect.objectContaining({
+      localCheckouts: [expect.objectContaining({ name: "project" })],
     }));
   });
 

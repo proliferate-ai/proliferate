@@ -1520,7 +1520,6 @@ Purpose:
 Required control-plane env:
 
 ```text
-SANDBOX_PROVIDER=e2b
 E2B_API_KEY
 E2B_TEMPLATE_NAME
 ```

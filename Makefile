@@ -104,10 +104,10 @@ endif
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
         release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
-        test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
+        test-agent-runtime-cloud-e2b \
         cloud-runtime-build publish-cloud-template-env-local \
         test-cloud-ssh-worker dev-cloud-ssh-worker \
-        test-cloud-e2b test-cloud-daytona test-cloud-all test-cloud-webhooks \
+        test-cloud-e2b test-cloud-all test-cloud-webhooks \
         cloud-openapi cloud-client-generate \
         stripe-setup-test \
         stage-sidecar \
@@ -772,9 +772,6 @@ publish-cloud-template-env-local:
 test-cloud-e2b: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 uv run python -m pytest tests/e2e/cloud -m "cloud_e2e and e2b and not live_webhook" -xvs
 
-test-cloud-daytona: cloud-runtime-build server-db-ready
-	cd server && RUN_CLOUD_E2E=1 uv run python -m pytest tests/e2e/cloud -m "cloud_e2e and daytona" -xvs
-
 test-cloud-webhooks: server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud/test_e2b_webhooks.py -m "live_webhook" -xvs
 
@@ -916,9 +913,6 @@ build: build-rust build-frontend
 
 test-agent-runtime-cloud-e2b: sdk-generate
 	cd anyharness/tests && pnpm run test:cloud:e2b
-
-test-agent-runtime-cloud-daytona: sdk-generate
-	cd anyharness/tests && pnpm run test:cloud:daytona
 
 # --- Install ---
 

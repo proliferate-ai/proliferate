@@ -136,9 +136,6 @@ def load_cloud_test_config() -> CloudTestConfig:
         e2b_api_key=discover_secret("E2B_API_KEY"),
         e2b_template_name=discover_secret("E2B_TEMPLATE_NAME"),
         e2b_webhook_signature_secret=discover_secret("E2B_WEBHOOK_SIGNATURE_SECRET"),
-        daytona_api_key=discover_secret("DAYTONA_API_KEY"),
-        daytona_server_url=discover_secret("DAYTONA_SERVER_URL") or settings.daytona_server_url,
-        daytona_target=discover_secret("DAYTONA_TARGET") or settings.daytona_target,
         claude_auth_path=discover_existing_path(
             [
                 Path.home() / ".claude" / ".credentials.json",
@@ -162,10 +159,10 @@ def load_cloud_test_config() -> CloudTestConfig:
 def ensure_provider_available(config: CloudTestConfig, provider_kind: str) -> None:
     if not config.run_cloud_e2e:
         raise CloudE2ETestError("RUN_CLOUD_E2E=1 is required for live cloud lifecycle tests.")
-    if provider_kind == "e2b" and not config.e2b_api_key:
+    if provider_kind != "e2b":
+        raise CloudE2ETestError(f"Unsupported cloud test provider: {provider_kind}")
+    if not config.e2b_api_key:
         raise CloudE2ETestError("E2B_API_KEY is required for E2B cloud tests.")
-    if provider_kind == "daytona" and not config.daytona_api_key:
-        raise CloudE2ETestError("DAYTONA_API_KEY is required for Daytona cloud tests.")
     if not config.github_token:
         raise CloudE2ETestError(
             "GitHub access is required. Authenticate with `gh auth login` or set GH_TOKEN."
@@ -173,8 +170,8 @@ def ensure_provider_available(config: CloudTestConfig, provider_kind: str) -> No
 
 
 def runtime_workdir_for_provider(provider_kind: str) -> str:
-    if provider_kind == "daytona":
-        return "/home/daytona/workspace"
+    if provider_kind != "e2b":
+        raise CloudE2ETestError(f"Unsupported cloud test provider: {provider_kind}")
     return "/home/user/workspace"
 
 
@@ -183,8 +180,9 @@ def configure_cloud_settings_for_provider(
     config: CloudTestConfig,
     provider_kind: str,
 ) -> None:
+    if provider_kind != "e2b":
+        raise CloudE2ETestError(f"Unsupported cloud test provider: {provider_kind}")
     monkeypatch.setattr(settings, "cloud_billing_mode", "off")
-    monkeypatch.setattr(settings, "sandbox_provider", provider_kind)
     monkeypatch.setattr(settings, "e2b_api_key", config.e2b_api_key or "")
     monkeypatch.setattr(settings, "e2b_template_name", config.e2b_template_name or "")
     monkeypatch.setattr(
@@ -192,9 +190,6 @@ def configure_cloud_settings_for_provider(
         "e2b_webhook_signature_secret",
         config.e2b_webhook_signature_secret or "",
     )
-    monkeypatch.setattr(settings, "daytona_api_key", config.daytona_api_key or "")
-    monkeypatch.setattr(settings, "daytona_server_url", config.daytona_server_url)
-    monkeypatch.setattr(settings, "daytona_target", config.daytona_target)
 
 
 def env_flag(name: str) -> bool:

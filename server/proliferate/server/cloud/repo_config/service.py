@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import NoReturn, Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
+from proliferate.db import engine as db_engine
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigSummaryValue,
@@ -23,9 +22,7 @@ from proliferate.db.store.cloud_repo_config import (
     save_organization_cloud_repo_config,
 )
 from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
-from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
-from proliferate.db.store.organizations import get_active_membership
-from proliferate.integrations.anyharness import CloudRuntimeOperationError
+from proliferate.db.store.managed_sandboxes import load_personal_managed_sandbox
 from proliferate.server.billing.snapshots import (
     get_billing_snapshot,
     get_billing_snapshot_for_request,
@@ -33,12 +30,6 @@ from proliferate.server.billing.snapshots import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.access import require_organization_repo_config_admin
-from proliferate.server.cloud.repo_config.domain.workspace_status import (
-    RepoConfigTrackedFileStatus,
-    ResyncWorkspaceRepoConfigStatus,
-    RunWorkspaceSetupStatus,
-    WorkspaceRepoConfigStatus,
-)
 from proliferate.server.cloud.repo_config.models import (
     PutCloudRepoFileRequest,
     SaveCloudRepoConfigRequest,
@@ -51,118 +42,6 @@ from proliferate.server.cloud.repo_config.validation import (
 )
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
-from proliferate.server.cloud.runtime.config_sync.repo_config import (
-    WorkspaceRepoApplyBusyError,
-    WorkspaceRuntimeAccess,
-    apply_workspace_repo_config,
-    run_workspace_saved_setup,
-)
-from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
-from proliferate.server.cloud.runtime.service import get_workspace_connection
-
-
-class _WorkspaceRepoConfigRecord(Protocol):
-    id: UUID
-    owner_scope: str
-    owner_user_id: UUID | None
-    organization_id: UUID | None
-    git_owner: str
-    git_repo_name: str
-    repo_files_applied_version: int
-    repo_files_applied_at: datetime | None
-    repo_post_ready_phase: str
-    repo_post_ready_files_total: int
-    repo_post_ready_files_applied: int
-    repo_post_ready_started_at: datetime | None
-    repo_post_ready_completed_at: datetime | None
-    repo_files_last_failed_path: str | None
-    repo_files_last_error: str | None
-
-
-def _raise_workspace_not_found() -> NoReturn:
-    raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-
-
-def _raise_org_cloud_not_ready() -> NoReturn:
-    raise CloudApiError(
-        "org_cloud_not_ready",
-        "Organization cloud workspaces are not ready yet.",
-        status_code=409,
-    )
-
-
-async def _load_authorized_workspace_for_repo_config(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> _WorkspaceRepoConfigRecord:
-    workspace = await get_cloud_workspace_by_id(db, workspace_id)
-    if workspace is None:
-        _raise_workspace_not_found()
-
-    if workspace.owner_scope == "personal":
-        if workspace.owner_user_id != user_id:
-            _raise_workspace_not_found()
-        return workspace
-
-    if workspace.owner_scope == "organization" and workspace.organization_id is not None:
-        membership = await get_active_membership(
-            db,
-            organization_id=workspace.organization_id,
-            user_id=user_id,
-        )
-        if membership is None:
-            _raise_workspace_not_found()
-        _raise_org_cloud_not_ready()
-
-    _raise_workspace_not_found()
-
-
-def _workspace_repo_config_status(
-    workspace: _WorkspaceRepoConfigRecord,
-    repo_config: CloudRepoConfigValue | None,
-) -> WorkspaceRepoConfigStatus:
-    tracked_files = (
-        ()
-        if repo_config is None
-        else tuple(
-            RepoConfigTrackedFileStatus(
-                relative_path=item.relative_path,
-                content_sha256=item.content_sha256,
-                byte_size=item.byte_size,
-                updated_at=item.updated_at,
-                last_synced_at=item.last_synced_at,
-            )
-            for item in repo_config.tracked_files
-        )
-    )
-    env_var_keys = () if repo_config is None else tuple(sorted(repo_config.env_vars))
-    current_version = 0 if repo_config is None else repo_config.files_version
-    return WorkspaceRepoConfigStatus(
-        current_repo_files_version=current_version,
-        repo_files_applied_version=workspace.repo_files_applied_version,
-        repo_files_applied_at=workspace.repo_files_applied_at,
-        files_out_of_sync=workspace.repo_files_applied_version != current_version,
-        tracked_files=tracked_files,
-        env_var_keys=env_var_keys,
-        post_ready_phase=workspace.repo_post_ready_phase,
-        post_ready_files_total=workspace.repo_post_ready_files_total,
-        post_ready_files_applied=workspace.repo_post_ready_files_applied,
-        post_ready_started_at=workspace.repo_post_ready_started_at,
-        post_ready_completed_at=workspace.repo_post_ready_completed_at,
-        last_apply_failed_path=workspace.repo_files_last_failed_path,
-        last_apply_error=workspace.repo_files_last_error,
-    )
-
-
-def _resync_workspace_repo_config_status(
-    workspace: _WorkspaceRepoConfigRecord,
-    repo_config: CloudRepoConfigValue | None,
-) -> ResyncWorkspaceRepoConfigStatus:
-    return ResyncWorkspaceRepoConfigStatus(
-        workspace_id=workspace.id,
-        status=_workspace_repo_config_status(workspace, repo_config),
-    )
 
 
 async def list_repo_configs(
@@ -334,6 +213,13 @@ async def save_repo_config(
             ),
             status_code=409,
         ) from error
+    _schedule_managed_sandbox_repo_materialization(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        configured=value.configured,
+    )
     return value
 
 
@@ -411,6 +297,13 @@ async def save_repo_file(
         relative_path=relative_path,
         content=body.content,
     )
+    _schedule_managed_sandbox_repo_materialization(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        configured=value.configured,
+    )
     return value
 
 
@@ -439,7 +332,7 @@ async def bootstrap_repo_config(
     billing_snapshot = await get_billing_snapshot(user_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
     try:
-        return await bootstrap_cloud_repo_config_for_user(
+        value = await bootstrap_cloud_repo_config_for_user(
             db,
             user_id=user_id,
             git_owner=git_owner,
@@ -456,124 +349,54 @@ async def bootstrap_repo_config(
             ),
             status_code=409,
         ) from error
-
-
-async def get_workspace_repo_config_status(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> WorkspaceRepoConfigStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
-    repo_config = await get_cloud_repo_config(
+    _schedule_managed_sandbox_repo_materialization(
         db,
         user_id=user_id,
-        git_owner=workspace.git_owner,
-        git_repo_name=workspace.git_repo_name,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        configured=value.configured,
     )
-    return _workspace_repo_config_status(workspace, repo_config)
+    return value
 
 
-async def build_resync_workspace_repo_config_status(
+def _schedule_managed_sandbox_repo_materialization(
     db: AsyncSession,
+    *,
     user_id: UUID,
-    workspace_id: UUID,
-) -> ResyncWorkspaceRepoConfigStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
-    repo_config = await get_cloud_repo_config(
-        db,
-        user_id=user_id,
-        git_owner=workspace.git_owner,
-        git_repo_name=workspace.git_repo_name,
-    )
-    return _resync_workspace_repo_config_status(workspace, repo_config)
+    git_owner: str,
+    git_repo_name: str,
+    configured: bool,
+) -> None:
+    if not configured:
+        return
 
+    async def _run() -> None:
+        async with db_engine.async_session_factory() as fresh_db:
+            sandbox = await load_personal_managed_sandbox(fresh_db, user_id)
+            if sandbox is None or sandbox.status != "ready":
+                return
+            github_grant = await get_ready_github_grant_for_user(fresh_db, user_id=user_id)
+            if github_grant is None:
+                return
+            repo_config = await get_cloud_repo_config(
+                fresh_db,
+                user_id=user_id,
+                git_owner=git_owner,
+                git_repo_name=git_repo_name,
+            )
+            if repo_config is None or not repo_config.configured:
+                return
+            from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
+                ensure_repo_materialized,
+            )
 
-def _runtime_access_from_target(
-    target: RuntimeConnectionTarget,
-) -> WorkspaceRuntimeAccess:
-    if not target.anyharness_workspace_id:
-        raise CloudApiError(
-            "workspace_not_ready",
-            "Cloud workspace runtime is not ready yet.",
-            status_code=409,
-        )
-    return WorkspaceRuntimeAccess(
-        runtime_url=target.runtime_url,
-        access_token=target.access_token,
-        anyharness_workspace_id=target.anyharness_workspace_id,
-    )
+            await ensure_repo_materialized(
+                fresh_db,
+                sandbox=sandbox,
+                repo_config=repo_config,
+                github_token=github_grant.access_token,
+                run_setup=False,
+            )
+            await db_engine.commit_session(fresh_db)
 
-
-async def resync_workspace_files(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> ResyncWorkspaceRepoConfigStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
-
-    # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
-    target = await get_workspace_connection(db, workspace)  # type: ignore[arg-type]
-    try:
-        await apply_workspace_repo_config(
-            workspace,  # type: ignore[arg-type]
-            runtime=_runtime_access_from_target(target),
-            run_setup=False,
-        )
-    except WorkspaceRepoApplyBusyError as error:
-        raise CloudApiError(
-            "workspace_repo_apply_in_progress",
-            str(error),
-            status_code=409,
-        ) from error
-    except CloudRuntimeOperationError as error:
-        raise CloudApiError(
-            "workspace_repo_apply_failed",
-            str(error),
-            status_code=502,
-        ) from error
-
-    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
-    repo_config = await get_cloud_repo_config(
-        db,
-        user_id=user_id,
-        git_owner=workspace.git_owner,
-        git_repo_name=workspace.git_repo_name,
-    )
-    return _resync_workspace_repo_config_status(workspace, repo_config)
-
-
-async def run_workspace_setup(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> RunWorkspaceSetupStatus:
-    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
-
-    # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
-    target = await get_workspace_connection(db, workspace)  # type: ignore[arg-type]
-    try:
-        started = await run_workspace_saved_setup(
-            workspace,  # type: ignore[arg-type]
-            runtime=_runtime_access_from_target(target),
-        )
-    except WorkspaceRepoApplyBusyError as error:
-        raise CloudApiError(
-            "workspace_repo_apply_in_progress",
-            str(error),
-            status_code=409,
-        ) from error
-    except CloudRuntimeOperationError as error:
-        raise CloudApiError(
-            "workspace_setup_start_failed",
-            str(error),
-            status_code=502,
-        ) from error
-
-    workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
-    return RunWorkspaceSetupStatus(
-        workspace_id=workspace.id,
-        command=started.command,
-        terminal_id=started.terminal_id,
-        command_run_id=started.command_run_id,
-        status=started.status,
-    )
+    db_engine.defer_after_commit(db, _run)

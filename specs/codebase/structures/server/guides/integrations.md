@@ -96,15 +96,14 @@ For multiple vendors implementing the same protocol where product code
 selects an implementation at runtime.
 
 - `base.py` — abstract interface or protocol that all providers implement.
-- `<provider>.py` — each implementation (e.g., `daytona.py`, `e2b.py`).
+- `<provider>.py` — each implementation when multiple providers exist.
 - `factory.py` — provider selection logic (config-driven, identity-driven,
   etc.).
 - `models.py` — shared types across providers.
 - `errors.py` — shared error types raised by any provider.
 - `__init__.py` — exports the factory and shared types.
 
-Example: `sandbox/` with `base.py`, `daytona.py`, `e2b.py`,
-`factory.py`.
+Example: `sandbox/` with `base.py`, `e2b.py`, `factory.py`.
 
 ## Picking a Shape
 

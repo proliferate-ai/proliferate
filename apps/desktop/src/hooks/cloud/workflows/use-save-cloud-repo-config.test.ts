@@ -23,6 +23,8 @@ function repository(overrides: Partial<SettingsRepositoryEntry> = {}): SettingsR
     gitProvider: "github",
     gitOwner: "acme",
     gitRepoName: "rocket",
+    cloudConfigured: false,
+    availability: "local",
     ...overrides,
   };
 }

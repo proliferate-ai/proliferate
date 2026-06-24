@@ -3,7 +3,6 @@ import { useCallback } from "react";
 import {
   cloudRepoConfigKey,
   cloudRepoConfigsKey,
-  isCloudWorkspaceRepoConfigStatusQueryKey,
 } from "@/hooks/access/cloud/query-keys";
 
 export function useCloudRepoConfigCache() {
@@ -17,9 +16,6 @@ export function useCloudRepoConfigCache() {
     const gitRepoName = input?.gitRepoName?.trim() ?? "";
     const invalidations: Promise<unknown>[] = [
       queryClient.invalidateQueries({ queryKey: cloudRepoConfigsKey() }),
-      queryClient.invalidateQueries({
-        predicate: (query) => isCloudWorkspaceRepoConfigStatusQueryKey(query.queryKey),
-      }),
     ];
 
     if (gitOwner && gitRepoName) {

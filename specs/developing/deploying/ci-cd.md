@@ -597,7 +597,7 @@ Flow:
    ASGI app and do not need live provider credentials.
 5. `.github/workflows/cloud-tests.yml` runs the real-provider cloud suites by
    manual dispatch only:
-   - cloud lifecycle/provisioning coverage for E2B and Daytona
+   - cloud lifecycle/provisioning coverage for E2B
    - the shared AnyHarness runtime scenarios against cloud-provisioned backends
 6. `.github/workflows/cloud-live-webhook.yml` is separate because the live E2B
    webhook smoke depends on an externally reachable ngrok target and should not

@@ -9,8 +9,7 @@
     "export-session-events": "tsx src/tools/export-session-events.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:cloud:e2b": "tsx src/runners/run-cloud-runtime-suite.ts e2b",
-    "test:cloud:daytona": "tsx src/runners/run-cloud-runtime-suite.ts daytona"
+    "test:cloud:e2b": "tsx src/runners/run-cloud-runtime-suite.ts e2b"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",

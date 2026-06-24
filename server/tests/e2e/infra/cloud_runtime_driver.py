@@ -20,10 +20,10 @@ def _parse_args() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     create_runtime = subparsers.add_parser("create-runtime")
-    create_runtime.add_argument("--provider", required=True, choices=("e2b", "daytona"))
+    create_runtime.add_argument("--provider", required=True, choices=("e2b",))
 
     destroy_runtime = subparsers.add_parser("destroy-runtime")
-    destroy_runtime.add_argument("--provider", required=True, choices=("e2b", "daytona"))
+    destroy_runtime.add_argument("--provider", required=True, choices=("e2b",))
     destroy_runtime.add_argument("--cloud-workspace-id", required=True)
 
     return parser.parse_args()

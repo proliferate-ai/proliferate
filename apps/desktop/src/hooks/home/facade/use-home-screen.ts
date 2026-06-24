@@ -47,8 +47,9 @@ export function useHomeScreen() {
         workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
       ),
       repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
+      cloudRepoConfigs?.configs ?? [],
     );
-  }, [hiddenRepoRootIds, localWorkspaces, repoRoots]);
+  }, [cloudRepoConfigs?.configs, hiddenRepoRootIds, localWorkspaces, repoRoots]);
   const cloudRepoConfigsLoading =
     cloudActive && cloudRepoConfigsPending && !cloudRepoConfigs;
   const onboardingCards = useMemo(

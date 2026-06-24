@@ -49,7 +49,7 @@ You need:
 
 - an unprefixed release version like `0.1.0`
 - GitHub OAuth credentials if you want desktop sign-in
-- E2B or Daytona credentials if you want cloud workspaces
+- E2B credentials if you want managed cloud sandboxes
 
 The GitHub release tag still uses the `server-v*` line, but `ReleaseVersion`
 should be the matching unprefixed image tag. Example:

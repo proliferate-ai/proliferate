@@ -193,16 +193,11 @@ export interface TeamCheckoutIntentResponse {
 export interface CurrentTeamCheckoutResponse {
   intent?: TeamCheckoutIntentResponse | null;
 }
-export type CloudWorkspaceSummary = Omit<
-  components["schemas"]["WorkspaceSummary"],
-  | "status"
-  | "workspaceStatus"
-  | "runtime"
-  | "actionBlockKind"
-  | "actionBlockReason"
-  | "visibility"
-> & {
+export interface CloudWorkspaceSummary {
+  id: string;
   targetId?: string | null;
+  displayName: string | null;
+  repo: RepoRef;
   status: CloudWorkspaceStatus;
   workspaceStatus: CloudWorkspaceStatus;
   productLifecycle?: CloudWorkspaceProductLifecycle;
@@ -211,15 +206,38 @@ export type CloudWorkspaceSummary = Omit<
   selectedMaterializationId?: string | null;
   primaryMaterialization?: CloudWorkspaceMaterializationSummary | null;
   cloudAccess?: CloudWorkspaceCloudAccessSummary;
+  statusDetail: string | null;
+  lastError: string | null;
+  templateVersion: string | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+  readyAt: string | null;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
+  postReadyPhase: string;
+  postReadyFilesTotal: number;
+  postReadyFilesApplied: number;
+  postReadyStartedAt: string | null;
+  postReadyCompletedAt: string | null;
+  repoFilesLastFailedPath?: string | null;
+  origin?: CloudOriginContext | null;
+  creatorContext?: CloudWorkspaceCreatorContext | null;
+  directTargetContext?: CloudWorkspaceDirectTargetContext | null;
   visibility: CloudWorkspaceVisibility;
   exposure?: CloudWorkspaceExposureSummary | null;
   exposureState?: CloudWorkspaceExposureState;
   sandboxType?: CloudWorkspaceSandboxType;
   lastActivityAt?: string | null;
   lastSessionSummary?: CloudWorkspaceLastSessionSummary | null;
-};
+  claimedByUserId?: string | null;
+  claimId?: string | null;
+  claimedAt?: string | null;
+  claimSourceKind?: string | null;
+  billing?: components["schemas"]["WorkspaceBillingSummary"] | null;
+  allowedAgentKinds?: string[];
+  readyAgentKinds?: string[];
+  anyharnessWorkspaceId?: string | null;
+}
 export type CloudWorkspaceDetail = Omit<
   components["schemas"]["WorkspaceDetail"],
   | "status"
@@ -260,7 +278,15 @@ export type CloudWorkspaceCreatorContext =
   components["schemas"]["WorkspaceCreatorContext"];
 export type CloudWorkspaceDirectTargetContext =
   components["schemas"]["WorkspaceDirectTargetContext"];
-export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
+export interface CloudConnectionInfo {
+  runtimeUrl: string;
+  accessToken: string;
+  anyharnessWorkspaceId: string | null;
+  runtimeGeneration: number;
+  allowedAgentKinds: CloudAgentKind[];
+  readyAgentKinds: string[];
+  runtimeAuth: CloudRuntimeAuthState;
+}
 export type CloudGitRepositorySummary = components["schemas"]["CloudGitRepositorySummary"];
 export type CloudGitRepositoriesResponse =
   components["schemas"]["CloudGitRepositoriesResponse"];
@@ -445,14 +471,48 @@ export type CreateSkillConfiguredItemRequest =
 export type PatchSkillConfiguredItemRequest =
   components["schemas"]["PatchSkillConfiguredItemRequest"];
 export type PutCloudRepoFileRequest   = components["schemas"]["PutCloudRepoFileRequest"];
-export type CloudWorkspaceRepoConfigStatusResponse = components["schemas"]["CloudWorkspaceRepoConfigStatusResponse"];
-export type ResyncCloudWorkspaceFilesResponse = components["schemas"]["ResyncCloudWorkspaceFilesResponse"];
-export type RunCloudWorkspaceSetupResponse = components["schemas"]["RunCloudWorkspaceSetupResponse"];
+export interface CloudWorkspaceRepoConfigStatusResponse {
+  currentRepoFilesVersion: number;
+  repoFilesAppliedVersion: number;
+  repoFilesAppliedAt: string | null;
+  filesOutOfSync: boolean;
+  trackedFiles: CloudRepoFileMetadata[];
+  envVarKeys: string[];
+  postReadyPhase: string;
+  postReadyFilesTotal: number;
+  postReadyFilesApplied: number;
+  postReadyStartedAt: string | null;
+  postReadyCompletedAt: string | null;
+  lastApplyFailedPath: string | null;
+  lastApplyError: string | null;
+}
+export interface ResyncCloudWorkspaceFilesResponse extends CloudWorkspaceRepoConfigStatusResponse {
+  workspaceId: string;
+}
+export interface RunCloudWorkspaceSetupResponse {
+  workspaceId: string;
+  command: string;
+  terminalId?: string | null;
+  commandRunId?: string | null;
+  status: string;
+}
 export type CloudWorktreeRetentionPolicyRequest =
   components["schemas"]["CloudWorktreeRetentionPolicyRequest"];
 export type CloudWorktreeRetentionPolicyResponse =
   components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
-export type CreateCloudWorkspaceRequest = components["schemas"]["CreateCloudWorkspaceRequest"];
+export interface CreateCloudWorkspaceRequest {
+  gitProvider: "github";
+  gitOwner: string;
+  gitRepoName: string;
+  baseBranch?: string | null;
+  branchName: string;
+  displayName?: string | null;
+  generatedName?: boolean | null;
+  ownerScope: "personal" | "organization";
+  organizationId?: string | null;
+  requiredAgentKind?: string | null;
+  source?: "desktop" | "web" | "mobile" | null;
+}
 export type GenerateSessionTitleRequest = components["schemas"]["GenerateSessionTitleRequest"];
 export type GenerateSessionTitleResponse = components["schemas"]["GenerateSessionTitleResponse"];
 export type GenerateWorkspaceNameRequest = components["schemas"]["GenerateWorkspaceNameRequest"];

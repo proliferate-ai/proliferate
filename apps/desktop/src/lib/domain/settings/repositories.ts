@@ -1,4 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
+import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
+
+export type RepositoryAvailability = "local" | "local_cloud" | "cloud";
 
 export interface SettingsRepositoryEntry {
   sourceRoot: string;
@@ -10,6 +13,8 @@ export interface SettingsRepositoryEntry {
   gitProvider: string | null;
   gitOwner: string | null;
   gitRepoName: string | null;
+  cloudConfigured: boolean;
+  availability: RepositoryAvailability;
 }
 
 export interface CloudSettingsRepositoryEntry extends SettingsRepositoryEntry {
@@ -31,6 +36,7 @@ function resolveRepoName(repoRoot: RepoRoot, sourceRoot: string): string {
 export function buildSettingsRepositoryEntries(
   workspaces: Workspace[],
   repoRoots: RepoRoot[] = [],
+  cloudRepoConfigs: CloudRepoConfigSummary[] = [],
 ): SettingsRepositoryEntry[] {
   const workspacesByRepoRootId = new Map<string, Workspace[]>();
   for (const workspace of workspaces) {
@@ -46,12 +52,25 @@ export function buildSettingsRepositoryEntries(
     }
   }
 
-  const repos = repoRoots.map((repoRoot) => {
+  const configuredCloudRepos = cloudRepoConfigs.filter((config) => config.configured);
+  const configuredCloudKeys = new Set(
+    configuredCloudRepos.map((config) => cloudRepositoryKey(config.gitOwner, config.gitRepoName)),
+  );
+  const localCloudKeys = new Set<string>();
+
+  const localRepos = repoRoots.map((repoRoot) => {
     const repoWorkspaces = workspacesByRepoRootId.get(repoRoot.id) ?? [];
     const localWorkspace = repoWorkspaces.find((workspace) => workspace.kind === "local")
       ?? repoWorkspaces[0]
       ?? null;
     const sourceRoot = resolveRepoSourceRoot(repoRoot);
+    const gitOwner = repoRoot.remoteOwner?.trim() ?? null;
+    const gitRepoName = repoRoot.remoteRepoName?.trim() ?? null;
+    const cloudKey = gitOwner && gitRepoName ? cloudRepositoryKey(gitOwner, gitRepoName) : null;
+    const cloudConfigured = cloudKey ? configuredCloudKeys.has(cloudKey) : false;
+    if (cloudKey) {
+      localCloudKeys.add(cloudKey);
+    }
 
     return {
       sourceRoot,
@@ -61,10 +80,34 @@ export function buildSettingsRepositoryEntries(
       repoRootId: repoRoot.id,
       localWorkspaceId: localWorkspace?.id ?? null,
       gitProvider: repoRoot.remoteProvider?.trim() ?? null,
-      gitOwner: repoRoot.remoteOwner?.trim() ?? null,
-      gitRepoName: repoRoot.remoteRepoName?.trim() ?? null,
+      gitOwner,
+      gitRepoName,
+      cloudConfigured,
+      availability: cloudConfigured ? "local_cloud" : "local",
     } satisfies SettingsRepositoryEntry;
-  }).sort((a, b) => {
+  });
+
+  const cloudOnlyRepos = configuredCloudRepos.flatMap((config) => {
+    const key = cloudRepositoryKey(config.gitOwner, config.gitRepoName);
+    if (localCloudKeys.has(key)) {
+      return [];
+    }
+    return [{
+      sourceRoot: `cloud:${config.gitOwner}/${config.gitRepoName}`,
+      name: config.gitRepoName,
+      secondaryLabel: config.gitOwner,
+      workspaceCount: 0,
+      repoRootId: "",
+      localWorkspaceId: null,
+      gitProvider: "github",
+      gitOwner: config.gitOwner,
+      gitRepoName: config.gitRepoName,
+      cloudConfigured: true,
+      availability: "cloud",
+    } satisfies SettingsRepositoryEntry];
+  });
+
+  const repos = [...localRepos, ...cloudOnlyRepos].sort((a, b) => {
     const byName = a.name.localeCompare(b.name);
     return byName !== 0 ? byName : a.sourceRoot.localeCompare(b.sourceRoot);
   });

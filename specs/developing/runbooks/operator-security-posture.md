@@ -37,7 +37,7 @@ Do not rotate by editing local env files and copying values around.
 Common secret groups:
 
 - Cloud control-plane signing: `CLOUD_SECRET_KEY`.
-- Provider access: `E2B_API_KEY`, `DAYTONA_API_KEY`.
+- Provider access: `E2B_API_KEY`.
 - Provider webhooks: `E2B_WEBHOOK_SIGNATURE_SECRET`.
 - Remote runtime observability: `CLOUD_RUNTIME_SENTRY_DSN`,
   `CLOUD_TARGET_SENTRY_DSN`.

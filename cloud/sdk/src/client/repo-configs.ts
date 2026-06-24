@@ -2,12 +2,9 @@ import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   CloudRepoConfigResponse,
   CloudRepoConfigsListResponse,
-  CloudWorkspaceRepoConfigStatusResponse,
   PutCloudRepoFileRequest,
-  RunCloudWorkspaceSetupResponse,
   SaveCloudRepoConfigRequest,
   SaveOrganizationCloudRepoConfigRequest,
-  ResyncCloudWorkspaceFilesResponse,
 } from "../types/index.js";
 
 export async function listCloudRepoConfigs(
@@ -123,36 +120,6 @@ export async function resyncCloudRepoFileFromLocal(
     await getProliferateClient().PUT("/v1/cloud/repos/{git_owner}/{git_repo_name}/files", {
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
       body,
-    })
-  ).data!;
-}
-
-export async function getCloudWorkspaceRepoConfigStatus(
-  workspaceId: string,
-): Promise<CloudWorkspaceRepoConfigStatusResponse> {
-  return (
-    await getProliferateClient().GET("/v1/cloud/workspaces/{workspace_id}/repo-config-status", {
-      params: { path: { workspace_id: workspaceId } },
-    })
-  ).data!;
-}
-
-export async function resyncCloudWorkspaceFiles(
-  workspaceId: string,
-): Promise<ResyncCloudWorkspaceFilesResponse> {
-  return (
-    await getProliferateClient().POST("/v1/cloud/workspaces/{workspace_id}/resync-files", {
-      params: { path: { workspace_id: workspaceId } },
-    })
-  ).data!;
-}
-
-export async function runCloudWorkspaceSetup(
-  workspaceId: string,
-): Promise<RunCloudWorkspaceSetupResponse> {
-  return (
-    await getProliferateClient().POST("/v1/cloud/workspaces/{workspace_id}/run-setup", {
-      params: { path: { workspace_id: workspaceId } },
     })
   ).data!;
 }

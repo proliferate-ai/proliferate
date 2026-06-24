@@ -20,7 +20,6 @@ dependencies = [
     "python-multipart>=0.0.32",
     "python-dateutil>=2.9.0",
     "e2b>=2.29.0",
-    "daytona>=0.187.0",
     "sentry-sdk[fastapi]>=2.62.0",
     "boto3>=1.43.30",
     "botocore[crt]>=1.43.30",
@@ -122,7 +121,6 @@ testpaths = ["tests"]
 markers = [
     "cloud_e2e: live cloud lifecycle tests that require real provider credentials",
     "e2b: tests specific to the E2B provider",
-    "daytona: tests specific to the Daytona provider",
     "live_webhook: tests that require a real externally reachable E2B webhook target",
     "live_bifrost: tests that require a live Bifrost deployment and provider credentials",
 ]
