@@ -265,6 +265,8 @@ async def resolve_sso_user(
 
     if not verified.email:
         raise HTTPException(status_code=400, detail="SSO did not return an email address.")
+    if not verified.email_verified:
+        raise HTTPException(status_code=403, detail="SSO email address is not verified.")
     require_email_domain_allowed(verified.email, connection.allowed_domains)
 
     user = await get_user_by_email(db, verified.email)
@@ -298,7 +300,7 @@ async def test_oidc_connection(
 ) -> dict[str, str | None]:
     if connection.protocol != SsoProtocol.OIDC:
         raise HTTPException(status_code=400, detail="Only OIDC connection tests are supported.")
-    _require_oidc_configured(connection, require_secret=False)
+    _require_oidc_configured(connection)
     metadata = await resolve_oidc_metadata(connection)
     return {
         "issuer": metadata.issuer,

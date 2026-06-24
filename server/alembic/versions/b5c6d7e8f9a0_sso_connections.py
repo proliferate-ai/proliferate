@@ -40,7 +40,7 @@ def upgrade() -> None:
     if not _has_table("sso_connection"):
         op.create_table(
             "sso_connection",
-            sa.Column("id", sa.UUID(), nullable=False),
+            sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
             sa.Column("scope", sa.String(length=32), nullable=False),
             sa.Column("organization_id", sa.UUID(), nullable=True),
             sa.Column("protocol", sa.String(length=16), nullable=False),
@@ -96,8 +96,18 @@ def upgrade() -> None:
             sa.Column("tested_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("last_error", sa.Text(), nullable=True),
             sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
             sa.CheckConstraint(
                 "scope IN ('deployment', 'organization')",
                 name="ck_sso_connection_scope",
@@ -160,7 +170,7 @@ def upgrade() -> None:
     if not _has_table("sso_challenge"):
         op.create_table(
             "sso_challenge",
-            sa.Column("id", sa.UUID(), nullable=False),
+            sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
             sa.Column("scope", sa.String(length=32), nullable=False),
             sa.Column("connection_id", sa.UUID(), nullable=True),
             sa.Column("connection_key", sa.String(length=255), nullable=False),
@@ -178,7 +188,12 @@ def upgrade() -> None:
             sa.Column("login_hint", sa.String(length=320), nullable=True),
             sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
             sa.CheckConstraint(
                 "scope IN ('deployment', 'organization')",
                 name="ck_sso_challenge_scope",
@@ -211,7 +226,7 @@ def upgrade() -> None:
     if not _has_table("sso_identity"):
         op.create_table(
             "sso_identity",
-            sa.Column("id", sa.UUID(), nullable=False),
+            sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
             sa.Column("user_id", sa.UUID(), nullable=False),
             sa.Column("organization_id", sa.UUID(), nullable=True),
             sa.Column("connection_id", sa.UUID(), nullable=True),
@@ -221,10 +236,25 @@ def upgrade() -> None:
             sa.Column("email", sa.Text(), nullable=True),
             sa.Column("email_verified", sa.Boolean(), nullable=False),
             sa.Column("display_name", sa.Text(), nullable=True),
-            sa.Column("linked_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column(
+                "linked_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
             sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.text("now()"),
+                nullable=False,
+            ),
             sa.CheckConstraint(
                 "protocol IN ('oidc', 'saml')",
                 name="ck_sso_identity_protocol",
