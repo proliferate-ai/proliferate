@@ -5,7 +5,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
-from proliferate.db import engine as db_engine
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigSummaryValue,
@@ -35,6 +34,10 @@ from proliferate.server.cloud.repo_config.models import (
     PutCloudRepoFileRequest,
     SaveCloudRepoConfigRequest,
     SaveOrganizationCloudRepoConfigRequest,
+)
+from proliferate.server.cloud.repo_config.transactions import (
+    defer_repo_config_after_commit,
+    run_with_fresh_repo_config_session,
 )
 from proliferate.server.cloud.repo_config.validation import (
     normalize_env_vars,
@@ -371,44 +374,44 @@ def _schedule_managed_sandbox_repo_materialization(
     if not configured:
         return
 
-    async def _run() -> None:
-        async with db_engine.async_session_factory() as fresh_db:
-            sandbox = await load_personal_managed_sandbox(fresh_db, user_id)
-            if sandbox is None or sandbox.status != "ready":
-                return
-            github_grant = await get_ready_github_grant_for_user(fresh_db, user_id=user_id)
-            if github_grant is None:
-                return
-            repo_config = await get_cloud_repo_config(
+    async def _materialize(fresh_db: AsyncSession) -> None:
+        sandbox = await load_personal_managed_sandbox(fresh_db, user_id)
+        if sandbox is None or sandbox.status != "ready":
+            return
+        github_grant = await get_ready_github_grant_for_user(fresh_db, user_id=user_id)
+        if github_grant is None:
+            return
+        repo_config = await get_cloud_repo_config(
+            fresh_db,
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+        if repo_config is None or not repo_config.configured:
+            return
+        from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
+            ensure_repo_materialized,
+        )
+
+        try:
+            await ensure_repo_materialized(
                 fresh_db,
-                user_id=user_id,
-                git_owner=git_owner,
-                git_repo_name=git_repo_name,
+                sandbox=sandbox,
+                repo_config=repo_config,
+                github_token=github_grant.access_token,
+                run_setup=False,
             )
-            if repo_config is None or not repo_config.configured:
-                return
-            from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
-                ensure_repo_materialized,
+        except Exception as exc:
+            log_cloud_event(
+                "managed sandbox repo materialization failed after repo config save",
+                managed_sandbox_id=sandbox.id,
+                cloud_repo_config_id=repo_config.id,
+                repo=f"{git_owner}/{git_repo_name}",
+                error=format_exception_message(exc),
+                error_type=exc.__class__.__name__,
             )
 
-            try:
-                await ensure_repo_materialized(
-                    fresh_db,
-                    sandbox=sandbox,
-                    repo_config=repo_config,
-                    github_token=github_grant.access_token,
-                    run_setup=False,
-                )
-            except Exception as exc:
-                log_cloud_event(
-                    "managed sandbox repo materialization failed after repo config save",
-                    managed_sandbox_id=sandbox.id,
-                    cloud_repo_config_id=repo_config.id,
-                    repo=f"{git_owner}/{git_repo_name}",
-                    error=format_exception_message(exc),
-                    error_type=exc.__class__.__name__,
-                )
-                return
-            await db_engine.commit_session(fresh_db)
+    async def _run() -> None:
+        await run_with_fresh_repo_config_session(_materialize)
 
-    db_engine.defer_after_commit(db, _run)
+    defer_repo_config_after_commit(db, _run)
