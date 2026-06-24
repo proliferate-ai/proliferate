@@ -13,6 +13,7 @@ export interface SettingsRepositoryEntry {
   gitProvider: string | null;
   gitOwner: string | null;
   gitRepoName: string | null;
+  defaultBranch?: string | null;
   cloudConfigured: boolean;
   availability: RepositoryAvailability;
 }
@@ -82,6 +83,7 @@ export function buildSettingsRepositoryEntries(
       gitProvider: repoRoot.remoteProvider?.trim() ?? null,
       gitOwner,
       gitRepoName,
+      defaultBranch: repoRoot.defaultBranch?.trim() || null,
       cloudConfigured,
       availability: cloudConfigured ? "local_cloud" : "local",
     } satisfies SettingsRepositoryEntry;
@@ -102,6 +104,7 @@ export function buildSettingsRepositoryEntries(
       gitProvider: "github",
       gitOwner: config.gitOwner,
       gitRepoName: config.gitRepoName,
+      defaultBranch: config.defaultBranch?.trim() || null,
       cloudConfigured: true,
       availability: "cloud",
     } satisfies SettingsRepositoryEntry];

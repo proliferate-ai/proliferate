@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db import engine as db_engine
 from proliferate.db.store.cloud_repo_config import CloudRepoConfigValue, list_cloud_repo_configs
 from proliferate.db.store.managed_sandbox_repo_materializations import (
     ManagedSandboxRepoMaterializationValue,
@@ -50,13 +51,18 @@ def _materialization_versions_match(
     *,
     sandbox: ManagedSandboxValue,
     repo_config: CloudRepoConfigValue,
+    run_setup: bool,
 ) -> bool:
+    setup_matches = (
+        materialization.applied_setup_script_version == repo_config.setup_script_version
+        if run_setup or not repo_config.setup_script.strip()
+        else True
+    )
     return (
         materialization.status == "ready"
         and materialization.sandbox_generation == sandbox.runtime_generation
         and materialization.applied_files_version == repo_config.files_version
-        and materialization.applied_setup_script_version == repo_config.setup_script_version
-        and materialization.applied_env_vars_version == repo_config.env_vars_version
+        and setup_matches
     )
 
 
@@ -119,6 +125,7 @@ async def ensure_repo_materialized(
         existing,
         sandbox=sandbox,
         repo_config=repo_config,
+        run_setup=run_setup,
     ):
         return existing
 
@@ -129,6 +136,7 @@ async def ensure_repo_materialized(
         sandbox_generation=sandbox.runtime_generation,
         repo_path=_repo_path(repo_config),
     )
+    await db_engine.commit_session(db)
     try:
         runtime_url, access_token, _data_key = await load_managed_sandbox_runtime_access(sandbox)
         provider = get_configured_sandbox_provider()
@@ -164,17 +172,28 @@ async def ensure_repo_materialized(
                 command=repo_config.setup_script,
                 base_ref=repo_config.default_branch,
             )
+        applied_setup_script_version = (
+            repo_config.setup_script_version
+            if run_setup or not repo_config.setup_script.strip()
+            else materialization.applied_setup_script_version
+        )
+        applied_env_vars_version = (
+            repo_config.env_vars_version
+            if not repo_config.env_vars
+            else materialization.applied_env_vars_version
+        )
         ready = await mark_repo_materialization_ready(
             db,
             materialization.id,
             anyharness_repo_root_id=resolved.repo_root_id,
             anyharness_workspace_id=resolved.workspace_id,
             applied_files_version=repo_config.files_version,
-            applied_setup_script_version=repo_config.setup_script_version,
-            applied_env_vars_version=repo_config.env_vars_version,
+            applied_setup_script_version=applied_setup_script_version,
+            applied_env_vars_version=applied_env_vars_version,
         )
         if ready is None:
             raise RuntimeError("Repo materialization row disappeared.")
+        await db_engine.commit_session(db)
         return ready
     except Exception as exc:
         await mark_repo_materialization_error(
@@ -182,6 +201,7 @@ async def ensure_repo_materialized(
             materialization.id,
             last_error=format_exception_message(exc),
         )
+        await db_engine.commit_session(db)
         raise
 
 
@@ -224,8 +244,14 @@ async def _clone_or_update_repo(
             f"if [ -d {quoted_repo_path}/.git ]; then",
             f"  git -C {quoted_repo_path} remote set-url origin {quoted_repo_url}",
             f"  git -C {quoted_repo_path} fetch --prune origin",
+            f"  if [ -n \"$(git -C {quoted_repo_path} status --porcelain)\" ]; then",
+            "    echo 'Repository has local changes; refusing cloud materialization.' >&2",
+            "    exit 45",
+            "  fi",
+            f"elif [ -e {quoted_repo_path} ]; then",
+            "  echo 'Repository path exists but is not a git checkout.' >&2",
+            "  exit 46",
             "else",
-            f"  rm -rf {quoted_repo_path}",
             (f"  git clone {clone_branch_args}{quoted_repo_url} {quoted_repo_path}"),
             "fi",
             f"git -C {quoted_repo_path} remote set-url origin {quoted_repo_url}",

@@ -136,6 +136,7 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
 export type RepoRef                   = components["schemas"]["RepoRef"];
+export type ManagedSandboxResponse    = components["schemas"]["ManagedSandboxResponse"];
 export type BillingPlanInfo           = components["schemas"]["CloudPlanInfo"];
 export type BillingUrlResponse        = components["schemas"]["BillingUrlResponse"];
 export type OverageSettingsResponse   = components["schemas"]["OverageSettingsResponse"];

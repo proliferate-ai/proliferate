@@ -77,28 +77,36 @@ export function useHomeNextRepositorySelection({
       ? repoRoots.find((repoRoot) => repoRoot.id === selectedRepository.repoRootId) ?? null
       : null
   ), [repoRoots, selectedRepository]);
+  const selectedRepositoryIsCloudOnly = selectedRepository?.availability === "cloud";
 
   const branchQuery = useRepoRootGitBranchesQuery({
     repoRootId: selectedRepository?.repoRootId ?? null,
-    enabled: !!selectedRepository?.repoRootId && repoLaunchKind !== "local",
+    enabled: !!selectedRepository?.repoRootId
+      && !selectedRepositoryIsCloudOnly
+      && repoLaunchKind !== "local",
   });
   const branchRefs = branchQuery.data ?? EMPTY_BRANCH_REFS;
-  const branchOptions = useMemo(
-    () => localBranchNames(branchRefs),
-    [branchRefs],
-  );
   const defaultBranchName = useMemo(() => (
     resolveHomeNextDefaultBranchName({
       branchRefs,
       savedDefaultBranch: selectedRepository
         ? repoConfigs[selectedRepository.sourceRoot]?.defaultBranch ?? null
         : null,
-      repoRootDefaultBranch: selectedRepoRoot?.defaultBranch ?? null,
+      repoRootDefaultBranch: selectedRepoRoot?.defaultBranch
+        ?? selectedRepository?.defaultBranch
+        ?? null,
     })
   ), [branchRefs, repoConfigs, selectedRepoRoot?.defaultBranch, selectedRepository]);
+  const branchOptions = useMemo(() => {
+    const localBranches = localBranchNames(branchRefs);
+    if (localBranches.length > 0 || !selectedRepositoryIsCloudOnly || !defaultBranchName) {
+      return localBranches;
+    }
+    return [defaultBranchName];
+  }, [branchRefs, defaultBranchName, selectedRepositoryIsCloudOnly]);
 
   const selectedBranchName =
-    baseBranchOverride && branchOptions.includes(baseBranchOverride)
+    baseBranchOverride && (branchOptions.includes(baseBranchOverride) || selectedRepositoryIsCloudOnly)
       ? baseBranchOverride
       : defaultBranchName;
   const expandedArchivedWorkspaceIds = useMemo(

@@ -40,7 +40,8 @@ Important columns:
 - `created_by_user_id`: the user who first requested the sandbox.
 - `billing_subject_id`: billing subject used for provisioning and future
   wake/start gating.
-- `status`: `creating`, `starting`, `ready`, `paused`, `error`, or `destroyed`.
+- `status`: `creating`, `starting`, `ready`, `paused`, `error`, `destroying`,
+  or `destroyed`.
 - `last_error`: last provisioning or lifecycle error surfaced to the UI.
 - `e2b_sandbox_id`: provider sandbox id.
 - `e2b_template_ref`: E2B template ref used for this sandbox.
@@ -111,22 +112,28 @@ The server:
 
 1. authenticates the user with the normal product JWT;
 2. ensures the user's personal billing subject;
-3. acquires an owner advisory lock;
+3. acquires an owner advisory lock for the DB claim phase;
 4. reuses the non-destroyed `managed_sandbox` row if one exists, otherwise
    inserts a `creating` row;
-5. reuses a healthy recorded AnyHarness runtime when possible;
-6. otherwise creates or resumes an E2B sandbox from `E2B_TEMPLATE_NAME`;
-7. uploads/executes the AnyHarness launch script;
-8. waits for AnyHarness health and auth to pass;
-9. encrypts and stores runtime access metadata;
-10. marks the row `ready` and increments `runtime_generation` when the runtime
+5. claims provisioning by committing a fresh `starting` status before provider
+   work; concurrent ensure calls wait on that fresh row instead of creating
+   another E2B sandbox;
+6. reuses a healthy recorded AnyHarness runtime when possible;
+7. otherwise creates or resumes an E2B sandbox from `E2B_TEMPLATE_NAME`;
+8. stores `e2b_sandbox_id` immediately after provider creation so later failure
+   paths can retry or clean up the sandbox;
+9. uploads/executes the AnyHarness launch script;
+10. waits for AnyHarness health and auth to pass;
+11. encrypts and stores runtime access metadata;
+12. marks the row `ready` and increments `runtime_generation` when the runtime
     tuple changed;
-11. best-effort reconciles configured GitHub repos into the sandbox.
+13. best-effort reconciles configured GitHub repos into the sandbox.
 
 Long-running provisioning is currently request-driven. Service code commits at
-phase boundaries so provider work is not held inside one database transaction.
-If/when this moves to a background job, keep the same state transitions and
-owner lock semantics.
+phase boundaries so provider work is not held inside one database transaction;
+fresh `starting`/`destroying` rows are the durable lifecycle claim between those
+transactions. If/when this moves to a background job, keep the same state
+transitions and owner claim semantics.
 
 ### 3. Wake
 
@@ -148,9 +155,10 @@ The destroy endpoint is:
 DELETE /v1/cloud/managed-sandbox
 ```
 
-The server asks E2B to kill the sandbox when an E2B id is present, then marks
-the row `destroyed`. The next ensure creates a new row because active uniqueness
-excludes destroyed rows.
+The server claims `destroying`, asks E2B to kill the sandbox when an E2B id is
+present, then marks the row `destroyed` only after provider deletion succeeds.
+The next ensure creates a new row because active uniqueness excludes destroyed
+rows.
 
 ## Repo Configuration And Materialization
 
@@ -174,7 +182,9 @@ Materialization currently:
 1. clones or fetches the GitHub repo inside the sandbox;
 2. uses a temporary `GIT_ASKPASS` script and never persists the token in the
    remote URL;
-3. checks out the configured default branch when available;
+3. checks out the configured default branch when available, but refuses to
+   reset an existing checkout with local changes or overwrite a non-git
+   directory;
 4. writes tracked file contents from `cloud_repo_config`;
 5. resolves a runtime workspace in AnyHarness for the repo path;
 6. optionally starts setup through AnyHarness when setup is configured;
@@ -229,11 +239,10 @@ DELETE /v1/cloud/managed-sandbox
 
 ## Deleted Paths
 
-The Stack 1 cutover removes active Daytona support and unmounts the old
-cloud-workspace creation route from the control plane API. Legacy TypeScript
-workspace client functions may exist temporarily as compatibility shims for
-older UI surfaces, but they are not part of the generated OpenAPI contract for
-managed sandbox provisioning.
+The Stack 1 cutover removes active Daytona support. The old cloud-workspace
+router remains mounted as a compatibility surface for current Desktop/Web
+workspace flows until gateway-backed AnyHarness workspace creation replaces
+those clients. It is not the managed sandbox provisioning contract.
 
 Deleted/obsolete concepts:
 

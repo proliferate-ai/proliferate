@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.managed_sandboxes import ManagedSandboxRepoMaterialization
@@ -101,51 +102,64 @@ async def begin_repo_materialization(
     repo_path: str,
 ) -> ManagedSandboxRepoMaterializationValue:
     now = utcnow()
+    generation_changed = (
+        ManagedSandboxRepoMaterialization.sandbox_generation != sandbox_generation
+    )
     row = (
         await db.execute(
-            select(ManagedSandboxRepoMaterialization)
-            .where(
-                ManagedSandboxRepoMaterialization.managed_sandbox_id == managed_sandbox_id,
-                ManagedSandboxRepoMaterialization.cloud_repo_config_id == cloud_repo_config_id,
+            pg_insert(ManagedSandboxRepoMaterialization)
+            .values(
+                managed_sandbox_id=managed_sandbox_id,
+                cloud_repo_config_id=cloud_repo_config_id,
+                sandbox_generation=sandbox_generation,
+                status="running",
+                repo_path=repo_path,
+                anyharness_repo_root_id=None,
+                anyharness_workspace_id=None,
+                applied_files_version=0,
+                applied_setup_script_version=0,
+                applied_env_vars_version=0,
+                last_error=None,
+                last_attempted_at=now,
+                materialized_at=None,
+                created_at=now,
+                updated_at=now,
             )
-            .with_for_update()
+            .on_conflict_do_update(
+                index_elements=["managed_sandbox_id", "cloud_repo_config_id"],
+                set_={
+                    "sandbox_generation": sandbox_generation,
+                    "status": "running",
+                    "repo_path": repo_path,
+                    "anyharness_repo_root_id": case(
+                        (generation_changed, None),
+                        else_=ManagedSandboxRepoMaterialization.anyharness_repo_root_id,
+                    ),
+                    "anyharness_workspace_id": case(
+                        (generation_changed, None),
+                        else_=ManagedSandboxRepoMaterialization.anyharness_workspace_id,
+                    ),
+                    "applied_files_version": case(
+                        (generation_changed, 0),
+                        else_=ManagedSandboxRepoMaterialization.applied_files_version,
+                    ),
+                    "applied_setup_script_version": case(
+                        (generation_changed, 0),
+                        else_=ManagedSandboxRepoMaterialization.applied_setup_script_version,
+                    ),
+                    "applied_env_vars_version": case(
+                        (generation_changed, 0),
+                        else_=ManagedSandboxRepoMaterialization.applied_env_vars_version,
+                    ),
+                    "last_error": None,
+                    "last_attempted_at": now,
+                    "materialized_at": None,
+                    "updated_at": now,
+                },
+            )
+            .returning(ManagedSandboxRepoMaterialization)
         )
-    ).scalar_one_or_none()
-    if row is None:
-        row = ManagedSandboxRepoMaterialization(
-            managed_sandbox_id=managed_sandbox_id,
-            cloud_repo_config_id=cloud_repo_config_id,
-            sandbox_generation=sandbox_generation,
-            status="running",
-            repo_path=repo_path,
-            anyharness_repo_root_id=None,
-            anyharness_workspace_id=None,
-            applied_files_version=0,
-            applied_setup_script_version=0,
-            applied_env_vars_version=0,
-            last_error=None,
-            last_attempted_at=now,
-            materialized_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(row)
-    else:
-        generation_changed = row.sandbox_generation != sandbox_generation
-        row.sandbox_generation = sandbox_generation
-        row.status = "running"
-        row.repo_path = repo_path
-        row.last_error = None
-        row.last_attempted_at = now
-        row.updated_at = now
-        if generation_changed:
-            row.anyharness_repo_root_id = None
-            row.anyharness_workspace_id = None
-            row.applied_files_version = 0
-            row.applied_setup_script_version = 0
-            row.applied_env_vars_version = 0
-            row.materialized_at = None
-    await db.flush()
+    ).scalar_one()
     return materialization_value(row)
 
 

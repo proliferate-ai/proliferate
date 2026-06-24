@@ -26,8 +26,8 @@ aws cloudformation deploy \
     UseSslipFallback=true \
     GitHubOAuthClientId='<github-client-id>' \
     GitHubOAuthClientSecret='<github-client-secret>' \
-    SandboxProvider=e2b \
-    E2BApiKey='<e2b-api-key>'
+    E2BApiKey='<e2b-api-key>' \
+    E2BTemplateName='<e2b-template-name>'
 ```
 
 `ReleaseVersion` is the unprefixed image tag, not the GitHub release tag. For a

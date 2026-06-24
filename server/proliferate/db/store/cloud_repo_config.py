@@ -72,6 +72,7 @@ class CloudRepoConfigSummaryValue:
     git_repo_name: str
     configured: bool
     configured_at: datetime | None
+    default_branch: str | None
     files_version: int
 
 
@@ -154,6 +155,7 @@ async def list_cloud_repo_configs(
             git_repo_name=record.git_repo_name,
             configured=record.configured,
             configured_at=record.configured_at,
+            default_branch=record.default_branch,
             files_version=record.files_version,
         )
         for record in records

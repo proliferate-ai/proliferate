@@ -1,22 +1,7 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import type { ManagedSandboxResponse } from "../types/generated.js";
 
-export interface ManagedSandboxResponse {
-  id: string;
-  ownerScope: string;
-  ownerUserId: string | null;
-  organizationId: string | null;
-  status: string;
-  lastError: string | null;
-  e2bSandboxId: string | null;
-  e2bTemplateRef: string;
-  anyharnessBaseUrl: string | null;
-  runtimeGeneration: number;
-  createdAt: string;
-  updatedAt: string;
-  readyAt: string | null;
-  lastHealthAt: string | null;
-  destroyedAt: string | null;
-}
+export type { ManagedSandboxResponse } from "../types/generated.js";
 
 export async function getManagedSandbox(
   client: ProliferateCloudClient = getProliferateClient(),

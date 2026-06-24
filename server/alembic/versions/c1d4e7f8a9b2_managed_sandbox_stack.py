@@ -86,7 +86,8 @@ def upgrade() -> None:
                 name="ck_managed_sandbox_owner_fields",
             ),
             sa.CheckConstraint(
-                "status IN ('creating', 'starting', 'ready', 'paused', 'error', 'destroyed')",
+                "status IN ('creating', 'starting', 'ready', 'paused', 'error', "
+                "'destroying', 'destroyed')",
                 name="ck_managed_sandbox_status",
             ),
             sa.ForeignKeyConstraint(["owner_user_id"], ["user.id"], ondelete="CASCADE"),

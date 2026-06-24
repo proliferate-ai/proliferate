@@ -54,7 +54,16 @@ vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
 
 vi.mock("@/hooks/access/cloud/use-cloud-repo-configs", () => ({
   useCloudRepoConfigs: () => ({
-    data: { configs: [{ gitOwner: "proliferate-ai", gitRepoName: "repo-b", configured: true }] },
+    data: {
+      configs: [{
+        gitOwner: "proliferate-ai",
+        gitRepoName: "repo-b",
+        configured: true,
+        configuredAt: null,
+        defaultBranch: "main",
+        filesVersion: 0,
+      }],
+    },
     isPending: false,
   }),
 }));

@@ -35,6 +35,7 @@ from proliferate.server.cloud.target_git_identity.api import (
 from proliferate.server.cloud.targets.api import router as targets_router
 from proliferate.server.cloud.webhooks.api import router as webhooks_router
 from proliferate.server.cloud.worker.api import router as worker_router
+from proliferate.server.cloud.workspaces.api import router as workspaces_router
 from proliferate.server.cloud.worktree_policy.api import router as worktree_policy_router
 
 # SLACK BOT PARKED: preserve the Slack API module, but do not mount its routes.
@@ -44,6 +45,7 @@ router = APIRouter(prefix="/cloud", tags=["cloud"])
 router.include_router(repos_router)
 router.include_router(repo_config_router)
 router.include_router(managed_sandboxes_router)
+router.include_router(workspaces_router)
 router.include_router(worktree_policy_router)
 router.include_router(capabilities_router)
 router.include_router(claims_router)
