@@ -27,6 +27,18 @@ export interface ScratchListEnterResult {
   };
 }
 
+export interface ScratchListIndentResult {
+  value: string;
+  selectionStart: number;
+  selectionEnd: number;
+  changes: Array<{
+    from: number;
+    to: number;
+    insert: string;
+  }>;
+}
+
+const SCRATCH_LIST_INDENT = "    ";
 const MARKDOWN_LIST_LINE_PATTERN = /^(\s*)(?:(\d+[.)])|([-*]))\s+(?:(\[([ xX])\]\s+)(.*)|(.*))$/;
 const LITERAL_LIST_LINE_PATTERN = /^(\s*)(?:([•◦])\s+|([☐☑])\s+)(.*)$/;
 
@@ -117,6 +129,77 @@ export function applyScratchListEnterFormatting({
   return null;
 }
 
+export function applyScratchListIndentFormatting({
+  value,
+  selectionStart,
+  selectionEnd,
+}: ScratchListEnterInput): ScratchListIndentResult | null {
+  const start = clampOffset(selectionStart, value.length);
+  const end = clampOffset(selectionEnd, value.length);
+  const changes = selectedLines(value, start, end).map((line) => ({
+    from: line.from,
+    to: line.from,
+    insert: SCRATCH_LIST_INDENT,
+  }));
+  return applyListLineChanges(value, start, end, changes);
+}
+
+export function applyScratchListOutdentFormatting({
+  value,
+  selectionStart,
+  selectionEnd,
+}: ScratchListEnterInput): ScratchListIndentResult | null {
+  const start = clampOffset(selectionStart, value.length);
+  const end = clampOffset(selectionEnd, value.length);
+  const changes = selectedLines(value, start, end)
+    .map((line) => {
+      const indentLength = leadingWhitespaceLength(line.text);
+      if (indentLength === 0) {
+        return null;
+      }
+      const removeCount = line.text.startsWith(SCRATCH_LIST_INDENT)
+        ? SCRATCH_LIST_INDENT.length
+        : 1;
+      return {
+        from: line.from,
+        to: line.from + removeCount,
+        insert: "",
+      };
+    })
+    .filter((change): change is {
+      from: number;
+      to: number;
+      insert: string;
+    } => change !== null);
+  return applyListLineChanges(value, start, end, changes);
+}
+
+export function shouldScratchBackspaceOutdent({
+  value,
+  selectionStart,
+  selectionEnd,
+}: ScratchListEnterInput): boolean {
+  const start = clampOffset(selectionStart, value.length);
+  const end = clampOffset(selectionEnd, value.length);
+  if (start !== end) {
+    return false;
+  }
+
+  const lineStart = lineStartAt(value, start);
+  const column = start - lineStart;
+  if (column === 0 || column % SCRATCH_LIST_INDENT.length !== 0) {
+    return false;
+  }
+
+  const beforeCaret = value.slice(lineStart, start);
+  if (!/^\s+$/.test(beforeCaret)) {
+    return false;
+  }
+
+  const from = start - SCRATCH_LIST_INDENT.length;
+  return from >= lineStart;
+}
+
 function markerForNextMarkdownListItem(prefix: ScratchListPrefix) {
   if (prefix.kind === "task") {
     return `${prefix.marker} [ ] `;
@@ -127,6 +210,26 @@ function markerForNextMarkdownListItem(prefix: ScratchListPrefix) {
     return `${number + 1}${delimiter} `;
   }
   return `${prefix.marker} `;
+}
+
+function selectedLines(value: string, selectionStart: number, selectionEnd: number) {
+  const from = Math.min(selectionStart, selectionEnd);
+  const to = Math.max(selectionStart, selectionEnd);
+  const lastOffset = to > from && isLineStart(value, to) ? to - 1 : to;
+  const lines: Array<{ from: number; to: number; text: string }> = [];
+  let lineStart = lineStartAt(value, from);
+
+  while (lineStart <= lastOffset) {
+    const lineEnd = lineEndAt(value, lineStart);
+    const text = value.slice(lineStart, lineEnd);
+    lines.push({ from: lineStart, to: lineEnd, text });
+    if (lineEnd >= value.length) {
+      break;
+    }
+    lineStart = lineEnd + 1;
+  }
+
+  return lines;
 }
 
 function parseLiteralListPrefix(line: string) {
@@ -147,6 +250,71 @@ function parseLiteralListPrefix(line: string) {
     body,
     prefixLength: indent.length + marker.length,
   };
+}
+
+function leadingWhitespaceLength(value: string) {
+  return /^\s*/.exec(value)?.[0].length ?? 0;
+}
+
+function applyListLineChanges(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number,
+  changes: ScratchListIndentResult["changes"],
+): ScratchListIndentResult | null {
+  if (changes.length === 0) {
+    return null;
+  }
+
+  const next = changes
+    .slice()
+    .sort((a, b) => b.from - a.from)
+    .reduce((current, change) => (
+      `${current.slice(0, change.from)}${change.insert}${current.slice(change.to)}`
+    ), value);
+
+  return {
+    value: next,
+    selectionStart: mapOffsetThroughChanges(selectionStart, changes),
+    selectionEnd: mapOffsetThroughChanges(selectionEnd, changes),
+    changes,
+  };
+}
+
+function mapOffsetThroughChanges(
+  offset: number,
+  changes: ScratchListIndentResult["changes"],
+) {
+  return changes
+    .slice()
+    .sort((a, b) => a.from - b.from)
+    .reduce((current, change) => mapOffsetThroughChange(current, change), offset);
+}
+
+function mapOffsetThroughChange(
+  offset: number,
+  change: ScratchListIndentResult["changes"][number],
+) {
+  if (offset < change.from) {
+    return offset;
+  }
+  if (offset > change.to) {
+    return offset + change.insert.length - (change.to - change.from);
+  }
+  return change.from + change.insert.length;
+}
+
+function lineStartAt(value: string, offset: number) {
+  return value.lastIndexOf("\n", Math.max(0, offset - 1)) + 1;
+}
+
+function lineEndAt(value: string, lineStart: number) {
+  const lineEnd = value.indexOf("\n", lineStart);
+  return lineEnd === -1 ? value.length : lineEnd;
+}
+
+function isLineStart(value: string, offset: number) {
+  return offset === 0 || value[offset - 1] === "\n";
 }
 
 function applyListEnter(
