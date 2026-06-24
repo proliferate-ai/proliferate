@@ -221,6 +221,13 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(backRow.className).not.toContain("w-fit");
   });
 
+  it("does not bold the active settings row", () => {
+    renderSettingsSidebar();
+
+    const activeRow = screen.getByRole("button", { name: /General/ });
+    expect(activeRow.className).not.toContain("font-semibold");
+  });
+
   it("keeps desktop update actions on the single settings row", () => {
     const onCheckForUpdates = vi.fn();
     renderSettingsSidebar({

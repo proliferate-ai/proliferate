@@ -34,27 +34,28 @@ export function ConfirmationDialog({
       title={title}
       description={description}
       headerContent={(
-        <div className="py-1">
-          <div className="text-base font-[560] leading-5 text-foreground">{title}</div>
+        <header className="flex flex-col gap-1.5 text-left">
+          <div className="text-lg font-semibold leading-none tracking-tight text-foreground">{title}</div>
           {description ? (
-            <div className="mt-1.5 text-sm leading-5 text-muted-foreground">
+            <div className="text-base leading-6 text-muted-foreground">
               {description}
             </div>
           ) : null}
-        </div>
+        </header>
       )}
-      sizeClassName="max-w-[26rem]"
+      sizeClassName="max-w-[34rem]"
+      headerClassName="shrink-0 px-6 pb-0 pt-6 pr-14"
       bodyClassName="hidden"
       overlayClassName="bg-background/60 backdrop-blur-[2px]"
-      panelClassName="!rounded-xl border-border/70 bg-background/95 shadow-floating"
-      footerClassName="flex shrink-0 items-center justify-end gap-2 px-5 pb-5 pt-1"
+      panelClassName="!rounded-xl border-border/80 bg-card shadow-floating"
+      footerClassName="flex shrink-0 items-center justify-end gap-2 px-6 pb-6 pt-6"
       footer={(
         <>
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="px-3"
+            size="md"
+            className="h-9 rounded-lg px-3 text-sm"
             disabled={loading}
             onClick={onClose}
           >
@@ -63,8 +64,8 @@ export function ConfirmationDialog({
           <Button
             type="button"
             variant={confirmVariant}
-            size="sm"
-            className="min-w-28"
+            size="md"
+            className="h-9 min-w-0 rounded-lg px-4 text-sm shadow-none"
             loading={loading}
             disabled={loading}
             onClick={onConfirm}

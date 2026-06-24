@@ -72,7 +72,7 @@ const SETTINGS_ROW_INACTIVE_CLASS =
 const SETTINGS_BACK_ROW_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-foreground";
 const SETTINGS_ROW_ACTIVE_CLASS =
-  "!font-semibold !text-sidebar-foreground";
+  "!text-sidebar-foreground";
 const SETTINGS_ROW_DISABLED_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-muted-foreground";
 
