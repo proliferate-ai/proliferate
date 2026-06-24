@@ -23,6 +23,7 @@ from proliferate.db.models.organizations import (
     OrganizationMembership,
 )
 from proliferate.integrations import resend
+from proliferate.permissions import CurrentOrgUser
 from proliferate.server.organizations import service as organization_service
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -275,10 +276,16 @@ async def test_invitation_is_durable_before_email_delivery(
     async with engine_module.async_session_factory() as session:
         actor = await session.get(User, uuid.UUID(owner["user_id"]))
         assert actor is not None
+        org_user = CurrentOrgUser(
+            actor_user_id=actor.id,
+            organization_id=organization_id,
+            membership_id=uuid.UUID(organization["membership_id"]),
+            role=ORGANIZATION_ROLE_OWNER,
+        )
         result = await organization_service.create_invitation(
             session,
-            actor,
-            organization_id,
+            org_user,
+            inviter_email=actor.email,
             email="durable-member@acme.dev",
             role=ORGANIZATION_ROLE_MEMBER,
         )

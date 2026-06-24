@@ -9,6 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.permissions import (
+    CurrentOrgUser,
+    current_path_org_admin,
+    current_path_org_member,
+)
 from proliferate.server.organizations.models import (
     OrganizationInvitationAcceptRequest,
     OrganizationInvitationAcceptResponse,
@@ -94,25 +99,22 @@ async def list_organizations_endpoint(
 
 @router.get("/{organization_id}", response_model=OrganizationResponse)
 async def get_organization_endpoint(
-    organization_id: UUID,
-    user: User = Depends(current_product_user),
+    org_user: CurrentOrgUser = Depends(current_path_org_member),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationResponse:
-    record = await get_organization(db, user, organization_id)
+    record = await get_organization(db, org_user)
     return organization_with_membership_response(record)
 
 
 @router.patch("/{organization_id}", response_model=OrganizationResponse)
 async def update_organization_endpoint(
-    organization_id: UUID,
     body: OrganizationUpdateRequest,
-    user: User = Depends(current_product_user),
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationResponse:
     record = await update_organization(
         db,
-        user,
-        organization_id,
+        org_admin,
         name=body.name,
         logo_image=body.logo_image,
         update_logo_image="logo_image" in body.model_fields_set,
@@ -122,11 +124,10 @@ async def update_organization_endpoint(
 
 @router.get("/{organization_id}/members", response_model=OrganizationMembersResponse)
 async def list_organization_members_endpoint(
-    organization_id: UUID,
-    user: User = Depends(current_product_user),
+    org_user: CurrentOrgUser = Depends(current_path_org_member),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationMembersResponse:
-    members = await list_members(db, user, organization_id)
+    members = await list_members(db, org_user)
     return OrganizationMembersResponse(members=[member_response(member) for member in members])
 
 
@@ -135,16 +136,14 @@ async def list_organization_members_endpoint(
     response_model=OrganizationMembershipResponse,
 )
 async def update_organization_membership_endpoint(
-    organization_id: UUID,
     membership_id: UUID,
     body: OrganizationMembershipUpdateRequest,
-    user: User = Depends(current_product_user),
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationMembershipResponse:
     membership = await update_membership(
         db,
-        user,
-        organization_id,
+        org_admin,
         membership_id,
         role=body.role,
         status=body.status,
@@ -157,22 +156,20 @@ async def update_organization_membership_endpoint(
     response_model=OrganizationMembershipResponse,
 )
 async def remove_organization_membership_endpoint(
-    organization_id: UUID,
     membership_id: UUID,
-    user: User = Depends(current_product_user),
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationMembershipResponse:
-    membership = await remove_membership(db, user, organization_id, membership_id)
+    membership = await remove_membership(db, org_admin, membership_id)
     return membership_response(membership)
 
 
 @router.get("/{organization_id}/invitations", response_model=OrganizationInvitationsResponse)
 async def list_organization_invitations_endpoint(
-    organization_id: UUID,
-    user: User = Depends(current_product_user),
+    org_user: CurrentOrgUser = Depends(current_path_org_member),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationsResponse:
-    invitations = await list_invitations(db, user, organization_id)
+    invitations = await list_invitations(db, org_user)
     return OrganizationInvitationsResponse(
         invitations=[invitation_response(invitation) for invitation in invitations],
     )
@@ -184,15 +181,15 @@ async def list_organization_invitations_endpoint(
     status_code=201,
 )
 async def create_organization_invitation_endpoint(
-    organization_id: UUID,
     body: OrganizationInviteRequest,
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
     result = await create_invitation(
         db,
-        user,
-        organization_id,
+        org_admin,
+        inviter_email=user.email,
         email=str(body.email),
         role=body.role,
     )
@@ -204,12 +201,17 @@ async def create_organization_invitation_endpoint(
     response_model=OrganizationInvitationResponse,
 )
 async def resend_organization_invitation_endpoint(
-    organization_id: UUID,
     invitation_id: UUID,
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
-    result = await resend_invitation(db, user, organization_id, invitation_id)
+    result = await resend_invitation(
+        db,
+        org_admin,
+        invitation_id,
+        inviter_email=user.email,
+    )
     return invitation_response(result.invitation)
 
 
@@ -218,10 +220,9 @@ async def resend_organization_invitation_endpoint(
     response_model=OrganizationInvitationResponse,
 )
 async def revoke_organization_invitation_endpoint(
-    organization_id: UUID,
     invitation_id: UUID,
-    user: User = Depends(current_product_user),
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
-    invitation = await revoke_invitation(db, user, organization_id, invitation_id)
+    invitation = await revoke_invitation(db, org_admin, invitation_id)
     return invitation_response(invitation)

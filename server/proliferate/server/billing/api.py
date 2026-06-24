@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from typing import Literal
-from uuid import UUID
-
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import OwnerSelection
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.permissions import OwnerContext, current_owner_context
 from proliferate.server.billing.checkout import (
     create_cloud_checkout_session,
     create_customer_portal_session,
@@ -28,10 +26,8 @@ from proliferate.server.billing.models import (
     StripeWebhookAck,
 )
 from proliferate.server.billing.overview import (
-    get_billing_overview,
-    get_billing_overview_for_owner,
-    get_cloud_plan,
-    get_cloud_plan_for_owner,
+    get_billing_overview_for_context,
+    get_cloud_plan_for_context,
     get_current_plan,
 )
 from proliferate.server.billing.stripe_webhooks import handle_stripe_webhook
@@ -57,19 +53,11 @@ async def get_plan(
 
 @router.get("/cloud-plan", response_model=CloudPlanInfo)
 async def get_cloud_plan_endpoint(
-    owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
-    organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    user: User = Depends(current_product_user),
+    owner_context: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudPlanInfo:
     try:
-        if owner_scope == "personal" and organization_id is None:
-            return await get_cloud_plan(db, user.id)
-        return await get_cloud_plan_for_owner(
-            db,
-            user,
-            OwnerSelection(owner_scope=owner_scope, organization_id=organization_id),
-        )
+        return await get_cloud_plan_for_context(db, owner_context)
     except BillingServiceError as error:
         raise HTTPException(
             status_code=error.status_code,
@@ -79,19 +67,11 @@ async def get_cloud_plan_endpoint(
 
 @router.get("/overview", response_model=BillingOverview)
 async def get_overview(
-    owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
-    organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    user: User = Depends(current_product_user),
+    owner_context: OwnerContext = Depends(current_owner_context),
     db: AsyncSession = Depends(get_async_session),
 ) -> BillingOverview:
     try:
-        if owner_scope == "personal" and organization_id is None:
-            return await get_billing_overview(db, user.id)
-        return await get_billing_overview_for_owner(
-            db,
-            user,
-            OwnerSelection(owner_scope=owner_scope, organization_id=organization_id),
-        )
+        return await get_billing_overview_for_context(db, owner_context)
     except BillingServiceError as error:
         raise HTTPException(
             status_code=error.status_code,
