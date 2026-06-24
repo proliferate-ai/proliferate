@@ -8,7 +8,7 @@ export function SettingsCard({
   return (
     <div
       className={twMerge(
-        "flex flex-col overflow-hidden rounded-lg border border-border-light bg-surface-elevated text-card-foreground shadow-subtle",
+        "flex flex-col overflow-hidden rounded-lg border border-border-light bg-surface-elevated text-card-foreground shadow-none",
         className,
       )}
       {...props}

@@ -58,19 +58,19 @@ interface SettingsSidebarProps {
 }
 
 const SETTINGS_SIDEBAR_ROOT_CLASS =
-  "flex h-full w-[280px] shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar";
-const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-2.5 pb-4";
+  "flex h-full w-[280px] shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground";
+const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-3 pb-5";
 const SETTINGS_GROUPS_CLASS = "flex flex-col";
-const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
-const SETTINGS_GROUP_SPACING_CLASS = "mt-4";
+const SETTINGS_GROUP_CLASS = "flex flex-col gap-1";
+const SETTINGS_GROUP_SPACING_CLASS = "mt-5";
 const SETTINGS_GROUP_HEADING_CLASS =
-  "px-2 pb-1 pt-1.5 text-[11px] font-medium leading-4 tracking-normal text-sidebar-muted-foreground";
+  "px-2.5 pb-1 pt-1.5 text-[11px] font-medium leading-4 tracking-normal text-sidebar-muted-foreground";
 const SETTINGS_ROW_INACTIVE_CLASS =
   "!text-sidebar-foreground hover:!text-sidebar-foreground";
 const SETTINGS_BACK_ROW_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-foreground";
 const SETTINGS_ROW_ACTIVE_CLASS =
-  "!font-medium !text-sidebar-foreground";
+  "!font-semibold !text-sidebar-foreground";
 const SETTINGS_ROW_DISABLED_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-muted-foreground";
 
@@ -168,7 +168,7 @@ function TbrPill() {
     <span
       aria-hidden="true"
       title="To be removed"
-      className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
+      className="rounded-md border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
     >
       tbr
     </span>
@@ -255,7 +255,7 @@ export function SettingsSidebar({
     <div className={SETTINGS_SIDEBAR_ROOT_CLASS}>
       <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
 
-      <div className="mb-4 px-2.5">
+      <div className="mb-5 px-3">
         <SidebarNavRow
           icon={<ArrowLeft className="size-4" />}
           label={SETTINGS_COPY.back}
@@ -315,7 +315,7 @@ export function SettingsSidebar({
         </div>
       </nav>
       {appVersion ? (
-        <div className="shrink-0 border-t border-sidebar-border px-3 py-2 text-xs text-sidebar-muted-foreground">
+        <div className="shrink-0 border-t border-sidebar-border px-4 py-3 text-[11px] leading-4 text-sidebar-muted-foreground">
           Proliferate v{appVersion}
         </div>
       ) : null}
