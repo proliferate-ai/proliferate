@@ -10,7 +10,7 @@ const target = {
     {
       id: "targets",
       items: [
-        { id: "shared", label: "Shared cloud", selected: true },
+        { id: "shared", label: "Organization cloud", selected: true },
         { id: "personal", label: "Personal cloud" },
       ],
     },
@@ -110,7 +110,7 @@ describe("NewChatSurface", () => {
     });
     expect(onDraftChange).toHaveBeenCalledWith("hello");
 
-    fireEvent.click(screen.getByText("Shared cloud"));
+    fireEvent.click(screen.getByText("Organization cloud"));
     fireEvent.click(screen.getByText("Personal cloud"));
     expect(onPickerSelect).toHaveBeenCalledWith("target", "personal");
   });

@@ -144,14 +144,8 @@ function PlaygroundComposerControlRow() {
       activeSessionId="playground-session"
       workspaceUiKey="playground-workspace"
       sdkWorkspaceId="playground-workspace"
-      suppressActiveSessionState={false}
-      canStartCodeReview
-      hasBlockingReview={false}
-      startingReview={false}
       hasUnresolvedPlans={false}
       onAttachFile={noop}
-      onStartReview={noop}
-      onConfigureReview={() => undefined}
       isRunning={false}
       isEmpty
       onSubmit={noop}

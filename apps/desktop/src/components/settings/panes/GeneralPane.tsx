@@ -217,15 +217,15 @@ export function GeneralPane() {
       <GeneralSection title="Session policy">
         <SettingsCard>
           <SettingsCardRow
-            label="Plugins setup"
+            label="Integrations setup"
             description="Configure cloud connectors and plugin packages."
           >
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate(APP_ROUTES.plugins)}
+              onClick={() => navigate(APP_ROUTES.integrations)}
             >
-              Open Plugins
+              Open Integrations
             </Button>
           </SettingsCardRow>
           <SettingsCardRow

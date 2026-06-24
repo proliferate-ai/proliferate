@@ -1,5 +1,5 @@
 import { PluginsScreen } from "../components/plugins/screen/PluginsScreen";
 
-export function PluginsPage() {
+export function IntegrationsPage() {
   return <PluginsScreen />;
 }

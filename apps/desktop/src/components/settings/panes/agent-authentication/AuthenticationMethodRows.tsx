@@ -14,7 +14,6 @@ import {
   agentAuthCredentialAvailability,
   agentAuthCredentialKindLabel,
   agentAuthCredentialOwnerLabel,
-  agentAuthCredentialShareLabel,
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   credentialSummaryDetails,
@@ -145,27 +144,15 @@ export function CredentialMethodRow({
   credential,
   currentUserId,
   revoking,
-  revokingShare,
-  sharing,
   onRequestRevoke,
-  onRevokeShare,
-  onShareCredential,
 }: {
   capabilities: AgentGatewayCapabilities | null;
   credential: AgentAuthCredential;
   currentUserId: string | null;
   revoking: boolean;
-  revokingShare: boolean;
-  sharing: boolean;
   onRequestRevoke: (credential: AgentAuthCredential) => void;
-  onRevokeShare: (credential: AgentAuthCredential) => void;
-  onShareCredential: (credential: AgentAuthCredential) => void;
 }) {
   const availability = agentAuthCredentialAvailability(credential, capabilities);
-  const shareLabel = agentAuthCredentialShareLabel(credential, currentUserId);
-  const canManageShare = shareLabel !== null
-    && credential.ownerScope === "personal"
-    && credential.ownerUserId === currentUserId;
   const canRevokeCredential = credential.ownerScope === "personal"
     && credential.ownerUserId === currentUserId
     && !isProliferateManagedCreditsCredential(credential);
@@ -194,23 +181,6 @@ export function CredentialMethodRow({
             ? agentAuthCredentialStatusLabel(credential.status)
             : availability.label}
         </Badge>
-        {canManageShare && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            loading={credential.activeCredentialShareId ? revokingShare : sharing}
-            onClick={() => {
-              if (credential.activeCredentialShareId) {
-                onRevokeShare(credential);
-                return;
-              }
-              onShareCredential(credential);
-            }}
-          >
-            {credential.activeCredentialShareId ? "Unshare" : "Share"}
-          </Button>
-        )}
         {canRevokeCredential && (
           <Button
             type="button"

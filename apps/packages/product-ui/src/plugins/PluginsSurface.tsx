@@ -69,9 +69,9 @@ export function PluginsSurface({
             <Input
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search plugins..."
+              placeholder="Search integrations..."
               className="pl-9"
-              aria-label="Search plugins"
+              aria-label="Search integrations"
             />
           </div>
         </div>
@@ -85,11 +85,11 @@ export function PluginsSurface({
           />
         ) : null}
 
-        {loading && items.length === 0 ? <PluginListMessage title="Loading plugins" /> : null}
+        {loading && items.length === 0 ? <PluginListMessage title="Loading integrations" /> : null}
 
         {error && items.length === 0 ? (
           <PluginListMessage
-            title="Couldn't load plugins"
+            title="Couldn't load integrations"
             description={error}
             action={<Button variant="outline" onClick={onRetry}>Retry</Button>}
           />
@@ -97,16 +97,16 @@ export function PluginsSurface({
 
         {searchEmpty ? (
           <PluginListMessage
-            title={`No plugins match "${query}"`}
+            title={`No integrations match "${query}"`}
             description="Try a different search term."
           />
         ) : null}
 
         {!loading && !error && firstRunEmpty && available.length > 0 ? (
           <div className="rounded-lg border border-border/50 bg-foreground/5 px-4 py-3">
-            <div className="text-sm font-medium text-foreground">No plugins installed</div>
+            <div className="text-sm font-medium text-foreground">No integrations installed</div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Install a package below. Enabled packages add MCP tools and plugin skills to your sessions.
+              Install a package below. Enabled packages add MCP tools and skills to your sessions.
             </p>
           </div>
         ) : null}
@@ -145,7 +145,7 @@ export function PluginsSurface({
           </PluginSection>
         ) : !loading && !error && !searchEmpty ? (
           <p className="text-sm text-muted-foreground">
-            {installed.length > 0 ? "All available plugins are installed." : "No plugins are available right now."}
+            {installed.length > 0 ? "All available integrations are installed." : "No integrations are available right now."}
           </p>
         ) : null}
       </section>
@@ -176,7 +176,7 @@ export function PluginsSurface({
 
       <ConfirmationDialog
         open={deleteTarget !== null}
-        title={deleteTarget ? `Delete ${deleteTarget.entry.name}?` : "Delete plugin?"}
+        title={deleteTarget ? `Delete ${deleteTarget.entry.name}?` : "Delete integration?"}
         description="This removes the MCP connection from personal cloud access. Existing sessions keep their transcript history."
         confirmLabel="Delete"
         confirmVariant="destructive"

@@ -13,13 +13,13 @@ describe("workspace provider scope", () => {
 
   it("clears the workspace provider on top-level non-workspace routes", () => {
     expect(resolveRouteScopedWorkspaceProviderId({
-      pathname: APP_ROUTES.plugins,
+      pathname: APP_ROUTES.integrations,
       selectedLogicalWorkspaceId: "logical-workspace",
       selectedWorkspaceId: "workspace-1",
     })).toBeNull();
 
     expect(resolveRouteScopedWorkspaceProviderId({
-      pathname: APP_ROUTES.automations,
+      pathname: APP_ROUTES.workflows,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: "workspace-1",
     })).toBeNull();

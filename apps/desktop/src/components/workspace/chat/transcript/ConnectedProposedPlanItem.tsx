@@ -27,12 +27,9 @@ export function ConnectedProposedPlanItem({
     approvePlan,
     rejectPlan,
     implementPlanHere,
-    reviewPlan,
-    configurePlanReview,
     isApprovingPlan,
     isRejectingPlan,
     isImplementingPlan,
-    isStartingReview,
   } = useProposedPlanActions();
   const decision = item.decision;
   const plan = useMemo(() => proposedPlanItemToAttachment(item), [item]);
@@ -60,15 +57,12 @@ export function ConnectedProposedPlanItem({
               : undefined
           }
           onImplementHere={() => implementPlanHere(plan)}
-          onReview={() => reviewPlan(plan)}
-          onConfigureReview={(anchorRect) => configurePlanReview(plan, anchorRect)}
           onHandOffToNewSession={
             onHandOffToNewSession ? () => onHandOffToNewSession(plan) : undefined
           }
           isApproving={isApprovingPlan}
           isRejecting={isRejectingPlan}
           isImplementingHere={isImplementingPlan}
-          isStartingReview={isStartingReview}
           renderLink={renderTranscriptLink}
           renderInlineCode={renderTranscriptInlineCode}
           renderCodeBlock={renderTranscriptCodeBlock}

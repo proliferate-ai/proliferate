@@ -40,6 +40,9 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
     // SLACK BOT PARKED: old direct links fall back to the default settings page.
     return SETTINGS_DEFAULT_SECTION;
   }
+  if (value === "shared-environments") {
+    return SETTINGS_DEFAULT_SECTION;
+  }
   if (value === "cloud") {
     return "agent-authentication";
   }
@@ -61,10 +64,7 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
   const params = new URLSearchParams();
   const section = target.section === "repo" ? "environments" : target.section;
   params.set("section", section);
-  if (
-    (section === "environments" || section === "shared-environments")
-    && target.repo
-  ) {
+  if (section === "environments" && target.repo) {
     params.set("repo", target.repo);
   }
   const focus = target.focus ?? {};
@@ -99,19 +99,6 @@ export function buildCloudRepoSettingsHref(
 ): string {
   return buildSettingsHref({
     section: "environments",
-    focus: {
-      cloudRepoOwner: gitOwner,
-      cloudRepoName: gitRepoName,
-    },
-  });
-}
-
-export function buildSharedCloudRepoSettingsHref(
-  gitOwner: string,
-  gitRepoName: string,
-): string {
-  return buildSettingsHref({
-    section: "shared-environments",
     focus: {
       cloudRepoOwner: gitOwner,
       cloudRepoName: gitRepoName,
@@ -184,10 +171,7 @@ export function resolveSettingsSelection({
     section = cloudRedirectSection(focus);
   }
 
-  if (
-    (section === "environments" || section === "shared-environments")
-    && rawRepo
-  ) {
+  if (section === "environments" && rawRepo) {
     repoSourceRoot = rawRepo;
   }
 
@@ -205,7 +189,7 @@ export function resolveSettingsSelection({
     }
   }
 
-  if (section === "environments" || section === "shared-environments") {
+  if (section === "environments") {
     if (!repoSourceRoot || !repositoryRoots.has(repoSourceRoot)) {
       repoSourceRoot = null;
     }
@@ -259,7 +243,7 @@ function sanitizeFocusForSection(
   if (section === "compute") {
     return pickFocus({ target: focus.target });
   }
-  if (section === "environments" || section === "shared-environments") {
+  if (section === "environments") {
     return pickFocus({
       focus: focus.focus,
       cloudRepoOwner: focus.cloudRepoOwner,

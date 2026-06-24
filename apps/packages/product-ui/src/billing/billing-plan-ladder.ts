@@ -36,7 +36,7 @@ export const BILLING_PLAN_COLUMNS: BillingPlanColumn[] = [
     highlights: [
       "Starter personal cloud runtime",
       "Desktop, web, and mobile dispatch",
-      "Personal plugins, MCPs, and skills",
+      "Personal integrations, MCPs, and skills",
       "Local and SSH workspaces",
       "Community and docs support",
     ],
@@ -44,7 +44,7 @@ export const BILLING_PLAN_COLUMNS: BillingPlanColumn[] = [
   {
     key: "team",
     name: "Team",
-    tagline: "Shared cloud for teams.",
+    tagline: "Organization cloud for teams.",
     price: "$20",
     suffix: "per user / month",
     billing: "Billed monthly",
@@ -54,8 +54,8 @@ export const BILLING_PLAN_COLUMNS: BillingPlanColumn[] = [
       "20 managed-cloud hours per user",
       "4 cloud repo environments per user",
       "2 active cloud environments per user",
-      "Shared cloud sessions, Slack, and team automations",
-      "Shared plugins, MCPs, skills, and agent auth",
+      "Organization cloud sessions, Slack, and team workflows",
+      "Organization integrations, MCPs, skills, and agent auth",
     ],
   },
   {
@@ -82,7 +82,7 @@ export const BILLING_PLAN_SECTIONS: BillingPlanSection[] = [
     rows: [
       { label: "Team members", values: { free: "1", team: "Unlimited", enterprise: "Unlimited" } },
       { label: "Personal cloud sandbox", values: { free: "1", team: "1 per user", enterprise: "1 per user" } },
-      { label: "Shared cloud sandbox", values: { free: false, team: "1 per org", enterprise: "Custom" } },
+      { label: "Organization cloud sandbox", values: { free: false, team: "1 per org", enterprise: "Custom" } },
       { label: "Included managed cloud", values: { free: "Starter runtime", team: "20 hr / user / month", enterprise: "Custom" } },
       { label: "Active cloud environments", values: { free: "1", team: "2 / user", enterprise: "Custom" } },
       { label: "Cloud repo environments", values: { free: "2", team: "4 / user", enterprise: "Custom" } },
@@ -98,10 +98,10 @@ export const BILLING_PLAN_SECTIONS: BillingPlanSection[] = [
       { label: "Web and mobile dispatch", values: { free: true, team: true, enterprise: true } },
       { label: "Local workspaces and worktrees", values: { free: true, team: true, enterprise: true } },
       { label: "Personal cloud workspaces", values: { free: true, team: true, enterprise: true } },
-      { label: "Shared cloud workspaces", values: { free: false, team: true, enterprise: true } },
+      { label: "Organization cloud workspaces", values: { free: false, team: true, enterprise: true } },
       { label: "Slack integration", values: { free: false, team: true, enterprise: true } },
-      { label: "Automations", pill: "Beta", values: { free: "Definitions", team: "Cloud runs", enterprise: "Cloud runs" } },
-      { label: "Plugins, MCPs, skills", values: { free: "Personal", team: "Shared across team", enterprise: "Shared across org" } },
+      { label: "Workflows", pill: "Beta", values: { free: "Definitions", team: "Cloud runs", enterprise: "Cloud runs" } },
+      { label: "Integrations, MCPs, skills", values: { free: "Personal", team: "Shared across team", enterprise: "Shared across org" } },
     ],
   },
   {

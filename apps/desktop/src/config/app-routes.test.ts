@@ -2,13 +2,20 @@ import { describe, expect, it } from "vitest";
 import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes";
 
 describe("app routes", () => {
-
-  it("registers plugins as the canonical integrations route", () => {
-    expect(APP_ROUTES.plugins).toBe("/plugins");
+  it("registers personal integrations and workflows as top-level routes", () => {
+    expect(APP_ROUTES.integrations).toBe("/integrations");
+    expect(APP_ROUTES.workflows).toBe("/workflows");
   });
 
-  it("registers the cloud-visible workspace inventory route", () => {
-    expect(APP_ROUTES.workspaces).toBe("/workspaces");
+  it("does not keep named constants for merged plugin and automation routes", () => {
+    expect(APP_ROUTES).not.toHaveProperty("plugins");
+    expect(APP_ROUTES).not.toHaveProperty("automations");
+    expect(LEGACY_APP_ROUTES.plugins).toBe("/plugins");
+    expect(LEGACY_APP_ROUTES.automations).toBe("/automations");
+  });
+
+  it("does not keep a named constant for the retired workspace inventory route", () => {
+    expect(APP_ROUTES).not.toHaveProperty("workspaces");
   });
 
   it("does not keep a named constant for the retired powers route", () => {

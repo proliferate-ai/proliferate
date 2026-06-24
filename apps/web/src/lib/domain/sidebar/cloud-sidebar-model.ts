@@ -8,7 +8,6 @@ export type CloudSidebarWorkspace = CloudWorkspaceSummary | CloudWorkspaceDetail
 export interface CloudSidebarRouteState {
   workspaceId: string | null;
   sessionId: string | null;
-  workspacesActive: boolean;
 }
 
 export function parseCloudSidebarRoute(pathname: string): CloudSidebarRouteState {
@@ -18,9 +17,6 @@ export function parseCloudSidebarRoute(pathname: string): CloudSidebarRouteState
   return {
     workspaceId: match?.[1] ? decodeRoutePart(match[1]) : null,
     sessionId: match?.[2] ? decodeRoutePart(match[2]) : null,
-    workspacesActive:
-      normalizedPath === "/workspaces" ||
-      normalizedPath === "/cloud/workspaces",
   };
 }
 

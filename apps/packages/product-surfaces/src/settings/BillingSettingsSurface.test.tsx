@@ -117,6 +117,10 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
+    expect(screen.getByRole("heading", { name: "Plan + billing" })).toBeTruthy();
+    expect(screen.getByText("Auto top up")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Configure" }) as HTMLButtonElement).disabled).toBe(true);
+
     fireEvent.click(screen.getAllByRole("button", { name: "Manage Team billing" })[0]);
 
     await waitFor(() => {

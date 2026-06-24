@@ -121,23 +121,25 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
-      "Preferences",
+      "Admin",
+      "Organization settings",
+      "Plan + billing",
+      "Integrations",
+      "Model policy",
+      "Limits",
+      "Settings",
       "General",
       "Appearance",
-      "Keyboard",
-      "Organization & Account",
+      "Keyboard shortcuts",
       "Account",
-      "Organization",
-      "Billing",
-      "Workspace",
+      "Workspaces",
       "Environments",
+      "Personal compute",
       "Worktrees",
-      "Shared Sandbox",
-      "Compute",
+      "Archived chats",
       "Agents",
-      "Agent Defaults",
-      "Agent Authentication",
-      "Review",
+      "Authentication",
+      "Defaults",
       "Help",
       "Support",
     ];
@@ -148,15 +150,22 @@ describe("SettingsSidebar layout and shortcuts", () => {
       previousIndex = nextIndex;
     }
 
-    expect(screen.queryByText("Workflows")).toBeNull();
+    expect(screen.queryByText("Organization & Account")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cloud" })).toBeNull();
   });
 
   it("renders admin tags for admin-only settings rows", () => {
     renderSettingsSidebar();
 
-    expect(screen.getAllByText("Admin")).toHaveLength(1);
+    const adminPills = screen.getAllByText("Admin").filter((element) => element.tagName === "SPAN");
+    expect(adminPills).toHaveLength(5);
     expect(screen.queryByRole("button", { name: /Slack bot/ })).toBeNull();
+  });
+
+  it("marks visible settings rows outside the target IA as tbr", () => {
+    renderSettingsSidebar();
+
+    expect(screen.getAllByText("tbr")).toHaveLength(1);
   });
 
   it("disables admin-only rows for non-admins", () => {
@@ -166,12 +175,12 @@ describe("SettingsSidebar layout and shortcuts", () => {
       onSelectSection,
     });
 
-    const sharedEnvironments = screen.getByRole("button", { name: /Shared Sandbox/ }) as HTMLButtonElement;
-    expect(sharedEnvironments.disabled).toBe(true);
-    expect(sharedEnvironments.getAttribute("title")).toBe("Admin access required");
+    const organizationIntegrations = screen.getByRole("button", { name: /Integrations/ }) as HTMLButtonElement;
+    expect(organizationIntegrations.disabled).toBe(true);
+    expect(organizationIntegrations.getAttribute("title")).toBe("Admin access required");
 
-    fireEvent.click(sharedEnvironments);
-    expect(onSelectSection).not.toHaveBeenCalledWith("shared-environments");
+    fireEvent.click(organizationIntegrations);
+    expect(onSelectSection).not.toHaveBeenCalledWith("organization-integrations");
   });
 
   it("keeps the back row full width", () => {
@@ -215,7 +224,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     renderSettingsSidebar();
 
-    const shortcutLabel = screen.getByText("⌘1");
+    const shortcutLabel = screen.getByText("⌘6");
     expect(shortcutLabel.className).toContain("opacity-0");
     expect(shortcutLabel.className).toContain("group-hover:opacity-100");
   });
@@ -232,13 +241,13 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+    expect(onSelectSection).toHaveBeenLastCalledWith("billing");
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
       digit: 9,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("review");
+    expect(onSelectSection).toHaveBeenLastCalledWith("agent-defaults");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {
@@ -249,7 +258,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     const onSelectSection = vi.fn();
     renderSettingsSidebar({
-      disabledSections: { appearance: true },
+      disabledSections: { general: true },
       onSelectSection,
     });
 
@@ -257,18 +266,18 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
-    expect(screen.getByText("⌘2")).toBeTruthy();
+    expect(screen.getByText("⌘6")).toBeTruthy();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 2,
+      digit: 6,
     })).toBe(false);
     expect(onSelectSection).not.toHaveBeenCalled();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 3,
+      digit: 7,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("keyboard");
+    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
   });
 });

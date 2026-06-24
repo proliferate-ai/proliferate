@@ -11,7 +11,6 @@ export function renderActiveSlot(scenario: ScenarioKey): ReactNode | null {
     case "edit-approval":
     case "pending-prompts-with-approval":
     case "subagents-queued-wake-with-approval":
-    case "subagents-coding-review-with-approval":
     case "gemini-mcp-approval-options":
     case "gemini-tool-before-approval":
     case "user-input-single-option":

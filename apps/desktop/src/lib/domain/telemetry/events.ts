@@ -1,10 +1,11 @@
 import type { TelemetryFailureKind } from "./failures";
 
 export type DesktopTelemetryRoute =
-  | "automations"
+  | "integrations"
   | "login"
   | "main"
   | "settings"
+  | "workflows"
   | "unknown";
 export type DesktopWorkspaceKind = "cloud" | "local";
 export type SupportReportScopeKind =

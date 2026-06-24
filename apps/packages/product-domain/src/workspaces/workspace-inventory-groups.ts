@@ -178,9 +178,9 @@ export function groupLabelForSource(kind: WorkspaceInventorySourceKind): string 
     case "mobile":
       return "Mobile";
     case "personal_automation":
-      return "Personal automations";
+      return "Personal workflows";
     case "team_automation":
-      return "Team automations";
+      return "Team workflows";
     case "slack":
       return "Slack";
     case "api":

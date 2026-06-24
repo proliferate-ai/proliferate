@@ -1,18 +1,19 @@
 export const SETTINGS_CONTENT_SECTIONS = [
+  "organization",
+  "billing",
+  "organization-integrations",
+  "organization-model-policy",
+  "organization-limits",
   "general",
   "appearance",
   "keyboard",
   "account",
-  "organization",
-  "billing",
   "environments",
+  "compute",
   "worktrees",
   "archived-chats",
-  "shared-environments",
-  "compute",
-  "agent-defaults",
   "agent-authentication",
-  "review",
+  "agent-defaults",
   // SLACK BOT PARKED: keep the id nearby for revival, but do not register it.
   // "slack-bot",
 ] as const;
@@ -22,20 +23,21 @@ export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
 export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
+  "organization",
+  "billing",
+  "organization-integrations",
+  "organization-model-policy",
+  "organization-limits",
   "general",
   "appearance",
   "keyboard",
   "account",
-  "organization",
-  "billing",
   "environments",
+  "compute",
   "worktrees",
   "archived-chats",
-  "shared-environments",
-  "compute",
-  "agent-defaults",
   "agent-authentication",
-  "review",
+  "agent-defaults",
   // SLACK BOT PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "slack-bot",
 ] as const satisfies readonly SettingsSection[];

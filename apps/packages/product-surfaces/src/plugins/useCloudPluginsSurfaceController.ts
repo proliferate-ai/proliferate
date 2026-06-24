@@ -118,12 +118,12 @@ export function useCloudPluginsSurfaceController({
     const succeeded = completion.status === "completed";
     setCompletionNotice(succeeded
       ? {
-          title: "Plugin connected",
-          description: "Browser authorization finished. Plugin access is refreshing.",
+          title: "Integration connected",
+          description: "Browser authorization finished. Integration access is refreshing.",
           tone: "info",
         }
       : {
-          title: "Plugin connection failed",
+          title: "Integration connection failed",
           description: oauthFailureMessage(completion.failureCode),
           tone: "destructive",
         });

@@ -29,7 +29,7 @@ describe("UpgradeGateDialog", () => {
     expect(screen.getByRole("dialog", { name: "Upgrade to Team" })).toBeTruthy();
     expect(screen.getByText("Research")).toBeTruthy();
     expect(screen.getByText("Members, invitations, and admin roles")).toBeTruthy();
-    expect(screen.getByText("Shared cloud workspaces, Slack sessions, and automations")).toBeTruthy();
+    expect(screen.getByText("Organization cloud work, Slack sessions, and workflows")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Continue to checkout" }));
     expect(onConfirm).toHaveBeenCalledTimes(1);

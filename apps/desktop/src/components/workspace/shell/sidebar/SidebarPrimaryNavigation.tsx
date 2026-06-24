@@ -1,45 +1,38 @@
 import {
   Blocks,
-  CalendarClock,
-  Grid,
   Home,
   LifeBuoy,
+  Zap,
 } from "@proliferate/ui/icons";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
 import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
 
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
-  pluginsActive: boolean;
-  automationsActive: boolean;
-  workspacesActive: boolean;
+  integrationsActive: boolean;
+  workflowsActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
   shortcutLabels: {
     home: string;
-    plugins: string;
-    automations: string;
     support: string;
   };
   onGoHome: () => void;
-  onGoPlugins: () => void;
-  onGoAutomations: () => void;
-  onGoWorkspaces: () => void;
+  onGoIntegrations: () => void;
+  onGoWorkflows: () => void;
   onOpenSupport: () => void;
 }
 
 export function SidebarPrimaryNavigation({
   homeActive,
-  pluginsActive,
-  automationsActive,
-  workspacesActive,
+  integrationsActive,
+  workflowsActive,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
   onGoHome,
-  onGoPlugins,
-  onGoAutomations,
-  onGoWorkspaces,
+  onGoIntegrations,
+  onGoWorkflows,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
   const navItems: SidebarNavItemView[] = [
@@ -51,24 +44,16 @@ export function SidebarPrimaryNavigation({
       shortcutLabel: shortcutLabels.home,
     },
     {
-      id: "plugins",
-      active: pluginsActive,
+      id: "integrations",
+      active: integrationsActive,
       icon: <Blocks className="size-4" />,
-      label: "Plugins",
-      shortcutLabel: shortcutLabels.plugins,
+      label: "Integrations",
     },
     {
-      id: "workspaces",
-      active: workspacesActive,
-      icon: <Grid className="size-4" />,
-      label: "Workspaces",
-    },
-    {
-      id: "automations",
-      active: automationsActive,
-      icon: <CalendarClock className="size-4" />,
-      label: "Automations",
-      shortcutLabel: shortcutLabels.automations,
+      id: "workflows",
+      active: workflowsActive,
+      icon: <Zap className="size-4" />,
+      label: "Workflows",
     },
     {
       id: "support",
@@ -84,14 +69,11 @@ export function SidebarPrimaryNavigation({
       case "home":
         onGoHome();
         break;
-      case "plugins":
-        onGoPlugins();
+      case "integrations":
+        onGoIntegrations();
         break;
-      case "workspaces":
-        onGoWorkspaces();
-        break;
-      case "automations":
-        onGoAutomations();
+      case "workflows":
+        onGoWorkflows();
         break;
       case "support":
         onOpenSupport();
