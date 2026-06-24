@@ -41,8 +41,11 @@ export function OrganizationMembersPane() {
   const membersQuery = useOrganizationMembers(activeOrganizationId);
   const invitationsQuery = useOrganizationInvitations(activeOrganizationId);
   const joinLinkQuery = useOrganizationJoinLink(activeOrganizationId, admin.isAdmin);
+  const shouldLoadPendingInvitations = authStatus === "authenticated"
+    && organizationsQuery.isSuccess
+    && !activeOrganization;
   const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
-    authStatus === "authenticated",
+    shouldLoadPendingInvitations,
   );
   const { copyText } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
@@ -106,7 +109,7 @@ export function OrganizationMembersPane() {
     && organizationsQuery.isSuccess
     && organizations.length === 0
     && pendingInvitations.length === 0;
-  const shouldShowPendingInvitations = authStatus === "authenticated"
+  const shouldShowPendingInvitations = shouldLoadPendingInvitations
     && pendingInvitations.length > 0;
 
   return (
