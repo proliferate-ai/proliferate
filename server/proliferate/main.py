@@ -48,6 +48,7 @@ from proliferate.server.cloud.agent_auth.reconciler import (
     stop_agent_gateway_reconciler,
 )
 from proliferate.server.cloud.api import router as cloud_router
+from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.cloud.mobility.reconciler import (
     start_mobility_cleanup_reconciler,
     stop_mobility_cleanup_reconciler,
@@ -216,6 +217,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(analytics_router, prefix=f"{api_prefix}/v1", tags=["analytics"])
     app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
+    app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])

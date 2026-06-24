@@ -132,6 +132,25 @@ async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
   return request;
 }
 
+export async function getDesktopCloudAccessToken(): Promise<string> {
+  if (isDevAuthBypassed()) {
+    throw new ProliferateClientError(
+      "Cloud workspaces require real sign-in. Set VITE_DEV_DISABLE_AUTH=false and sign in.",
+      401,
+      "dev_auth_bypass",
+    );
+  }
+  const session = await loadValidSession();
+  if (!session) {
+    throw new ProliferateClientError(
+      "You must sign in to use cloud workspaces.",
+      401,
+      "unauthorized",
+    );
+  }
+  return session.access_token;
+}
+
 async function fetchDesktopCloudStream(
   input: ProliferateStreamRequestInput,
 ): Promise<Response> {

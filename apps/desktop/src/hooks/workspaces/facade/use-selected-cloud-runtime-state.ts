@@ -37,9 +37,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   ) ?? null;
   const persistedStatus = (selectedCloudWorkspace?.status ?? null) as CloudWorkspaceStatus | null;
   const usesCloudRuntime = cloudWorkspaceUsesCloudRuntime(selectedCloudWorkspace);
-  const usesDirectAttach = selectedCloudWorkspace
-    ? selectedCloudWorkspace.visibility === "claimed" || !usesCloudRuntime
-    : false;
+  const usesDirectAttach = selectedCloudWorkspace ? !usesCloudRuntime : false;
   const needsClaim = selectedCloudWorkspace?.visibility === "shared_unclaimed";
   const isWarm = selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
   const connectionQuery = useCloudWorkspaceConnection(

@@ -15,6 +15,10 @@ import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cl
 
 import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
 import type { UpdateSessionConfigPayload } from "../../../lib/access/cloud/cloud-command-payloads";
+import {
+  getWebManagedSandboxAnyHarnessClient,
+  isWebManagedSandboxWorkspace,
+} from "../../../lib/access/anyharness/managed-sandbox-runtime";
 
 type EnqueueCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
@@ -22,6 +26,7 @@ type EnqueueCommand<TPayload> = (
 
 export function useWebCloudSessionConfigActions(input: {
   client: ProliferateCloudClient;
+  productToken: string | null;
   workspace: CloudWorkspaceDetail | null;
   session: CloudSessionProjection | null;
   isUnclaimed: boolean;
@@ -36,6 +41,7 @@ export function useWebCloudSessionConfigActions(input: {
 }) {
   const {
     client,
+    productToken,
     workspace,
     session,
     isUnclaimed,
@@ -60,10 +66,12 @@ export function useWebCloudSessionConfigActions(input: {
       setPendingHomePromptStatus("Claim this shared workspace before changing session settings.");
       return;
     }
-    const readiness = cloudCommandReadiness(workspace);
-    if (!readiness.commandable) {
-      setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
-      return;
+    if (!isWebManagedSandboxWorkspace(workspace)) {
+      const readiness = cloudCommandReadiness(workspace);
+      if (!readiness.commandable) {
+        setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+        return;
+      }
     }
     setPendingConfigChanges((current) => ({
       ...current,
@@ -76,6 +84,29 @@ export function useWebCloudSessionConfigActions(input: {
       },
     }));
     try {
+      if (isWebManagedSandboxWorkspace(workspace)) {
+        const { anyharness } = await getWebManagedSandboxAnyHarnessClient({
+          workspace,
+          productToken,
+          client,
+        });
+        await anyharness.sessions.setConfigOption(session.sessionId, {
+          configId: rawConfigId,
+          value,
+        });
+        if (!mountedRef.current) {
+          return;
+        }
+        setPendingConfigChanges((current) => {
+          const existing = current[changeKey];
+          if (!existing || existing.mutationId !== mutationId) {
+            return current;
+          }
+          const { [changeKey]: _removed, ...rest } = current;
+          return rest;
+        });
+        return;
+      }
       const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
         client,
         workspace,

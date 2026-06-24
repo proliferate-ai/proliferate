@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.config import settings
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.managed_sandboxes import (
     ManagedSandboxValue,
     acquire_managed_sandbox_owner_lock,
@@ -66,6 +67,13 @@ class _UserWithId(Protocol):
 class _SandboxStartClaim:
     sandbox: ManagedSandboxValue
     action: Literal["start", "reuse", "wait"]
+
+
+@dataclass(frozen=True)
+class ManagedSandboxRepoRuntimeConnection:
+    anyharness_workspace_id: str
+    anyharness_repo_root_id: str | None
+    runtime_generation: int
 
 
 def _template_ref() -> str:
@@ -351,6 +359,58 @@ async def load_managed_sandbox_runtime_access(
         sandbox.anyharness_base_url or "",
         decrypt_text(sandbox.anyharness_bearer_token_ciphertext or ""),
         decrypt_text(sandbox.anyharness_data_key_ciphertext or ""),
+    )
+
+
+async def ensure_managed_sandbox_repo_runtime_connection(
+    db: AsyncSession,
+    user: _UserWithId,
+    *,
+    git_owner: str,
+    git_repo_name: str,
+) -> ManagedSandboxRepoRuntimeConnection:
+    repo_config = await get_cloud_repo_config(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    if repo_config is None or not repo_config.configured:
+        raise CloudApiError(
+            "managed_sandbox_repo_not_configured",
+            "Configure this GitHub repo for cloud use before resolving its runtime.",
+            status_code=404,
+        )
+    github_grant = await get_ready_github_grant_for_user(db, user_id=user.id)
+    if github_grant is None:
+        raise CloudApiError(
+            "github_link_required",
+            "Connect GitHub before resolving a managed sandbox repo runtime.",
+            status_code=400,
+        )
+
+    sandbox = await ensure_managed_sandbox_ready(db, user)
+    from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
+        ensure_repo_materialized,
+    )
+
+    materialization = await ensure_repo_materialized(
+        db,
+        sandbox=sandbox,
+        repo_config=repo_config,
+        github_token=github_grant.access_token,
+        run_setup=False,
+    )
+    if not materialization.anyharness_workspace_id:
+        raise CloudApiError(
+            "managed_sandbox_repo_materialization_incomplete",
+            "Managed sandbox repo materialization did not resolve an AnyHarness workspace.",
+            status_code=502,
+        )
+    return ManagedSandboxRepoRuntimeConnection(
+        anyharness_workspace_id=materialization.anyharness_workspace_id,
+        anyharness_repo_root_id=materialization.anyharness_repo_root_id,
+        runtime_generation=sandbox.runtime_generation,
     )
 
 

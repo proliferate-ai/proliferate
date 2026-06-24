@@ -19,6 +19,10 @@ import {
   type ActivePlanDecision,
 } from "../../../lib/domain/chat/cloud-chat-plan-decision";
 import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
+import {
+  getWebManagedSandboxAnyHarnessClient,
+  isWebManagedSandboxWorkspace,
+} from "../../../lib/access/anyharness/managed-sandbox-runtime";
 
 type DecidePlanPayload = {
   workspaceId: string;
@@ -29,6 +33,7 @@ type DecidePlanPayload = {
 
 export function useWebCloudPlanDecisionActions(input: {
   client: ProliferateCloudClient;
+  productToken: string | null;
   workspace: CloudWorkspaceDetail | null;
   session: CloudSessionProjection | null;
   isUnclaimed: boolean;
@@ -45,6 +50,7 @@ export function useWebCloudPlanDecisionActions(input: {
 }) {
   const {
     client,
+    productToken,
     workspace,
     session,
     isUnclaimed,
@@ -71,15 +77,12 @@ export function useWebCloudPlanDecisionActions(input: {
       setPendingHomePromptStatus("Claim this shared workspace before approving plans.");
       return;
     }
-    const readiness = cloudCommandReadiness(workspace);
-    if (!readiness.commandable) {
-      setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
-      return;
-    }
-    const commandWorkspaceId = session.workspaceId;
-    if (!commandWorkspaceId) {
-      setPendingHomePromptStatus("Session is not attached to a runtime workspace yet.");
-      return;
+    if (!isWebManagedSandboxWorkspace(workspace)) {
+      const readiness = cloudCommandReadiness(workspace);
+      if (!readiness.commandable) {
+        setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+        return;
+      }
     }
     setActivePlanDecision({
       planId,
@@ -89,6 +92,34 @@ export function useWebCloudPlanDecisionActions(input: {
     });
     setPendingHomePromptStatus(planDecisionProgressMessage(decision));
     try {
+      if (isWebManagedSandboxWorkspace(workspace)) {
+        const { connection, anyharness } = await getWebManagedSandboxAnyHarnessClient({
+          workspace,
+          productToken,
+          client,
+        });
+        if (decision === "approve") {
+          await anyharness.plans.approve(connection.anyharnessWorkspaceId, planId, {
+            expectedDecisionVersion,
+          });
+        } else {
+          await anyharness.plans.reject(connection.anyharnessWorkspaceId, planId, {
+            expectedDecisionVersion,
+          });
+        }
+        if (!mountedRef.current) {
+          return;
+        }
+        setPendingHomePromptStatus(null);
+        void transcriptRefetch();
+        void sessionEventsRefetch();
+        return;
+      }
+      const commandWorkspaceId = session.workspaceId;
+      if (!commandWorkspaceId) {
+        setPendingHomePromptStatus("Session is not attached to a runtime workspace yet.");
+        return;
+      }
       const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
         client,
         workspace,

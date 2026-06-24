@@ -3,6 +3,7 @@ import { resolveRuntimeTargetForWorkspace } from "./runtime-target";
 
 export type AnyHarnessDesktopResolvedConnection = AnyHarnessResolvedConnection & {
   runtimeGeneration?: number;
+  runtimeAccessKind?: "direct" | "proliferate-gateway";
 };
 
 export async function resolveWorkspaceConnection(
@@ -15,5 +16,6 @@ export async function resolveWorkspaceConnection(
     authToken: target.authToken,
     anyharnessWorkspaceId: target.anyharnessWorkspaceId,
     runtimeGeneration: target.runtimeGeneration,
+    runtimeAccessKind: target.runtimeAccessKind,
   };
 }
