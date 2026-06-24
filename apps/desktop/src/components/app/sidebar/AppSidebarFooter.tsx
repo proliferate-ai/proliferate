@@ -8,7 +8,6 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
-  Building2,
   Check,
   ChevronUpDown,
   ExternalLink,
@@ -24,9 +23,44 @@ import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/orga
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
-import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
+import type {
+  OrganizationInvitationRecord,
+  OrganizationRecord,
+} from "@/lib/domain/organizations/organization-records";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+
+function OrganizationSwitcherMark({
+  organization,
+  label,
+  className,
+}: {
+  organization?: Pick<OrganizationRecord, "logoDomain" | "logoImage"> | null;
+  label: string;
+  className: string;
+}) {
+  const initials = label.trim().slice(0, 2).toUpperCase() || "OR";
+  const baseClassName = `flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-sidebar-border bg-sidebar-accent text-sm font-[520] leading-none text-sidebar-foreground ${className}`;
+
+  if (organization?.logoImage) {
+    return (
+      <span className={baseClassName}>
+        <img src={organization.logoImage} alt="" className="size-full object-cover" />
+      </span>
+    );
+  }
+
+  if (organization?.logoDomain) {
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(organization.logoDomain)}&sz=64`;
+    return (
+      <span className={baseClassName}>
+        <img src={faviconUrl} alt="" className="h-2/3 w-2/3" />
+      </span>
+    );
+  }
+
+  return <span className={baseClassName}>{initials}</span>;
+}
 
 export function AppSidebarFooter() {
   const navigate = useNavigate();
@@ -50,7 +84,6 @@ export function AppSidebarFooter() {
   const [acceptTarget, setAcceptTarget] = useState<OrganizationInvitationRecord | null>(null);
 
   const activeLabel = activeOrganization?.name ?? "Organization";
-  const activeInitial = activeLabel.trim().charAt(0).toUpperCase() || "O";
 
   async function handleAcceptInvitation() {
     if (!acceptTarget) {
@@ -81,9 +114,11 @@ export function AppSidebarFooter() {
               className="h-10 w-full min-w-0 justify-start rounded-lg px-2 text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
               title={activeLabel}
             >
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-sm font-[520] leading-none text-sidebar-foreground">
-                {activeInitial}
-              </span>
+              <OrganizationSwitcherMark
+                organization={activeOrganization}
+                label={activeLabel}
+                className="size-6 rounded-md"
+              />
               <span className="min-w-0 flex-1 truncate text-left text-sm font-[430] leading-4">
                 {activeLabel}
               </span>
@@ -97,9 +132,11 @@ export function AppSidebarFooter() {
               <div className="px-2 py-2">
                 <div className="text-xs leading-4 text-muted-foreground">Active organization</div>
                 <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground/10 text-sm font-[540] text-foreground">
-                    {activeInitial}
-                  </span>
+                  <OrganizationSwitcherMark
+                    organization={activeOrganization}
+                    label={activeLabel}
+                    className="size-8"
+                  />
                   <div className="min-w-0">
                     <div className="truncate text-sm font-[520] leading-4 text-foreground">
                       {activeLabel}
@@ -148,7 +185,14 @@ export function AppSidebarFooter() {
                       key={organization.id}
                       variant="sidebar"
                       label={organization.name}
-                      icon={<Building2 className="size-3.5" />}
+                      icon={(
+                        <OrganizationSwitcherMark
+                          organization={organization}
+                          label={organization.name}
+                          className="size-5"
+                        />
+                      )}
+                      iconClassName="opacity-100"
                       trailing={
                         organization.id === activeOrganizationId
                           ? <Check className="size-3.5" />
