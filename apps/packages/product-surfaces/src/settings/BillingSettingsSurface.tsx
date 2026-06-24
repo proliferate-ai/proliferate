@@ -118,7 +118,7 @@ export function BillingSettingsSurface({
     <section className="space-y-6">
       <SettingsPageHeader
         title="Plan + billing"
-        description="Review account credits, organization plan, Core memberships, top up, and Stripe billing portal access."
+        description="Review account credits, organization plan, Core checkout, top up, and Stripe billing portal access."
       />
       <BillingSettingsPane
         checkoutReturnState={checkoutReturnState}
@@ -169,9 +169,10 @@ export function BillingSettingsSurface({
             label: "Learn more about pricing",
             onClick: openPricingPage,
           } : undefined,
+          actionErrorMessage: comparisonActionError,
         } : undefined}
       >
-        {comparisonActionError ? (
+        {comparisonActionError && !planManagementOpen ? (
           <SettingsCard>
             <SettingsCardRow label="Plan action failed" description={comparisonActionError} />
           </SettingsCard>
@@ -199,7 +200,7 @@ export function BillingSettingsSurface({
           <SettingsCard>
             <SettingsCardRow
               label="Organization billing"
-              description="Create an organization from Organization settings to add seats, Core memberships, and org admin controls."
+              description="Create an organization from settings to add Core billing and org admin controls."
             >
               <Button
                 type="button"

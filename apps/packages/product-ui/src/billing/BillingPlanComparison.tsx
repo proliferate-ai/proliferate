@@ -29,8 +29,8 @@ export function PlanComparisonCard({
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-foreground">Plans</h2>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Start free with 5 PCUs. Move to Core for monthly organization credits,
-            unlimited members, top up, and role-based controls.
+            Start free with 5 PCUs. Move to Core for organization cloud billing,
+            top up, shared workflows, and role-based controls.
           </p>
         </div>
         {action ? (

@@ -124,6 +124,8 @@ describe("BillingSettingsSurface", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Manage plan" })[0]);
     const dialog = screen.getByRole("dialog", { name: "Manage plan" });
     expect(dialog).toBeTruthy();
+    expect(within(dialog).getByText("Core organization plan")).toBeTruthy();
+    expect(within(dialog).queryByText("20 PCUs")).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Billing portal" }));
 
     await waitFor(() => {
@@ -180,13 +182,13 @@ describe("BillingSettingsSurface", () => {
     );
 
     fireEvent.click(screen.getAllByRole("button", { name: "Manage plan" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "Manage plan" });
     fireEvent.click(
-      within(screen.getByRole("dialog", { name: "Manage plan" }))
-        .getByRole("button", { name: "Upgrade to Core" }),
+      within(dialog).getByRole("button", { name: "Upgrade to Core" }),
     );
 
     await waitFor(() => {
-      expect(screen.queryByText("checkout offline")).not.toBeNull();
+      expect(within(dialog).queryByText("checkout offline")).not.toBeNull();
     });
   });
 });
