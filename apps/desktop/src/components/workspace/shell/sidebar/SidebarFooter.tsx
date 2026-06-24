@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,
@@ -12,6 +11,7 @@ import {
   ChevronUpDown,
   ExternalLink,
   LifeBuoy,
+  LogOut,
   Settings,
 } from "@proliferate/ui/icons";
 import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
