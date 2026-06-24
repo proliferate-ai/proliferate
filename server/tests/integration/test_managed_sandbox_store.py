@@ -139,15 +139,18 @@ async def test_personal_managed_sandbox_lifecycle(db_session: AsyncSession) -> N
     assert destroyed.status == "destroyed"
     assert destroyed.destroyed_at is not None
     assert destroyed.last_error == "user requested destroy"
-    assert await mark_managed_sandbox_ready(
-        db_session,
-        first.id,
-        e2b_sandbox_id="e2b-sbx-3",
-        e2b_template_ref="tpl_v1",
-        anyharness_base_url="https://3000-e2b-sbx-3.e2b.dev",
-        anyharness_bearer_token_ciphertext="token:v3",
-        anyharness_data_key_ciphertext="data-key:v3",
-    ) is None
+    assert (
+        await mark_managed_sandbox_ready(
+            db_session,
+            first.id,
+            e2b_sandbox_id="e2b-sbx-3",
+            e2b_template_ref="tpl_v1",
+            anyharness_base_url="https://3000-e2b-sbx-3.e2b.dev",
+            anyharness_bearer_token_ciphertext="token:v3",
+            anyharness_data_key_ciphertext="data-key:v3",
+        )
+        is None
+    )
     assert await load_personal_managed_sandbox(db_session, user.id) is None
 
     replacement = await ensure_personal_managed_sandbox(

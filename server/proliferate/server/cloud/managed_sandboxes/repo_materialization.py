@@ -244,7 +244,7 @@ async def _clone_or_update_repo(
             f"if [ -d {quoted_repo_path}/.git ]; then",
             f"  git -C {quoted_repo_path} remote set-url origin {quoted_repo_url}",
             f"  git -C {quoted_repo_path} fetch --prune origin",
-            f"  if [ -n \"$(git -C {quoted_repo_path} status --porcelain)\" ]; then",
+            f'  if [ -n "$(git -C {quoted_repo_path} status --porcelain)" ]; then',
             "    echo 'Repository has local changes; refusing cloud materialization.' >&2",
             "    exit 45",
             "  fi",
