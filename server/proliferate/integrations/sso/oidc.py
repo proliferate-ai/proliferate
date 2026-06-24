@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import ipaddress
+import socket
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import HTTPException, status
@@ -14,6 +17,7 @@ from proliferate.auth.identity import providers
 from proliferate.auth.identity.service import hash_secret
 from proliferate.auth.sso.policy import oidc_discovery_url
 from proliferate.auth.sso.types import SsoConnectionSnapshot, VerifiedSsoIdentity
+from proliferate.config import settings
 
 OIDC_SIGNING_ALGORITHMS = [
     "RS256",
@@ -50,8 +54,13 @@ async def resolve_oidc_metadata(connection: SsoConnectionSnapshot) -> OidcMetada
         and connection.oidc_token_endpoint
         and connection.oidc_jwks_uri
     ):
+        await _validate_oidc_url(connection.oidc_authorization_endpoint, "authorization_endpoint")
+        await _validate_oidc_url(connection.oidc_token_endpoint, "token_endpoint")
+        await _validate_oidc_url(connection.oidc_jwks_uri, "jwks_uri")
+        if connection.oidc_userinfo_endpoint:
+            await _validate_oidc_url(connection.oidc_userinfo_endpoint, "userinfo_endpoint")
         return OidcMetadata(
-            issuer=connection.oidc_issuer_url.rstrip("/"),
+            issuer=connection.oidc_issuer_url,
             authorization_endpoint=connection.oidc_authorization_endpoint,
             token_endpoint=connection.oidc_token_endpoint,
             jwks_uri=connection.oidc_jwks_uri,
@@ -62,6 +71,7 @@ async def resolve_oidc_metadata(connection: SsoConnectionSnapshot) -> OidcMetada
     if not source_url:
         raise HTTPException(status_code=400, detail="OIDC issuer or discovery URL is required.")
     discovery_url = oidc_discovery_url(source_url)
+    await _validate_oidc_url(discovery_url, "discovery_url")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(discovery_url)
@@ -80,13 +90,19 @@ async def resolve_oidc_metadata(connection: SsoConnectionSnapshot) -> OidcMetada
     token_endpoint = _required_string(payload, "token_endpoint")
     jwks_uri = _required_string(payload, "jwks_uri")
     userinfo_endpoint = payload.get("userinfo_endpoint")
-    return OidcMetadata(
-        issuer=issuer.rstrip("/"),
+    metadata = OidcMetadata(
+        issuer=issuer,
         authorization_endpoint=authorization_endpoint,
         token_endpoint=token_endpoint,
         jwks_uri=jwks_uri,
         userinfo_endpoint=userinfo_endpoint if isinstance(userinfo_endpoint, str) else None,
     )
+    await _validate_oidc_url(metadata.authorization_endpoint, "authorization_endpoint")
+    await _validate_oidc_url(metadata.token_endpoint, "token_endpoint")
+    await _validate_oidc_url(metadata.jwks_uri, "jwks_uri")
+    if metadata.userinfo_endpoint:
+        await _validate_oidc_url(metadata.userinfo_endpoint, "userinfo_endpoint")
+    return metadata
 
 
 def build_oidc_authorization_url(
@@ -143,6 +159,7 @@ async def exchange_oidc_code(
         data["client_id"] = client_id
     else:
         raise HTTPException(status_code=400, detail="Unsupported OIDC token auth method.")
+    await _validate_oidc_url(metadata.token_endpoint, "token_endpoint")
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -197,7 +214,7 @@ async def verify_oidc_identity(
     email = claims.get("email") if isinstance(claims.get("email"), str) else None
     display_name = claims.get("name") if isinstance(claims.get("name"), str) else None
     avatar_url = claims.get("picture") if isinstance(claims.get("picture"), str) else None
-    email_verified = _claim_bool(claims.get("email_verified"), default=True)
+    email_verified = _claim_bool(claims.get("email_verified"), default=False)
     return VerifiedSsoIdentity(
         provider_subject=subject,
         email=email,
@@ -215,6 +232,7 @@ async def _decode_oidc_id_token(
     issuer: str,
     audience: str,
 ) -> dict[str, object]:
+    await _validate_oidc_url(jwks_uri, "jwks_uri")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(jwks_uri)
@@ -248,6 +266,7 @@ async def _decode_oidc_id_token(
 
 
 async def _fetch_userinfo(userinfo_endpoint: str, access_token: str) -> dict[str, object]:
+    await _validate_oidc_url(userinfo_endpoint, "userinfo_endpoint")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
@@ -282,3 +301,36 @@ def _claim_bool(value: object, *, default: bool) -> bool:
     if isinstance(value, str):
         return value.lower() in {"true", "1", "yes"}
     return default
+
+
+async def _validate_oidc_url(value: str, field: str) -> None:
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail=f"OIDC {field} URL is invalid.")
+    if parsed.username or parsed.password or parsed.fragment:
+        raise HTTPException(status_code=400, detail=f"OIDC {field} URL is invalid.")
+    if settings.telemetry_mode != "hosted_product":
+        return
+    if parsed.scheme != "https":
+        raise HTTPException(status_code=400, detail=f"OIDC {field} URL must use HTTPS.")
+    if await _host_resolves_to_private_address(parsed.hostname):
+        raise HTTPException(status_code=400, detail=f"OIDC {field} URL host is not allowed.")
+
+
+async def _host_resolves_to_private_address(hostname: str) -> bool:
+    try:
+        addrinfo = await asyncio.to_thread(socket.getaddrinfo, hostname, None)
+    except socket.gaierror as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="OIDC URL host could not be resolved.",
+        ) from exc
+    for entry in addrinfo:
+        address = entry[4][0]
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            return True
+        if not ip.is_global:
+            return True
+    return False

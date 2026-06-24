@@ -47,7 +47,7 @@ export const WEB_CLOUD_SETTINGS_SECTIONS: readonly CloudSettingsSectionDefinitio
     id: "sso",
     label: "Single sign-on",
     iconToken: "sso",
-    mobileRelevant: true,
+    mobileRelevant: false,
   },
   {
     id: "billing",

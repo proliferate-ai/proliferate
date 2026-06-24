@@ -1,2 +1,1 @@
 """Organization SSO administration."""
-

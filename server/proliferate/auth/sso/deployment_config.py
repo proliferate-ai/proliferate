@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fastapi import HTTPException
+
 from proliferate.auth.sso.policy import normalize_domains
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
@@ -30,11 +32,7 @@ def deployment_sso_connection() -> SsoConnectionSnapshot | None:
         protocol=protocol,
         status=SsoStatus.ENABLED,
         display_name=settings.sso_display_name.strip() or "Company SSO",
-        login_policy=_enum_or_default(
-            SsoLoginPolicy,
-            settings.sso_login_policy,
-            SsoLoginPolicy.OPTIONAL,
-        ),
+        login_policy=_deployment_login_policy(),
         jit_policy=_enum_or_default(SsoJitPolicy, settings.sso_jit_policy, SsoJitPolicy.DISABLED),
         default_role=settings.sso_default_role.strip() or "member",
         allowed_domains=allowed_domains,
@@ -65,6 +63,20 @@ def _split_csv(value: str) -> list[str]:
 
 def _split_scope_string(value: str) -> list[str]:
     return [item for item in value.replace(",", " ").split() if item]
+
+
+def _deployment_login_policy() -> SsoLoginPolicy:
+    policy = _enum_or_default(
+        SsoLoginPolicy,
+        settings.sso_login_policy,
+        SsoLoginPolicy.OPTIONAL,
+    )
+    if policy == SsoLoginPolicy.REQUIRED:
+        raise HTTPException(
+            status_code=400,
+            detail="Required SSO login policy is not supported yet.",
+        )
+    return policy
 
 
 def _enum_or_default[T](enum_type: type[T], value: str, default: T) -> T:

@@ -52,9 +52,9 @@ async def create_organization_sso_connection(
         organization_id=organization_id,
         protocol=body.protocol,
         display_name=_clean_display_name(body.display_name),
-        login_policy=body.login_policy,
+        login_policy=_clean_login_policy(body.login_policy),
         jit_policy=body.jit_policy,
-        default_role=body.default_role,
+        default_role=_clean_default_role(body.default_role),
         allowed_domains=normalize_domains(body.allowed_domains),
         oidc_issuer_url=_clean_optional(body.oidc_issuer_url),
         oidc_discovery_url=_clean_optional(body.oidc_discovery_url),
@@ -90,11 +90,11 @@ async def update_organization_sso_connection(
     if "display_name" in fields:
         values["display_name"] = _clean_display_name(body.display_name)
     if "login_policy" in fields and body.login_policy is not None:
-        values["login_policy"] = body.login_policy
+        values["login_policy"] = _clean_login_policy(body.login_policy)
     if "jit_policy" in fields and body.jit_policy is not None:
         values["jit_policy"] = body.jit_policy
     if "default_role" in fields and body.default_role is not None:
-        values["default_role"] = body.default_role
+        values["default_role"] = _clean_default_role(body.default_role)
     if "allowed_domains" in fields:
         values["allowed_domains"] = normalize_domains(body.allowed_domains or [])
     for model_field, store_field in (
@@ -311,3 +311,21 @@ def _clean_optional(value: str | None) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _clean_default_role(value: str) -> str:
+    if value == "owner":
+        raise HTTPException(
+            status_code=400,
+            detail="SSO JIT default role cannot be owner.",
+        )
+    return value
+
+
+def _clean_login_policy(value: str) -> str:
+    if value == "required":
+        raise HTTPException(
+            status_code=400,
+            detail="Required SSO login policy is not supported yet.",
+        )
+    return value
