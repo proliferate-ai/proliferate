@@ -80,7 +80,17 @@ export function PluginGlyph({
   item: PluginInventoryItem;
   size?: PluginIconSize;
 }) {
-  const brandAsset = PLUGIN_BRAND_ASSETS[item.entry.iconId];
+  return <PluginIconTile iconId={item.entry.iconId} size={size} />;
+}
+
+export function PluginIconTile({
+  iconId,
+  size = "sm",
+}: {
+  iconId: string;
+  size?: PluginIconSize;
+}) {
+  const brandAsset = PLUGIN_BRAND_ASSETS[iconId];
   if (brandAsset) {
     return (
       <span
@@ -92,7 +102,7 @@ export function PluginGlyph({
     );
   }
 
-  const Icon = PLUGIN_GLYPH_ICONS[item.entry.iconId] ?? Globe;
+  const Icon = PLUGIN_GLYPH_ICONS[iconId] ?? Globe;
   return (
     <span
       aria-hidden="true"

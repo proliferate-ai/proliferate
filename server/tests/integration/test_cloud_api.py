@@ -205,6 +205,28 @@ async def _create_organization_for_user(db_session: AsyncSession, user_id: str) 
     return str(organization.id)
 
 
+async def _add_organization_member(
+    db_session: AsyncSession,
+    *,
+    organization_id: str,
+    user_id: str,
+    role: str = ORGANIZATION_ROLE_MEMBER,
+) -> None:
+    now = datetime.now(UTC)
+    db_session.add(
+        OrganizationMembership(
+            organization_id=uuid.UUID(organization_id),
+            user_id=uuid.UUID(user_id),
+            role=role,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+
+
 async def _list_mcp_connections(
     db_session: AsyncSession,
     user_id: str,
@@ -386,6 +408,91 @@ class TestCloudWorktreeRetentionPolicy:
 
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "invalid_worktree_retention_policy"
+
+
+class TestCloudOrganizationIntegrationPolicy:
+    @pytest.mark.asyncio
+    async def test_owner_can_patch_policy_and_member_can_read_only(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        owner = await _register_and_login(
+            client,
+            f"integration-policy-owner-{uuid.uuid4().hex[:8]}@example.com",
+        )
+        member = await _register_and_login(
+            client,
+            f"integration-policy-member-{uuid.uuid4().hex[:8]}@example.com",
+        )
+        organization_id = await _create_organization_for_user(db_session, owner["user_id"])
+        await _add_organization_member(
+            db_session,
+            organization_id=organization_id,
+            user_id=member["user_id"],
+        )
+        owner_headers = {"Authorization": f"Bearer {owner['access_token']}"}
+        member_headers = {"Authorization": f"Bearer {member['access_token']}"}
+        url = f"/v1/cloud/organizations/{organization_id}/integration-policy"
+
+        defaults = await client.get(url, headers=owner_headers)
+
+        assert defaults.status_code == 200
+        default_entries = {
+            entry["catalogEntryId"]: entry for entry in defaults.json()["entries"]
+        }
+        assert default_entries["linear"]["enabled"] is True
+        assert default_entries["linear"]["updatedAt"] is None
+
+        patched = await client.patch(
+            url,
+            headers=owner_headers,
+            json={"catalogEntryId": "linear", "enabled": False},
+        )
+
+        assert patched.status_code == 200
+        patched_entries = {
+            entry["catalogEntryId"]: entry for entry in patched.json()["entries"]
+        }
+        assert patched_entries["linear"]["enabled"] is False
+        assert patched_entries["linear"]["updatedAt"] is not None
+        assert patched_entries["linear"]["updatedByUserId"] == owner["user_id"]
+
+        member_read = await client.get(url, headers=member_headers)
+        member_write = await client.patch(
+            url,
+            headers=member_headers,
+            json={"catalogEntryId": "linear", "enabled": True},
+        )
+
+        assert member_read.status_code == 200
+        member_entries = {
+            entry["catalogEntryId"]: entry for entry in member_read.json()["entries"]
+        }
+        assert member_entries["linear"]["enabled"] is False
+        assert member_write.status_code == 403
+        assert member_write.json()["detail"]["code"] == "organization_permission_denied"
+
+    @pytest.mark.asyncio
+    async def test_patch_rejects_unknown_catalog_entry(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        owner = await _register_and_login(
+            client,
+            f"integration-policy-missing-{uuid.uuid4().hex[:8]}@example.com",
+        )
+        organization_id = await _create_organization_for_user(db_session, owner["user_id"])
+
+        response = await client.patch(
+            f"/v1/cloud/organizations/{organization_id}/integration-policy",
+            headers={"Authorization": f"Bearer {owner['access_token']}"},
+            json={"catalogEntryId": "not-real", "enabled": False},
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["code"] == "catalog_entry_not_found"
 
 
 class TestCloudMcpConnections:

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   useCloudMcpCatalog,
   useCloudMcpConnections,
+  useCloudOrganizationIntegrationPolicy,
   useConfiguredPlugins,
   useConfiguredSkills,
   useCurrentTeam,
@@ -42,6 +43,11 @@ export function useCloudPluginsSurfaceController({
   const configuredPlugins = useConfiguredPlugins(enabled);
   const configuredSkills = useConfiguredSkills(enabled);
   const currentTeam = useCurrentTeam(enabled);
+  const team = currentTeam.data ?? null;
+  const integrationPolicy = useCloudOrganizationIntegrationPolicy(
+    team?.id ?? null,
+    enabled && team !== null,
+  );
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<{ id: string; mode: PluginModalMode } | null>(null);
   const [draft, setDraft] = useState<PluginConnectionDraft | null>(null);
@@ -49,11 +55,19 @@ export function useCloudPluginsSurfaceController({
   const [completionNotice, setCompletionNotice] = useState<PluginCompletionNotice | null>(null);
 
   const baseItems = useMemo(() => {
-    if (!catalog.data || !connections.data || !configuredPlugins.data || !configuredSkills.data) {
+    if (
+      !catalog.data
+      || !connections.data
+      || !configuredPlugins.data
+      || !configuredSkills.data
+      || currentTeam.isLoading
+      || (team !== null && !integrationPolicy.data)
+    ) {
       return [];
     }
     return buildCloudPluginInventory({
       catalog: catalog.data,
+      integrationPolicy: integrationPolicy.data ?? null,
       connections: connections.data.connections,
       configuredPlugins: configuredPlugins.data.plugins,
       configuredSkills: configuredSkills.data.skills,
@@ -65,8 +79,11 @@ export function useCloudPluginsSurfaceController({
     configuredPlugins.data,
     configuredSkills.data,
     connections.data,
+    currentTeam.isLoading,
+    integrationPolicy.data,
     query,
     surface,
+    team,
   ]);
   const localOAuthStatuses = useCloudPluginLocalOAuthStatuses(baseItems, localOAuthAdapter);
   const items = useMemo(
@@ -77,7 +94,6 @@ export function useCloudPluginsSurfaceController({
   const selectedItem = selection
     ? items.find((item) => item.id === selection.id || item.entry.id === selection.id) ?? null
     : null;
-  const team = currentTeam.data ?? null;
   const teamRole = team?.membership?.role ?? null;
   const canShare = Boolean(
     team?.membership?.status === "active" && (teamRole === "owner" || teamRole === "admin"),
@@ -85,12 +101,16 @@ export function useCloudPluginsSurfaceController({
   const loading = catalog.isLoading
     || connections.isLoading
     || configuredPlugins.isLoading
-    || configuredSkills.isLoading;
+    || configuredSkills.isLoading
+    || currentTeam.isLoading
+    || (team !== null && integrationPolicy.isLoading);
   const error = firstErrorMessage(
     catalog.error,
     connections.error,
     configuredPlugins.error,
     configuredSkills.error,
+    currentTeam.error,
+    integrationPolicy.error,
   );
   const actions = useCloudPluginsSurfaceActions({
     catalog,

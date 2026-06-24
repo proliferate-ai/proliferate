@@ -1,11 +1,10 @@
-
 import { AlertCircle, Check, Search } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ProductNotice } from "../layout/ProductNotice";
-import { PluginCard, PluginListMessage, PluginSection } from "./PluginCards";
+import { PluginList, PluginListMessage, PluginRow } from "./PluginCards";
 import { PluginConnectionModal } from "./PluginConnectionModal";
 import type { PluginsSurfaceProps } from "./plugin-types";
 
@@ -55,25 +54,23 @@ export function PluginsSurface({
   onConfirmDelete,
 }: PluginsSurfaceProps) {
   const pendingIds = useMemo(() => new Set(pendingItemIds), [pendingItemIds]);
-  const installed = items.filter((item) => item.state === "installed");
-  const available = items.filter((item) => item.state === "available");
-  const firstRunEmpty = !loading && !error && installed.length === 0 && !query.trim();
-  const searchEmpty = !loading && !error && items.length === 0 && query.trim().length > 0;
+  const trimmedQuery = query.trim();
+  const hasQuery = trimmedQuery.length > 0;
+  const searchEmpty = !loading && !error && items.length === 0 && hasQuery;
+  const empty = !loading && !error && items.length === 0 && !hasQuery;
 
   return (
     <>
-      <section className="space-y-5">
-        <div className="sticky top-10 z-10 bg-background/95 pb-2 pt-1 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search integrations..."
-              className="pl-9"
-              aria-label="Search integrations"
-            />
-          </div>
+      <section className="space-y-6">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search integrations..."
+            className="pl-9"
+            aria-label="Search integrations"
+          />
         </div>
 
         {completionNotice ? (
@@ -95,58 +92,35 @@ export function PluginsSurface({
           />
         ) : null}
 
+        {empty ? (
+          <PluginListMessage title="No integrations are available right now." />
+        ) : null}
+
         {searchEmpty ? (
           <PluginListMessage
-            title={`No integrations match "${query}"`}
+            title={`No integrations match "${trimmedQuery}"`}
             description="Try a different search term."
           />
         ) : null}
 
-        {!loading && !error && firstRunEmpty && available.length > 0 ? (
-          <div className="rounded-lg border border-border/50 bg-foreground/5 px-4 py-3">
-            <div className="text-sm font-medium text-foreground">No integrations installed</div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Install a package below. Enabled packages add MCP tools and skills to your sessions.
-            </p>
-          </div>
-        ) : null}
-
-        {installed.length > 0 ? (
-          <PluginSection title="Installed">
-            {installed.map((item) => (
-              <PluginCard
-                key={item.id}
-                item={item}
-                pending={pendingIds.has(item.id)}
-                renderIcon={renderIcon}
-                onOpen={() => onOpenItem(item, "manage")}
-                onToggle={(enabled) => onToggleEnabled(item, enabled)}
-                onConfigure={() => onOpenItem(item, "manage")}
-                onOpenDesktop={onOpenDesktop}
-              />
-            ))}
-          </PluginSection>
-        ) : null}
-
-        {available.length > 0 ? (
-          <PluginSection title="Available">
-            {available.map((item) => (
-              <PluginCard
-                key={item.id}
-                item={item}
-                pending={pendingIds.has(item.id)}
-                renderIcon={renderIcon}
-                onOpen={() => onOpenItem(item, "connect")}
-                onToggle={(enabled) => onToggleEnabled(item, enabled)}
-                onConfigure={() => onOpenItem(item, "connect")}
-                onOpenDesktop={onOpenDesktop}
-              />
-            ))}
-          </PluginSection>
-        ) : !loading && !error && !searchEmpty ? (
-          <p className="text-sm text-muted-foreground">
-            {installed.length > 0 ? "All available integrations are installed." : "No integrations are available right now."}
-          </p>
+        {items.length > 0 ? (
+          <PluginList>
+            {items.map((item) => {
+              const mode = item.state === "installed" ? "manage" : "connect";
+              return (
+                <PluginRow
+                  key={item.id}
+                  item={item}
+                  pending={pendingIds.has(item.id)}
+                  renderIcon={renderIcon}
+                  onOpen={() => onOpenItem(item, mode)}
+                  onConnect={() => onOpenItem(item, mode)}
+                  onDisconnect={() => onRequestDelete(item)}
+                  onOpenDesktop={onOpenDesktop}
+                />
+              );
+            })}
+          </PluginList>
         ) : null}
       </section>
 
@@ -176,9 +150,9 @@ export function PluginsSurface({
 
       <ConfirmationDialog
         open={deleteTarget !== null}
-        title={deleteTarget ? `Delete ${deleteTarget.entry.name}?` : "Delete integration?"}
-        description="This removes the MCP connection from personal cloud access. Existing sessions keep their transcript history."
-        confirmLabel="Delete"
+        title={deleteTarget ? `Disconnect ${deleteTarget.entry.name}?` : "Disconnect integration?"}
+        description="This removes the integration connection from personal cloud access. Existing sessions keep their transcript history."
+        confirmLabel="Disconnect"
         confirmVariant="destructive"
         loading={deletePending}
         disableClose={deletePending}

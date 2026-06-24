@@ -1595,6 +1595,24 @@ export interface paths {
         patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
         trace?: never;
     };
+    "/v1/cloud/organizations/{organization_id}/integration-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Organization Integration Policy Endpoint */
+        get: operations["get_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Organization Integration Policy Endpoint */
+        patch: operations["patch_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_patch"];
+        trace?: never;
+    };
     "/v1/cloud/mcp/catalog": {
         parameters: {
             query?: never;
@@ -4863,6 +4881,24 @@ export interface components {
             /** Finalsurface */
             finalSurface: string;
         };
+        /** CloudOrganizationIntegrationPolicyItem */
+        CloudOrganizationIntegrationPolicyItem: {
+            /** Catalogentryid */
+            catalogEntryId: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Updatedbyuserid */
+            updatedByUserId?: string | null;
+        };
+        /** CloudOrganizationIntegrationPolicyResponse */
+        CloudOrganizationIntegrationPolicyResponse: {
+            /** Organizationid */
+            organizationId: string;
+            /** Entries */
+            entries: components["schemas"]["CloudOrganizationIntegrationPolicyItem"][];
+        };
         /** CloudPendingInteractionResponse */
         CloudPendingInteractionResponse: {
             /** Requestid */
@@ -6586,6 +6622,13 @@ export interface components {
             publicToOrg?: boolean | null;
             /** Publicorganizationid */
             publicOrganizationId?: string | null;
+        };
+        /** PatchCloudOrganizationIntegrationPolicyRequest */
+        PatchCloudOrganizationIntegrationPolicyRequest: {
+            /** Catalogentryid */
+            catalogEntryId: string;
+            /** Enabled */
+            enabled: boolean;
         };
         /** PatchPluginConfiguredItemRequest */
         PatchPluginConfiguredItemRequest: {
@@ -12562,6 +12605,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentRunConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchCloudOrganizationIntegrationPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
                 };
             };
             /** @description Validation Error */

@@ -1,3 +1,5 @@
+import type { CloudOrganizationIntegrationPolicyResponse } from "@proliferate/cloud-sdk";
+
 import {
   catalogEntryView,
   isActiveCatalogEntry,
@@ -42,6 +44,7 @@ export {
 
 export function buildCloudPluginInventory({
   catalog,
+  integrationPolicy = null,
   connections,
   configuredPlugins,
   configuredSkills,
@@ -57,7 +60,10 @@ export function buildCloudPluginInventory({
   );
   const entries = catalog.entries
     .map((entry) => catalogEntryView(entry, packagesByCatalogEntryId.get(entry.id)))
-    .filter(isActiveCatalogEntry);
+    .filter(isActiveCatalogEntry)
+    .filter((entry) =>
+      catalogEntryAllowedByOrganizationPolicy(entry.id, integrationPolicy)
+    );
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
   const pluginsByPluginId = new Map(configuredPlugins.map((item) => [item.pluginId, item]));
   const skillsByPluginId = groupSkillsByPluginId(configuredSkills);
@@ -88,4 +94,16 @@ export function buildCloudPluginInventory({
   return [...installed, ...available].filter((item) =>
     matchesInventoryQuery(item, normalizedQuery)
   );
+}
+
+export function catalogEntryAllowedByOrganizationPolicy(
+  catalogEntryId: string,
+  integrationPolicy: CloudOrganizationIntegrationPolicyResponse | null | undefined,
+): boolean {
+  if (!integrationPolicy) {
+    return true;
+  }
+  return integrationPolicy.entries.find((entry) =>
+    entry.catalogEntryId === catalogEntryId
+  )?.enabled ?? true;
 }

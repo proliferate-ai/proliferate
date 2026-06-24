@@ -27,6 +27,7 @@ import {
 } from "@/config/settings";
 import {
   SETTINGS_NAV_GROUPS,
+  isSettingsAdminOnlySection,
   type SettingsNavIconId,
   type SettingsNavItem,
 } from "@/lib/domain/settings/navigation-presentation";
@@ -108,11 +109,9 @@ function isSettingsItemDisabled(
   item: SettingsNavItem,
   disabledSections: Partial<Record<SettingsSection, boolean>> | undefined,
   updateActionState: SettingsSidebarProps["updateActionState"],
-  adminAccess: SettingsSidebarProps["adminAccess"],
 ) {
   return (
     (item.kind === "section" && !!disabledSections?.[item.id])
-    || (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true)
     || (item.kind === "action"
       && item.id === "checkForUpdates"
       && !updateActionState.updatesSupported)
@@ -124,9 +123,6 @@ function settingsItemStatus(
   updateActionState: SettingsSidebarProps["updateActionState"],
 ) {
   const statusItems: ReactNode[] = [];
-  if (item.kind === "section" && item.adminOnly === true) {
-    statusItems.push(<AdminPill key="admin" />);
-  }
   if (item.tbr === true) {
     statusItems.push(<TbrPill key="tbr" />);
   }
@@ -157,26 +153,14 @@ function settingsItemDisabledReason(
   item: SettingsNavItem,
   disabled: boolean,
   updateActionState: SettingsSidebarProps["updateActionState"],
-  adminAccess: SettingsSidebarProps["adminAccess"],
 ) {
   if (!disabled) {
     return undefined;
-  }
-  if (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true) {
-    return adminAccess?.isLoading ? "Checking admin access" : "Admin access required";
   }
   if (item.kind === "action" && item.id === "checkForUpdates" && !updateActionState.updatesSupported) {
     return "Desktop updates are available in packaged builds.";
   }
   return undefined;
-}
-
-function AdminPill() {
-  return (
-    <span className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-sidebar-muted-foreground">
-      Admin
-    </span>
-  );
 }
 
 function TbrPill() {
@@ -203,23 +187,35 @@ export function SettingsSidebar({
   const appVersion = useAppVersion().data?.trim();
   const handleOpenSupport = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
+  const visibleNavGroups = useMemo(() =>
+    SETTINGS_NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        item.kind !== "section"
+        || !isSettingsAdminOnlySection(item.id)
+        || adminAccess?.isAdmin === true
+      ),
+    })).filter((group) => group.items.length > 0),
+  [adminAccess?.isAdmin]);
+  const visibleShortcutSections = useMemo(() => {
+    const visibleSections = new Set(
+      visibleNavGroups.flatMap((group) =>
+        group.items.flatMap((item) => item.kind === "section" ? [item.id] : [])
+      ),
+    );
+    return SETTINGS_SHORTCUT_SECTION_ORDER.filter((section) =>
+      visibleSections.has(section)
+    );
+  }, [visibleNavGroups]);
   const effectiveDisabledSections = useMemo(() => {
-    const next: Partial<Record<SettingsSection, boolean>> = { ...disabledSections };
-    for (const group of SETTINGS_NAV_GROUPS) {
-      for (const item of group.items) {
-        if (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true) {
-          next[item.id] = true;
-        }
-      }
-    }
-    return next;
-  }, [adminAccess?.isAdmin, disabledSections]);
+    return { ...disabledSections };
+  }, [disabledSections]);
   const shortcutTargets = useMemo(
     () => buildSettingsShortcutSectionTargets(
-      SETTINGS_SHORTCUT_SECTION_ORDER,
+      visibleShortcutSections,
       effectiveDisabledSections,
     ),
-    [effectiveDisabledSections],
+    [effectiveDisabledSections, visibleShortcutSections],
   );
   const shortcutLabelBySection = useMemo(
     () => buildShortcutRangeLabelById(
@@ -233,7 +229,7 @@ export function SettingsSidebar({
     onSelectSection,
   });
   function handleItemClick(item: SettingsNavItem) {
-    if (isSettingsItemDisabled(item, effectiveDisabledSections, updateActionState, adminAccess)) {
+    if (isSettingsItemDisabled(item, effectiveDisabledSections, updateActionState)) {
       return;
     }
 
@@ -270,7 +266,7 @@ export function SettingsSidebar({
 
       <nav className={SETTINGS_NAV_CLASS} aria-label="Settings">
         <div className={SETTINGS_GROUPS_CLASS}>
-          {SETTINGS_NAV_GROUPS.map((group, index) => (
+          {visibleNavGroups.map((group, index) => (
             <div
               key={group.id}
               className={`${SETTINGS_GROUP_CLASS} ${index > 0 ? SETTINGS_GROUP_SPACING_CLASS : ""}`}
@@ -286,7 +282,6 @@ export function SettingsSidebar({
                   item,
                   effectiveDisabledSections,
                   updateActionState,
-                  adminAccess,
                 );
                 const Icon = SETTINGS_NAV_ICONS[item.iconId];
                 return (
@@ -304,7 +299,6 @@ export function SettingsSidebar({
                         item,
                         disabled,
                         updateActionState,
-                        adminAccess,
                       )}
                       onPress={() => handleItemClick(item)}
                       active={active}

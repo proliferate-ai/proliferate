@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type {
   CloudChatComposerControlView,
   CloudChatComposerFooterControlView,
@@ -95,7 +96,8 @@ export function CloudChatComposerFooter({
         {controls.map((control) => {
           const Icon = iconForComposerFooterControl(control.icon);
           const copied = copiedFeedbackKey === footerControlFeedbackKey(control);
-          return (
+          const tooltip = copied ? "Copied" : control.title ?? null;
+          const button = (
             <ComposerControlButton
               key={control.id}
               type="button"
@@ -109,12 +111,20 @@ export function CloudChatComposerFooter({
                 <Loader2 size={12} className="shrink-0 animate-spin text-muted-foreground/70" />
               ) : undefined}
               aria-label={copied ? copiedFeedbackLabel(control) : undefined}
-              title={copied ? "Copied" : control.title ?? undefined}
-              className="max-w-full shrink-0 sm:max-w-[18rem]"
+              className={tooltip ? "w-full max-w-full" : "max-w-full shrink-0 sm:max-w-[18rem]"}
               data-telemetry-mask
               onClick={() => handleFooterControlClick(control)}
             />
           );
+          return tooltip ? (
+            <Tooltip
+              key={control.id}
+              content={tooltip}
+              className="inline-flex min-w-0 max-w-full shrink-0 sm:max-w-[18rem]"
+            >
+              {button}
+            </Tooltip>
+          ) : button;
         })}
       </div>
     </div>
