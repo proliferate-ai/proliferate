@@ -18,7 +18,7 @@ export function useOrganizationSelectionActions() {
   ) => {
     if (organizationId) {
       writeSelectedOrganizationCookie(organizationId);
-      setStoredActiveOrganizationId(organizationId);
+      setStoredActiveOrganizationId(organizationId, { validated: true });
       return;
     }
     clearSelectedOrganizationCookie();
