@@ -125,6 +125,11 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
+      "Settings",
+      "General",
+      "Appearance",
+      "Keyboard shortcuts",
+      "Account",
       "Admin",
       "Organization settings",
       "Members",
@@ -132,11 +137,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Integrations",
       "Model policy",
       "Limits",
-      "Settings",
-      "General",
-      "Appearance",
-      "Keyboard shortcuts",
-      "Account",
       "Workspaces",
       "Environments",
       "Personal compute",
@@ -271,6 +271,12 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 6,
+    })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
 
     expect(runShortcutHandler("settings.section-by-index", {
@@ -296,17 +302,17 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
-    expect(screen.getByText("⌘7")).toBeTruthy();
+    expect(screen.getByText("⌘1")).toBeTruthy();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 7,
+      digit: 1,
     })).toBe(false);
     expect(onSelectSection).not.toHaveBeenCalled();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 8,
+      digit: 2,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
   });
