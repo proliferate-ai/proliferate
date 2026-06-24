@@ -26,10 +26,8 @@ from proliferate.db.engine import apply_rls_context_to_session, get_async_sessio
 from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organization_store
 from proliferate.errors import InvalidRequest, NotFoundError, PermissionDenied
-from proliferate.middleware.request_context import (
-    set_resource_tenant_context,
-    set_rls_owner_context,
-)
+from proliferate.middleware.request_context import set_resource_tenant_context
+from proliferate.rls_context import set_rls_owner_context
 from proliferate.server.billing.subjects import (
     ensure_organization_billing_subject_state,
     ensure_personal_billing_subject_state,

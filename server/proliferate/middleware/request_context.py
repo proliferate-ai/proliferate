@@ -9,6 +9,8 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
+from proliferate.rls_context import with_cleared_rls_context
+
 _request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 _user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
 _organization_id_var: ContextVar[str | None] = ContextVar("organization_id", default=None)
@@ -27,18 +29,6 @@ _session_id_var: ContextVar[str | None] = ContextVar("session_id", default=None)
 _interaction_id_var: ContextVar[str | None] = ContextVar("interaction_id", default=None)
 _command_id_var: ContextVar[str | None] = ContextVar("command_id", default=None)
 _worker_id_var: ContextVar[str | None] = ContextVar("worker_id", default=None)
-_rls_actor_user_id_var: ContextVar[str | None] = ContextVar(
-    "rls_actor_user_id",
-    default=None,
-)
-_rls_owner_scope_var: ContextVar[str | None] = ContextVar(
-    "rls_owner_scope",
-    default=None,
-)
-_rls_organization_id_var: ContextVar[str | None] = ContextVar(
-    "rls_organization_id",
-    default=None,
-)
 
 _CORRELATION_VARS: dict[str, ContextVar[str | None]] = {
     "request_id": _request_id_var,
@@ -57,12 +47,6 @@ _CORRELATION_VARS: dict[str, ContextVar[str | None]] = {
     "command_id": _command_id_var,
     "worker_id": _worker_id_var,
 }
-
-_RLS_CONTEXT_VARS: tuple[ContextVar[str | None], ...] = (
-    _rls_actor_user_id_var,
-    _rls_owner_scope_var,
-    _rls_organization_id_var,
-)
 
 
 def get_request_id() -> str | None:
@@ -85,27 +69,6 @@ def set_authenticated_user_context(user_id: str | None) -> None:
     _user_id_var.set(str(user_id) if user_id else None)
 
 
-def set_rls_actor_context(user_id: object | None) -> None:
-    _rls_actor_user_id_var.set(str(user_id) if user_id else None)
-
-
-def set_rls_owner_context(
-    *,
-    owner_scope: str,
-    organization_id: object | None,
-) -> None:
-    _rls_owner_scope_var.set(owner_scope)
-    _rls_organization_id_var.set(str(organization_id) if organization_id else None)
-
-
-def get_rls_context() -> tuple[str | None, str | None, str | None]:
-    return (
-        _rls_actor_user_id_var.get(),
-        _rls_owner_scope_var.get(),
-        _rls_organization_id_var.get(),
-    )
-
-
 def set_resource_tenant_context(
     *,
     organization_id: str | None = None,
@@ -117,28 +80,6 @@ def set_resource_tenant_context(
 
 def set_support_report_context(report_id: str | None) -> None:
     _support_report_id_var.set(str(report_id) if report_id else None)
-
-
-@contextmanager
-def with_rls_context(
-    *,
-    actor_user_id: object,
-    owner_scope: str,
-    organization_id: object | None,
-) -> Iterator[None]:
-    tokens: list[tuple[ContextVar[str | None], Token[str | None]]] = [
-        (_rls_actor_user_id_var, _rls_actor_user_id_var.set(str(actor_user_id))),
-        (_rls_owner_scope_var, _rls_owner_scope_var.set(owner_scope)),
-        (
-            _rls_organization_id_var,
-            _rls_organization_id_var.set(str(organization_id) if organization_id else None),
-        ),
-    ]
-    try:
-        yield
-    finally:
-        for context_var, token in reversed(tokens):
-            context_var.reset(token)
 
 
 @contextmanager
@@ -170,12 +111,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             tokens.append(
                 (context_var, context_var.set(request_id if key == "request_id" else None))
             )
-        for context_var in _RLS_CONTEXT_VARS:
-            tokens.append((context_var, context_var.set(None)))
         request.state.request_id = request_id
 
         try:
-            response = await call_next(request)
+            with with_cleared_rls_context():
+                response = await call_next(request)
         finally:
             for context_var, token in reversed(tokens):
                 context_var.reset(token)

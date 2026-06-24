@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import Session
 
 from proliferate.config import settings
-from proliferate.middleware.request_context import get_rls_context
+from proliferate.rls_context import get_rls_context
 
 engine = create_async_engine(
     settings.database_url,

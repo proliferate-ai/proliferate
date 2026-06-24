@@ -13,10 +13,8 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.errors import PermissionDenied
 from proliferate.integrations.sentry import set_server_sentry_user
-from proliferate.middleware.request_context import (
-    set_authenticated_user_context,
-    set_rls_actor_context,
-)
+from proliferate.middleware.request_context import set_authenticated_user_context
+from proliferate.rls_context import set_rls_actor_context
 
 fastapi_users = FastAPIUsers[User, uuid.UUID](
     get_user_manager,
