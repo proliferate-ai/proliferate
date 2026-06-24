@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
-from proliferate.db.models.auth import User
+from proliferate.permissions import (
+    CurrentOrgUser,
+    current_path_org_admin,
+    current_path_org_member,
+)
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.integration_policy.models import (
     CloudOrganizationIntegrationPolicyResponse,
@@ -26,15 +27,13 @@ router = APIRouter(prefix="/organizations/{organization_id}/integration-policy")
 
 @router.get("", response_model=CloudOrganizationIntegrationPolicyResponse)
 async def get_organization_integration_policy_endpoint(
-    organization_id: UUID,
-    user: User = Depends(current_product_user),
+    org_user: CurrentOrgUser = Depends(current_path_org_member),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudOrganizationIntegrationPolicyResponse:
     try:
         snapshot = await get_organization_integration_policy(
             db,
-            actor_user_id=user.id,
-            organization_id=organization_id,
+            org_user=org_user,
         )
     except CloudApiError as error:
         return raise_cloud_error(error)
@@ -43,16 +42,14 @@ async def get_organization_integration_policy_endpoint(
 
 @router.patch("", response_model=CloudOrganizationIntegrationPolicyResponse)
 async def patch_organization_integration_policy_endpoint(
-    organization_id: UUID,
     body: PatchCloudOrganizationIntegrationPolicyRequest,
-    user: User = Depends(current_product_user),
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudOrganizationIntegrationPolicyResponse:
     try:
         snapshot = await patch_organization_integration_policy(
             db,
-            actor_user_id=user.id,
-            organization_id=organization_id,
+            org_admin=org_admin,
             body=body,
         )
     except CloudApiError as error:
