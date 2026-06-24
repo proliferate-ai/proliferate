@@ -85,13 +85,77 @@ async def test_oidc_sso_callback_uses_static_error_for_unbound_provider_error(
 
 
 @pytest.mark.asyncio
-async def test_oidc_sso_callback_redirects_processing_http_errors(
+async def test_oidc_sso_callback_redirects_known_processing_http_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
 
     async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
         raise HTTPException(status_code=400, detail="Invalid or expired SSO state.")
+
+    monkeypatch.setattr(
+        sso_api,
+        "complete_oidc_sso_callback",
+        fake_complete_oidc_sso_callback,
+    )
+    db = _FakeDb()
+
+    response = await sso_api.oidc_sso_callback(
+        cast(Request, object()),
+        state="state",
+        code="code",
+        db=cast(AsyncSession, db),
+    )
+
+    assert response.status_code == 302
+    assert (
+        response.headers["location"]
+        == "https://app.example.test/auth/error?code=sso_state_invalid"
+    )
+    assert db.rolled_back is True
+    assert db.committed is False
+
+
+@pytest.mark.asyncio
+async def test_oidc_sso_callback_redirects_email_domain_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
+
+    async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
+        raise HTTPException(status_code=403, detail="Email domain is not allowed for this SSO.")
+
+    monkeypatch.setattr(
+        sso_api,
+        "complete_oidc_sso_callback",
+        fake_complete_oidc_sso_callback,
+    )
+    db = _FakeDb()
+
+    response = await sso_api.oidc_sso_callback(
+        cast(Request, object()),
+        state="state",
+        code="code",
+        db=cast(AsyncSession, db),
+    )
+
+    assert response.status_code == 302
+    assert (
+        response.headers["location"]
+        == "https://app.example.test/auth/error?code=sso_email_domain_not_allowed"
+    )
+    assert db.rolled_back is True
+    assert db.committed is False
+
+
+@pytest.mark.asyncio
+async def test_oidc_sso_callback_keeps_generic_code_for_unknown_http_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
+
+    async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
+        raise HTTPException(status_code=400, detail="Unexpected SSO failure.")
 
     monkeypatch.setattr(
         sso_api,

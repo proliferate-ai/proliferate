@@ -117,10 +117,10 @@ async def oidc_sso_callback(
     except WebBetaAccessDenied as exc:
         await db.rollback()
         return RedirectResponse(_auth_error_url(exc.code), status_code=status.HTTP_302_FOUND)
-    except HTTPException:
+    except HTTPException as exc:
         await db.rollback()
         return RedirectResponse(
-            _auth_error_url("sso_callback_failed"), status_code=status.HTTP_302_FOUND
+            _auth_error_url(_sso_callback_error_code(exc)), status_code=status.HTTP_302_FOUND
         )
     await db.commit()
     return _auth_redirect_response(redirect_url)
@@ -138,6 +138,30 @@ def _optional_uuid(value: str | None, *, field: str) -> UUID | None:
 def _auth_error_url(code: str) -> str:
     base = settings.frontend_base_url.strip().rstrip("/") or "http://localhost:5174"
     return f"{base}/auth/error?{urlencode({'code': code})}"
+
+
+def _sso_callback_error_code(exc: HTTPException) -> str:
+    detail = exc.detail if isinstance(exc.detail, str) else None
+    if detail is None:
+        return "sso_callback_failed"
+    return _SSO_CALLBACK_ERROR_CODES.get(detail, "sso_callback_failed")
+
+
+_SSO_CALLBACK_ERROR_CODES = {
+    "Email domain is not allowed for this SSO.": "sso_email_domain_not_allowed",
+    "Invalid or expired SSO state.": "sso_state_invalid",
+    "Linked SSO user not found.": "sso_linked_user_not_found",
+    "OIDC identity token could not be verified.": "sso_oidc_identity_verification_failed",
+    "OIDC nonce mismatch.": "sso_oidc_nonce_mismatch",
+    "OIDC token exchange failed.": "sso_oidc_token_exchange_failed",
+    "SSO callback protocol mismatch.": "sso_protocol_mismatch",
+    "SSO callback state mismatch.": "sso_state_mismatch",
+    "SSO connection is no longer available.": "sso_connection_unavailable",
+    "SSO connection is not enabled.": "sso_connection_disabled",
+    "SSO did not return an email address.": "sso_email_missing",
+    "SSO email address is not verified.": "sso_email_unverified",
+    "User is inactive.": "sso_user_inactive",
+}
 
 
 def _auth_redirect_response(redirect_url: str) -> RedirectResponse:
