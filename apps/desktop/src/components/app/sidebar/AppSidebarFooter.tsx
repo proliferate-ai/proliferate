@@ -129,27 +129,8 @@ export function AppSidebarFooter() {
         >
           {(close) => (
             <div className="max-h-[28rem] overflow-y-auto">
-              <div className="px-2 py-2">
-                <div className="text-xs leading-4 text-muted-foreground">Active organization</div>
-                <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <OrganizationSwitcherMark
-                    organization={activeOrganization}
-                    label={activeLabel}
-                    className="size-8"
-                  />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-[520] leading-4 text-foreground">
-                      {activeLabel}
-                    </div>
-                    <div className="truncate text-xs leading-4 text-muted-foreground">
-                      {activeOrganizationId ? "Organization workspace" : "No organization selected"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {pendingInvitations.length > 0 ? (
-                <div className="border-t border-border-light py-1">
+                <div className="py-1">
                   <div className="px-2 py-1 text-xs leading-4 text-muted-foreground">
                     Pending invitations
                   </div>
@@ -170,7 +151,7 @@ export function AppSidebarFooter() {
                 </div>
               ) : null}
 
-              <div className="border-t border-border-light py-1">
+              <div className={`${pendingInvitations.length > 0 ? "border-t border-border-light" : ""} py-1`}>
                 {organizationsQuery.isLoading ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">
                     Loading organizations...
