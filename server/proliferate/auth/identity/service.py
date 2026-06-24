@@ -30,6 +30,7 @@ from proliferate.auth.identity.types import (
     AuthSession,
     VerifiedProviderIdentity,
 )
+from proliferate.auth.identity.web_beta import ensure_web_beta_email_allowed
 from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_REDIRECT_SCHEMES,
@@ -199,6 +200,9 @@ async def complete_oauth_provider_callback(
             request, provider=provider, surface=callback_surface
         ),
     )
+    if callback_surface == "web" and challenge.purpose == "login":
+        beta_email = await _beta_email_for_provider_login(db, verified=verified)
+        ensure_web_beta_email_allowed(beta_email)
     desktop_github_account_or_email_exists = True
     if callback_surface == "desktop" and provider == "github":
         desktop_github_account_or_email_exists = await _desktop_github_account_or_email_exists(
@@ -336,6 +340,9 @@ async def complete_apple_web_callback(
         email_hint=email,
         display_name_hint=display_name,
     )
+    if challenge.purpose == "login":
+        beta_email = await _beta_email_for_provider_login(db, verified=verified)
+        ensure_web_beta_email_allowed(beta_email)
     user = await resolve_provider_user(db, verified=verified, challenge=challenge)
     auth_code = await create_auth_code(
         db,
@@ -346,6 +353,28 @@ async def complete_apple_web_callback(
         redirect_uri=challenge.redirect_uri,
     )
     return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
+
+
+async def _beta_email_for_provider_login(
+    db: AsyncSession,
+    *,
+    verified: VerifiedProviderIdentity,
+) -> str | None:
+    existing_identity = await get_identity_by_provider_subject(
+        db,
+        provider=verified.provider,
+        provider_subject=verified.provider_subject,
+    )
+    if existing_identity is not None:
+        user = await get_user_by_id(db, existing_identity.user_id)
+        return user.email if user is not None else None
+
+    if verified.provider == "github" and verified.email:
+        existing_email_user = await get_user_by_email(db, verified.email)
+        if existing_email_user is not None:
+            return existing_email_user.email
+
+    return verified.email
 
 
 def _nonce_unavailable_marker(challenge: AuthChallengeSnapshot) -> str:

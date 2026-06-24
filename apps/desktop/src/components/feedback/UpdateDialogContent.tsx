@@ -1,5 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
 
 export interface UpdateDialogContentProps {
@@ -45,14 +46,14 @@ export function UpdateDialogContent({
         </div>
       </div>
 
-      <label className="flex select-none items-center gap-2 pl-[4.5rem] text-[13px] text-muted-foreground">
+      <Label className="mb-0 flex select-none items-center gap-2 pl-[4.5rem] text-[13px]">
         <Checkbox
           checked={autoUpdate}
           onChange={(event) => onToggleAutoUpdate(event.target.checked)}
           className="size-4"
         />
         Automatically download and install updates in the future
-      </label>
+      </Label>
 
       <div className="mt-auto flex items-center justify-between gap-3">
         <Button variant="ghost" size="sm" onClick={onSkip}>

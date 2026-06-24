@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "CHANGE-ME-IN-PRODUCTION"
     password_auth_enabled: bool = True
     password_auth_trusted_proxy_hosts: str = ""
+    web_beta_allowed_emails: str = ""
+    web_beta_allowed_domains: str = ""
 
     # GitHub OAuth
     github_oauth_client_id: str = ""
