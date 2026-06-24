@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
+import {
+  canUseDevDesktopHandoff,
+  queueDevDesktopHandoff,
+} from "../lib/access/cloud/dev-desktop-handoff";
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -28,6 +32,11 @@ export function OrganizationJoinPage() {
     if (!deepLinkUrl) {
       return;
     }
+    if (canUseDevDesktopHandoff()) {
+      void queueDevDesktopHandoff(deepLinkUrl).catch(() => {
+        // Keep the OS deep-link attempt as the fallback in local dev.
+      });
+    }
     window.location.replace(deepLinkUrl);
   }, [deepLinkUrl]);
 
@@ -52,7 +61,12 @@ export function OrganizationJoinPage() {
         statusLabel="Organization invite waiting"
         primaryAction={{
           label: "Try opening Desktop again",
-          onClick: () => window.location.assign(deepLinkUrl),
+          onClick: () => {
+            void queueDevDesktopHandoff(deepLinkUrl).catch(() => {
+              // Keep the OS deep-link attempt as the fallback in local dev.
+            });
+            window.location.assign(deepLinkUrl);
+          },
         }}
       />
     );
@@ -66,7 +80,12 @@ export function OrganizationJoinPage() {
       variant="handoff"
       primaryAction={{
         label: "Click here if not redirected",
-        onClick: () => window.location.assign(deepLinkUrl),
+        onClick: () => {
+          void queueDevDesktopHandoff(deepLinkUrl).catch(() => {
+            // Keep the OS deep-link attempt as the fallback in local dev.
+          });
+          window.location.assign(deepLinkUrl);
+        },
       }}
     />
   );

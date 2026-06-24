@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # App
     debug: bool = False
+    proliferate_dev: bool = Field(default=False, validation_alias="PROLIFERATE_DEV")
     api_base_url: str = ""
     api_path_prefix: str = ""
     telemetry_mode: str = Field(
