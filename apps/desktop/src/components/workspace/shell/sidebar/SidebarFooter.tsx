@@ -12,49 +12,29 @@ import {
   ChevronUpDown,
   ExternalLink,
   LifeBuoy,
-  Plus,
   Settings,
 } from "@proliferate/ui/icons";
 import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
-import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
-import { useToastStore } from "@/stores/toast/toast-store";
 
 export function SidebarFooter() {
   const navigate = useNavigate();
   const { openExternal } = useTauriShellActions();
-  const { signOut } = useAuthActions();
+  const handleSignOut = useAppSidebarSignOutAction();
   const openSupport = useOpenSupportReportWindow({ source: "sidebar" });
-  const showToast = useToastStore((state) => state.show);
   const {
     activeOrganization,
     activeOrganizationId,
     organizations,
     organizationsQuery,
     setActiveOrganizationId,
-    clearActiveOrganizationId,
   } = useActiveOrganization();
 
   const activeLabel = activeOrganization?.name ?? "Organization";
   const activeInitial = activeLabel.trim().charAt(0).toUpperCase() || "O";
-
-  const openOrganizationSettings = () => {
-    navigate(buildSettingsHref({ section: "organization" }));
-  };
-
-  const handleSignOut = () => {
-    void signOut()
-      .then(() => {
-        clearActiveOrganizationId();
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : "Could not sign out.";
-        showToast(message);
-      });
-  };
 
   return (
     <div className="shrink-0">
@@ -136,24 +116,6 @@ export function SidebarFooter() {
               </div>
 
               <div className="border-t border-border-light py-1">
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Create organization"
-                  icon={<Plus className="size-3.5" />}
-                  onClick={() => {
-                    openOrganizationSettings();
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Organization settings"
-                  icon={<Building2 className="size-3.5" />}
-                  onClick={() => {
-                    openOrganizationSettings();
-                    close();
-                  }}
-                />
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Settings"
