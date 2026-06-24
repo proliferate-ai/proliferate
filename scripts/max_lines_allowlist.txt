@@ -37,12 +37,12 @@ server/proliferate/server/cloud/commands/domain/payload.py 549 existing cloud co
 server/proliferate/server/cloud/agent_auth/models.py 537 existing cloud agent auth API schema module pending request/response split
 server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split
 server/proliferate/constants/cloud.py 614 existing cloud constants module with command and target config enums
-server/tests/integration/schema_migration_assertions.py 884 existing server oversized test helper
+server/tests/integration/schema_migration_assertions.py 890 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 2040 existing server oversized integration test
 server/tests/integration/test_cloud_agent_auth_api.py 1897 existing server oversized integration test
-server/tests/integration/test_cloud_api.py 2346 existing server oversized integration test
+server/tests/integration/test_cloud_api.py 2580 existing server oversized integration test
 server/tests/integration/test_cloud_commands_api.py 4889 existing server oversized integration test
 server/tests/integration/test_sandbox_profile_foundation.py 1222 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test

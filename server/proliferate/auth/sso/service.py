@@ -504,8 +504,10 @@ def _require_oidc_configured(
 ) -> None:
     if not connection.oidc_client_id:
         raise HTTPException(status_code=400, detail="OIDC client ID is required.")
-    if require_secret and not connection.oidc_client_secret and (
-        connection.oidc_token_endpoint_auth_method != "none"
+    if (
+        require_secret
+        and not connection.oidc_client_secret
+        and (connection.oidc_token_endpoint_auth_method != "none")
     ):
         raise HTTPException(status_code=400, detail="OIDC client secret is required.")
     has_static_endpoints = (
