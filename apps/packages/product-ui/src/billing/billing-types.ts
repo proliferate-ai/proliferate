@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import type { BillingPlanColumn } from "./billing-plan-ladder";
 
 export interface BillingPlanView {
   plan?: string | null;
@@ -61,12 +60,4 @@ export interface BillingOwnerCardView {
   refillAction?: BillingActionView;
   overageAction?: BillingActionView;
   invoiceAction?: BillingActionView;
-}
-
-export interface BillingSettingsPaneProps {
-  children: ReactNode;
-  planComparisonAction?: BillingActionView;
-  enterprisePlanAction?: BillingActionView;
-  currentPlanKey?: BillingPlanColumn["key"] | null;
-  checkoutReturnState?: "success" | "cancel" | null;
 }

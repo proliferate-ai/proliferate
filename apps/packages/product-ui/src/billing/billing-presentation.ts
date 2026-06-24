@@ -80,7 +80,7 @@ export function proliferateCreditBalance(plan: BillingPlanView): {
   const included = plan.proBillingEnabled && plan.isPaidCloud
     ? plan.includedManagedCloudHours
     : plan.freeSandboxHours;
-  const used = managedUsedHours(plan) ?? plan.usedSandboxHours ?? null;
+  const used = managedUsedHours(plan) ?? plan.usedSandboxHours ?? 0;
 
   return {
     purchased: formatCredits(included),

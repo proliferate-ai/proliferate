@@ -79,14 +79,6 @@ export function BillingSettingsSurface({
 
   async function openComparisonBillingAction(action: "checkout" | "portal") {
     setComparisonActionError(null);
-    if (!organization) {
-      onOpenOrganizationSettings();
-      return;
-    }
-    if (!organization.canManageBilling) {
-      setComparisonActionError("Organization billing is managed by owners and admins.");
-      return;
-    }
     try {
       const response = action === "portal"
         ? await comparisonActions.createBillingPortal()
