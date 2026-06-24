@@ -11,6 +11,7 @@ from proliferate.auth.authorization import OwnerSelection
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
@@ -168,6 +169,32 @@ async def test_organization_member_list_and_last_owner_protection(
     assert members[0]["email"] == "owner@acme.dev"
     assert members[0]["displayName"] == "Owner User"
     assert members[0]["avatarUrl"] == "https://example.com/avatar.png"
+
+    removed_user = await _create_user_and_get_tokens(client, email="removed@acme.dev")
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        now = datetime.now(UTC)
+        session.add(
+            OrganizationMembership(
+                organization_id=uuid.UUID(organization_id),
+                user_id=uuid.UUID(removed_user["user_id"]),
+                role=ORGANIZATION_ROLE_MEMBER,
+                status=ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+                joined_at=now,
+                removed_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+
+    response = await client.get(
+        f"/v1/organizations/{organization_id}/members",
+        headers=_headers(owner),
+    )
+    assert response.status_code == 200
+    assert [member["email"] for member in response.json()["members"]] == ["owner@acme.dev"]
 
     response = await client.patch(
         f"/v1/organizations/{organization_id}/members/{membership_id}",

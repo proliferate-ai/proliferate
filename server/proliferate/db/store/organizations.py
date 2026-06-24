@@ -506,7 +506,10 @@ async def list_organization_members(
         await db.execute(
             select(OrganizationMembership, User)
             .join(User, User.id == OrganizationMembership.user_id)
-            .where(OrganizationMembership.organization_id == organization_id)
+            .where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
             .order_by(
                 OrganizationMembership.status.asc(),
                 OrganizationMembership.role.asc(),
