@@ -354,7 +354,11 @@ class SsoIdentity(Base):
     protocol: Mapped[str] = mapped_column(String(16))
     provider_subject: Mapped[str] = mapped_column(Text)
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
-    email_verified: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+    )
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

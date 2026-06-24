@@ -234,7 +234,12 @@ def upgrade() -> None:
             sa.Column("protocol", sa.String(length=16), nullable=False),
             sa.Column("provider_subject", sa.Text(), nullable=False),
             sa.Column("email", sa.Text(), nullable=True),
-            sa.Column("email_verified", sa.Boolean(), nullable=False),
+            sa.Column(
+                "email_verified",
+                sa.Boolean(),
+                server_default=sa.text("false"),
+                nullable=False,
+            ),
             sa.Column("display_name", sa.Text(), nullable=True),
             sa.Column(
                 "linked_at",
