@@ -34,6 +34,7 @@ PROD_DB_SECRET ?= proliferate/prod/database
 PROD_DB_INSTANCE ?= proliferate-prod
 SQL ?= select version_num from alembic_version;
 LOCAL_CODEX_ACP ?= $(HOME)/codex-acp/target/debug/codex-acp
+DEV_ANYHARNESS_TARGET_DIR ?= target/runtime-local
 CLOUD_SSH_WORKER_API_PORT ?= 8044
 CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
@@ -121,11 +122,14 @@ endif
 dev: setup run
 
 dev-artifacts-ready:
-	@runtime_bin="$${CARGO_TARGET_DIR:-target}/debug/anyharness"; \
+	@runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
 	missing_rust=0; \
 	missing_frontend=0; \
 	if [ ! -x "$$runtime_bin" ]; then \
 		echo "Missing AnyHarness runtime binary: $$runtime_bin"; \
+		missing_rust=1; \
+	elif grep -a -q "sidecar is not available\\|unsupported target placeholder" "$$runtime_bin" 2>/dev/null; then \
+		echo "AnyHarness runtime binary is a sidecar placeholder: $$runtime_bin"; \
 		missing_rust=1; \
 	fi; \
 	for artifact in $(DEV_FRONTEND_ARTIFACTS); do \
@@ -355,7 +359,7 @@ run: dev-artifacts-ready
 		fi; \
 		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$$STRIPE_FORWARD_TO" & \
 	fi; \
-	runtime_bin="$${CARGO_TARGET_DIR:-target}/debug/anyharness"; \
+	runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
 	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, desktop :$$PROLIFERATE_WEB_PORT, web :$$PROLIFERATE_HOSTED_WEB_PORT, mobile web :$$PROLIFERATE_MOBILE_WEB_PORT"; \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 "$$runtime_bin" serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
@@ -898,6 +902,7 @@ shared-build:
 
 build-rust:
 	$(CARGO) build --workspace
+	CARGO_TARGET_DIR="$(DEV_ANYHARNESS_TARGET_DIR)" $(CARGO) build -p anyharness
 
 runtime-build: build-rust
 
