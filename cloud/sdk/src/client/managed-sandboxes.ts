@@ -16,6 +16,12 @@ export interface ManagedSandboxRepoRuntimeConnection {
   runtimeGeneration: number;
 }
 
+export type ManagedSandboxWorkspaceRuntimeConnectionResponse =
+  ManagedSandboxRepoRuntimeConnectionResponse;
+
+export type ManagedSandboxWorkspaceRuntimeConnection =
+  ManagedSandboxRepoRuntimeConnection;
+
 export async function getManagedSandbox(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<ManagedSandboxResponse | null> {
@@ -61,6 +67,23 @@ export async function ensureManagedSandboxRepoRuntimeConnection(
     method: "POST",
     path: `/v1/cloud/managed-sandbox/repos/${encodeURIComponent(gitOwner)}/${encodeURIComponent(
       gitRepoName,
+    )}/runtime-connection`,
+  });
+
+  return {
+    ...response,
+    gatewayAnyHarnessBaseUrl: client.buildUrl("/v1/gateway/managed-sandbox/anyharness"),
+  };
+}
+
+export async function ensureManagedSandboxWorkspaceRuntimeConnection(
+  workspaceId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<ManagedSandboxWorkspaceRuntimeConnection> {
+  const response = await client.requestJson<ManagedSandboxWorkspaceRuntimeConnectionResponse>({
+    method: "POST",
+    path: `/v1/cloud/managed-sandbox/workspaces/${encodeURIComponent(
+      workspaceId,
     )}/runtime-connection`,
   });
 

@@ -3,18 +3,29 @@
 from __future__ import annotations
 
 import asyncio
+import math
+import re
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import PurePosixPath
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.store import get_ready_github_grant_for_user
+from proliferate.auth.identity.store import (
+    get_ready_github_grant_for_user,
+    read_ready_github_grant_for_user,
+)
 from proliferate.config import settings
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
+from proliferate.db.store.cloud_workspace_runtime import (
+    attach_anyharness_workspace_id,
+    attach_anyharness_workspace_id_to_managed_repo_workspaces,
+)
 from proliferate.db.store.managed_sandboxes import (
     ManagedSandboxValue,
     acquire_managed_sandbox_owner_lock,
@@ -29,6 +40,7 @@ from proliferate.integrations.sandbox import (
     SandboxProvider,
     get_configured_sandbox_provider,
 )
+from proliferate.integrations.anyharness import create_remote_worktree_workspace
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.managed_sandboxes.transactions import (
@@ -50,17 +62,38 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
     runtime_launcher_path,
 )
+from proliferate.server.cloud.workspaces.access import (
+    cloud_workspace_user_can_interact_with_db,
+)
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
 _IN_FLIGHT_STATUSES = {"creating", "starting", "destroying"}
 _STARTING_LEASE_SECONDS = 10 * 60
+_PROVIDER_UNAVAILABLE_COOLDOWN_SECONDS = 30
 _WAIT_ATTEMPTS = 120
 _WAIT_DELAY_SECONDS = 1.0
+_SAFE_PATH_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 class _UserWithId(Protocol):
     id: UUID
+
+
+class _ManagedWorkspaceRow(Protocol):
+    id: UUID
+    owner_scope: str
+    owner_user_id: UUID | None
+    sandbox_profile_id: UUID | None
+    target_id: UUID | None
+    git_owner: str
+    git_repo_name: str
+    git_branch: str
+    git_base_branch: str | None
+    origin: str
+    status: str
+    anyharness_workspace_id: str | None
+    worktree_path: str | None
 
 
 @dataclass(frozen=True)
@@ -74,6 +107,122 @@ class ManagedSandboxRepoRuntimeConnection:
     anyharness_workspace_id: str
     anyharness_repo_root_id: str | None
     runtime_generation: int
+
+
+@dataclass(frozen=True)
+class ManagedSandboxWorkspaceRuntimeConnection:
+    anyharness_workspace_id: str
+    anyharness_repo_root_id: str | None
+    runtime_generation: int
+
+
+@dataclass(frozen=True)
+class _RepoRuntimeConnectionCacheKey:
+    user_id: UUID
+    git_owner: str
+    git_repo_name: str
+
+
+@dataclass(frozen=True)
+class _CachedRepoRuntimeConnection:
+    connection: ManagedSandboxRepoRuntimeConnection
+    expires_at_monotonic: float
+
+
+_REPO_RUNTIME_CONNECTION_CACHE_TTL_SECONDS = 60.0
+_repo_runtime_connection_cache: dict[
+    _RepoRuntimeConnectionCacheKey,
+    _CachedRepoRuntimeConnection,
+] = {}
+_repo_runtime_connection_locks: dict[_RepoRuntimeConnectionCacheKey, asyncio.Lock] = {}
+_workspace_runtime_connection_locks: dict[UUID, asyncio.Lock] = {}
+
+
+def _repo_runtime_connection_cache_key(
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+) -> _RepoRuntimeConnectionCacheKey:
+    return _RepoRuntimeConnectionCacheKey(
+        user_id=user_id,
+        git_owner=git_owner.lower(),
+        git_repo_name=git_repo_name.lower(),
+    )
+
+
+def _cached_repo_runtime_connection(
+    key: _RepoRuntimeConnectionCacheKey,
+) -> ManagedSandboxRepoRuntimeConnection | None:
+    cached = _repo_runtime_connection_cache.get(key)
+    if cached is None:
+        return None
+    if cached.expires_at_monotonic <= time.monotonic():
+        _repo_runtime_connection_cache.pop(key, None)
+        return None
+    return cached.connection
+
+
+def _repo_runtime_connection_lock(key: _RepoRuntimeConnectionCacheKey) -> asyncio.Lock:
+    lock = _repo_runtime_connection_locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _repo_runtime_connection_locks[key] = lock
+    return lock
+
+
+def _remember_repo_runtime_connection(
+    key: _RepoRuntimeConnectionCacheKey,
+    connection: ManagedSandboxRepoRuntimeConnection,
+) -> ManagedSandboxRepoRuntimeConnection:
+    _repo_runtime_connection_cache[key] = _CachedRepoRuntimeConnection(
+        connection=connection,
+        expires_at_monotonic=time.monotonic() + _REPO_RUNTIME_CONNECTION_CACHE_TTL_SECONDS,
+    )
+    return connection
+
+
+def _reset_managed_sandbox_repo_runtime_connection_cache_for_tests() -> None:
+    _repo_runtime_connection_cache.clear()
+    _repo_runtime_connection_locks.clear()
+    _workspace_runtime_connection_locks.clear()
+
+
+def _workspace_runtime_connection_lock(workspace_id: UUID) -> asyncio.Lock:
+    lock = _workspace_runtime_connection_locks.get(workspace_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _workspace_runtime_connection_locks[workspace_id] = lock
+    return lock
+
+
+def _safe_path_segment(value: str) -> str:
+    normalized = _SAFE_PATH_CHARS.sub("-", value.strip()).strip("-._")
+    return normalized or "workspace"
+
+
+def _managed_cloud_worktree_path(workspace: _ManagedWorkspaceRow) -> str:
+    owner = _safe_path_segment(workspace.git_owner)
+    repo = _safe_path_segment(workspace.git_repo_name)
+    branch = _safe_path_segment(workspace.git_branch)
+    return str(
+        PurePosixPath("/home/user/workspace/worktrees")
+        / owner
+        / repo
+        / f"{branch}-{str(workspace.id)[:8]}"
+    )
+
+
+def _workspace_origin_context(workspace: _ManagedWorkspaceRow) -> dict[str, str]:
+    entrypoint_by_origin = {
+        "manual_desktop": "desktop",
+        "manual_web": "web",
+        "manual_mobile": "mobile",
+    }
+    return {
+        "kind": "human",
+        "entrypoint": entrypoint_by_origin.get(workspace.origin, "cloud"),
+    }
 
 
 def _template_ref() -> str:
@@ -100,6 +249,47 @@ def _in_flight_status_is_fresh(sandbox: ManagedSandboxValue) -> bool:
     if sandbox.status not in _IN_FLIGHT_STATUSES:
         return False
     return utcnow() - sandbox.updated_at < timedelta(seconds=_STARTING_LEASE_SECONDS)
+
+
+def _is_temporary_provider_unavailable_message(message: str | None) -> bool:
+    if not message:
+        return False
+    normalized = message.lower()
+    return "no healthy upstream" in normalized or "service unavailable" in normalized
+
+
+def _is_temporary_provider_unavailable(exc: BaseException) -> bool:
+    return _is_temporary_provider_unavailable_message(format_exception_message(exc))
+
+
+def _provider_unavailable_retry_after_seconds(sandbox: ManagedSandboxValue | None = None) -> int:
+    if sandbox is None:
+        return _PROVIDER_UNAVAILABLE_COOLDOWN_SECONDS
+    elapsed = (utcnow() - sandbox.updated_at).total_seconds()
+    return max(1, math.ceil(_PROVIDER_UNAVAILABLE_COOLDOWN_SECONDS - elapsed))
+
+
+def _provider_unavailable_cooldown_seconds(sandbox: ManagedSandboxValue) -> int | None:
+    if sandbox.status != "error":
+        return None
+    if not _is_temporary_provider_unavailable_message(sandbox.last_error):
+        return None
+    remaining = _PROVIDER_UNAVAILABLE_COOLDOWN_SECONDS - (
+        utcnow() - sandbox.updated_at
+    ).total_seconds()
+    if remaining <= 0:
+        return None
+    return max(1, math.ceil(remaining))
+
+
+def _provider_unavailable_error(retry_after_seconds: int) -> CloudApiError:
+    return CloudApiError(
+        "managed_sandbox_provider_unavailable",
+        "The sandbox provider is temporarily unavailable. Retrying shortly.",
+        status_code=503,
+        extra_detail={"retryAfterSeconds": retry_after_seconds},
+        headers={"Retry-After": str(retry_after_seconds)},
+    )
 
 
 async def _claim_managed_sandbox_start(
@@ -133,6 +323,10 @@ async def _claim_managed_sandbox_start(
         )
         await commit_managed_sandbox_session(db)
         return _SandboxStartClaim(sandbox=claimed or created, action="start")
+
+    retry_after = _provider_unavailable_cooldown_seconds(existing)
+    if retry_after is not None:
+        raise _provider_unavailable_error(retry_after)
 
     if _in_flight_status_is_fresh(existing):
         await commit_managed_sandbox_session(db)
@@ -257,6 +451,11 @@ async def ensure_managed_sandbox_ready(
             )
         except Exception as exc:
             message = format_exception_message(exc)
+            retry_after_seconds = (
+                _provider_unavailable_retry_after_seconds()
+                if _is_temporary_provider_unavailable(exc)
+                else None
+            )
             await update_managed_sandbox_status(
                 db,
                 claim.sandbox.id,
@@ -264,6 +463,8 @@ async def ensure_managed_sandbox_ready(
                 last_error=message,
             )
             await commit_managed_sandbox_session(db)
+            if retry_after_seconds is not None:
+                raise _provider_unavailable_error(retry_after_seconds) from exc
             if isinstance(exc, CloudApiError):
                 raise
             raise CloudApiError(
@@ -369,6 +570,36 @@ async def ensure_managed_sandbox_repo_runtime_connection(
     git_owner: str,
     git_repo_name: str,
 ) -> ManagedSandboxRepoRuntimeConnection:
+    cache_key = _repo_runtime_connection_cache_key(
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    cached = _cached_repo_runtime_connection(cache_key)
+    if cached is not None:
+        return cached
+
+    async with _repo_runtime_connection_lock(cache_key):
+        cached = _cached_repo_runtime_connection(cache_key)
+        if cached is not None:
+            return cached
+
+        connection = await _resolve_managed_sandbox_repo_runtime_connection(
+            db,
+            user,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+        return _remember_repo_runtime_connection(cache_key, connection)
+
+
+async def _resolve_managed_sandbox_repo_runtime_connection(
+    db: AsyncSession,
+    user: _UserWithId,
+    *,
+    git_owner: str,
+    git_repo_name: str,
+) -> ManagedSandboxRepoRuntimeConnection:
     repo_config = await get_cloud_repo_config(
         db,
         user_id=user.id,
@@ -381,7 +612,7 @@ async def ensure_managed_sandbox_repo_runtime_connection(
             "Configure this GitHub repo for cloud use before resolving its runtime.",
             status_code=404,
         )
-    github_grant = await get_ready_github_grant_for_user(db, user_id=user.id)
+    github_grant = await read_ready_github_grant_for_user(db, user_id=user.id)
     if github_grant is None:
         raise CloudApiError(
             "github_link_required",
@@ -407,9 +638,131 @@ async def ensure_managed_sandbox_repo_runtime_connection(
             "Managed sandbox repo materialization did not resolve an AnyHarness workspace.",
             status_code=502,
         )
+    await attach_anyharness_workspace_id_to_managed_repo_workspaces(
+        db,
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        anyharness_workspace_id=materialization.anyharness_workspace_id,
+        preferred_branch=repo_config.default_branch,
+    )
     return ManagedSandboxRepoRuntimeConnection(
         anyharness_workspace_id=materialization.anyharness_workspace_id,
         anyharness_repo_root_id=materialization.anyharness_repo_root_id,
+        runtime_generation=sandbox.runtime_generation,
+    )
+
+
+async def ensure_managed_sandbox_workspace_runtime_connection(
+    db: AsyncSession,
+    user: _UserWithId,
+    *,
+    workspace_id: UUID,
+) -> ManagedSandboxWorkspaceRuntimeConnection:
+    async with _workspace_runtime_connection_lock(workspace_id):
+        workspace = await cloud_workspace_user_can_interact_with_db(
+            db,
+            user.id,
+            workspace_id,
+        )
+        return await ensure_managed_sandbox_workspace_record_runtime_connection(
+            db,
+            user,
+            workspace=workspace,
+        )
+
+
+async def ensure_managed_sandbox_workspace_record_runtime_connection(
+    db: AsyncSession,
+    user: _UserWithId,
+    *,
+    workspace: _ManagedWorkspaceRow,
+) -> ManagedSandboxWorkspaceRuntimeConnection:
+    if (
+        workspace.owner_scope != "personal"
+        or workspace.owner_user_id != user.id
+        or workspace.sandbox_profile_id is None
+        or workspace.target_id is None
+    ):
+        raise CloudApiError(
+            "managed_sandbox_workspace_required",
+            "This cloud workspace is not backed by a managed sandbox.",
+            status_code=409,
+        )
+
+    repo_connection = await ensure_managed_sandbox_repo_runtime_connection(
+        db,
+        user,
+        git_owner=workspace.git_owner,
+        git_repo_name=workspace.git_repo_name,
+    )
+    if not repo_connection.anyharness_repo_root_id:
+        raise CloudApiError(
+            "managed_sandbox_repo_materialization_incomplete",
+            "Managed sandbox repo materialization did not resolve an AnyHarness repo root.",
+            status_code=502,
+        )
+
+    branch = workspace.git_branch.strip()
+    if not branch:
+        raise CloudApiError(
+            "invalid_workspace_branch",
+            "Cloud workspace branch is missing.",
+            status_code=400,
+        )
+
+    base_branch = workspace.git_base_branch.strip() if workspace.git_base_branch else None
+    is_repo_root_workspace = base_branch is None or branch == base_branch
+    if (
+        workspace.anyharness_workspace_id
+        and workspace.status == "ready"
+        and (
+            is_repo_root_workspace
+            or workspace.anyharness_workspace_id != repo_connection.anyharness_workspace_id
+        )
+    ):
+        return ManagedSandboxWorkspaceRuntimeConnection(
+            anyharness_workspace_id=workspace.anyharness_workspace_id,
+            anyharness_repo_root_id=repo_connection.anyharness_repo_root_id,
+            runtime_generation=repo_connection.runtime_generation,
+        )
+
+    if is_repo_root_workspace:
+        await attach_anyharness_workspace_id(
+            db,
+            workspace_id=workspace.id,
+            anyharness_workspace_id=repo_connection.anyharness_workspace_id,
+            runtime_generation=repo_connection.runtime_generation,
+        )
+        return ManagedSandboxWorkspaceRuntimeConnection(
+            anyharness_workspace_id=repo_connection.anyharness_workspace_id,
+            anyharness_repo_root_id=repo_connection.anyharness_repo_root_id,
+            runtime_generation=repo_connection.runtime_generation,
+        )
+
+    sandbox = await ensure_managed_sandbox_ready(db, user)
+    runtime_url, access_token, _data_key = await load_managed_sandbox_runtime_access(sandbox)
+    worktree_path = workspace.worktree_path or _managed_cloud_worktree_path(workspace)
+    materialized = await create_remote_worktree_workspace(
+        runtime_url,
+        access_token,
+        repo_root_id=repo_connection.anyharness_repo_root_id,
+        target_path=worktree_path,
+        new_branch_name=branch,
+        base_branch=base_branch,
+        origin=_workspace_origin_context(workspace),
+        creator_context={"kind": "human", "label": "Cloud workspace"},
+    )
+    await attach_anyharness_workspace_id(
+        db,
+        workspace_id=workspace.id,
+        anyharness_workspace_id=materialized.workspace_id,
+        worktree_path=worktree_path,
+        runtime_generation=sandbox.runtime_generation,
+    )
+    return ManagedSandboxWorkspaceRuntimeConnection(
+        anyharness_workspace_id=materialized.workspace_id,
+        anyharness_repo_root_id=materialized.repo_root_id,
         runtime_generation=sandbox.runtime_generation,
     )
 
@@ -639,7 +992,7 @@ async def _best_effort_reconcile_repos(
 ) -> None:
     if user_id is None:
         return
-    github_grant = await get_ready_github_grant_for_user(db, user_id=user_id)
+    github_grant = await read_ready_github_grant_for_user(db, user_id=user_id)
     if github_grant is None:
         return
     from proliferate.server.cloud.managed_sandboxes.repo_materialization import (

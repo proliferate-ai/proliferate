@@ -22,6 +22,7 @@ import {
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/access/anyharness/session-runtime";
+import { runtimeTargetUsesCloudCommand } from "@/lib/access/anyharness/runtime-target";
 import {
   prepareLocalRuntimeConfigForTarget,
 } from "@/lib/access/anyharness/session-runtime-config";
@@ -146,7 +147,7 @@ export async function dispatchPromptIntent(
     });
     requestStarted = true;
     let response;
-    if (target.location === "cloud") {
+    if (runtimeTargetUsesCloudCommand(target)) {
       if (!target.cloudWorkspaceId || !target.targetId) {
         throw new Error("Cloud workspace is missing command routing metadata.");
       }

@@ -30,10 +30,12 @@ export class AgentsClient {
 
   async applyAuthConfig(
     request: ApplyAgentAuthConfigRequest,
+    options?: AnyHarnessRequestOptions,
   ): Promise<ApplyAgentAuthConfigResponse> {
     return this.transport.put<ApplyAgentAuthConfigResponse>(
       "/v1/agents/auth-config",
       request,
+      options,
     );
   }
 

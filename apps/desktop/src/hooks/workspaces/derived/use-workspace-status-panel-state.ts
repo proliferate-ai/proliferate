@@ -6,6 +6,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   isCloudWorkspacePostReadyPending,
+  resolveCloudWorkspaceStatus,
   shouldShowCloudWorkspaceStatusScreen,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
@@ -177,7 +178,8 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
       pendingWorkspaceEntry
       && pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
       && pendingWorkspaceEntry.workspaceId === selectedWorkspaceId
-      && selectedCloudWorkspace?.status === "ready"
+      && selectedCloudWorkspace
+      && resolveCloudWorkspaceStatus(selectedCloudWorkspace) === "ready"
       && !isCloudWorkspacePostReadyPending(selectedCloudWorkspace),
     );
 

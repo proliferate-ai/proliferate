@@ -16,6 +16,7 @@ import { useWorktreeSettingsTargetCache } from "@/hooks/workspaces/cache/use-wor
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   buildLocalWorktreeSettingsTarget,
   type WorktreeSettingsTarget,
@@ -43,7 +44,7 @@ export function useWorktreeSettingsTargets() {
     updateRetentionPolicy,
   } = useWorktreeTargetActions();
   const readyCloudWorkspaces = useMemo(
-    () => cloudWorkspaces.filter((workspace) => workspace.status === "ready"),
+    () => cloudWorkspaces.filter((workspace) => resolveCloudWorkspaceStatus(workspace) === "ready"),
     [cloudWorkspaces],
   );
 

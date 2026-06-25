@@ -23,8 +23,40 @@ class GatewayWebSocketAuthError(Exception):
     """Raised when a gateway WebSocket cannot authenticate the product user."""
 
 
+GATEWAY_WEBSOCKET_BEARER_PROTOCOL = "proliferate-gateway-bearer"
+
+
+def _websocket_protocol_values(websocket: WebSocket) -> list[str]:
+    header = websocket.headers.get("sec-websocket-protocol")
+    if not header:
+        return []
+    return [value.strip() for value in header.split(",") if value.strip()]
+
+
+def product_token_from_websocket_protocol(websocket: WebSocket) -> str | None:
+    protocols = _websocket_protocol_values(websocket)
+    try:
+        marker_index = protocols.index(GATEWAY_WEBSOCKET_BEARER_PROTOCOL)
+    except ValueError:
+        return None
+    token_index = marker_index + 1
+    if token_index >= len(protocols):
+        return None
+    return protocols[token_index] or None
+
+
+def accepted_gateway_websocket_subprotocol(websocket: WebSocket) -> str | None:
+    protocols = _websocket_protocol_values(websocket)
+    if GATEWAY_WEBSOCKET_BEARER_PROTOCOL in protocols:
+        return GATEWAY_WEBSOCKET_BEARER_PROTOCOL
+    return None
+
+
 def product_token_from_websocket(websocket: WebSocket) -> str | None:
     token = websocket.query_params.get("access_token")
+    if token:
+        return token
+    token = product_token_from_websocket_protocol(websocket)
     if token:
         return token
     authorization = websocket.headers.get("authorization")

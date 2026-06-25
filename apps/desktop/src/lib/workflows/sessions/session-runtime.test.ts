@@ -12,6 +12,7 @@ import {
 } from "@/lib/access/anyharness/session-runtime";
 import {
   assertDirectSessionCreateRuntimeConfigStamped,
+  prepareLocalRuntimeConfigForTarget,
   prepareLocalSessionRuntimeConfig,
 } from "@/lib/access/anyharness/session-runtime-config";
 import type { SessionStreamHandle } from "@anyharness/sdk";
@@ -61,10 +62,13 @@ const sessionStreamPruningDeps: SessionStreamPruningDeps = {
 };
 
 const mocks = vi.hoisted(() => ({
+  applyAgentAuthConfig: vi.fn(),
   applyRuntimeConfig: vi.fn(),
   ensurePersonalSandboxProfile: vi.fn(),
+  getSandboxProfileDesktopAgentAuthConfigApplyRequest: vi.fn(),
   getSandboxProfileDesktopRuntimeConfigApplyRequest: vi.fn(),
   listEvents: vi.fn(),
+  recordSandboxProfileDesktopAgentAuthConfigApplyStatus: vi.fn(),
   resume: vi.fn(),
   resolveRuntimeTargetForWorkspace: vi.fn(),
 }));
@@ -83,11 +87,16 @@ vi.mock("@/lib/access/anyharness/runtime-target", () => ({
 }));
 
 vi.mock("@/lib/access/anyharness/runtime-config", () => ({
+  applyAgentAuthConfig: mocks.applyAgentAuthConfig,
   applyRuntimeConfig: mocks.applyRuntimeConfig,
 }));
 
 vi.mock("@proliferate/cloud-sdk/client/agent-auth", () => ({
   ensurePersonalSandboxProfile: mocks.ensurePersonalSandboxProfile,
+  getSandboxProfileDesktopAgentAuthConfigApplyRequest:
+    mocks.getSandboxProfileDesktopAgentAuthConfigApplyRequest,
+  recordSandboxProfileDesktopAgentAuthConfigApplyStatus:
+    mocks.recordSandboxProfileDesktopAgentAuthConfigApplyStatus,
 }));
 
 vi.mock("@proliferate/cloud-sdk/client/runtime-config", () => ({
@@ -96,10 +105,13 @@ vi.mock("@proliferate/cloud-sdk/client/runtime-config", () => ({
 }));
 
 beforeEach(() => {
+  mocks.applyAgentAuthConfig.mockReset();
   mocks.applyRuntimeConfig.mockReset();
   mocks.ensurePersonalSandboxProfile.mockReset();
+  mocks.getSandboxProfileDesktopAgentAuthConfigApplyRequest.mockReset();
   mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockReset();
   mocks.listEvents.mockReset();
+  mocks.recordSandboxProfileDesktopAgentAuthConfigApplyStatus.mockReset();
   mocks.resume.mockReset();
   mocks.resolveRuntimeTargetForWorkspace.mockReset();
   resetSessionStreamHandlesForTest();
@@ -181,6 +193,17 @@ describe("assertDirectSessionCreateRuntimeConfigStamped", () => {
     })).not.toThrow();
   });
 
+  it("allows managed sandbox gateway session creation", () => {
+    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
+      anyharnessWorkspaceId: "sandbox-workspace-1",
+      baseUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+      location: "cloud",
+      runtimeGeneration: 1,
+      runtimeAccessKind: "proliferate-gateway",
+      authToken: "product-token",
+    })).not.toThrow();
+  });
+
   it("fails closed for direct remote session creation", () => {
     expect(() => assertDirectSessionCreateRuntimeConfigStamped({
       anyharnessWorkspaceId: "workspace-1",
@@ -259,6 +282,106 @@ describe("prepareLocalSessionRuntimeConfig", () => {
       expect.objectContaining({ source: "desktop" }),
       undefined,
     );
+  });
+
+  it("applies runtime config through managed sandbox gateway targets", async () => {
+    mocks.ensurePersonalSandboxProfile.mockResolvedValue({
+      id: "profile-1",
+      primaryTargetId: "target-1",
+    });
+    mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockResolvedValue({
+      applyRequest: {
+        source: "desktop",
+        revision: {
+          id: "revision-1",
+          sequence: 2,
+          contentHash: "hash-1",
+          externalScope: {
+            provider: "proliferate-cloud",
+            id: "profile-1",
+            targetId: "target-1",
+          },
+        },
+        manifest: {},
+      },
+      expectedRuntimeConfigRevision: {
+        revisionId: "revision-1",
+        sequence: 2,
+        contentHash: "hash-1",
+        externalScope: null,
+      },
+    });
+    mocks.applyRuntimeConfig.mockResolvedValue({
+      applied: true,
+      status: "applied",
+      revision: {
+        id: "revision-1",
+        sequence: 2,
+        contentHash: "hash-1",
+        externalScope: {
+          provider: "proliferate-cloud",
+          id: "profile-1",
+          targetId: "target-1",
+        },
+      },
+    });
+    mocks.getSandboxProfileDesktopAgentAuthConfigApplyRequest.mockResolvedValue({
+      applyRequest: {
+        revision: 1,
+        selections: [{
+          agentKind: "claude",
+          authSlotId: "anthropic",
+          materializationMode: "gateway_env",
+          credentialId: "credential-1",
+          credentialRevision: 1,
+        }],
+      },
+    });
+    mocks.applyAgentAuthConfig.mockResolvedValue({
+      applied: true,
+      revision: 1,
+      selectionCount: 1,
+      noSelectionKinds: [],
+      status: "applied",
+    });
+    mocks.recordSandboxProfileDesktopAgentAuthConfigApplyStatus.mockResolvedValue({
+      changed: true,
+    });
+    const gatewayConnection = {
+      runtimeUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+      authToken: "product-token",
+      anyharnessWorkspaceId: "sandbox-workspace-1",
+    };
+
+    await expect(prepareLocalRuntimeConfigForTarget({
+      anyharnessWorkspaceId: "sandbox-workspace-1",
+      baseUrl: gatewayConnection.runtimeUrl,
+      location: "cloud",
+      runtimeAccessKind: "proliferate-gateway",
+      runtimeGeneration: 1,
+      authToken: "product-token",
+    }, gatewayConnection)).resolves.toEqual({
+      revisionId: "revision-1",
+      sequence: 2,
+      contentHash: "hash-1",
+      externalScope: {
+        provider: "proliferate-cloud",
+        id: "profile-1",
+        targetId: "target-1",
+      },
+    });
+    expect(mocks.applyRuntimeConfig).toHaveBeenCalledWith(
+      gatewayConnection,
+      expect.objectContaining({ source: "desktop" }),
+      undefined,
+    );
+    expect(mocks.applyAgentAuthConfig).toHaveBeenCalledWith(
+      gatewayConnection,
+      expect.objectContaining({ revision: 1 }),
+      undefined,
+    );
+    expect(mocks.applyAgentAuthConfig.mock.invocationCallOrder[0]!)
+      .toBeLessThan(mocks.applyRuntimeConfig.mock.invocationCallOrder[0]!);
   });
 
   it("keeps local session creation available when Cloud is not configured", async () => {

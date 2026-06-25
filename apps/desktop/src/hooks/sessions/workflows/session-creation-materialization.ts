@@ -3,6 +3,7 @@ import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-lau
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import {
   resolveRuntimeTargetForWorkspace,
+  runtimeTargetUsesCloudCommand,
 } from "@/lib/access/anyharness/runtime-target";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import {
@@ -30,6 +31,7 @@ import {
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
 import {
   assertDirectSessionCreateRuntimeConfigStamped,
+  prepareManagedSandboxGatewayAgentAuthConfig,
   prepareLocalSessionRuntimeConfig,
 } from "@/lib/access/anyharness/session-runtime-config";
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
@@ -140,7 +142,7 @@ export async function materializeSessionCreation({
 
   const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
   let session: Session;
-  if (target.location === "cloud") {
+  if (runtimeTargetUsesCloudCommand(target)) {
     if (!target.cloudWorkspaceId || !target.targetId) {
       throw new Error("Cloud workspace is missing command routing metadata.");
     }
@@ -157,16 +159,13 @@ export async function materializeSessionCreation({
     session = startResult.session
       ?? await getSession(targetConnection, startResult.sessionId, requestOptions);
   } else {
-    assertDirectSessionCreateRuntimeConfigStamped(target);
-    const expectedRuntimeConfigRevision = await prepareLocalSessionRuntimeConfig(
+    const expectedRuntimeConfigRevision = await prepareDirectSessionRuntimeConfig({
+      target,
       targetConnection,
       requestOptions,
-    );
-    logLatency("session.create.materialize.runtime_config_prepared", {
-      clientSessionId: pendingSessionId,
+      pendingSessionId,
       workspaceId,
-      hasExpectedRuntimeConfigRevision: Boolean(expectedRuntimeConfigRevision),
-      elapsedMs: Date.now() - materializeStartedAt,
+      materializeStartedAt,
     });
     session = await createSession(targetConnection, {
       workspaceId: target.anyharnessWorkspaceId,
@@ -275,6 +274,43 @@ export async function materializeSessionCreation({
   }
 
   return pendingSessionId;
+}
+
+async function prepareDirectSessionRuntimeConfig({
+  target,
+  targetConnection,
+  requestOptions,
+  pendingSessionId,
+  workspaceId,
+  materializeStartedAt,
+}: {
+  target: Awaited<ReturnType<typeof resolveRuntimeTargetForWorkspace>>;
+  targetConnection: {
+    runtimeUrl: string;
+    authToken?: string;
+  };
+  requestOptions: ReturnType<typeof buildLatencyRequestOptions>;
+  pendingSessionId: string;
+  workspaceId: string;
+  materializeStartedAt: number;
+}) {
+  assertDirectSessionCreateRuntimeConfigStamped(target);
+  await prepareManagedSandboxGatewayAgentAuthConfig(
+    target,
+    targetConnection,
+    requestOptions,
+  );
+  const expectedRuntimeConfigRevision = await prepareLocalSessionRuntimeConfig(
+    targetConnection,
+    requestOptions,
+  );
+  logLatency("session.create.materialize.runtime_config_prepared", {
+    clientSessionId: pendingSessionId,
+    workspaceId,
+    hasExpectedRuntimeConfigRevision: Boolean(expectedRuntimeConfigRevision),
+    elapsedMs: Date.now() - materializeStartedAt,
+  });
+  return expectedRuntimeConfigRevision;
 }
 
 function materializeExistingSession({

@@ -6,6 +6,7 @@ import type {
 } from "@/lib/access/cloud/client";
 import { createCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   buildNextCloudWorkspaceAttempt,
   collectKnownCloudBranchNames,
@@ -203,9 +204,10 @@ export function useCreateCloudWorkspace() {
           attemptCount,
         });
         const workspace = await createCloudWorkspaceMutation(attempt.request);
+        const workspaceStatus = resolveCloudWorkspaceStatus(workspace) ?? "pending";
         trackProductEvent("cloud_workspace_created", {
           workspace_kind: "cloud",
-          status: workspace.status,
+          status: workspaceStatus,
           git_provider: workspace.repo.provider,
           attempt_count: attemptCount,
           retry_count: retryCount,
@@ -213,7 +215,7 @@ export function useCreateCloudWorkspace() {
         logLatency("workspace.cloud_create.request.success", {
           attemptId,
           workspaceId: workspace.id,
-          status: workspace.status,
+          status: workspaceStatus,
           attemptCount,
           retryCount,
           requestElapsedMs: elapsedMs(requestStartedAt),
@@ -226,14 +228,14 @@ export function useCreateCloudWorkspace() {
         const workspaceId = cloudWorkspaceSyntheticId(workspace.id);
         const updatedEntry: PendingWorkspaceEntry = {
           ...nextEntry,
-          stage: workspace.status === "ready" ? "submitting" : "awaiting-cloud-ready",
+          stage: workspaceStatus === "ready" ? "submitting" : "awaiting-cloud-ready",
           workspaceId,
           baseBranchName: workspace.repo.baseBranch,
           request: { kind: "select-existing", workspaceId },
         };
         setPendingWorkspaceEntry(updatedEntry);
 
-        if (workspace.status === "ready") {
+        if (workspaceStatus === "ready") {
           const selectionFinalized = await finalizeSelection(updatedEntry, workspaceId, {
             latencyFlowId: args.latencyFlowId,
             repoGroupKeyToExpand: args.repoGroupKeyToExpand,
@@ -262,7 +264,7 @@ export function useCreateCloudWorkspace() {
         logLatency("workspace.cloud_create.awaiting_ready", {
           attemptId,
           workspaceId,
-          status: workspace.status,
+          status: workspaceStatus,
           attemptCount,
           retryCount,
         });

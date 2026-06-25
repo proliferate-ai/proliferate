@@ -12,6 +12,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
+    CloudWorkspaceCleanupState,
     WORKSPACE_REPO_APPLY_LOCK_SALT,
     CloudWorkspaceStatus,
     WorkspaceStatus,
@@ -233,6 +234,8 @@ async def attach_anyharness_workspace_id(
     anyharness_workspace_id: str,
     status: CloudWorkspaceStatus | WorkspaceStatus | str = CloudWorkspaceStatus.ready,
     status_detail: str = "Ready",
+    worktree_path: str | None | object = _UNSET,
+    runtime_generation: int | object = _UNSET,
 ) -> CloudWorkspace | None:
     workspace = (
         await db.execute(select(CloudWorkspace).where(CloudWorkspace.id == workspace_id))
@@ -240,12 +243,138 @@ async def attach_anyharness_workspace_id(
     if workspace is None:
         return None
     workspace.anyharness_workspace_id = anyharness_workspace_id
+    workspace.materialized_target_id = workspace.target_id
+    if worktree_path is not _UNSET:
+        workspace.worktree_path = worktree_path
+    if runtime_generation is not _UNSET:
+        workspace.runtime_generation = int(runtime_generation)
     workspace.status = status.value if hasattr(status, "value") else str(status)
     workspace.status_detail = status_detail
+    workspace.last_error = None
     workspace.ready_at = workspace.ready_at or utcnow()
     workspace.updated_at = utcnow()
+    await _ensure_ready_workspace_exposure(
+        db,
+        workspace=workspace,
+        anyharness_workspace_id=anyharness_workspace_id,
+    )
     await db.flush()
     return workspace
+
+
+async def attach_anyharness_workspace_id_to_managed_repo_workspaces(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    anyharness_workspace_id: str,
+    preferred_branch: str | None = None,
+) -> int:
+    workspaces = list(
+        (
+            await db.execute(
+                select(CloudWorkspace)
+                .where(CloudWorkspace.owner_scope == "personal")
+                .where(CloudWorkspace.owner_user_id == user_id)
+                .where(CloudWorkspace.git_owner == git_owner)
+                .where(CloudWorkspace.git_repo_name == git_repo_name)
+                .where(CloudWorkspace.sandbox_profile_id.is_not(None))
+                .where(CloudWorkspace.target_id.is_not(None))
+                .where(CloudWorkspace.archived_at.is_(None))
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    changed_count = 0
+    now = utcnow()
+    preferred = (preferred_branch or "").strip()
+    canonical_workspaces = [
+        workspace
+        for workspace in workspaces
+        if not preferred or workspace.git_branch == preferred
+    ]
+
+    for workspace in canonical_workspaces:
+        changed = False
+        if workspace.anyharness_workspace_id != anyharness_workspace_id:
+            workspace.anyharness_workspace_id = anyharness_workspace_id
+            changed = True
+        if workspace.materialized_target_id != workspace.target_id:
+            workspace.materialized_target_id = workspace.target_id
+            changed = True
+        if workspace.status != CloudWorkspaceStatus.ready.value:
+            workspace.status = CloudWorkspaceStatus.ready.value
+            changed = True
+        if workspace.status_detail != "Ready":
+            workspace.status_detail = "Ready"
+            changed = True
+        if workspace.last_error is not None:
+            workspace.last_error = None
+            changed = True
+        if workspace.ready_at is None:
+            workspace.ready_at = now
+            changed = True
+        if changed:
+            workspace.updated_at = now
+            changed_count += 1
+        await _ensure_ready_workspace_exposure(
+            db,
+            workspace=workspace,
+            anyharness_workspace_id=anyharness_workspace_id,
+        )
+    await db.flush()
+    return changed_count
+
+
+async def _archive_stale_managed_workspace_projection(
+    db: AsyncSession,
+    *,
+    workspace: CloudWorkspace,
+    now: datetime,
+) -> bool:
+    changed = False
+    if workspace.archive_requested_at is None:
+        workspace.archive_requested_at = now
+        changed = True
+    if workspace.archived_at is None:
+        workspace.archived_at = now
+        changed = True
+    if workspace.status != CloudWorkspaceStatus.archived.value:
+        workspace.status = CloudWorkspaceStatus.archived.value
+        changed = True
+    if workspace.status_detail != "Archived":
+        workspace.status_detail = "Archived"
+        changed = True
+    if workspace.cleanup_state != CloudWorkspaceCleanupState.complete.value:
+        workspace.cleanup_state = CloudWorkspaceCleanupState.complete.value
+        changed = True
+    if changed:
+        workspace.updated_at = now
+
+    exposures = list(
+        (
+            await db.execute(
+                select(CloudWorkspaceExposure)
+                .where(CloudWorkspaceExposure.cloud_workspace_id == workspace.id)
+                .where(CloudWorkspaceExposure.archived_at.is_(None))
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for exposure in exposures:
+        exposure.visibility = "archived"
+        exposure.status = "revoked"
+        exposure.commandable = False
+        exposure.revision += 1
+        exposure.archived_at = now
+        exposure.updated_at = now
+        changed = True
+    return changed
 
 
 async def try_acquire_workspace_repo_apply_lock(

@@ -56,6 +56,7 @@ export function useTerminalStreamController() {
       identity,
       baseUrl: resolvedConnection.runtimeUrl,
       authToken: resolvedConnection.authToken,
+      webSocketAuthTransport: resolvedConnection.webSocketAuthTransport,
       readOnly: options?.readOnlyReplay,
       onOpen: () => {},
       onData: () => {

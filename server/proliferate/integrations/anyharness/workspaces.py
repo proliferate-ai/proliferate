@@ -13,13 +13,13 @@ from proliferate.integrations.anyharness.models import (
 
 _MOBILITY_DESTINATION_PREPARE_TIMEOUT_SECONDS = 180.0
 _MOBILITY_DESTROY_SOURCE_TIMEOUT_SECONDS = 60.0
+_CREATE_WORKTREE_TIMEOUT_SECONDS = 180.0
 
 
 def _runtime_status_error_message(
-    exc: httpx.HTTPStatusError,
+    response: httpx.Response,
     fallback: str,
 ) -> str:
-    response = exc.response
     try:
         payload = response.json()
     except ValueError:
@@ -138,7 +138,10 @@ async def prepare_runtime_mobility_destination(
                 ) from exc
     except httpx.HTTPStatusError as exc:
         raise CloudRuntimeReconnectError(
-            _runtime_status_error_message(exc, "Failed to prepare worktree destination.")
+            _runtime_status_error_message(
+                exc.response,
+                "Failed to prepare worktree destination.",
+            )
         ) from exc
     except httpx.HTTPError as exc:
         raise CloudRuntimeReconnectError("Failed to prepare worktree destination.") from exc
@@ -148,6 +151,77 @@ async def prepare_runtime_mobility_destination(
         invalid_message="Cloud runtime did not return a valid prepared workspace.",
         workspace_id_message="Cloud runtime did not return a valid prepared workspace id.",
         repo_root_message="Cloud runtime did not return a valid prepared repo root id.",
+    )
+
+
+async def create_remote_worktree_workspace(
+    runtime_url: str,
+    access_token: str,
+    *,
+    repo_root_id: str,
+    target_path: str,
+    new_branch_name: str,
+    base_branch: str | None,
+    origin: dict[str, object] | None = None,
+    creator_context: dict[str, object] | None = None,
+) -> ResolvedRemoteWorkspace:
+    body: dict[str, object] = {
+        "repoRootId": repo_root_id,
+        "targetPath": target_path,
+        "newBranchName": new_branch_name,
+        "checkoutMode": "new_branch",
+        "nameConflictPolicy": "fail",
+    }
+    if base_branch:
+        body["baseBranch"] = base_branch
+    if origin is not None:
+        body["origin"] = origin
+    if creator_context is not None:
+        body["creatorContext"] = creator_context
+
+    try:
+        async with httpx.AsyncClient(timeout=_CREATE_WORKTREE_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{runtime_url}/v1/workspaces/worktrees",
+                headers=auth_headers(access_token),
+                json=body,
+            )
+            if response.status_code == 409:
+                try:
+                    return await resolve_runtime_workspace(
+                        runtime_url,
+                        access_token,
+                        runtime_workdir=target_path,
+                    )
+                except CloudRuntimeReconnectError as exc:
+                    raise CloudRuntimeReconnectError(
+                        _runtime_status_error_message(
+                            response,
+                            "Failed to create AnyHarness worktree workspace.",
+                        )
+                    ) from exc
+            response.raise_for_status()
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise CloudRuntimeReconnectError(
+                    "Cloud runtime returned invalid JSON when creating a worktree workspace."
+                ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise CloudRuntimeReconnectError(
+            _runtime_status_error_message(
+                exc.response,
+                "Failed to create AnyHarness worktree workspace.",
+            )
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError("Failed to create AnyHarness worktree workspace.") from exc
+
+    return _parse_resolved_workspace(
+        payload,
+        invalid_message="Cloud runtime did not return a valid worktree workspace.",
+        workspace_id_message="Cloud runtime did not return a valid worktree workspace id.",
+        repo_root_message="Cloud runtime did not return a valid worktree repo root id.",
     )
 
 
@@ -203,7 +277,7 @@ async def destroy_runtime_mobility_source(
     except httpx.HTTPStatusError as exc:
         raise CloudRuntimeReconnectError(
             _runtime_status_error_message(
-                exc,
+                exc.response,
                 "Failed to destroy old AnyHarness mobility source.",
             )
         ) from exc
