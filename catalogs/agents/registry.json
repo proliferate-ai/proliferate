@@ -208,6 +208,15 @@
           }
         ]
       },
+      "permissionOptionPresentations": [
+        {
+          "optionId": "abort",
+          "presentation": {
+            "kind": "feedback_text_input",
+            "placeholder": "No, and tell Codex what to do differently"
+          }
+        }
+      ],
       "docsUrl": "https://github.com/proliferate-ai/codex-acp"
     },
     {
