@@ -9,7 +9,7 @@
     "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && tsc -p tsconfig.json --noEmit"
+    "typecheck": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@anyharness/sdk": "workspace:*",
