@@ -129,14 +129,7 @@ export function PlanDecisionComposerPanel({
       submitEntry(selectedEntry);
       return;
     }
-    if (/^[1-9]$/u.test(event.key)) {
-      const nextIndex = Number(event.key) - 1;
-      if (nextIndex >= 0 && nextIndex < entries.length) {
-        event.preventDefault();
-        setSelectedIndex(nextIndex);
-      }
-    }
-  }, [dismiss, entries.length, selectRelative, selectedEntry, submitEntry]);
+  }, [dismiss, selectRelative, selectedEntry, submitEntry]);
 
   const canSubmit = selectedEntry?.type === "feedback"
     ? feedbackDraft.trim().length > 0
@@ -232,7 +225,9 @@ function PlanDecisionRow({
       <div
         className={twMerge(
           "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 transition-colors",
-          selected ? "bg-muted" : "hover:bg-muted/70",
+          selected
+            ? "bg-accent text-accent-foreground"
+            : "text-foreground hover:bg-accent/70",
         )}
         onClick={onSelect}
       >
@@ -251,7 +246,12 @@ function PlanDecisionRow({
             }
           }}
           placeholder={entry.action.presentation?.placeholder ?? entry.action.label}
-          className="h-auto flex-1 border-none bg-transparent px-0 py-0 text-base shadow-none focus:ring-0"
+          className={twMerge(
+            "h-auto flex-1 border-none bg-transparent px-0 py-0 text-base shadow-none focus:ring-0",
+            selected
+              ? "text-accent-foreground placeholder:text-muted-foreground"
+              : "text-foreground placeholder:text-muted-foreground",
+          )}
         />
       </div>
     );
@@ -265,8 +265,10 @@ function PlanDecisionRow({
       disabled={disabled}
       onClick={onSelect}
       className={twMerge(
-        "flex min-h-11 w-full items-center justify-start gap-3 rounded-xl px-3 py-2 text-left text-base font-medium text-foreground transition-colors",
-        selected ? "bg-muted" : "hover:bg-muted/70",
+        "flex min-h-11 w-full items-center justify-start gap-3 rounded-xl px-3 py-2 text-left text-base font-medium transition-colors",
+        selected
+          ? "bg-accent text-accent-foreground"
+          : "text-foreground hover:bg-accent/70",
       )}
     >
       <span className={numberBadgeClassName(selected)}>{number}</span>
@@ -279,7 +281,7 @@ function numberBadgeClassName(selected: boolean): string {
   return twMerge(
     "grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold",
     selected
-      ? "bg-foreground text-background"
+      ? "bg-foreground/15 text-accent-foreground"
       : "bg-foreground/10 text-foreground",
   );
 }
