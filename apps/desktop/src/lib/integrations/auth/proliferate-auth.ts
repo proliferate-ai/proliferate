@@ -31,8 +31,10 @@ import {
 
 export type { AuthUser }
 export {
+  abortError,
   AuthRequestError,
   isDefinitiveAuthRejection,
+  isAbortError,
   createPendingGitHubDesktopAuth,
   DESKTOP_AUTH_REDIRECT_URI,
   isPendingDesktopAuthExpired,
@@ -71,6 +73,12 @@ export interface GitHubDesktopAuthAvailability {
 
 export interface GitHubDesktopSignInOptions {
   prompt?: "select_account"
+}
+
+export interface DesktopSessionPollOptions {
+  signal?: AbortSignal
+  transientFailureMessage?: string
+  timeoutMessage?: string
 }
 
 export type DesktopIdentityProvider = "github" | "google" | "apple"
@@ -239,8 +247,9 @@ export async function exchangeDesktopAuthCode(
 export async function pollGitHubDesktopSession(
   state: string,
   codeVerifier: string,
-  signal?: AbortSignal,
+  options: DesktopSessionPollOptions = {},
 ): Promise<StoredAuthSession> {
+  const { signal } = options
   const timeoutAt = Date.now() + GITHUB_RECOVERY_TIMEOUT_MS
   let lastError: Error | null = null
 
@@ -272,7 +281,7 @@ export async function pollGitHubDesktopSession(
       lastError =
         error instanceof Error
           ? error
-          : new Error("GitHub sign-in failed")
+          : new Error(options.transientFailureMessage ?? "Sign-in failed")
       await delay(1250, signal)
       continue
     }
@@ -294,7 +303,7 @@ export async function pollGitHubDesktopSession(
   }
 
   throw new AuthRequestError(
-    "GitHub sign-in timed out. Finish the browser flow and try again.",
+    options.timeoutMessage ?? "Sign-in timed out. Finish the browser flow and try again.",
     408,
   )
 }

@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
 import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { getRedirectTarget } from "@/lib/domain/auth/login-redirect";
@@ -16,11 +17,22 @@ export function useLoginPage() {
     signInAvailable: githubSignInAvailable,
     signInChecking: githubSignInChecking,
     signInUnavailableDescription: githubSignInUnavailableDescription,
+    cancelSignIn: cancelGitHubSignIn,
   } = useGitHubSignIn();
+  const {
+    signIn: signInWithSso,
+    submitting: ssoSubmitting,
+    error: ssoError,
+    signInAvailable: ssoSignInAvailable,
+    signInChecking: ssoSignInChecking,
+    signInUnavailableDescription: ssoSignInUnavailableDescription,
+    displayName: ssoDisplayName,
+    cancelSignIn: cancelSsoSignIn,
+  } = useSsoSignIn();
   const canContinueLocally = !isProductAuthRequired();
 
   const redirectTarget = getRedirectTarget(location.state);
-  const busy = submitting || status === "bootstrapping";
+  const busy = submitting || ssoSubmitting || status === "bootstrapping";
 
   async function handleGitHubSignIn() {
     try {
@@ -31,18 +43,44 @@ export function useLoginPage() {
     }
   }
 
+  async function handleSsoSignIn() {
+    try {
+      await signInWithSso();
+      navigate(redirectTarget, { replace: true });
+    } catch {
+      // error is already surfaced via the hook's `error` state
+    }
+  }
+
   function handleContinueLocally() {
     navigate(redirectTarget, { replace: true });
   }
 
+  function handleCancelSignIn() {
+    if (ssoSubmitting) {
+      void cancelSsoSignIn();
+      return;
+    }
+    if (submitting) {
+      void cancelGitHubSignIn();
+    }
+  }
+
   return {
     submitting,
-    error,
+    error: error ?? ssoError,
     busy,
     githubSignInAvailable,
     githubSignInChecking,
     githubSignInUnavailableDescription,
+    ssoSubmitting,
+    ssoSignInAvailable,
+    ssoSignInChecking,
+    ssoSignInUnavailableDescription,
+    ssoDisplayName,
     handleGitHubSignIn,
+    handleSsoSignIn,
+    handleCancelSignIn,
     handleContinueLocally,
     canContinueLocally,
   };

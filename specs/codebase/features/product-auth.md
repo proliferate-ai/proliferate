@@ -18,10 +18,10 @@ Scope:
 Proliferate has two related but distinct auth concepts:
 
 - **Sign-in methods** let a person authenticate to the Proliferate account.
-  Current methods are GitHub, Apple, Google, and email/password.
+  Current methods are GitHub, Apple, Google, SSO, and email/password.
 - **Linked providers** are external OAuth identities and grants attached to the
-  account. GitHub, Google, and Apple are linked providers. Email/password is not
-  a linked provider.
+  account. GitHub, Google, Apple, and SSO identities are linked providers.
+  Email/password is not a linked provider.
 
 GitHub remains the product-readiness provider. A password-only user is signed in
 but limited until the existing GitHub readiness check succeeds. Do not add a
@@ -134,6 +134,8 @@ Account settings:
 
 - Show email/password separately from connected providers.
 - Do not render email/password as a provider row.
+- Show connected SSO identities by provider display name, protocol-backed
+  account email, and SSO icon.
 - GitHub readiness remains its own status.
 
 ## Reviewer Accounts

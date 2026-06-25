@@ -6,6 +6,7 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 
 import { SettingsCard } from "../settings/SettingsCard";
+import { ProviderBrandIcon } from "../auth/ProviderBrandIcon";
 
 export interface AccountPasswordCredentialSubmit {
   currentPassword?: string;
@@ -81,7 +82,10 @@ export function AccountPasswordCredentialCard({
       <div className="space-y-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <div className="text-sm font-medium text-foreground">Email/password</div>
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <ProviderBrandIcon provider="password" className="size-4 shrink-0 text-muted-foreground" />
+              <span>Email/password</span>
+            </div>
             <p className="max-w-xl text-sm leading-6 text-muted-foreground">
               {credential.enabled
                 ? "Email sign-in is enabled for this account."

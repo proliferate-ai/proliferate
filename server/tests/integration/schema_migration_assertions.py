@@ -1,6 +1,7 @@
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncConnection
 from tests.integration.background_schema_assertions import assert_background_outbox_schema
+from tests.integration.sso_schema_assertions import assert_sso_schema
 
 
 async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> None:
@@ -52,6 +53,9 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "auth_identity",
         "provider_grant",
         "auth_challenge",
+        "sso_connection",
+        "sso_challenge",
+        "sso_identity",
         "oauth_account",
         "organization",
         "organization_invitation",
@@ -453,6 +457,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         }
     )
     assert {"ix_auth_challenge_state_hash", "ix_auth_challenge_user_id"} <= auth_challenge_indexes
+    await assert_sso_schema(conn)
 
     mcp_connection_columns = await conn.run_sync(
         lambda sync_conn: {

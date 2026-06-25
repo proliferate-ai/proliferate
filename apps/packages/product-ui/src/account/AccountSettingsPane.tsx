@@ -9,17 +9,19 @@ import {
   AccountPasswordCredentialCard,
   type AccountPasswordCredentialView,
 } from "./AccountPasswordCredentialCard";
+import { ProviderBrandIcon } from "../auth/ProviderBrandIcon";
 
 export type {
   AccountPasswordCredentialSubmit,
   AccountPasswordCredentialView,
 } from "./AccountPasswordCredentialCard";
 
-export type AccountProviderKind = "github" | "google" | "apple";
+export type AccountProviderKind = "github" | "google" | "apple" | "sso";
 
 export interface AccountProviderView {
   provider: AccountProviderKind;
   label: string;
+  brandLabel?: string | null;
   accountLabel?: string | null;
   connected: boolean;
   status?: "ready" | "needs_reauth" | "expired";
@@ -247,10 +249,13 @@ function ProviderRow({ provider }: { provider: AccountProviderView }) {
     <div className="flex items-center justify-between gap-3 border-b border-border-light px-3 py-2.5 text-sm last:border-b-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2 font-medium text-foreground">
+          <ProviderBrandIcon
+            provider={provider.provider}
+            label={provider.brandLabel ?? provider.label}
+            className="size-4 shrink-0 text-muted-foreground"
+          />
           <span>{provider.label}</span>
-          {provider.primary ? (
-            <Badge tone="neutral">Primary</Badge>
-          ) : null}
+          {provider.primary && provider.connected ? <Badge tone="neutral">Primary</Badge> : null}
         </div>
         <div className="truncate text-muted-foreground">
           {provider.accountLabel || (provider.connected ? "Connected" : "Not connected")}

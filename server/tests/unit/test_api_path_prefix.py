@@ -43,6 +43,9 @@ def test_create_app_mounts_routes_without_api_prefix_by_default(
 
     assert "/health" in paths
     assert "/auth/desktop/token" in paths
+    assert "/auth/sso/discover" in paths
+    assert "/auth/{surface}/sso/start" in paths
+    assert "/auth/sso/oidc/callback" in paths
     assert "/v1/telemetry/anonymous" in paths
     assert "/v1/automations" in paths
 
@@ -77,6 +80,9 @@ def test_create_app_mounts_routes_under_api_prefix_when_configured(
 
     assert "/api/health" in paths
     assert "/api/auth/desktop/token" in paths
+    assert "/api/auth/sso/discover" in paths
+    assert "/api/auth/{surface}/sso/start" in paths
+    assert "/api/auth/sso/oidc/callback" in paths
     assert "/api/v1/telemetry/anonymous" in paths
     assert "/api/v1/automations" in paths
 

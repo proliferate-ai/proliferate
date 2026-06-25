@@ -17,6 +17,7 @@ export * from "./hooks/runtime-config.js";
 export * from "./hooks/repo-configs.js";
 export * from "./hooks/repos.js";
 export * from "./hooks/sessions.js";
+export * from "./hooks/sso.js";
 export * from "./hooks/support.js";
 export * from "./hooks/targets.js";
 export * from "./hooks/workspaces.js";

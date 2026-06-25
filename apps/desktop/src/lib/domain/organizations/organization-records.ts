@@ -16,6 +16,13 @@ export interface OrganizationMemberRecord {
   email: string;
   avatarUrl?: string | null;
   joinedAt?: string | null;
+  authMethods?: OrganizationMemberAuthMethodRecord[];
+}
+
+export interface OrganizationMemberAuthMethodRecord {
+  provider: string;
+  label: string;
+  brandLabel?: string | null;
 }
 
 export interface OrganizationInvitationRecord {

@@ -2,11 +2,9 @@ import { useState } from "react";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
-import {
-  OrganizationMembersList,
-  buildMemberRows,
-} from "@/components/settings/panes/organization/OrganizationMembersList";
+import { OrganizationMembersList } from "@/components/settings/panes/organization/OrganizationMembersList";
 import { OrganizationSelectMenu } from "@/components/settings/panes/organization/OrganizationSelectMenu";
+import { buildMemberRows } from "@/lib/domain/organizations/member-list-rows";
 import type {
   OrganizationInvitationRecord,
   OrganizationMemberRecord,

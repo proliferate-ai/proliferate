@@ -44,6 +44,10 @@ export function cloudOrganizationIntegrationPolicyKey(
   ] as const;
 }
 
+export function organizationSsoConnectionsKey(organizationId: string | null) {
+  return [...cloudRootKey(), "organizations", organizationId, "sso-connections"] as const;
+}
+
 export function cloudMcpConnectionsKey() {
   return [...cloudPluginInventoryRootKey(), "mcp-connections"] as const;
 }

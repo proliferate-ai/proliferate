@@ -49,10 +49,10 @@ export function ProductSidebarNavRow({
       active={item.active}
       disabled={item.disabled}
       onPress={() => onSelect(item.id)}
-      className={`h-[30px] gap-2 px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`min-h-[calc(1lh+0.5rem)] gap-2 px-2 py-1 text-base leading-5 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex size-5 shrink-0 items-center justify-center">
+      <div className="flex size-[1.125em] shrink-0 items-center justify-center [&>svg]:size-full [&>svg]:shrink-0">
         {item.icon}
       </div>
       <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-current">

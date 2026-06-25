@@ -14,20 +14,7 @@ import {
   type OrganizationMemberRecord,
   type OrganizationRole,
 } from "@/lib/domain/organizations/organization-records";
-
-export interface MemberListRow {
-  key: string;
-  kind: "member" | "invitation";
-  name: string;
-  email: string;
-  role: string;
-  dateLabel: string;
-  authLabel: string;
-  statusFilter: "active" | "invited";
-  searchText: string;
-  member?: OrganizationMemberRecord;
-  invitation?: OrganizationInvitationRecord;
-}
+import type { MemberListRow } from "@/lib/domain/organizations/member-list-rows";
 
 const PEOPLE_GRID_CLASS =
   "grid grid-cols-[minmax(0,1fr)_6.75rem_5.25rem_8rem_2.25rem] items-center gap-x-3";
@@ -231,41 +218,6 @@ function InvitationRow({
   );
 }
 
-export function buildMemberRows(
-  members: OrganizationMemberRecord[],
-  pendingInvitations: OrganizationInvitationRecord[],
-): MemberListRow[] {
-  return [
-    ...members.map((member) => {
-      const name = member.displayName || member.email;
-      return {
-        key: `member:${member.membershipId}`,
-        kind: "member" as const,
-        name,
-        email: member.email,
-        role: member.role,
-        dateLabel: formatJoinedDate(member.joinedAt),
-        authLabel: "GitHub",
-        statusFilter: "active" as const,
-        searchText: `${name} ${member.email}`.toLowerCase(),
-        member,
-      };
-    }),
-    ...pendingInvitations.map((invitation) => ({
-      key: `invitation:${invitation.id}`,
-      kind: "invitation" as const,
-      name: invitation.email,
-      email: invitation.email,
-      role: invitation.role,
-      dateLabel: "Invited",
-      authLabel: "N/A",
-      statusFilter: "invited" as const,
-      searchText: invitation.email.toLowerCase(),
-      invitation,
-    })),
-  ];
-}
-
 function MemberMeta({ value }: { value: ReactNode }) {
   return (
     <div className="min-w-0">
@@ -365,19 +317,4 @@ function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
   if (role === "admin") return "Admin";
   return "Member";
-}
-
-function formatJoinedDate(value: string | null | undefined): string {
-  if (!value) {
-    return "Joined";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Joined";
-  }
-  return date.toLocaleDateString(undefined, {
-    month: "numeric",
-    day: "numeric",
-    year: "numeric",
-  });
 }

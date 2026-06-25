@@ -19,6 +19,8 @@ BIFROST_APP_DIR ?= $(HOME)/.proliferate-local/bifrost
 BIFROST_LOG_LEVEL ?= info
 AGENT_GATEWAY_TUNNEL ?= 0
 CLOUD_WORKER_TUNNEL ?= 0
+AUTH_PROFILE ?=
+SSO_STATUS ?= enabled
 AGENT_GATEWAY_FREE_CREDIT_USD ?= 5
 AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS ?= claude,codex
 AWS_REGION ?= us-east-1
@@ -55,6 +57,23 @@ STRIPE_LOCAL_SECRET_ENV = if [ -z "$${STRIPE_SECRET_KEY:-}" ] && command -v stri
 		echo "Using Stripe CLI test key for local billing API calls."; \
 	fi; \
 fi;
+AUTH_PROFILE_ENV_SOURCE = auth_profile="$(AUTH_PROFILE)"; \
+	if [ -n "$$auth_profile" ]; then \
+		case "$$auth_profile" in *[!A-Za-z0-9_-]* ) \
+			echo "AUTH_PROFILE must contain only letters, numbers, underscores, or hyphens."; \
+			exit 1; \
+		esac; \
+		auth_env=".auth-env/.env.$$auth_profile"; \
+		if [ ! -f "$$auth_env" ]; then \
+			echo "Missing auth profile env file: $$auth_env"; \
+			exit 1; \
+		fi; \
+		set -a; \
+		. "$$auth_env"; \
+		set +a; \
+		export AUTH_PROFILE="$$auth_profile"; \
+		echo "Loaded auth profile $$auth_profile from $$auth_env"; \
+	fi;
 DEV_FRONTEND_ARTIFACTS := \
 	anyharness/sdk/dist \
 	anyharness/sdk-react/dist \
@@ -72,13 +91,13 @@ PROFILE_DB_READY_COMMAND = :;
 PROFILE_DB_ENSURE_COMMAND = :;
 endif
 
-ifneq ($(filter dev dev-init setup run,$(MAKECMDGOALS)),)
+ifneq ($(filter dev dev-init setup run seed-sso,$(MAKECMDGOALS)),)
 ifeq ($(strip $(PROFILE)),)
 $(error PROFILE is required. Example: make dev PROFILE=main)
 endif
 endif
 
-.PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
+.PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
@@ -159,6 +178,7 @@ run: dev-artifacts-ready
 	trap cleanup EXIT INT TERM; \
 	$(SERVER_ENV_SOURCE) \
 	. "$$launch_env"; \
+	$(AUTH_PROFILE_ENV_SOURCE) \
 	$(STRIPE_LOCAL_SECRET_ENV) \
 	$(LOCAL_CODEX_ACP_ENV) \
 	if [ "$$database_url_override_set" = "x" ]; then \
@@ -177,6 +197,10 @@ run: dev-artifacts-ready
 	fi; \
 	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
 	export FRONTEND_BASE_URL="$${FRONTEND_BASE_URL:-http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT}"; \
+	if [ -n "$${AUTH_PROFILE:-}" ]; then \
+		sso_oidc_callback_base_url="$${PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL:-$$API_BASE_URL}"; \
+		echo "SSO callback URL for provider console: $$sso_oidc_callback_base_url/auth/sso/oidc/callback"; \
+	fi; \
 	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT,http://localhost:$$PROLIFERATE_MOBILE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_MOBILE_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
 	export STRIPE_CHECKOUT_SUCCESS_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=success"; \
 	export STRIPE_CHECKOUT_CANCEL_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=cancel"; \
@@ -410,6 +434,54 @@ dev-mobile-tunnel: dev-mobile-auth
 
 dev-web-auth:
 	@node scripts/dev-web-auth.mjs
+
+seed-sso:
+	@set -e; \
+	org_id="$(ORG_ID)"; \
+	if [ -z "$$org_id" ]; then org_id="$(org_id)"; fi; \
+	if [ -z "$$org_id" ]; then \
+		echo "ORG_ID is required. Example: make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>"; \
+		exit 1; \
+	fi; \
+	database_url_override_set="$${DATABASE_URL+x}"; \
+	database_url_override_value="$${DATABASE_URL:-}"; \
+	launch_env=$$( \
+		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
+		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
+		PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
+		PROLIFERATE_HOSTED_WEB_PORT="$(PROLIFERATE_HOSTED_WEB_PORT)" \
+		PROLIFERATE_MOBILE_WEB_PORT="$(PROLIFERATE_MOBILE_WEB_PORT)" \
+		PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE="$(PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE)" \
+		ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
+		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
+		PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
+		PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
+		node scripts/dev.mjs ensure --profile "$(PROFILE)" \
+	); \
+	$(SERVER_ENV_SOURCE) \
+	. "$$launch_env"; \
+	$(AUTH_PROFILE_ENV_SOURCE) \
+	if [ -z "$${AUTH_PROFILE:-}" ]; then \
+		echo "AUTH_PROFILE is required. Example: make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>"; \
+		exit 1; \
+	fi; \
+	if [ "$$database_url_override_set" = "x" ]; then \
+		export DATABASE_URL="$$database_url_override_value"; \
+	else \
+		$(PROFILE_DB_READY_COMMAND) \
+		export DATABASE_URL="$$( \
+			LOCAL_PGHOST="$(LOCAL_PGHOST)" \
+			LOCAL_PGPORT="$(LOCAL_PGPORT)" \
+			LOCAL_PGUSER="$(LOCAL_PGUSER)" \
+			LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" \
+			node scripts/dev.mjs database-url --db-name "$$PROLIFERATE_DEV_DB_NAME" \
+		)"; \
+		$(PROFILE_DB_ENSURE_COMMAND) \
+	fi; \
+	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
+	echo "Seeding org SSO for profile $$PROLIFERATE_DEV_PROFILE with auth profile $$AUTH_PROFILE"; \
+	(cd server && DATABASE_URL="$$DATABASE_URL" uv run alembic upgrade head); \
+	(cd server && DATABASE_URL="$$DATABASE_URL" uv run python ../scripts/seed_sso.py --org-id "$$org_id" --status "$(SSO_STATUS)")
 
 # --- Server (Python control plane) ---
 

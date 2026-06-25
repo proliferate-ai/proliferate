@@ -289,8 +289,10 @@ Members
     invite-by-email creates an invitation record and sends the same join link
     that admins can copy. The join link is the organization join endpoint. A
     signed-in matching invited user can accept the invitation; an anonymous
-    user is sent through auth and returned to the join flow. Domain auto-join
-    uses the same link but is Enterprise-only.
+    user is sent through the organization's configured auth path and returned
+    to the join flow. Organizations with enabled SSO start that SSO connection
+    from the join link; organizations without SSO fall back to standard product
+    sign-in. Domain auto-join uses the same link but is Enterprise-only.
 
 Billing
   maturity: mixed real-now + mocked-ui

@@ -10,6 +10,7 @@ import {
   FolderList,
   Keyboard,
   LifeBuoy,
+  Link2,
   Palette,
   RefreshCw,
   Server,
@@ -94,6 +95,7 @@ const SETTINGS_NAV_ICONS = {
   "organization-limits": SlidersHorizontal,
   "organization-members": UsersRound,
   "organization-model-policy": Brain,
+  "organization-sso": Link2,
   support: LifeBuoy,
   worktrees: Tree,
 } satisfies Record<SettingsNavIconId, typeof Settings>;

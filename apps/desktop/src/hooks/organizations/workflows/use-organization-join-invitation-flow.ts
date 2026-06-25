@@ -8,6 +8,9 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import {
+  canFallbackToStandardInviteSignIn,
+} from "@/lib/domain/organizations/join-auth";
+import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
@@ -19,7 +22,7 @@ export function useOrganizationJoinInvitationFlow() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authStatus = useAuthStore((state) => state.status);
-  const { signInWithGitHub } = useAuthActions();
+  const { signInWithGitHub, signInWithSso } = useAuthActions();
   const signInStartedRef = useRef(false);
   const joinOrganizationId = useMemo(
     () => searchParams.get("joinOrganizationId"),
@@ -64,14 +67,29 @@ export function useOrganizationJoinInvitationFlow() {
       return;
     }
     signInStartedRef.current = true;
-    setStatusMessage("Opening sign-in to accept this invitation.");
-    void signInWithGitHub()
-      .catch(() => {
-        setStatusMessage(
-          "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
-        );
+    setStatusMessage("Opening organization sign-in to accept this invitation.");
+    void signInWithSso({
+      organizationId: transientJoinOrganizationId,
+      prompt: "select_account",
+    })
+      .catch(async (error: unknown) => {
+        if (!canFallbackToStandardInviteSignIn(error)) {
+          setStatusMessage(
+            "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
+          );
+          return;
+        }
+
+        setStatusMessage("Opening sign-in to accept this invitation.");
+        try {
+          await signInWithGitHub();
+        } catch {
+          setStatusMessage(
+            "Sign in could not start. Use Account settings to sign in, then reopen the invite link.",
+          );
+        }
       });
-  }, [authStatus, signInWithGitHub, transientJoinOrganizationId]);
+  }, [authStatus, signInWithGitHub, signInWithSso, transientJoinOrganizationId]);
 
   return {
     joinOrganizationId: transientJoinOrganizationId,

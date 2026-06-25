@@ -20,6 +20,10 @@ make run PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
                                     # expose Bifrost and API worker callbacks through ngrok for E2B/public sandbox tests
 make run PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
                                     # expose only API worker callbacks through ngrok
+make run PROFILE=<name> AUTH_PROFILE=google
+                                    # load .auth-env/.env.google for deployment SSO testing
+make seed-sso PROFILE=<name> AUTH_PROFILE=google ORG_ID=<org-id>
+                                    # seed that profile's local org SSO connection from .auth-env/.env.google
 make dev-web-auth                  # standalone web auth helper with ngrok callbacks
 ```
 
@@ -112,6 +116,36 @@ current managed-credit implementation chooses one backing provider for the
 default free-credit pool; if both Anthropic and OpenAI managed keys are set,
 Anthropic is selected first. Personal BYOK forms can still expose both provider
 types at the same time.
+
+## Local SSO Auth Profiles
+
+Manual OIDC SSO QA can load local-only provider credentials from
+`.auth-env/.env.<auth-profile>`. Those files are ignored by git because they
+contain client secrets. To run the deployment/self-hosted SSO path, pass the
+auth profile to the normal dev launcher:
+
+```bash
+make run PROFILE=sso-google AUTH_PROFILE=google
+```
+
+To test org-scoped SSO without filling the settings form by hand, run the
+normal profile and seed the local profile database:
+
+```bash
+make run PROFILE=sso-org
+make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>
+```
+
+The auth profile env uses the same `PROLIFERATE_SSO_*` names as deployment SSO,
+including `PROLIFERATE_SSO_OIDC_ISSUER_URL`,
+`PROLIFERATE_SSO_OIDC_CLIENT_ID`, and
+`PROLIFERATE_SSO_OIDC_CLIENT_SECRET`. `PROLIFERATE_SSO_ALLOWED_DOMAINS` may be
+blank for provider-only manual QA, or set to a comma-separated allowlist when
+testing domain policy. If a provider app registration requires a different local
+callback hostname than the API base URL, set
+`PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL`, for example
+`http://localhost:${PROLIFERATE_API_PORT}` for Microsoft Entra app registrations
+that do not include the `127.0.0.1` callback.
 
 ## Ports And UI Identity
 

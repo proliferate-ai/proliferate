@@ -1,5 +1,6 @@
 import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
 
 // Persistent owner of the pre-app experience. BootstrappedRoute keeps a single
 // <AuthShell> mounted across the bootstrapping -> anonymous transition, so the
@@ -20,7 +21,20 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
     signInAvailable,
     signInChecking,
     signInUnavailableDescription,
+    cancelSignIn,
   } = useGitHubSignIn();
+  const {
+    signIn: signInWithSso,
+    submitting: ssoSubmitting,
+    error: ssoError,
+    signInAvailable: ssoSignInAvailable,
+    signInChecking: ssoSignInChecking,
+    signInUnavailableDescription: ssoSignInUnavailableDescription,
+    displayName: ssoDisplayName,
+    cancelSignIn: cancelSsoSignIn,
+  } = useSsoSignIn();
+  const busy = submitting || ssoSubmitting;
+  const handleCancelSignIn = ssoSubmitting ? cancelSsoSignIn : cancelSignIn;
 
   return (
     <AuthScreenLayout
@@ -28,13 +42,24 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       markComplete={markComplete}
       onMarkResolved={onMarkResolved}
       submitting={submitting}
-      busy={submitting}
-      error={error}
+      busy={busy}
+      error={error ?? ssoError}
       githubSignInAvailable={signInAvailable}
       githubSignInChecking={signInChecking}
       githubSignInUnavailableDescription={signInUnavailableDescription}
+      ssoSubmitting={ssoSubmitting}
+      ssoSignInAvailable={ssoSignInAvailable}
+      ssoSignInChecking={ssoSignInChecking}
+      ssoSignInUnavailableDescription={ssoSignInUnavailableDescription}
+      ssoDisplayName={ssoDisplayName}
       onGitHubSignIn={() => {
         void signIn();
+      }}
+      onSsoSignIn={() => {
+        void signInWithSso();
+      }}
+      onCancelSignIn={() => {
+        void handleCancelSignIn();
       }}
     />
   );

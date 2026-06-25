@@ -190,6 +190,118 @@
   tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════
+# Server: Deployment SSO
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: PROLIFERATE_SSO_ENABLED
+  secret: false
+  default: "false"
+  description: Enables env-backed deployment SSO for self-hosted or single-tenant installs
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_PROTOCOL
+  secret: false
+  default: "oidc"
+  description: Deployment SSO protocol; OIDC is supported
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_DISPLAY_NAME
+  secret: false
+  default: "Company SSO"
+  description: Display name shown for deployment SSO sign-in
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_LOGIN_POLICY
+  secret: false
+  default: "optional"
+  description: Deployment SSO login policy; required mode is not enabled yet
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_JIT_POLICY
+  secret: false
+  default: "disabled"
+  description: Deployment SSO just-in-time user policy
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_DEFAULT_ROLE
+  secret: false
+  default: "member"
+  description: Default organization role used by SSO JIT membership creation
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_ALLOWED_DOMAINS
+  secret: false
+  default: ""
+  description: Comma-separated email domains accepted for deployment SSO
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_ISSUER_URL
+  secret: false
+  default: ""
+  description: OIDC issuer URL used for discovery and issuer pinning
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_DISCOVERY_URL
+  secret: false
+  default: ""
+  description: Optional explicit OIDC discovery document URL
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_AUTHORIZATION_ENDPOINT
+  secret: false
+  default: ""
+  description: Optional static OIDC authorization endpoint
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT
+  secret: false
+  default: ""
+  description: Optional static OIDC token endpoint
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_JWKS_URI
+  secret: false
+  default: ""
+  description: Optional static OIDC JWKS URI
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_USERINFO_ENDPOINT
+  secret: false
+  default: ""
+  description: Optional OIDC userinfo endpoint
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_CLIENT_ID
+  secret: false
+  default: ""
+  description: OIDC client ID for deployment SSO
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_CLIENT_SECRET
+  secret: true
+  default: ""
+  description: OIDC client secret for deployment SSO
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_SCOPES
+  secret: false
+  default: "openid email profile"
+  description: Space- or comma-separated OIDC scopes requested for SSO
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
+  secret: false
+  default: "client_secret_basic"
+  description: OIDC token endpoint auth method: client_secret_basic, client_secret_post, or none
+  tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS
+  secret: false
+  default: "false"
+  description: Allows OIDC provider URLs to use HTTP or private hosts for trusted local/private IdPs
+  tags: [local-dev, self-hosted]
+
+# ═══════════════════════════════════════════════════════════════════════
 # Server: GitHub OAuth
 # ═══════════════════════════════════════════════════════════════════════
 

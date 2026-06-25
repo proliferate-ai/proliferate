@@ -1,16 +1,24 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { takeDevDesktopHandoff } from "@/lib/access/cloud/dev-desktop-handoff";
+import {
+  markDevDesktopHandoffOpened,
+  takeDevDesktopHandoff,
+} from "@/lib/access/cloud/dev-desktop-handoff";
+import {
+  isMainTauriWebviewAvailable,
+  revealCurrentWindow,
+} from "@/lib/access/tauri/window";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 
 const DEV_HANDOFF_POLL_MS = 1000;
+const handledDevHandoffIds = new Set<string>();
 
 // Owns local-dev browser-to-desktop handoffs when OS scheme registration is unavailable.
 export function useDevDesktopHandoff() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!import.meta.env.DEV) {
+    if (!import.meta.env.DEV || !isMainTauriWebviewAvailable()) {
       return;
     }
 
@@ -37,9 +45,19 @@ export function useDevDesktopHandoff() {
           if (!handoff || cancelled) {
             return;
           }
+          if (handledDevHandoffIds.has(handoff.id)) {
+            return;
+          }
+          handledDevHandoffIds.add(handoff.id);
           const target = desktopNavigationTarget(handoff.url);
           if (target) {
             navigate(target);
+            void markDevDesktopHandoffOpened(handoff.id).catch(() => {
+              // The route already opened; the browser retry state is dev-only feedback.
+            });
+            void revealCurrentWindow().catch(() => {
+              // The handoff should still navigate if the OS refuses focus.
+            });
           }
         })
         .catch(() => {
@@ -63,4 +81,3 @@ export function useDevDesktopHandoff() {
     };
   }, [navigate]);
 }
-

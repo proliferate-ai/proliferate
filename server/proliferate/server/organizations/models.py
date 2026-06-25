@@ -74,6 +74,12 @@ class OrganizationResponse(OrganizationBaseModel):
     membership: OrganizationMembershipResponse | None = None
 
 
+class OrganizationMemberAuthMethodResponse(OrganizationBaseModel):
+    provider: str
+    label: str
+    brand_label: str | None = Field(default=None, alias="brandLabel")
+
+
 class OrganizationMemberResponse(OrganizationBaseModel):
     membership_id: str = Field(alias="membershipId")
     user_id: str = Field(alias="userId")
@@ -84,6 +90,10 @@ class OrganizationMemberResponse(OrganizationBaseModel):
     status: OrganizationMembershipStatus
     joined_at: str = Field(alias="joinedAt")
     removed_at: str | None = Field(default=None, alias="removedAt")
+    auth_methods: list[OrganizationMemberAuthMethodResponse] = Field(
+        default_factory=list,
+        alias="authMethods",
+    )
 
 
 class OrganizationInvitationResponse(OrganizationBaseModel):
@@ -168,6 +178,14 @@ def member_response(record: MemberRecord) -> OrganizationMemberResponse:
         status=membership.status,  # type: ignore[arg-type]
         joined_at=_iso(membership.joined_at) or "",
         removed_at=_iso(membership.removed_at),
+        auth_methods=[
+            OrganizationMemberAuthMethodResponse(
+                provider=method.provider,
+                label=method.label,
+                brand_label=method.brand_label,
+            )
+            for method in record.auth_methods
+        ],
     )
 
 

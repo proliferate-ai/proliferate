@@ -37,11 +37,19 @@ class MembershipRecord:
 
 
 @dataclass(frozen=True)
+class MemberAuthMethodRecord:
+    provider: str
+    label: str
+    brand_label: str | None = None
+
+
+@dataclass(frozen=True)
 class MemberRecord:
     membership: MembershipRecord
     email: str
     display_name: str | None
     avatar_url: str | None
+    auth_methods: tuple[MemberAuthMethodRecord, ...] = ()
 
 
 @dataclass(frozen=True)

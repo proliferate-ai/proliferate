@@ -6,9 +6,18 @@ export function canUseDevDesktopHandoff(): boolean {
   return import.meta.env.DEV && LOCALHOST_NAMES.has(window.location.hostname);
 }
 
-export async function queueDevDesktopHandoff(url: string): Promise<void> {
+export interface DevDesktopHandoffRecord {
+  id: string;
+  url: string;
+  createdAt: string;
+  openedAt?: string | null;
+}
+
+export async function queueDevDesktopHandoff(
+  url: string,
+): Promise<DevDesktopHandoffRecord | null> {
   if (!canUseDevDesktopHandoff()) {
-    return;
+    return null;
   }
 
   const endpoint = new URL("/v1/dev/desktop-handoff", webEnv.apiBaseUrl);
@@ -19,7 +28,32 @@ export async function queueDevDesktopHandoff(url: string): Promise<void> {
     },
     body: JSON.stringify({ url }),
   });
-  if (!response.ok && response.status !== 404) {
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
     throw new Error("Could not queue the local Desktop handoff.");
   }
+  return await response.json() as DevDesktopHandoffRecord;
+}
+
+export async function getDevDesktopHandoff(
+  id: string,
+  signal?: AbortSignal,
+): Promise<DevDesktopHandoffRecord | null> {
+  const endpoint = new URL(`/v1/dev/desktop-handoff/${id}`, webEnv.apiBaseUrl);
+  const response = await fetch(endpoint, {
+    method: "GET",
+    headers: {
+      "Cache-Control": "no-store",
+    },
+    signal,
+  });
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error("Could not read the local Desktop handoff.");
+  }
+  return await response.json() as DevDesktopHandoffRecord;
 }

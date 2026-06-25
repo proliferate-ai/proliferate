@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Protocol
 from uuid import UUID
@@ -16,6 +16,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_OWNER,
 )
 from proliferate.db.store import organization_invitations as invitation_store
+from proliferate.db.store import organization_member_auth_methods as member_auth_method_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.organization_records import (
     InvitationRecord,
@@ -251,7 +252,16 @@ async def list_members(
     db: AsyncSession,
     org_user: CurrentOrgUser,
 ) -> list[MemberRecord]:
-    return await organization_store.list_organization_members(db, org_user.organization_id)
+    members = await organization_store.list_organization_members(db, org_user.organization_id)
+    auth_methods = await member_auth_method_store.list_member_auth_methods(
+        db,
+        organization_id=org_user.organization_id,
+        user_ids=[member.membership.user_id for member in members],
+    )
+    return [
+        replace(member, auth_methods=tuple(auth_methods.get(member.membership.user_id, ())))
+        for member in members
+    ]
 
 
 async def update_membership(

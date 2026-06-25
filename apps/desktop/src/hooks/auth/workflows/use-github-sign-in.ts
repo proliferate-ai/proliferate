@@ -3,7 +3,10 @@ import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
-import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
+import {
+  isAbortError,
+  type GitHubDesktopSignInOptions,
+} from "@/lib/integrations/auth/proliferate-auth";
 
 export interface UseGitHubSignInResult {
   signIn: (options?: GitHubDesktopSignInOptions) => Promise<void>;
@@ -13,6 +16,7 @@ export interface UseGitHubSignInResult {
   signInChecking: boolean;
   signInUnavailableDescription: string;
   clearError: () => void;
+  cancelSignIn: () => Promise<void>;
 }
 
 // Owns GitHub sign-in form state and submit callback. Does not own auth availability access.
@@ -21,7 +25,7 @@ export interface UseGitHubSignInResult {
 // otherwise the first-load pending window flashes a "checking…" state during the loading -> auth
 // transition. The query self-guards on control-plane reachability.
 export function useGitHubSignIn(): UseGitHubSignInResult {
-  const { signInWithGitHub } = useAuthActions();
+  const { cancelAuthFlow, signInWithGitHub } = useAuthActions();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,
@@ -47,6 +51,10 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     try {
       await signInWithGitHub(options);
     } catch (err) {
+      if (isAbortError(err)) {
+        setError(null);
+        throw err;
+      }
       setError(err instanceof Error ? err.message : "GitHub sign-in failed");
       throw err;
     } finally {
@@ -58,6 +66,12 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     setError(null);
   }, []);
 
+  const cancelSignIn = useCallback(async () => {
+    setSubmitting(false);
+    setError(null);
+    await cancelAuthFlow("GitHub sign-in cancelled.");
+  }, [cancelAuthFlow]);
+
   return {
     signIn,
     submitting,
@@ -66,5 +80,6 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     signInChecking,
     signInUnavailableDescription,
     clearError,
+    cancelSignIn,
   };
 }

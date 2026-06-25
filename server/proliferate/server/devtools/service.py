@@ -14,11 +14,12 @@ _HANDOFF_TTL = timedelta(minutes=10)
 _MAX_HANDOFFS = 20
 
 
-@dataclass(frozen=True)
+@dataclass
 class DevDesktopHandoffRecord:
     id: str
     url: str
     created_at: datetime
+    opened_at: datetime | None = None
 
 
 _handoffs: deque[DevDesktopHandoffRecord] = deque()
@@ -45,7 +46,28 @@ async def take_desktop_handoff() -> DevDesktopHandoffRecord | None:
         _prune_expired_locked()
         if not _handoffs:
             return None
-        return _handoffs.popleft()
+        # Broadcast the latest handoff so one dev renderer cannot steal it from another.
+        return _handoffs[-1]
+
+
+async def get_desktop_handoff(handoff_id: str) -> DevDesktopHandoffRecord | None:
+    async with _handoff_lock:
+        _prune_expired_locked()
+        for record in _handoffs:
+            if record.id == handoff_id:
+                return record
+        return None
+
+
+async def mark_desktop_handoff_opened(handoff_id: str) -> DevDesktopHandoffRecord | None:
+    async with _handoff_lock:
+        _prune_expired_locked()
+        for record in _handoffs:
+            if record.id == handoff_id:
+                if record.opened_at is None:
+                    record.opened_at = datetime.now(UTC)
+                return record
+        return None
 
 
 def _validate_desktop_handoff_url(url: str) -> str:

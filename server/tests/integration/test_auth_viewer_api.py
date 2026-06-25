@@ -5,7 +5,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, User
+from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, SsoIdentity, User
 from proliferate.utils.crypto import encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -143,6 +143,56 @@ async def test_auth_viewer_allows_multiple_google_identities_for_one_user(
     assert [row["accountEmail"] for row in google_rows] == [
         "google-0@example.com",
         "google-1@example.com",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_auth_viewer_includes_sso_identity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user_id, access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-sso@example.com",
+    )
+    db_session.add(
+        SsoIdentity(
+            user_id=uuid.UUID(user_id),
+            organization_id=None,
+            connection_id=None,
+            connection_key="deployment",
+            protocol="oidc",
+            provider_subject="sso-subject",
+            email="viewer-sso@example.com",
+            email_verified=True,
+            display_name="Viewer SSO",
+            linked_at=datetime.now(UTC),
+            last_login_at=datetime.now(UTC),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        "/v1/auth/viewer",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    sso_rows = [
+        provider for provider in payload["linkedProviders"] if provider["provider"] == "sso"
+    ]
+    assert sso_rows == [
+        {
+            "provider": "sso",
+            "connected": True,
+            "accountEmail": "viewer-sso@example.com",
+            "accountId": "sso-subject",
+            "displayName": "SSO",
+        }
     ]
 
 

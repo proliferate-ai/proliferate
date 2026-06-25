@@ -49,17 +49,15 @@ describe("getGitHubStatusLabel", () => {
       getGitHubStatusLabel({
         cloudSignInChecking: false,
         devAuthBypassed: false,
-        isAuthenticated: true,
         localMode: false,
         signInUnavailable: false,
       }),
-    ).toBe("Username unavailable");
+    ).toBe("Not connected");
 
     expect(
       getGitHubStatusLabel({
         cloudSignInChecking: false,
         devAuthBypassed: false,
-        isAuthenticated: false,
         localMode: true,
         signInUnavailable: false,
       }),
@@ -68,7 +66,7 @@ describe("getGitHubStatusLabel", () => {
 });
 
 describe("getAccountActionDescription", () => {
-  it("uses reconnect copy based on whether a GitHub login is available", () => {
+  it("uses GitHub connection copy based on whether GitHub is linked", () => {
     expect(
       getAccountActionDescription({
         devAuthBypassed: false,
@@ -76,7 +74,7 @@ describe("getAccountActionDescription", () => {
         localMode: false,
         signInUnavailable: false,
         signedInWhileCloudUnavailable: false,
-        githubLogin: "octocat",
+        githubConnected: true,
       }),
     ).toContain("manage repository access");
 
@@ -87,9 +85,9 @@ describe("getAccountActionDescription", () => {
         localMode: false,
         signInUnavailable: false,
         signedInWhileCloudUnavailable: false,
-        githubLogin: null,
+        githubConnected: false,
       }),
-    ).toContain("refresh account details");
+    ).toContain("Connect GitHub");
   });
 });
 
