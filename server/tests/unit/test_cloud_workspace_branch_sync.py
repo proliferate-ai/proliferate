@@ -18,12 +18,11 @@ async def test_branch_sync_returns_canonical_managed_projection_on_duplicate_bra
     user_id = uuid4()
     sandbox_profile_id = uuid4()
     target_id = uuid4()
-    runtime_environment_id = uuid4()
     stale = SimpleNamespace(
         id=uuid4(),
         git_branch="feature/stale",
         archived_at=None,
-        runtime_environment_id=runtime_environment_id,
+        runtime_environment_id=None,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
         git_provider="github",
@@ -33,7 +32,7 @@ async def test_branch_sync_returns_canonical_managed_projection_on_duplicate_bra
     canonical = SimpleNamespace(
         id=uuid4(),
         git_branch="main",
-        runtime_environment_id=runtime_environment_id,
+        runtime_environment_id=None,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
         git_provider="github",
@@ -59,7 +58,11 @@ async def test_branch_sync_returns_canonical_managed_projection_on_duplicate_bra
         raise AssertionError("managed duplicate branch sync should not update the stale row")
 
     monkeypatch.setattr(service, "cloud_workspace_user_can_interact_with_db", can_interact)
-    monkeypatch.setattr(service, "get_active_cloud_workspace_for_runtime_branch", get_conflict)
+    monkeypatch.setattr(
+        service,
+        "get_active_cloud_workspace_for_managed_profile_branch",
+        get_conflict,
+    )
     monkeypatch.setattr(service, "archive_cloud_workspace_record", archive)
     monkeypatch.setattr(service, "_build_workspace_detail_for_request", build_detail)
     monkeypatch.setattr(service, "update_workspace_branch", update_branch)
@@ -80,11 +83,10 @@ async def test_branch_sync_rejects_unrelated_duplicate_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid4()
-    runtime_environment_id = uuid4()
     stale = SimpleNamespace(
         id=uuid4(),
         git_branch="feature/stale",
-        runtime_environment_id=runtime_environment_id,
+        runtime_environment_id=None,
         sandbox_profile_id=uuid4(),
         target_id=uuid4(),
         git_provider="github",
@@ -94,7 +96,7 @@ async def test_branch_sync_rejects_unrelated_duplicate_branch(
     conflict = SimpleNamespace(
         id=uuid4(),
         git_branch="main",
-        runtime_environment_id=runtime_environment_id,
+        runtime_environment_id=None,
         sandbox_profile_id=uuid4(),
         target_id=uuid4(),
         git_provider="github",
@@ -112,7 +114,11 @@ async def test_branch_sync_rejects_unrelated_duplicate_branch(
         raise AssertionError("unrelated conflicts must not archive")
 
     monkeypatch.setattr(service, "cloud_workspace_user_can_interact_with_db", can_interact)
-    monkeypatch.setattr(service, "get_active_cloud_workspace_for_runtime_branch", get_conflict)
+    monkeypatch.setattr(
+        service,
+        "get_active_cloud_workspace_for_managed_profile_branch",
+        get_conflict,
+    )
     monkeypatch.setattr(service, "archive_cloud_workspace_record", archive)
 
     with pytest.raises(CloudApiError) as error:
@@ -134,14 +140,13 @@ async def test_branch_sync_redirects_archived_managed_projection_to_canonical_wo
     user_id = uuid4()
     sandbox_profile_id = uuid4()
     target_id = uuid4()
-    runtime_environment_id = uuid4()
     archived = SimpleNamespace(
         id=uuid4(),
         git_branch="feature/stale",
         archived_at=object(),
         owner_scope="personal",
         owner_user_id=user_id,
-        runtime_environment_id=runtime_environment_id,
+        runtime_environment_id=None,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
         git_provider="github",
@@ -154,7 +159,7 @@ async def test_branch_sync_redirects_archived_managed_projection_to_canonical_wo
         archived_at=None,
         owner_scope="personal",
         owner_user_id=user_id,
-        runtime_environment_id=runtime_environment_id,
+        runtime_environment_id=None,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
         git_provider="github",
@@ -179,7 +184,11 @@ async def test_branch_sync_redirects_archived_managed_projection_to_canonical_wo
 
     monkeypatch.setattr(service, "cloud_workspace_user_can_interact_with_db", can_interact)
     monkeypatch.setattr(service, "get_cloud_workspace_by_id", get_workspace)
-    monkeypatch.setattr(service, "get_active_cloud_workspace_for_runtime_branch", get_conflict)
+    monkeypatch.setattr(
+        service,
+        "get_active_cloud_workspace_for_managed_profile_branch",
+        get_conflict,
+    )
     monkeypatch.setattr(service, "archive_cloud_workspace_record", archive)
     monkeypatch.setattr(service, "_build_workspace_detail_for_request", build_detail)
 

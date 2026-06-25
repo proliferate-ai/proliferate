@@ -20,10 +20,10 @@ export function cloudWorkspaceConnectionQueryOptions(workspaceId: string) {
   return queryOptions<CloudConnectionInfo>({
     queryKey: cloudWorkspaceConnectionKey(workspaceId),
     queryFn: () => getResolvedCloudWorkspaceConnection(workspaceId),
-    staleTime: Number.POSITIVE_INFINITY,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     retry: (failureCount, error) =>
       failureCount < CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES
       && isRetryableCloudWorkspaceConnectionError(error),

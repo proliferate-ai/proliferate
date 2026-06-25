@@ -119,3 +119,25 @@ def test_workspace_summary_drops_malformed_origin(monkeypatch: pytest.MonkeyPatc
     assert warnings[0][0] == "invalid cloud workspace origin JSON"
     assert warnings[0][1]["extra"]["table"] == "cloud_workspace"
     assert warnings[0][1]["extra"]["row_id"] == str(workspace.id)
+
+
+def test_managed_workspace_summary_marks_ready_runtime_running_without_target_heartbeat() -> None:
+    workspace = _workspace(origin_json=None)
+    workspace.status = "ready"
+    workspace.target_id = uuid.uuid4()
+    workspace.anyharness_workspace_id = "workspace-1"
+
+    payload = workspace_summary_payload(workspace, target_kind=None, target_online=False)
+
+    assert payload.runtime.status == "running"
+    assert payload.sandbox_type == "managed_personal"
+
+
+def test_managed_workspace_summary_marks_materializing_runtime_provisioning() -> None:
+    workspace = _workspace(origin_json=None)
+    workspace.status = "materializing"
+    workspace.target_id = uuid.uuid4()
+
+    payload = workspace_summary_payload(workspace, target_kind=None, target_online=False)
+
+    assert payload.runtime.status == "provisioning"

@@ -30,6 +30,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
+import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
 
 const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
 
@@ -152,8 +153,8 @@ export function useWorkspaceMetadataSync() {
       return;
     }
 
-    const { runtimeUrl: cloudRuntimeUrl, accessToken, anyharnessWorkspaceId } =
-      selectedCloudRuntime.connectionInfo;
+    const connectionInfo = selectedCloudRuntime.connectionInfo;
+    const { anyharnessWorkspaceId } = connectionInfo;
     if (!anyharnessWorkspaceId) {
       return;
     }
@@ -175,6 +176,8 @@ export function useWorkspaceMetadataSync() {
 
       syncingCloudDisplayNameRef.current = syncKey;
       try {
+        const { runtimeUrl: cloudRuntimeUrl, accessToken } =
+          await withFreshManagedSandboxGatewayAccessToken(connectionInfo);
         const runtimeWorkspace = await getWorkspace({
           runtimeUrl: cloudRuntimeUrl,
           authToken: accessToken,

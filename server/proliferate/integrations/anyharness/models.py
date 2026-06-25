@@ -35,6 +35,14 @@ class RemoteAgentInstallResult:
 
 
 @dataclass(frozen=True)
+class RemoteAgentAuthConfigApplyResult:
+    applied: bool
+    revision: int
+    status: str
+    selection_count: int
+
+
+@dataclass(frozen=True)
 class ResolvedRemoteWorkspace:
     workspace_id: str
     repo_root_id: str

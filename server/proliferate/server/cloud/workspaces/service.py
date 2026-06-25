@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity, OwnerSelection
 from proliferate.db.store.cloud_workspaces import (
+    get_active_cloud_workspace_for_managed_profile_branch,
     get_active_cloud_workspace_for_runtime_branch,
     get_cloud_workspace_by_id,
     list_claimed_organization_workspaces_for_user,
@@ -165,26 +166,49 @@ async def sync_cloud_workspace_branch(
     if workspace.git_branch == cleaned_branch_name:
         return await _build_workspace_detail_for_request(db, workspace)
 
-    if workspace.runtime_environment_id is not None:
-        conflict = await get_active_cloud_workspace_for_runtime_branch(
-            db,
-            runtime_environment_id=workspace.runtime_environment_id,
-            git_branch=cleaned_branch_name,
-            exclude_workspace_id=workspace.id,
+    conflict = await _find_branch_sync_conflict(db, workspace, cleaned_branch_name)
+    if conflict is not None:
+        if _is_managed_workspace_projection_sibling(workspace, conflict):
+            if workspace.archived_at is None:
+                await archive_cloud_workspace_record(db, workspace=workspace)
+            return await _build_workspace_detail_for_request(db, conflict)
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{cleaned_branch_name}'.",
+            status_code=409,
         )
-        if conflict is not None:
-            if _is_managed_workspace_projection_sibling(workspace, conflict):
-                if workspace.archived_at is None:
-                    await archive_cloud_workspace_record(db, workspace=workspace)
-                return await _build_workspace_detail_for_request(db, conflict)
-            raise CloudApiError(
-                "cloud_branch_already_exists",
-                f"A cloud workspace already exists for branch '{cleaned_branch_name}'.",
-                status_code=409,
-            )
 
     workspace = await update_workspace_branch(db, workspace, cleaned_branch_name)
     return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def _find_branch_sync_conflict(
+    db: AsyncSession,
+    workspace: object,
+    branch_name: str,
+) -> object | None:
+    runtime_environment_id = getattr(workspace, "runtime_environment_id", None)
+    if runtime_environment_id is not None:
+        return await get_active_cloud_workspace_for_runtime_branch(
+            db,
+            runtime_environment_id=runtime_environment_id,
+            git_branch=branch_name,
+            exclude_workspace_id=workspace.id,
+        )
+    sandbox_profile_id = getattr(workspace, "sandbox_profile_id", None)
+    target_id = getattr(workspace, "target_id", None)
+    if sandbox_profile_id is None or target_id is None:
+        return None
+    return await get_active_cloud_workspace_for_managed_profile_branch(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+        git_provider=workspace.git_provider,
+        git_owner=workspace.git_owner,
+        git_repo_name=workspace.git_repo_name,
+        git_branch=branch_name,
+        exclude_workspace_id=workspace.id,
+    )
 
 
 async def _load_workspace_for_branch_sync(

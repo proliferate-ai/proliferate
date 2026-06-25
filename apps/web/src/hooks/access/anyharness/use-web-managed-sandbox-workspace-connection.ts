@@ -12,9 +12,12 @@ export function useWebManagedSandboxWorkspaceConnection(
   const { token } = useAuthToken();
   const client = useCloudClient();
 
-  return useCallback(async (): Promise<AnyHarnessResolvedConnection> => {
+  return useCallback(async (workspaceId: string): Promise<AnyHarnessResolvedConnection> => {
     if (!workspace) {
       throw new Error("Cloud runtime unavailable.");
+    }
+    if (workspace.id !== workspaceId) {
+      throw new Error("Requested cloud workspace is not loaded.");
     }
     const runtime = await resolveWebManagedSandboxWorkspaceConnection({
       workspace,

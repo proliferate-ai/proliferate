@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.managed_sandboxes import (
     ensure_personal_managed_sandbox,
     load_personal_managed_sandbox,
     mark_managed_sandbox_ready,
 )
+from proliferate.integrations.anyharness import RemoteAgentAuthConfigApplyResult
 from proliferate.integrations.sandbox import (
     RuntimeEndpoint,
     SandboxHandle,
@@ -22,6 +24,7 @@ from proliferate.integrations.sandbox import (
     SandboxRuntimeContext,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.agent_auth.models import DesktopAgentAuthConfigApplyResponse
 from proliferate.server.cloud.managed_sandboxes import service
 
 
@@ -52,6 +55,7 @@ class _FakeSandboxProvider:
     def __init__(self) -> None:
         self.create_calls = 0
         self.destroyed: list[str] = []
+        self.writes: list[tuple[str, str]] = []
 
     async def create_sandbox(self, *, metadata: dict[str, str] | None = None) -> SandboxHandle:
         self.create_calls += 1
@@ -93,7 +97,8 @@ class _FakeSandboxProvider:
         )
 
     async def write_file(self, sandbox: Any, path: str, content: bytes | str) -> None:
-        del sandbox, path, content
+        del sandbox
+        self.writes.append((path, content.decode() if isinstance(content, bytes) else content))
 
     async def destroy_sandbox(self, sandbox_id: str) -> None:
         self.destroyed.append(sandbox_id)
@@ -108,6 +113,7 @@ async def test_ensure_persists_e2b_id_when_runtime_launch_fails(
     provider = _FakeSandboxProvider()
     monkeypatch.setattr(service.settings, "e2b_template_name", "test-template")
     monkeypatch.setattr(service, "get_configured_sandbox_provider", lambda: provider)
+    monkeypatch.setattr(service, "check_runtime_bundle_preinstalled", _async_return(True))
 
     async def _command_ok(*_args: object, **_kwargs: object) -> SimpleNamespace:
         return SimpleNamespace(exit_code=0, stdout="", stderr="")
@@ -171,6 +177,194 @@ async def test_destroy_failure_does_not_hide_live_provider_sandbox(
     assert loaded.status == "error"
     assert loaded.destroyed_at is None
     assert loaded.e2b_sandbox_id == "e2b-destroy-fails"
+
+
+def _async_return(value: object):
+    async def _inner(*_args: object, **_kwargs: object) -> object:
+        return value
+
+    return _inner
+
+
+@pytest.mark.asyncio
+async def test_managed_runtime_stages_stale_bundle_before_launch(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await _create_user(db_session)
+    provider = _FakeSandboxProvider()
+    calls: list[str] = []
+
+    async def _command_ok(*_args: object, **kwargs: object) -> SimpleNamespace:
+        calls.append(str(kwargs.get("label")))
+        return SimpleNamespace(exit_code=0, stdout="", stderr="")
+
+    async def _stage_bundle(*_args: object, **_kwargs: object) -> dict[str, object]:
+        calls.append("stage_runtime_bundle")
+        return {"anyharness": object(), "worker": object(), "supervisor": object()}
+
+    monkeypatch.setattr(service.settings, "e2b_template_name", "test-template")
+    monkeypatch.setattr(service, "get_configured_sandbox_provider", lambda: provider)
+    monkeypatch.setattr(service, "run_sandbox_command_logged", _command_ok)
+    monkeypatch.setattr(service, "check_runtime_bundle_preinstalled", _async_return(False))
+    monkeypatch.setattr(service, "stage_runtime_bundle", _stage_bundle)
+    monkeypatch.setattr(service, "wait_for_runtime_health", _async_return(None))
+    monkeypatch.setattr(service, "verify_runtime_auth_enforced", _async_return(None))
+    monkeypatch.setattr(service, "_prepare_managed_runtime_integrations", _async_return(None))
+
+    ready = await service.ensure_managed_sandbox_ready(db_session, user)
+
+    assert ready.status == "ready"
+    assert "managed_runtime_stop_previous" in calls
+    assert "stage_runtime_bundle" in calls
+    assert calls.index("managed_runtime_stop_previous") < calls.index("stage_runtime_bundle")
+    assert calls.index("stage_runtime_bundle") < calls.index("managed_runtime_launch")
+
+
+@pytest.mark.asyncio
+async def test_managed_runtime_launch_applies_target_auth_config_and_agents(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await _create_user(db_session)
+    provider = _FakeSandboxProvider()
+    calls: list[tuple[str, object]] = []
+    revision_id = uuid.uuid4()
+
+    async def _command_ok(*_args: object, **kwargs: object) -> SimpleNamespace:
+        calls.append(("command", kwargs.get("label")))
+        return SimpleNamespace(exit_code=0, stdout="", stderr="")
+
+    async def _selected_agent_kinds(*_args: object, **_kwargs: object) -> tuple[str, ...]:
+        return ("claude",)
+
+    async def _agent_auth_apply_request(*_args: object, **_kwargs: object):
+        calls.append(("agent_auth_request", True))
+        return DesktopAgentAuthConfigApplyResponse.model_validate(
+            {
+                "applyRequest": {
+                    "externalAuthScope": {
+                        "provider": "proliferate-cloud",
+                        "id": "profile-id",
+                        "targetId": "target-id",
+                    },
+                    "revision": 0,
+                    "selections": [],
+                },
+                "syncedFiles": [
+                    {
+                        "relativePath": ".claude/cloud-auth.json",
+                        "content": '{"ok":true}',
+                    }
+                ],
+            }
+        )
+
+    async def _apply_agent_auth_config(
+        runtime_url: str,
+        access_token: str,
+        body: dict[str, object],
+    ) -> RemoteAgentAuthConfigApplyResult:
+        calls.append(("agent_auth_apply", (runtime_url, bool(access_token), body)))
+        return RemoteAgentAuthConfigApplyResult(
+            applied=True,
+            revision=int(body["revision"]),
+            status="applied",
+            selection_count=len(body.get("selections", [])),
+        )
+
+    async def _refresh_runtime_config(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        calls.append(("runtime_config_refresh", True))
+        return SimpleNamespace(
+            current_revision=SimpleNamespace(
+                revision_id=str(revision_id),
+                sequence=3,
+            )
+        )
+
+    async def _runtime_config_body(*_args: object, **kwargs: object) -> dict[str, object]:
+        calls.append(("runtime_config_body", True))
+        calls.append(("runtime_config_source", kwargs.get("source")))
+        return {"revision": {"id": str(revision_id), "sequence": 3}}
+
+    async def _apply_runtime_config(
+        runtime_url: str,
+        access_token: str,
+        body: dict[str, object],
+        *,
+        workspace_id: uuid.UUID | None = None,
+    ) -> dict[str, object]:
+        calls.append(
+            ("runtime_config_apply", (runtime_url, bool(access_token), body, workspace_id))
+        )
+        return {"status": "applied", "applied": True}
+
+    async def _reconcile_agents(
+        runtime_url: str,
+        access_token: str,
+        *,
+        workspace_id: uuid.UUID | None = None,
+        required_agent_kinds: tuple[str, ...],
+        auth_overlay_agent_kinds: tuple[str, ...],
+    ) -> list[str]:
+        calls.append(
+            (
+                "reconcile_agents",
+                (
+                    runtime_url,
+                    bool(access_token),
+                    workspace_id,
+                    required_agent_kinds,
+                    auth_overlay_agent_kinds,
+                ),
+            )
+        )
+        return list(required_agent_kinds)
+
+    monkeypatch.setattr(service.settings, "e2b_template_name", "test-template")
+    monkeypatch.setattr(service, "get_configured_sandbox_provider", lambda: provider)
+    monkeypatch.setattr(service, "run_sandbox_command_logged", _command_ok)
+    monkeypatch.setattr(service, "check_runtime_bundle_preinstalled", _async_return(True))
+    monkeypatch.setattr(service, "wait_for_runtime_health", _async_return(None))
+    monkeypatch.setattr(service, "verify_runtime_auth_enforced", _async_return(None))
+    monkeypatch.setattr(service, "selected_agent_auth_agent_kinds", _selected_agent_kinds)
+    monkeypatch.setattr(
+        service,
+        "desktop_agent_auth_config_apply_request",
+        _agent_auth_apply_request,
+    )
+    monkeypatch.setattr(service, "apply_agent_auth_config", _apply_agent_auth_config)
+    monkeypatch.setattr(service, "runtime_config_fragment_for_profile", _async_return(None))
+    monkeypatch.setattr(service, "refresh_profile_runtime_config", _refresh_runtime_config)
+    monkeypatch.setattr(service, "runtime_config_apply_request_for_revision", _runtime_config_body)
+    monkeypatch.setattr(service, "apply_remote_runtime_config", _apply_runtime_config)
+    monkeypatch.setattr(service, "reconcile_remote_agents", _reconcile_agents)
+
+    await service.ensure_managed_sandbox_ready(db_session, user)
+
+    profile = await sandbox_profile_store.ensure_personal_sandbox_profile(
+        db_session,
+        user_id=user.id,
+        created_by_user_id=user.id,
+    )
+    assert profile.primary_target_id is not None
+
+    launch_script = next(
+        content for path, content in provider.writes if path.endswith("/start-anyharness.sh")
+    )
+    assert f"ANYHARNESS_RUNTIME_TARGET_ID={profile.primary_target_id}" in launch_script
+    assert (
+        "/home/user/.claude/cloud-auth.json",
+        '{"ok":true}',
+    ) in provider.writes
+    assert ("agent_auth_request", True) in calls
+    assert any(name == "agent_auth_apply" for name, _payload in calls)
+    assert ("runtime_config_source", "desktop") in calls
+    assert any(name == "runtime_config_apply" for name, _payload in calls)
+    assert any(
+        name == "reconcile_agents" and payload[3] == ("claude",) and payload[4] == ("claude",)
+        for name, payload in calls
+    )
 
 
 @pytest.mark.asyncio

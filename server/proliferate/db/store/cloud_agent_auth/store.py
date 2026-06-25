@@ -105,6 +105,7 @@ from proliferate.db.store.cloud_agent_auth.target_states import (
     mark_runtime_config_failed,
     mark_runtime_config_pending,
     record_runtime_config_command,
+    record_runtime_config_direct_status,
     record_runtime_config_worker_status,
     upsert_target_state,
 )
@@ -187,6 +188,7 @@ __all__ = [
     "mark_selection_invalid",
     "record_audit_event",
     "record_runtime_config_command",
+    "record_runtime_config_direct_status",
     "record_runtime_config_worker_status",
     "release_agent_gateway_reconciler_lock",
     "revoke_credential",

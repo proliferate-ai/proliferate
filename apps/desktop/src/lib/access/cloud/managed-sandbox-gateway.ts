@@ -24,6 +24,25 @@ export type ManagedSandboxGatewayConnectionInfo = CloudConnectionInfo & {
   anyharnessRepoRootId: string | null;
 };
 
+export function isManagedSandboxGatewayConnectionInfo(
+  connection: CloudConnectionInfo | null | undefined,
+): connection is ManagedSandboxGatewayConnectionInfo {
+  return (connection as { runtimeAccessKind?: string } | null | undefined)?.runtimeAccessKind
+    === "proliferate-gateway";
+}
+
+export async function withFreshManagedSandboxGatewayAccessToken<
+  Connection extends CloudConnectionInfo,
+>(connection: Connection): Promise<Connection> {
+  if (!isManagedSandboxGatewayConnectionInfo(connection)) {
+    return connection;
+  }
+  return {
+    ...connection,
+    accessToken: await getDesktopCloudAccessToken(),
+  };
+}
+
 export async function resolveManagedSandboxGatewayConnectionForRepo(input: {
   gitOwner: string;
   gitRepoName: string;
