@@ -35,10 +35,10 @@ export function SidebarNavRow({
       className={`h-[30px] gap-2 px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex size-5 shrink-0 items-center justify-center">
+      <div className="flex size-4 shrink-0 items-center justify-center">
         {icon}
       </div>
-      <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-current">
+      <div className="flex min-w-0 flex-1 items-center text-sm leading-5 text-current">
         <span className="truncate">{label}</span>
       </div>
       {status ? (
