@@ -160,6 +160,9 @@ _SSO_CALLBACK_ERROR_CODES = {
     "SSO connection is not enabled.": "sso_connection_disabled",
     "SSO did not return an email address.": "sso_email_missing",
     "SSO email address is not verified.": "sso_email_unverified",
+    "SSO organization is missing.": "sso_organization_missing",
+    "SSO user is not a team member.": "sso_user_not_team_member",
+    "User already belongs to another team.": "sso_user_already_in_team",
     "User is inactive.": "sso_user_inactive",
 }
 

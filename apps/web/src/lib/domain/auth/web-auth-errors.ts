@@ -99,6 +99,33 @@ const SSO_ERROR_PRESENTATIONS = new Map<
       statusLabel: "SSO unavailable",
     },
   ],
+  [
+    "sso_user_not_team_member",
+    {
+      title: "Invite required",
+      description:
+        "This SSO connection only accepts existing organization members. Ask an admin for an invitation, or enable automatic member creation for this connection.",
+      statusLabel: "SSO access denied",
+    },
+  ],
+  [
+    "sso_user_already_in_team",
+    {
+      title: "Already in another organization",
+      description:
+        "This account already belongs to another organization. Use a different account or leave the other organization before joining this one.",
+      statusLabel: "SSO access denied",
+    },
+  ],
+  [
+    "sso_organization_missing",
+    {
+      title: "SSO setup issue",
+      description:
+        "This SSO connection is missing its organization link. Recreate the connection or contact support.",
+      statusLabel: "SSO setup issue",
+    },
+  ],
 ]);
 
 export function isWebBetaAuthErrorCode(code: string | null): boolean {

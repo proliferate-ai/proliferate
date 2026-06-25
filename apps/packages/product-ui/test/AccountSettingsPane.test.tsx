@@ -111,6 +111,30 @@ describe("AccountSettingsPane", () => {
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
   });
 
+  it("uses SSO brand labels for icons without changing the visible provider label", () => {
+    const { container } = render(
+      <AccountSettingsPane
+        displayName="Pablo"
+        email="pablo@example.com"
+        profileSummary="Ready."
+        githubLabel="@pablo"
+        providers={[
+          {
+            provider: "sso",
+            label: "SSO",
+            brandLabel: "Google SSO",
+            accountLabel: "pablo@proliferate.com",
+            connected: true,
+          },
+        ]}
+        actions={{}}
+      />,
+    );
+
+    expect(screen.getByText("SSO")).toBeTruthy();
+    expect(container.querySelector('[data-auth-provider-brand="google-sso"]')).toBeTruthy();
+  });
+
   it("keeps email password separate from linked providers", async () => {
     const setPassword = vi.fn();
 

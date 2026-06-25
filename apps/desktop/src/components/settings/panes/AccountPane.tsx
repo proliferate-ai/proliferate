@@ -273,6 +273,7 @@ function buildAccountProviderViews({
     accountEmail?: string | null;
     accountId?: string | null;
     displayName?: string | null;
+    brandLabel?: string | null;
   }>;
   googleAvailable: boolean;
   showProviders: boolean;
@@ -292,6 +293,7 @@ function buildAccountProviderViews({
   const providers: AccountProviderView[] = ssoAccounts.map((account) => ({
     provider: "sso" as const,
     label: account.displayName ?? "SSO",
+    brandLabel: account.brandLabel ?? account.displayName ?? null,
     accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
     connected: true,
   }));

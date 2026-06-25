@@ -21,6 +21,7 @@ export type AccountProviderKind = "github" | "google" | "apple" | "sso";
 export interface AccountProviderView {
   provider: AccountProviderKind;
   label: string;
+  brandLabel?: string | null;
   accountLabel?: string | null;
   connected: boolean;
   status?: "ready" | "needs_reauth" | "expired";
@@ -250,7 +251,7 @@ function ProviderRow({ provider }: { provider: AccountProviderView }) {
         <div className="flex items-center gap-2 font-medium text-foreground">
           <ProviderBrandIcon
             provider={provider.provider}
-            label={provider.label}
+            label={provider.brandLabel ?? provider.label}
             className="size-4 shrink-0 text-muted-foreground"
           />
           <span>{provider.label}</span>

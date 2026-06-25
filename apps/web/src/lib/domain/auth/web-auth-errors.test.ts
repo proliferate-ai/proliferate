@@ -41,4 +41,12 @@ describe("web auth errors", () => {
     expect(presentation.statusLabel).toBe("Token exchange failed");
     expect(presentation.description).toContain("client secret");
   });
+
+  it("presents org SSO membership denials as invite-required errors", () => {
+    const presentation = webAuthErrorPresentation("sso_user_not_team_member");
+
+    expect(presentation.title).toBe("Invite required");
+    expect(presentation.statusLabel).toBe("SSO access denied");
+    expect(presentation.description).toContain("existing organization members");
+  });
 });

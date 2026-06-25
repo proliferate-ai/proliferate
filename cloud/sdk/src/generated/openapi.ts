@@ -3683,6 +3683,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/dev/desktop-handoff/{handoff_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dev Desktop Handoff Endpoint */
+        get: operations["get_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff__handoff_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/dev/desktop-handoff/{handoff_id}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Dev Desktop Handoff Opened Endpoint */
+        post: operations["mark_dev_desktop_handoff_opened_endpoint_v1_dev_desktop_handoff__handoff_id__opened_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4482,6 +4516,8 @@ export interface components {
             accountId?: string | null;
             /** Displayname */
             displayName?: string | null;
+            /** Brandlabel */
+            brandLabel?: string | null;
         };
         /** AuthPasswordCredential */
         AuthPasswordCredential: {
@@ -6028,6 +6064,8 @@ export interface components {
             url: string;
             /** Createdat */
             createdAt: string;
+            /** Openedat */
+            openedAt?: string | null;
         };
         /** DevDesktopHandoffRequest */
         DevDesktopHandoffRequest: {
@@ -17550,6 +17588,68 @@ export interface operations {
                 "application/json": components["schemas"]["DevDesktopHandoffRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevDesktopHandoffRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff__handoff_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handoff_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevDesktopHandoffRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_dev_desktop_handoff_opened_endpoint_v1_dev_desktop_handoff__handoff_id__opened_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handoff_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

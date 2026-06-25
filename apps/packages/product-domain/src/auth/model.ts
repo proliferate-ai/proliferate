@@ -9,6 +9,7 @@ export interface LinkedAuthProvider {
   provider: AuthLinkedProviderKind;
   email?: string | null;
   displayName?: string | null;
+  brandLabel?: string | null;
   connected: boolean;
 }
 

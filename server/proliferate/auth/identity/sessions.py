@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Protocol
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -36,7 +37,7 @@ from proliferate.constants.auth import (
 from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store.auth import consume_auth_code
-from proliferate.db.store.auth_sso_records import SsoIdentityRecord
+from proliferate.db.store.auth_sso_records import SsoConnectionRecord, SsoIdentityRecord
 
 WEB_REFRESH_COOKIE = "proliferate_web_refresh"
 WEB_CSRF_COOKIE = "proliferate_web_csrf"
@@ -142,13 +143,15 @@ async def auth_viewer_payload(
         for identity in identities
     ]
     for identity in await sso_store.list_sso_identities_for_user(db, user_id=user.id):
+        display_name, brand_label = await _sso_identity_labels(db, identity)
         linked.append(
             AuthLinkedProvider(
                 provider="sso",
                 connected=True,
                 account_email=identity.email,
                 account_id=identity.provider_subject,
-                display_name=await _sso_identity_display_name(db, identity),
+                display_name=display_name,
+                brand_label=brand_label,
             )
         )
     connected_providers = {identity.provider for identity in identities}
@@ -181,10 +184,10 @@ async def auth_viewer_payload(
     )
 
 
-async def _sso_identity_display_name(
+async def _sso_identity_labels(
     db: AsyncSession,
     identity: SsoIdentityRecord,
-) -> str:
+) -> tuple[str, str | None]:
     if identity.connection_id is not None:
         connection = await sso_store.get_sso_connection(
             db,
@@ -192,12 +195,75 @@ async def _sso_identity_display_name(
             include_deleted=True,
         )
         if connection is not None:
-            return connection.display_name
+            return (
+                connection.display_name,
+                _sso_brand_label_for_connection(connection, identity.provider_subject),
+            )
     if identity.connection_key == "deployment":
         connection = deployment_sso_connection()
         if connection is not None:
-            return connection.display_name
-    return "SSO"
+            return (
+                connection.display_name,
+                _sso_brand_label_for_connection(connection, identity.provider_subject),
+            )
+    return "SSO", _sso_brand_label_from_subject(identity.provider_subject)
+
+
+class _SsoBrandConnection(Protocol):
+    display_name: str
+    oidc_issuer_url: str | None
+    oidc_discovery_url: str | None
+    oidc_authorization_endpoint: str | None
+    oidc_token_endpoint: str | None
+    oidc_userinfo_endpoint: str | None
+
+
+def _sso_brand_label_for_connection(
+    connection: SsoConnectionRecord | _SsoBrandConnection,
+    provider_subject: str,
+) -> str | None:
+    return _sso_brand_label_from_parts(
+        connection.display_name,
+        connection.oidc_issuer_url,
+        connection.oidc_discovery_url,
+        connection.oidc_authorization_endpoint,
+        connection.oidc_token_endpoint,
+        connection.oidc_userinfo_endpoint,
+        provider_subject,
+    )
+
+
+def _sso_brand_label_from_subject(provider_subject: str) -> str | None:
+    return _sso_brand_label_from_parts(provider_subject)
+
+
+def _sso_brand_label_from_parts(*parts: str | None) -> str | None:
+    values = [part.strip().lower() for part in parts if part and part.strip()]
+    if not values:
+        return None
+    normalized = " ".join(values)
+    subject = values[-1]
+    if "auth0" in normalized:
+        return "Auth0 SSO"
+    if "gitlab" in normalized:
+        return "GitLab SSO"
+    if (
+        "accounts.google.com" in normalized
+        or "google" in normalized
+        or (subject.isdigit() and len(subject) >= 10)
+    ):
+        return "Google SSO"
+    if (
+        "login.microsoftonline.com" in normalized
+        or "sts.windows.net" in normalized
+        or "microsoft" in normalized
+        or "entra" in normalized
+        or "azure" in normalized
+    ):
+        return "Microsoft Entra"
+    if "okta" in normalized or subject.startswith("00u"):
+        return "Okta SSO"
+    return None
 
 
 def auth_session_response(

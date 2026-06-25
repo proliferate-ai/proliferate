@@ -219,7 +219,7 @@ def _connection_input() -> dict[str, object]:
         "jit_policy": _env(
             "PROLIFERATE_SSO_JIT_POLICY",
             "SSO_JIT_POLICY",
-            default="disabled",
+            default="create_member",
         ),
         "default_role": default_role,
         "allowed_domains": allowed_domains,

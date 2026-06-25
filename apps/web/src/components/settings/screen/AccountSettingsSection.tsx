@@ -128,6 +128,7 @@ function buildProviderViews(
   const providers: AccountProviderView[] = ssoProviders.map((provider) => ({
     provider: "sso",
     label: provider.displayName ?? "SSO",
+    brandLabel: provider.brandLabel ?? provider.displayName ?? null,
     accountLabel: provider.accountEmail ?? provider.accountId ?? "Connected",
     connected: true,
   }));

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import cast
 from uuid import uuid4
@@ -8,6 +9,7 @@ import pytest
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.identity import sessions as auth_sessions
 from proliferate.auth.sso import api as sso_api
 from proliferate.auth.sso import service as sso_service
 from proliferate.auth.sso.types import (
@@ -97,6 +99,32 @@ def test_oidc_discovery_rejects_mismatched_configured_issuer() -> None:
             _connection(allowed_domains=("example.com",)),
             "https://other-idp.example.test",
         )
+
+
+def test_sso_brand_labels_use_connection_and_legacy_subject_hints() -> None:
+    google_connection = replace(
+        _connection(allowed_domains=("example.com",)),
+        display_name="Corporate Login",
+        oidc_issuer_url="https://accounts.google.com",
+    )
+    microsoft_connection = replace(
+        _connection(allowed_domains=("example.com",)),
+        display_name="Workforce Login",
+        oidc_issuer_url="https://login.microsoftonline.com/common/v2.0",
+    )
+
+    assert (
+        auth_sessions._sso_brand_label_for_connection(google_connection, "subject-1")
+        == "Google SSO"
+    )
+    assert (
+        auth_sessions._sso_brand_label_for_connection(microsoft_connection, "subject-1")
+        == "Microsoft Entra"
+    )
+    assert auth_sessions._sso_brand_label_from_subject("auth0|abc123") == "Auth0 SSO"
+    assert auth_sessions._sso_brand_label_from_subject("105348973383490238728") == "Google SSO"
+    assert auth_sessions._sso_brand_label_from_subject("00u14igc8z0aH8qyU698") == "Okta SSO"
+    assert auth_sessions._sso_brand_label_from_subject("unknown-subject") is None
 
 
 @pytest.mark.asyncio
@@ -281,6 +309,38 @@ async def test_oidc_sso_callback_redirects_email_domain_errors(
     assert (
         response.headers["location"]
         == "https://app.example.test/auth/error?code=sso_email_domain_not_allowed"
+    )
+    assert db.rolled_back is True
+    assert db.committed is False
+
+
+@pytest.mark.asyncio
+async def test_oidc_sso_callback_redirects_org_membership_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.test/")
+
+    async def fake_complete_oidc_sso_callback(*_args: object, **_kwargs: object) -> str:
+        raise HTTPException(status_code=403, detail="SSO user is not a team member.")
+
+    monkeypatch.setattr(
+        sso_api,
+        "complete_oidc_sso_callback",
+        fake_complete_oidc_sso_callback,
+    )
+    db = _FakeDb()
+
+    response = await sso_api.oidc_sso_callback(
+        cast(Request, object()),
+        state="state",
+        code="code",
+        db=cast(AsyncSession, db),
+    )
+
+    assert response.status_code == 302
+    assert (
+        response.headers["location"]
+        == "https://app.example.test/auth/error?code=sso_user_not_team_member"
     )
     assert db.rolled_back is True
     assert db.committed is False
