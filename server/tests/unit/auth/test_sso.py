@@ -33,6 +33,22 @@ def test_sso_auth_error_url_encodes_provider_error(
     )
 
 
+def test_oidc_callback_url_prefers_explicit_sso_callback_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "api_base_url", "http://127.0.0.1:8025")
+    monkeypatch.setattr(
+        settings,
+        "sso_oidc_callback_base_url",
+        " http://localhost:8025/ ",
+    )
+
+    assert (
+        sso_service._oidc_callback_url(_request("http://127.0.0.1:8025/auth/sso/start"))
+        == "http://localhost:8025/auth/sso/oidc/callback"
+    )
+
+
 def test_oidc_discovery_rejects_mismatched_configured_issuer() -> None:
     with pytest.raises(SsoIntegrationError, match="discovery issuer"):
         oidc_integration._validate_discovered_issuer(
@@ -340,6 +356,22 @@ class _FakeDb:
 
     async def rollback(self) -> None:
         self.rolled_back = True
+
+
+def _request(url: str) -> Request:
+    scheme, rest = url.split("://", 1)
+    host, path = rest.split("/", 1)
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": scheme,
+            "path": f"/{path}",
+            "headers": [(b"host", host.encode("ascii"))],
+            "server": (host.split(":", 1)[0], int(host.rsplit(":", 1)[1])),
+            "client": ("127.0.0.1", 12345),
+        }
+    )
 
 
 def _connection(*, allowed_domains: tuple[str, ...]) -> SsoConnectionSnapshot:

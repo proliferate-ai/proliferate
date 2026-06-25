@@ -152,6 +152,13 @@ class Settings(BaseSettings):
             "SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD",
         ),
     )
+    sso_oidc_callback_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL",
+            "SSO_OIDC_CALLBACK_BASE_URL",
+        ),
+    )
     sso_oidc_allow_private_provider_urls: bool = Field(
         default=False,
         validation_alias=AliasChoices(

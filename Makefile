@@ -154,7 +154,8 @@ dev: sdk-build server-db-ready
 	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
 	export FRONTEND_BASE_URL="$${FRONTEND_BASE_URL:-http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT}"; \
 	if [ -n "$${AUTH_PROFILE:-}" ]; then \
-		echo "SSO callback URL for provider console: $$API_BASE_URL/auth/sso/oidc/callback"; \
+		sso_oidc_callback_base_url="$${PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL:-$$API_BASE_URL}"; \
+		echo "SSO callback URL for provider console: $$sso_oidc_callback_base_url/auth/sso/oidc/callback"; \
 	fi; \
 	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://localhost:$$PROLIFERATE_HOSTED_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_HOSTED_WEB_PORT,http://localhost:$$PROLIFERATE_MOBILE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_MOBILE_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
 	export STRIPE_CHECKOUT_SUCCESS_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=success"; \

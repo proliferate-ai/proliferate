@@ -541,7 +541,9 @@ def _raise_sso_integration_error(exc: SsoIntegrationError) -> NoReturn:
 
 
 def _oidc_callback_url(request: Request) -> str:
-    base = settings.api_base_url.strip().rstrip("/")
+    base = settings.sso_oidc_callback_base_url.strip().rstrip("/")
+    if not base:
+        base = settings.api_base_url.strip().rstrip("/")
     if not base:
         base = str(request.base_url).rstrip("/")
     path = auth_route_path_for_base("/auth/sso/oidc/callback", base_url=base)

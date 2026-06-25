@@ -136,7 +136,11 @@ make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>
 The auth profile env uses the same `PROLIFERATE_SSO_*` names as deployment SSO,
 including `PROLIFERATE_SSO_OIDC_ISSUER_URL`,
 `PROLIFERATE_SSO_OIDC_CLIENT_ID`, and
-`PROLIFERATE_SSO_OIDC_CLIENT_SECRET`.
+`PROLIFERATE_SSO_OIDC_CLIENT_SECRET`. If a provider app registration requires a
+different local callback hostname than the API base URL, set
+`PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL`, for example
+`http://localhost:${PROLIFERATE_API_PORT}` for Microsoft Entra app registrations
+that do not include the `127.0.0.1` callback.
 
 ## Ports And UI Identity
 

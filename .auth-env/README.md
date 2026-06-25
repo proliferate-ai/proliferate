@@ -22,6 +22,9 @@ PROLIFERATE_SSO_OIDC_CLIENT_ID="..."
 PROLIFERATE_SSO_OIDC_CLIENT_SECRET="..."
 PROLIFERATE_SSO_OIDC_SCOPES="openid email profile"
 PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD="client_secret_basic"
+# Optional: override only the OIDC redirect URI base for providers that require
+# a different loopback hostname than the local API base URL.
+PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL="http://localhost:${PROLIFERATE_API_PORT}"
 # Only set this for local/private IdPs. Public providers should leave it false.
 PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS=false
 ```
