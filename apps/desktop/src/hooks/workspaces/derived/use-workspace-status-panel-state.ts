@@ -4,7 +4,10 @@ import type { CloudWorkspaceStatusScreenModel } from "@/lib/domain/workspaces/cl
 import {
   buildCloudWorkspaceStatusScreenModel,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import {
+  isCloudWorkspacePostReadyPending,
+  shouldShowCloudWorkspaceStatusScreen,
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildPendingWorkspaceArrivalViewModel,
@@ -170,7 +173,15 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   ) ?? null;
 
   return useMemo(() => {
-    if (pendingWorkspaceEntry) {
+    const staleCloudReadyPendingEntry = Boolean(
+      pendingWorkspaceEntry
+      && pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
+      && pendingWorkspaceEntry.workspaceId === selectedWorkspaceId
+      && selectedCloudWorkspace?.status === "ready"
+      && !isCloudWorkspacePostReadyPending(selectedCloudWorkspace),
+    );
+
+    if (pendingWorkspaceEntry && !staleCloudReadyPendingEntry) {
       return {
         kind: "pending",
         entry: pendingWorkspaceEntry,
