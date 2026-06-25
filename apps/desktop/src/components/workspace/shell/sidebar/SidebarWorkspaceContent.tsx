@@ -2,6 +2,7 @@ import {
   resolveCloudRepoActionState,
   type CloudWorkspaceRepoTarget,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarEmptyState,
@@ -12,7 +13,7 @@ import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sideba
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
-import { RepoGroup } from "./RepoGroup";
+import { RepoGroup, type RepoGroupEnvironmentKind } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
 import { WorkspaceItem } from "./WorkspaceItem";
 
@@ -156,6 +157,7 @@ export function SidebarWorkspaceContent({
         name={group.name}
         count={group.items.length}
         collapsed={collapsedRepoGroupKeys.has(group.sourceRoot)}
+        environmentKind={resolveRepoGroupEnvironmentKind(group, configuredCloudRepoKeys)}
         onToggleCollapsed={() => onToggleRepoCollapsed(group.sourceRoot)}
         onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId, group.sourceRoot)}
         onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot, group.sourceRoot)}
@@ -250,4 +252,26 @@ export function SidebarWorkspaceContent({
       </RepoGroup>
     );
   });
+}
+
+function resolveRepoGroupEnvironmentKind(
+  group: SidebarGroupState,
+  configuredCloudRepoKeys: ReadonlySet<string>,
+): RepoGroupEnvironmentKind {
+  const hasLocal = Boolean(group.localSourceRoot);
+  const hasCloudWorkspace = group.items.some((item) => item.variant === "cloud");
+  const hasConfiguredCloud = group.cloudRepoTarget
+    ? configuredCloudRepoKeys.has(
+      cloudRepositoryKey(group.cloudRepoTarget.gitOwner, group.cloudRepoTarget.gitRepoName),
+    )
+    : false;
+  const hasCloud = hasCloudWorkspace || hasConfiguredCloud;
+
+  if (hasCloud && !hasLocal) {
+    return "cloud";
+  }
+  if (hasCloud) {
+    return "local_cloud";
+  }
+  return "local";
 }
