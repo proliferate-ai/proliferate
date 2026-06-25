@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { takeDevDesktopHandoff } from "@/lib/access/cloud/dev-desktop-handoff";
+import {
+  isMainTauriWebviewAvailable,
+  revealCurrentWindow,
+} from "@/lib/access/tauri/window";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 
 const DEV_HANDOFF_POLL_MS = 1000;
@@ -10,7 +14,7 @@ export function useDevDesktopHandoff() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!import.meta.env.DEV) {
+    if (!import.meta.env.DEV || !isMainTauriWebviewAvailable()) {
       return;
     }
 
@@ -40,6 +44,9 @@ export function useDevDesktopHandoff() {
           const target = desktopNavigationTarget(handoff.url);
           if (target) {
             navigate(target);
+            void revealCurrentWindow().catch(() => {
+              // The handoff should still navigate if the OS refuses focus.
+            });
           }
         })
         .catch(() => {
@@ -63,4 +70,3 @@ export function useDevDesktopHandoff() {
     };
   }, [navigate]);
 }
-
