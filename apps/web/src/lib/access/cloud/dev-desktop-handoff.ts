@@ -6,9 +6,9 @@ export function canUseDevDesktopHandoff(): boolean {
   return import.meta.env.DEV && LOCALHOST_NAMES.has(window.location.hostname);
 }
 
-export async function queueDevDesktopHandoff(url: string): Promise<void> {
+export async function queueDevDesktopHandoff(url: string): Promise<boolean> {
   if (!canUseDevDesktopHandoff()) {
-    return;
+    return false;
   }
 
   const endpoint = new URL("/v1/dev/desktop-handoff", webEnv.apiBaseUrl);
@@ -19,7 +19,11 @@ export async function queueDevDesktopHandoff(url: string): Promise<void> {
     },
     body: JSON.stringify({ url }),
   });
-  if (!response.ok && response.status !== 404) {
+  if (response.status === 404) {
+    return false;
+  }
+  if (!response.ok) {
     throw new Error("Could not queue the local Desktop handoff.");
   }
+  return true;
 }

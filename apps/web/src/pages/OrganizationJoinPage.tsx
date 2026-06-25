@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
@@ -23,30 +23,46 @@ function organizationJoinDeepLink(organizationId: string): string {
 export function OrganizationJoinPage() {
   const { organizationId } = useParams();
   const [handoffTimedOut, setHandoffTimedOut] = useState(false);
+  const [devHandoffQueued, setDevHandoffQueued] = useState(false);
   const deepLinkUrl = useMemo(
     () => organizationId ? organizationJoinDeepLink(organizationId) : null,
     [organizationId],
   );
+  const openInvite = useCallback(async () => {
+    if (!deepLinkUrl) {
+      return;
+    }
+
+    setHandoffTimedOut(false);
+    if (canUseDevDesktopHandoff()) {
+      try {
+        const queued = await queueDevDesktopHandoff(deepLinkUrl);
+        if (queued) {
+          setDevHandoffQueued(true);
+          return;
+        }
+      } catch {
+        // Fall through to the OS deep-link attempt.
+      }
+    }
+
+    window.location.assign(deepLinkUrl);
+  }, [deepLinkUrl]);
 
   useEffect(() => {
     if (!deepLinkUrl) {
       return;
     }
-    if (canUseDevDesktopHandoff()) {
-      void queueDevDesktopHandoff(deepLinkUrl).catch(() => {
-        // Keep the OS deep-link attempt as the fallback in local dev.
-      });
-    }
-    window.location.replace(deepLinkUrl);
-  }, [deepLinkUrl]);
+    void openInvite();
+  }, [deepLinkUrl, openInvite]);
 
   useEffect(() => {
-    if (!deepLinkUrl) {
+    if (!deepLinkUrl || devHandoffQueued) {
       return;
     }
     const timer = window.setTimeout(() => setHandoffTimedOut(true), 8000);
     return () => window.clearTimeout(timer);
-  }, [deepLinkUrl]);
+  }, [deepLinkUrl, devHandoffQueued]);
 
   if (!deepLinkUrl) {
     return <Navigate to="/" replace />;
@@ -56,16 +72,21 @@ export function OrganizationJoinPage() {
     return (
       <RedirectCallbackScreen
         title="Desktop did not open"
-        description="The organization invite is ready, but the operating system has not handed it to Proliferate Desktop."
-        detail="Install Proliferate Desktop, then try opening the invite again."
+        description={
+          devHandoffQueued
+            ? "The organization invite was sent to local Proliferate Desktop, but Desktop has not opened it."
+            : "The organization invite is ready, but the operating system has not handed it to Proliferate Desktop."
+        }
+        detail={
+          devHandoffQueued
+            ? "Keep the matching Desktop dev profile running, then try again."
+            : "Install Proliferate Desktop, then try opening the invite again."
+        }
         statusLabel="Organization invite waiting"
         primaryAction={{
           label: "Try opening Desktop again",
           onClick: () => {
-            void queueDevDesktopHandoff(deepLinkUrl).catch(() => {
-              // Keep the OS deep-link attempt as the fallback in local dev.
-            });
-            window.location.assign(deepLinkUrl);
+            void openInvite();
           },
         }}
       />
@@ -75,16 +96,17 @@ export function OrganizationJoinPage() {
   return (
     <RedirectCallbackScreen
       title="Opening invite"
-      description="Opening Proliferate Desktop..."
+      description={
+        devHandoffQueued
+          ? "Sent to local Proliferate Desktop."
+          : "Opening Proliferate Desktop..."
+      }
       statusLabel="Organization invite"
       variant="handoff"
       primaryAction={{
-        label: "Click here if not redirected",
+        label: devHandoffQueued ? "Send to Desktop again" : "Click here if not redirected",
         onClick: () => {
-          void queueDevDesktopHandoff(deepLinkUrl).catch(() => {
-            // Keep the OS deep-link attempt as the fallback in local dev.
-          });
-          window.location.assign(deepLinkUrl);
+          void openInvite();
         },
       }}
     />
