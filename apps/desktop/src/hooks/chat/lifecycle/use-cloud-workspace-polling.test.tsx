@@ -198,6 +198,56 @@ describe("useCloudWorkspacePolling", () => {
     expect(mocks.materializePendingWorkspaceSessions).not.toHaveBeenCalled();
   });
 
+  it("finalizes an awaiting pending entry when the cached cloud workspace is already ready", async () => {
+    const workspaceId = "cloud:cloud-1";
+    const pendingEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "cloud-created",
+        displayName: "feature-branch",
+        repoLabel: "proliferate-ai/proliferate",
+        baseBranchName: "main",
+        request: {
+          kind: "select-existing" as const,
+          workspaceId,
+        },
+      }),
+      stage: "awaiting-cloud-ready" as const,
+      workspaceId,
+    };
+    mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({ status: "ready" })];
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: pendingEntry,
+      selectedWorkspaceId: workspaceId,
+    });
+    mocks.refreshCloudWorkspace.mockResolvedValueOnce(cloudWorkspace({ status: "ready" }));
+    mocks.selectWorkspace.mockResolvedValueOnce(undefined);
+    mocks.materializePendingWorkspaceSessions.mockReturnValueOnce({
+      pendingWorkspaceUiKey: buildPendingWorkspaceUiKey(pendingEntry),
+      projectedSessionCount: 0,
+      projectedSessionIds: [],
+    });
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(mocks.refreshCloudWorkspace).toHaveBeenCalledWith(workspaceId);
+    });
+    await waitFor(() => {
+      expect(mocks.selectWorkspace).toHaveBeenCalledWith(workspaceId, {
+        force: true,
+        preservePending: true,
+      });
+    });
+    expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
+      pendingEntry,
+      workspaceId,
+      { eventPrefix: "workspace.cloud_polling" },
+    );
+    expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toBeNull();
+  });
+
   it("marks the current awaiting cloud workspace as failed when the cached cloud workspace is already error", async () => {
     const workspaceId = "cloud:cloud-1";
     const pendingEntry = {

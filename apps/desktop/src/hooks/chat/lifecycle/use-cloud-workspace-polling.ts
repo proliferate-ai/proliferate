@@ -47,11 +47,18 @@ export function useCloudWorkspacePolling() {
     && cloudWorkspace.status === "error"
     && selectedPendingCloudWorkspaceIsAwaiting,
   );
+  const shouldHandleCachedCloudWorkspaceReady = Boolean(
+    cloudWorkspace
+    && cloudWorkspace.status === "ready"
+    && !isCloudWorkspacePostReadyPending(cloudWorkspace)
+    && selectedPendingCloudWorkspaceIsAwaiting,
+  );
   const shouldPollCloudWorkspace = Boolean(
     cloudWorkspace
     && (
       shouldPollCloudWorkspaceForUpdates(cloudWorkspace)
       || shouldHandleCachedCloudWorkspaceFailure
+      || shouldHandleCachedCloudWorkspaceReady
     ),
   );
 
@@ -241,6 +248,7 @@ export function useCloudWorkspacePolling() {
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
     shouldHandleCachedCloudWorkspaceFailure,
+    shouldHandleCachedCloudWorkspaceReady,
     shouldPollCloudWorkspace,
   ]);
 }
