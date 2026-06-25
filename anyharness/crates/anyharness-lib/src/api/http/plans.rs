@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
     HandoffPlanRequest, HandoffPlanResponse, ListProposedPlansResponse, PlanDecisionRequest,
-    PlanDecisionResponse, ProposedPlanDetail, ProposedPlanDocumentResponse,
+    PlanDecisionResponse, PlanNativeOptionDecisionRequest, PlanNativeOptionDecisionResponse,
+    ProposedPlanDetail, ProposedPlanDocumentResponse,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -165,6 +166,40 @@ pub async fn reject_plan(
 
 #[utoipa::path(
     post,
+    path = "/v1/workspaces/{workspace_id}/plans/{plan_id}/native-option",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("plan_id" = String, Path, description = "Plan ID")
+    ),
+    request_body = PlanNativeOptionDecisionRequest,
+    responses((status = 200, description = "Resolved proposed plan native option", body = PlanNativeOptionDecisionResponse)),
+    tag = "plans"
+)]
+pub async fn resolve_plan_native_option(
+    State(state): State<AppState>,
+    Path((workspace_id, plan_id)): Path<(String, String)>,
+    Json(req): Json<PlanNativeOptionDecisionRequest>,
+) -> Result<Json<PlanNativeOptionDecisionResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
+    state
+        .plan_runtime
+        .resolve_native_option(
+            &workspace_id,
+            &plan_id,
+            req.expected_decision_version,
+            &req.option_id,
+        )
+        .await
+        .map(|outcome| Json(plan_native_option_decision_response(outcome)))
+        .map_err(map_decision_error)
+}
+
+#[utoipa::path(
+    post,
     path = "/v1/workspaces/{workspace_id}/plans/{plan_id}/handoff",
     params(
         ("workspace_id" = String, Path, description = "Workspace ID"),
@@ -203,6 +238,12 @@ fn plan_document_response(document: PlanDocument) -> ProposedPlanDocumentRespons
 
 fn plan_decision_response(outcome: PlanDecisionOutcome) -> PlanDecisionResponse {
     PlanDecisionResponse { plan: outcome.plan }
+}
+
+fn plan_native_option_decision_response(
+    outcome: PlanDecisionOutcome,
+) -> PlanNativeOptionDecisionResponse {
+    PlanNativeOptionDecisionResponse { plan: outcome.plan }
 }
 
 fn handoff_plan_input(request: HandoffPlanRequest) -> PlanHandoffInput {

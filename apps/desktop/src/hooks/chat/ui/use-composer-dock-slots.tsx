@@ -13,6 +13,7 @@ import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
 } from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import { useActivePlanDecision } from "@/hooks/chat/derived/use-active-plan-decision";
 import { useDelegatedWorkComposer } from "@/hooks/chat/facade/use-delegated-work-composer";
 import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-tracker";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
@@ -31,6 +32,7 @@ export function useComposerDockSlots(options?: {
   const suppressSessionSlots = options?.suppressSessionSlots ?? false;
   const suppressWorkspaceStatusPanels = options?.suppressWorkspaceStatusPanels ?? false;
   const { primaryPendingInteraction } = useActivePendingInteractionState();
+  const activePlanDecision = useActivePlanDecision();
   const pendingPrompts = useActivePendingPrompts();
   const activeTodoTracker = useActiveTodoTracker();
   const delegatedWorkComposer = useDelegatedWorkComposer();
@@ -42,7 +44,7 @@ export function useComposerDockSlots(options?: {
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
     pendingPromptCount: pendingPrompts.length,
-    primaryPendingInteractionKind: primaryPendingInteraction?.kind ?? null,
+    primaryPendingInteractionKind: activePlanDecision ? "permission" : primaryPendingInteraction?.kind ?? null,
     hasActiveTodoTracker: !!activeTodoTracker,
     hasDelegatedWork: !!delegatedWorkComposer,
     hasWorkspaceStatusPanel: !!workspaceStatusPanel,
@@ -52,6 +54,7 @@ export function useComposerDockSlots(options?: {
     delegatedWorkComposer,
     hasCloudRuntimePanel,
     pendingPrompts.length,
+    activePlanDecision,
     primaryPendingInteraction?.kind,
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
@@ -60,13 +63,13 @@ export function useComposerDockSlots(options?: {
 
   const interactionPanel = useMemo<ReactNode | null>(() => (
     dockSlotResolution.activeSlot?.kind === "permission"
-      ? <ConnectedApprovalCard />
+      ? activePlanDecision ? null : <ConnectedApprovalCard />
       : dockSlotResolution.activeSlot?.kind === "user_input"
         ? <ConnectedUserInputCard />
         : dockSlotResolution.activeSlot?.kind === "mcp_elicitation"
           ? <ConnectedMcpElicitationCard />
           : null
-  ), [dockSlotResolution.activeSlot?.kind]);
+  ), [activePlanDecision, dockSlotResolution.activeSlot?.kind]);
 
   const ambientContextSlot = useMemo<ReactNode | null>(() => (
     dockSlotResolution.attachedSlot?.ambientSlot?.kind === "workspace_status"

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
+import { PlanDecisionComposerPanel } from "@/components/workspace/chat/input/PlanDecisionComposerPanel";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
@@ -31,6 +32,7 @@ import { useChatPromptAttachments } from "@/hooks/chat/ui/use-chat-prompt-attach
 import { useChatRootFocus } from "@/hooks/chat/ui/use-chat-root-focus";
 import { useCloudWorkspacePolling } from "@/hooks/chat/lifecycle/use-cloud-workspace-polling";
 import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
+import { useActivePlanDecision } from "@/hooks/chat/derived/use-active-plan-decision";
 import { useQueuedPromptEditStatus } from "@/hooks/chat/ui/use-queued-prompt-edit";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { useSessionErrorAcknowledgement } from "@/hooks/sessions/lifecycle/use-session-error-acknowledgement";
@@ -128,6 +130,7 @@ export const ChatView = memo(function ChatView({
     suppressSessionSlots,
     suppressWorkspaceStatusPanels: !showWorkspaceStatusPanels,
   });
+  const activePlanDecision = useActivePlanDecision();
   const promptCapabilities = suppressComposerActiveSessionState
     ? null
     : activePromptCapabilities;
@@ -160,11 +163,15 @@ export const ChatView = memo(function ChatView({
   useWorkspaceMobilityLifecycle();
 
   const chatInput = useMemo(() => (
-    <ChatInput
-      attachments={promptAttachments}
-      suppressActiveSessionState={suppressComposerActiveSessionState}
-    />
-  ), [promptAttachments, suppressComposerActiveSessionState]);
+    activePlanDecision ? (
+      <PlanDecisionComposerPanel decision={activePlanDecision} />
+    ) : (
+      <ChatInput
+        attachments={promptAttachments}
+        suppressActiveSessionState={suppressComposerActiveSessionState}
+      />
+    )
+  ), [activePlanDecision, promptAttachments, suppressComposerActiveSessionState]);
   const footerSlot = useMemo(
     () => showWorkspaceFooter ? <WorkspaceMobilityFooterRow /> : null,
     [showWorkspaceFooter],

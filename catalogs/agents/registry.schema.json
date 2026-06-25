@@ -81,7 +81,48 @@
         "auth": {
           "$ref": "#/$defs/auth"
         },
+        "permissionOptionPresentations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/permissionOptionPresentationRule"
+          }
+        },
         "docsUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "permissionOptionPresentationRule": {
+      "type": "object",
+      "required": [
+        "optionId",
+        "presentation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "optionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "presentation": {
+          "$ref": "#/$defs/permissionOptionPresentation"
+        }
+      }
+    },
+    "permissionOptionPresentation": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "feedback_text_input"
+        },
+        "placeholder": {
           "type": [
             "string",
             "null"

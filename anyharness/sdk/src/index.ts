@@ -256,6 +256,8 @@ export type {
   ProposedPlanDocumentResponse,
   PlanDecisionRequest,
   PlanDecisionResponse,
+  PlanNativeOptionDecisionRequest,
+  PlanNativeOptionDecisionResponse,
   HandoffPlanRequest,
   HandoffPlanResponse,
   PlanHandoffPromptStatus,

@@ -7,7 +7,7 @@ use anyharness_contract::v1::{
 
 use super::InboundDoor;
 use crate::acp::permission_context::permission_context_from_meta;
-use crate::acp::permission_payload::{bound_raw_json, permission_options};
+use crate::acp::permission_payload::{bound_raw_json, permission_options_with_presentations};
 use crate::live::sessions::model::{
     PermissionAdvice, PermissionQuestionView, SessionObserverContext,
 };
@@ -61,7 +61,10 @@ impl InboundDoor {
             .and_then(|v| serde_json::to_value(v).ok())
             .map(bound_raw_json);
 
-        let options = permission_options(&args.options);
+        let options = permission_options_with_presentations(
+            &args.options,
+            &self.permission_option_presentations,
+        );
         let context = permission_context_from_meta(args.meta.as_ref());
 
         // Consult the permission advisor (a domain port) BEFORE parking,
@@ -88,8 +91,7 @@ impl InboundDoor {
                 PermissionAdvice::Park {
                     pending_interaction,
                 } => {
-                    linked_plan_id =
-                        pending_interaction.and_then(|link| link.linked_plan_id);
+                    linked_plan_id = pending_interaction.and_then(|link| link.linked_plan_id);
                 }
                 PermissionAdvice::Predecided {
                     selected_option_id,
@@ -158,9 +160,11 @@ impl InboundDoor {
         let outcome = pending_wait.wait().await;
 
         let acp_outcome = match outcome {
-            PermissionOutcome::Selected { option_id } => acp::schema::RequestPermissionOutcome::Selected(
-                acp::schema::SelectedPermissionOutcome::new(option_id),
-            ),
+            PermissionOutcome::Selected { option_id } => {
+                acp::schema::RequestPermissionOutcome::Selected(
+                    acp::schema::SelectedPermissionOutcome::new(option_id),
+                )
+            }
             PermissionOutcome::Cancelled | PermissionOutcome::Dismissed => {
                 acp::schema::RequestPermissionOutcome::Cancelled
             }
@@ -168,5 +172,4 @@ impl InboundDoor {
 
         Ok(acp::schema::RequestPermissionResponse::new(acp_outcome))
     }
-
 }

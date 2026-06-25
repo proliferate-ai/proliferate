@@ -4,6 +4,8 @@ import type {
   ListProposedPlansResponse,
   PlanDecisionRequest,
   PlanDecisionResponse,
+  PlanNativeOptionDecisionRequest,
+  PlanNativeOptionDecisionResponse,
   ProposedPlanDetail,
   ProposedPlanDocumentResponse,
   ProposedPlanSummary,
@@ -68,6 +70,19 @@ export class PlansClient {
   ): Promise<PlanDecisionResponse> {
     return this.transport.post<PlanDecisionResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/plans/${encodeURIComponent(planId)}/reject`,
+      input,
+      options,
+    );
+  }
+
+  async resolveNativeOption(
+    workspaceId: string,
+    planId: string,
+    input: PlanNativeOptionDecisionRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<PlanNativeOptionDecisionResponse> {
+    return this.transport.post<PlanNativeOptionDecisionResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/plans/${encodeURIComponent(planId)}/native-option`,
       input,
       options,
     );

@@ -8,6 +8,10 @@ export type ProposedPlanDocumentResponse =
   components["schemas"]["ProposedPlanDocumentResponse"];
 export type PlanDecisionRequest = components["schemas"]["PlanDecisionRequest"];
 export type PlanDecisionResponse = components["schemas"]["PlanDecisionResponse"];
+export type PlanNativeOptionDecisionRequest =
+  components["schemas"]["PlanNativeOptionDecisionRequest"];
+export type PlanNativeOptionDecisionResponse =
+  components["schemas"]["PlanNativeOptionDecisionResponse"];
 export type HandoffPlanRequest = components["schemas"]["HandoffPlanRequest"];
 export type HandoffPlanResponse = components["schemas"]["HandoffPlanResponse"];
 export type PlanHandoffPromptStatus =

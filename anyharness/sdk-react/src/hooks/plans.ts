@@ -239,6 +239,56 @@ export function useRejectPlanMutation(options?: { workspaceId?: string | null })
   });
 }
 
+export function useResolvePlanNativeOptionMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: {
+      planId: string;
+      expectedDecisionVersion: number;
+      optionId: string;
+    }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.plans.resolveNativeOption(resolved.connection.anyharnessWorkspaceId, input.planId, {
+        expectedDecisionVersion: input.expectedDecisionVersion,
+        optionId: input.optionId,
+      });
+    },
+    onSuccess: async (response, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, variables.planId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionEventsKey(
+            runtimeUrl,
+            workspaceId,
+            response.plan.sessionId,
+          ),
+        }),
+      ]);
+    },
+    onError: async (error, variables) => {
+      if (!isPlanDecisionVersionConflict(error)) return;
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, variables.planId),
+        }),
+      ]);
+    },
+  });
+}
+
 export function useHandoffPlanMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();

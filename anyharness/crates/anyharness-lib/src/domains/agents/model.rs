@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use anyharness_contract::v1::PermissionInteractionOptionPresentation;
+
 /// Identifies which coding-agent family this descriptor represents.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AgentKind {
@@ -416,6 +418,12 @@ pub struct LaunchSpecTemplate {
     pub default_args: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PermissionOptionPresentationRule {
+    pub option_id: String,
+    pub presentation: PermissionInteractionOptionPresentation,
+}
+
 // ---------------------------------------------------------------------------
 // Agent descriptor (the complete static metadata for one agent kind)
 // ---------------------------------------------------------------------------
@@ -433,6 +441,8 @@ pub struct AgentDescriptor {
     pub launch: LaunchSpecTemplate,
     /// Auth/credential configuration for this agent.
     pub auth: AuthSpec,
+    /// UI presentation overrides for exact permission option ids emitted by this agent.
+    pub permission_option_presentations: Vec<PermissionOptionPresentationRule>,
     /// URL for the agent's docs or repo (shown in UI).
     pub docs_url: Option<String>,
 }

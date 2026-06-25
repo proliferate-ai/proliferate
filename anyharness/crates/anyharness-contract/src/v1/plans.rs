@@ -67,6 +67,19 @@ pub struct PlanDecisionResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct PlanNativeOptionDecisionRequest {
+    pub expected_decision_version: i64,
+    pub option_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanNativeOptionDecisionResponse {
+    pub plan: ProposedPlanDetail,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct HandoffPlanRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_session_id: Option<String>,

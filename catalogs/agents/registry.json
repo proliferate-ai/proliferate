@@ -99,6 +99,15 @@
           }
         ]
       },
+      "permissionOptionPresentations": [
+        {
+          "optionId": "plan",
+          "presentation": {
+            "kind": "feedback_text_input",
+            "placeholder": "No, keep planning"
+          }
+        }
+      ],
       "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp"
     },
     {

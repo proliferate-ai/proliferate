@@ -209,6 +209,10 @@ pub fn build_router(state: AppState) -> Router {
             post(plans::reject_plan),
         )
         .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}/native-option",
+            post(plans::resolve_plan_native_option),
+        )
+        .route(
             "/workspaces/{workspace_id}/plans/{plan_id}/handoff",
             post(plans::handoff_plan),
         )

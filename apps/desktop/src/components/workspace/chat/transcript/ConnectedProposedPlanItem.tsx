@@ -6,7 +6,6 @@ import {
   renderTranscriptInlineCode,
   renderTranscriptLink,
 } from "@/components/workspace/chat/transcript/transcript-markdown";
-import { useProposedPlanActions } from "@/hooks/plans/workflows/use-proposed-plan-actions";
 import {
   planAttachmentId,
   type PromptPlanAttachmentDescriptor,
@@ -23,17 +22,6 @@ export function ConnectedProposedPlanItem({
   item,
   onHandOffToNewSession,
 }: ConnectedProposedPlanItemProps) {
-  const {
-    approvePlan,
-    rejectPlan,
-    implementPlanHere,
-    reviewPlan,
-    configurePlanReview,
-    isApprovingPlan,
-    isRejectingPlan,
-    isImplementingPlan,
-    isStartingReview,
-  } = useProposedPlanActions();
   const decision = item.decision;
   const plan = useMemo(() => proposedPlanItemToAttachment(item), [item]);
 
@@ -46,29 +34,11 @@ export function ConnectedProposedPlanItem({
           isStreaming={item.status === "in_progress"}
           decisionState={decision?.decisionState ?? null}
           nativeResolutionState={decision?.nativeResolutionState ?? null}
-          decisionVersion={decision?.decisionVersion ?? null}
           errorMessage={decision?.errorMessage ?? null}
           nativeContinuation={Boolean(item.plan.sourceToolCallId)}
-          onApprove={
-            decision
-              ? () => approvePlan(item.plan.planId, decision.decisionVersion)
-              : undefined
-          }
-          onReject={
-            decision
-              ? () => rejectPlan(item.plan.planId, decision.decisionVersion)
-              : undefined
-          }
-          onImplementHere={() => implementPlanHere(plan)}
-          onReview={() => reviewPlan(plan)}
-          onConfigureReview={(anchorRect) => configurePlanReview(plan, anchorRect)}
           onHandOffToNewSession={
             onHandOffToNewSession ? () => onHandOffToNewSession(plan) : undefined
           }
-          isApproving={isApprovingPlan}
-          isRejecting={isRejectingPlan}
-          isImplementingHere={isImplementingPlan}
-          isStartingReview={isStartingReview}
           renderLink={renderTranscriptLink}
           renderInlineCode={renderTranscriptInlineCode}
           renderCodeBlock={renderTranscriptCodeBlock}

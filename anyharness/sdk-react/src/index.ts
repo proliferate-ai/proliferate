@@ -170,6 +170,7 @@ export {
   useMaterializePlanDocumentMutation,
   useApprovePlanMutation,
   useRejectPlanMutation,
+  useResolvePlanNativeOptionMutation,
   useHandoffPlanMutation,
 } from "./hooks/plans.js";
 export {

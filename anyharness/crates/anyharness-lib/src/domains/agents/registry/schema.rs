@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use anyharness_contract::v1::PermissionInteractionOptionPresentation;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,7 +27,16 @@ pub struct AgentRegistryAgent {
     pub launch: AgentRegistryLaunch,
     pub auth: AgentRegistryAuth,
     #[serde(default)]
+    pub permission_option_presentations: Vec<AgentRegistryPermissionOptionPresentationRule>,
+    #[serde(default)]
     pub docs_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistryPermissionOptionPresentationRule {
+    pub option_id: String,
+    pub presentation: PermissionInteractionOptionPresentation,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

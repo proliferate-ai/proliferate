@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use anyharness_contract::v1::{PromptInputBlock, ProposedPlanDecisionState, ProposedPlanDetail};
 
-use super::decision_op::{PendingPermissionCandidate, PlanDecisionOp, PlanDecisionOpOutput};
+use super::decision_op::{
+    PendingPermissionCandidate, PlanDecisionOp, PlanDecisionOpOutput, PlanNativeOptionDecisionOp,
+};
 use super::document;
 use super::model::{
     PlanDecisionOutcome, PlanDocument, PlanHandoffInput, PlanHandoffOutcome,
@@ -134,6 +136,21 @@ impl PlanRuntime {
                 expected_version,
                 ProposedPlanDecisionState::Rejected,
             )
+            .await?;
+        Ok(PlanDecisionOutcome {
+            plan: plan_to_detail(&plan),
+        })
+    }
+
+    pub async fn resolve_native_option(
+        &self,
+        workspace_id: &str,
+        plan_id: &str,
+        expected_version: i64,
+        option_id: &str,
+    ) -> Result<PlanDecisionOutcome, PlanDecisionError> {
+        let plan = self
+            .apply_plan_native_option(workspace_id, plan_id, expected_version, option_id)
             .await?;
         Ok(PlanDecisionOutcome {
             plan: plan_to_detail(&plan),
@@ -292,15 +309,18 @@ impl PlanRuntime {
                 decision,
                 pending_permissions,
             });
-            let reply = handle.run_domain_op(op).await.map_err(|error| match error {
-                LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
-                    anyhow::anyhow!("session actor is not available for plan decision"),
-                ),
-                LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
-                    anyhow::anyhow!("session actor dropped plan decision response"),
-                ),
-                LiveSessionCommandError::Rejected(infallible) => match infallible {},
-            })?;
+            let reply = handle
+                .run_domain_op(op)
+                .await
+                .map_err(|error| match error {
+                    LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor is not available for plan decision"),
+                    ),
+                    LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor dropped plan decision response"),
+                    ),
+                    LiveSessionCommandError::Rejected(infallible) => match infallible {},
+                })?;
             let output = reply.downcast::<PlanDecisionOpOutput>().map_err(|_| {
                 PlanDecisionError::Store(anyhow::anyhow!(
                     "plan decision op returned an unexpected reply type"
@@ -320,6 +340,63 @@ impl PlanRuntime {
             self.plan_service
                 .update_decision_offline(plan_id, expected_version, decision)?;
         Ok(plan)
+    }
+
+    async fn apply_plan_native_option(
+        &self,
+        workspace_id: &str,
+        plan_id: &str,
+        expected_version: i64,
+        option_id: &str,
+    ) -> Result<PlanRecord, PlanDecisionError> {
+        let plan = self
+            .get_plan_for_workspace(workspace_id, plan_id)
+            .map_err(map_get_plan_error_to_decision)?;
+        self.access_gate
+            .assert_can_mutate_for_session(&plan.session_id)
+            .map_err(|error| PlanDecisionError::Store(anyhow::anyhow!(error.to_string())))?;
+
+        let Some(handle) = self.acp_manager.get_handle(&plan.session_id).await else {
+            return Err(PlanDecisionError::Store(anyhow::anyhow!(
+                "session actor is not available for native plan option decision"
+            )));
+        };
+
+        let pending_permissions = PendingPermissionCandidate::from_pending_interactions(
+            &handle.execution_snapshot().await.pending_interactions,
+        );
+        let op = Box::new(PlanNativeOptionDecisionOp {
+            plan_service: self.plan_service.clone(),
+            plan_id: plan_id.to_string(),
+            expected_version,
+            option_id: option_id.to_string(),
+            pending_permissions,
+        });
+        let reply = handle
+            .run_domain_op(op)
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => {
+                    PlanDecisionError::Store(anyhow::anyhow!(
+                        "session actor is not available for native plan option decision"
+                    ))
+                }
+                LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
+                    anyhow::anyhow!("session actor dropped native plan option decision response"),
+                ),
+                LiveSessionCommandError::Rejected(infallible) => match infallible {},
+            })?;
+        let output = reply.downcast::<PlanDecisionOpOutput>().map_err(|_| {
+            PlanDecisionError::Store(anyhow::anyhow!(
+                "native plan option decision op returned an unexpected reply type"
+            ))
+        })?;
+        if let Some(request_id) = output.linked_request_id.as_deref() {
+            handle
+                .link_pending_interaction_to_plan(request_id, plan_id)
+                .await;
+        }
+        output.result
     }
 }
 

@@ -11,7 +11,8 @@ use crate::domains::agents::model::{
     AgentDescriptor, AgentKind, AgentProcessArtifactSpec, AgentProcessFallback,
     AgentProcessInstallSpec, AuthMaterializationSpec, AuthReadinessPolicy, AuthSlotSpec, AuthSpec,
     CommandSpec, CredentialDiscoveryKind, GatewayEnvMaterializationSpec, LaunchSpecTemplate,
-    LoginSpec, NativeArtifactSpec, NativeInstallSpec, Platform, SyncedFilesMaterializationSpec,
+    LoginSpec, NativeArtifactSpec, NativeInstallSpec, PermissionOptionPresentationRule, Platform,
+    SyncedFilesMaterializationSpec,
 };
 
 /// Returns trusted process/auth descriptors from the bundled registry only.
@@ -84,6 +85,14 @@ fn agent_registry_agent_to_descriptor(
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?,
         },
+        permission_option_presentations: agent
+            .permission_option_presentations
+            .iter()
+            .map(|rule| PermissionOptionPresentationRule {
+                option_id: rule.option_id.clone(),
+                presentation: rule.presentation.clone(),
+            })
+            .collect(),
         docs_url: agent.docs_url.clone(),
     })
 }

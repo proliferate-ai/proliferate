@@ -7,8 +7,8 @@ describe("chat input helpers", () => {
       { optionId: "allow-once", label: "Allow once", kind: "allow_once" },
       { optionId: "reject-always", label: "Reject always", kind: "reject_always" },
     ])).toEqual([
-      { optionId: "allow-once", label: "Allow once", kind: "allow_once" },
-      { optionId: "reject-always", label: "Reject always", kind: "reject_always" },
+      { optionId: "allow-once", label: "Allow once", kind: "allow_once", presentation: null },
+      { optionId: "reject-always", label: "Reject always", kind: "reject_always", presentation: null },
     ]);
   });
 
@@ -16,7 +16,47 @@ describe("chat input helpers", () => {
     expect(parsePermissionOptionActions([
       { option_id: "allow-once", name: "Allow once", kind: "allow_once" },
     ])).toEqual([
-      { optionId: "allow-once", label: "Allow once", kind: "allow_once" },
+      { optionId: "allow-once", label: "Allow once", kind: "allow_once", presentation: null },
+    ]);
+  });
+
+  it("parses explicit feedback text input presentation metadata", () => {
+    expect(parsePermissionOptionActions([
+      {
+        optionId: "plan",
+        label: "No, keep planning",
+        kind: "reject_once",
+        presentation: {
+          kind: "feedback_text_input",
+          placeholder: "No, keep planning",
+        },
+      },
+    ])).toEqual([
+      {
+        optionId: "plan",
+        label: "No, keep planning",
+        kind: "reject_once",
+        presentation: {
+          kind: "feedback_text_input",
+          placeholder: "No, keep planning",
+        },
+      },
+    ]);
+  });
+
+  it("drops unknown presentation metadata", () => {
+    expect(parsePermissionOptionActions([
+      {
+        optionId: "plan",
+        label: "No, keep planning",
+        kind: "reject_once",
+        presentation: {
+          kind: "unknown",
+          placeholder: "No, keep planning",
+        },
+      },
+    ])).toEqual([
+      { optionId: "plan", label: "No, keep planning", kind: "reject_once", presentation: null },
     ]);
   });
 });

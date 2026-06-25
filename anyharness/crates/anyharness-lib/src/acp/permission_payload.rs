@@ -1,17 +1,33 @@
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{PermissionInteractionOption, PermissionInteractionOptionKind};
 
+use crate::domains::agents::model::PermissionOptionPresentationRule;
+
 const MAX_PERMISSION_RAW_JSON_BYTES: usize = 32 * 1024;
 
 pub fn permission_options(
     options: &[acp::schema::PermissionOption],
 ) -> Vec<PermissionInteractionOption> {
+    permission_options_with_presentations(options, &[])
+}
+
+pub fn permission_options_with_presentations(
+    options: &[acp::schema::PermissionOption],
+    presentation_rules: &[PermissionOptionPresentationRule],
+) -> Vec<PermissionInteractionOption> {
     options
         .iter()
-        .map(|option| PermissionInteractionOption {
-            option_id: option.option_id.to_string(),
-            label: option.name.clone(),
-            kind: permission_option_kind(option.kind),
+        .map(|option| {
+            let option_id = option.option_id.to_string();
+            PermissionInteractionOption {
+                presentation: presentation_rules
+                    .iter()
+                    .find(|rule| rule.option_id == option_id)
+                    .map(|rule| rule.presentation.clone()),
+                option_id,
+                label: option.name.clone(),
+                kind: permission_option_kind(option.kind),
+            }
         })
         .collect()
 }
@@ -116,6 +132,7 @@ mod tests {
             option_id: option_id.to_string(),
             label: label.to_string(),
             kind,
+            presentation: None,
         }
     }
 

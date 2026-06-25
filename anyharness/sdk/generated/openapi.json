@@ -4918,6 +4918,56 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/native-option": {
+      "post": {
+        "tags": [
+          "plans"
+        ],
+        "operationId": "resolve_plan_native_option",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanNativeOptionDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Resolved proposed plan native option",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanNativeOptionDecisionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/plans/{plan_id}/reject": {
       "post": {
         "tags": [
@@ -11385,6 +11435,16 @@
           },
           "optionId": {
             "type": "string"
+          },
+          "presentation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PermissionInteractionOptionPresentation"
+              }
+            ]
           }
         }
       },
@@ -11396,6 +11456,29 @@
           "reject_once",
           "reject_always",
           "unknown"
+        ]
+      },
+      "PermissionInteractionOptionPresentation": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/PermissionInteractionOptionPresentationKind"
+          },
+          "placeholder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PermissionInteractionOptionPresentationKind": {
+        "type": "string",
+        "enum": [
+          "feedback_text_input"
         ]
       },
       "PermissionInteractionPayload": {
@@ -11466,6 +11549,33 @@
           "sent",
           "failed"
         ]
+      },
+      "PlanNativeOptionDecisionRequest": {
+        "type": "object",
+        "required": [
+          "expectedDecisionVersion",
+          "optionId"
+        ],
+        "properties": {
+          "expectedDecisionVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "optionId": {
+            "type": "string"
+          }
+        }
+      },
+      "PlanNativeOptionDecisionResponse": {
+        "type": "object",
+        "required": [
+          "plan"
+        ],
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/ProposedPlanDetail"
+          }
+        }
       },
       "PrepareRepoRootMobilityDestinationRequest": {
         "type": "object",

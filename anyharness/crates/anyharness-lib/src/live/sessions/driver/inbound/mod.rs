@@ -5,10 +5,11 @@ use serde::Serialize;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::live::sessions::model::PermissionAdvisor;
-use crate::live::sessions::sink::SessionEventSink;
+use crate::domains::agents::model::PermissionOptionPresentationRule;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::PermissionAdvisor;
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
+use crate::live::sessions::sink::SessionEventSink;
 
 mod mcp_elicitation;
 mod permission;
@@ -31,6 +32,7 @@ pub(in crate::live::sessions) struct InboundDoor {
     pub live_session_handle: Arc<LiveSessionHandle>,
     pub workspace_id: String,
     pub agent_kind: String,
+    pub permission_option_presentations: Vec<PermissionOptionPresentationRule>,
     pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
 }
 
@@ -43,6 +45,7 @@ impl InboundDoor {
         live_session_handle: Arc<LiveSessionHandle>,
         workspace_id: String,
         agent_kind: String,
+        permission_option_presentations: Vec<PermissionOptionPresentationRule>,
         permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
     ) -> Self {
         Self {
@@ -53,6 +56,7 @@ impl InboundDoor {
             live_session_handle,
             workspace_id,
             agent_kind,
+            permission_option_presentations,
             permission_advisor,
         }
     }

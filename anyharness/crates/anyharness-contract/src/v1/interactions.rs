@@ -84,6 +84,8 @@ pub struct PermissionInteractionOption {
     pub option_id: String,
     pub label: String,
     pub kind: PermissionInteractionOptionKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<PermissionInteractionOptionPresentation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
@@ -94,6 +96,20 @@ pub enum PermissionInteractionOptionKind {
     RejectOnce,
     RejectAlways,
     Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionInteractionOptionPresentation {
+    pub kind: PermissionInteractionOptionPresentationKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionInteractionOptionPresentationKind {
+    FeedbackTextInput,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]

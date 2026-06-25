@@ -48,6 +48,22 @@ fn validate_agent(
             agent.kind
         );
     }
+    let mut seen_permission_option_presentations = HashSet::new();
+    for rule in &agent.permission_option_presentations {
+        if rule.option_id.trim().is_empty() {
+            anyhow::bail!(
+                "agent registry agent '{}' has empty permission option presentation id",
+                agent.kind
+            );
+        }
+        if !seen_permission_option_presentations.insert(rule.option_id.clone()) {
+            anyhow::bail!(
+                "agent registry agent '{}' permission option presentation '{}' is duplicated",
+                agent.kind,
+                rule.option_id
+            );
+        }
+    }
     validate_auth(&agent.kind, &agent.auth)
 }
 

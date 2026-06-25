@@ -30,8 +30,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    PendingInteractionPayloadSummary, PendingInteractionSummary, ProposedPlanDecisionState,
-    ProposedPlanNativeResolutionState,
+    PendingInteractionPayloadSummary, PendingInteractionSummary, PermissionInteractionOption,
+    PermissionInteractionOptionKind, ProposedPlanDecisionState, ProposedPlanNativeResolutionState,
 };
 
 use super::model::PlanRecord;
@@ -67,6 +67,7 @@ pub struct PlanDecisionOpOutput {
 pub struct PendingPermissionCandidate {
     pub request_id: String,
     pub tool_call_id: Option<String>,
+    pub options: Vec<PermissionInteractionOption>,
     /// `permission_option_mappings(options)` of the pending permission.
     pub option_mappings: serde_json::Value,
 }
@@ -88,10 +89,76 @@ impl PendingPermissionCandidate {
                 Some(PendingPermissionCandidate {
                     request_id: interaction.request_id.clone(),
                     tool_call_id: interaction.source.tool_call_id.clone(),
+                    options: options.clone(),
                     option_mappings: permission_option_mappings(options),
                 })
             })
             .collect()
+    }
+}
+
+/// Applies an exact harness-emitted native option to a proposed plan and asks
+/// the actor to resolve that linked permission before the API call returns.
+pub struct PlanNativeOptionDecisionOp {
+    pub plan_service: Arc<PlanService>,
+    pub plan_id: String,
+    pub expected_version: i64,
+    pub option_id: String,
+    /// See [`PendingPermissionCandidate`]; captured before the op was sent.
+    pub pending_permissions: Vec<PendingPermissionCandidate>,
+}
+
+impl SessionDomainOp for PlanNativeOptionDecisionOp {
+    fn begin(self: Box<Self>, emitter: &mut SessionOpEmitter<'_>) -> SessionOpStep {
+        let PlanNativeOptionDecisionOp {
+            plan_service,
+            plan_id,
+            expected_version,
+            option_id,
+            pending_permissions,
+        } = *self;
+
+        let plan = match plan_service.get(&plan_id) {
+            Ok(Some(plan)) => plan,
+            Ok(None) => return done(Err(PlanDecisionError::NotFound), None),
+            Err(error) => return done(Err(PlanDecisionError::Store(error)), None),
+        };
+        let native_resolution =
+            match plan_native_option_resolution(&plan, &option_id, &pending_permissions) {
+                Ok(resolution) => resolution,
+                Err(error) => return done(Err(error), None),
+            };
+
+        let context = plan_event_context(&emitter.event_ctx());
+        let (plan, envelopes) = match plan_service.update_decision_with_context(
+            &plan_id,
+            expected_version,
+            native_resolution.decision.clone(),
+            context,
+        ) {
+            Ok(result) => result,
+            Err(error) => return done(Err(error), None),
+        };
+        emitter.publish(envelopes);
+
+        let linked_request_id = relink_to_pending_permission_candidate(
+            &plan_service,
+            &plan,
+            &native_resolution.candidate,
+        );
+        let request_id = native_resolution.candidate.request_id.clone();
+
+        SessionOpStep::ResolveInteraction {
+            request_id: request_id.clone(),
+            resolution: Resolution::Selected { option_id },
+            then: Box::new(PlanDecisionFinish {
+                plan_service,
+                plan,
+                request_id,
+                mode: PlanFinishMode::Native,
+                linked_request_id,
+            }),
+        }
     }
 }
 
@@ -233,9 +300,7 @@ impl SessionOpFinish for PlanDecisionFinish {
                     );
                     (
                         ProposedPlanNativeResolutionState::Failed,
-                        Some(format!(
-                            "Failed to resolve native interaction: {error:?}"
-                        )),
+                        Some(format!("Failed to resolve native interaction: {error:?}")),
                     )
                 }
             },
@@ -275,7 +340,10 @@ impl SessionOpFinish for PlanDecisionFinish {
     }
 }
 
-fn done(result: Result<PlanRecord, PlanDecisionError>, linked_request_id: Option<String>) -> SessionOpStep {
+fn done(
+    result: Result<PlanRecord, PlanDecisionError>,
+    linked_request_id: Option<String>,
+) -> SessionOpStep {
     SessionOpStep::Done(Box::new(PlanDecisionOpOutput {
         result,
         linked_request_id,
@@ -308,6 +376,19 @@ fn relink_to_pending_permission(
         .rev()
         .find(|candidate| candidate.tool_call_id.as_deref() == Some(tool_call_id))?;
 
+    relink_to_pending_permission_candidate(plan_service, plan, candidate)
+}
+
+fn relink_to_pending_permission_candidate(
+    plan_service: &PlanService,
+    plan: &PlanRecord,
+    candidate: &PendingPermissionCandidate,
+) -> Option<String> {
+    let tool_call_id = plan.source_tool_call_id.as_deref()?;
+    if candidate.tool_call_id.as_deref() != Some(tool_call_id) {
+        return None;
+    }
+
     match plan_service.register_interaction_link(
         plan,
         &candidate.request_id,
@@ -327,6 +408,57 @@ fn relink_to_pending_permission(
             None
         }
     }
+}
+
+struct PlanNativeOptionResolution {
+    candidate: PendingPermissionCandidate,
+    decision: ProposedPlanDecisionState,
+}
+
+fn plan_native_option_resolution(
+    plan: &PlanRecord,
+    option_id: &str,
+    pending_permissions: &[PendingPermissionCandidate],
+) -> Result<PlanNativeOptionResolution, PlanDecisionError> {
+    let tool_call_id = plan.source_tool_call_id.as_deref().ok_or_else(|| {
+        PlanDecisionError::Store(anyhow::anyhow!(
+            "proposed plan has no source tool call for native option decision"
+        ))
+    })?;
+    let candidate = pending_permissions
+        .iter()
+        .rev()
+        .find(|candidate| candidate.tool_call_id.as_deref() == Some(tool_call_id))
+        .cloned()
+        .ok_or_else(|| {
+            PlanDecisionError::Store(anyhow::anyhow!(
+                "no pending native permission found for proposed plan"
+            ))
+        })?;
+    let option = candidate
+        .options
+        .iter()
+        .find(|option| option.option_id == option_id)
+        .ok_or_else(|| {
+            PlanDecisionError::Store(anyhow::anyhow!(
+                "native option '{option_id}' is not available for proposed plan"
+            ))
+        })?;
+    let decision = match option.kind {
+        PermissionInteractionOptionKind::AllowOnce
+        | PermissionInteractionOptionKind::AllowAlways => ProposedPlanDecisionState::Approved,
+        PermissionInteractionOptionKind::RejectOnce
+        | PermissionInteractionOptionKind::RejectAlways => ProposedPlanDecisionState::Rejected,
+        PermissionInteractionOptionKind::Unknown => {
+            return Err(PlanDecisionError::Store(anyhow::anyhow!(
+                "native option '{option_id}' has unknown permission kind"
+            )));
+        }
+    };
+    Ok(PlanNativeOptionResolution {
+        candidate,
+        decision,
+    })
 }
 
 #[derive(Debug, PartialEq)]

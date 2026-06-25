@@ -165,7 +165,8 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 |---|---|---|---|
 | `TodoTrackerPanel` | Long-lived, non-gating active agent state | `PlanEntry[]` as a fade-masked list | tiny muted icon + muted status text |
 | `ApprovalCard` | Short-lived, gating (demands a decision) | options from `pendingApproval`, one variant for all three `toolKind`s | plain title only — NO icon, NO label chip, NO separator |
-| `ProposedPlanCard` | Lives in the **transcript**, not above composer | immutable markdown plan snapshot, decision state, and plan actions | bold plan title + icon-only Copy/Collapse buttons |
+| `PlanDecisionComposerPanel` | Short-lived, gating native plan-mode decision | harness-emitted plan action options, with feedback input only when emitted as an option | plain native prompt title |
+| `ProposedPlanCard` | Lives in the **transcript**, not above composer | immutable markdown plan snapshot, decision state, and new-session handoff action | bold plan title + icon-only Copy/Collapse buttons |
 | `PlanReferenceAttachmentCard` | Draft/user-prompt attachment | immutable markdown plan snapshot attached to a prompt | compact draft chip + preview action before send; full collapsible transcript card after send |
 
 ### 3.1 `ApprovalCard` covers all three approval kinds
@@ -182,6 +183,26 @@ interactions (preserved by the SDK reducer at
 `anyharness/sdk/src/reducer/transcript.ts:applyInteractionRequested`). Do not
 parse `toolCallId` with regexes.
 
+### 3.1.1 Native plan decisions replace the composer
+
+Plan-mode decisions are native harness permission interactions. When a pending
+permission is linked to a proposed plan, the normal composer surface is
+temporarily replaced by `PlanDecisionComposerPanel`.
+
+- Render harness-emitted options in the exact emitted order. Do not reorder by
+  allow/reject kind.
+- Do not invent Proliferate-only plan options. A feedback text field is shown
+  only when one emitted option is a reject-kind "tell/do differently" option;
+  that emitted option is rendered as the field in its original order.
+- Submitting a normal row resolves the native interaction with that option id.
+- Submitting the feedback field first resolves the native interaction with the
+  emitted feedback option id, then enqueues the typed feedback as the next
+  prompt to the same session.
+- Escape and Dismiss use the same cancellation behavior as the composer Stop
+  action during a run.
+
+The generic `ApprovalCard` remains for non-plan permission interactions.
+
 ### 3.2 Proposed plans live in the transcript
 
 Claude's `ExitPlanMode` tool call and Codex's explicit proposed-plan adapter
@@ -189,7 +210,9 @@ signal carry markdown plan bodies. They render in the **transcript** as
 `ProposedPlanCard`, not above the composer.
 
 - New runtime sessions emit `proposed_plan` transcript items, and the card owns
-  approve/reject/implement-here actions.
+  immutable plan display plus the "Start in new session" handoff action. Native
+  approve/reject/continue choices belong in the composer replacement panel, not
+  in the transcript card.
 - The Claude tool-call intercept in `MessageList.tsx` is a compatibility
   fallback for older runtimes. If a first-class proposed plan exists for the
   same tool call, the tool-call fallback is hidden.
@@ -221,9 +244,9 @@ echoes it back as a `plan_reference` content part.
   workspace.
 - Plan title/body UI must be `data-telemetry-mask`, including picker rows,
   draft previews, transcript echo cards, and handoff dialogs.
-- Attaching or handing off a plan does not approve, reject, or mutate the
-  source proposed plan. Approval state remains local to the session that
-  received the original proposed-plan item.
+- Attaching or handing off a plan does not resolve the source session's native
+  plan-mode interaction. The source proposed plan remains a transcript artifact;
+  native plan decisions are made only through the composer replacement panel.
 
 ### 3.4 Todo tracker is Codex/Gemini only
 

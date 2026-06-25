@@ -1476,6 +1476,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/native-option": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve_plan_native_option"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/plans/{plan_id}/reject": {
         parameters: {
             query?: never;
@@ -3042,9 +3058,16 @@ export interface components {
             kind: components["schemas"]["PermissionInteractionOptionKind"];
             label: string;
             optionId: string;
+            presentation?: null | components["schemas"]["PermissionInteractionOptionPresentation"];
         };
         /** @enum {string} */
         PermissionInteractionOptionKind: "allow_once" | "allow_always" | "reject_once" | "reject_always" | "unknown";
+        PermissionInteractionOptionPresentation: {
+            kind: components["schemas"]["PermissionInteractionOptionPresentationKind"];
+            placeholder?: string | null;
+        };
+        /** @enum {string} */
+        PermissionInteractionOptionPresentationKind: "feedback_text_input";
         PermissionInteractionPayload: {
             context?: null | components["schemas"]["PermissionInteractionContext"];
             options?: components["schemas"]["PermissionInteractionOption"][];
@@ -3064,6 +3087,14 @@ export interface components {
         };
         /** @enum {string} */
         PlanHandoffPromptStatus: "queued" | "sent" | "failed";
+        PlanNativeOptionDecisionRequest: {
+            /** Format: int64 */
+            expectedDecisionVersion: number;
+            optionId: string;
+        };
+        PlanNativeOptionDecisionResponse: {
+            plan: components["schemas"]["ProposedPlanDetail"];
+        };
         PrepareRepoRootMobilityDestinationRequest: {
             destinationId?: string | null;
             preferredWorkspaceName?: string | null;
@@ -8123,6 +8154,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HandoffPlanResponse"];
+                };
+            };
+        };
+    };
+    resolve_plan_native_option: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanNativeOptionDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Resolved proposed plan native option */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanNativeOptionDecisionResponse"];
                 };
             };
         };
