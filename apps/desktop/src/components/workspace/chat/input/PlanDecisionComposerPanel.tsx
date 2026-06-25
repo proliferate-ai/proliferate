@@ -86,7 +86,7 @@ export function PlanDecisionComposerPanel({
         optionId: entry.action.optionId,
       });
       if (feedbackText) {
-        await promptSessionById(decision.plan.sourceSessionId, feedbackText);
+        await promptSessionById(decision.plan.sessionId, feedbackText);
       }
     })().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -96,7 +96,7 @@ export function PlanDecisionComposerPanel({
   }, [
     decision.plan.decisionVersion,
     decision.plan.id,
-    decision.plan.sourceSessionId,
+    decision.plan.sessionId,
     decision.pendingApproval.requestId,
     feedbackDraft,
     isSubmitting,

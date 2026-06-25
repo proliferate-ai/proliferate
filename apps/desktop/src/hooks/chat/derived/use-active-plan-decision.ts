@@ -16,7 +16,7 @@ export interface ActivePlanDecision {
   actions: PermissionOptionAction[];
   plan: {
     id: string;
-    sourceSessionId: string;
+    sessionId: string;
     decisionVersion: number;
   };
 }
@@ -35,16 +35,16 @@ export function useActivePlanDecision(): ActivePlanDecision | null {
   );
 
   return useMemo(() => (
-    pendingApproval ? {
+    pendingApproval && activeSessionId ? {
       pendingApproval: pendingApproval.interaction,
       actions,
       plan: {
         id: pendingApproval.plan.planId,
-        sourceSessionId: pendingApproval.plan.sourceSessionId,
+        sessionId: activeSessionId,
         decisionVersion: pendingApproval.decision?.decisionVersion ?? 1,
       },
     } : null
-  ), [actions, pendingApproval]);
+  ), [actions, activeSessionId, pendingApproval]);
 }
 
 interface PendingPlanDecisionSelection {
