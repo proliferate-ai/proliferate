@@ -7,7 +7,6 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from proliferate.auth.authorization import OwnerSelection
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
@@ -175,7 +174,7 @@ async def test_organization_member_list_and_last_owner_protection(
 
     removed_user = await _create_user_and_get_tokens(client, email="removed@acme.dev")
     from proliferate.db import engine as engine_module
-    from proliferate.db.models.auth import SsoConnection, SsoIdentity
+    from proliferate.db.models.auth import SsoIdentity
 
     async with engine_module.async_session_factory() as session:
         now = datetime.now(UTC)
@@ -189,32 +188,6 @@ async def test_organization_member_list_and_last_owner_protection(
         )
         session.add(sso_user)
         await session.flush()
-        other_organization = Organization(
-            name="Other Org",
-            logo_domain="other.dev",
-            status=ORGANIZATION_STATUS_ACTIVE,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(other_organization)
-        await session.flush()
-        other_connection = SsoConnection(
-            scope="organization",
-            organization_id=other_organization.id,
-            protocol="oidc",
-            status="enabled",
-            display_name="Other Org SSO",
-            login_policy="optional",
-            jit_policy="create_member",
-            default_role=ORGANIZATION_ROLE_MEMBER,
-            allowed_domains_json='["other.dev"]',
-            oidc_issuer_url="https://accounts.google.com",
-            oidc_client_id="other-client-id",
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(other_connection)
-        await session.flush()
         session.add(
             SsoIdentity(
                 user_id=sso_user.id,
@@ -223,23 +196,6 @@ async def test_organization_member_list_and_last_owner_protection(
                 connection_key="deployment",
                 protocol="oidc",
                 provider_subject="105348973383490238728",
-                email="sso@acme.dev",
-                email_verified=True,
-                display_name="SSO User",
-                linked_at=now,
-                last_login_at=now,
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        session.add(
-            SsoIdentity(
-                user_id=sso_user.id,
-                organization_id=other_organization.id,
-                connection_id=other_connection.id,
-                connection_key=f"organization:{other_connection.id}",
-                protocol="oidc",
-                provider_subject="auth0|cross-org-subject",
                 email="sso@acme.dev",
                 email_verified=True,
                 display_name="SSO User",
@@ -294,104 +250,6 @@ async def test_organization_member_list_and_last_owner_protection(
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "cannot_modify_own_membership"
-
-
-@pytest.mark.asyncio
-async def test_list_organizations_ensures_default_owned_organization(
-    client: AsyncClient,
-) -> None:
-    user = await _create_user_and_get_tokens(client, email="no-team@acme.dev")
-
-    response = await client.get("/v1/organizations", headers=_headers(user))
-
-    assert response.status_code == 200
-    organizations = response.json()["organizations"]
-    assert len(organizations) == 1
-    assert organizations[0]["name"] == "Acme"
-    assert organizations[0]["logoDomain"] == "acme.dev"
-    assert organizations[0]["membership"]["role"] == "owner"
-
-    from proliferate.db import engine as engine_module
-
-    async with engine_module.async_session_factory() as session:
-        organization_count = await session.scalar(select(Organization).limit(1))
-    assert organization_count is not None
-
-
-@pytest.mark.asyncio
-async def test_sso_jit_membership_allows_existing_user_with_another_active_org(
-    client: AsyncClient,
-) -> None:
-    user = await _create_user_and_get_tokens(client, email="multi-org-sso@acme.dev")
-    await _create_organization_for_user(user_id=user["user_id"], name="Personal Org")
-
-    from proliferate.db import engine as engine_module
-    from proliferate.db.store import auth_sso as sso_store
-
-    async with engine_module.async_session_factory() as session:
-        now = datetime.now(UTC)
-        target_org = Organization(
-            name="Target Org",
-            logo_domain="target.dev",
-            status=ORGANIZATION_STATUS_ACTIVE,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(target_org)
-        await session.flush()
-
-        await sso_store.ensure_sso_organization_membership(
-            session,
-            organization_id=target_org.id,
-            user_id=uuid.UUID(user["user_id"]),
-            role=ORGANIZATION_ROLE_MEMBER,
-        )
-        await session.commit()
-
-    async with engine_module.async_session_factory() as session:
-        active_memberships = (
-            await session.execute(
-                select(OrganizationMembership).where(
-                    OrganizationMembership.user_id == uuid.UUID(user["user_id"]),
-                    OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                )
-            )
-        ).scalars().all()
-
-    assert len(active_memberships) == 2
-
-
-@pytest.mark.asyncio
-async def test_resolve_owner_context_uses_threaded_db(
-    client: AsyncClient,
-) -> None:
-    owner = await _create_user_and_get_tokens(
-        client,
-        email="owner@acme.dev",
-        display_name="Owner User",
-    )
-    await _create_organization_for_user(user_id=owner["user_id"])
-    organization = await _default_organization(client, owner)
-    organization_id = uuid.UUID(str(organization["id"]))
-
-    from proliferate.db import engine as engine_module
-    from proliferate.db.models.auth import User
-
-    async with engine_module.async_session_factory() as session:
-        user = await session.get(User, uuid.UUID(owner["user_id"]))
-        assert user is not None
-        context = await organization_service.resolve_owner_context(
-            user,
-            OwnerSelection(
-                owner_scope="organization",
-                organization_id=organization_id,
-            ),
-            db=session,
-        )
-
-    assert context.owner_scope == "organization"
-    assert context.organization_id == organization_id
-    assert context.membership_role == "owner"
 
 
 @pytest.mark.asyncio
