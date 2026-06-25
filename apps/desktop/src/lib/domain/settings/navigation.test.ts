@@ -81,6 +81,18 @@ describe("settings navigation", () => {
     });
   });
 
+  it("falls parked budget settings links back to general", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "organization-limits",
+      repositories: [],
+    })).toEqual({
+      activeSection: "general",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
   it("falls removed review settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "review",
@@ -98,7 +110,6 @@ describe("settings navigation", () => {
       "organization-integrations",
       "organization-members",
       "organization-model-policy",
-      "organization-limits",
     ]) {
       expect(resolveSettingsSelection({
         rawSection: section,

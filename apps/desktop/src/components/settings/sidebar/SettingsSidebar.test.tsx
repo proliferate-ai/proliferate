@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
-import type { SettingsSection } from "@/config/settings";
+import {
+  TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
+  type SettingsSection,
+} from "@/config/settings";
 import {
   clearShortcutHandlerRegistryForTests,
   getShortcutHandler,
@@ -133,10 +136,9 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Admin",
       "Organization settings",
       "Members",
-      "Plan + billing",
+      "Billing",
       "Integrations",
       "Model policy",
-      "Limits",
       "Workspaces",
       "Environments",
       "Personal compute",
@@ -173,20 +175,31 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.getAllByText("tbr")).toHaveLength(1);
   });
 
-  it("hides admin-only rows for non-admins", () => {
+  it("honors admin-only row visibility for non-admins", () => {
     const onSelectSection = vi.fn();
     renderSettingsSidebar({
       adminAccess: { isAdmin: false, isLoading: false },
       onSelectSection,
     });
 
+    if (TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION) {
+      expect(screen.queryByText("Admin")).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Members/ })).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Organization settings/ })).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Integrations/ })).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Model policy/ })).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Budgets/ })).toBeNull();
+      return;
+    }
+
     expect(screen.queryByText("Admin")).toBeNull();
     expect(screen.queryByRole("button", { name: /Members/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Plan \+ billing/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Billing/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Integrations/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Model policy/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Limits/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Budgets/ })).toBeNull();
   });
 
   it("uses visible settings rows for non-admin shortcut numbering", async () => {

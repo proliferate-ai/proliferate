@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
-import type { BillingReturnSurface, CloudOwnerSelection } from "@proliferate/cloud-sdk";
+import type { BillingReturnSurface } from "@proliferate/cloud-sdk";
 import {
   useCloudBilling,
   useCloudBillingActions,
 } from "@proliferate/cloud-sdk-react";
 import {
-  BillingOwnerCard,
-  type BillingOwnerCardView,
-} from "@proliferate/product-ui/billing/BillingOwnerCard";
-import {
   BillingSettingsPane,
-  type BillingActionView,
   type BillingPlanView,
 } from "@proliferate/product-ui/billing/BillingSettingsPane";
-import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
-import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { Button } from "@proliferate/ui/primitives/Button";
+import {
+  BillingAutoTopUpCard,
+  BillingPlanCard,
+  BillingPortalCard,
+  type BillingPlanPresentation,
+} from "./BillingManagementCards";
+import {
+  BillingUsageUnitsSection,
+  type BillingUnitBalancePresentation,
+} from "./BillingUsageUnitsSection";
 
 export type BillingCheckoutReturnState = "success" | "cancel" | null;
 
@@ -34,8 +36,33 @@ export interface BillingSettingsSurfaceProps {
   billingReturnSurface?: BillingReturnSurface;
   checkoutReturnState?: BillingCheckoutReturnState;
   onOpenUrl: (url: string) => void | Promise<void>;
+  onOpenPricingPage?: () => void | Promise<void>;
   onOpenOrganizationSettings: () => void;
 }
+
+const MOCK_COMPUTE_BALANCE: BillingUnitBalancePresentation = {
+  kind: "compute",
+  title: "Compute units",
+  description: "Used by hosted runtime, sandboxes, and execution time.",
+  purchased: "360 PCUs",
+  available: "118 PCUs",
+  used: "242 PCUs",
+  availablePercent: 33,
+  topUpLabel: "Add compute units",
+  lowBalanceCopy: "Need more runtime capacity? Add compute units any time.",
+};
+
+const MOCK_LLM_BALANCE: BillingUnitBalancePresentation = {
+  kind: "llm",
+  title: "LLM credits",
+  description: "Used by model gateway calls, inference-backed tools, and managed model access.",
+  purchased: "12,000 LLM credits",
+  available: "4,600 LLM credits",
+  used: "7,400 LLM credits",
+  availablePercent: 38,
+  topUpLabel: "Add LLM credits",
+  lowBalanceCopy: "Need more model usage? Add LLM credits any time.",
+};
 
 export function BillingSettingsSurface({
   organization,
@@ -44,6 +71,7 @@ export function BillingSettingsSurface({
   billingReturnSurface = "web",
   checkoutReturnState = null,
   onOpenUrl,
+  onOpenPricingPage,
   onOpenOrganizationSettings,
 }: BillingSettingsSurfaceProps) {
   const billingReturnOptions = { returnSurface: billingReturnSurface };
@@ -53,6 +81,7 @@ export function BillingSettingsSurface({
   const comparisonBilling = useCloudBilling(comparisonOwner, enabled);
   const comparisonActions = useCloudBillingActions(comparisonOwner, billingReturnOptions);
   const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
+  const [planManagementOpen, setPlanManagementOpen] = useState(false);
 
   useEffect(() => {
     if (checkoutReturnState !== "success") {
@@ -61,18 +90,23 @@ export function BillingSettingsSurface({
     void comparisonBilling.refetch();
   }, [checkoutReturnState, comparisonBilling.refetch]);
 
-  async function openComparisonBillingAction() {
+  function openPlanManagement() {
     setComparisonActionError(null);
     if (!organization) {
       onOpenOrganizationSettings();
       return;
     }
     if (!organization.canManageBilling) {
-      setComparisonActionError("Team billing is managed by owners and admins.");
+      setComparisonActionError("Organization billing is managed by owners and admins.");
       return;
     }
+    setPlanManagementOpen(true);
+  }
+
+  async function openComparisonBillingAction(action: "checkout" | "portal") {
+    setComparisonActionError(null);
     try {
-      const response = comparisonBilling.data?.isPaidCloud
+      const response = action === "portal"
         ? await comparisonActions.createBillingPortal()
         : await comparisonActions.createCloudCheckout();
       await onOpenUrl(response.url);
@@ -83,302 +117,236 @@ export function BillingSettingsSurface({
     }
   }
 
+  async function updateComparisonTopUp(nextEnabled: boolean) {
+    setComparisonActionError(null);
+    try {
+      await comparisonActions.updateOverageEnabled({ enabled: nextEnabled });
+    } catch (error) {
+      setComparisonActionError(
+        error instanceof Error ? error.message : "Top up setting could not be updated.",
+      );
+    }
+  }
+
+  function openPricingPage() {
+    if (!onOpenPricingPage) {
+      return;
+    }
+    void onOpenPricingPage();
+  }
+
+  const billingPlan = comparisonBilling.data;
+  const currentPlanKey = planKeyForBilling(billingPlan);
+  const plan = planSummary(currentPlanKey, billingPlan);
+  const unitBalances = billingUnitBalances(billingPlan);
+  const topUpEnabled = Boolean(
+    billingPlan?.managedCloudOverageEnabled || billingPlan?.overageEnabled,
+  );
+  const canManage = organization?.canManageBilling === true;
+  const paidPlan = billingPlan?.isPaidCloud === true;
+  const comparisonActionDisabled = !enabled
+    || organizationLoading
+    || (canManage ? comparisonBilling.isLoading : false);
+  const billingActionDisabled = comparisonActionDisabled || !canManage || !paidPlan;
+  const coreActionLoading = billingPlan?.isPaidCloud
+    ? comparisonActions.creatingBillingPortal
+    : comparisonActions.creatingCloudCheckout;
+
   return (
-    <section className="space-y-6">
+    <section className="max-w-[820px] space-y-6">
       <SettingsPageHeader
-        title="Plan + billing"
-        description="Review account credits and manage organization plan, seats, cloud runtime, auto top up, overage, and plan changes."
+        title="Billing"
+        description="Manage usage and billing details."
       />
       <BillingSettingsPane
         checkoutReturnState={checkoutReturnState}
-        currentPlanKey={planKeyForBilling(comparisonBilling.data)}
+        currentPlanKey={currentPlanKey}
         planComparisonAction={{
-          label: !organization
-            ? "Create Team"
-            : comparisonBilling.data?.isPaidCloud
-              ? "Manage Team billing"
-              : "Upgrade Team",
-          loading: comparisonBilling.data?.isPaidCloud
-            ? comparisonActions.creatingBillingPortal
-            : comparisonActions.creatingCloudCheckout,
-          disabled: !enabled
-            || organizationLoading
-            || (organization?.canManageBilling ? comparisonBilling.isLoading : false),
-          onClick: () => {
-            void openComparisonBillingAction();
-          },
+          label: !organization ? "Create organization" : "Manage plan",
+          disabled: comparisonActionDisabled,
+          onClick: openPlanManagement,
         }}
+        enterprisePlanAction={onOpenPricingPage ? {
+          label: "Request trial",
+          onClick: openPricingPage,
+        } : undefined}
+        planManagementDialog={canManage && organization ? {
+          open: planManagementOpen,
+          onClose: () => {
+            setPlanManagementOpen(false);
+          },
+          currentPlanKey,
+          organizationName: organization.name,
+          coreAction: {
+            label: billingPlan?.isPaidCloud ? "Manage Core" : "Upgrade to Core",
+            loading: coreActionLoading,
+            disabled: comparisonActionDisabled,
+            onClick: () => {
+              void openComparisonBillingAction(
+                billingPlan?.isPaidCloud ? "portal" : "checkout",
+              );
+            },
+          },
+          portalAction: billingPlan?.isPaidCloud
+            ? {
+                label: "Billing portal",
+                loading: comparisonActions.creatingBillingPortal,
+                disabled: comparisonActionDisabled,
+                onClick: () => {
+                  void openComparisonBillingAction("portal");
+                },
+              }
+            : undefined,
+          enterpriseAction: onOpenPricingPage ? {
+            label: "Request trial",
+            onClick: openPricingPage,
+          } : undefined,
+          pricingAction: onOpenPricingPage ? {
+            label: "Learn more about pricing",
+            onClick: openPricingPage,
+          } : undefined,
+          actionErrorMessage: comparisonActionError,
+        } : undefined}
       >
-        {comparisonActionError ? (
-          <SettingsCard>
-            <SettingsCardRow label="Plan action failed" description={comparisonActionError} />
-          </SettingsCard>
-        ) : null}
-
-        <BillingOwnerController
-          title="Account credits"
-          description="Included cloud usage and onboarding credits for work you launch from this account."
-          iconKind="personal"
-          checkoutReturnState={checkoutReturnState}
-          actionsEnabled={false}
-          accountCreditsOnly
-          enabled={enabled}
-          billingReturnSurface={billingReturnSurface}
-          onOpenUrl={onOpenUrl}
+        <BillingPlanCard
+          plan={plan}
+          organization={organization}
+          organizationLoading={organizationLoading}
+          loading={canManage ? comparisonBilling.isLoading : false}
+          actionError={comparisonActionError}
+          onManage={openPlanManagement}
         />
 
-        {organizationLoading ? (
-          <SettingsCard>
-            <SettingsCardRow label="Team billing" description="Loading team..." />
-          </SettingsCard>
-        ) : null}
+        <BillingUsageUnitsSection
+          unitBalances={unitBalances}
+          addCreditsLoading={false}
+          addCreditsDisabled
+        />
 
-        {!organizationLoading && !organization ? (
-          <SettingsCard>
-            <SettingsCardRow
-              label="Team billing"
-              description="Create a team from Organization settings to add seats, organization cloud, Slack work, and org admin controls."
-            >
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={onOpenOrganizationSettings}
-              >
-                Open Organization
-              </Button>
-            </SettingsCardRow>
-          </SettingsCard>
-        ) : null}
+        <BillingAutoTopUpCard
+          enabled={topUpEnabled}
+          disabled={billingActionDisabled || comparisonActions.updatingOverage}
+          saving={comparisonActions.updatingOverage}
+          onEnabledChange={(value) => {
+            void updateComparisonTopUp(value);
+          }}
+        />
 
-        {organization?.canManageBilling ? (
-          <>
-            <BillingOwnerController
-              key={organization.id}
-              title={`${organization.name} billing`}
-              description="Applies to organization cloud workspaces, team workflows, Slack sessions, and cloud usage."
-              iconKind="organization"
-              owner={{ ownerScope: "organization", organizationId: organization.id }}
-              checkoutReturnState={checkoutReturnState}
-              actionsEnabled
-              enabled={enabled}
-              billingReturnSurface={billingReturnSurface}
-              onOpenUrl={onOpenUrl}
-            />
-            <SettingsCard>
-              <SettingsCardRow
-                label="Auto top up"
-                description="Automatically refill organization-managed credits when balance reaches a threshold."
-              >
-                <Button type="button" size="sm" variant="secondary" disabled>
-                  Configure
-                </Button>
-              </SettingsCardRow>
-            </SettingsCard>
-          </>
-        ) : organization ? (
-          <SettingsCard>
-            <SettingsCardRow
-              label={`${organization.name} billing`}
-              description="Team billing is managed by owners and admins."
-            />
-          </SettingsCard>
-        ) : null}
+        <BillingPortalCard
+          loading={comparisonActions.creatingBillingPortal}
+          disabled={billingActionDisabled}
+          onOpenPortal={() => {
+            void openComparisonBillingAction("portal");
+          }}
+        />
       </BillingSettingsPane>
     </section>
   );
 }
 
-function BillingOwnerController({
-  title,
-  description,
-  iconKind,
-  owner,
-  checkoutReturnState,
-  actionsEnabled,
-  accountCreditsOnly = false,
-  enabled,
-  billingReturnSurface,
-  onOpenUrl,
-}: {
-  title: string;
-  description: string;
-  iconKind: "personal" | "organization";
-  owner?: CloudOwnerSelection;
-  checkoutReturnState?: BillingCheckoutReturnState;
-  actionsEnabled: boolean;
-  accountCreditsOnly?: boolean;
-  enabled: boolean;
-  billingReturnSurface: BillingReturnSurface;
-  onOpenUrl: (url: string) => void | Promise<void>;
-}) {
-  const billing = useCloudBilling(owner, enabled);
-  const billingActions = useCloudBillingActions(owner, { returnSurface: billingReturnSurface });
-  const billingPlan = billing.data;
-  const [actionError, setActionError] = useState<string | null>(null);
-  const invoiceUrl = billingPlan?.hostedInvoiceUrl ?? null;
+type BillingPlanViewKey = "free" | "core" | "enterprise";
 
-  useEffect(() => {
-    if (checkoutReturnState !== "success") {
-      return;
-    }
-    void billing.refetch();
-    const timers = [1500, 4500, 9000].map((delayMs) =>
-      window.setTimeout(() => {
-        void billing.refetch();
-      }, delayMs)
-    );
-    return () => {
-      for (const timer of timers) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [billing.refetch, checkoutReturnState]);
-
-  async function openBillingAction(action: "checkout" | "portal" | "refill") {
-    if (!actionsEnabled) {
-      return;
-    }
-    setActionError(null);
-    try {
-      const response = action === "portal"
-        ? await billingActions.createBillingPortal()
-        : action === "refill"
-          ? await billingActions.createRefillCheckout()
-          : await billingActions.createCloudCheckout();
-      await onOpenUrl(response.url);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Billing action could not start.");
-    }
-  }
-
-  async function updateOverage(enabled: boolean) {
-    if (!actionsEnabled) {
-      return;
-    }
-    setActionError(null);
-    try {
-      await billingActions.updateOverageEnabled({ enabled });
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Overage settings could not be updated.");
-    }
-  }
-
-  const view: BillingOwnerCardView = {
-    title,
-    description,
-    iconKind,
-    plan: billingPlan,
-    loading: billing.isLoading,
-    error: billing.isError ? "Billing details could not be loaded." : null,
-    actionError,
-    retryAction: billing.isError
-      ? {
-          label: "Retry",
-          onClick: () => {
-            void billing.refetch();
-          },
-        }
-      : undefined,
-    manageAction: actionsEnabled && !accountCreditsOnly
-      ? {
-          label: "Manage billing",
-          loading: billingActions.creatingBillingPortal,
-          onClick: () => {
-            void openBillingAction("portal");
-          },
-        }
-      : undefined,
-    upgradeAction: actionsEnabled && !accountCreditsOnly
-      ? {
-          label: "Upgrade Team",
-          loading: billingActions.creatingCloudCheckout,
-          onClick: () => {
-            void openBillingAction("checkout");
-          },
-        }
-      : undefined,
-    refillAction: actionsEnabled
-      && !accountCreditsOnly
-      && billingPlan?.isPaidCloud
-      && !billingPlan.proBillingEnabled
-      && !billingPlan.hasUnlimitedCloudHours
-      ? {
-          label: "Refill 10h",
-          loading: billingActions.creatingRefillCheckout,
-          onClick: () => {
-            void openBillingAction("refill");
-          },
-        }
-      : undefined,
-    overageAction: actionsEnabled && !accountCreditsOnly
-      ? overageActionForPlan({
-          plan: billingPlan,
-          loading: billingActions.updatingOverage,
-          onUpdate: updateOverage,
-        })
-      : undefined,
-    invoiceAction: actionsEnabled && !accountCreditsOnly && invoiceUrl
-      ? {
-          label: "View invoice",
-          onClick: () => {
-            void onOpenUrl(invoiceUrl);
-          },
-        }
-      : undefined,
-  };
-
-  return <BillingOwnerCard view={view} />;
-}
-
-function planKeyForBilling(plan: BillingPlanView | null | undefined) {
+function planKeyForBilling(plan: BillingPlanView | null | undefined): BillingPlanViewKey | null {
   if (!plan) {
     return null;
   }
   if (plan.isUnlimited && !plan.isPaidCloud) {
     return "enterprise";
   }
-  return plan.isPaidCloud ? "team" : "free";
+  return plan.isPaidCloud ? "core" : "free";
 }
 
-function overageActionForPlan({
-  plan,
-  loading,
-  onUpdate,
-}: {
-  plan: BillingPlanView | null | undefined;
-  loading: boolean;
-  onUpdate: (enabled: boolean) => Promise<void>;
-}): BillingActionView | undefined {
-  if (!plan?.isPaidCloud || plan.isUnlimited) {
-    return undefined;
-  }
-
-  if (plan.proBillingEnabled && plan.legacyCloudSubscription) {
-    return undefined;
-  }
-
-  if (plan.proBillingEnabled) {
-    const nextEnabled = !plan.managedCloudOverageEnabled;
+function planSummary(
+  planKey: BillingPlanViewKey | null,
+  plan: BillingPlanView | null | undefined,
+): BillingPlanPresentation {
+  if (!plan) {
     return {
-      label: nextEnabled ? "Turn on overage" : "Turn off overage",
-      loading,
-      onClick: () => {
-        void onUpdate(nextEnabled);
-      },
+      name: "Core plan",
+      price: "$20/month",
+      badge: "Mocked",
+      badgeTone: "neutral",
+    };
+  }
+  if (planKey === "enterprise") {
+    return {
+      name: "Enterprise plan",
+      price: "custom",
+      badge: "Active",
+      badgeTone: "success",
+    };
+  }
+  if (planKey === "core") {
+    return {
+      name: "Core plan",
+      price: "$20/month",
+      badge: "Active",
+      badgeTone: "success",
+    };
+  }
+  return {
+    name: "Free plan",
+    price: "$0/month",
+    badge: "Active",
+    badgeTone: "neutral",
+  };
+}
+
+function billingUnitBalances(
+  plan: BillingPlanView | null | undefined,
+): BillingUnitBalancePresentation[] {
+  return [
+    computeBalanceSummary(plan),
+    MOCK_LLM_BALANCE,
+  ];
+}
+
+function computeBalanceSummary(
+  plan: BillingPlanView | null | undefined,
+): BillingUnitBalancePresentation {
+  if (!plan) {
+    return MOCK_COMPUTE_BALANCE;
+  }
+
+  const visibleGrants = (plan.grantAllocations ?? []).filter((grant) =>
+    grant.active || grant.consumedSeconds > 0 || grant.remainingSeconds > 0
+  );
+  if (visibleGrants.length > 0) {
+    const purchased = visibleGrants.reduce(
+      (total, grant) => total + secondsToCredits(grant.totalSeconds),
+      0,
+    );
+    const available = visibleGrants.reduce(
+      (total, grant) => total + secondsToCredits(grant.remainingSeconds),
+      0,
+    );
+    const used = visibleGrants.reduce(
+      (total, grant) => total + secondsToCredits(grant.consumedSeconds),
+      0,
+    );
+    return {
+      ...MOCK_COMPUTE_BALANCE,
+      purchased: formatCredits(purchased),
+      available: formatCredits(available),
+      used: formatCredits(used),
+      availablePercent: purchased > 0 ? Math.round((available / purchased) * 100) : null,
     };
   }
 
-  if (plan.hasUnlimitedCloudHours) {
-    return undefined;
-  }
+  return MOCK_COMPUTE_BALANCE;
+}
 
-  const nextEnabled = !plan.overageEnabled;
-  return {
-    label: nextEnabled ? "Turn on overage" : "Turn off overage",
-    loading,
-    onClick: () => {
-      void onUpdate(nextEnabled);
-    },
-  };
+function secondsToCredits(seconds: number | null | undefined): number {
+  return Math.max(seconds ?? 0, 0) / 3600;
+}
+
+function formatCredits(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "Unlimited";
+  }
+  const rounded = Math.round(Math.max(value, 0) * 10) / 10;
+  const formatted = rounded.toLocaleString(undefined, {
+    maximumFractionDigits: Number.isInteger(rounded) ? 0 : 1,
+  });
+  return `${formatted} ${rounded === 1 ? "PCU" : "PCUs"}`;
 }

@@ -2,7 +2,11 @@ import type { ReactNode } from "react";
 
 import type { BillingPlanColumn } from "./billing-plan-ladder";
 import type { BillingActionView } from "./billing-types";
-import { CheckoutReturnNotice, PlanComparisonCard } from "./BillingPlanComparison";
+import {
+  BillingPlanManagementDialog,
+  type BillingPlanManagementDialogProps,
+} from "./BillingPlanManagementDialog";
+import { CheckoutReturnNotice } from "./BillingPlanComparison";
 
 export type {
   BillingActionView,
@@ -13,6 +17,8 @@ export type {
 export interface BillingSettingsPaneProps {
   children: ReactNode;
   planComparisonAction?: BillingActionView;
+  enterprisePlanAction?: BillingActionView;
+  planManagementDialog?: BillingPlanManagementDialogProps;
   currentPlanKey?: BillingPlanColumn["key"] | null;
   checkoutReturnState?: "success" | "cancel" | null;
 }
@@ -20,14 +26,23 @@ export interface BillingSettingsPaneProps {
 export function BillingSettingsPane({
   children,
   planComparisonAction,
+  enterprisePlanAction,
+  planManagementDialog,
   currentPlanKey,
   checkoutReturnState,
 }: BillingSettingsPaneProps) {
   return (
     <div className="space-y-6">
       {checkoutReturnState ? <CheckoutReturnNotice state={checkoutReturnState} /> : null}
-      <PlanComparisonCard action={planComparisonAction} currentPlanKey={currentPlanKey ?? null} />
       {children}
+      {planManagementDialog ? (
+        <BillingPlanManagementDialog
+          {...planManagementDialog}
+          coreAction={planManagementDialog.coreAction ?? planComparisonAction}
+          enterpriseAction={planManagementDialog.enterpriseAction ?? enterprisePlanAction}
+          currentPlanKey={planManagementDialog.currentPlanKey ?? currentPlanKey ?? null}
+        />
+      ) : null}
     </div>
   );
 }

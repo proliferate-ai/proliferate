@@ -25,6 +25,7 @@ import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   SETTINGS_SHORTCUT_SECTION_ORDER,
+  TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
 } from "@/config/settings";
 import {
@@ -196,6 +197,7 @@ export function SettingsSidebar({
       items: group.items.filter((item) =>
         item.kind !== "section"
         || !isSettingsAdminOnlySection(item.id)
+        || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
         || adminAccess?.isAdmin === true
       ),
     })).filter((group) => group.items.length > 0),

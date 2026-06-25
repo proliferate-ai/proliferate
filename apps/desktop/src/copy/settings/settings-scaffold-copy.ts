@@ -1,6 +1,5 @@
 export const SETTINGS_SCAFFOLD_PAGE_IDS = [
   "organization-model-policy",
-  "organization-limits",
 ] as const;
 
 export type SettingsScaffoldPageId = (typeof SETTINGS_SCAFFOLD_PAGE_IDS)[number];
@@ -32,24 +31,6 @@ export const SETTINGS_SCAFFOLD_COPY: Record<SettingsScaffoldPageId, SettingsScaf
       {
         label: "Provider constraints",
         description: "Provider-level constraints applied across organization-owned work.",
-      },
-    ],
-  },
-  "organization-limits": {
-    title: "Limits",
-    description: "Organization guardrails for LLM spend, runtime usage, and member-level budgets.",
-    rows: [
-      {
-        label: "Per-user LLM spend",
-        description: "Member budgets and enforcement behavior for organization-funded model usage.",
-      },
-      {
-        label: "Runtime usage",
-        description: "Organization cloud and SSH usage caps aligned with organization spend controls.",
-      },
-      {
-        label: "Alerts",
-        description: "Budget and usage alerts for admins and affected members.",
       },
     ],
   },

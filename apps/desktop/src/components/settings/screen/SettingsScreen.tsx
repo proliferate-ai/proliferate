@@ -1,6 +1,10 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { SETTINGS_DEFAULT_SECTION, type SettingsSection } from "@/config/settings";
+import {
+  SETTINGS_DEFAULT_SECTION,
+  TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
+  type SettingsSection,
+} from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
 import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
@@ -10,6 +14,8 @@ import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
+// BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
+// import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
@@ -97,6 +103,10 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
+  // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
+  // if (activeSection === "organization-limits") {
+  //   return <OrganizationBudgetsPane />;
+  // }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
   }
@@ -192,9 +202,15 @@ export function SettingsScreen({
   const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
   const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
   const shouldRedirectAdminSection =
-    activeSectionIsAdminOnly && !adminAccessLoading && admin.isAdmin !== true;
+    activeSectionIsAdminOnly
+    && !TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+    && !adminAccessLoading
+    && admin.isAdmin !== true;
   const effectiveActiveSection =
-    activeSectionIsAdminOnly && !adminAccessLoading && admin.isAdmin !== true
+    activeSectionIsAdminOnly
+    && !TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+    && !adminAccessLoading
+    && admin.isAdmin !== true
       ? SETTINGS_DEFAULT_SECTION
       : activeSection;
   const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);

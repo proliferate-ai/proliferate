@@ -2,7 +2,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 
 import type { BillingPlanView } from "./billing-types";
 import {
-  formatHours,
+  formatCredits,
   grantTypeLabel,
   secondsToHours,
   visibleGrantAllocations,
@@ -18,13 +18,13 @@ export function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
     <div className="space-y-3 border-t border-border-light pt-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-sm font-medium text-foreground">Credit usage</div>
+          <div className="text-sm font-medium text-foreground">Usage by credit grant</div>
           <p className="text-xs leading-5 text-muted-foreground">
-            Consumed hours across free trial, included, refill, and Team period grants.
+            Consumed PCUs across free trial, included, top-up, and Core period grants.
           </p>
         </div>
         <div className="text-xs text-muted-foreground">
-          {formatHours(grants.reduce((total, grant) => total + secondsToHours(grant.consumedSeconds), 0))} used
+          {formatCredits(grants.reduce((total, grant) => total + secondsToHours(grant.consumedSeconds), 0))} used
         </div>
       </div>
       <div className="space-y-2">
@@ -42,7 +42,7 @@ export function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
                   {grantTypeLabel(grant.grantType)}
                 </span>
                 <span className="shrink-0 text-muted-foreground">
-                  {formatHours(consumedHours)} / {formatHours(totalHours)}
+                  {formatCredits(consumedHours)} / {formatCredits(totalHours)}
                 </span>
                 {!grant.active ? <Badge tone="neutral">Inactive</Badge> : null}
               </div>
@@ -50,7 +50,7 @@ export function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
                 <div className="h-full rounded-full bg-foreground/70" style={{ width: `${percent}%` }} />
               </div>
               <div className="text-xs text-muted-foreground">
-                {grant.active ? `${formatHours(remainingHours)} remaining` : "No longer active"}
+                {grant.active ? `${formatCredits(remainingHours)} remaining` : "No longer active"}
               </div>
             </div>
           );

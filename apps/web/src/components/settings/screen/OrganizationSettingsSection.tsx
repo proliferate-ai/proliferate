@@ -21,7 +21,7 @@ export function OrganizationSettingsSection() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Organization"
-        description="Create or join one team for shared work, members, invites, and Team billing."
+        description="Create or join one team for shared work, members, invites, and organization billing."
       />
       {organization.actionError ? (
         <SettingsCard>
