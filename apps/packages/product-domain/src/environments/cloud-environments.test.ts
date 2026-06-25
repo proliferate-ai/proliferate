@@ -10,7 +10,7 @@ import {
 } from "./cloud-environments";
 
 describe("cloud environment helpers", () => {
-  it("projects configured and disabled cloud environments with local checkout state", () => {
+  it("projects local and cloud environments into one repository list", () => {
     expect(buildCloudEnvironmentListItems({
       configs: [
         { gitOwner: "acme", gitRepoName: "cloud-only", configured: true, filesVersion: 2 },
@@ -25,24 +25,50 @@ describe("cloud environment helpers", () => {
           name: "local",
           secondaryLabel: null,
         },
+        {
+          gitOwner: "acme",
+          gitRepoName: "local-only",
+          sourceRoot: "/repos/local-only",
+          name: "local-only",
+          secondaryLabel: null,
+        },
+        {
+          gitOwner: null,
+          gitRepoName: null,
+          sourceRoot: "/repos/no-remote",
+          name: "no-remote",
+          secondaryLabel: null,
+        },
       ],
     })).toMatchObject([
       {
-        id: "acme/local",
+        id: "/repos/local",
         configState: "configured",
-        localState: "local_and_cloud",
+        locationState: "local_and_cloud",
         localSourceRoot: "/repos/local",
+      },
+      {
+        id: "/repos/local-only",
+        configState: null,
+        locationState: "local_only",
+        localSourceRoot: "/repos/local-only",
+      },
+      {
+        id: "/repos/no-remote",
+        fullName: "no-remote",
+        configState: null,
+        locationState: "local_only",
       },
       {
         id: "acme/cloud-only",
         configState: "configured",
-        localState: "cloud_only",
+        locationState: "cloud_only",
         description: "Cloud-only environment",
       },
       {
         id: "acme/disabled",
         configState: "disabled",
-        localState: "cloud_only",
+        locationState: "cloud_only",
       },
     ]);
   });

@@ -3,7 +3,7 @@ import { useCloudRepoConfigs } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudEnvironmentListItems,
 } from "@proliferate/product-domain/environments/cloud-environments";
-import { formatGitRepoId, parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
+import { parseGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { CloudEnvironmentList } from "@proliferate/product-ui/environments/CloudEnvironmentList";
 import { AddCloudEnvironmentDialogController } from "./cloud-environments/AddCloudEnvironmentDialogController";
 import { CloudEnvironmentDetail } from "./cloud-environments/CloudEnvironmentDetail";
@@ -46,30 +46,19 @@ export function CloudEnvironmentsSettingsSurface({
   const repoConfigs = useCloudRepoConfigs(enabled);
   const localCheckoutsForDomain = useMemo(
     () => localCheckouts
-      .filter((checkout) => checkout.gitOwner && checkout.gitRepoName)
       .map((checkout) => ({
-        gitOwner: checkout.gitOwner!,
-        gitRepoName: checkout.gitRepoName!,
+        gitOwner: checkout.gitOwner ?? null,
+        gitRepoName: checkout.gitRepoName ?? null,
         sourceRoot: checkout.id,
         name: checkout.name,
         secondaryLabel: checkout.description,
       })),
     [localCheckouts],
   );
-  const cloudConfigByRepoId = useMemo(() => {
-    const byId = new Map<string, { configured: boolean }>();
-    for (const config of repoConfigs.data?.configs ?? []) {
-      byId.set(formatGitRepoId({
-        gitOwner: config.gitOwner,
-        gitRepoName: config.gitRepoName,
-      }), config);
-    }
-    return byId;
-  }, [repoConfigs.data?.configs]);
   const cloudEnvironmentItems = useMemo(() => buildCloudEnvironmentListItems({
     configs: repoConfigs.data?.configs ?? [],
-    localCheckouts: localCheckoutsForDomain,
-  }), [localCheckoutsForDomain, repoConfigs.data?.configs]);
+    localCheckouts: mode === "hybrid" ? localCheckoutsForDomain : [],
+  }), [localCheckoutsForDomain, mode, repoConfigs.data?.configs]);
 
   if (selectedCloudRepo && enabled) {
     return (
@@ -95,31 +84,13 @@ export function CloudEnvironmentsSettingsSurface({
         description={mode === "hybrid"
           ? "Configure local checkouts and personal Cloud environments."
           : "Personal Cloud environments are GitHub repositories Proliferate can run without a local clone."}
-        localCheckouts={mode === "hybrid" ? localCheckouts.map((checkout) => {
-          const repoId = checkout.gitOwner && checkout.gitRepoName
-            ? formatGitRepoId({
-                gitOwner: checkout.gitOwner,
-                gitRepoName: checkout.gitRepoName,
-              })
-            : null;
-          const cloudConfig = repoId ? cloudConfigByRepoId.get(repoId) : null;
-          return {
-            id: checkout.id,
-            name: checkout.name,
-            description: checkout.description,
-            cloudStatusLabel: cloudConfig
-              ? cloudConfig.configured
-                ? "Cloud enabled"
-                : "Cloud disabled"
-              : null,
-          };
-        }) : undefined}
         cloudEnvironments={cloudEnvironmentItems.map((environment) => ({
           id: environment.id,
           fullName: environment.fullName,
           description: environment.description,
           configured: environment.configured,
-          localState: environment.localState,
+          locationState: environment.locationState,
+          localSourceRoot: environment.localSourceRoot,
           trackedFileCount: null,
         }))}
         loadingCloudEnvironments={enabled && repoConfigs.isLoading}

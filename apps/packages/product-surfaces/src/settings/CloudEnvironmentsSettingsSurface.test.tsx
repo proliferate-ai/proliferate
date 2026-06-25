@@ -118,7 +118,7 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     });
   });
 
-  it("renders hybrid local checkout rows plus cloud environment rows", () => {
+  it("renders hybrid local and cloud rows as one repository list", () => {
     render(
       <CloudEnvironmentsSettingsSurface
         mode="hybrid"
@@ -135,11 +135,10 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       />,
     );
 
-    expect(screen.queryByText("Local checkouts")).not.toBeNull();
-    expect(screen.queryByText("project")).not.toBeNull();
-    expect(screen.queryByText("Cloud enabled")).not.toBeNull();
+    expect(screen.queryByText("Repositories")).not.toBeNull();
     expect(screen.queryByText("octo/desktop-cloud")).not.toBeNull();
-    expect(screen.queryByText("Local + cloud")).not.toBeNull();
+    expect(screen.queryByText("Local")).not.toBeNull();
+    expect(screen.queryByText("Cloud enabled")).not.toBeNull();
   });
 
   it("saves cloud-only detail edits with the existing core request body", async () => {

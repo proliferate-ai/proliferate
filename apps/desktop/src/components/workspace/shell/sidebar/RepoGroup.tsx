@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Plus, Settings, Trash } from "@proliferate/ui/icons";
+import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Globe, Plus, Settings, Trash } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -23,6 +23,7 @@ interface RepoGroupProps {
   name: string;
   count: number;
   collapsed: boolean;
+  environmentKind?: RepoGroupEnvironmentKind;
   children: ReactNode;
   onToggleCollapsed: () => void;
   onNewWorkspace?: () => void;
@@ -36,12 +37,15 @@ interface RepoGroupProps {
   onOpenSettings?: () => void;
 }
 
+export type RepoGroupEnvironmentKind = "local" | "local_cloud" | "cloud";
+
 const CREATE_WORKSPACE_SHORTCUT_CLASS = "shrink-0 text-muted-foreground/70";
 
 export function RepoGroup({
   name,
   count,
   collapsed,
+  environmentKind = "local",
   children,
   onToggleCollapsed,
   onNewWorkspace,
@@ -97,8 +101,8 @@ export function RepoGroup({
       label={name}
       count={count}
       collapsed={collapsed}
-      icon={<FolderClosedFilled className="size-3.5 shrink-0" />}
-      expandedIcon={<FolderFilled className="size-3.5 shrink-0" />}
+      icon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded={false} />}
+      expandedIcon={<RepoGroupEnvironmentIcon kind={environmentKind} expanded />}
       hoverIcon={(
         <ChevronRight
           className={`size-3 transition-transform ${collapsed ? "" : "rotate-90"}`}
@@ -218,6 +222,33 @@ export function RepoGroup({
       {!collapsed && <div className="flex w-full min-w-0 flex-col gap-px">{children}</div>}
     </div>
   );
+}
+
+function RepoGroupEnvironmentIcon({
+  kind,
+  expanded,
+}: {
+  kind: RepoGroupEnvironmentKind;
+  expanded: boolean;
+}) {
+  const FolderIcon = expanded ? FolderFilled : FolderClosedFilled;
+
+  if (kind === "cloud") {
+    return <CloudIcon className="size-3.5 shrink-0" />;
+  }
+
+  if (kind === "local_cloud") {
+    return (
+      <span className="relative flex size-4 shrink-0 items-center justify-center">
+        <FolderIcon className="size-3.5 shrink-0" />
+        <span className="absolute -bottom-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-sidebar text-sidebar-muted-foreground">
+          <Globe className="size-2" />
+        </span>
+      </span>
+    );
+  }
+
+  return <FolderIcon className="size-3.5 shrink-0" />;
 }
 
 function RepoContextMenuContent({

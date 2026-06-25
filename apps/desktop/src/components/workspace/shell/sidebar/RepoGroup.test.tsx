@@ -12,6 +12,7 @@ vi.mock("@proliferate/ui/icons", () => ({
   CloudIcon: () => <span data-icon="cloud" />,
   FolderClosedFilled: () => <span data-icon="folder-closed" />,
   FolderFilled: () => <span data-icon="folder-filled" />,
+  Globe: () => <span data-icon="globe" />,
   Plus: () => <span data-icon="plus" />,
   Settings: () => <span data-icon="settings" />,
   Trash: () => <span data-icon="trash" />,
@@ -85,11 +86,15 @@ vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
 }));
 
 vi.mock("@proliferate/product-ui/sidebar/ProductSidebarRepositories", () => ({
-  ProductSidebarRepoGroupHeader: ({ action, label }: {
+  ProductSidebarRepoGroupHeader: ({ action, collapsed, expandedIcon, icon, label }: {
     action: ReactNode;
+    collapsed: boolean;
+    expandedIcon: ReactNode;
+    icon: ReactNode;
     label: string;
   }) => (
     <div>
+      {collapsed ? icon : expandedIcon}
       <span>{label}</span>
       {action}
     </div>
@@ -138,5 +143,21 @@ describe("RepoGroup new workspace command scope", () => {
     unmount();
 
     expect(useNewWorkspaceCommandScopeStore.getState().activeScope).toBeNull();
+  });
+
+  it("marks local cloud repository groups with a cloud overlay", () => {
+    render(
+      <RepoGroup
+        name="Repo A"
+        count={1}
+        collapsed={false}
+        environmentKind="local_cloud"
+        onToggleCollapsed={vi.fn()}
+      >
+        <div>Workspace A</div>
+      </RepoGroup>,
+    );
+
+    expect(document.querySelector('[data-icon="globe"]')).toBeTruthy();
   });
 });
