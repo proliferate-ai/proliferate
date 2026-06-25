@@ -11,6 +11,7 @@ from proliferate.db.models.auth import User
 from proliferate.server.cloud.gateway.access import (
     GatewayWebSocketAuthError,
     authenticate_product_user_for_gateway_websocket,
+    accepted_gateway_websocket_subprotocol,
     product_token_from_websocket,
 )
 from proliferate.server.cloud.gateway.proxy import (
@@ -61,5 +62,5 @@ async def proxy_managed_sandbox_anyharness_websocket(
         upstream_base_url=access.upstream_base_url,
         upstream_token=access.upstream_token,
         path=path,
+        accept_subprotocol=accepted_gateway_websocket_subprotocol(websocket),
     )
-

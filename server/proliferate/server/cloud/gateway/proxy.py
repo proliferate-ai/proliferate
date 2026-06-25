@@ -11,7 +11,8 @@ import httpx
 import websockets
 from fastapi import Request, WebSocket
 from starlette.background import BackgroundTask
-from starlette.responses import StreamingResponse
+from starlette.requests import ClientDisconnect
+from starlette.responses import Response, StreamingResponse
 from starlette.websockets import WebSocketDisconnect
 from websockets.exceptions import ConnectionClosed
 
@@ -30,6 +31,7 @@ _STRIP_REQUEST_HEADERS = {
     "transfer-encoding",
     "upgrade",
     "content-length",
+    "sec-websocket-protocol",
 }
 _STRIP_RESPONSE_HEADERS = {
     "connection",
@@ -112,10 +114,14 @@ async def proxy_http_to_anyharness(
     upstream_base_url: str,
     upstream_token: str,
     path: str,
-) -> StreamingResponse:
+) -> Response:
     raw_path = _raw_anyharness_path(request.scope, path)
     upstream = _upstream_url(upstream_base_url, raw_path, _query_string(request.scope))
-    body = await request.body()
+    try:
+        body = await request.body()
+    except ClientDisconnect:
+        return Response(status_code=499)
+
     client = httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=False)
     upstream_request = client.build_request(
         request.method,
@@ -205,6 +211,7 @@ async def proxy_websocket_to_anyharness(
     upstream_base_url: str,
     upstream_token: str,
     path: str,
+    accept_subprotocol: str | None = None,
 ) -> None:
     upstream_url = _websocket_upstream_url(
         websocket,
@@ -222,7 +229,7 @@ async def proxy_websocket_to_anyharness(
             ping_interval=20,
             ping_timeout=20,
         ) as upstream:
-            await websocket.accept()
+            await websocket.accept(subprotocol=accept_subprotocol)
             client_task = asyncio.create_task(_pump_client_to_upstream(websocket, upstream))
             upstream_task = asyncio.create_task(_pump_upstream_to_client(websocket, upstream))
             done, pending = await asyncio.wait(

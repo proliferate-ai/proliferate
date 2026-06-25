@@ -10,6 +10,7 @@ import {
   isCloudStartBlockReason,
   isCloudWorkspacePending,
   isCloudWorkspacePostReadyPending,
+  resolveCloudWorkspaceStatus,
   type CloudStartBlockReason,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 
@@ -120,6 +121,7 @@ export function buildCloudWorkspaceStatusScreenModel(
 ): CloudWorkspaceStatusScreenModel {
   const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
   const branchLabel = `${workspace.repo.baseBranch} -> ${workspace.repo.branch}`;
+  const status = resolveCloudWorkspaceStatus(workspace) ?? "error";
 
   if (workspace.actionBlockKind) {
     const description = workspace.actionBlockReason
@@ -139,7 +141,7 @@ export function buildCloudWorkspaceStatusScreenModel(
     };
   }
 
-  if (workspace.status === "error") {
+  if (status === "error") {
     return {
       mode: "error",
       pendingStage: null,
@@ -160,7 +162,7 @@ export function buildCloudWorkspaceStatusScreenModel(
     };
   }
 
-  if (workspace.status === "archived") {
+  if (status === "archived") {
     return {
       mode: "archived",
       pendingStage: null,
@@ -199,13 +201,13 @@ export function buildCloudWorkspaceStatusScreenModel(
     };
   }
 
-  const activeStepIndex = getProvisioningStepIndex(workspace.status);
+  const activeStepIndex = getProvisioningStepIndex(status);
   const normalizedStepIndex = activeStepIndex >= 0
     ? activeStepIndex
     : CLOUD_WORKSPACE_PROVISIONING_STEPS.length - 1;
   const activeStep =
     CLOUD_WORKSPACE_PROVISIONING_STEPS[normalizedStepIndex] ?? null;
-  const isReady = workspace.status === "ready";
+  const isReady = status === "ready";
 
   return {
     mode: "pending",
@@ -279,7 +281,8 @@ export function buildCloudWorkspaceCompactStatusView(
 }
 
 function isFirstRuntimeSetupPending(workspace: CloudWorkspaceSummary): boolean {
-  return isCloudWorkspacePending(workspace.status) && workspace.runtime?.generation === 0;
+  return isCloudWorkspacePending(resolveCloudWorkspaceStatus(workspace))
+    && workspace.runtime?.generation === 0;
 }
 
 function getProvisioningStepIndex(status: string): number {

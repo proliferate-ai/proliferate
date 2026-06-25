@@ -120,6 +120,50 @@ async def test_http_proxy_preserves_path_query_and_injects_sandbox_auth(
     assert client.closed is True
 
 
+def test_websocket_headers_strip_product_protocol_auth() -> None:
+    forwarded = proxy._websocket_headers({
+        "sec-websocket-protocol": "proliferate-gateway-bearer, product-token",
+        "x-client-header": "kept",
+    })
+
+    assert forwarded == {"x-client-header": "kept"}
+
+
+@pytest.mark.asyncio
+async def test_http_proxy_returns_499_when_client_disconnects_before_forwarding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def receive() -> dict[str, object]:
+        return {"type": "http.disconnect"}
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/gateway/managed-sandbox/anyharness/v1/sessions",
+            "raw_path": b"/v1/gateway/managed-sandbox/anyharness/v1/sessions",
+            "query_string": b"",
+            "headers": [],
+        },
+        receive,
+    )
+
+    class _UnexpectedAsyncClient:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            raise AssertionError("upstream client should not be created")
+
+    monkeypatch.setattr(proxy.httpx, "AsyncClient", _UnexpectedAsyncClient)
+
+    response = await proxy.proxy_http_to_anyharness(
+        request,
+        upstream_base_url="https://sandbox.example.test",
+        upstream_token="sandbox-token",
+        path="v1/sessions",
+    )
+
+    assert response.status_code == 499
+
+
 def test_websocket_upstream_url_rewrites_access_token_and_preserves_after_seq() -> None:
     class _FakeWebSocket:
         scope = {

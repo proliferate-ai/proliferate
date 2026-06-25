@@ -187,6 +187,13 @@ async def get_target_state(
             db,
             target_id=target.id,
         )
+    profile = await _activate_profile_if_runtime_ready(
+        db,
+        profile=profile,
+        target=target,
+        sandbox=sandbox,
+        runtime_access=runtime_access,
+    )
     return SandboxProfileTargetState(
         profile=profile,
         target=target,
@@ -221,3 +228,33 @@ async def _require_profile_access(
         user_id=user.id,
     )
     require_target_admin_membership(membership)
+
+
+async def _activate_profile_if_runtime_ready(
+    db: AsyncSession,
+    *,
+    profile: profile_store.SandboxProfileSnapshot,
+    target: targets_store.CloudTargetSnapshot | None,
+    sandbox: sandbox_store.CloudSandboxSnapshot | None,
+    runtime_access: targets_store.CloudTargetRuntimeAccessSnapshot | None,
+) -> profile_store.SandboxProfileSnapshot:
+    if profile.status not in {"configuring", "provisioning"}:
+        return profile
+    if target is None or target.status != "online":
+        return profile
+    if sandbox is None or sandbox.status not in {"running", "paused"}:
+        return profile
+    if (
+        runtime_access is None
+        or not runtime_access.anyharness_base_url
+        or not runtime_access.runtime_token_ciphertext
+        or not runtime_access.anyharness_data_key_ciphertext
+        or runtime_access.cloud_sandbox_id != sandbox.id
+    ):
+        return profile
+    updated = await profile_store.update_sandbox_profile_status(
+        db,
+        sandbox_profile_id=profile.id,
+        status="active",
+    )
+    return updated or profile

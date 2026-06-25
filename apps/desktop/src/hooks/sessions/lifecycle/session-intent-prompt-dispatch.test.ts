@@ -209,6 +209,52 @@ describe("dispatchPromptIntent", () => {
     expect(mocks.prepareLocalRuntimeConfigForTarget.mock.invocationCallOrder[0]!)
       .toBeLessThan(mocks.mutateAsync.mock.invocationCallOrder[0]!);
   });
+
+  it("dispatches managed sandbox gateway prompts through AnyHarness", async () => {
+    mocks.getSessionClientAndWorkspace.mockResolvedValue({
+      connection: {
+        runtimeUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+        authToken: "product-token",
+        anyharnessWorkspaceId: "sandbox-workspace-1",
+      },
+      target: {
+        location: "cloud",
+        runtimeAccessKind: "proliferate-gateway",
+        baseUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+        authToken: "product-token",
+        anyharnessWorkspaceId: "sandbox-workspace-1",
+        runtimeGeneration: 1,
+        cloudWorkspaceId: "cloud-workspace-1",
+      },
+      workspaceId: "cloud:cloud-workspace-1",
+      materializedSessionId: "session-1",
+    });
+    const entry = useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "client-session-1",
+      workspaceId: "cloud:cloud-workspace-1",
+      text: "Build please",
+      blocks: [{ type: "text", text: "Build please" }],
+    });
+    mocks.mutateAsync.mockResolvedValue({
+      session: { id: "session-1" },
+      status: "queued",
+      queuedSeq: 1,
+    });
+
+    await dispatchPromptIntent(entry, createDeps());
+
+    expect(mocks.sendCloudPromptCommand).not.toHaveBeenCalled();
+    expect(mocks.mutateAsync).toHaveBeenCalledWith({
+      workspaceId: "cloud:cloud-workspace-1",
+      sessionId: "session-1",
+      request: {
+        promptId: "prompt-1",
+        blocks: [{ type: "text", text: "Build please" }],
+      },
+      requestOptions: undefined,
+    });
+  });
 });
 
 function createDeps(): PromptIntentDispatchDeps {

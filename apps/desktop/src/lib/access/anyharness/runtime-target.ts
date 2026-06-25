@@ -1,4 +1,5 @@
 import type { AgentAuthAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import { resolveManagedSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/managed-sandbox-gateway";
 import {
   getCloudWorkspaceConnectionWithRetry,
@@ -9,6 +10,7 @@ import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { cloudWorkspaceUsesManagedSandboxGateway } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 
 type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
   targetId?: string | null;
@@ -18,6 +20,7 @@ export interface RuntimeTarget {
   location: "local" | "cloud" | "target";
   baseUrl: string;
   authToken?: string;
+  webSocketAuthTransport?: TerminalWebSocketAuthTransport;
   anyharnessWorkspaceId: string;
   runtimeGeneration: number;
   runtimeAccessKind?: "direct" | "proliferate-gateway";
@@ -25,6 +28,12 @@ export interface RuntimeTarget {
   targetId?: string;
   allowedAgentKinds?: AgentAuthAgentKind[];
   readyAgentKinds?: AgentAuthAgentKind[];
+}
+
+export function runtimeTargetUsesCloudCommand(
+  target: Pick<RuntimeTarget, "location" | "runtimeAccessKind">,
+): boolean {
+  return target.location === "cloud" && target.runtimeAccessKind !== "proliferate-gateway";
 }
 
 export async function resolveRuntimeTargetForWorkspace(
@@ -70,7 +79,7 @@ export async function resolveRuntimeTargetForWorkspace(
     await getCloudWorkspaceWithRetry(cloudWorkspaceId);
   if (!cloudWorkspace) throw new Error("Cloud workspace not found.");
   const cloudWorkspaceCommandMetadata = cloudWorkspace as CloudWorkspaceCommandMetadata;
-  if (cloudWorkspace.status !== "ready") {
+  if (resolveCloudWorkspaceStatus(cloudWorkspace) !== "ready") {
     throw new Error("Cloud workspace is not ready yet.");
   }
 
@@ -98,6 +107,7 @@ export async function resolveRuntimeTargetForWorkspace(
       location: "cloud",
       baseUrl: connection.runtimeUrl,
       authToken: connection.accessToken,
+      webSocketAuthTransport: connection.webSocketAuthTransport,
       anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
       runtimeGeneration: connection.runtimeGeneration,
       runtimeAccessKind: "proliferate-gateway",

@@ -263,6 +263,32 @@ class WorkerAgentAuthMaterializationPlan(BaseModel):
     selections: list[WorkerAgentAuthSelectionPlan] = Field(default_factory=list)
 
 
+class DesktopAgentAuthConfigApplyRequestInput(BaseModel):
+    target_id: UUID | None = Field(default=None, alias="targetId")
+
+
+class DesktopAgentAuthSyncedFileMaterialization(BaseModel):
+    relative_path: str = Field(alias="relativePath")
+    content: str
+
+
+class DesktopAgentAuthConfigApplyResponse(BaseModel):
+    apply_request: dict[str, object] = Field(alias="applyRequest")
+    synced_files: list[DesktopAgentAuthSyncedFileMaterialization] = Field(
+        default_factory=list,
+        alias="syncedFiles",
+    )
+
+
+class DesktopAgentAuthConfigApplyStatusRequest(BaseModel):
+    target_id: UUID | None = Field(default=None, alias="targetId")
+    revision: int
+    status: str
+    applied: bool = True
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+
+
 class WorkerAgentAuthStatusRequest(BaseModel):
     status: str
     command_id: UUID = Field(alias="commandId")

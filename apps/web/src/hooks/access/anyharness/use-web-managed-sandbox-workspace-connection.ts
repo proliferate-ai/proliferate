@@ -25,6 +25,7 @@ export function useWebManagedSandboxWorkspaceConnection(
       runtimeUrl: runtime.runtimeUrl,
       authToken: runtime.authToken,
       anyharnessWorkspaceId: runtime.anyharnessWorkspaceId,
+      webSocketAuthTransport: runtime.webSocketAuthTransport,
     };
   }, [client, token, workspace]);
 }

@@ -33,6 +33,7 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
       return {
         runtimeUrl: selectedCloudRuntime.connectionInfo.runtimeUrl,
         authToken: selectedCloudRuntime.connectionInfo.accessToken,
+        webSocketAuthTransport: selectedCloudRuntime.connectionInfo.webSocketAuthTransport,
         anyharnessWorkspaceId: selectedCloudRuntime.connectionInfo.anyharnessWorkspaceId ?? "",
         runtimeGeneration: selectedCloudRuntime.connectionInfo.runtimeGeneration,
       };

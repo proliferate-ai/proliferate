@@ -293,6 +293,60 @@ export async function getSandboxAgentAuthTargetStates(
   });
 }
 
+export interface DesktopAgentAuthConfigApplyRequestInput {
+  targetId?: string | null;
+}
+
+export interface DesktopAgentAuthConfigApplyRequestResponse {
+  applyRequest: Record<string, unknown>;
+  syncedFiles?: Array<{
+    relativePath: string;
+    content: string;
+  }>;
+}
+
+export interface DesktopAgentAuthConfigApplyStatusInput {
+  targetId?: string | null;
+  revision: number;
+  status: string;
+  applied?: boolean;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}
+
+export async function getSandboxProfileDesktopAgentAuthConfigApplyRequest(
+  sandboxProfileId: string,
+  body: DesktopAgentAuthConfigApplyRequestInput = {},
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<DesktopAgentAuthConfigApplyRequestResponse> {
+  return client.requestJson<DesktopAgentAuthConfigApplyRequestResponse>({
+    method: "POST",
+    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-config/desktop-apply-request",
+    pathParams: { sandbox_profile_id: sandboxProfileId },
+    body,
+  });
+}
+
+export async function recordSandboxProfileDesktopAgentAuthConfigApplyStatus(
+  sandboxProfileId: string,
+  body: DesktopAgentAuthConfigApplyStatusInput,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AgentAuthMutationResponse> {
+  return client.requestJson<AgentAuthMutationResponse>({
+    method: "POST",
+    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-config/desktop-apply-status",
+    pathParams: { sandbox_profile_id: sandboxProfileId },
+    body: {
+      targetId: body.targetId ?? null,
+      revision: body.revision,
+      status: body.status,
+      applied: body.applied ?? true,
+      errorCode: body.errorCode ?? null,
+      errorMessage: body.errorMessage ?? null,
+    },
+  });
+}
+
 export async function ensureFreeManagedCredits(
   input: EnsureFreeManagedCreditsRequest = {},
   client: ProliferateCloudClient = getProliferateClient(),

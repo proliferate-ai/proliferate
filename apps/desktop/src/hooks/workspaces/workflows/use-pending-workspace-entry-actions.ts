@@ -4,6 +4,7 @@ import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-stat
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   type PendingWorkspaceEntry,
   resolvePendingWorktreeRetryInput,
@@ -104,7 +105,7 @@ export function usePendingWorkspaceEntryActions() {
             if (!current || current.attemptId !== entry.attemptId) {
               return;
             }
-            if (cloudWorkspaceId && cloudWorkspace?.status !== "ready") {
+            if (cloudWorkspaceId && resolveCloudWorkspaceStatus(cloudWorkspace) !== "ready") {
               setPendingWorkspaceEntry({
                 ...current,
                 stage: "awaiting-cloud-ready",

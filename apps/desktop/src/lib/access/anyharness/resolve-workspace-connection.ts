@@ -14,6 +14,7 @@ export async function resolveWorkspaceConnection(
   return {
     runtimeUrl: target.baseUrl,
     authToken: target.authToken,
+    webSocketAuthTransport: target.webSocketAuthTransport,
     anyharnessWorkspaceId: target.anyharnessWorkspaceId,
     runtimeGeneration: target.runtimeGeneration,
     runtimeAccessKind: target.runtimeAccessKind,

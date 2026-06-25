@@ -1,5 +1,6 @@
 import type { startCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import type { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { resolveSelectionConnection } from "@/hooks/workspaces/workflows/selection/connection";
 import { isWorkspaceSelectionCurrent } from "@/hooks/workspaces/workflows/selection/guards";
@@ -41,15 +42,16 @@ export async function resolveCloudSelectionConnectionWithStartRetry(
     }
 
     const startedWorkspace = await deps.startCloudWorkspace(input.cloudReadiness.cloudWorkspaceId);
+    const startedWorkspaceStatus = resolveCloudWorkspaceStatus(startedWorkspace);
     await input.selectionDeps.cache.invalidateCloudWorkspaceStartState(input.runtimeUrl);
     if (!isWorkspaceSelectionCurrent(input.context.workspaceId, input.context.selectionNonce)) {
       cancelLatencyFlow(input.latencyFlowId, "workspace_selection_stale");
       return null;
     }
-    if (startedWorkspace.status !== "ready") {
+    if (startedWorkspaceStatus !== "ready") {
       cancelLatencyFlow(input.latencyFlowId, "cloud_workspace_start_pending", {
         cloudWorkspaceId: input.cloudReadiness.cloudWorkspaceId,
-        status: startedWorkspace.status,
+        status: startedWorkspaceStatus,
       });
       return null;
     }

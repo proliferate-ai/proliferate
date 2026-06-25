@@ -363,9 +363,16 @@ async def get_account_readiness(
     *,
     user_id: UUID,
 ) -> AccountReadiness:
-    await backfill_legacy_oauth_accounts_for_user(db, user_id=user_id)
     identities = await get_identities_for_user_provider(db, user_id=user_id, provider="github")
     if not identities:
+        legacy = await _read_valid_legacy_github_account(db, user_id=user_id)
+        if legacy is not None:
+            return AccountReadiness(
+                product_ready=True,
+                missing_requirements=(),
+                github_identity_id=None,
+                github_grant_status=AuthProviderGrantStatus.READY.value,
+            )
         return AccountReadiness(
             product_ready=False,
             missing_requirements=("github_identity_missing",),
@@ -420,6 +427,15 @@ async def get_account_readiness(
             fallback_status = grant.status
             fallback_missing = missing
 
+    legacy = await _read_valid_legacy_github_account(db, user_id=user_id)
+    if legacy is not None:
+        return AccountReadiness(
+            product_ready=True,
+            missing_requirements=(),
+            github_identity_id=fallback_identity.id if identities else None,
+            github_grant_status=AuthProviderGrantStatus.READY.value,
+        )
+
     return AccountReadiness(
         product_ready=False,
         missing_requirements=tuple(fallback_missing or ["github_grant_missing"]),
@@ -462,6 +478,89 @@ async def get_ready_github_grant_for_user(
             avatar_url=identity.avatar_url,
         )
     return None
+
+
+async def read_ready_github_grant_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> ReadyGitHubGrant | None:
+    """Read a ready GitHub grant without mutating or locking auth rows."""
+    identities = await get_identities_for_user_provider(db, user_id=user_id, provider="github")
+    for identity in identities:
+        grant = await get_provider_grant(db, identity_id=identity.id, provider="github")
+        if grant is None:
+            continue
+        if _expires_at_is_past(grant.expires_at):
+            continue
+        if grant.status != AuthProviderGrantStatus.READY.value:
+            continue
+        if not _github_scopes_satisfy_requirements(_parse_scopes(grant.scopes_json)):
+            continue
+        if not grant.access_token_ciphertext:
+            continue
+
+        return ReadyGitHubGrant(
+            user_id=user_id,
+            identity_id=identity.id,
+            access_token=decrypt_text(grant.access_token_ciphertext),
+            account_email=identity.email,
+            display_name=identity.display_name,
+            avatar_url=identity.avatar_url,
+        )
+
+    legacy = (
+        await db.execute(
+            select(OAuthAccount)
+            .where(
+                OAuthAccount.user_id == user_id,
+                OAuthAccount.oauth_name == "github",
+            )
+            .order_by(OAuthAccount.id.asc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if legacy is None or not legacy.access_token:
+        return None
+    if _expires_at_is_past(_legacy_expires_at(legacy.expires_at)):
+        return None
+
+    identity = await get_identity_by_provider_subject(
+        db,
+        provider="github",
+        provider_subject=legacy.account_id,
+    )
+    return ReadyGitHubGrant(
+        user_id=user_id,
+        identity_id=identity.id if identity is not None else user_id,
+        access_token=legacy.access_token,
+        account_email=identity.email if identity is not None else legacy.account_email,
+        display_name=identity.display_name if identity is not None else None,
+        avatar_url=identity.avatar_url if identity is not None else None,
+    )
+
+
+async def _read_valid_legacy_github_account(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> OAuthAccount | None:
+    account = (
+        await db.execute(
+            select(OAuthAccount)
+            .where(
+                OAuthAccount.user_id == user_id,
+                OAuthAccount.oauth_name == "github",
+            )
+            .order_by(OAuthAccount.id.asc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if account is None or not account.access_token:
+        return None
+    if _expires_at_is_past(_legacy_expires_at(account.expires_at)):
+        return None
+    return account
 
 
 async def create_auth_challenge(
@@ -555,7 +654,6 @@ async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: 
             OAuthAccount.user_id == user_id,
             OAuthAccount.oauth_name.in_(("github", "google")),
         )
-        .with_for_update()
     )
     for account in result.scalars().all():
         provider = account.oauth_name

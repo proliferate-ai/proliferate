@@ -1,9 +1,11 @@
 import { createContext, type ReactNode, useContext } from "react";
+import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 
 export interface AnyHarnessResolvedConnection {
   runtimeUrl: string;
   authToken?: string;
   anyharnessWorkspaceId: string;
+  webSocketAuthTransport?: TerminalWebSocketAuthTransport;
 }
 
 export interface AnyHarnessWorkspaceContextValue {
@@ -58,6 +60,7 @@ export async function resolveWorkspaceConnectionFromContext(
       runtimeUrl,
       authToken: connection.authToken,
       anyharnessWorkspaceId,
+      webSocketAuthTransport: connection.webSocketAuthTransport,
     },
   };
 }

@@ -218,6 +218,23 @@ async def get_cloud_workspace_by_id(
     ).scalar_one_or_none()
 
 
+async def get_active_cloud_workspace_for_runtime_branch(
+    db: AsyncSession,
+    *,
+    runtime_environment_id: UUID,
+    git_branch: str,
+    exclude_workspace_id: UUID | None = None,
+) -> CloudWorkspace | None:
+    statement = select(CloudWorkspace).where(
+        CloudWorkspace.runtime_environment_id == runtime_environment_id,
+        CloudWorkspace.git_branch == git_branch,
+        CloudWorkspace.archived_at.is_(None),
+    )
+    if exclude_workspace_id is not None:
+        statement = statement.where(CloudWorkspace.id != exclude_workspace_id)
+    return (await db.execute(statement.limit(1))).scalar_one_or_none()
+
+
 async def get_existing_cloud_workspace(
     db: AsyncSession,
     *,

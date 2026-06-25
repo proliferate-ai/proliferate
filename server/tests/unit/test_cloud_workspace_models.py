@@ -66,6 +66,19 @@ def test_workspace_summary_projects_ready_at() -> None:
     assert ready_payload.model_dump(by_alias=True)["readyAt"] == "2026-05-30T07:30:45+00:00"
 
 
+def test_workspace_summary_serializes_legacy_and_current_status_keys() -> None:
+    workspace = _workspace(origin_json=None)
+    workspace.status = "ready"
+
+    payload = workspace_summary_payload(workspace)
+    dumped = payload.model_dump(by_alias=True)
+
+    assert payload.status == "ready"
+    assert payload.workspace_status == "ready"
+    assert dumped["status"] == "ready"
+    assert dumped["workspaceStatus"] == "ready"
+
+
 def test_workspace_summary_projects_creator_context_when_present() -> None:
     payload = workspace_summary_payload(
         _workspace(origin_json='{"kind":"system","entrypoint":"cloud"}'),

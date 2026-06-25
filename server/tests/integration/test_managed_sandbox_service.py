@@ -50,9 +50,11 @@ class _FakeSandboxProvider:
     preserves_processes_on_resume = True
 
     def __init__(self) -> None:
+        self.create_calls = 0
         self.destroyed: list[str] = []
 
     async def create_sandbox(self, *, metadata: dict[str, str] | None = None) -> SandboxHandle:
+        self.create_calls += 1
         return SandboxHandle(
             provider=SandboxProviderKind.e2b,
             sandbox_id="e2b-created-before-health-failure",
@@ -169,3 +171,42 @@ async def test_destroy_failure_does_not_hide_live_provider_sandbox(
     assert loaded.status == "error"
     assert loaded.destroyed_at is None
     assert loaded.e2b_sandbox_id == "e2b-destroy-fails"
+
+
+@pytest.mark.asyncio
+async def test_provider_unavailable_error_is_retryable_and_cooldowned(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = await _create_user(db_session)
+
+    class _UnavailableProvider(_FakeSandboxProvider):
+        async def create_sandbox(self, *, metadata: dict[str, str] | None = None) -> SandboxHandle:
+            self.create_calls += 1
+            raise SandboxProviderError("503: b'no healthy upstream'")
+
+    provider = _UnavailableProvider()
+    monkeypatch.setattr(service.settings, "e2b_template_name", "test-template")
+    monkeypatch.setattr(service, "get_configured_sandbox_provider", lambda: provider)
+    monkeypatch.setattr(service, "_PROVIDER_UNAVAILABLE_COOLDOWN_SECONDS", 60)
+
+    with pytest.raises(CloudApiError) as first_error:
+        await service.ensure_managed_sandbox_ready(db_session, user)
+
+    assert first_error.value.code == "managed_sandbox_provider_unavailable"
+    assert first_error.value.status_code == 503
+    assert first_error.value.headers["Retry-After"] == "60"
+    assert provider.create_calls == 1
+
+    sandbox = await load_personal_managed_sandbox(db_session, user.id)
+    assert sandbox is not None
+    assert sandbox.status == "error"
+    assert sandbox.last_error == "503: b'no healthy upstream'"
+
+    with pytest.raises(CloudApiError) as second_error:
+        await service.ensure_managed_sandbox_ready(db_session, user)
+
+    assert second_error.value.code == "managed_sandbox_provider_unavailable"
+    assert second_error.value.status_code == 503
+    assert 1 <= int(second_error.value.headers["Retry-After"]) <= 60
+    assert provider.create_calls == 1

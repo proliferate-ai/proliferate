@@ -35,6 +35,12 @@ class ManagedSandboxRepoRuntimeConnectionResponse(BaseModel):
     runtime_generation: int = Field(serialization_alias="runtimeGeneration")
 
 
+class ManagedSandboxWorkspaceRuntimeConnectionResponse(BaseModel):
+    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
+    anyharness_repo_root_id: str | None = Field(serialization_alias="anyharnessRepoRootId")
+    runtime_generation: int = Field(serialization_alias="runtimeGeneration")
+
+
 def managed_sandbox_payload(value: ManagedSandboxValue) -> ManagedSandboxResponse:
     return ManagedSandboxResponse(
         id=str(value.id),

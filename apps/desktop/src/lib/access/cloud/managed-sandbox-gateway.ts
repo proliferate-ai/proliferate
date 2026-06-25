@@ -1,5 +1,6 @@
 import {
   ensureManagedSandboxRepoRuntimeConnection,
+  ensureManagedSandboxWorkspaceRuntimeConnection,
 } from "@proliferate/cloud-sdk/client/managed-sandboxes";
 import type {
   CloudConnectionInfo,
@@ -19,6 +20,7 @@ export type AnyHarnessRuntimeAccessKind = "direct" | "proliferate-gateway";
 
 export type ManagedSandboxGatewayConnectionInfo = CloudConnectionInfo & {
   runtimeAccessKind: "proliferate-gateway";
+  webSocketAuthTransport: "protocol";
   anyharnessRepoRootId: string | null;
 };
 
@@ -43,6 +45,7 @@ export async function resolveManagedSandboxGatewayConnectionForRepo(input: {
     readyAgentKinds: input.readyAgentKinds ?? [],
     runtimeAuth: input.runtimeAuth ?? CURRENT_RUNTIME_AUTH,
     runtimeAccessKind: "proliferate-gateway",
+    webSocketAuthTransport: "protocol",
     anyharnessRepoRootId: runtime.anyharnessRepoRootId,
   };
 }
@@ -50,11 +53,32 @@ export async function resolveManagedSandboxGatewayConnectionForRepo(input: {
 export function resolveManagedSandboxGatewayConnectionForWorkspace(
   workspace: CloudWorkspaceDetail,
 ): Promise<ManagedSandboxGatewayConnectionInfo> {
-  return resolveManagedSandboxGatewayConnectionForRepo({
-    gitOwner: workspace.repo.owner,
-    gitRepoName: workspace.repo.name,
+  return resolveManagedSandboxGatewayConnectionForCloudWorkspace({
+    workspaceId: workspace.id,
     allowedAgentKinds: workspace.allowedAgentKinds,
     readyAgentKinds: workspace.readyAgentKinds,
     runtimeAuth: workspace.runtime?.runtimeAuth ?? null,
   });
+}
+
+export async function resolveManagedSandboxGatewayConnectionForCloudWorkspace(input: {
+  workspaceId: string;
+  allowedAgentKinds?: string[];
+  readyAgentKinds?: string[];
+  runtimeAuth?: CloudRuntimeAuthState | null;
+}): Promise<ManagedSandboxGatewayConnectionInfo> {
+  const productToken = await getDesktopCloudAccessToken();
+  const runtime = await ensureManagedSandboxWorkspaceRuntimeConnection(input.workspaceId);
+  return {
+    runtimeUrl: runtime.gatewayAnyHarnessBaseUrl,
+    accessToken: productToken,
+    anyharnessWorkspaceId: runtime.anyharnessWorkspaceId,
+    runtimeGeneration: runtime.runtimeGeneration,
+    allowedAgentKinds: (input.allowedAgentKinds ?? []).filter(isCloudAgentKind),
+    readyAgentKinds: input.readyAgentKinds ?? [],
+    runtimeAuth: input.runtimeAuth ?? CURRENT_RUNTIME_AUTH,
+    runtimeAccessKind: "proliferate-gateway",
+    webSocketAuthTransport: "protocol",
+    anyharnessRepoRootId: runtime.anyharnessRepoRootId,
+  };
 }

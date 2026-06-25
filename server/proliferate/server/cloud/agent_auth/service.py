@@ -10,6 +10,10 @@ from proliferate.server.cloud.agent_auth.credentials import (
     list_credentials_for_response,
     sync_synced_credential_for_user,
 )
+from proliferate.server.cloud.agent_auth.desktop_materialization import (
+    desktop_agent_auth_config_apply_request,
+    record_desktop_agent_auth_config_status,
+)
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.free_credits import ensure_free_managed_credits_for_user
 from proliferate.server.cloud.agent_auth.grant_freshness import (
@@ -68,6 +72,7 @@ __all__ = [
     "BifrostAdminClient",
     "CreateGatewayCredentialResult",
     "CredentialListItem",
+    "desktop_agent_auth_config_apply_request",
     "EnsureFreeManagedCreditsResult",
     "EnsureManagedCreditsResult",
     "FreeManagedCreditReadyAgentModel",
@@ -86,6 +91,7 @@ __all__ = [
     "list_credentials_for_response",
     "list_selections",
     "list_target_states",
+    "record_desktop_agent_auth_config_status",
     "reconcile_agent_gateway_bifrost_router",
     "reconcile_agent_gateway_runtime_grant_freshness",
     "record_worker_agent_auth_status",

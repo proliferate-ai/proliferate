@@ -3,8 +3,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.identity.store import get_account_readiness
 from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, SsoIdentity, User
 from proliferate.utils.crypto import encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
@@ -106,6 +108,37 @@ async def test_auth_viewer_marks_google_only_user_as_needing_github(
     linked = {provider["provider"]: provider for provider in payload["linkedProviders"]}
     assert linked["google"]["connected"] is True
     assert linked["github"]["connected"] is False
+
+
+@pytest.mark.asyncio
+async def test_account_readiness_uses_legacy_github_without_backfill(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    user_id, _access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-legacy-github@example.com",
+    )
+    await _link_provider(db_session, user_id, "github")
+
+    readiness = await get_account_readiness(db_session, user_id=uuid.UUID(user_id))
+
+    assert readiness.product_ready is True
+    assert readiness.missing_requirements == ()
+    assert readiness.github_grant_status == "ready"
+    canonical_identity = (
+        await db_session.execute(
+            select(AuthIdentity).where(AuthIdentity.user_id == uuid.UUID(user_id))
+        )
+    ).scalar_one_or_none()
+    canonical_grant = (
+        await db_session.execute(
+            select(ProviderGrant).where(ProviderGrant.user_id == uuid.UUID(user_id))
+        )
+    ).scalar_one_or_none()
+    assert canonical_identity is None
+    assert canonical_grant is None
 
 
 @pytest.mark.asyncio

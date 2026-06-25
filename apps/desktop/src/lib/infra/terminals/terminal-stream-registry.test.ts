@@ -88,6 +88,21 @@ describe("terminal stream registry", () => {
     expect(mockState.connections[1]!.options.afterSeq).toBe(5);
   });
 
+  it("passes WebSocket auth transport to the SDK", () => {
+    const identity = streamIdentity();
+    ensureConnected({
+      identity,
+      baseUrl: "http://runtime.test",
+      authToken: "product-token",
+      webSocketAuthTransport: "protocol",
+    });
+
+    expect(connectTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      authToken: "product-token",
+      webSocketAuthTransport: "protocol",
+    }));
+  });
+
   it("keeps runtime identity stable across credential refreshes", () => {
     expect(createTerminalRuntimeIdentity({
       runtimeUrl: "http://runtime.test/",

@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.constants.cloud import WorkspacePostReadyPhase
 from proliferate.db import engine as engine_module
+from proliferate.db.models.auth import User
+from proliferate.db.models.billing import BillingSubject
+from proliferate.db.models.cloud.agent_auth import SandboxProfile
+from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_workspace_setup_runs import (
@@ -21,6 +27,7 @@ from proliferate.db.store.cloud_workspace_setup_runs import (
 from proliferate.db.store.cloud_sandboxes import reserve_sandbox_for_workspace
 from proliferate.db.store.cloud_workspace_creation import create_cloud_workspace_for_user
 from proliferate.db.store.cloud_workspace_runtime import (
+    attach_anyharness_workspace_id_to_managed_repo_workspaces,
     finalize_workspace_provision,
     mark_workspace_error,
     persist_workspace_destroy,
@@ -279,6 +286,159 @@ async def test_sandbox_reservation_limit_and_provision_finalization_are_atomic(
     assert sandbox.status == "running"
     assert sandbox.template_version == "v2"
     assert sandbox.last_heartbeat_at is not None
+
+
+@pytest.mark.asyncio
+async def test_managed_repo_workspace_repair_preserves_branch_workspaces(
+    db_session: AsyncSession,
+) -> None:
+    user = User(
+        id=uuid.uuid4(),
+        email=f"{uuid.uuid4()}@example.com",
+        hashed_password="hashed",
+        is_active=True,
+        is_superuser=False,
+        is_verified=True,
+    )
+    billing_subject = BillingSubject(
+        id=uuid.uuid4(),
+        kind="personal",
+        user_id=user.id,
+        organization_id=None,
+    )
+    profile = SandboxProfile(
+        id=uuid.uuid4(),
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        billing_subject_id=billing_subject.id,
+        created_by_user_id=user.id,
+        desired_agent_auth_revision=0,
+        status="active",
+    )
+    target = CloudTarget(
+        id=uuid.uuid4(),
+        display_name="Personal cloud",
+        kind="managed_cloud",
+        status="online",
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        sandbox_profile_id=profile.id,
+        profile_target_role="primary",
+    )
+    runtime_environment = CloudRuntimeEnvironment(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        billing_subject_id=billing_subject.id,
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        git_owner_norm="acme",
+        git_repo_name_norm="rocket",
+        target_id=target.id,
+        status="ready",
+    )
+    canonical = CloudWorkspace(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        billing_subject_id=billing_subject.id,
+        runtime_environment_id=runtime_environment.id,
+        sandbox_profile_id=profile.id,
+        target_id=target.id,
+        display_name="acme/rocket",
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        normalized_repo_key="github/acme/rocket",
+        git_branch="main",
+        git_base_branch="main",
+        origin="manual_web",
+        status="pending",
+        status_detail="Pending",
+        template_version="v1",
+        cleanup_state="none",
+    )
+    legacy_duplicate = CloudWorkspace(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        billing_subject_id=billing_subject.id,
+        runtime_environment_id=None,
+        sandbox_profile_id=profile.id,
+        target_id=target.id,
+        display_name="acme/rocket",
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        normalized_repo_key="github/acme/rocket",
+        git_branch="feature/stale",
+        git_base_branch="main",
+        origin="manual_web",
+        status="ready",
+        status_detail="Ready",
+        template_version="v1",
+        anyharness_workspace_id="workspace-1",
+        cleanup_state="none",
+    )
+    legacy_exposure = CloudWorkspaceExposure(
+        target_id=target.id,
+        cloud_workspace_id=legacy_duplicate.id,
+        anyharness_workspace_id="workspace-1",
+        owner_scope="personal",
+        owner_user_id=user.id,
+        organization_id=None,
+        visibility="private",
+        default_projection_level="live",
+        commandable=True,
+        status="active",
+        revision=1,
+        origin="manual_web",
+    )
+    db_session.add_all([user, billing_subject])
+    await db_session.flush()
+    db_session.add(profile)
+    await db_session.flush()
+    db_session.add(target)
+    await db_session.flush()
+    db_session.add(runtime_environment)
+    await db_session.flush()
+    db_session.add_all([canonical, legacy_duplicate])
+    await db_session.flush()
+    db_session.add(legacy_exposure)
+    await db_session.flush()
+
+    changed_count = await attach_anyharness_workspace_id_to_managed_repo_workspaces(
+        db_session,
+        user_id=user.id,
+        git_owner="acme",
+        git_repo_name="rocket",
+        anyharness_workspace_id="workspace-1",
+        preferred_branch="main",
+    )
+
+    await db_session.refresh(canonical)
+    await db_session.refresh(legacy_duplicate)
+    await db_session.refresh(legacy_exposure)
+    assert changed_count >= 1
+    assert canonical.archived_at is None
+    assert canonical.status == "ready"
+    assert canonical.anyharness_workspace_id == "workspace-1"
+    assert legacy_duplicate.archived_at is None
+    assert legacy_duplicate.status == "ready"
+    assert legacy_exposure.archived_at is None
+    assert legacy_exposure.commandable is True
+    assert legacy_exposure.status == "active"
 
 
 @pytest.mark.asyncio

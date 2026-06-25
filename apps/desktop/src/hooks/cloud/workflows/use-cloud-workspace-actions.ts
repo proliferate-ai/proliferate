@@ -13,6 +13,7 @@ import {
 import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
 import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { useCloudWorkspaceLifecycleCache } from "@/hooks/access/cloud/use-cloud-workspace-lifecycle-cache";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
@@ -118,7 +119,7 @@ export function useCloudWorkspaceActions() {
       }
       trackProductEvent("cloud_workspace_started", {
         workspace_kind: "cloud",
-        status: workspace.status,
+        status: resolveCloudWorkspaceStatus(workspace) ?? "unknown",
         git_provider: workspace.repo.provider,
       });
     },

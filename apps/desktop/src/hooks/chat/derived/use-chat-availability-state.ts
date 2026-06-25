@@ -4,6 +4,7 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   resolveChatInputAvailability,
   type ChatInputAvailabilityState,
@@ -46,12 +47,13 @@ export function useChatAvailabilityState(options?: {
   const selectedCloudWorkspace =
     workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === selectedCloudWorkspaceId)
     ?? null;
+  const selectedCloudWorkspaceStatus = resolveCloudWorkspaceStatus(selectedCloudWorkspace);
 
   const availability = useMemo(() => resolveChatInputAvailability({
     selectedWorkspaceId,
     isCloudWorkspaceSelected: selectedCloudWorkspaceId !== null,
     connectionState,
-    selectedCloudWorkspaceStatus: selectedCloudWorkspace?.status ?? null,
+    selectedCloudWorkspaceStatus,
     selectedCloudWorkspaceActionBlockReason: selectedCloudWorkspace?.actionBlockReason ?? null,
     selectedCloudRuntimePhase: selectedCloudRuntime.state?.phase ?? null,
     selectedCloudRuntimeActionBlockReason: selectedCloudRuntime.state?.actionBlockReason ?? null,
@@ -94,7 +96,7 @@ export function useChatAvailabilityState(options?: {
     selectedCloudRuntime.state?.actionBlockReason,
     selectedCloudRuntime.state?.phase,
     selectedCloudWorkspace?.actionBlockReason,
-    selectedCloudWorkspace?.status,
+    selectedCloudWorkspaceStatus,
     selectedWorkspaceId,
     selectedCloudWorkspaceId,
   ]);

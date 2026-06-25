@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,12 +13,14 @@ from proliferate.db.models.auth import User
 from proliferate.server.cloud.managed_sandboxes.models import (
     ManagedSandboxRepoRuntimeConnectionResponse,
     ManagedSandboxResponse,
+    ManagedSandboxWorkspaceRuntimeConnectionResponse,
     managed_sandbox_payload,
 )
 from proliferate.server.cloud.managed_sandboxes.service import (
     destroy_managed_sandbox,
     ensure_managed_sandbox_ready,
     ensure_managed_sandbox_repo_runtime_connection,
+    ensure_managed_sandbox_workspace_runtime_connection,
     get_managed_sandbox_detail,
     wake_managed_sandbox,
 )
@@ -66,6 +70,27 @@ async def ensure_managed_sandbox_repo_runtime_connection_endpoint(
         git_repo_name=git_repo_name,
     )
     return ManagedSandboxRepoRuntimeConnectionResponse(
+        anyharness_workspace_id=connection.anyharness_workspace_id,
+        anyharness_repo_root_id=connection.anyharness_repo_root_id,
+        runtime_generation=connection.runtime_generation,
+    )
+
+
+@router.post(
+    "/managed-sandbox/workspaces/{workspace_id}/runtime-connection",
+    response_model=ManagedSandboxWorkspaceRuntimeConnectionResponse,
+)
+async def ensure_managed_sandbox_workspace_runtime_connection_endpoint(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> ManagedSandboxWorkspaceRuntimeConnectionResponse:
+    connection = await ensure_managed_sandbox_workspace_runtime_connection(
+        db,
+        user,
+        workspace_id=workspace_id,
+    )
+    return ManagedSandboxWorkspaceRuntimeConnectionResponse(
         anyharness_workspace_id=connection.anyharness_workspace_id,
         anyharness_repo_root_id=connection.anyharness_repo_root_id,
         runtime_generation=connection.runtime_generation,

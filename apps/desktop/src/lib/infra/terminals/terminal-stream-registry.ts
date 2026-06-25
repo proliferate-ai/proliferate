@@ -3,6 +3,7 @@ import {
   type TerminalDataFrame,
   type TerminalReplayGapFrame,
   type TerminalStreamHandle,
+  type TerminalWebSocketAuthTransport,
 } from "@anyharness/sdk";
 import { terminalStreamKey } from "./terminal-stream-key";
 import { resetTerminalCloseIntentForTests } from "./terminal-close-intent";
@@ -60,6 +61,7 @@ interface EnsureConnectedOptions {
   identity: TerminalStreamIdentity;
   baseUrl: string;
   authToken?: string;
+  webSocketAuthTransport?: TerminalWebSocketAuthTransport;
   readOnly?: boolean;
   onOpen?: () => void;
   onData?: (data: Uint8Array, frame: TerminalDataFrame) => void;
@@ -83,6 +85,7 @@ export function ensureConnected(options: EnsureConnectedOptions): boolean {
   const handle = connectTerminal({
     baseUrl: options.baseUrl,
     authToken: options.authToken,
+    webSocketAuthTransport: options.webSocketAuthTransport,
     terminalId: options.identity.terminalId,
     afterSeq: entry.lastDataSeq > 0 ? entry.lastDataSeq : undefined,
     onOpen: options.onOpen,

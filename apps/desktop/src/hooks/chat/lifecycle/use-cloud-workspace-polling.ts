@@ -12,6 +12,7 @@ import {
 } from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
 import {
   isCloudWorkspacePostReadyPending,
+  resolveCloudWorkspaceStatus,
   shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -40,16 +41,17 @@ export function useCloudWorkspacePolling() {
   const cloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
     (workspace) => workspace.id === cloudWorkspaceId,
   ) ?? null;
+  const cloudWorkspaceStatus = resolveCloudWorkspaceStatus(cloudWorkspace);
   const selectedPendingCloudWorkspaceIsAwaiting = pendingWorkspaceEntry?.workspaceId === selectedWorkspaceId
     && pendingWorkspaceEntry.stage === "awaiting-cloud-ready";
   const shouldHandleCachedCloudWorkspaceFailure = Boolean(
     cloudWorkspace
-    && cloudWorkspace.status === "error"
+    && cloudWorkspaceStatus === "error"
     && selectedPendingCloudWorkspaceIsAwaiting,
   );
   const shouldHandleCachedCloudWorkspaceReady = Boolean(
     cloudWorkspace
-    && cloudWorkspace.status === "ready"
+    && cloudWorkspaceStatus === "ready"
     && !isCloudWorkspacePostReadyPending(cloudWorkspace)
     && selectedPendingCloudWorkspaceIsAwaiting,
   );
@@ -79,7 +81,7 @@ export function useCloudWorkspacePolling() {
     let timer: number | null = null;
     logLatency("workspace.cloud_polling.start", {
       workspaceId: selectedWorkspaceId,
-      status: cloudWorkspace?.status ?? null,
+      status: cloudWorkspaceStatus,
       pendingStage: pendingWorkspaceEntry?.stage ?? null,
       pendingElapsedMs: pendingWorkspaceEntry ? elapsedSince(pendingWorkspaceEntry.createdAt) : null,
     });
@@ -107,9 +109,10 @@ export function useCloudWorkspacePolling() {
 
       try {
         const workspace = await refreshCloudWorkspace(selectedWorkspaceId);
+        const refreshedStatus = resolveCloudWorkspaceStatus(workspace);
         logLatency("workspace.cloud_polling.refreshed", {
           workspaceId: selectedWorkspaceId,
-          status: workspace.status,
+          status: refreshedStatus,
           pollElapsedMs: elapsedMs(pollStartedAt),
           pendingElapsedMs: pendingWorkspaceEntry ? elapsedSince(pendingWorkspaceEntry.createdAt) : null,
         });
@@ -117,7 +120,7 @@ export function useCloudWorkspacePolling() {
           return;
         }
 
-        if (workspace.status === "error") {
+        if (refreshedStatus === "error") {
           shouldScheduleNextPoll = false;
           const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
           if (
@@ -142,7 +145,7 @@ export function useCloudWorkspacePolling() {
           return;
         }
 
-        if (workspace.status === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
+        if (refreshedStatus === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
           shouldScheduleNextPoll = false;
           const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
           const shouldPreservePending = pending?.workspaceId === selectedWorkspaceId

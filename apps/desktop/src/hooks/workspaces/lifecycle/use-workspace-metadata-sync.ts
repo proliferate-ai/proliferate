@@ -111,14 +111,18 @@ export function useWorkspaceMetadataSync() {
         if (syncingCloudBranchRef.current === syncKey) {
           return;
         }
+        const requestedCloudWorkspaceId = selectedCloudWorkspace.id;
         syncingCloudBranchRef.current = syncKey;
         const cloudWorkspace = await updateCloudWorkspaceBranch(
-          selectedCloudWorkspace.id,
+          requestedCloudWorkspaceId,
           currentBranch,
         );
         upsertCloudWorkspace(cloudWorkspace);
         const currentSelectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
-        if (currentSelectedWorkspaceId === cloudWorkspaceSyntheticId(cloudWorkspace.id)) {
+        if (
+          currentSelectedWorkspaceId === cloudWorkspaceSyntheticId(requestedCloudWorkspaceId)
+          || currentSelectedWorkspaceId === cloudWorkspaceSyntheticId(cloudWorkspace.id)
+        ) {
           useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId(
             buildLogicalIdForCloudWorkspace(cloudWorkspace),
           );
