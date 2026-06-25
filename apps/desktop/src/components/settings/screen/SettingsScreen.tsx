@@ -14,7 +14,8 @@ import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
-import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
+// BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
+// import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
@@ -102,9 +103,10 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  if (activeSection === "organization-limits") {
-    return <OrganizationBudgetsPane />;
-  }
+  // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
+  // if (activeSection === "organization-limits") {
+  //   return <OrganizationBudgetsPane />;
+  // }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
   }

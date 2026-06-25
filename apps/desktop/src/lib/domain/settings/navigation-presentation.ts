@@ -98,13 +98,15 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         iconId: "organization-model-policy",
         adminOnly: true,
       },
-      {
-        kind: "section",
-        id: "organization-limits",
-        label: "Budgets",
-        iconId: "organization-limits",
-        adminOnly: true,
-      },
+      // BUDGETS PARKED: OrganizationBudgetsPane remains in code, but the nav
+      // entry is disabled until real budget data/enforcement replaces mocked UI.
+      // {
+      //   kind: "section",
+      //   id: "organization-limits",
+      //   label: "Budgets",
+      //   iconId: "organization-limits",
+      //   adminOnly: true,
+      // },
     ],
   },
   {

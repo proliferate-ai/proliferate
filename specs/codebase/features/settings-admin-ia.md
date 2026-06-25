@@ -239,8 +239,9 @@ Settings / Agents       Review
 
 The organization settings surfaces form an organization control center. The
 shell is still the Desktop Settings shell, but the Admin group is product
-oriented: organization identity, members, billing, budgets, integrations, model
-policy, and capability limits.
+oriented: organization identity, members, billing, integrations, model policy,
+and capability limits. Budgets are modeled in code but parked until real
+budget data and enforcement replace the mocked UI.
 
 Each Admin surface carries an implementation maturity label so UI can ship
 before every backend primitive exists without confusing reviewers about what is
@@ -251,6 +252,7 @@ real-now              connected to server state and permission enforcement
 mocked-ui             product-correct display with local deterministic mock data
 disabled-until-backend product row exists but action is disabled until API work lands
 enterprise-only       visible product capability gated to Enterprise
+parked-ui             product model exists in code/spec, but page is unregistered
 ```
 
 Organization control center map:
@@ -305,13 +307,16 @@ Billing
     hour fields.
 
 Budgets
-  maturity: mocked-ui
+  maturity: parked-ui
   owns:
     usage over time, usage by person, and budget controls.
   rule:
-    use real members when available and deterministic mock usage values until
-    usage rollups exist. Budget controls render as disabled unless the owning
-    backend is connected. Per-person budgets are Enterprise-only.
+    OrganizationBudgetsPane remains in code, but organization-limits is not
+    registered in settings navigation or routing while only mocked usage data
+    exists. When revived, use real members when available and deterministic
+    mock usage values only in tests/stories. Budget controls render as
+    disabled unless the owning backend is connected. Per-person budgets are
+    Enterprise-only.
   per-person budget shape:
     each member can have a monthly maximum for LLM credits and an alert
     threshold. Enforcement should pause new LLM-backed work for that member
@@ -377,9 +382,10 @@ Admin
                                                            including auto top up option
   organization-integrations SettingsScaffoldPane           org-owned integrations
   organization-model-policy SettingsScaffoldPane           allowed/default models
-  organization-limits      OrganizationBudgetsPane         usage over time,
-                                                           usage by person,
-                                                           budget controls
+  # PARKED until budget backend exists:
+  # organization-limits    OrganizationBudgetsPane         usage over time,
+  #                                                        usage by person,
+  #                                                        budget controls
 
 Settings
   general                  GeneralPane                    general settings,
@@ -472,8 +478,9 @@ Admin
                                        auto top up, Stripe portal, plan changes
   organization-integrations future org integrations spec
   organization-model-policy future model policy spec
-  organization-limits       spec 09   mocked usage over time, usage by person,
-                                       and budget controls
+  # PARKED until budget backend exists:
+  # organization-limits     spec 09   usage over time, usage by person,
+  #                                    and budget controls
 
 Settings
   general                   spec 03   product feature flags, telemetry opt-in,

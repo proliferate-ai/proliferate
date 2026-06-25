@@ -139,7 +139,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Billing",
       "Integrations",
       "Model policy",
-      "Budgets",
       "Workspaces",
       "Environments",
       "Personal compute",
@@ -190,7 +189,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Integrations/ })).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Model policy/ })).not.toBeNull();
-      expect(screen.queryByRole("button", { name: /Budgets/ })).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Budgets/ })).toBeNull();
       return;
     }
 

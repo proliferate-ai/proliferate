@@ -8,13 +8,15 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "billing",
   "organization-integrations",
   "organization-model-policy",
-  "organization-limits",
   "environments",
   "compute",
   "worktrees",
   "archived-chats",
   "agent-authentication",
   "agent-defaults",
+  // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
+  // the page until real budget data/enforcement replaces mocked UI.
+  // "organization-limits",
   // SLACK BOT PARKED: keep the id nearby for revival, but do not register it.
   // "slack-bot",
 ] as const;
@@ -35,13 +37,14 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "billing",
   "organization-integrations",
   "organization-model-policy",
-  "organization-limits",
   "environments",
   "compute",
   "worktrees",
   "archived-chats",
   "agent-authentication",
   "agent-defaults",
+  // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.
+  // "organization-limits",
   // SLACK BOT PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "slack-bot",
 ] as const satisfies readonly SettingsSection[];
