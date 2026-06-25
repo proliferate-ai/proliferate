@@ -1,3 +1,4 @@
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { Select } from "@proliferate/ui/primitives/Select";
@@ -18,7 +19,6 @@ const LLM_BUDGET_CREDITS = 12000;
 const TOTAL_LLM_CREDITS = 12000;
 const AVAILABLE_LLM_CREDITS = 4600;
 const USED_LLM_CREDITS = TOTAL_LLM_CREDITS - AVAILABLE_LLM_CREDITS;
-const DAYS_REMAINING_AT_CURRENT_PACE = 4;
 const USAGE_POINTS: UsagePoint[] = [
   { label: "Jun 18", compute: 12, llm: 390 },
   { label: "Jun 19", compute: 28, llm: 840 },
@@ -72,15 +72,6 @@ export function OrganizationBudgetsPane() {
       {!activeOrganization && organizationsQuery.isLoading ? (
         <div className="text-sm text-muted-foreground">Loading organization...</div>
       ) : null}
-
-      <div className="flex flex-col gap-3 rounded-lg border border-info/25 bg-info/10 px-4 py-3 text-sm text-info sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          You have about {DAYS_REMAINING_AT_CURRENT_PACE} days of compute left at this pace.
-        </div>
-        <Button type="button" variant="primary" disabled className="w-full sm:w-auto">
-          Add compute units
-        </Button>
-      </div>
 
       <SettingsCard>
         <div className="space-y-5 p-5">
@@ -170,6 +161,8 @@ export function OrganizationBudgetsPane() {
 
       <OrganizationBudgetPeople people={people} />
 
+      <OrganizationMemberLlmBudgets people={people} />
+
       <SettingsCard>
         <SettingsCardRow
           label="Monthly compute budget"
@@ -195,14 +188,6 @@ export function OrganizationBudgetsPane() {
         >
           <Switch checked={false} onChange={() => {}} disabled aria-label="LLM credit auto top-up" />
         </SettingsCardRow>
-        <SettingsCardRow
-          label="Per-person budgets"
-          description="Enterprise teams can enforce member-level budgets and alert thresholds."
-        >
-          <Button type="button" variant="secondary" disabled>
-            Enterprise
-          </Button>
-        </SettingsCardRow>
       </SettingsCard>
     </section>
   );
@@ -225,7 +210,7 @@ function OrganizationBudgetPeople({ people }: { people: BudgetPerson[] }) {
         >
           <div className="flex min-w-[15rem] items-center justify-end gap-3">
             <ProgressBar
-              value={person.percent}
+              value={person.computePercent}
               className="h-1.5 w-24 overflow-hidden rounded-full bg-foreground/10"
               indicatorClassName="h-full rounded-full bg-foreground/50"
             />
@@ -239,12 +224,104 @@ function OrganizationBudgetPeople({ people }: { people: BudgetPerson[] }) {
   );
 }
 
+function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[] }) {
+  return (
+    <SettingsCard>
+      <div className="border-b border-border-light px-5 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-lg font-semibold text-foreground">Monthly LLM budgets</div>
+          <Badge tone="info">Enterprise</Badge>
+          <Badge tone="neutral">Mocked UI</Badge>
+        </div>
+        <div className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Set the maximum model and gateway credits each member can use per month.
+        </div>
+      </div>
+
+      <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] gap-4 border-b border-border-light px-5 py-3 text-xs font-medium uppercase text-muted-foreground md:grid">
+        <div>Member</div>
+        <div>Current month</div>
+        <div>Monthly max</div>
+        <div>Alert at</div>
+      </div>
+
+      {people.map((person) => (
+        <div
+          key={person.email}
+          className="grid gap-3 border-b border-border-light px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] md:items-center md:gap-4"
+        >
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-foreground">{person.name}</div>
+            <div className="truncate text-sm text-muted-foreground">{person.email}</div>
+          </div>
+
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground md:hidden">Current month</span>
+              <span className="font-medium text-foreground">
+                {person.usedLlmCredits.toLocaleString()} / {person.monthlyLlmBudgetCredits.toLocaleString()}
+              </span>
+            </div>
+            <ProgressBar
+              value={person.llmBudgetPercent}
+              className="h-1.5 overflow-hidden rounded-full bg-foreground/10"
+              indicatorClassName="h-full rounded-full bg-primary/70"
+              aria-label={`${person.name} LLM budget usage`}
+            />
+          </div>
+
+          <div className="min-w-0">
+            <label className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
+              Monthly max
+            </label>
+            <Input
+              type="number"
+              min={0}
+              step={100}
+              defaultValue={person.monthlyLlmBudgetCredits}
+              aria-label={`${person.name} monthly LLM credit budget`}
+            />
+          </div>
+
+          <div className="min-w-0">
+            <label className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
+              Alert at
+            </label>
+            <Select
+              defaultValue={String(person.alertThresholdPercent)}
+              aria-label={`${person.name} LLM budget alert threshold`}
+            >
+              <option value="50">50%</option>
+              <option value="75">75%</option>
+              <option value="80">80%</option>
+              <option value="90">90%</option>
+              <option value="100">100%</option>
+            </Select>
+          </div>
+        </div>
+      ))}
+
+      <div className="flex flex-col gap-3 border-t border-border-light px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="max-w-2xl text-sm leading-6 text-muted-foreground">
+          Enforcement will pause new LLM-backed work for a member once their monthly max is reached.
+        </div>
+        <Button type="button" variant="secondary" disabled className="w-full sm:w-auto">
+          Save budgets
+        </Button>
+      </div>
+    </SettingsCard>
+  );
+}
+
 interface BudgetPerson {
   name: string;
   email: string;
   usedPcus: number;
   usedLlmCredits: number;
-  percent: number;
+  monthlyLlmBudgetCredits: number;
+  alertThresholdPercent: number;
+  computePercent: number;
+  llmBudgetPercent: number;
 }
 
 interface UsagePoint {
@@ -298,11 +375,18 @@ function buildBudgetPeople(members: OrganizationMemberRecord[]): BudgetPerson[] 
   return source.slice(0, 5).map((person, index) => {
     const usedPcus = [72, 45, 31, 22, 12][index] ?? 8;
     const usedLlmCredits = [2800, 1900, 1320, 880, 500][index] ?? 250;
+    const monthlyLlmBudgetCredits = [5000, 3000, 2500, 1800, 1000][index] ?? 1000;
     return {
       ...person,
       usedPcus,
       usedLlmCredits,
-      percent: Math.round((usedPcus / COMPUTE_BUDGET_PCUS) * 100),
+      monthlyLlmBudgetCredits,
+      alertThresholdPercent: [80, 80, 75, 75, 50][index] ?? 80,
+      computePercent: Math.round((usedPcus / COMPUTE_BUDGET_PCUS) * 100),
+      llmBudgetPercent: Math.min(
+        100,
+        Math.round((usedLlmCredits / monthlyLlmBudgetCredits) * 100),
+      ),
     };
   });
 }

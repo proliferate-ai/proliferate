@@ -312,6 +312,11 @@ Budgets
     use real members when available and deterministic mock usage values until
     usage rollups exist. Budget controls render as disabled unless the owning
     backend is connected. Per-person budgets are Enterprise-only.
+  per-person budget shape:
+    each member can have a monthly maximum for LLM credits and an alert
+    threshold. Enforcement should pause new LLM-backed work for that member
+    once the monthly maximum is reached. Compute budgets remain organization
+    level unless a later product decision adds per-member compute caps.
 
 Plans
   maturity: mocked-ui plus real Stripe entrypoints where available
