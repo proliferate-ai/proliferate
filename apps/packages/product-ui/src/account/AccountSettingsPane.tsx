@@ -250,6 +250,7 @@ function ProviderRow({ provider }: { provider: AccountProviderView }) {
         <div className="flex items-center gap-2 font-medium text-foreground">
           <ProviderBrandIcon
             provider={provider.provider}
+            label={provider.label}
             className="size-4 shrink-0 text-muted-foreground"
           />
           <span>{provider.label}</span>
