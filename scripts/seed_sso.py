@@ -100,9 +100,13 @@ async def seed_sso(*, org_id: UUID, status: str) -> None:
                 last_error=f"Disabled by seed-sso for AUTH_PROFILE={auth_profile}.",
             )
 
-    callback_url = (
-        f"{_env('API_BASE_URL', default='http://127.0.0.1:8000')}/auth/sso/oidc/callback"
-    )
+    callback_base_url = _env(
+        "PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL",
+        "SSO_OIDC_CALLBACK_BASE_URL",
+        "API_BASE_URL",
+        default="http://127.0.0.1:8000",
+    ).rstrip("/")
+    callback_url = f"{callback_base_url}/auth/sso/oidc/callback"
     print(f"{action} {record.display_name} for org {org_id}")
     print(f"Connection: {record.id}")
     print(f"Status: {record.status}")
@@ -166,7 +170,7 @@ def _connection_input() -> dict[str, object]:
         raise SystemExit("SSO JIT default role cannot be owner.")
 
     allowed_domains = normalize_domains(
-        _split_csv(_required("PROLIFERATE_SSO_ALLOWED_DOMAINS", "SSO_ALLOWED_DOMAINS")),
+        _split_csv(_env("PROLIFERATE_SSO_ALLOWED_DOMAINS", "SSO_ALLOWED_DOMAINS", default="")),
     )
     oidc_client_id = _required("PROLIFERATE_SSO_OIDC_CLIENT_ID", "SSO_OIDC_CLIENT_ID")
     token_auth_method = _env(

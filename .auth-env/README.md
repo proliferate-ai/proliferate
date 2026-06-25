@@ -16,6 +16,7 @@ Each file should export the normal deployment SSO env vars, for example:
 PROLIFERATE_SSO_ENABLED=true
 PROLIFERATE_SSO_PROTOCOL=oidc
 PROLIFERATE_SSO_DISPLAY_NAME="Google SSO"
+# Leave blank for manual provider-only QA, or set a comma-separated allowlist.
 PROLIFERATE_SSO_ALLOWED_DOMAINS="example.com"
 PROLIFERATE_SSO_OIDC_ISSUER_URL="https://accounts.google.com"
 PROLIFERATE_SSO_OIDC_CLIENT_ID="..."
