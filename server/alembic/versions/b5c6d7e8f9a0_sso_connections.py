@@ -1,7 +1,7 @@
 """sso connections and identities
 
 Revision ID: b5c6d7e8f9a0
-Revises: b8e1f5a6c9d2
+Revises: b9c3d4e5f6a7
 Create Date: 2026-06-24 00:00:00.000000
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b5c6d7e8f9a0"
-down_revision: str | Sequence[str] | None = "b8e1f5a6c9d2"
+down_revision: str | Sequence[str] | None = "b9c3d4e5f6a7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
