@@ -225,6 +225,7 @@ async def test_auth_viewer_includes_sso_identity(
             "accountEmail": "viewer-sso@example.com",
             "accountId": "sso-subject",
             "displayName": "SSO",
+            "brandLabel": None,
         }
     ]
 
