@@ -15,6 +15,7 @@ import { Input } from "@proliferate/ui/primitives/Input";
 
 import { webEnv } from "../../../config/env";
 import { WEB_AUTH_COPY } from "../../../copy/auth/web-auth-copy";
+import { useWebDeploymentSsoDiscovery } from "../../../hooks/auth/use-web-deployment-sso-discovery";
 import {
   startWebAuthFlow,
   startWebSsoFlow,
@@ -31,8 +32,35 @@ export function AuthScreen() {
   const [showDevAccess, setShowDevAccess] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<LoadingAuthTarget | null>(null);
   const [providerError, setProviderError] = useState<string | null>(null);
+  const deploymentSsoDiscovery = useWebDeploymentSsoDiscovery();
   const busy = Boolean(loadingProvider);
-  const providerActions = AUTH_PROVIDER_ORDER
+  const deploymentSso = deploymentSsoDiscovery.data?.enabled
+    && deploymentSsoDiscovery.data.scope === "deployment"
+    ? deploymentSsoDiscovery.data
+    : null;
+  const providerActions = deploymentSso
+    ? [{
+      id: "sso",
+      label: deploymentSsoActionLabel(deploymentSso.displayName),
+      icon: (
+        <ProviderBrandIcon provider="sso" label={deploymentSso.displayName} />
+      ),
+      loading: loadingProvider === "sso",
+      disabled: busy,
+      primary: true,
+      onClick: () => void signInWithDeploymentSso(),
+    }]
+    : deploymentSsoDiscovery.isLoading
+    ? [{
+      id: "sso-discovery",
+      label: "Checking sign-in options",
+      icon: <ProviderBrandIcon provider="sso" />,
+      loading: true,
+      disabled: true,
+      primary: true,
+      onClick: () => {},
+    }]
+    : AUTH_PROVIDER_ORDER
     .filter((provider) => WEB_SIGN_IN_PROVIDERS.has(provider))
     .map((provider) => ({
       id: provider,
@@ -43,6 +71,38 @@ export function AuthScreen() {
       primary: provider === "github",
       onClick: () => void signIn(provider),
     }));
+  const credentialForm = deploymentSso || deploymentSsoDiscovery.isLoading
+    ? null
+    : (
+      <form
+        className="grid gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void signInWithSso();
+        }}
+      >
+        <Input
+          type="email"
+          value={ssoEmail}
+          onChange={(event) => setSsoEmail(event.target.value)}
+          placeholder="name@company.com"
+          className="text-sm"
+          disabled={busy}
+          autoComplete="email"
+        />
+        <Button
+          type="submit"
+          size="md"
+          variant="secondary"
+          className="w-full"
+          loading={loadingProvider === "sso"}
+          disabled={busy || !ssoEmail.trim()}
+        >
+          <ProviderBrandIcon provider="sso" className="size-[15px]" />
+          Continue with SSO
+        </Button>
+      </form>
+    );
 
   async function signIn(provider: AuthProviderName) {
     if (busy) {
@@ -72,6 +132,23 @@ export function AuthScreen() {
     }
   }
 
+  async function signInWithDeploymentSso() {
+    if (busy || !deploymentSso) {
+      return;
+    }
+    setProviderError(null);
+    setLoadingProvider("sso");
+    try {
+      await startWebSsoFlow({
+        organizationId: deploymentSso.organizationId ?? null,
+        connectionId: deploymentSso.connectionId ?? null,
+      });
+    } catch (authError) {
+      setLoadingProvider(null);
+      setProviderError(authError instanceof Error ? authError.message : "SSO could not start.");
+    }
+  }
+
   return (
     <AuthStartPanel
       mark={<ProliferateMark size={36} />}
@@ -83,36 +160,7 @@ export function AuthScreen() {
         </span>
       )}
       footer={<span className="block text-faint">{AUTH_SIGN_IN_COPY.footer}</span>}
-      credentialForm={(
-        <form
-          className="grid gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void signInWithSso();
-          }}
-        >
-          <Input
-            type="email"
-            value={ssoEmail}
-            onChange={(event) => setSsoEmail(event.target.value)}
-            placeholder="name@company.com"
-            className="text-sm"
-            disabled={busy}
-            autoComplete="email"
-          />
-          <Button
-            type="submit"
-            size="md"
-            variant="secondary"
-            className="w-full"
-            loading={loadingProvider === "sso"}
-            disabled={busy || !ssoEmail.trim()}
-          >
-            <ProviderBrandIcon provider="sso" className="size-[15px]" />
-            Continue with SSO
-          </Button>
-        </form>
-      )}
+      credentialForm={credentialForm}
       providers={providerActions}
       error={providerError ?? (bootstrapUnreachable ? localApiUnreachableNotice() : null)}
       devAccess={webEnv.devAccessTokenLogin ? (
@@ -170,6 +218,13 @@ export function AuthScreen() {
 
 function providerIcon(provider: AuthProviderName) {
   return <ProviderBrandIcon provider={provider} />;
+}
+
+function deploymentSsoActionLabel(displayName: string | null | undefined) {
+  const name = displayName?.trim() || "SSO";
+  return name.toLowerCase().includes("sso")
+    ? `Continue with ${name}`
+    : `Continue with ${name} SSO`;
 }
 
 function localApiUnreachableNotice() {

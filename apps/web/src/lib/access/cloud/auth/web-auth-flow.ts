@@ -70,15 +70,33 @@ export async function startWebAuthFlow(input: {
   window.location.assign(response.authorizationUrl);
 }
 
-export async function startWebSsoFlow(input: { email: string }): Promise<void> {
-  const email = input.email.trim();
-  if (!email) {
-    throw new Error("Enter your work email to continue with SSO.");
-  }
+export async function startWebSsoFlow(input: {
+  email?: string | null;
+  organizationId?: string | null;
+  connectionId?: string | null;
+} = {}): Promise<void> {
+  const email = input.email?.trim() ?? "";
+  const organizationId = input.organizationId ?? null;
+  const connectionId = input.connectionId ?? null;
+  const hasConnectionHint = Boolean(organizationId || connectionId);
   const client = createWebCloudClient(webEnv.apiBaseUrl, null);
-  const discovery = await discoverSso({ email }, client);
+  const discovery = await discoverSso(
+    {
+      email: email || undefined,
+      organizationId,
+      connectionId,
+    },
+    client,
+  );
   if (!discovery.enabled) {
-    throw new Error("SSO is not configured for this email domain.");
+    throw new Error(
+      email
+        ? "SSO is not configured for this email domain."
+        : "SSO is not configured for this deployment.",
+    );
+  }
+  if (!email && discovery.scope !== "deployment" && !hasConnectionHint) {
+    throw new Error("Enter your work email to continue with SSO.");
   }
   const pkce = await createPkcePair();
   const clientState = createOAuthState();
@@ -90,9 +108,9 @@ export async function startWebSsoFlow(input: { email: string }): Promise<void> {
       codeChallenge: pkce.challenge,
       codeChallengeMethod: "S256",
       redirectUri,
-      email,
-      organizationId: discovery.organizationId ?? undefined,
-      connectionId: discovery.connectionId ?? undefined,
+      email: email || undefined,
+      organizationId: organizationId ?? discovery.organizationId ?? undefined,
+      connectionId: connectionId ?? discovery.connectionId ?? undefined,
       prompt: "select_account",
     },
     client,
