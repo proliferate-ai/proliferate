@@ -202,6 +202,7 @@ async fn approved_native_plan_failure_cancels_pending_permission() {
         option_id: "reject-once".to_string(),
         label: "Reject".to_string(),
         kind: PermissionInteractionOptionKind::RejectOnce,
+        presentation: None,
     };
     let (event_sink, broker, handle, wait) = live_plan_context(
         db,
@@ -258,6 +259,7 @@ async fn links_plan_to_existing_pending_permission_by_tool_call_id() {
         option_id: "allow".to_string(),
         label: "Yes, continue".to_string(),
         kind: PermissionInteractionOptionKind::AllowOnce,
+        presentation: None,
     };
     let (event_sink, broker, handle, wait) = live_plan_context(
         db,

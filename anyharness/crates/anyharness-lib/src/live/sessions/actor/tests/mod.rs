@@ -159,6 +159,7 @@ fn pending_interaction_summary() -> PendingInteractionSummary {
                 option_id: "allow".to_string(),
                 label: "Allow".to_string(),
                 kind: PermissionInteractionOptionKind::AllowOnce,
+                presentation: None,
             }],
             context: None,
         },
