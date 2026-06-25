@@ -29,6 +29,7 @@ import { resolveRouteScopedWorkspaceProviderId } from "@/lib/domain/workspaces/s
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useAuthStore } from "@/stores/auth/auth-store";
 import { TelemetryProvider } from "./TelemetryProvider";
 
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -48,6 +49,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
 function WorkspaceProviders({ children }: { children: ReactNode }) {
   const location = useLocation();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const authStatus = useAuthStore((state) => state.status);
+  const authUserId = useAuthStore((state) => state.user?.id ?? null);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const providerWorkspaceId = resolveRouteScopedWorkspaceProviderId({
@@ -57,7 +60,11 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
   });
   const resolveConnection = useCallback(
     (workspaceId: string) => {
-      const workspaceCollections = getWorkspaceCollectionsFromCache(appQueryClient, runtimeUrl);
+      const workspaceCollections = getWorkspaceCollectionsFromCache(
+        appQueryClient,
+        runtimeUrl,
+        authStatus === "authenticated" ? authUserId : null,
+      );
       const cloudMobilityWorkspaces = appQueryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
         cloudMobilityWorkspacesKey(),
       );
@@ -129,7 +136,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
 
       return resolveWorkspaceConnection(runtimeUrl, workspaceId);
     },
-    [runtimeUrl, selectedWorkspaceId],
+    [authStatus, authUserId, runtimeUrl, selectedWorkspaceId],
   );
 
   return (

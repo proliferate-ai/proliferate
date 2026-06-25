@@ -54,8 +54,10 @@ from proliferate.server.cloud.runtime.setup_monitor import (
     start_cloud_setup_monitor,
     stop_cloud_setup_monitor,
 )
+from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
+from proliferate.server.organizations.join_api import router as organization_join_router
 from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
 
@@ -209,6 +211,7 @@ def create_app() -> FastAPI:
 
     # ── Domain routes ──
     app.include_router(health_router, prefix=api_prefix, tags=["health"])
+    app.include_router(organization_join_router, prefix=api_prefix, tags=["organizations"])
     app.include_router(artifact_runtime_router, prefix=api_prefix, tags=["artifact_runtime"])
     app.include_router(
         anonymous_telemetry_router,
@@ -223,6 +226,7 @@ def create_app() -> FastAPI:
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
     app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
+    app.include_router(devtools_router, prefix=f"{api_prefix}/v1", tags=["devtools"])
 
     return app
 

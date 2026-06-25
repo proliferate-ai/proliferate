@@ -29,7 +29,7 @@ export function useSettingsNavigation({
   const rawCredential = searchParams.get("credential");
   const rawKind = searchParams.get("kind");
   const rawCheckout = searchParams.get("checkout");
-  const rawInviteHandoff = searchParams.get("inviteHandoff");
+  const rawJoinOrganizationId = searchParams.get("joinOrganizationId");
 
   const selection = useMemo(() => resolveSettingsSelection({
     rawSection,
@@ -41,7 +41,7 @@ export function useSettingsNavigation({
     rawCredential,
     rawKind,
     rawCheckout,
-    rawInviteHandoff,
+    rawJoinOrganizationId,
     repositories,
   }), [
     rawCloudRepoName,
@@ -49,7 +49,7 @@ export function useSettingsNavigation({
     rawCredential,
     rawCheckout,
     rawFocus,
-    rawInviteHandoff,
+    rawJoinOrganizationId,
     rawKind,
     rawRepo,
     rawSection,
@@ -62,7 +62,7 @@ export function useSettingsNavigation({
       section: selection.activeSection,
       repo: selection.activeRepoSourceRoot,
       focus: selection.focus,
-      inviteHandoff: selection.inviteHandoff,
+      joinOrganizationId: selection.joinOrganizationId,
     });
     const currentHref = `/settings?${searchParams.toString()}`;
 
@@ -75,7 +75,7 @@ export function useSettingsNavigation({
     selection.activeRepoSourceRoot,
     selection.activeSection,
     selection.focus,
-    selection.inviteHandoff,
+    selection.joinOrganizationId,
   ]);
 
   const navigateTo = useCallback((next: {

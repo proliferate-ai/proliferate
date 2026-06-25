@@ -8,6 +8,7 @@ import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
+import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
 import { useUpdateRestartWatcher } from "@/hooks/access/tauri/use-update-restart-watcher"
 import { useWorkspaceActivityIndicator } from "@/hooks/app/lifecycle/use-workspace-activity-indicator"
@@ -176,6 +177,7 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.after.use_export_running_agent_count")
   useUpdateRestartWatcher()
   useDebugSessionActivity()
+  useDevDesktopHandoff()
   recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")
   useShortcutDispatcher()
   recordBootDiagnosticOnce("app_runtime.render.after.use_shortcut_dispatcher")

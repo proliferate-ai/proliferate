@@ -4,6 +4,8 @@ import { closeAllSessionStreamHandles } from "@/lib/access/anyharness/session-st
 import type { AuthClientStatePatch } from "@/lib/domain/auth/auth-state-mapping";
 import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { clearSelectedOrganizationCookie } from "@/lib/access/browser/organization-selection-cookie";
+import { useOrganizationStore } from "@/stores/organizations/organization-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
@@ -26,6 +28,8 @@ export function useAuthOrchestrationEffects(): AuthOrchestrationDeps {
     },
     clearSessionRuntimeState: () => {
       closeAllSessionStreamHandles();
+      clearSelectedOrganizationCookie();
+      useOrganizationStore.getState().clearActiveOrganizationId();
       useSessionDirectoryStore.getState().clearEntries();
       useSessionTranscriptStore.getState().clearEntries();
       useSessionSelectionStore.getState().clearSelection();

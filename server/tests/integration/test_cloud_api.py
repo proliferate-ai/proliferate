@@ -52,7 +52,7 @@ from proliferate.integrations.mcp_oauth import (
     RegisteredOAuthClient,
     TokenResponse,
 )
-from proliferate.middleware.request_context import with_rls_context
+from proliferate.rls_context import with_rls_context
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
@@ -511,9 +511,7 @@ class TestCloudOrganizationIntegrationPolicy:
         defaults = await client.get(url, headers=owner_headers)
 
         assert defaults.status_code == 200
-        default_entries = {
-            entry["catalogEntryId"]: entry for entry in defaults.json()["entries"]
-        }
+        default_entries = {entry["catalogEntryId"]: entry for entry in defaults.json()["entries"]}
         assert default_entries["linear"]["enabled"] is True
         assert default_entries["linear"]["updatedAt"] is None
 
@@ -524,9 +522,7 @@ class TestCloudOrganizationIntegrationPolicy:
         )
 
         assert patched.status_code == 200
-        patched_entries = {
-            entry["catalogEntryId"]: entry for entry in patched.json()["entries"]
-        }
+        patched_entries = {entry["catalogEntryId"]: entry for entry in patched.json()["entries"]}
         assert patched_entries["linear"]["enabled"] is False
         assert patched_entries["linear"]["updatedAt"] is not None
         assert patched_entries["linear"]["updatedByUserId"] == owner["user_id"]

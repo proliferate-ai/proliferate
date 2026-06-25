@@ -19,6 +19,10 @@ vi.mock("@/lib/access/tauri/support", () => ({
   openSupportReportWindow,
 }));
 
+vi.mock("@/components/app/sidebar/AppSidebarFooter", () => ({
+  AppSidebarFooter: () => <div data-testid="app-sidebar-footer" />,
+}));
+
 vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   useSupportReportSnapshot: () => ({
     openedAt: "2026-05-30T00:00:00.000Z",
@@ -121,17 +125,18 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
-      "Admin",
-      "Organization settings",
-      "Plan + billing",
-      "Integrations",
-      "Model policy",
-      "Limits",
       "Settings",
       "General",
       "Appearance",
       "Keyboard shortcuts",
       "Account",
+      "Admin",
+      "Organization settings",
+      "Members",
+      "Plan + billing",
+      "Integrations",
+      "Model policy",
+      "Limits",
       "Workspaces",
       "Environments",
       "Personal compute",
@@ -176,6 +181,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
     });
 
     expect(screen.queryByText("Admin")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Members/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Plan \+ billing/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Integrations/ })).toBeNull();
@@ -213,6 +219,13 @@ describe("SettingsSidebar layout and shortcuts", () => {
     const backRow = screen.getByRole("button", { name: "Back to app" });
     expect(backRow.className).toContain("w-full");
     expect(backRow.className).not.toContain("w-fit");
+  });
+
+  it("does not bold the active settings row", () => {
+    renderSettingsSidebar();
+
+    const activeRow = screen.getByRole("button", { name: /General/ });
+    expect(activeRow.className).not.toContain("font-semibold");
   });
 
   it("keeps desktop update actions on the single settings row", () => {
@@ -265,7 +278,13 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("billing");
+    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 6,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
@@ -290,17 +309,17 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
-    expect(screen.getByText("⌘6")).toBeTruthy();
+    expect(screen.getByText("⌘1")).toBeTruthy();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 6,
+      digit: 1,
     })).toBe(false);
     expect(onSelectSection).not.toHaveBeenCalled();
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
-      digit: 7,
+      digit: 2,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
   });

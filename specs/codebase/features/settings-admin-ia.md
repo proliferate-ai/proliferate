@@ -138,8 +138,9 @@ SETTINGS_CONTENT_SECTIONS = [
 groups (6)**:
 
 ```text
-Admin                  organization, billing, organization-integrations,
-                       organization-model-policy, organization-limits
+Admin                  organization, organization-members, billing,
+                       organization-integrations, organization-model-policy,
+                       organization-limits
 Settings               general, appearance, keyboard, account
 Workspaces             environments, compute, worktrees, archived-chats,
                        shared-environments
@@ -240,8 +241,9 @@ Target visible `SETTINGS_NAV_GROUPS` after the owning panes ship:
 
 ```text
 Admin
-  organization             OrganizationPane               members, invitation emails,
-                                                           invite link, org profile
+  organization             OrganizationPane               org profile and Team setup
+  organization-members     OrganizationMembersPane        members, invitation emails,
+                                                           invite link
   billing                  BillingPane                    plan + billing as an org,
                                                            including auto top up option
   organization-integrations SettingsScaffoldPane           org-owned integrations
@@ -759,8 +761,8 @@ apps/desktop/src/lib/domain/settings/navigation.ts
 
 apps/desktop/src/lib/domain/settings/navigation-presentation.ts
   - groups: Admin | Settings | Workspaces | Agents | Help
-  - Admin items: organization, billing, organization-integrations,
-    organization-model-policy, organization-limits
+  - Admin items: organization, organization-members, billing,
+    organization-integrations, organization-model-policy, organization-limits
   - admin tag metadata on Admin rows and shared-environments
 
 apps/desktop/src/components/settings/sidebar/SettingsSidebar.tsx
@@ -813,8 +815,7 @@ apps/desktop/src/lib/domain/telemetry/events.ts
    `worktrees` remains a first-class Workspaces section.
 3. `SettingsScaffoldPane.tsx` renders the scaffolded pages listed in §4.2.
    Scaffolded pages establish route, placement, title, and ownership copy only.
-4. Admin rows are marked `adminOnly`; non-admin users see disabled rows with
-   the admin access tooltip instead of hidden information architecture.
+4. Admin rows are marked `adminOnly`; non-admin users do not see those rows.
 5. `BillingSettingsSurface` is labeled `Plan + billing` and shows the
    organization auto top up option alongside the existing billing controls.
 6. `ComputePane` is labeled `Personal compute`.
@@ -869,7 +870,7 @@ Manual smoke:
 
 ```text
 1. Open Settings as a non-admin org member.
-     -> Admin rows are disabled with tooltip.
+     -> Admin rows are hidden.
      -> Workspaces > Shared sandbox is disabled with tooltip.
      -> Agents > Agent Authentication is enabled (personal selection
         still allowed).

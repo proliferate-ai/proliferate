@@ -11,6 +11,16 @@ export function desktopNavigationTarget(url: string): string | null {
     return null;
   }
 
+  if (parsed.hostname === "join") {
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length === 1) {
+      const organizationId = decodeRoutePart(segments[0]);
+      const params = new URLSearchParams({ section: "organization-members" });
+      params.set("joinOrganizationId", organizationId);
+      return `/settings?${params.toString()}`;
+    }
+  }
+
   if (parsed.hostname === "settings" && parsed.pathname === "/cloud") {
     const params = new URLSearchParams(parsed.search);
     params.set("section", "billing");

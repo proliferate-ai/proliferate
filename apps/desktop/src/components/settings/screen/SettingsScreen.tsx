@@ -10,6 +10,7 @@ import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
+import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 // SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
@@ -77,6 +78,9 @@ function renderSettingsSection(
   }
   if (activeSection === "organization") {
     return <OrganizationPane />;
+  }
+  if (activeSection === "organization-members") {
+    return <OrganizationMembersPane />;
   }
   if (activeSection === "organization-integrations") {
     if (!cloudEnabled) {
@@ -175,7 +179,7 @@ export function SettingsScreen({
   onSelectCloudEnvironment,
 }: SettingsScreenProps) {
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
-  const { activeOrganizationId } = useActiveOrganization();
+  const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
   const {
     phase,
@@ -186,10 +190,11 @@ export function SettingsScreen({
     (repository) => repository.sourceRoot === activeRepoSourceRoot,
   ) ?? null;
   const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
+  const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
   const shouldRedirectAdminSection =
-    activeSectionIsAdminOnly && !admin.isLoading && admin.isAdmin !== true;
+    activeSectionIsAdminOnly && !adminAccessLoading && admin.isAdmin !== true;
   const effectiveActiveSection =
-    activeSectionIsAdminOnly && admin.isAdmin !== true
+    activeSectionIsAdminOnly && !adminAccessLoading && admin.isAdmin !== true
       ? SETTINGS_DEFAULT_SECTION
       : activeSection;
   const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);

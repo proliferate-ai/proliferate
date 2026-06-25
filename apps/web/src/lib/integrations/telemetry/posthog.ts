@@ -26,6 +26,7 @@ export type WebTelemetryRoute =
   | "auth_error"
   | "desktop_handoff"
   | "connect_github"
+  | "organization_join"
   | "home"
   | "integrations"
   | "workflows"
@@ -114,6 +115,7 @@ export function webTelemetryRouteForPathname(pathname: string): WebTelemetryRout
   if (normalized === "/auth/error") return "auth_error";
   if (normalized === "/auth/desktop/handoff") return "desktop_handoff";
   if (normalized === "/connect-github") return "connect_github";
+  if (/^\/join\/[^/]+$/u.test(normalized)) return "organization_join";
   if (normalized === "/") return "home";
   if (normalized === "/integrations") return "integrations";
   if (normalized === "/workflows") return "workflows";

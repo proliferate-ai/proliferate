@@ -8,12 +8,13 @@ import {
 export function useWorkspaceCollectionsCache(args: {
   runtimeUrl: string;
   cloudActive: boolean;
+  authUserId: string | null;
 }) {
-  const { cloudActive, runtimeUrl } = args;
+  const { authUserId, cloudActive, runtimeUrl } = args;
   const queryClient = useQueryClient();
   const queryKey = useMemo(
-    () => workspaceCollectionsKey(runtimeUrl, cloudActive),
-    [cloudActive, runtimeUrl],
+    () => workspaceCollectionsKey(runtimeUrl, cloudActive, cloudActive ? authUserId : null),
+    [authUserId, cloudActive, runtimeUrl],
   );
 
   const getWorkspaceCollectionsCacheState = useCallback(() => {
@@ -21,8 +22,12 @@ export function useWorkspaceCollectionsCache(args: {
   }, [queryClient, queryKey]);
 
   const getWorkspaceCollections = useCallback(() => {
-    return getWorkspaceCollectionsFromCache(queryClient, runtimeUrl);
-  }, [queryClient, runtimeUrl]);
+    return getWorkspaceCollectionsFromCache(
+      queryClient,
+      runtimeUrl,
+      cloudActive ? authUserId : null,
+    );
+  }, [authUserId, cloudActive, queryClient, runtimeUrl]);
 
   return {
     getWorkspaceCollections,

@@ -15,10 +15,13 @@ export interface OrganizationMemberRecord {
   displayName?: string | null;
   email: string;
   avatarUrl?: string | null;
+  joinedAt?: string | null;
 }
 
 export interface OrganizationInvitationRecord {
   id: string;
+  organizationId?: string | null;
+  organizationName?: string | null;
   email: string;
   role: string;
   status: string;

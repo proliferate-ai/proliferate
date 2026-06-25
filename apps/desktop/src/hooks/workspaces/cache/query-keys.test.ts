@@ -75,4 +75,34 @@ describe("getWorkspaceCollectionsFromCache", () => {
 
     expect(getWorkspaceCollectionsFromCache(queryClient, runtimeUrl)).toEqual(collections);
   });
+
+  it("keeps authenticated workspace collections scoped to the signed-in user", () => {
+    const queryClient = new QueryClient();
+    const runtimeUrl = "http://127.0.0.1:7007";
+    const firstUserCollections = makeCollections({
+      cloudWorkspaces: [{ id: "first-user-cloud" }],
+    } as unknown as Partial<WorkspaceCollections>);
+    const secondUserCollections = makeCollections({
+      cloudWorkspaces: [{ id: "second-user-cloud" }],
+    } as unknown as Partial<WorkspaceCollections>);
+
+    queryClient.setQueryData(
+      workspaceCollectionsKey(runtimeUrl, true, "user-1"),
+      firstUserCollections,
+      { updatedAt: 200 },
+    );
+    queryClient.setQueryData(
+      workspaceCollectionsKey(runtimeUrl, true, "user-2"),
+      secondUserCollections,
+      { updatedAt: 100 },
+    );
+
+    expect(getWorkspaceCollectionsFromCache(queryClient, runtimeUrl, "user-1")).toEqual(
+      firstUserCollections,
+    );
+    expect(getWorkspaceCollectionsFromCache(queryClient, runtimeUrl, "user-2")).toEqual(
+      secondUserCollections,
+    );
+    expect(getWorkspaceCollectionsFromCache(queryClient, runtimeUrl, null)).toBeUndefined();
+  });
 });

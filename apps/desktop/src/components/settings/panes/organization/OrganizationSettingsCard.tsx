@@ -14,6 +14,8 @@ import {
 } from "@/components/settings/panes/organization/OrganizationLogo";
 import type { OrganizationRecord } from "@/lib/domain/organizations/organization-records";
 
+const ORGANIZATION_SETTINGS_HELPER_CLASS = "font-normal text-muted-foreground/70";
+
 export function OrganizationSettingsCard({
   organization,
   settingsName,
@@ -46,14 +48,22 @@ export function OrganizationSettingsCard({
 
   return (
     <OrganizationSection
-      title="Profile"
-      description="Update how this organization appears in switchers, settings, and shared workspace context."
+      title="Organization settings"
+      description={(
+        <span className={ORGANIZATION_SETTINGS_HELPER_CLASS}>
+          Manage the organization name and logo used in switchers, settings, and shared workspaces.
+        </span>
+      )}
     >
       <SettingsCard>
         <form onSubmit={(event) => { void onSubmit(event); }}>
           <SettingsCardRow
             label="Logo"
-            description="Upload a square image for the clearest result."
+            description={(
+              <span className={ORGANIZATION_SETTINGS_HELPER_CLASS}>
+                Upload a square image for the clearest result.
+              </span>
+            )}
           >
             <div className="flex flex-wrap items-center justify-end gap-2">
               <OrganizationLogo organization={organization} logoImage={settingsLogoImage} />
@@ -94,8 +104,12 @@ export function OrganizationSettingsCard({
             ) : null}
           </SettingsCardRow>
           <SettingsCardRow
-            label="Name"
-            description="Shown anywhere organization context is displayed."
+            label="Organization name"
+            description={(
+              <span className={ORGANIZATION_SETTINGS_HELPER_CLASS}>
+                Shown anywhere organization context is displayed.
+              </span>
+            )}
           >
             <Input
               value={settingsName}

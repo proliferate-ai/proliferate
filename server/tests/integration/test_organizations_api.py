@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
@@ -12,6 +11,7 @@ from proliferate.auth.authorization import OwnerSelection
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
@@ -127,10 +127,6 @@ async def _default_organization(client: AsyncClient, tokens: dict[str, str]) -> 
     return organizations[0]
 
 
-def _token_sequence(tokens: list[str]) -> Iterator[str]:
-    yield from tokens
-
-
 @pytest.mark.asyncio
 async def test_organization_member_list_and_last_owner_protection(
     client: AsyncClient,
@@ -174,6 +170,32 @@ async def test_organization_member_list_and_last_owner_protection(
     assert members[0]["displayName"] == "Owner User"
     assert members[0]["avatarUrl"] == "https://example.com/avatar.png"
 
+    removed_user = await _create_user_and_get_tokens(client, email="removed@acme.dev")
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        now = datetime.now(UTC)
+        session.add(
+            OrganizationMembership(
+                organization_id=uuid.UUID(organization_id),
+                user_id=uuid.UUID(removed_user["user_id"]),
+                role=ORGANIZATION_ROLE_MEMBER,
+                status=ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+                joined_at=now,
+                removed_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+
+    response = await client.get(
+        f"/v1/organizations/{organization_id}/members",
+        headers=_headers(owner),
+    )
+    assert response.status_code == 200
+    assert [member["email"] for member in response.json()["members"]] == ["owner@acme.dev"]
+
     response = await client.patch(
         f"/v1/organizations/{organization_id}/members/{membership_id}",
         headers=_headers(owner),
@@ -184,7 +206,7 @@ async def test_organization_member_list_and_last_owner_protection(
 
 
 @pytest.mark.asyncio
-async def test_list_organizations_has_no_creation_side_effect(
+async def test_list_organizations_ensures_default_owned_organization(
     client: AsyncClient,
 ) -> None:
     user = await _create_user_and_get_tokens(client, email="no-team@acme.dev")
@@ -192,13 +214,17 @@ async def test_list_organizations_has_no_creation_side_effect(
     response = await client.get("/v1/organizations", headers=_headers(user))
 
     assert response.status_code == 200
-    assert response.json() == {"organizations": []}
+    organizations = response.json()["organizations"]
+    assert len(organizations) == 1
+    assert organizations[0]["name"] == "Acme"
+    assert organizations[0]["logoDomain"] == "acme.dev"
+    assert organizations[0]["membership"]["role"] == "owner"
 
     from proliferate.db import engine as engine_module
 
     async with engine_module.async_session_factory() as session:
         organization_count = await session.scalar(select(Organization).limit(1))
-    assert organization_count is None
+    assert organization_count is not None
 
 
 @pytest.mark.asyncio
@@ -256,7 +282,6 @@ async def test_invitation_is_durable_before_email_delivery(
     owner = await _create_user_and_get_tokens(client, email="durable-owner@acme.dev")
     organization = await _create_organization_for_user(user_id=owner["user_id"])
     organization_id = uuid.UUID(organization["organization_id"])
-    monkeypatch.setattr(organization_service, "_new_token", lambda: "durable-invite-token")
     sent_invites: list[dict[str, str]] = []
 
     async def fake_send_organization_invitation_email(
@@ -294,6 +319,7 @@ async def test_invitation_is_durable_before_email_delivery(
     assert result.invitation.email == "durable-member@acme.dev"
     assert result.invitation.delivery_status == ORGANIZATION_INVITATION_DELIVERY_SKIPPED
     assert sent_invites and sent_invites[0]["to_email"] == "durable-member@acme.dev"
+    assert sent_invites[0]["invite_url"].endswith(f"/join/{organization_id}")
 
     async with engine_module.async_session_factory() as session:
         invitation = (
@@ -311,13 +337,9 @@ async def test_invitation_is_durable_before_email_delivery(
 @pytest.mark.asyncio
 async def test_admin_cannot_modify_existing_owner(
     client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = await _create_user_and_get_tokens(client, email="owner@acme.dev")
     admin = await _create_user_and_get_tokens(client, email="admin@acme.dev")
-
-    generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
-    monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
     await _create_organization_for_user(user_id=owner["user_id"])
     organization = await _default_organization(client, owner)
@@ -331,16 +353,10 @@ async def test_admin_cannot_modify_existing_owner(
     )
     assert response.status_code == 201
 
-    response = await client.get(
-        "/v1/organizations/invitations/landing",
-        params={"token": "raw-invite-token"},
-    )
-    assert response.status_code == 200
-
     response = await client.post(
         "/v1/organizations/invitations/accept",
         headers=_headers(admin),
-        json={"inviteHandoff": "handoff-token"},
+        json={"organizationId": organization_id},
     )
     assert response.status_code == 200
 
@@ -356,13 +372,9 @@ async def test_admin_cannot_modify_existing_owner(
 @pytest.mark.asyncio
 async def test_user_cannot_modify_or_remove_own_membership(
     client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     first_owner = await _create_user_and_get_tokens(client, email="first@acme.dev")
     second_owner = await _create_user_and_get_tokens(client, email="second@acme.dev")
-
-    generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
-    monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
     await _create_organization_for_user(user_id=first_owner["user_id"])
     organization = await _default_organization(client, first_owner)
@@ -375,16 +387,10 @@ async def test_user_cannot_modify_or_remove_own_membership(
     )
     assert response.status_code == 201
 
-    response = await client.get(
-        "/v1/organizations/invitations/landing",
-        params={"token": "raw-invite-token"},
-    )
-    assert response.status_code == 200
-
     response = await client.post(
         "/v1/organizations/invitations/accept",
         headers=_headers(second_owner),
-        json={"inviteHandoff": "handoff-token"},
+        json={"organizationId": organization_id},
     )
     assert response.status_code == 200
     second_membership_id = response.json()["organization"]["membership"]["id"]
@@ -406,15 +412,11 @@ async def test_user_cannot_modify_or_remove_own_membership(
 
 
 @pytest.mark.asyncio
-async def test_invitation_handoff_accepts_matching_email_and_rejects_replay(
+async def test_invitation_accepts_join_for_matching_email_and_replays_current_membership(
     client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = await _create_user_and_get_tokens(client, email="owner@acme.dev")
     invited = await _create_user_and_get_tokens(client, email="member@acme.dev")
-
-    generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
-    monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
     await _create_organization_for_user(user_id=owner["user_id"])
     organization_id = (await _default_organization(client, owner))["id"]
@@ -430,17 +432,22 @@ async def test_invitation_handoff_accepts_matching_email_and_rejects_replay(
     assert invitation["deliveryStatus"] == "skipped"
 
     response = await client.get(
-        "/v1/organizations/invitations/landing",
-        params={"token": "raw-invite-token"},
+        f"/v1/organizations/{organization_id}/join-link",
+        headers=_headers(owner),
     )
     assert response.status_code == 200
-    assert "handoff-token" in response.text
-    assert "raw-invite-token" not in response.text
+    assert response.json()["url"].endswith(f"/join/{organization_id}")
+
+    response = await client.get(
+        f"/join/{organization_id}",
+    )
+    assert response.status_code == 200
+    assert f"proliferate://join/{organization_id}" in response.text
 
     response = await client.post(
         "/v1/organizations/invitations/accept",
         headers=_headers(invited),
-        json={"inviteHandoff": "handoff-token"},
+        json={"organizationId": organization_id},
     )
     assert response.status_code == 200
     accepted = response.json()["organization"]
@@ -450,22 +457,81 @@ async def test_invitation_handoff_accepts_matching_email_and_rejects_replay(
     response = await client.post(
         "/v1/organizations/invitations/accept",
         headers=_headers(invited),
-        json={"inviteHandoff": "handoff-token"},
+        json={"organizationId": organization_id},
+    )
+    assert response.status_code == 200
+    replayed = response.json()["organization"]
+    assert replayed["id"] == organization_id
+    assert replayed["membership"]["id"] == accepted["membership"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_current_user_can_accept_pending_invitation(
+    client: AsyncClient,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="owner-current@acme.dev")
+    invited = await _create_user_and_get_tokens(client, email="current-member@acme.dev")
+    wrong_user = await _create_user_and_get_tokens(client, email="wrong-current@acme.dev")
+
+    await _create_organization_for_user(user_id=owner["user_id"])
+    organization_id = (await _default_organization(client, owner))["id"]
+
+    response = await client.post(
+        f"/v1/organizations/{organization_id}/invitations",
+        headers=_headers(owner),
+        json={"email": "current-member@acme.dev", "role": "member"},
+    )
+    assert response.status_code == 201
+    invitation = response.json()
+
+    response = await client.get(
+        "/v1/organizations/invitations/current",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 200
+    current_invitations = response.json()["invitations"]
+    assert [item["id"] for item in current_invitations] == [invitation["id"]]
+    assert current_invitations[0]["organizationName"] == "Acme"
+
+    response = await client.post(
+        f"/v1/organizations/invitations/current/{invitation['id']}/accept",
+        headers=_headers(wrong_user),
     )
     assert response.status_code == 404
     assert response.json()["detail"]["code"] == "invalid_invitation"
 
+    response = await client.post(
+        f"/v1/organizations/invitations/current/{invitation['id']}/accept",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 200
+    accepted = response.json()["organization"]
+    assert accepted["id"] == organization_id
+    assert accepted["membership"]["role"] == "member"
+
+    response = await client.get(
+        "/v1/organizations/invitations/current",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 200
+    assert response.json()["invitations"] == []
+
+    response = await client.post(
+        f"/v1/organizations/invitations/current/{invitation['id']}/accept",
+        headers=_headers(invited),
+    )
+    assert response.status_code == 200
+    replayed = response.json()["organization"]
+    assert replayed["id"] == organization_id
+    assert replayed["membership"]["id"] == accepted["membership"]["id"]
+
 
 @pytest.mark.asyncio
-async def test_invitation_accept_conflicts_when_user_already_has_team(
+async def test_invitation_accept_adds_membership_when_user_already_has_team(
     client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = await _create_user_and_get_tokens(client, email="owner-conflict@acme.dev")
     invited = await _create_user_and_get_tokens(client, email="already-in-team@acme.dev")
-
-    generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
-    monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
     await _create_organization_for_user(user_id=owner["user_id"], name="Inviting Team")
     await _create_organization_for_user(user_id=invited["user_id"], name="Existing Team")
@@ -478,40 +544,35 @@ async def test_invitation_accept_conflicts_when_user_already_has_team(
     )
     assert response.status_code == 201
 
-    response = await client.get(
-        "/v1/organizations/invitations/landing",
-        params={"token": "raw-invite-token"},
-    )
-    assert response.status_code == 200
-
     response = await client.post(
         "/v1/organizations/invitations/accept",
         headers=_headers(invited),
-        json={"inviteHandoff": "handoff-token"},
+        json={"organizationId": organization_id},
     )
-    assert response.status_code == 409
-    detail = response.json()["detail"]
-    assert detail["code"] == "already_in_organization"
-    assert detail["currentOrganization"]["name"] == "Existing Team"
+    assert response.status_code == 200
+    accepted = response.json()["organization"]
+    assert accepted["id"] == organization_id
+    assert accepted["membership"]["role"] == "member"
+
+    response = await client.get("/v1/organizations", headers=_headers(invited))
+    assert response.status_code == 200
+    organization_names = sorted(item["name"] for item in response.json()["organizations"])
+    assert organization_names == ["Existing Team", "Inviting Team"]
 
     response = await client.get(
         f"/v1/organizations/{organization_id}/invitations",
         headers=_headers(owner),
     )
     assert response.status_code == 200
-    assert response.json()["invitations"][0]["status"] == "pending"
+    assert response.json()["invitations"][0]["status"] == "accepted"
 
 
 @pytest.mark.asyncio
 async def test_invitation_accept_requires_matching_authenticated_email(
     client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = await _create_user_and_get_tokens(client, email="owner@acme.dev")
     wrong_user = await _create_user_and_get_tokens(client, email="wrong@acme.dev")
-
-    generated_tokens = _token_sequence(["raw-invite-token", "handoff-token"])
-    monkeypatch.setattr(organization_service, "_new_token", lambda: next(generated_tokens))
 
     await _create_organization_for_user(user_id=owner["user_id"])
     organization_id = (await _default_organization(client, owner))["id"]
@@ -523,16 +584,10 @@ async def test_invitation_accept_requires_matching_authenticated_email(
     )
     assert response.status_code == 201
 
-    response = await client.get(
-        "/v1/organizations/invitations/landing",
-        params={"token": "raw-invite-token"},
-    )
-    assert response.status_code == 200
-
     response = await client.post(
         "/v1/organizations/invitations/accept",
         headers=_headers(wrong_user),
-        json={"inviteHandoff": "handoff-token"},
+        json={"organizationId": organization_id},
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "invitation_email_mismatch"

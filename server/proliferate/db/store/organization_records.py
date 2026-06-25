@@ -48,6 +48,7 @@ class MemberRecord:
 class InvitationRecord:
     id: UUID
     organization_id: UUID
+    organization_name: str | None
     email: str
     role: str
     status: str
@@ -74,14 +75,6 @@ class OrganizationWithMembershipRecord:
 class InvitationCreateRecord:
     invitation: InvitationRecord
     organization: OrganizationRecord
-
-
-@dataclass(frozen=True)
-class InvitationHandoffRecord:
-    organization_id: UUID
-    organization_name: str
-    invite_email: str
-    handoff_token: str
 
 
 @dataclass(frozen=True)
@@ -150,10 +143,14 @@ def membership_record(membership: OrganizationMembership) -> MembershipRecord:
     )
 
 
-def invitation_record(invitation: OrganizationInvitation) -> InvitationRecord:
+def invitation_record(
+    invitation: OrganizationInvitation,
+    organization: Organization | None = None,
+) -> InvitationRecord:
     return InvitationRecord(
         id=invitation.id,
         organization_id=invitation.organization_id,
+        organization_name=organization.name if organization is not None else None,
         email=invitation.email,
         role=invitation.role,
         status=invitation.status,

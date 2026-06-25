@@ -15,6 +15,7 @@ export type SettingsNavIconId =
   | "organization"
   | "organization-integrations"
   | "organization-limits"
+  | "organization-members"
   | "organization-model-policy"
   | "support"
   | "worktrees";
@@ -49,6 +50,16 @@ export interface SettingsNavGroup {
 
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
+    id: "individual_settings",
+    heading: "Settings",
+    items: [
+      { kind: "section", id: "general", label: "General", iconId: "general" },
+      { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
+      { kind: "section", id: "keyboard", label: "Keyboard shortcuts", iconId: "keyboard" },
+      { kind: "section", id: "account", label: "Account", iconId: "account" },
+    ],
+  },
+  {
     id: "admin",
     heading: "Admin",
     items: [
@@ -57,6 +68,13 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: "organization",
         label: "Organization settings",
         iconId: "organization",
+        adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "organization-members",
+        label: "Members",
+        iconId: "organization-members",
         adminOnly: true,
       },
       {
@@ -87,16 +105,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         iconId: "organization-limits",
         adminOnly: true,
       },
-    ],
-  },
-  {
-    id: "individual_settings",
-    heading: "Settings",
-    items: [
-      { kind: "section", id: "general", label: "General", iconId: "general" },
-      { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
-      { kind: "section", id: "keyboard", label: "Keyboard shortcuts", iconId: "keyboard" },
-      { kind: "section", id: "account", label: "Account", iconId: "account" },
     ],
   },
   {

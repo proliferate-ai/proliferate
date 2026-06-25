@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -47,7 +48,11 @@ class OrganizationMembershipUpdateRequest(OrganizationBaseModel):
 
 
 class OrganizationInvitationAcceptRequest(OrganizationBaseModel):
-    invite_handoff: str = Field(alias="inviteHandoff")
+    organization_id: UUID = Field(alias="organizationId")
+
+
+class OrganizationJoinLinkResponse(OrganizationBaseModel):
+    url: str
 
 
 class OrganizationMembershipResponse(OrganizationBaseModel):
@@ -84,6 +89,7 @@ class OrganizationMemberResponse(OrganizationBaseModel):
 class OrganizationInvitationResponse(OrganizationBaseModel):
     id: str
     organization_id: str = Field(alias="organizationId")
+    organization_name: str | None = Field(default=None, alias="organizationName")
     email: str
     role: OrganizationRole
     status: OrganizationInvitationStatus
@@ -169,6 +175,7 @@ def invitation_response(record: InvitationRecord) -> OrganizationInvitationRespo
     return OrganizationInvitationResponse(
         id=str(record.id),
         organization_id=str(record.organization_id),
+        organization_name=record.organization_name,
         email=record.email,
         role=record.role,  # type: ignore[arg-type]
         status=record.status,  # type: ignore[arg-type]

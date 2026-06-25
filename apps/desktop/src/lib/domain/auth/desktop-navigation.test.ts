@@ -60,10 +60,10 @@ describe("desktopNavigationTarget", () => {
     );
   });
 
-  it("routes organization invitation handoff links to the flat organization settings section", () => {
+  it("routes organization join links to the members settings section", () => {
     expect(
-      desktopNavigationTarget("proliferate://settings/organization?inviteHandoff=abc123"),
-    ).toBe("/settings?inviteHandoff=abc123&section=organization");
+      desktopNavigationTarget("proliferate://join/org-123"),
+    ).toBe("/settings?section=organization-members&joinOrganizationId=org-123");
   });
 
   it("routes parked Slack bot settings links to general settings", () => {

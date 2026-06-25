@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Protocol
@@ -12,13 +9,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITE_EXPIRES_DAYS,
-    ORGANIZATION_INVITE_HANDOFF_EXPIRES_MINUTES,
-    ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN,
-    ORGANIZATION_INVITE_TOKEN_DOMAIN,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_OWNER,
 )
@@ -54,11 +47,13 @@ from proliferate.server.organizations.domain.profile import (
     OrganizationProfileIssue,
     clean_organization_name,
     default_organization_name,
+    derive_logo_domain_from_email,
     organization_name_issue,
     sanitize_logo_image,
 )
 from proliferate.server.organizations.errors import OrganizationServiceError
-from proliferate.server.organizations.landing import build_landing_html
+from proliferate.server.organizations.join_links import organization_join_url
+from proliferate.server.organizations.landing import build_join_landing_html
 from proliferate.utils.time import utcnow
 
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
@@ -120,18 +115,6 @@ def _require_role(role: str) -> str:
             status_code=400,
         )
     return role
-
-
-def _hash_token(raw_token: str, domain: str) -> str:
-    return hmac.new(
-        settings.cloud_secret_key.encode("utf-8"),
-        f"{domain}:{raw_token}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def _new_token() -> str:
-    return secrets.token_urlsafe(32)
 
 
 def _require_uuid(value: str | UUID | None, *, field: str) -> UUID:
@@ -218,21 +201,12 @@ async def list_organizations(
     db: AsyncSession,
     actor_user: OrganizationActor,
 ) -> OrganizationMembershipRecords:
-    try:
-        records = await organization_store.list_organizations_for_user(db, actor_user.id)
-    except RuntimeError as exc:
-        raise OrganizationServiceError(
-            "multiple_active_organizations",
-            "This account has multiple active teams. Contact support to repair membership state.",
-            status_code=409,
-        ) from exc
-    if len(records) > 1:
-        raise OrganizationServiceError(
-            "multiple_active_organizations",
-            "This account has multiple active teams. Contact support to repair membership state.",
-            status_code=409,
-        )
-    return records
+    return await organization_store.ensure_default_organization_for_user(
+        db,
+        user_id=actor_user.id,
+        name=_default_organization_name(actor_user),
+        logo_domain=derive_logo_domain_from_email(actor_user.email),
+    )
 
 
 async def get_organization(
@@ -324,12 +298,6 @@ async def update_membership(
             "The last organization owner cannot be removed or downgraded.",
             status_code=409,
         )
-    if error == "already_in_organization":
-        raise OrganizationServiceError(
-            error,
-            "This user already belongs to another team.",
-            status_code=409,
-        )
     if membership is None:
         raise _org_not_found()
     if status is not None:
@@ -365,15 +333,12 @@ async def create_invitation(
 ) -> OrganizationInvitationEmailResult:
     _require_current_org_role(org_user, required_roles_for_invitation_role(role))
     normalized_email = normalize_invitation_email(email)
-    token = _new_token()
     result = await invitation_delivery.create_and_send_invitation(
         organization_id=org_user.organization_id,
         email=normalized_email,
         role=_require_role(role),
-        token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         invited_by_user_id=org_user.actor_user_id,
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
-        token=token,
         inviter_email=inviter_email,
     )
     if result is None:
@@ -392,13 +357,10 @@ async def resend_invitation(
     inviter_email: str,
 ) -> OrganizationInvitationEmailResult:
     _require_current_org_role(org_user, organization_admin_roles())
-    token = _new_token()
     result = await invitation_delivery.rotate_and_send_invitation(
         organization_id=org_user.organization_id,
         invitation_id=invitation_id,
-        token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
-        token=token,
         inviter_email=inviter_email,
     )
     if result is None:
@@ -427,6 +389,31 @@ async def list_current_user_invitations(
     return await invitation_store.list_pending_invitations_for_email(db, actor_user.email)
 
 
+async def accept_current_user_invitation(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    invitation_id: UUID,
+) -> OrganizationWithMembershipRecord:
+    accepted, error = await invitation_store.accept_pending_invitation_for_email(
+        db,
+        invitation_id=invitation_id,
+        authenticated_user_id=actor_user.id,
+        authenticated_email=actor_user.email,
+    )
+    if accepted is None:
+        accept_error = _build_invitation_accept_error(error)
+        raise accept_error
+    await maybe_create_organization_seat_adjustment(
+        db,
+        organization_id=accepted.organization.id,
+        membership_id=accepted.membership.id,
+    )
+    return OrganizationWithMembershipRecord(
+        organization=accepted.organization,
+        membership=accepted.membership,
+    )
+
+
 async def revoke_invitation(
     db: AsyncSession,
     org_user: CurrentOrgUser,
@@ -447,62 +434,35 @@ async def revoke_invitation(
     return invitation
 
 
-async def create_invitation_landing_handoff(db: AsyncSession, raw_token: str) -> str:
-    handoff_token = _new_token()
-    handoff = await invitation_store.create_invitation_handoff(
-        db,
-        token_hash=_hash_token(raw_token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
-        handoff_token_hash=_hash_token(handoff_token, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
-        handoff_token=handoff_token,
-        handoff_expires_at=utcnow()
-        + timedelta(minutes=ORGANIZATION_INVITE_HANDOFF_EXPIRES_MINUTES),
-    )
-    if handoff is None:
-        raise OrganizationServiceError(
-            "invitation_not_found",
-            "Organization invitation not found or expired.",
-            status_code=404,
-        )
-    return build_landing_html(handoff.organization_name, handoff.handoff_token)
+def get_organization_join_link(organization_id: UUID) -> str:
+    return organization_join_url(organization_id)
+
+
+async def create_organization_join_landing(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> str:
+    organization = await organization_store.get_organization(db, organization_id)
+    if organization is None:
+        raise _org_not_found()
+    return build_join_landing_html(organization.name, organization.id)
 
 
 async def accept_invitation(
     db: AsyncSession,
     actor_user: OrganizationActor,
-    invite_handoff: str,
+    *,
+    organization_id: UUID,
 ) -> OrganizationWithMembershipRecord:
-    accepted, error = await invitation_store.accept_invitation_handoff(
+    accepted, error = await invitation_store.accept_pending_invitation_for_organization_email(
         db,
-        handoff_token_hash=_hash_token(invite_handoff, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
+        organization_id=organization_id,
         authenticated_user_id=actor_user.id,
         authenticated_email=actor_user.email,
     )
     if accepted is None:
-        if error == "already_in_organization":
-            current = await organization_store.get_current_membership_for_user(db, actor_user.id)
-            extra_detail: dict[str, object] = {}
-            if current is not None:
-                extra_detail["currentOrganization"] = {
-                    "id": str(current.organization.id),
-                    "name": current.organization.name,
-                }
-            raise OrganizationServiceError(
-                "already_in_organization",
-                "You already belong to a team. Leave your current team before joining this one.",
-                status_code=409,
-                extra_detail=extra_detail,
-            )
-        status_code = 403 if error == "invitation_email_mismatch" else 404
-        message = (
-            "This invitation was sent to a different email address."
-            if error == "invitation_email_mismatch"
-            else "Organization invitation not found or expired."
-        )
-        raise OrganizationServiceError(
-            error or "invalid_invitation",
-            message,
-            status_code=status_code,
-        )
+        accept_error = _build_invitation_accept_error(error)
+        raise accept_error
     await maybe_create_organization_seat_adjustment(
         db,
         organization_id=accepted.organization.id,
@@ -511,4 +471,20 @@ async def accept_invitation(
     return OrganizationWithMembershipRecord(
         organization=accepted.organization,
         membership=accepted.membership,
+    )
+
+
+def _build_invitation_accept_error(
+    error: str | None,
+) -> OrganizationServiceError:
+    status_code = 403 if error == "invitation_email_mismatch" else 404
+    message = (
+        "This invitation was sent to a different email address."
+        if error == "invitation_email_mismatch"
+        else "Organization invitation not found or expired."
+    )
+    return OrganizationServiceError(
+        error or "invalid_invitation",
+        message,
+        status_code=status_code,
     )

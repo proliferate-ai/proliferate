@@ -334,6 +334,10 @@ export function organizationInvitationsKey(organizationId: string | null) {
   return [...organizationsRootKey(), organizationId, "invitations"] as const;
 }
 
+export function organizationJoinLinkKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "join-link"] as const;
+}
+
 export function currentUserOrganizationInvitationsKey() {
   return [...organizationsRootKey(), "current-user", "invitations"] as const;
 }

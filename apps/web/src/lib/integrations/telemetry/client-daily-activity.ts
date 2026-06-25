@@ -14,6 +14,7 @@ export function webTelemetryScreenForPath(pathname: string): string {
   if (pathname === "/auth/desktop/handoff") return "desktop_handoff";
   if (pathname === "/auth/error") return "auth_error";
   if (pathname === "/connect-github") return "connect_github";
+  if (/^\/join\/[^/]+$/u.test(pathname)) return "organization_join";
   if (pathname === "/integrations") return "integrations";
   if (pathname === "/workflows") return "workflows";
   if (pathname === "/automations") return "workflows";

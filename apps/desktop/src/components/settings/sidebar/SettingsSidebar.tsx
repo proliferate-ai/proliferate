@@ -17,8 +17,10 @@ import {
   Shield,
   SlidersHorizontal,
   Tree,
+  UsersRound,
 } from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
+import { AppSidebarFooter } from "@/components/app/sidebar/AppSidebarFooter";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
@@ -70,7 +72,7 @@ const SETTINGS_ROW_INACTIVE_CLASS =
 const SETTINGS_BACK_ROW_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-foreground";
 const SETTINGS_ROW_ACTIVE_CLASS =
-  "!font-semibold !text-sidebar-foreground";
+  "!text-sidebar-foreground";
 const SETTINGS_ROW_DISABLED_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-muted-foreground";
 
@@ -89,6 +91,7 @@ const SETTINGS_NAV_ICONS = {
   organization: Building2,
   "organization-integrations": Blocks,
   "organization-limits": SlidersHorizontal,
+  "organization-members": UsersRound,
   "organization-model-policy": Brain,
   support: LifeBuoy,
   worktrees: Tree,
@@ -310,15 +313,16 @@ export function SettingsSidebar({
                   </Fragment>
                 );
               })}
+              {group.id === "help" && appVersion ? (
+                <div className="px-2.5 py-2 text-base leading-5 text-sidebar-muted-foreground">
+                  Proliferate v{appVersion}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
       </nav>
-      {appVersion ? (
-        <div className="shrink-0 border-t border-sidebar-border px-4 py-3 text-base text-sidebar-muted-foreground">
-          Proliferate v{appVersion}
-        </div>
-      ) : null}
+      <AppSidebarFooter />
     </div>
   );
 }

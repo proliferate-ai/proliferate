@@ -126,6 +126,9 @@ Desktop:
 - Keeps GitHub as the primary sign-in path.
 - Account settings expose `Set password` / `Change password` for authenticated
   users.
+- Organization join deep links may arrive before Desktop is authenticated.
+  Desktop should start the normal sign-in path and preserve the join target so
+  the organization invitation flow resumes after authentication.
 
 Account settings:
 

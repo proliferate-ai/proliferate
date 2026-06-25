@@ -17,6 +17,7 @@ const FOCUS_PARAM_NAMES = [
   "cloudRepoOwner",
   "cloudRepoName",
   "checkout",
+  "joinOrganizationId",
 ] as const;
 
 type SettingsFocusParam = (typeof FOCUS_PARAM_NAMES)[number];
@@ -57,7 +58,7 @@ interface SettingsNavigationTarget {
   target?: string | null;
   credential?: string | null;
   kind?: string | null;
-  inviteHandoff?: string | null;
+  joinOrganizationId?: string | null;
 }
 
 export function buildSettingsHref(target: SettingsNavigationTarget): string {
@@ -83,8 +84,8 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
   if (section === "agent-authentication" && target.kind) {
     params.set("kind", target.kind);
   }
-  if (section === "organization" && target.inviteHandoff) {
-    params.set("inviteHandoff", target.inviteHandoff);
+  if (section === "organization-members" && target.joinOrganizationId) {
+    params.set("joinOrganizationId", target.joinOrganizationId);
   }
   return `/settings?${params.toString()}`;
 }
@@ -116,7 +117,7 @@ export interface SettingsSelectionInput {
   rawCredential?: string | null;
   rawKind?: string | null;
   rawCheckout?: string | null;
-  rawInviteHandoff?: string | null;
+  rawJoinOrganizationId?: string | null;
   repositories: SettingsRepositoryEntry[];
 }
 
@@ -124,7 +125,7 @@ export interface SettingsSelection {
   activeSection: SettingsSection;
   activeRepoSourceRoot: string | null;
   focus: SettingsFocus;
-  inviteHandoff: string | null;
+  joinOrganizationId: string | null;
 }
 
 export function resolveSettingsSelection({
@@ -137,7 +138,7 @@ export function resolveSettingsSelection({
   rawCredential = null,
   rawKind = null,
   rawCheckout = null,
-  rawInviteHandoff = null,
+  rawJoinOrganizationId = null,
   repositories,
 }: SettingsSelectionInput): SettingsSelection {
   const repositoryRoots = new Set(repositories.map((repository) => repository.sourceRoot));
@@ -162,6 +163,7 @@ export function resolveSettingsSelection({
     credential: rawCredential,
     kind: rawKind,
     checkout: rawCheckout,
+    joinOrganizationId: rawJoinOrganizationId,
     cloudRepoOwner: rawCloudRepoOwner,
     cloudRepoName: rawCloudRepoName,
   });
@@ -199,7 +201,7 @@ export function resolveSettingsSelection({
     activeSection: section,
     activeRepoSourceRoot: repoSourceRoot,
     focus: sanitizeFocusForSection(section, focus),
-    inviteHandoff: section === "organization" ? rawInviteHandoff : null,
+    joinOrganizationId: section === "organization-members" ? rawJoinOrganizationId : null,
   };
 }
 
@@ -252,6 +254,9 @@ function sanitizeFocusForSection(
   }
   if (section === "billing") {
     return pickFocus({ checkout: focus.checkout });
+  }
+  if (section === "organization-members") {
+    return pickFocus({ joinOrganizationId: focus.joinOrganizationId });
   }
   return {};
 }
