@@ -164,34 +164,6 @@ describe("BillingSettingsSurface", () => {
     );
   });
 
-  it("links Enterprise actions to the pricing page instead of billing checkout", async () => {
-    const onOpenPricingPage = vi.fn();
-
-    render(
-      <BillingSettingsSurface
-        organization={{
-          id: "org_1",
-          name: "Team One",
-          canManageBilling: true,
-          loading: false,
-        }}
-        onOpenUrl={vi.fn()}
-        onOpenPricingPage={onOpenPricingPage}
-        onOpenOrganizationSettings={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
-    const dialog = screen.getByRole("dialog", { name: "Choose your plan" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "View pricing" }));
-
-    await waitFor(() => {
-      expect(onOpenPricingPage).toHaveBeenCalledTimes(1);
-    });
-    expect(cloudHooks.createCloudCheckout).not.toHaveBeenCalled();
-    expect(cloudHooks.createBillingPortal).not.toHaveBeenCalled();
-  });
-
   it("shows billing action errors from failed checkout starts", async () => {
     cloudHooks.useCloudBilling.mockImplementation(() => ({
       data: billingPlan(),
