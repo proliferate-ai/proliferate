@@ -30,8 +30,9 @@ Use the narrowest mobile mode that proves the change:
 Start the full profile first:
 
 ```bash
-make dev-init PROFILE=<name>
-make dev PROFILE=<name>
+make setup PROFILE=<name>
+make build # first clean worktree, or after generated/Rust/frontend artifacts change
+make run PROFILE=<name>
 ```
 
 Then run Expo web using the profile environment:
