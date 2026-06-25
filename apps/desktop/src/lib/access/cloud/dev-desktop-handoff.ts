@@ -4,6 +4,7 @@ export interface DevDesktopHandoffRecord {
   id: string;
   url: string;
   createdAt: string;
+  openedAt?: string | null;
 }
 
 interface DevDesktopHandoffResponse {
@@ -30,3 +31,17 @@ export async function takeDevDesktopHandoff(
   return body.handoff;
 }
 
+export async function markDevDesktopHandoffOpened(id: string): Promise<void> {
+  const response = await fetch(buildProliferateApiUrl(`/v1/dev/desktop-handoff/${id}/opened`), {
+    method: "POST",
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
+  if (response.status === 404) {
+    return;
+  }
+  if (!response.ok) {
+    throw new Error("Could not confirm the local Desktop handoff.");
+  }
+}

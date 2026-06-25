@@ -13,6 +13,7 @@ class DevDesktopHandoffRecordResponse(BaseModel):
     id: str
     url: str
     created_at: str = Field(alias="createdAt")
+    opened_at: str | None = Field(default=None, alias="openedAt")
 
 
 class DevDesktopHandoffPollResponse(BaseModel):

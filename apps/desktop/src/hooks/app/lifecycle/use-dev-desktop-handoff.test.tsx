@@ -7,12 +7,14 @@ import type { ReactNode } from "react";
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff";
 
 const handoffMocks = vi.hoisted(() => ({
+  markDevDesktopHandoffOpened: vi.fn(),
   takeDevDesktopHandoff: vi.fn(),
   isMainTauriWebviewAvailable: vi.fn(),
   revealCurrentWindow: vi.fn(),
 }));
 
 vi.mock("@/lib/access/cloud/dev-desktop-handoff", () => ({
+  markDevDesktopHandoffOpened: handoffMocks.markDevDesktopHandoffOpened,
   takeDevDesktopHandoff: handoffMocks.takeDevDesktopHandoff,
 }));
 
@@ -23,9 +25,11 @@ vi.mock("@/lib/access/tauri/window", () => ({
 
 describe("useDevDesktopHandoff", () => {
   beforeEach(() => {
+    handoffMocks.markDevDesktopHandoffOpened.mockReset();
     handoffMocks.takeDevDesktopHandoff.mockReset();
     handoffMocks.isMainTauriWebviewAvailable.mockReset();
     handoffMocks.revealCurrentWindow.mockReset();
+    handoffMocks.markDevDesktopHandoffOpened.mockResolvedValue(undefined);
     handoffMocks.takeDevDesktopHandoff.mockResolvedValue(null);
     handoffMocks.isMainTauriWebviewAvailable.mockReturnValue(true);
     handoffMocks.revealCurrentWindow.mockResolvedValue(undefined);
@@ -63,6 +67,7 @@ describe("useDevDesktopHandoff", () => {
       );
     });
     expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);
+    expect(handoffMocks.markDevDesktopHandoffOpened).toHaveBeenCalledWith("handoff-1");
   });
 
   it("ignores replayed handoff ids after navigating once", async () => {
@@ -89,6 +94,7 @@ describe("useDevDesktopHandoff", () => {
       expect(handoffMocks.takeDevDesktopHandoff.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
     expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);
+    expect(handoffMocks.markDevDesktopHandoffOpened).toHaveBeenCalledTimes(1);
   });
 });
 

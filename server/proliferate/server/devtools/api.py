@@ -13,6 +13,8 @@ from proliferate.server.devtools.models import (
 from proliferate.server.devtools.service import (
     DevDesktopHandoffRecord,
     enqueue_desktop_handoff,
+    get_desktop_handoff,
+    mark_desktop_handoff_opened,
     take_desktop_handoff,
 )
 
@@ -40,6 +42,28 @@ async def take_dev_desktop_handoff_endpoint() -> DevDesktopHandoffPollResponse:
     )
 
 
+@router.get("/{handoff_id}", response_model=DevDesktopHandoffRecordResponse)
+async def get_dev_desktop_handoff_endpoint(
+    handoff_id: str,
+) -> DevDesktopHandoffRecordResponse:
+    _require_local_dev()
+    record = await get_desktop_handoff(handoff_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Desktop handoff not found.")
+    return _record_response(record)
+
+
+@router.post("/{handoff_id}/opened", response_model=DevDesktopHandoffRecordResponse)
+async def mark_dev_desktop_handoff_opened_endpoint(
+    handoff_id: str,
+) -> DevDesktopHandoffRecordResponse:
+    _require_local_dev()
+    record = await mark_desktop_handoff_opened(handoff_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Desktop handoff not found.")
+    return _record_response(record)
+
+
 def _require_local_dev() -> None:
     if not settings.proliferate_dev:
         raise HTTPException(status_code=404, detail="Not found.")
@@ -50,4 +74,5 @@ def _record_response(record: DevDesktopHandoffRecord) -> DevDesktopHandoffRecord
         id=record.id,
         url=record.url,
         createdAt=record.created_at.isoformat(),
+        openedAt=record.opened_at.isoformat() if record.opened_at else None,
     )

@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { takeDevDesktopHandoff } from "@/lib/access/cloud/dev-desktop-handoff";
+import {
+  markDevDesktopHandoffOpened,
+  takeDevDesktopHandoff,
+} from "@/lib/access/cloud/dev-desktop-handoff";
 import {
   isMainTauriWebviewAvailable,
   revealCurrentWindow,
@@ -49,6 +52,9 @@ export function useDevDesktopHandoff() {
           const target = desktopNavigationTarget(handoff.url);
           if (target) {
             navigate(target);
+            void markDevDesktopHandoffOpened(handoff.id).catch(() => {
+              // The route already opened; the browser retry state is dev-only feedback.
+            });
             void revealCurrentWindow().catch(() => {
               // The handoff should still navigate if the OS refuses focus.
             });

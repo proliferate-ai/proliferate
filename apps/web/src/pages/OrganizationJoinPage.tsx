@@ -4,10 +4,12 @@ import { Navigate, useParams } from "react-router-dom";
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
 import {
   canUseDevDesktopHandoff,
+  getDevDesktopHandoff,
   queueDevDesktopHandoff,
 } from "../lib/access/cloud/dev-desktop-handoff";
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"]);
+const DEV_HANDOFF_STATUS_POLL_MS = 500;
 
 function desktopDeepLinkScheme(): "proliferate" | "proliferate-local" {
   return LOCALHOST_NAMES.has(window.location.hostname)
@@ -24,6 +26,8 @@ export function OrganizationJoinPage() {
   const { organizationId } = useParams();
   const [handoffTimedOut, setHandoffTimedOut] = useState(false);
   const [devHandoffQueued, setDevHandoffQueued] = useState(false);
+  const [devHandoffId, setDevHandoffId] = useState<string | null>(null);
+  const [devHandoffOpened, setDevHandoffOpened] = useState(false);
   const [handoffAttempt, setHandoffAttempt] = useState(0);
   const deepLinkUrl = useMemo(
     () => organizationId ? organizationJoinDeepLink(organizationId) : null,
@@ -35,12 +39,17 @@ export function OrganizationJoinPage() {
     }
 
     setHandoffTimedOut(false);
+    setDevHandoffQueued(false);
+    setDevHandoffId(null);
+    setDevHandoffOpened(false);
     setHandoffAttempt((attempt) => attempt + 1);
     if (canUseDevDesktopHandoff()) {
       try {
-        const queued = await queueDevDesktopHandoff(deepLinkUrl);
-        if (queued) {
+        const handoff = await queueDevDesktopHandoff(deepLinkUrl);
+        if (handoff) {
           setDevHandoffQueued(true);
+          setDevHandoffId(handoff.id);
+          setDevHandoffOpened(Boolean(handoff.openedAt));
           return;
         }
       } catch {
@@ -59,29 +68,89 @@ export function OrganizationJoinPage() {
   }, [deepLinkUrl, openInvite]);
 
   useEffect(() => {
-    if (!deepLinkUrl || handoffAttempt === 0) {
+    if (!devHandoffId || devHandoffOpened) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let abortController: AbortController | null = null;
+
+    const pollStatus = () => {
+      if (cancelled) {
+        return;
+      }
+      abortController = new AbortController();
+      void getDevDesktopHandoff(devHandoffId, abortController.signal)
+        .then((handoff) => {
+          if (!cancelled && handoff?.openedAt) {
+            setHandoffTimedOut(false);
+            setDevHandoffOpened(true);
+          }
+        })
+        .catch(() => {
+          // The dev API may restart; the retry action can queue a fresh handoff.
+        })
+        .finally(() => {
+          abortController = null;
+          if (!cancelled) {
+            timeoutId = window.setTimeout(pollStatus, DEV_HANDOFF_STATUS_POLL_MS);
+          }
+        });
+    };
+
+    pollStatus();
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      abortController?.abort();
+    };
+  }, [devHandoffId, devHandoffOpened]);
+
+  useEffect(() => {
+    if (!deepLinkUrl || handoffAttempt === 0 || devHandoffOpened) {
       return;
     }
     const timer = window.setTimeout(() => setHandoffTimedOut(true), 8000);
     return () => window.clearTimeout(timer);
-  }, [deepLinkUrl, handoffAttempt]);
+  }, [deepLinkUrl, devHandoffOpened, handoffAttempt]);
 
   if (!deepLinkUrl) {
     return <Navigate to="/" replace />;
   }
 
+  if (devHandoffOpened) {
+    return (
+      <RedirectCallbackScreen
+        title="Opened in Desktop"
+        description="The organization invite was sent to local Proliferate Desktop."
+        detail="Continue in the matching Desktop dev profile."
+        statusLabel="Organization invite opened"
+        variant="handoff"
+        primaryAction={{
+          label: "Send to Desktop again",
+          onClick: () => {
+            void openInvite();
+          },
+        }}
+      />
+    );
+  }
+
   if (handoffTimedOut) {
     return (
       <RedirectCallbackScreen
-        title="Desktop did not open"
+        title={devHandoffQueued ? "Desktop handoff waiting" : "Desktop did not open"}
         description={
           devHandoffQueued
-            ? "The organization invite was sent to local Proliferate Desktop, but Desktop has not opened it."
+            ? "The organization invite was sent to local Proliferate Desktop, but Desktop has not confirmed it opened."
             : "The organization invite is ready, but the operating system has not handed it to Proliferate Desktop."
         }
         detail={
           devHandoffQueued
-            ? "Keep the matching Desktop dev profile running, then try again."
+            ? "Bring the matching Desktop dev profile to the front, or try again."
             : "Install Proliferate Desktop, then try opening the invite again."
         }
         statusLabel="Organization invite waiting"
