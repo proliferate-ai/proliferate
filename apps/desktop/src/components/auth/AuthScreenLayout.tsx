@@ -1,7 +1,8 @@
 import { twMerge } from "tailwind-merge";
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
-import { ArrowRight, GitHub, Shield } from "@proliferate/ui/icons";
+import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS } from "@/copy/auth/auth-copy";
 
@@ -144,7 +145,13 @@ export function AuthScreenLayout({
                   tabIndex={showAuth ? 0 : -1}
                   className="h-11 w-full"
                 >
-                  {!ssoSubmitting && <Shield className="h-4 w-4 shrink-0" />}
+                  {!ssoSubmitting && (
+                    <ProviderBrandIcon
+                      provider="sso"
+                      label={ssoDisplayName}
+                      className="h-4 w-4 shrink-0"
+                    />
+                  )}
                   {ssoSubmitting
                     ? AUTH_LOGIN_LABELS.ssoWaiting
                     : AUTH_LOGIN_LABELS.ssoSignIn(ssoDisplayName)}

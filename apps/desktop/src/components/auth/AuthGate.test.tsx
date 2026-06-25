@@ -256,7 +256,7 @@ describe("AuthScreenLayout", () => {
   });
 
   it("shows the SSO action when deployment SSO is available", () => {
-    render(
+    const { container } = render(
       <AuthScreenLayout
         mode="auth"
         githubSignInAvailable
@@ -269,6 +269,7 @@ describe("AuthScreenLayout", () => {
 
     expect(screen.getByText("Continue with GitHub")).toBeTruthy();
     expect(screen.getByText("Continue with Google SSO")).toBeTruthy();
+    expect(container.querySelector('[data-auth-provider-brand="google-sso"]')).toBeTruthy();
   });
 
   it("ignores user appearance text-size preferences", () => {

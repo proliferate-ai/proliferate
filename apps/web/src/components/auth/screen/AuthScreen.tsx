@@ -1,4 +1,4 @@
-import { KeyRound, Shield } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { useState } from "react";
 
 import { type AuthProviderName } from "@proliferate/cloud-sdk";
@@ -108,7 +108,7 @@ export function AuthScreen() {
             loading={loadingProvider === "sso"}
             disabled={busy || !ssoEmail.trim()}
           >
-            <Shield size={15} />
+            <ProviderBrandIcon provider="sso" className="size-[15px]" />
             Continue with SSO
           </Button>
         </form>
