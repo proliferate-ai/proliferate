@@ -215,6 +215,56 @@ async def test_organization_member_auth_methods_exclude_other_org_sso(
 
 
 @pytest.mark.asyncio
+async def test_organization_member_auth_methods_include_password(
+    client: AsyncClient,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="owner-password@acme.dev")
+    organization = await _create_organization_for_user(user_id=owner["user_id"])
+    organization_id = uuid.UUID(organization["organization_id"])
+
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        now = datetime.now(UTC)
+        password_user = User(
+            email="password@acme.dev",
+            hashed_password="hashed-password",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Password User",
+            password_set_at=now,
+        )
+        session.add(password_user)
+        await session.flush()
+        session.add(
+            OrganizationMembership(
+                organization_id=organization_id,
+                user_id=password_user.id,
+                role=ORGANIZATION_ROLE_MEMBER,
+                status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                joined_at=now,
+                removed_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+
+    response = await client.get(
+        f"/v1/organizations/{organization_id}/members",
+        headers=_headers(owner),
+    )
+    assert response.status_code == 200
+    password_member = next(
+        member for member in response.json()["members"] if member["email"] == "password@acme.dev"
+    )
+    assert password_member["authMethods"] == [
+        {"provider": "password", "label": "Email/password", "brandLabel": None}
+    ]
+
+
+@pytest.mark.asyncio
 async def test_sso_jit_membership_allows_existing_user_with_another_active_org(
     client: AsyncClient,
 ) -> None:

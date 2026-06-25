@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.sso.policy import normalize_domains
 from proliferate.auth.sso.service import (
+    oidc_callback_url,
     snapshot_from_sso_connection_record,
     test_oidc_connection,
 )
@@ -242,7 +243,7 @@ def organization_sso_urls(request: Request, connection_id: UUID) -> tuple[str, s
     base = settings.api_base_url.strip().rstrip("/")
     if not base:
         base = str(request.base_url).rstrip("/")
-    oidc_path = auth_route_path_for_base("/auth/sso/oidc/callback", base_url=base)
+    oidc_url = oidc_callback_url(request)
     saml_acs_path = auth_route_path_for_base(
         f"/auth/sso/saml/{connection_id}/acs",
         base_url=base,
@@ -252,7 +253,7 @@ def organization_sso_urls(request: Request, connection_id: UUID) -> tuple[str, s
         base_url=base,
     )
     return (
-        f"{base}{oidc_path}",
+        oidc_url,
         f"{base}{saml_acs_path}",
         f"urn:proliferate:sso:{connection_id}",
         f"{base}{saml_metadata_path}",

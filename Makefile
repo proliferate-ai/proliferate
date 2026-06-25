@@ -443,6 +443,8 @@ seed-sso:
 		echo "ORG_ID is required. Example: make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>"; \
 		exit 1; \
 	fi; \
+	database_url_override_set="$${DATABASE_URL+x}"; \
+	database_url_override_value="$${DATABASE_URL:-}"; \
 	launch_env=$$( \
 		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
 		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
@@ -463,7 +465,9 @@ seed-sso:
 		echo "AUTH_PROFILE is required. Example: make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>"; \
 		exit 1; \
 	fi; \
-	if [ -z "$${DATABASE_URL:-}" ]; then \
+	if [ "$$database_url_override_set" = "x" ]; then \
+		export DATABASE_URL="$$database_url_override_value"; \
+	else \
 		$(PROFILE_DB_READY_COMMAND) \
 		export DATABASE_URL="$$( \
 			LOCAL_PGHOST="$(LOCAL_PGHOST)" \

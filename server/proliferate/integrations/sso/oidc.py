@@ -203,7 +203,7 @@ async def verify_oidc_identity(
     _validate_nonce(claims, nonce_hash)
     if _needs_userinfo_claims(claims) and token.access_token and metadata.userinfo_endpoint:
         userinfo = await _fetch_userinfo(metadata.userinfo_endpoint, token.access_token)
-        claims = {**userinfo, **claims}
+        claims = _merge_userinfo_claims(claims, userinfo)
     subject = claims.get("sub")
     if not isinstance(subject, str) or not subject:
         raise SsoIntegrationError("OIDC subject is missing.")
@@ -295,6 +295,37 @@ def _needs_userinfo_claims(claims: dict[str, object]) -> bool:
     return claims.get("email") is None or claims.get("email_verified") is None
 
 
+def _merge_userinfo_claims(
+    id_token_claims: dict[str, object],
+    userinfo: dict[str, object],
+) -> dict[str, object]:
+    id_subject = _claim_str(id_token_claims.get("sub"))
+    userinfo_subject = _claim_str(userinfo.get("sub"))
+    if not id_subject or not userinfo_subject or userinfo_subject != id_subject:
+        raise SsoIntegrationError("OIDC userinfo subject does not match identity token.")
+
+    claims = dict(id_token_claims)
+    id_email = _claim_str(id_token_claims.get("email"))
+    userinfo_email = _claim_str(userinfo.get("email"))
+    if id_email is None and userinfo_email is not None:
+        claims["email"] = userinfo_email
+        if "email_verified" in userinfo:
+            claims["email_verified"] = userinfo["email_verified"]
+    elif (
+        id_email is not None
+        and userinfo_email is not None
+        and id_email.lower() == userinfo_email.lower()
+        and id_token_claims.get("email_verified") is None
+        and "email_verified" in userinfo
+    ):
+        claims["email_verified"] = userinfo["email_verified"]
+
+    for key in ("name", "picture"):
+        if claims.get(key) is None and isinstance(userinfo.get(key), str):
+            claims[key] = userinfo[key]
+    return claims
+
+
 def _validate_nonce(claims: dict[str, object], nonce_hash: str) -> None:
     nonce = claims.get("nonce")
     if not isinstance(nonce, str) or hash_secret(nonce) != nonce_hash:
@@ -314,6 +345,12 @@ def _claim_bool(value: object, *, default: bool) -> bool:
     if isinstance(value, str):
         return value.lower() in {"true", "1", "yes"}
     return default
+
+
+def _claim_str(value: object) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
 
 
 def _validate_discovered_issuer(connection: SsoConnectionSnapshot, issuer: str) -> None:

@@ -20,6 +20,7 @@ from proliferate.db.store.auth_sso_records import (
     sso_connection_record,
     sso_identity_record,
 )
+from proliferate.db.store.organization_records import MembershipRecord, membership_record
 from proliferate.utils.crypto import encrypt_text
 
 
@@ -505,7 +506,7 @@ async def ensure_sso_organization_membership(
     organization_id: UUID,
     user_id: UUID,
     role: str,
-) -> None:
+) -> MembershipRecord:
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
         {"lock_key": f"organization-membership-active-user:{user_id}"},
@@ -541,3 +542,4 @@ async def ensure_sso_organization_membership(
             membership.joined_at = now
         membership.updated_at = now
     await db.flush()
+    return membership_record(membership)

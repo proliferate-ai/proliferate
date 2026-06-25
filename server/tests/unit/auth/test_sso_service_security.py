@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
 from uuid import uuid4
 
@@ -106,7 +107,7 @@ async def test_discover_sso_finds_org_connection_with_explicit_org_context(
 async def test_resolve_sso_user_rechecks_org_membership_for_existing_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    organization_id = uuid4()
+    target_organization_id = uuid4()
     connection_id = uuid4()
     user_id = uuid4()
     now = datetime.now(UTC)
@@ -119,7 +120,7 @@ async def test_resolve_sso_user_rechecks_org_membership_for_existing_identity(
         return SsoIdentityRecord(
             id=uuid4(),
             user_id=user_id,
-            organization_id=organization_id,
+            organization_id=target_organization_id,
             connection_id=connection_id,
             connection_key=f"organization:{connection_id}",
             protocol=SsoProtocol.OIDC.value,
@@ -152,6 +153,11 @@ async def test_resolve_sso_user_rechecks_org_membership_for_existing_identity(
         "get_active_membership",
         fake_get_active_membership,
     )
+    monkeypatch.setattr(
+        sso_service.invitation_store,
+        "has_live_pending_invitation_for_organization_email",
+        _false_pending_invitation,
+    )
     monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
 
     with pytest.raises(HTTPException) as exc_info:
@@ -159,7 +165,7 @@ async def test_resolve_sso_user_rechecks_org_membership_for_existing_identity(
             cast(AsyncSession, object()),
             connection=_organization_connection(
                 connection_id=connection_id,
-                organization_id=organization_id,
+                organization_id=target_organization_id,
                 jit_policy=SsoJitPolicy.EXISTING_USER,
             ),
             verified=VerifiedSsoIdentity(
@@ -220,7 +226,10 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
 
     resolved = await sso_service.resolve_sso_user(
         cast(AsyncSession, object()),
-        connection=_connection(allowed_domains=("example.com",)),
+        connection=replace(
+            _connection(allowed_domains=("example.com",)),
+            jit_policy=SsoJitPolicy.CREATE_MEMBER,
+        ),
         verified=VerifiedSsoIdentity(
             provider_subject="subject-1",
             email="person@example.com",
@@ -233,6 +242,177 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
 
     assert resolved is user
     assert ensured_user_ids == [user.id]
+
+
+@pytest.mark.asyncio
+async def test_resolve_sso_user_rejects_unlinked_deployment_user_when_jit_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _user(user_id=uuid4(), email="person@example.com")
+    attach_called = False
+
+    async def fake_get_sso_identity_by_connection_subject(
+        *_args: object,
+        **_kwargs: object,
+    ) -> None:
+        return None
+
+    async def fake_get_user_by_email(*_args: object, **_kwargs: object) -> User:
+        return user
+
+    async def fake_attach_sso_identity(*_args: object, **_kwargs: object) -> None:
+        nonlocal attach_called
+        attach_called = True
+
+    monkeypatch.setattr(
+        sso_service.sso_store,
+        "get_sso_identity_by_connection_subject",
+        fake_get_sso_identity_by_connection_subject,
+    )
+    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await sso_service.resolve_sso_user(
+            cast(AsyncSession, object()),
+            connection=replace(
+                _connection(allowed_domains=("example.com",)),
+                jit_policy=SsoJitPolicy.DISABLED,
+            ),
+            verified=VerifiedSsoIdentity(
+                provider_subject="subject-1",
+                email="person@example.com",
+                email_verified=True,
+                display_name="Person Example",
+                avatar_url=None,
+                claims={},
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert attach_called is False
+
+
+@pytest.mark.asyncio
+async def test_resolve_sso_user_accepts_pending_org_invitation_when_jit_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_organization_id = uuid4()
+    connection_id = uuid4()
+    membership_id = uuid4()
+    user = _user(user_id=uuid4(), email="person@example.com")
+    ensured_user_ids: list[object] = []
+    seat_adjustments: list[tuple[object, object]] = []
+
+    async def fake_get_sso_identity_by_connection_subject(
+        *_args: object,
+        **_kwargs: object,
+    ) -> None:
+        return None
+
+    async def fake_get_user_by_email(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def fake_create_auth_user(*_args: object, **_kwargs: object) -> User:
+        return user
+
+    async def fake_ensure_default_organization_for_account(
+        _db: AsyncSession,
+        ensured_user: User,
+    ) -> None:
+        ensured_user_ids.append(ensured_user.id)
+
+    async def fake_has_pending_invitation(
+        _db: AsyncSession,
+        *,
+        organization_id: object,
+        email: str,
+    ) -> bool:
+        assert organization_id == target_organization_id
+        assert email == "person@example.com"
+        return True
+
+    async def fake_get_active_membership(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def fake_accept_pending_invitation(*_args: object, **_kwargs: object):
+        return (
+            SimpleNamespace(
+                organization=SimpleNamespace(id=target_organization_id),
+                membership=SimpleNamespace(id=membership_id),
+            ),
+            None,
+        )
+
+    async def fake_maybe_create_organization_seat_adjustment(
+        _db: AsyncSession,
+        *,
+        organization_id: object,
+        membership_id: object,
+    ) -> None:
+        seat_adjustments.append((organization_id, membership_id))
+
+    async def fake_attach_sso_identity(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        sso_service.sso_store,
+        "get_sso_identity_by_connection_subject",
+        fake_get_sso_identity_by_connection_subject,
+    )
+    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_service, "create_auth_user", fake_create_auth_user)
+    monkeypatch.setattr(
+        sso_service,
+        "ensure_default_organization_for_account",
+        fake_ensure_default_organization_for_account,
+    )
+    monkeypatch.setattr(
+        sso_service.invitation_store,
+        "has_live_pending_invitation_for_organization_email",
+        fake_has_pending_invitation,
+    )
+    monkeypatch.setattr(
+        sso_service.organization_store,
+        "get_active_membership",
+        fake_get_active_membership,
+    )
+    monkeypatch.setattr(
+        sso_service.invitation_store,
+        "accept_pending_invitation_for_organization_email",
+        fake_accept_pending_invitation,
+    )
+    monkeypatch.setattr(
+        sso_service,
+        "maybe_create_organization_seat_adjustment",
+        fake_maybe_create_organization_seat_adjustment,
+    )
+    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+
+    resolved = await sso_service.resolve_sso_user(
+        cast(AsyncSession, object()),
+        connection=_organization_connection(
+            connection_id=connection_id,
+            organization_id=target_organization_id,
+            jit_policy=SsoJitPolicy.DISABLED,
+        ),
+        verified=VerifiedSsoIdentity(
+            provider_subject="subject-1",
+            email="person@example.com",
+            email_verified=True,
+            display_name="Person Example",
+            avatar_url=None,
+            claims={},
+        ),
+    )
+
+    assert resolved is user
+    assert ensured_user_ids == [user.id]
+    assert seat_adjustments == [(target_organization_id, membership_id)]
+
+
+async def _false_pending_invitation(*_args: object, **_kwargs: object) -> bool:
+    return False
 
 
 def _connection_record(

@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { describe, expect, it } from "vitest";
-import { buildMemberRows } from "@/components/settings/panes/organization/OrganizationMembersList";
+import { buildMemberRows } from "@/lib/domain/organizations/member-list-rows";
 import type { OrganizationMemberRecord } from "@/lib/domain/organizations/organization-records";
 
 describe("buildMemberRows", () => {

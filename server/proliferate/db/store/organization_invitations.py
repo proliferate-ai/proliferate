@@ -413,6 +413,25 @@ async def accept_pending_invitation_for_organization_email(
     )
 
 
+async def has_live_pending_invitation_for_organization_email(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    email: str,
+) -> bool:
+    normalized_email = normalize_invitation_email(email)
+    return (
+        await db.execute(
+            select(OrganizationInvitation.id).where(
+                OrganizationInvitation.organization_id == organization_id,
+                OrganizationInvitation.email == normalized_email,
+                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+                OrganizationInvitation.expires_at > utcnow(),
+            )
+        )
+    ).first() is not None
+
+
 async def _accept_locked_invitation(
     db: AsyncSession,
     *,

@@ -15,7 +15,7 @@ import { Input } from "@proliferate/ui/primitives/Input";
 
 import { webEnv } from "../../../config/env";
 import { WEB_AUTH_COPY } from "../../../copy/auth/web-auth-copy";
-import { useWebDeploymentSsoDiscovery } from "../../../hooks/auth/use-web-deployment-sso-discovery";
+import { useWebDeploymentSsoDiscovery } from "../../../hooks/auth/derived/use-web-deployment-sso-discovery";
 import {
   startWebAuthFlow,
   startWebSsoFlow,

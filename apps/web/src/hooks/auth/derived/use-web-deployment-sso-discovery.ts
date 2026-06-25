@@ -1,8 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { discoverSso, type SsoDiscoveryResponse } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "@proliferate/cloud-sdk-react";
+import { useQuery } from "@tanstack/react-query";
 
-import { webEnv } from "../../config/env";
+import { webEnv } from "../../../config/env";
 
 export function useWebDeploymentSsoDiscovery() {
   const client = useCloudClient();

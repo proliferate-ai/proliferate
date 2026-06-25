@@ -49,7 +49,7 @@ def test_oidc_callback_url_prefers_explicit_sso_callback_base_url(
     )
 
     assert (
-        sso_service._oidc_callback_url(_request("http://127.0.0.1:8025/auth/sso/start"))
+        sso_service.oidc_callback_url(_request("http://127.0.0.1:8025/auth/sso/start"))
         == "http://localhost:8025/auth/sso/oidc/callback"
     )
 
@@ -115,7 +115,12 @@ async def test_verify_oidc_identity_uses_userinfo_email_verified_when_id_token_o
         return {"sub": "subject-1", "email": "person@example.com"}
 
     async def fake_fetch_userinfo(*_args: object, **_kwargs: object) -> dict[str, object]:
-        return {"email_verified": True, "name": "Person Example"}
+        return {
+            "sub": "subject-1",
+            "email": "person@example.com",
+            "email_verified": True,
+            "name": "Person Example",
+        }
 
     monkeypatch.setattr(oidc_integration, "_decode_oidc_id_token", fake_decode_oidc_id_token)
     monkeypatch.setattr(oidc_integration, "_fetch_userinfo", fake_fetch_userinfo)
@@ -142,6 +147,62 @@ async def test_verify_oidc_identity_treats_missing_email_verified_claim_as_unver
 
     async def fake_fetch_userinfo(*_args: object, **_kwargs: object) -> dict[str, object]:
         return {}
+
+    monkeypatch.setattr(oidc_integration, "_decode_oidc_id_token", fake_decode_oidc_id_token)
+    monkeypatch.setattr(oidc_integration, "_fetch_userinfo", fake_fetch_userinfo)
+    monkeypatch.setattr(oidc_integration, "_validate_nonce", lambda *_args, **_kwargs: None)
+
+    identity = await oidc_integration.verify_oidc_identity(
+        connection=_connection(allowed_domains=("example.com",)),
+        metadata=_metadata(userinfo_endpoint=None),
+        token=_oidc_token(access_token=None),
+        nonce_hash="nonce-hash",
+    )
+
+    assert identity.email == "person@example.com"
+    assert identity.email_verified is False
+
+
+@pytest.mark.asyncio
+async def test_verify_oidc_identity_rejects_mismatched_userinfo_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_decode_oidc_id_token(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"sub": "subject-1", "email": "person@example.com"}
+
+    async def fake_fetch_userinfo(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "sub": "other-subject",
+            "email": "person@example.com",
+            "email_verified": True,
+        }
+
+    monkeypatch.setattr(oidc_integration, "_decode_oidc_id_token", fake_decode_oidc_id_token)
+    monkeypatch.setattr(oidc_integration, "_fetch_userinfo", fake_fetch_userinfo)
+    monkeypatch.setattr(oidc_integration, "_validate_nonce", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(SsoIntegrationError, match="userinfo subject"):
+        await oidc_integration.verify_oidc_identity(
+            connection=_connection(allowed_domains=("example.com",)),
+            metadata=_metadata(userinfo_endpoint="https://idp.example.test/userinfo"),
+            token=_oidc_token(access_token="access-token"),
+            nonce_hash="nonce-hash",
+        )
+
+
+@pytest.mark.asyncio
+async def test_verify_oidc_identity_ignores_userinfo_email_verified_for_different_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_decode_oidc_id_token(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"sub": "subject-1", "email": "person@example.com"}
+
+    async def fake_fetch_userinfo(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "sub": "subject-1",
+            "email": "other@example.com",
+            "email_verified": True,
+        }
 
     monkeypatch.setattr(oidc_integration, "_decode_oidc_id_token", fake_decode_oidc_id_token)
     monkeypatch.setattr(oidc_integration, "_fetch_userinfo", fake_fetch_userinfo)

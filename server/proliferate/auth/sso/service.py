@@ -46,6 +46,7 @@ from proliferate.constants.auth import SUPPORTED_CODE_CHALLENGE_METHODS
 from proliferate.constants.organizations import ORGANIZATION_ROLE_MEMBER
 from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
+from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth import create_auth_code
 from proliferate.integrations.sso.errors import SsoIntegrationError
@@ -54,6 +55,9 @@ from proliferate.integrations.sso.oidc import (
     exchange_oidc_code,
     resolve_oidc_metadata,
     verify_oidc_identity,
+)
+from proliferate.server.billing.seat_reconciliation import (
+    maybe_create_organization_seat_adjustment,
 )
 from proliferate.server.organizations.registration import ensure_default_organization_for_account
 
@@ -184,7 +188,7 @@ async def start_sso_auth(
     authorization_url = build_oidc_authorization_url(
         metadata=metadata,
         client_id=connection.oidc_client_id or "",
-        redirect_uri=_oidc_callback_url(request),
+        redirect_uri=oidc_callback_url(request),
         scopes=connection.oidc_scopes or DEFAULT_OIDC_SCOPES,
         state=state,
         nonce=nonce,
@@ -229,7 +233,7 @@ async def complete_oidc_sso_callback(
             client_secret=connection.oidc_client_secret,
             token_endpoint_auth_method=connection.oidc_token_endpoint_auth_method,
             code=code,
-            redirect_uri=_oidc_callback_url(request),
+            redirect_uri=oidc_callback_url(request),
         )
         verified = await verify_oidc_identity(
             connection=connection,
@@ -292,14 +296,18 @@ async def resolve_sso_user(
         )
     else:
         if user is None:
+            if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
+                raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
             user = await create_auth_user(
                 db,
                 email=verified.email,
                 display_name=verified.display_name,
                 avatar_url=verified.avatar_url,
             )
-            await ensure_default_organization_for_account(db, user)
+        elif connection.jit_policy == SsoJitPolicy.DISABLED:
+            raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
         _ensure_active_user(user)
+        await ensure_default_organization_for_account(db, user)
 
     await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
     return user
@@ -347,8 +355,15 @@ async def _resolve_organization_sso_user(
 ) -> User:
     if connection.organization_id is None:
         raise HTTPException(status_code=400, detail="SSO organization is missing.")
+    has_pending_invitation = (
+        await invitation_store.has_live_pending_invitation_for_organization_email(
+            db,
+            organization_id=connection.organization_id,
+            email=verified.email or "",
+        )
+    )
     if user is None:
-        if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
+        if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER and not has_pending_invitation:
             raise HTTPException(status_code=403, detail="SSO user is not a team member.")
         user = await create_auth_user(
             db,
@@ -365,13 +380,32 @@ async def _resolve_organization_sso_user(
     )
     if membership is not None:
         return user
+    if has_pending_invitation:
+        accepted, _error = await invitation_store.accept_pending_invitation_for_organization_email(
+            db,
+            organization_id=connection.organization_id,
+            authenticated_user_id=user.id,
+            authenticated_email=verified.email or "",
+        )
+        if accepted is not None:
+            await maybe_create_organization_seat_adjustment(
+                db,
+                organization_id=accepted.organization.id,
+                membership_id=accepted.membership.id,
+            )
+            return user
     if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
         raise HTTPException(status_code=403, detail="SSO user is not a team member.")
-    await sso_store.ensure_sso_organization_membership(
+    membership = await sso_store.ensure_sso_organization_membership(
         db,
         organization_id=connection.organization_id,
         user_id=user.id,
         role=connection.default_role or ORGANIZATION_ROLE_MEMBER,
+    )
+    await maybe_create_organization_seat_adjustment(
+        db,
+        organization_id=connection.organization_id,
+        membership_id=membership.id,
     )
     return user
 
@@ -550,7 +584,7 @@ def _raise_sso_integration_error(exc: SsoIntegrationError) -> NoReturn:
     raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-def _oidc_callback_url(request: Request) -> str:
+def oidc_callback_url(request: Request) -> str:
     base = settings.sso_oidc_callback_base_url.strip().rstrip("/")
     if not base:
         base = settings.api_base_url.strip().rstrip("/")
