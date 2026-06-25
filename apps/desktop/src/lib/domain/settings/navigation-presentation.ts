@@ -80,7 +80,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       {
         kind: "section",
         id: "billing",
-        label: "Plan + billing",
+        label: "Billing",
         iconId: "billing",
         adminOnly: true,
       },
@@ -101,7 +101,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       {
         kind: "section",
         id: "organization-limits",
-        label: "Limits",
+        label: "Budgets",
         iconId: "organization-limits",
         adminOnly: true,
       },

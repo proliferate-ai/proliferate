@@ -6,7 +6,7 @@ import {
   BillingPlanManagementDialog,
   type BillingPlanManagementDialogProps,
 } from "./BillingPlanManagementDialog";
-import { CheckoutReturnNotice, PlanComparisonCard } from "./BillingPlanComparison";
+import { CheckoutReturnNotice } from "./BillingPlanComparison";
 
 export type {
   BillingActionView,
@@ -34,13 +34,15 @@ export function BillingSettingsPane({
   return (
     <div className="space-y-6">
       {checkoutReturnState ? <CheckoutReturnNotice state={checkoutReturnState} /> : null}
-      <PlanComparisonCard
-        action={planComparisonAction}
-        enterpriseAction={enterprisePlanAction}
-        currentPlanKey={currentPlanKey ?? null}
-      />
-      {planManagementDialog ? <BillingPlanManagementDialog {...planManagementDialog} /> : null}
       {children}
+      {planManagementDialog ? (
+        <BillingPlanManagementDialog
+          {...planManagementDialog}
+          coreAction={planManagementDialog.coreAction ?? planComparisonAction}
+          enterpriseAction={planManagementDialog.enterpriseAction ?? enterprisePlanAction}
+          currentPlanKey={planManagementDialog.currentPlanKey ?? currentPlanKey ?? null}
+        />
+      ) : null}
     </div>
   );
 }

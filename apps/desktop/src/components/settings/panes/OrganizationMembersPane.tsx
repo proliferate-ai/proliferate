@@ -15,6 +15,7 @@ import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-o
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
+import { TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION } from "@/config/settings";
 import {
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
@@ -40,7 +41,9 @@ export function OrganizationMembersPane() {
   const admin = useIsAdmin(activeOrganizationId);
   const membersQuery = useOrganizationMembers(activeOrganizationId);
   const invitationsQuery = useOrganizationInvitations(activeOrganizationId);
-  const joinLinkQuery = useOrganizationJoinLink(activeOrganizationId, admin.isAdmin);
+  const canManage = admin.isAdmin || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
+  const canManageOwners = admin.isOwner || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
+  const joinLinkQuery = useOrganizationJoinLink(activeOrganizationId, canManage);
   const shouldLoadPendingInvitations = authStatus === "authenticated";
   const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
     shouldLoadPendingInvitations,
@@ -54,8 +57,6 @@ export function OrganizationMembersPane() {
   const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
   const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
   const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
-  const canManage = admin.isAdmin;
-  const canManageOwners = admin.isOwner;
 
   async function handleInvite() {
     await actions.createInvitation({ email: inviteEmail, role: inviteRole });

@@ -95,8 +95,8 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    expect(screen.queryByText("Organization billing")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open Organization" }));
+    expect(screen.queryByText("Organization billing")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
 
     expect(onOpenOrganizationSettings).toHaveBeenCalledTimes(1);
   });
@@ -117,15 +117,22 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Plan + billing" })).toBeTruthy();
-    expect(screen.getAllByText("Credit top up").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Enable top up" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Billing" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Plan" })).toBeTruthy();
+    expect(screen.getByText(/tracked, budgeted, and topped up separately/)).toBeTruthy();
+    expect(screen.getByText("360 PCUs")).toBeTruthy();
+    expect(screen.getByText("12,000 LLM credits")).toBeTruthy();
+    expect(screen.queryByText("Loading")).toBeNull();
+    expect(screen.getByRole("button", { name: "Add compute units" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add LLM credits" })).toBeTruthy();
+    expect(screen.getByLabelText("Auto top-up")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Manage plan" })[0]);
-    const dialog = screen.getByRole("dialog", { name: "Manage plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    const dialog = screen.getByRole("dialog", { name: "Choose your plan" });
     expect(dialog).toBeTruthy();
-    expect(within(dialog).getByText("Core organization plan")).toBeTruthy();
-    expect(within(dialog).queryByText("20 PCUs")).toBeNull();
+    expect(within(dialog).getByRole("heading", { name: "Core" })).toBeTruthy();
+    expect(within(dialog).getByText("20 PCUs / month")).toBeTruthy();
+    expect(within(dialog).getByText("2,500 LLM credits / month")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Billing portal" }));
 
     await waitFor(() => {
@@ -153,10 +160,6 @@ describe("BillingSettingsSurface", () => {
       { ownerScope: "organization", organizationId: "org_1" },
       { returnSurface: "desktop" },
     );
-    expect(cloudHooks.useCloudBillingActions).toHaveBeenCalledWith(
-      undefined,
-      { returnSurface: "desktop" },
-    );
   });
 
   it("shows billing action errors from failed checkout starts", async () => {
@@ -181,8 +184,8 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Manage plan" })[0]);
-    const dialog = screen.getByRole("dialog", { name: "Manage plan" });
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    const dialog = screen.getByRole("dialog", { name: "Choose your plan" });
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Upgrade to Core" }),
     );

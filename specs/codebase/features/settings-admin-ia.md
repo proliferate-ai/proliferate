@@ -235,6 +235,130 @@ Settings / Agents       Review
 
 ## 5. Target Model
 
+### 5.0 Organization control center map
+
+The organization settings surfaces form an organization control center. The
+shell is still the Desktop Settings shell, but the Admin group is product
+oriented: organization identity, members, billing, budgets, integrations, model
+policy, and capability limits.
+
+Each Admin surface carries an implementation maturity label so UI can ship
+before every backend primitive exists without confusing reviewers about what is
+real.
+
+```text
+real-now              connected to server state and permission enforcement
+mocked-ui             product-correct display with local deterministic mock data
+disabled-until-backend product row exists but action is disabled until API work lands
+enterprise-only       visible product capability gated to Enterprise
+```
+
+Organization control center map:
+
+```text
+Org switcher / account hub
+  maturity: real-now
+  owns:
+    active org summary, organization list, pending invitations,
+    Settings, Docs, Support, Log out, and Create organization entrypoint.
+  rule:
+    every signed-in user has a personal organization created by the auth/user
+    creation flow. Users may belong to many organizations, but default
+    organization creation is one-per-user unless a later Team/Enterprise flow
+    explicitly provisions another organization.
+
+Organization settings
+  maturity: real-now
+  owns:
+    organization name, logo, and billing entrypoint cross-link.
+  rule:
+    organization identity controls how the org appears in switchers, settings,
+    shared workspace context, and future web/mobile org selectors.
+
+Members
+  maturity: real-now, with domain auto-join enterprise-only
+  owns:
+    member list, pending invitations, invite by email, copy join link,
+    role changes, remove member, rescind invitation.
+  rows:
+    profile picture, name/email, date joined or "Invited", role, auth methods,
+    and action menu.
+  invitation policy:
+    invite-by-email creates an invitation record and sends the same join link
+    that admins can copy. The join link is the organization join endpoint. A
+    signed-in matching invited user can accept the invitation; an anonymous
+    user is sent through auth and returned to the join flow. Domain auto-join
+    uses the same link but is Enterprise-only.
+
+Billing
+  maturity: mixed real-now + mocked-ui
+  owns:
+    current plan, Manage action, Proliferate Credits summary, add credits,
+    auto top-up, and billing portal.
+  rule:
+    the Billing page starts with current plan and credits. Plan comparison and
+    upgrade detail live inside the Manage modal. Stripe portal is the only
+    cancellation/payment-method surface.
+  mocked-ui:
+    PCU purchased/available/used cards and illustrative add-credit/top-up rows
+    may use deterministic mock values until PCU backend fields replace compute
+    hour fields.
+
+Budgets
+  maturity: mocked-ui
+  owns:
+    usage over time, usage by person, and budget controls.
+  rule:
+    use real members when available and deterministic mock usage values until
+    usage rollups exist. Budget controls render as disabled unless the owning
+    backend is connected. Per-person budgets are Enterprise-only.
+
+Plans
+  maturity: mocked-ui plus real Stripe entrypoints where available
+  owns:
+    Free, Core, and Enterprise comparison.
+  plan shape:
+    Free:
+      Proliferate Credits: 5 PCUs
+      cloud auth: Proliferate gateway only
+      local auth: any local option
+      workflows per person: 1
+      team members: 5
+      support: docs only
+    Core:
+      Proliferate Credits: 20 / 50 / 100 / 200 / 500 PCUs with overage/top-up
+      cloud auth: Proliferate gateway only
+      local auth: any local option
+      workflows per person: unlimited
+      team members: unlimited
+      extras: beta access, role-based access management
+    Enterprise:
+      Proliferate Credits: custom
+      cloud auth: Proliferate gateway and BYO model credentials
+      workflows per person: unlimited
+      team members: unlimited
+      extras: SSO, org-wide secrets, audit trails, custom instance types,
+        programmatic access, budgets per person, productivity insights,
+        VPC deployment, account manager, FDE, premium support.
+
+Integrations and skills
+  maturity: mixed mocked-ui + disabled-until-backend
+  owns:
+    organization-owned integration policy and shared plugin/MCP/skill controls.
+  rule:
+    the route and page are visible in Admin IA. Connected policy controls use
+    the integration-policy backend; missing shared skill/plugin controls render
+    disabled placeholders until their owning backend/API lands.
+
+Ownership enforcement
+  maturity: real-now
+  owns:
+    RLS, context vars, middleware, and server permission checks.
+  rule:
+    UI can mock display data, but access enforcement is never mocked. Admin-only
+    actions must fail closed server-side for non-admins.
+```
+
 ### 5.1 Sidebar groups + pages
 
 Target visible `SETTINGS_NAV_GROUPS` after the owning panes ship:
@@ -244,12 +368,13 @@ Admin
   organization             OrganizationPane               org profile and Team setup
   organization-members     OrganizationMembersPane        members, invitation emails,
                                                            invite link
-  billing                  BillingPane                    plan + billing as an org,
+  billing                  BillingPane                    billing as an org,
                                                            including auto top up option
   organization-integrations SettingsScaffoldPane           org-owned integrations
   organization-model-policy SettingsScaffoldPane           allowed/default models
-  organization-limits      SettingsScaffoldPane            per-user spend and
-                                                           usage guardrails
+  organization-limits      OrganizationBudgetsPane         usage over time,
+                                                           usage by person,
+                                                           budget controls
 
 Settings
   general                  GeneralPane                    general settings,
@@ -338,11 +463,12 @@ and shared primitives the pane consumes.
 Admin
   organization              spec 03 + 05  members, invitation emails,
                                        invite link, org profile
-  billing                   spec 09   org plan, seats, usage, credits,
-                                       auto top up, overage, plan changes
+  billing                   spec 09   current plan, PCUs, add credits,
+                                       auto top up, Stripe portal, plan changes
   organization-integrations future org integrations spec
   organization-model-policy future model policy spec
-  organization-limits       future limits/budget spec
+  organization-limits       spec 09   mocked usage over time, usage by person,
+                                       and budget controls
 
 Settings
   general                   spec 03   product feature flags, telemetry opt-in,
@@ -776,7 +902,7 @@ apps/desktop/src/components/settings/screen/SettingsScreen.tsx
 apps/desktop/src/components/settings/panes/
   SettingsScaffoldPane.tsx            renders scaffolded page rows
   OrganizationPane.tsx                existing org settings
-  BillingPane.tsx                     existing connected plan + billing
+  BillingPane.tsx                     existing connected billing
   ComputePane.tsx                     existing personal compute / SSH targets
 
 apps/desktop/src/copy/settings/settings-scaffold-copy.ts
@@ -786,8 +912,9 @@ apps/desktop/src/copy/settings/compute.ts
   - labels compute as Personal compute
 
 apps/packages/product-surfaces/src/settings/BillingSettingsSurface.tsx
-  - labels billing as Plan + billing
-  - exposes auto top up as an organization billing option
+  - labels billing as Billing
+  - exposes current plan, credits, add credits, top up, and Stripe portal
+    controls
 ```
 
 Server:
@@ -816,8 +943,8 @@ apps/desktop/src/lib/domain/telemetry/events.ts
 3. `SettingsScaffoldPane.tsx` renders the scaffolded pages listed in §4.2.
    Scaffolded pages establish route, placement, title, and ownership copy only.
 4. Admin rows are marked `adminOnly`; non-admin users do not see those rows.
-5. `BillingSettingsSurface` is labeled `Plan + billing` and shows the
-   organization auto top up option alongside the existing billing controls.
+5. `BillingSettingsSurface` is labeled `Billing` and shows the current plan,
+   organization credits, add credits, auto top up, and Stripe portal controls.
 6. `ComputePane` is labeled `Personal compute`.
 7. Integrations and Workflows pages are top-level. Still-visible Plugins,
    Automations, Archived chats, Shared sandbox, and Review rows are marked
@@ -863,7 +990,7 @@ apps/desktop/src/lib/domain/vocabulary.test.ts
   - enum string values match §5.3 verbatim
 
 apps/packages/product-surfaces/src/settings/BillingSettingsSurface.test.tsx
-  - renders Plan + billing and the auto top up option
+  - renders Billing and the auto top up option
 ```
 
 Manual smoke:
