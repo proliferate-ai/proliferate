@@ -8,22 +8,15 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import {
+  canFallbackToStandardInviteSignIn,
+} from "@/lib/domain/organizations/join-auth";
+import {
   clearPendingOrganizationJoinTarget,
   readPendingOrganizationJoinTarget,
   writePendingOrganizationJoinTarget,
 } from "@/lib/access/browser/organization-join-target";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useAuthStore } from "@/stores/auth/auth-store";
-
-function canFallbackToStandardInviteSignIn(error: unknown): boolean {
-  return (
-    error instanceof Error
-    && (
-      error.message === "SSO is not configured for this environment."
-      || error.message === "SSO is not available for this environment."
-    )
-  );
-}
 
 export function useOrganizationJoinInvitationFlow() {
   const navigate = useNavigate();
