@@ -167,7 +167,7 @@ export function BillingSettingsSurface({
           onClick: openPlanManagement,
         }}
         enterprisePlanAction={onOpenPricingPage ? {
-          label: "Request trial",
+          label: "View pricing",
           onClick: openPricingPage,
         } : undefined}
         planManagementDialog={canManage && organization ? {
@@ -198,7 +198,7 @@ export function BillingSettingsSurface({
               }
             : undefined,
           enterpriseAction: onOpenPricingPage ? {
-            label: "Request trial",
+            label: "View pricing",
             onClick: openPricingPage,
           } : undefined,
           pricingAction: onOpenPricingPage ? {
