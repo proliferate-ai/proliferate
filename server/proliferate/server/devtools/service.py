@@ -45,7 +45,8 @@ async def take_desktop_handoff() -> DevDesktopHandoffRecord | None:
         _prune_expired_locked()
         if not _handoffs:
             return None
-        return _handoffs.popleft()
+        # Broadcast the latest handoff so one dev renderer cannot steal it from another.
+        return _handoffs[-1]
 
 
 def _validate_desktop_handoff_url(url: str) -> str:

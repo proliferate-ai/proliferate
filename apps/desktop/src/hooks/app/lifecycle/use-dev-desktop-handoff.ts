@@ -8,6 +8,7 @@ import {
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 
 const DEV_HANDOFF_POLL_MS = 1000;
+const handledDevHandoffIds = new Set<string>();
 
 // Owns local-dev browser-to-desktop handoffs when OS scheme registration is unavailable.
 export function useDevDesktopHandoff() {
@@ -41,6 +42,10 @@ export function useDevDesktopHandoff() {
           if (!handoff || cancelled) {
             return;
           }
+          if (handledDevHandoffIds.has(handoff.id)) {
+            return;
+          }
+          handledDevHandoffIds.add(handoff.id);
           const target = desktopNavigationTarget(handoff.url);
           if (target) {
             navigate(target);

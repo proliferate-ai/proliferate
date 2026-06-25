@@ -32,6 +32,7 @@ describe("useDevDesktopHandoff", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
   });
 
@@ -60,6 +61,32 @@ describe("useDevDesktopHandoff", () => {
       expect(result.current).toBe(
         "/settings?section=organization-members&joinOrganizationId=org-1",
       );
+    });
+    expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores replayed handoff ids after navigating once", async () => {
+    handoffMocks.takeDevDesktopHandoff.mockResolvedValue({
+      id: "handoff-replayed",
+      url: "proliferate-local://join/org-1",
+      createdAt: "2026-06-25T00:00:00.000Z",
+    });
+
+    const { result } = renderHook(() => useHandoffLocation(), {
+      wrapper: TestRouter,
+    });
+
+    await waitFor(() => {
+      expect(result.current).toBe(
+        "/settings?section=organization-members&joinOrganizationId=org-1",
+      );
+    });
+    expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 1100));
+
+    await waitFor(() => {
+      expect(handoffMocks.takeDevDesktopHandoff.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
     expect(handoffMocks.revealCurrentWindow).toHaveBeenCalledTimes(1);
   });

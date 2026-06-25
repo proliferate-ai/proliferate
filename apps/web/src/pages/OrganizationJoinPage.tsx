@@ -24,6 +24,7 @@ export function OrganizationJoinPage() {
   const { organizationId } = useParams();
   const [handoffTimedOut, setHandoffTimedOut] = useState(false);
   const [devHandoffQueued, setDevHandoffQueued] = useState(false);
+  const [handoffAttempt, setHandoffAttempt] = useState(0);
   const deepLinkUrl = useMemo(
     () => organizationId ? organizationJoinDeepLink(organizationId) : null,
     [organizationId],
@@ -34,6 +35,7 @@ export function OrganizationJoinPage() {
     }
 
     setHandoffTimedOut(false);
+    setHandoffAttempt((attempt) => attempt + 1);
     if (canUseDevDesktopHandoff()) {
       try {
         const queued = await queueDevDesktopHandoff(deepLinkUrl);
@@ -57,12 +59,12 @@ export function OrganizationJoinPage() {
   }, [deepLinkUrl, openInvite]);
 
   useEffect(() => {
-    if (!deepLinkUrl || devHandoffQueued) {
+    if (!deepLinkUrl || handoffAttempt === 0) {
       return;
     }
     const timer = window.setTimeout(() => setHandoffTimedOut(true), 8000);
     return () => window.clearTimeout(timer);
-  }, [deepLinkUrl, devHandoffQueued]);
+  }, [deepLinkUrl, handoffAttempt]);
 
   if (!deepLinkUrl) {
     return <Navigate to="/" replace />;
