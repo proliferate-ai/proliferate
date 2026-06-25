@@ -250,12 +250,12 @@ docs need to change.
 | `stripe-local-testing.md` | Webhook forwarding, checkout, portal, refill, meter events |
 | `mobile.md` | Native mobile OAuth, Expo overrides, dev refresh-token path |
 
-Quick start: `make dev-init PROFILE=<name>` + `make dev PROFILE=<name>` (Pablo's alias: `pdev <name>`).
+Quick start: `make setup PROFILE=<name>` + `make build` for a clean worktree + `make run PROFILE=<name>` (Pablo's alias: `pdev <name>`).
 
-Stripe: `make stripe-setup-test` then `make dev PROFILE=<name> STRIPE=1`.
+Stripe: `make stripe-setup-test` then `make run PROFILE=<name> STRIPE=1`.
 Mobile web: `pnpm --dir apps/mobile web:profile`.
 Native mobile: `make dev-mobile-auth` (starts server + ngrok + Expo).
-Tunnels: `make dev PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok` or `CLOUD_WORKER_TUNNEL=ngrok`.
+Tunnels: `make run PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok` or `CLOUD_WORKER_TUNNEL=ngrok`.
 
 MCPs + permissions: local shell, Browser/Chrome for local/OAuth/provider
 surfaces, GitHub MCP/`gh` when reproducing from issue or artifact context,

@@ -27,9 +27,10 @@ For full-stack local development, use named profiles:
 
 ```bash
 make server-install
-make dev-init PROFILE=main
+make setup PROFILE=main
+make build # first clean worktree, or after generated/Rust/frontend artifacts change
 make dev-list
-make dev PROFILE=main
+make run PROFILE=main
 ```
 
 ## Pull Requests

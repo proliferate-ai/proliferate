@@ -62,8 +62,9 @@ deployment variable ownership.
 From a repo worktree:
 
 ```bash
-make dev-init PROFILE=<name>
-make dev PROFILE=<name>
+make setup PROFILE=<name>
+make build # first clean worktree, or after generated/Rust/frontend artifacts change
+make run PROFILE=<name>
 ```
 
 On Pablo's machine, the shell helper is:
@@ -72,13 +73,27 @@ On Pablo's machine, the shell helper is:
 pdev <name>
 ```
 
-`pdev` initializes the profile, ensures the profile database exists, rebuilds
-the repo, and starts the same profile-aware dev stack. It is a local shell
-convenience, not a repo contract.
+`pdev` should initialize the profile, ensure the profile database exists, and
+start the same profile-aware dev stack without rebuilding the repo. It is a
+local shell convenience, not a repo contract.
+
+Use explicit build targets when generated artifacts or binaries need refreshing:
+
+```bash
+make build-rust
+make build-frontend
+make build
+```
+
+`make run PROFILE=<name>` never invokes these build targets. It checks for the
+existing AnyHarness debug binary and frontend package build artifacts and tells
+you which explicit build target to run when they are missing.
+
+`make dev PROFILE=<name>` remains a compatibility alias for `setup` plus `run`.
 
 ## What Starts
 
-`make dev PROFILE=<name>` starts:
+`make run PROFILE=<name>` starts:
 
 - AnyHarness runtime on the profile's `ANYHARNESS_PORT`
 - Proliferate server on the profile's `PROLIFERATE_API_PORT`
@@ -162,7 +177,7 @@ It does not write Stripe API keys or webhook secrets.
 Start the full stack with Stripe webhook forwarding:
 
 ```bash
-make dev PROFILE=<name> STRIPE=1
+make run PROFILE=<name> STRIPE=1
 ```
 
 This does three useful things:
@@ -186,7 +201,7 @@ The billing-specific runbook is
 ## Web
 
 The hosted web app starts automatically with the full profile. Open the profile
-hosted web URL printed by `make dev` or inspect it with:
+hosted web URL printed by `make run` or inspect it with:
 
 ```bash
 source ~/.proliferate-local/dev/profiles/<name>/launch.env
@@ -224,7 +239,7 @@ add or change an email/password credential from Account settings.
 
 ## Desktop
 
-The desktop app starts automatically at the end of `make dev PROFILE=<name>`.
+The desktop app starts automatically at the end of `make run PROFILE=<name>`.
 The generated app identity makes the macOS app bar show the profile name, such
 as:
 
@@ -311,14 +326,14 @@ paths are:
 For local Bifrost/managed-credit work:
 
 ```bash
-make dev PROFILE=<name> AGENT_GATEWAY=bifrost
+make run PROFILE=<name> AGENT_GATEWAY=bifrost
 ```
 
 For E2B or public sandbox tests that need to call back into the local profile:
 
 ```bash
-make dev PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
-make dev PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
+make run PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
+make run PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
 ```
 
 The first command exposes both API callbacks and Bifrost through ngrok. The

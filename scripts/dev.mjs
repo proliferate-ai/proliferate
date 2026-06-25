@@ -525,6 +525,7 @@ function generatedTauriConfig(profile, env) {
     productName: displayName,
     identifier: `com.proliferate.app.local.${identifierSlug}`,
     build: {
+      beforeDevCommand: "pnpm dev",
       devUrl: `http://127.0.0.1:${env.PROLIFERATE_WEB_PORT}`,
     },
     app: {

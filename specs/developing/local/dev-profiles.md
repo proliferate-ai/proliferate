@@ -7,19 +7,20 @@ home, desktop file-backed home, and the macOS dev app label.
 ## Commands
 
 ```bash
-make dev-init PROFILE=<name>       # create or update profile state
+make setup PROFILE=<name>          # create/update profile state and database
+make build                         # first clean worktree or artifact refresh
 make dev-list                      # list profiles and TCP-probed status
-make dev PROFILE=<name>            # full stack for this profile
-make dev PROFILE=<name> STRIPE=1   # also run Stripe webhook forwarding
-make dev PROFILE=<name> AGENT_GATEWAY=1
+make run PROFILE=<name>            # full stack for this profile, no rebuild
+make run PROFILE=<name> STRIPE=1   # also run Stripe webhook forwarding
+make run PROFILE=<name> AGENT_GATEWAY=1
                                     # also run/reuse local Bifrost for gateway work
-make dev PROFILE=<name> AGENT_GATEWAY=bifrost
+make run PROFILE=<name> AGENT_GATEWAY=bifrost
                                     # also run/reuse local Bifrost for gateway work
-make dev PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
+make run PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
                                     # expose Bifrost and API worker callbacks through ngrok for E2B/public sandbox tests
-make dev PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
+make run PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
                                     # expose only API worker callbacks through ngrok
-make dev PROFILE=<name> AUTH_PROFILE=google
+make run PROFILE=<name> AUTH_PROFILE=google
                                     # load .auth-env/.env.google for deployment SSO testing
 make seed-sso PROFILE=<name> AUTH_PROFILE=google ORG_ID=<org-id>
                                     # seed that profile's local org SSO connection from .auth-env/.env.google
@@ -61,9 +62,11 @@ but they are excluded from automatic per-repo retention and orphan pruning.
 The default database is `proliferate_dev_<name>` on the local Docker Postgres
 server. On macOS, profile database URLs default to `::1` so Docker Desktop's
 Postgres listener is not confused with a Homebrew Postgres bound to
-`127.0.0.1:5432`. Use `DATABASE_URL=... make dev PROFILE=<name>` when you
+`127.0.0.1:5432`. Use `DATABASE_URL=... make run PROFILE=<name>` when you
 intentionally want to bypass the profile database for a one-off run, or
 `LOCAL_PGHOST=127.0.0.1` when you intentionally want a separate local Postgres.
+When `DATABASE_URL` is set, profile setup and run skip profile database
+creation/readiness checks and migrate the provided database URL.
 
 Desktop auth sessions, pending-auth entries, and stored provider API keys are
 profile-scoped `0600` files under the dev app home, so per-profile databases do
@@ -73,8 +76,8 @@ state. (See the sidecar spec's Local Secrets for the storage model.)
 
 ## Agent Gateway Local Dev
 
-`make dev PROFILE=<name> AGENT_GATEWAY=1` and
-`make dev PROFILE=<name> AGENT_GATEWAY=bifrost` start or reuse a local Bifrost
+`make run PROFILE=<name> AGENT_GATEWAY=1` and
+`make run PROFILE=<name> AGENT_GATEWAY=bifrost` start or reuse a local Bifrost
 gateway and export the API env needed for Bifrost-backed managed credits and
 personal BYOK development:
 
@@ -122,14 +125,14 @@ contain client secrets. To run the deployment/self-hosted SSO path, pass the
 auth profile to the normal dev launcher:
 
 ```bash
-make dev PROFILE=sso-google AUTH_PROFILE=google
+make run PROFILE=sso-google AUTH_PROFILE=google
 ```
 
 To test org-scoped SSO without filling the settings form by hand, run the
 normal profile and seed the local profile database:
 
 ```bash
-make dev PROFILE=sso-org
+make run PROFILE=sso-org
 make seed-sso PROFILE=sso-org AUTH_PROFILE=google ORG_ID=<org-id>
 ```
 
@@ -158,7 +161,7 @@ that do not include the `127.0.0.1` callback.
 
 The Google Workspace MCP value is the base of a 64-port loopback pool used for
 local Gmail OAuth callbacks. The generated Tauri config points the desktop at
-`PROLIFERATE_WEB_PORT`, while `make dev PROFILE=<name>` also starts the hosted
+`PROLIFERATE_WEB_PORT`, while `make run PROFILE=<name>` also starts the hosted
 web app on `PROLIFERATE_HOSTED_WEB_PORT` and sets `FRONTEND_BASE_URL` to that
 hosted web origin. Server CORS includes the desktop renderer, hosted web, Expo
 mobile web, and Tauri origins. For browser-based mobile smoke tests, run Expo
@@ -176,7 +179,9 @@ appearing as `proliferate`.
 
 ## Scope Notes
 
-`make dev PROFILE=<name>` is the profile-aware workflow. The individual
+`make setup PROFILE=<name>` and `make run PROFILE=<name>` are the
+profile-aware workflow. `make dev PROFILE=<name>` remains a compatibility alias
+for setup plus run. The individual
 `make dev-runtime`, `make dev-server`, and `make dev-desktop` shortcuts remain
 default-port shortcuts.
 
@@ -219,7 +224,7 @@ pass the resolved seed directory to the AnyHarness sidecar. Local development ca
 exercise the same hydration path by setting:
 
 ```bash
-ANYHARNESS_AGENT_SEED_DIR=/absolute/path/to/agent-seeds make dev PROFILE=<name>
+ANYHARNESS_AGENT_SEED_DIR=/absolute/path/to/agent-seeds make run PROFILE=<name>
 ```
 
 The directory should contain the generated target archive and checksum:
