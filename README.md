@@ -140,9 +140,10 @@ the same time.
 
 ```bash
 make server-install
-make dev-init PROFILE=main
+make setup PROFILE=main
+make build # first clean worktree, or after generated/Rust/frontend artifacts change
 make dev-list
-make dev PROFILE=main
+make run PROFILE=main
 ```
 
 See [dev profiles](./specs/developing/local/dev-profiles.md) for profile state, ports,

@@ -55,18 +55,34 @@ STRIPE_LOCAL_SECRET_ENV = if [ -z "$${STRIPE_SECRET_KEY:-}" ] && command -v stri
 		echo "Using Stripe CLI test key for local billing API calls."; \
 	fi; \
 fi;
+DEV_FRONTEND_ARTIFACTS := \
+	anyharness/sdk/dist \
+	anyharness/sdk-react/dist \
+	cloud/sdk/dist \
+	cloud/sdk-react/dist \
+	apps/packages/design/dist \
+	apps/packages/product-domain/dist \
+	apps/packages/ui/dist \
+	apps/packages/product-ui/dist \
+	apps/packages/product-surfaces/dist
+PROFILE_DB_READY_COMMAND = make server-db-ready;
+PROFILE_DB_ENSURE_COMMAND = LOCAL_PGHOST="$(LOCAL_PGHOST)" LOCAL_PGPORT="$(LOCAL_PGPORT)" LOCAL_PGUSER="$(LOCAL_PGUSER)" LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME";
+ifneq ($(origin DATABASE_URL), undefined)
+PROFILE_DB_READY_COMMAND = :;
+PROFILE_DB_ENSURE_COMMAND = :;
+endif
 
-ifneq ($(filter dev dev-init,$(MAKECMDGOALS)),)
+ifneq ($(filter dev dev-init setup run,$(MAKECMDGOALS)),)
 ifeq ($(strip $(PROFILE)),)
 $(error PROFILE is required. Example: make dev PROFILE=main)
 endif
 endif
 
-.PHONY: catalog-view catalog-pin catalog-update dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
+.PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
-        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build runtime-build desktop-build rebuild \
+        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
         release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
@@ -81,12 +97,39 @@ endif
         db-migrate-up db-migrate-down \
         all clean
 
-# --- Dev (builds SDK, starts runtime + desktop together) ---
+# --- Profile dev (setup, build, and run are separate) ---
 
-dev: sdk-build server-db-ready
+dev: setup run
+
+dev-artifacts-ready:
+	@runtime_bin="$${CARGO_TARGET_DIR:-target}/debug/anyharness"; \
+	missing_rust=0; \
+	missing_frontend=0; \
+	if [ ! -x "$$runtime_bin" ]; then \
+		echo "Missing AnyHarness runtime binary: $$runtime_bin"; \
+		missing_rust=1; \
+	fi; \
+	for artifact in $(DEV_FRONTEND_ARTIFACTS); do \
+		if [ ! -d "$$artifact" ]; then \
+			echo "Missing frontend build artifact: $$artifact"; \
+			missing_frontend=1; \
+		fi; \
+	done; \
+	if [ "$$missing_rust" = "1" ] || [ "$$missing_frontend" = "1" ]; then \
+		if [ "$$missing_rust" = "1" ] && [ "$$missing_frontend" = "1" ]; then \
+			echo "Run: make build"; \
+		elif [ "$$missing_rust" = "1" ]; then \
+			echo "Run: make build-rust"; \
+		else \
+			echo "Run: make build-frontend"; \
+		fi; \
+		exit 1; \
+	fi
+
+run: dev-artifacts-ready
 	@set -e; \
 	if [ -z "$(PROFILE)" ]; then \
-		echo "PROFILE is required. Example: make dev PROFILE=main"; \
+		echo "PROFILE is required. Example: make run PROFILE=main"; \
 		exit 1; \
 	fi; \
 	launch_env=$$( \
@@ -122,6 +165,7 @@ dev: sdk-build server-db-ready
 		export DATABASE_URL="$$database_url_override_value"; \
 		use_profile_db=0; \
 	else \
+		$(PROFILE_DB_READY_COMMAND) \
 		export DATABASE_URL="$$( \
 			LOCAL_PGHOST="$(LOCAL_PGHOST)" \
 			LOCAL_PGPORT="$(LOCAL_PGPORT)" \
@@ -198,12 +242,7 @@ dev: sdk-build server-db-ready
 		exit 1; \
 	fi; \
 	if [ "$$use_profile_db" = "1" ]; then \
-		LOCAL_PGHOST="$(LOCAL_PGHOST)" \
-		LOCAL_PGPORT="$(LOCAL_PGPORT)" \
-		LOCAL_PGUSER="$(LOCAL_PGUSER)" \
-		LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" \
-		USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" \
-		node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME"; \
+		$(PROFILE_DB_ENSURE_COMMAND) \
 	fi; \
 	if [ "$$agent_gateway_mode" = "1" ] || [ "$$agent_gateway_mode" = "bifrost" ]; then \
 		export AGENT_GATEWAY_ENABLED=true; \
@@ -292,8 +331,9 @@ dev: sdk-build server-db-ready
 		fi; \
 		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$$STRIPE_FORWARD_TO" & \
 	fi; \
+	runtime_bin="$${CARGO_TARGET_DIR:-target}/debug/anyharness"; \
 	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, desktop :$$PROLIFERATE_WEB_PORT, web :$$PROLIFERATE_HOSTED_WEB_PORT, mobile web :$$PROLIFERATE_MOBILE_WEB_PORT"; \
-	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
+	RUST_LOG=info ANYHARNESS_DEV_CORS=1 "$$runtime_bin" serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
 	echo "Starting hosted web app..."; \
 	(cd apps/web && VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" pnpm dev --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort) & \
@@ -302,22 +342,34 @@ dev: sdk-build server-db-ready
 	sleep 2; \
 	(cd apps/desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
 
-dev-init:
+setup:
 	@if [ -z "$(PROFILE)" ]; then \
-		echo "PROFILE is required. Example: make dev-init PROFILE=main"; \
+		echo "PROFILE is required. Example: make setup PROFILE=main"; \
 		exit 1; \
+	fi; \
+	database_url_override_set="$${DATABASE_URL+x}"; \
+	launch_env=$$( \
+		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
+		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
+		PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
+		PROLIFERATE_HOSTED_WEB_PORT="$(PROLIFERATE_HOSTED_WEB_PORT)" \
+		PROLIFERATE_MOBILE_WEB_PORT="$(PROLIFERATE_MOBILE_WEB_PORT)" \
+		PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE="$(PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE)" \
+		ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
+		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
+		PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
+		PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
+		node scripts/dev.mjs ensure --profile "$(PROFILE)" \
+	); \
+	if [ "$$database_url_override_set" = "x" ]; then \
+		echo "Skipping profile database creation because DATABASE_URL is set."; \
+	else \
+		. "$$launch_env"; \
+		$(PROFILE_DB_READY_COMMAND) \
+		$(PROFILE_DB_ENSURE_COMMAND) \
 	fi
-	@PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
-	PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
-	PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
-	PROLIFERATE_HOSTED_WEB_PORT="$(PROLIFERATE_HOSTED_WEB_PORT)" \
-	PROLIFERATE_MOBILE_WEB_PORT="$(PROLIFERATE_MOBILE_WEB_PORT)" \
-	PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE="$(PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE)" \
-	ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
-	ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
-	PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
-	PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
-	node scripts/dev.mjs ensure --profile "$(PROFILE)"
+
+dev-init: setup
 
 dev-list:
 	@node scripts/dev.mjs list
@@ -775,11 +827,20 @@ shared-build:
 	pnpm --filter @proliferate/product-ui build
 	pnpm --filter @proliferate/product-surfaces build
 
-runtime-build:
+build-rust:
 	$(CARGO) build --workspace
+
+runtime-build: build-rust
 
 desktop-build: cloud-sdk-build cloud-sdk-react-build sdk-build sdk-react-build shared-build
 	cd apps/desktop && pnpm exec tsc && pnpm exec vite build
+
+web-build: cloud-sdk-build cloud-sdk-react-build sdk-build shared-build
+	cd apps/web && pnpm exec tsc -p tsconfig.json && pnpm exec vite build
+
+build-frontend: desktop-build web-build
+
+build: build-rust build-frontend
 
 test-agent-runtime-cloud-e2b: sdk-generate
 	cd anyharness/tests && pnpm run test:cloud:e2b
@@ -804,7 +865,7 @@ stage-sidecar:
 
 all: check check-max-lines check-server-boundaries sdk-build
 
-rebuild: sdk-build runtime-build desktop-build
+rebuild: build
 
 clean:
 	$(CARGO) clean
