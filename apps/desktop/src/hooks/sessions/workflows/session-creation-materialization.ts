@@ -241,6 +241,11 @@ export async function materializeSessionCreation({
     pendingSessionId,
     launchedSession.id,
   );
+  requeuePromptIntentsBlockedOnMaterialization({
+    clientSessionId: pendingSessionId,
+    materializedSessionId: launchedSession.id,
+    workspaceId,
+  });
   logLatency("session.create.materialized", {
     clientSessionId: pendingSessionId,
     materializedSessionId: launchedSession.id,
@@ -351,6 +356,11 @@ function materializeExistingSession({
     pendingSessionId,
     existingSession.id,
   );
+  requeuePromptIntentsBlockedOnMaterialization({
+    clientSessionId: pendingSessionId,
+    materializedSessionId: existingSession.id,
+    workspaceId,
+  });
   if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
     rememberLastViewedSession(workspaceId, existingSession.id);
   }
@@ -376,6 +386,39 @@ function pendingConfigValuesForSession(sessionId: string): Record<string, string
     Object.values(pendingConfigChanges)
       .map((change) => [change.rawConfigId, change.value] as const),
   );
+}
+
+function requeuePromptIntentsBlockedOnMaterialization({
+  clientSessionId,
+  materializedSessionId,
+  workspaceId,
+}: {
+  clientSessionId: string;
+  materializedSessionId: string;
+  workspaceId: string;
+}): void {
+  const store = useSessionIntentStore.getState();
+  for (const intent of sessionIntentsForSession(store, clientSessionId)) {
+    if (intent.kind !== "send_prompt" || intent.deliveryState !== "failed_before_dispatch") {
+      continue;
+    }
+    store.patchIntent(intent.intentId, {
+      status: "queued",
+      deliveryState: "waiting_for_session",
+      errorMessage: null,
+      materializedSessionId,
+      workspaceId,
+      dispatchedAt: null,
+      acceptedAt: null,
+      queuedSeq: null,
+    });
+    logLatency("session.intent.prompt.requeued_after_materialization", {
+      clientPromptId: intent.clientPromptId,
+      clientSessionId,
+      materializedSessionId,
+      workspaceId,
+    });
+  }
 }
 
 function materializedRecordFromExistingSession({
