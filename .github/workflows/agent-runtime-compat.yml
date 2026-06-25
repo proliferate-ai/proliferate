@@ -31,7 +31,7 @@ jobs:
       ANYHARNESS_TEST_FIXTURE_REPO_URL: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_URL }}
       ANYHARNESS_TEST_FIXTURE_REPO_REF: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_REF }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install system build dependencies
         run: |
