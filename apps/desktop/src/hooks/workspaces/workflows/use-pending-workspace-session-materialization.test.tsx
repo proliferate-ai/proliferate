@@ -12,6 +12,7 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import {
   usePendingWorkspaceSessionMaterialization,
+  useReadyWorkspaceProjectedSessionMaterialization,
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 
 const mocks = vi.hoisted(() => ({
@@ -75,6 +76,39 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       agentKind: "codex",
       modelId: "gpt-5.5",
       modeId: "full-access",
+      reuseInFlightEmptySession: false,
+      preserveProjectedSessionOnCreateFailure: true,
+    });
+  });
+
+  it("retries projected sessions that are already attached to a ready workspace", async () => {
+    putSessionRecord(createEmptySessionRecord("client-session:claude:1", "claude", {
+      workspaceId: "workspace-real",
+      materializedSessionId: null,
+      modelId: "opus",
+      modeId: "default",
+      hasAttemptedPrompt: true,
+    }));
+
+    const materializeReadyWorkspaceProjectedSessions =
+      useReadyWorkspaceProjectedSessionMaterialization();
+    const materializationResult = materializeReadyWorkspaceProjectedSessions(
+      "workspace-real",
+      { eventPrefix: "test" },
+    );
+    await Promise.resolve();
+
+    expect(materializationResult).toEqual({
+      pendingWorkspaceUiKey: "workspace-real",
+      projectedSessionCount: 1,
+      projectedSessionIds: ["client-session:claude:1"],
+    });
+    expect(mocks.createEmptySessionWithResolvedConfig).toHaveBeenCalledWith({
+      clientSessionId: "client-session:claude:1",
+      workspaceId: "workspace-real",
+      agentKind: "claude",
+      modelId: "opus",
+      modeId: "default",
       reuseInFlightEmptySession: false,
       preserveProjectedSessionOnCreateFailure: true,
     });
