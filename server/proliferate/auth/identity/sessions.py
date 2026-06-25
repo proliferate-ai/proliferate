@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -27,6 +26,10 @@ from proliferate.auth.models import (
     UserRead,
 )
 from proliferate.auth.pkce import verify_pkce
+from proliferate.auth.sso.branding import (
+    sso_brand_label_for_connection,
+    sso_brand_label_from_subject,
+)
 from proliferate.auth.sso.deployment_config import deployment_sso_connection
 from proliferate.config import settings
 from proliferate.constants.auth import (
@@ -37,7 +40,7 @@ from proliferate.constants.auth import (
 from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store.auth import consume_auth_code
-from proliferate.db.store.auth_sso_records import SsoConnectionRecord, SsoIdentityRecord
+from proliferate.db.store.auth_sso_records import SsoIdentityRecord
 
 WEB_REFRESH_COOKIE = "proliferate_web_refresh"
 WEB_CSRF_COOKIE = "proliferate_web_csrf"
@@ -197,73 +200,16 @@ async def _sso_identity_labels(
         if connection is not None:
             return (
                 connection.display_name,
-                _sso_brand_label_for_connection(connection, identity.provider_subject),
+                sso_brand_label_for_connection(connection, identity.provider_subject),
             )
     if identity.connection_key == "deployment":
         connection = deployment_sso_connection()
         if connection is not None:
             return (
                 connection.display_name,
-                _sso_brand_label_for_connection(connection, identity.provider_subject),
+                sso_brand_label_for_connection(connection, identity.provider_subject),
             )
-    return "SSO", _sso_brand_label_from_subject(identity.provider_subject)
-
-
-class _SsoBrandConnection(Protocol):
-    display_name: str
-    oidc_issuer_url: str | None
-    oidc_discovery_url: str | None
-    oidc_authorization_endpoint: str | None
-    oidc_token_endpoint: str | None
-    oidc_userinfo_endpoint: str | None
-
-
-def _sso_brand_label_for_connection(
-    connection: SsoConnectionRecord | _SsoBrandConnection,
-    provider_subject: str,
-) -> str | None:
-    return _sso_brand_label_from_parts(
-        connection.display_name,
-        connection.oidc_issuer_url,
-        connection.oidc_discovery_url,
-        connection.oidc_authorization_endpoint,
-        connection.oidc_token_endpoint,
-        connection.oidc_userinfo_endpoint,
-        provider_subject,
-    )
-
-
-def _sso_brand_label_from_subject(provider_subject: str) -> str | None:
-    return _sso_brand_label_from_parts(provider_subject)
-
-
-def _sso_brand_label_from_parts(*parts: str | None) -> str | None:
-    values = [part.strip().lower() for part in parts if part and part.strip()]
-    if not values:
-        return None
-    normalized = " ".join(values)
-    subject = values[-1]
-    if "auth0" in normalized:
-        return "Auth0 SSO"
-    if "gitlab" in normalized:
-        return "GitLab SSO"
-    if (
-        "accounts.google.com" in normalized
-        or "google" in normalized
-        or (subject.isdigit() and len(subject) >= 10)
-    ):
-        return "Google SSO"
-    if (
-        "login.microsoftonline.com" in normalized
-        or "sts.windows.net" in normalized
-        or "microsoft" in normalized
-        or "entra" in normalized
-        or "azure" in normalized
-    ):
-        return "Microsoft Entra"
-    if "okta" in normalized or subject.startswith("00u"):
-        return "Okta SSO"
-    return None
+    return "SSO", sso_brand_label_from_subject(identity.provider_subject)
 
 
 def auth_session_response(

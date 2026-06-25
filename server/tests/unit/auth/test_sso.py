@@ -9,9 +9,12 @@ import pytest
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity import sessions as auth_sessions
 from proliferate.auth.sso import api as sso_api
 from proliferate.auth.sso import service as sso_service
+from proliferate.auth.sso.branding import (
+    sso_brand_label_for_connection,
+    sso_brand_label_from_subject,
+)
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
     SsoConnectionSnapshot,
@@ -114,17 +117,17 @@ def test_sso_brand_labels_use_connection_and_legacy_subject_hints() -> None:
     )
 
     assert (
-        auth_sessions._sso_brand_label_for_connection(google_connection, "subject-1")
+        sso_brand_label_for_connection(google_connection, "subject-1")
         == "Google SSO"
     )
     assert (
-        auth_sessions._sso_brand_label_for_connection(microsoft_connection, "subject-1")
+        sso_brand_label_for_connection(microsoft_connection, "subject-1")
         == "Microsoft Entra"
     )
-    assert auth_sessions._sso_brand_label_from_subject("auth0|abc123") == "Auth0 SSO"
-    assert auth_sessions._sso_brand_label_from_subject("105348973383490238728") == "Google SSO"
-    assert auth_sessions._sso_brand_label_from_subject("00u14igc8z0aH8qyU698") == "Okta SSO"
-    assert auth_sessions._sso_brand_label_from_subject("unknown-subject") is None
+    assert sso_brand_label_from_subject("auth0|abc123") == "Auth0 SSO"
+    assert sso_brand_label_from_subject("105348973383490238728") == "Google SSO"
+    assert sso_brand_label_from_subject("00u14igc8z0aH8qyU698") == "Okta SSO"
+    assert sso_brand_label_from_subject("unknown-subject") is None
 
 
 @pytest.mark.asyncio

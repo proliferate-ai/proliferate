@@ -10,6 +10,7 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Avatar } from "@/components/settings/panes/organization/OrganizationLogo";
 import {
   membershipStatusBadge,
+  type OrganizationMemberAuthMethodRecord,
   type OrganizationInvitationRecord,
   type OrganizationMemberRecord,
   type OrganizationRole,
@@ -238,6 +239,7 @@ export function buildMemberRows(
   return [
     ...members.map((member) => {
       const name = member.displayName || member.email;
+      const authLabel = memberAuthLabel(member.authMethods);
       return {
         key: `member:${member.membershipId}`,
         kind: "member" as const,
@@ -245,9 +247,9 @@ export function buildMemberRows(
         email: member.email,
         role: member.role,
         dateLabel: formatJoinedDate(member.joinedAt),
-        authLabel: "GitHub",
+        authLabel,
         statusFilter: "active" as const,
-        searchText: `${name} ${member.email}`.toLowerCase(),
+        searchText: `${name} ${member.email} ${authLabel}`.toLowerCase(),
         member,
       };
     }),
@@ -365,6 +367,32 @@ function roleLabel(role: string): string {
   if (role === "owner") return "Owner";
   if (role === "admin") return "Admin";
   return "Member";
+}
+
+function memberAuthLabel(methods: OrganizationMemberAuthMethodRecord[] | null | undefined): string {
+  if (!methods?.length) {
+    return "Unknown";
+  }
+  const labels = methods
+    .map(authMethodLabel)
+    .filter(Boolean);
+  return [...new Set(labels)].join(", ") || "Unknown";
+}
+
+function authMethodLabel(method: OrganizationMemberAuthMethodRecord): string {
+  const label = method.label.trim();
+  if (method.provider === "sso" && label.toLowerCase() === "sso" && method.brandLabel) {
+    return method.brandLabel;
+  }
+  return label || method.brandLabel?.trim() || authProviderFallbackLabel(method.provider);
+}
+
+function authProviderFallbackLabel(provider: string): string {
+  if (provider === "github") return "GitHub";
+  if (provider === "google") return "Google";
+  if (provider === "apple") return "Apple";
+  if (provider === "sso") return "SSO";
+  return provider.toUpperCase();
 }
 
 function formatJoinedDate(value: string | null | undefined): string {

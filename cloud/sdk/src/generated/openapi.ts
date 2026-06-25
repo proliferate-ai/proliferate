@@ -6722,6 +6722,15 @@ export interface components {
             /** Organizations */
             organizations: components["schemas"]["OrganizationResponse"][];
         };
+        /** OrganizationMemberAuthMethodResponse */
+        OrganizationMemberAuthMethodResponse: {
+            /** Provider */
+            provider: string;
+            /** Label */
+            label: string;
+            /** Brandlabel */
+            brandLabel?: string | null;
+        };
         /** OrganizationMemberResponse */
         OrganizationMemberResponse: {
             /** Membershipid */
@@ -6748,6 +6757,8 @@ export interface components {
             joinedAt: string;
             /** Removedat */
             removedAt?: string | null;
+            /** Authmethods */
+            authMethods?: components["schemas"]["OrganizationMemberAuthMethodResponse"][];
         };
         /** OrganizationMembersResponse */
         OrganizationMembersResponse: {
