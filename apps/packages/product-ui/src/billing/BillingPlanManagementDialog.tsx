@@ -5,26 +5,10 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { Select } from "@proliferate/ui/primitives/Select";
 
 import type { BillingPlanColumn } from "./billing-plan-ladder";
 import type { BillingActionView } from "./billing-types";
 import { BillingButton, Notice } from "./BillingUiParts";
-
-const CORE_COMPUTE_TIERS = [
-  { value: "20", label: "20 PCUs / month" },
-  { value: "50", label: "50 PCUs / month" },
-  { value: "100", label: "100 PCUs / month" },
-  { value: "200", label: "200 PCUs / month" },
-  { value: "500", label: "500 PCUs / month" },
-];
-
-const CORE_LLM_TIERS = [
-  { value: "2500", label: "2,500 LLM credits / month" },
-  { value: "5000", label: "5,000 LLM credits / month" },
-  { value: "10000", label: "10,000 LLM credits / month" },
-  { value: "25000", label: "25,000 LLM credits / month" },
-];
 
 const CORE_FEATURES = [
   "Separate compute unit and LLM credit pools",
@@ -112,26 +96,9 @@ export function BillingPlanManagementDialog({
             action={coreAction}
             actionVariant="primary"
           >
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground" htmlFor="core-compute-tier">
-                Monthly compute units
-              </label>
-              <Select id="core-compute-tier" defaultValue="20">
-                {CORE_COMPUTE_TIERS.map((tier) => (
-                  <option key={tier.value} value={tier.value}>{tier.label}</option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground" htmlFor="core-llm-tier">
-                Monthly LLM credits
-              </label>
-              <Select id="core-llm-tier" defaultValue="2500">
-                {CORE_LLM_TIERS.map((tier) => (
-                  <option key={tier.value} value={tier.value}>{tier.label}</option>
-                ))}
-              </Select>
+            <div className="grid gap-2 rounded-lg border border-border-light bg-foreground/[0.02] p-3 text-sm">
+              <PlanUnitRow label="Monthly compute units" value="20 PCUs / month" />
+              <PlanUnitRow label="Monthly LLM credits" value="2,500 LLM credits / month" />
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -163,6 +130,15 @@ export function BillingPlanManagementDialog({
         </div>
       </div>
     </ModalShell>
+  );
+}
+
+function PlanUnitRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
+    </div>
   );
 }
 

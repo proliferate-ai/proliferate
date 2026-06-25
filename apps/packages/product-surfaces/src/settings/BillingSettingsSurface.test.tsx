@@ -123,8 +123,9 @@ describe("BillingSettingsSurface", () => {
     expect(screen.getByText("360 PCUs")).toBeTruthy();
     expect(screen.getByText("12,000 LLM credits")).toBeTruthy();
     expect(screen.queryByText("Loading")).toBeNull();
-    expect(screen.getByRole("button", { name: "Add compute units" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add LLM credits" })).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add compute units" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add LLM credits" }).disabled).toBe(true);
+    expect(screen.getAllByText("Credit pack checkout for organizations is coming soon.")).toHaveLength(2);
     expect(screen.getByLabelText("Auto top-up")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage" }));
@@ -139,6 +140,7 @@ describe("BillingSettingsSurface", () => {
       expect(onOpenUrl).toHaveBeenCalledWith("https://billing.example/portal");
     });
     expect(cloudHooks.createBillingPortal).toHaveBeenCalledTimes(1);
+    expect(cloudHooks.createRefillCheckout).not.toHaveBeenCalled();
   });
 
   it("passes the selected return surface to billing actions", () => {

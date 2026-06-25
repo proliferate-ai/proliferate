@@ -25,7 +25,7 @@ export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
 
 export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 
-export const TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION = true;
+export const TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION = false;
 
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "general",
