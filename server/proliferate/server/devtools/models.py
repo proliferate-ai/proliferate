@@ -17,4 +17,3 @@ class DevDesktopHandoffRecordResponse(BaseModel):
 
 class DevDesktopHandoffPollResponse(BaseModel):
     handoff: DevDesktopHandoffRecordResponse | None
-

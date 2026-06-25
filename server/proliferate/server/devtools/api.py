@@ -51,4 +51,3 @@ def _record_response(record: DevDesktopHandoffRecord) -> DevDesktopHandoffRecord
         url=record.url,
         createdAt=record.created_at.isoformat(),
     )
-

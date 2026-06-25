@@ -496,7 +496,6 @@ class TestBillingApi:
 
         organizations = await client.get("/v1/organizations", headers=headers)
         assert organizations.status_code == 200
-        assert organizations.json() == {"organizations": []}
 
         intent = await db_session.get(OrganizationCheckoutIntent, uuid.UUID(body["intentId"]))
         assert intent is not None
@@ -509,7 +508,8 @@ class TestBillingApi:
         membership = (
             await db_session.execute(
                 select(OrganizationMembership).where(
-                    OrganizationMembership.user_id == uuid.UUID(session["user_id"])
+                    OrganizationMembership.organization_id == intent.organization_id,
+                    OrganizationMembership.user_id == uuid.UUID(session["user_id"]),
                 )
             )
         ).scalar_one_or_none()

@@ -25,7 +25,6 @@ from proliferate.db.store import users as user_store
 from proliferate.db.store.organizations import (
     acquire_membership_activation_lock,
     complete_team_checkout_activation,
-    get_current_membership_for_user,
     load_team_checkout_intent_for_update,
     mark_team_checkout_activating,
     mark_team_checkout_failed,
@@ -331,17 +330,6 @@ async def activate_team_checkout_from_stripe_session(
             )
             return
         await acquire_membership_activation_lock(db, created_by_user_id)
-        current = await get_current_membership_for_user(db, created_by_user_id)
-        if current is not None:
-            await mark_team_checkout_failed(
-                db,
-                intent,
-                activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
-                error_code="creator_already_in_organization",
-                error_message="Checkout creator already belongs to a team.",
-                webhook_event_id=webhook_event_id,
-            )
-            return
         await mark_team_checkout_activating(db, intent, stripe_subscription_id=subscription_id)
         await _upsert_team_subscription_from_stripe(
             db,

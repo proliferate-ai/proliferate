@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ async def enqueue_desktop_handoff(url: str) -> DevDesktopHandoffRecord:
     record = DevDesktopHandoffRecord(
         id=str(uuid4()),
         url=normalized_url,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     async with _handoff_lock:
         _prune_expired_locked()
@@ -59,7 +59,6 @@ def _validate_desktop_handoff_url(url: str) -> str:
 
 
 def _prune_expired_locked() -> None:
-    cutoff = datetime.now(timezone.utc) - _HANDOFF_TTL
+    cutoff = datetime.now(UTC) - _HANDOFF_TTL
     while _handoffs and _handoffs[0].created_at <= cutoff:
         _handoffs.popleft()
-
