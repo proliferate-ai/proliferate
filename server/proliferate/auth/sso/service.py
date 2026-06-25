@@ -415,6 +415,16 @@ async def _connection_for_start(
             organization_id=organization_id,
         )
         connection = _first_enabled_or_first(records)
+    elif email is not None:
+        domain = email_domain(email)
+        records = (
+            await sso_store.list_enabled_sso_connections_for_domain(db, domain=domain or "")
+            if domain
+            else []
+        )
+        connection = _first_enabled_or_first(records)
+        if connection is None:
+            connection = deployment_sso_connection()
     else:
         connection = deployment_sso_connection()
 

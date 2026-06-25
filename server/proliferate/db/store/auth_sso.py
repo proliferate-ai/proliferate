@@ -46,6 +46,33 @@ async def list_sso_connections_for_organization(
     return [sso_connection_record(row) for row in rows]
 
 
+async def list_enabled_sso_connections_for_domain(
+    db: AsyncSession,
+    *,
+    domain: str,
+) -> list[SsoConnectionRecord]:
+    normalized_domain = domain.strip().lower()
+    if not normalized_domain:
+        return []
+    rows = (
+        await db.execute(
+            select(SsoConnection)
+            .where(
+                SsoConnection.scope == "organization",
+                SsoConnection.status == "enabled",
+                SsoConnection.deleted_at.is_(None),
+            )
+            .order_by(SsoConnection.created_at.asc())
+        )
+    ).scalars()
+    records = [sso_connection_record(row) for row in rows]
+    return [
+        record
+        for record in records
+        if normalized_domain in {allowed.lower() for allowed in record.allowed_domains}
+    ]
+
+
 async def get_sso_connection(
     db: AsyncSession,
     *,

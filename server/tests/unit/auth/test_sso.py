@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import cast
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, Request
@@ -19,6 +21,7 @@ from proliferate.auth.sso.types import (
     VerifiedSsoIdentity,
 )
 from proliferate.config import settings
+from proliferate.db.store.auth_sso_records import SsoConnectionRecord
 from proliferate.integrations.sso import oidc as oidc_integration
 from proliferate.integrations.sso.errors import SsoIntegrationError
 
@@ -47,6 +50,45 @@ def test_oidc_callback_url_prefers_explicit_sso_callback_base_url(
         sso_service._oidc_callback_url(_request("http://127.0.0.1:8025/auth/sso/start"))
         == "http://localhost:8025/auth/sso/oidc/callback"
     )
+
+
+@pytest.mark.asyncio
+async def test_discover_sso_finds_org_connection_by_email_domain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    organization_id = uuid4()
+    connection_id = uuid4()
+
+    async def fake_list_enabled_sso_connections_for_domain(
+        _db: AsyncSession,
+        *,
+        domain: str,
+    ) -> list[SsoConnectionRecord]:
+        assert domain == "example.com"
+        return [
+            _connection_record(
+                id=connection_id,
+                organization_id=organization_id,
+                allowed_domains=("example.com",),
+            )
+        ]
+
+    monkeypatch.setattr(
+        sso_service.sso_store,
+        "list_enabled_sso_connections_for_domain",
+        fake_list_enabled_sso_connections_for_domain,
+    )
+
+    discovery = await sso_service.discover_sso(
+        cast(AsyncSession, object()),
+        email="person@example.com",
+    )
+
+    assert discovery.enabled is True
+    assert discovery.scope == SsoScope.ORGANIZATION
+    assert discovery.connection_id == connection_id
+    assert discovery.organization_id == organization_id
+    assert discovery.display_name == "Google SSO"
 
 
 def test_oidc_discovery_rejects_mismatched_configured_issuer() -> None:
@@ -371,6 +413,51 @@ def _request(url: str) -> Request:
             "server": (host.split(":", 1)[0], int(host.rsplit(":", 1)[1])),
             "client": ("127.0.0.1", 12345),
         }
+    )
+
+
+def _connection_record(
+    *,
+    id,
+    organization_id,
+    allowed_domains: tuple[str, ...],
+) -> SsoConnectionRecord:
+    now = datetime.now(UTC)
+    return SsoConnectionRecord(
+        id=id,
+        scope=SsoScope.ORGANIZATION.value,
+        organization_id=organization_id,
+        protocol=SsoProtocol.OIDC.value,
+        status=SsoStatus.ENABLED.value,
+        display_name="Google SSO",
+        login_policy=SsoLoginPolicy.OPTIONAL.value,
+        jit_policy=SsoJitPolicy.EXISTING_USER.value,
+        default_role="member",
+        allowed_domains=allowed_domains,
+        oidc_issuer_url="https://idp.example.test/",
+        oidc_discovery_url=None,
+        oidc_authorization_endpoint=None,
+        oidc_token_endpoint=None,
+        oidc_jwks_uri=None,
+        oidc_userinfo_endpoint=None,
+        oidc_client_id="client-id",
+        oidc_client_secret="client-secret",
+        oidc_client_secret_configured=True,
+        oidc_scopes=DEFAULT_OIDC_SCOPES,
+        oidc_token_endpoint_auth_method="client_secret_basic",
+        saml_idp_metadata_url=None,
+        saml_idp_metadata_xml_configured=False,
+        saml_idp_entity_id=None,
+        saml_sso_url=None,
+        saml_x509_cert_configured=False,
+        saml_email_attribute=None,
+        created_by_user_id=None,
+        updated_by_user_id=None,
+        tested_at=None,
+        last_error=None,
+        deleted_at=None,
+        created_at=now,
+        updated_at=now,
     )
 
 
