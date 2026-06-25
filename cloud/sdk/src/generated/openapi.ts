@@ -158,6 +158,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/sso/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover Sso Endpoint */
+        get: operations["discover_sso_endpoint_auth_sso_discover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/{surface}/sso/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Sso Endpoint */
+        post: operations["start_sso_endpoint_auth__surface__sso_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sso/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oidc Sso Callback */
+        get: operations["oidc_sso_callback_auth_sso_oidc_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/github/link/start": {
         parameters: {
             query?: never;
@@ -407,57 +458,6 @@ export interface paths {
         put?: never;
         /** Mobile Session Refresh */
         post: operations["mobile_session_refresh_auth_mobile_session_refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/sso/discover": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Discover Sso Endpoint */
-        get: operations["discover_sso_endpoint_auth_sso_discover_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/{surface}/sso/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start Sso Endpoint */
-        post: operations["start_sso_endpoint_auth__surface__sso_start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/sso/oidc/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Oidc Sso Callback */
-        get: operations["oidc_sso_callback_auth_sso_oidc_callback_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4455,13 +4455,15 @@ export interface components {
              * Provider
              * @enum {string}
              */
-            provider: "github" | "google" | "apple";
+            provider: "github" | "google" | "apple" | "sso";
             /** Connected */
             connected: boolean;
             /** Accountemail */
             accountEmail?: string | null;
             /** Accountid */
             accountId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
         };
         /** AuthPasswordCredential */
         AuthPasswordCredential: {
@@ -10098,6 +10100,107 @@ export interface operations {
             };
         };
     };
+    discover_sso_endpoint_auth_sso_discover_get: {
+        parameters: {
+            query?: {
+                email?: string | null;
+                organizationId?: string | null;
+                connectionId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoDiscoveryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_sso_endpoint_auth__surface__sso_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                surface: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSsoAuthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartSsoAuthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oidc_sso_callback_auth_sso_oidc_callback_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_required_github_link_auth_github_link_start_post: {
         parameters: {
             query?: never;
@@ -10589,107 +10692,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthSessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    discover_sso_endpoint_auth_sso_discover_get: {
-        parameters: {
-            query?: {
-                email?: string | null;
-                organizationId?: string | null;
-                connectionId?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SsoDiscoveryResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_sso_endpoint_auth__surface__sso_start_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                surface: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StartSsoAuthRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StartSsoAuthResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    oidc_sso_callback_auth_sso_oidc_callback_get: {
-        parameters: {
-            query?: {
-                state?: string | null;
-                code?: string | null;
-                error?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -16716,8 +16718,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 connection_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -16748,8 +16750,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 connection_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -16784,8 +16786,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 connection_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -16816,8 +16818,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 connection_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -16848,8 +16850,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 connection_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };

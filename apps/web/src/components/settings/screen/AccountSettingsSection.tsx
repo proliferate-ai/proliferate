@@ -122,7 +122,15 @@ function buildProviderViews(
   providerAvailability: NonNullable<AccountViewer>["providerAvailability"],
   githubConnected: boolean,
 ): AccountProviderView[] {
-  const providers: AccountProviderView[] = [];
+  const ssoProviders = linkedProviders.filter((provider) => (
+    provider.provider === "sso" && provider.connected
+  ));
+  const providers: AccountProviderView[] = ssoProviders.map((provider) => ({
+    provider: "sso",
+    label: provider.displayName ?? "SSO",
+    accountLabel: provider.accountEmail ?? provider.accountId ?? "Connected",
+    connected: true,
+  }));
   const github = linkedProviders.find((provider) => provider.provider === "github");
   providers.push({
     provider: "github",

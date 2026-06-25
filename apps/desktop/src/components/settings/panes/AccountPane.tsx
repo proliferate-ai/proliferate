@@ -7,7 +7,7 @@ import {
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { setPasswordCredential } from "@proliferate/cloud-sdk";
-import { ExternalLink, Link2, RefreshCw } from "@proliferate/ui/icons";
+import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
@@ -59,6 +59,9 @@ export function AccountPane() {
   ));
   const googleAccounts = linkedProviders.filter((provider) => (
     provider.provider === "google" && provider.connected
+  ));
+  const ssoAccounts = linkedProviders.filter((provider) => (
+    provider.provider === "sso" && provider.connected
   ));
   const googleAvailability = authViewer.data?.providerAvailability.find((provider) => (
     provider.provider === "google"
@@ -175,6 +178,7 @@ export function AccountPane() {
           githubAccountLabel,
           githubConnected,
           googleAccounts,
+          ssoAccounts,
           googleAvailable: googleAvailability?.enabled !== false,
           showProviders: isAuthenticated && !devAuthBypassed,
         })}
@@ -225,7 +229,7 @@ export function AccountPane() {
           connectGoogle: isAuthenticated && !devAuthBypassed
             ? {
                 label: linkingGoogle ? "Waiting for Google..." : "Add Google",
-                icon: <Link2 className="size-3" />,
+                icon: <ProviderBrandIcon provider="google" className="size-[13px]" />,
                 loading: linkingGoogle,
                 disabled: !canLinkGoogle || linkingGoogle,
                 onClick: () => { void handleLinkGoogle(); },
@@ -258,12 +262,18 @@ function buildAccountProviderViews({
   githubAccountLabel,
   githubConnected,
   googleAccounts,
+  ssoAccounts,
   googleAvailable,
   showProviders,
 }: {
   githubAccountLabel: string | null;
   githubConnected: boolean;
   googleAccounts: Array<{ accountEmail?: string | null; accountId?: string | null }>;
+  ssoAccounts: Array<{
+    accountEmail?: string | null;
+    accountId?: string | null;
+    displayName?: string | null;
+  }>;
   googleAvailable: boolean;
   showProviders: boolean;
 }): AccountProviderView[] {
@@ -279,7 +289,14 @@ function buildAccountProviderViews({
     ];
   }
 
-  const providers: AccountProviderView[] = [
+  const providers: AccountProviderView[] = ssoAccounts.map((account) => ({
+    provider: "sso" as const,
+    label: account.displayName ?? "SSO",
+    accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
+    connected: true,
+  }));
+
+  providers.push(
     {
       provider: "github",
       label: "GitHub",
@@ -287,7 +304,7 @@ function buildAccountProviderViews({
       connected: githubConnected,
       primary: githubConnected,
     },
-  ];
+  );
 
   if (googleAccounts.length > 0) {
     providers.push(

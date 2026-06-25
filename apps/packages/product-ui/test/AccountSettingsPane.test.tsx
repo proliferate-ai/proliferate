@@ -75,6 +75,12 @@ describe("AccountSettingsPane", () => {
         githubLabel="@pablo"
         providers={[
           {
+            provider: "sso",
+            label: "Auth0",
+            accountLabel: "pablo@proliferate.com",
+            connected: true,
+          },
+          {
             provider: "github",
             label: "GitHub",
             accountLabel: "@pablo",
@@ -98,6 +104,8 @@ describe("AccountSettingsPane", () => {
       />,
     );
 
+    expect(screen.getByText("Auth0")).toBeTruthy();
+    expect(screen.getByText("pablo@proliferate.com")).toBeTruthy();
     expect(screen.getByText("pablo@gmail.com")).toBeTruthy();
     expect(screen.getByText("Apple")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);

@@ -401,6 +401,21 @@ async def get_sso_identity_by_connection_subject(
     return sso_identity_record(row) if row is not None else None
 
 
+async def list_sso_identities_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[SsoIdentityRecord]:
+    rows = (
+        await db.execute(
+            select(SsoIdentity)
+            .where(SsoIdentity.user_id == user_id)
+            .order_by(SsoIdentity.linked_at.asc())
+        )
+    ).scalars()
+    return [sso_identity_record(row) for row in rows]
+
+
 async def upsert_sso_identity_for_user(
     db: AsyncSession,
     *,

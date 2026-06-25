@@ -26,6 +26,7 @@ from proliferate.auth.models import (
     UserRead,
 )
 from proliferate.auth.pkce import verify_pkce
+from proliferate.auth.sso.deployment_config import deployment_sso_connection
 from proliferate.config import settings
 from proliferate.constants.auth import (
     AUTH_CODE_LIFETIME_SECONDS,
@@ -33,7 +34,9 @@ from proliferate.constants.auth import (
     REFRESH_TOKEN_LIFETIME_SECONDS,
 )
 from proliferate.db.models.auth import User
+from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store.auth import consume_auth_code
+from proliferate.db.store.auth_sso_records import SsoIdentityRecord
 
 WEB_REFRESH_COOKIE = "proliferate_web_refresh"
 WEB_CSRF_COOKIE = "proliferate_web_csrf"
@@ -138,6 +141,16 @@ async def auth_viewer_payload(
         )
         for identity in identities
     ]
+    for identity in await sso_store.list_sso_identities_for_user(db, user_id=user.id):
+        linked.append(
+            AuthLinkedProvider(
+                provider="sso",
+                connected=True,
+                account_email=identity.email,
+                account_id=identity.provider_subject,
+                display_name=await _sso_identity_display_name(db, identity),
+            )
+        )
     connected_providers = {identity.provider for identity in identities}
     linked.extend(
         AuthLinkedProvider(
@@ -166,6 +179,25 @@ async def auth_viewer_payload(
         availability,
         auth_password_credential(user),
     )
+
+
+async def _sso_identity_display_name(
+    db: AsyncSession,
+    identity: SsoIdentityRecord,
+) -> str:
+    if identity.connection_id is not None:
+        connection = await sso_store.get_sso_connection(
+            db,
+            connection_id=identity.connection_id,
+            include_deleted=True,
+        )
+        if connection is not None:
+            return connection.display_name
+    if identity.connection_key == "deployment":
+        connection = deployment_sso_connection()
+        if connection is not None:
+            return connection.display_name
+    return "SSO"
 
 
 def auth_session_response(

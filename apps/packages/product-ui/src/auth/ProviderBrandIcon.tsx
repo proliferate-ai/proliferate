@@ -1,7 +1,10 @@
 import type { AuthProvider } from "@proliferate/product-domain/auth/model";
+import { Mail, Shield } from "@proliferate/ui/icons";
+
+export type AuthProviderIconKind = AuthProvider | "sso" | "password";
 
 interface ProviderBrandIconProps {
-  provider: AuthProvider;
+  provider: AuthProviderIconKind;
   className?: string;
 }
 
@@ -14,6 +17,12 @@ export function ProviderBrandIcon({
   }
   if (provider === "apple") {
     return <AppleBrandMark className={className} />;
+  }
+  if (provider === "sso") {
+    return <Shield aria-hidden="true" className={className} />;
+  }
+  if (provider === "password") {
+    return <Mail aria-hidden="true" className={className} />;
   }
   return <GoogleBrandMark className={className} />;
 }
