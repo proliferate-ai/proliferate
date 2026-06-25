@@ -185,7 +185,7 @@ export function AuthScreenLayout({
               : showUnavailableMessage
                 ? (
                   <p className="text-sm text-muted-foreground">
-                    {ssoSignInUnavailableDescription || githubSignInUnavailableDescription}
+                    {githubSignInUnavailableDescription || ssoSignInUnavailableDescription}
                   </p>
                 )
                 : showAuth && canContinueLocally

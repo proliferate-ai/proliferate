@@ -505,24 +505,11 @@ async def ensure_sso_organization_membership(
     organization_id: UUID,
     user_id: UUID,
     role: str,
-) -> str | None:
+) -> None:
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
         {"lock_key": f"organization-membership-active-user:{user_id}"},
     )
-    active_membership = (
-        await db.execute(
-            select(OrganizationMembership)
-            .where(
-                OrganizationMembership.user_id == user_id,
-                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if active_membership is not None and active_membership.organization_id != organization_id:
-        return "already_in_organization"
-
     now = _now()
     membership = (
         await db.execute(
@@ -554,4 +541,3 @@ async def ensure_sso_organization_membership(
             membership.joined_at = now
         membership.updated_at = now
     await db.flush()
-    return None

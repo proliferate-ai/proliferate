@@ -255,6 +255,20 @@ describe("AuthScreenLayout", () => {
     expect(screen.getByText("start locally")).toBeTruthy();
   });
 
+  it("prioritizes GitHub unavailable copy when every sign-in path is unavailable", () => {
+    render(
+      <AuthScreenLayout
+        mode="auth"
+        githubSignInAvailable={false}
+        githubSignInUnavailableDescription="Control plane is unreachable."
+        ssoSignInUnavailableDescription="SSO is not configured."
+      />,
+    );
+
+    expect(screen.getByText("Control plane is unreachable.")).toBeTruthy();
+    expect(screen.queryByText("SSO is not configured.")).toBeNull();
+  });
+
   it("shows the SSO action when deployment SSO is available", () => {
     const { container } = render(
       <AuthScreenLayout

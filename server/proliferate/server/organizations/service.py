@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.sso.branding import (
@@ -263,6 +263,7 @@ async def list_members(
     members = await organization_store.list_organization_members(db, org_user.organization_id)
     auth_methods = await _auth_methods_for_members(
         db,
+        organization_id=org_user.organization_id,
         user_ids=[member.membership.user_id for member in members],
     )
     return [
@@ -274,6 +275,7 @@ async def list_members(
 async def _auth_methods_for_members(
     db: AsyncSession,
     *,
+    organization_id: UUID,
     user_ids: list[UUID],
 ) -> dict[UUID, list[MemberAuthMethodRecord]]:
     if not user_ids:
@@ -323,7 +325,13 @@ async def _auth_methods_for_members(
         await db.execute(
             select(SsoIdentity, SsoConnection)
             .outerjoin(SsoConnection, SsoConnection.id == SsoIdentity.connection_id)
-            .where(SsoIdentity.user_id.in_(unique_user_ids))
+            .where(
+                SsoIdentity.user_id.in_(unique_user_ids),
+                or_(
+                    SsoIdentity.organization_id.is_(None),
+                    SsoIdentity.organization_id == organization_id,
+                ),
+            )
             .order_by(SsoIdentity.user_id.asc(), SsoIdentity.linked_at.asc())
         )
     ).all()

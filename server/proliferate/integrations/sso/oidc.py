@@ -210,7 +210,7 @@ async def verify_oidc_identity(
     email = claims.get("email") if isinstance(claims.get("email"), str) else None
     display_name = claims.get("name") if isinstance(claims.get("name"), str) else None
     avatar_url = claims.get("picture") if isinstance(claims.get("picture"), str) else None
-    email_verified = _claim_bool(claims.get("email_verified"), default=True)
+    email_verified = _claim_bool(claims.get("email_verified"), default=False)
     return VerifiedSsoIdentity(
         provider_subject=subject,
         email=email,

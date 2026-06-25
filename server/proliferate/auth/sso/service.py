@@ -55,6 +55,7 @@ from proliferate.integrations.sso.oidc import (
     resolve_oidc_metadata,
     verify_oidc_identity,
 )
+from proliferate.server.organizations.registration import ensure_default_organization_for_account
 
 
 @dataclass(frozen=True)
@@ -269,6 +270,13 @@ async def resolve_sso_user(
         if user is None:
             raise HTTPException(status_code=400, detail="Linked SSO user not found.")
         _ensure_active_user(user)
+        if connection.scope == SsoScope.ORGANIZATION:
+            user = await _resolve_organization_sso_user(
+                db,
+                connection=connection,
+                verified=verified,
+                user=user,
+            )
         await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
         return user
 
@@ -290,6 +298,7 @@ async def resolve_sso_user(
                 display_name=verified.display_name,
                 avatar_url=verified.avatar_url,
             )
+            await ensure_default_organization_for_account(db, user)
         _ensure_active_user(user)
 
     await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
@@ -347,6 +356,7 @@ async def _resolve_organization_sso_user(
             display_name=verified.display_name,
             avatar_url=verified.avatar_url,
         )
+        await ensure_default_organization_for_account(db, user)
     _ensure_active_user(user)
     membership = await organization_store.get_active_membership(
         db,
@@ -357,14 +367,12 @@ async def _resolve_organization_sso_user(
         return user
     if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
         raise HTTPException(status_code=403, detail="SSO user is not a team member.")
-    error = await sso_store.ensure_sso_organization_membership(
+    await sso_store.ensure_sso_organization_membership(
         db,
         organization_id=connection.organization_id,
         user_id=user.id,
         role=connection.default_role or ORGANIZATION_ROLE_MEMBER,
     )
-    if error == "already_in_organization":
-        raise HTTPException(status_code=409, detail="User already belongs to another team.")
     return user
 
 
@@ -416,15 +424,7 @@ async def _connection_for_start(
         )
         connection = _first_enabled_or_first(records)
     elif email is not None:
-        domain = email_domain(email)
-        records = (
-            await sso_store.list_enabled_sso_connections_for_domain(db, domain=domain or "")
-            if domain
-            else []
-        )
-        connection = _first_enabled_or_first(records)
-        if connection is None:
-            connection = deployment_sso_connection()
+        connection = deployment_sso_connection()
     else:
         connection = deployment_sso_connection()
 
