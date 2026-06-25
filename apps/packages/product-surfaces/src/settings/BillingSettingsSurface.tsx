@@ -353,7 +353,7 @@ function BillingUnitBalancesCard({
           </p>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4">
           {unitBalances.map((unitBalance) => (
             <BillingUnitPoolCard
               key={unitBalance.kind}
@@ -389,28 +389,39 @@ function BillingUnitPoolCard({
   const selectId = `billing-${unitBalance.kind}-top-up-amount`;
 
   return (
-    <section className="space-y-5 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
-      <div className="space-y-1">
-        <h3 className="text-base font-semibold text-foreground">{unitBalance.title}</h3>
-        <p className="text-sm leading-5 text-muted-foreground">{unitBalance.description}</p>
+    <section className="overflow-hidden rounded-lg border border-border-light bg-foreground/[0.02]">
+      <div className="space-y-5 p-4">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold text-foreground">{unitBalance.title}</h3>
+          <p className="text-sm leading-5 text-muted-foreground">{unitBalance.description}</p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <BillingMetric label="Total purchased" value={unitBalance.purchased} />
+          <BillingMetric label="Available" value={unitBalance.available} />
+          <BillingMetric label="Used" value={unitBalance.used} />
+        </div>
+
+        <ProgressBar
+          value={unitBalance.availablePercent ?? 0}
+          className="h-4 overflow-hidden rounded-full border border-border-light bg-foreground/5 p-0.5"
+          indicatorClassName="h-full rounded-full bg-primary/70"
+          aria-label={`${unitBalance.title} available`}
+        />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-        <BillingMetric label="Total purchased" value={unitBalance.purchased} />
-        <BillingMetric label="Available" value={unitBalance.available} />
-        <BillingMetric label="Used" value={unitBalance.used} />
-      </div>
-
-      <ProgressBar
-        value={unitBalance.availablePercent ?? 0}
-        className="h-4 overflow-hidden rounded-full border border-border-light bg-foreground/5 p-0.5"
-        indicatorClassName="h-full rounded-full bg-primary/70"
-        aria-label={`${unitBalance.title} available`}
-      />
-
-      <div className="space-y-3 rounded-lg border border-info/25 bg-info/10 px-3 py-2 text-sm text-info">
-        <div>{unitBalance.lowBalanceCopy}</div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="border-t border-border-light bg-background/40 p-4">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <h4 className="text-sm font-medium text-foreground">
+              Top up {unitBalance.title.toLowerCase()}
+            </h4>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+              {unitBalance.lowBalanceCopy}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="min-w-0 flex-1">
             <label className="sr-only" htmlFor={selectId}>
               {unitBalance.title} top-up amount
@@ -428,7 +439,7 @@ function BillingUnitPoolCard({
           </div>
           <Button
             type="button"
-            variant="primary"
+            variant="secondary"
             loading={addCreditsLoading}
             disabled={addCreditsDisabled}
             onClick={onAddCredits}
@@ -542,7 +553,9 @@ function BillingMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <p className="mb-1 text-sm text-muted-foreground">{label}</p>
-      <p className="truncate text-2xl font-semibold text-foreground">{value}</p>
+      <p className="break-words text-xl font-semibold leading-tight text-foreground sm:text-2xl">
+        {value}
+      </p>
     </div>
   );
 }
