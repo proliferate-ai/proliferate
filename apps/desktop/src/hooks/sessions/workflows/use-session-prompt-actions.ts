@@ -14,14 +14,14 @@ export function useSessionPromptActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { promptSession } = useSessionPromptWorkflow();
 
-  const promptActiveSession = useCallback(async (
+  const promptSessionById = useCallback(async (
+    sessionId: string,
     text: string,
     options?: ActiveSessionPromptOptions,
   ) => {
     const state = useSessionSelectionStore.getState();
-    const sessionId = state.activeSessionId;
     if (!sessionId) {
-      throw new Error("No active session");
+      throw new Error("No target session");
     }
 
     const slot = getSessionRecord(sessionId);
@@ -81,5 +81,17 @@ export function useSessionPromptActions() {
     });
   }, [getWorkspaceRuntimeBlockReason, promptSession]);
 
-  return { promptActiveSession };
+  const promptActiveSession = useCallback(async (
+    text: string,
+    options?: ActiveSessionPromptOptions,
+  ) => {
+    const state = useSessionSelectionStore.getState();
+    const sessionId = state.activeSessionId;
+    if (!sessionId) {
+      throw new Error("No active session");
+    }
+    await promptSessionById(sessionId, text, options);
+  }, [promptSessionById]);
+
+  return { promptActiveSession, promptSessionById };
 }

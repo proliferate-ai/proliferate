@@ -16,6 +16,7 @@ export interface ActivePlanDecision {
   actions: PermissionOptionAction[];
   plan: {
     id: string;
+    sourceSessionId: string;
     decisionVersion: number;
   };
 }
@@ -39,6 +40,7 @@ export function useActivePlanDecision(): ActivePlanDecision | null {
       actions,
       plan: {
         id: pendingApproval.plan.planId,
+        sourceSessionId: pendingApproval.plan.sourceSessionId,
         decisionVersion: pendingApproval.decision?.decisionVersion ?? 1,
       },
     } : null

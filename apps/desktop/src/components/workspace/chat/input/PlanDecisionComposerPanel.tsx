@@ -27,7 +27,7 @@ export function PlanDecisionComposerPanel({
   decision,
 }: PlanDecisionComposerPanelProps) {
   const resolvePlanNativeOption = useResolvePlanNativeOptionMutation();
-  const { promptActiveSession } = useSessionPromptActions();
+  const { promptSessionById } = useSessionPromptActions();
   const { cancelActiveSession } = useSessionCancelActions();
   const showToast = useToastStore((state) => state.show);
   const entries = useMemo(
@@ -86,7 +86,7 @@ export function PlanDecisionComposerPanel({
         optionId: entry.action.optionId,
       });
       if (feedbackText) {
-        await promptActiveSession(feedbackText);
+        await promptSessionById(decision.plan.sourceSessionId, feedbackText);
       }
     })().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -96,10 +96,11 @@ export function PlanDecisionComposerPanel({
   }, [
     decision.plan.decisionVersion,
     decision.plan.id,
+    decision.plan.sourceSessionId,
     decision.pendingApproval.requestId,
     feedbackDraft,
     isSubmitting,
-    promptActiveSession,
+    promptSessionById,
     resolvePlanNativeOption,
     showToast,
   ]);
