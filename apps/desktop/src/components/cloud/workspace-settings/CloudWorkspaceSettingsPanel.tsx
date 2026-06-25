@@ -34,6 +34,7 @@ export function CloudWorkspaceSettingsPanel() {
           errorMessage={state.errorMessage}
           isResyncingFiles={state.isResyncingFiles}
           isRunningSetup={state.isRunningSetup}
+          canResyncFiles={state.canResyncFiles}
           canRunSetup={state.canRunSetup}
           onResyncFiles={state.onResyncFiles}
           onRunSetup={state.onRunSetup}

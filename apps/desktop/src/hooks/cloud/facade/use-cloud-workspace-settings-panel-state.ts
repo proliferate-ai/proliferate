@@ -36,6 +36,7 @@ interface CloudWorkspaceSettingsPanelReadyState {
   errorMessage: string | null;
   isResyncingFiles: boolean;
   isRunningSetup: boolean;
+  canResyncFiles: boolean;
   canRunSetup: boolean;
   navigateToRepoSettings: () => void;
   onResyncFiles: () => void;
@@ -110,6 +111,7 @@ export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPan
     }),
     isResyncingFiles: false,
     isRunningSetup: false,
+    canResyncFiles: false,
     canRunSetup: false,
     navigateToRepoSettings,
     onResyncFiles,

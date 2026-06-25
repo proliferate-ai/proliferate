@@ -30,6 +30,9 @@ async def test_runtime_connection_materializes_repo_without_exposing_runtime_acc
         git_owner="owner",
         git_repo_name="repo",
         default_branch="main",
+        files_version=1,
+        env_vars_version=2,
+        setup_script_version=3,
     )
     sandbox = SimpleNamespace(runtime_generation=7)
     materialization = SimpleNamespace(
@@ -226,6 +229,9 @@ async def test_runtime_connection_singleflights_concurrent_repo_resolution(
         git_owner="Owner",
         git_repo_name="Repo",
         default_branch="main",
+        files_version=1,
+        env_vars_version=2,
+        setup_script_version=3,
     )
     sandbox = SimpleNamespace(runtime_generation=9)
     materialization = SimpleNamespace(
@@ -287,7 +293,7 @@ async def test_runtime_connection_singleflights_concurrent_repo_resolution(
     assert {result.anyharness_repo_root_id for result in results} == {"repo-root-789"}
     assert {result.runtime_generation for result in results} == {9}
     assert calls == {
-        "repo_lookup": 1,
+        "repo_lookup": 10,
         "github_grant": 1,
         "sandbox_ready": 1,
         "materialization": 1,

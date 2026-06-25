@@ -370,17 +370,25 @@ def workspace_summary_payload(
     target_label: str | None = None,
     target_online: bool | None = None,
 ) -> WorkspaceSummary:
-    runtime_status = (
-        runtime_environment.status
-        if runtime_environment is not None
-        else (
-            CloudRuntimeEnvironmentStatus.running.value
-            if target_kind not in {"desktop_dispatch", "local_direct", "ssh", "self_hosted_cloud"}
-            and workspace.target_id is not None
-            and target_online is True
-            else CloudRuntimeEnvironmentStatus.pending.value
-        )
-    )
+    if runtime_environment is not None:
+        runtime_status = runtime_environment.status
+    elif (
+        target_kind not in {"desktop_dispatch", "local_direct", "ssh", "self_hosted_cloud"}
+        and workspace.target_id is not None
+    ):
+        if workspace.status == CloudWorkspaceStatus.ready.value:
+            runtime_status = CloudRuntimeEnvironmentStatus.running.value
+        elif workspace.status in {
+            CloudWorkspaceStatus.materializing.value,
+            CloudWorkspaceStatus.needs_rematerialization.value,
+        }:
+            runtime_status = CloudRuntimeEnvironmentStatus.provisioning.value
+        elif workspace.status == CloudWorkspaceStatus.error.value:
+            runtime_status = CloudRuntimeEnvironmentStatus.error.value
+        else:
+            runtime_status = CloudRuntimeEnvironmentStatus.pending.value
+    else:
+        runtime_status = CloudRuntimeEnvironmentStatus.pending.value
     if runtime_status not in {"pending", "provisioning", "running", "paused", "error", "disabled"}:
         runtime_status = CloudRuntimeEnvironmentStatus.error.value
     workspace_status = workspace.status

@@ -7,6 +7,7 @@ import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-w
 import { usePendingWorkspaceSessionMaterialization } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
@@ -63,15 +64,16 @@ export function useSelectedCloudRuntimeRehydration(
 
     let cancelled = false;
     void (async () => {
+      const freshConnectionInfo = await withFreshManagedSandboxGatewayAccessToken(connectionInfo);
       if (!isBootstrapped) {
         await bootstrapWorkspace({
           workspaceId,
           logicalWorkspaceId: selectedLogicalWorkspaceId ?? workspaceId,
           runtimeUrl,
           workspaceConnection: {
-            runtimeUrl: connectionInfo.runtimeUrl,
-            authToken: connectionInfo.accessToken,
-            anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
+            runtimeUrl: freshConnectionInfo.runtimeUrl,
+            authToken: freshConnectionInfo.accessToken,
+            anyharnessWorkspaceId: freshConnectionInfo.anyharnessWorkspaceId ?? "",
           },
           startedAt: startLatencyTimer(),
           isCurrent: () => useSessionSelectionStore.getState().selectedWorkspaceId === workspaceId,

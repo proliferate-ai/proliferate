@@ -52,10 +52,11 @@ export async function wakeManagedSandbox(
 export async function destroyManagedSandbox(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<ManagedSandboxResponse | null> {
-  return client.requestJson<ManagedSandboxResponse | null>({
+  const response = await client.requestJson<ManagedSandboxResponse | null | undefined>({
     method: "DELETE",
     path: "/v1/cloud/managed-sandbox",
   });
+  return response ?? null;
 }
 
 export async function ensureManagedSandboxRepoRuntimeConnection(

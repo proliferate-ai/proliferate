@@ -213,7 +213,7 @@ async def record_runtime_config_worker_status(
     target_id: UUID,
     sequence: int,
     revision_id: UUID,
-    worker_id: UUID,
+    worker_id: UUID | None,
     status: str,
     error_code: str | None,
     error_message: str | None,
@@ -239,6 +239,30 @@ async def record_runtime_config_worker_status(
     row.updated_at = now
     await db.flush()
     return _target_state_record(row)
+
+
+async def record_runtime_config_direct_status(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    sequence: int,
+    revision_id: UUID,
+    status: str,
+    error_code: str | None,
+    error_message: str | None,
+) -> SandboxProfileAgentAuthTargetStateRecord:
+    return await record_runtime_config_worker_status(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+        sequence=sequence,
+        revision_id=revision_id,
+        worker_id=None,
+        status=status,
+        error_code=error_code,
+        error_message=error_message,
+    )
 
 
 async def _load_target_state_for_update(

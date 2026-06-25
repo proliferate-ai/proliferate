@@ -7,6 +7,7 @@ import {
 } from "@/lib/access/anyharness/resolve-workspace-connection";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
 
 export interface TerminalWorkspaceConnectionController {
   getWorkspaceRuntimeBlockReason(workspaceId: string): string | null;
@@ -30,12 +31,15 @@ export function useTerminalWorkspaceConnection(): TerminalWorkspaceConnectionCon
       && selectedCloudRuntime.state?.phase === "ready"
       && selectedCloudRuntime.connectionInfo
     ) {
+      const connectionInfo = await withFreshManagedSandboxGatewayAccessToken(
+        selectedCloudRuntime.connectionInfo,
+      );
       return {
-        runtimeUrl: selectedCloudRuntime.connectionInfo.runtimeUrl,
-        authToken: selectedCloudRuntime.connectionInfo.accessToken,
-        webSocketAuthTransport: selectedCloudRuntime.connectionInfo.webSocketAuthTransport,
-        anyharnessWorkspaceId: selectedCloudRuntime.connectionInfo.anyharnessWorkspaceId ?? "",
-        runtimeGeneration: selectedCloudRuntime.connectionInfo.runtimeGeneration,
+        runtimeUrl: connectionInfo.runtimeUrl,
+        authToken: connectionInfo.accessToken,
+        webSocketAuthTransport: connectionInfo.webSocketAuthTransport,
+        anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
+        runtimeGeneration: connectionInfo.runtimeGeneration,
       };
     }
 

@@ -10,6 +10,7 @@ from proliferate.integrations.anyharness.errors import (
     CloudRuntimeRequestRejectedError,
 )
 from proliferate.integrations.anyharness.models import (
+    RemoteAgentAuthConfigApplyResult,
     RemoteAgentInstallResult,
     RemoteAgentSummary,
     RemoteSession,
@@ -22,8 +23,11 @@ from proliferate.integrations.anyharness.models import (
     RuntimeHealthProbe,
 )
 from proliferate.integrations.anyharness.runtime import (
+    apply_agent_auth_config,
     apply_runtime_config,
     check_runtime_auth_enforcement,
+    get_agent_auth_config_status,
+    get_runtime_config_status,
     install_runtime_agent,
     list_runtime_agents,
     probe_runtime_health,
@@ -58,6 +62,7 @@ __all__ = [
     "CloudRuntimeReconnectError",
     "CloudRuntimeRequestRejectedError",
     "RemoteAgentInstallResult",
+    "RemoteAgentAuthConfigApplyResult",
     "RemoteAgentSummary",
     "RemoteSession",
     "RemoteTerminalCommandRun",
@@ -68,9 +73,12 @@ __all__ = [
     "RuntimeAuthProbe",
     "RuntimeHealthProbe",
     "apply_runtime_config",
+    "apply_agent_auth_config",
     "apply_runtime_reasoning_effort",
     "auth_headers",
     "check_runtime_auth_enforcement",
+    "get_agent_auth_config_status",
+    "get_runtime_config_status",
     "close_runtime_session",
     "create_runtime_session",
     "create_remote_worktree_workspace",

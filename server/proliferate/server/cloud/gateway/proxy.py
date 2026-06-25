@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 from contextlib import suppress
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode
 
 import httpx
 import websockets
@@ -66,11 +66,22 @@ def _raw_anyharness_path(scope: Mapping[str, object], fallback_path: str) -> str
     return remainder[1:] if remainder.startswith("/") else remainder
 
 
+_STRIP_QUERY_PARAMS = {"access_token"}
+
+
 def _query_string(scope: Mapping[str, object]) -> str:
     raw_query = scope.get("query_string")
-    if isinstance(raw_query, bytes):
-        return raw_query.decode("latin-1")
-    return ""
+    if not isinstance(raw_query, bytes):
+        return ""
+    query_items = [
+        (name, value)
+        for name, value in parse_qsl(
+            raw_query.decode("latin-1"),
+            keep_blank_values=True,
+        )
+        if name not in _STRIP_QUERY_PARAMS
+    ]
+    return urlencode(query_items, doseq=True)
 
 
 def _upstream_url(base_url: str, raw_path: str, query_string: str) -> str:

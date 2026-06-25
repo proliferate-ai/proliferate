@@ -20,7 +20,7 @@ def _request(body: bytes = b"payload") -> Request:
             "method": "POST",
             "path": "/v1/gateway/managed-sandbox/anyharness/v1/sessions/ws%2Fencoded",
             "raw_path": b"/v1/gateway/managed-sandbox/anyharness/v1/sessions/ws%2Fencoded",
-            "query_string": b"cursor=abc&repeat=1&repeat=2",
+            "query_string": b"cursor=abc&access_token=product-token&repeat=1&repeat=2",
             "headers": [
                 (b"authorization", b"Bearer product-token"),
                 (b"cookie", b"session=product-cookie"),
