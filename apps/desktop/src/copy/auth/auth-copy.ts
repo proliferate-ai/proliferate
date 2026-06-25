@@ -21,6 +21,7 @@ export const AUTH_LOGIN_LABELS = {
     displayName ? `Continue with ${displayName}` : "Continue with SSO"
   ),
   ssoWaiting: "Waiting for SSO...",
+  cancelSignIn: "Cancel sign-in",
   continueLocally: "Start locally",
   continueLocallyInline: "start locally",
 } as const;

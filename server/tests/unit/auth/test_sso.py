@@ -67,6 +67,86 @@ async def test_oidc_url_validation_can_allow_private_provider_urls(
 
 
 @pytest.mark.asyncio
+async def test_verify_oidc_identity_uses_userinfo_email_verified_when_id_token_omits_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_decode_oidc_id_token(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"sub": "subject-1", "email": "person@example.com"}
+
+    async def fake_fetch_userinfo(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"email_verified": True, "name": "Person Example"}
+
+    monkeypatch.setattr(oidc_integration, "_decode_oidc_id_token", fake_decode_oidc_id_token)
+    monkeypatch.setattr(oidc_integration, "_fetch_userinfo", fake_fetch_userinfo)
+    monkeypatch.setattr(oidc_integration, "_validate_nonce", lambda *_args, **_kwargs: None)
+
+    identity = await oidc_integration.verify_oidc_identity(
+        connection=_connection(allowed_domains=("example.com",)),
+        metadata=_metadata(userinfo_endpoint="https://idp.example.test/userinfo"),
+        token=_oidc_token(access_token="access-token"),
+        nonce_hash="nonce-hash",
+    )
+
+    assert identity.email == "person@example.com"
+    assert identity.email_verified is True
+    assert identity.display_name == "Person Example"
+
+
+@pytest.mark.asyncio
+async def test_verify_oidc_identity_trusts_missing_email_verified_claim_for_sso(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_decode_oidc_id_token(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"sub": "subject-1", "email": "person@example.com"}
+
+    async def fake_fetch_userinfo(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {}
+
+    monkeypatch.setattr(oidc_integration, "_decode_oidc_id_token", fake_decode_oidc_id_token)
+    monkeypatch.setattr(oidc_integration, "_fetch_userinfo", fake_fetch_userinfo)
+    monkeypatch.setattr(oidc_integration, "_validate_nonce", lambda *_args, **_kwargs: None)
+
+    identity = await oidc_integration.verify_oidc_identity(
+        connection=_connection(allowed_domains=("example.com",)),
+        metadata=_metadata(userinfo_endpoint="https://idp.example.test/userinfo"),
+        token=_oidc_token(access_token="access-token"),
+        nonce_hash="nonce-hash",
+    )
+
+    assert identity.email == "person@example.com"
+    assert identity.email_verified is True
+
+
+@pytest.mark.asyncio
+async def test_verify_oidc_identity_preserves_explicit_unverified_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    userinfo_called = False
+
+    async def fake_decode_oidc_id_token(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"sub": "subject-1", "email": "person@example.com", "email_verified": False}
+
+    async def fake_fetch_userinfo(*_args: object, **_kwargs: object) -> dict[str, object]:
+        nonlocal userinfo_called
+        userinfo_called = True
+        return {"email_verified": True}
+
+    monkeypatch.setattr(oidc_integration, "_decode_oidc_id_token", fake_decode_oidc_id_token)
+    monkeypatch.setattr(oidc_integration, "_fetch_userinfo", fake_fetch_userinfo)
+    monkeypatch.setattr(oidc_integration, "_validate_nonce", lambda *_args, **_kwargs: None)
+
+    identity = await oidc_integration.verify_oidc_identity(
+        connection=_connection(allowed_domains=("example.com",)),
+        metadata=_metadata(userinfo_endpoint="https://idp.example.test/userinfo"),
+        token=_oidc_token(access_token="access-token"),
+        nonce_hash="nonce-hash",
+    )
+
+    assert identity.email_verified is False
+    assert userinfo_called is False
+
+
+@pytest.mark.asyncio
 async def test_oidc_sso_callback_uses_static_error_for_unbound_provider_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -286,4 +366,24 @@ def _connection(*, allowed_domains: tuple[str, ...]) -> SsoConnectionSnapshot:
         oidc_client_secret_configured=True,
         oidc_scopes=DEFAULT_OIDC_SCOPES,
         oidc_token_endpoint_auth_method="client_secret_basic",
+    )
+
+
+def _metadata(*, userinfo_endpoint: str | None) -> oidc_integration.OidcMetadata:
+    return oidc_integration.OidcMetadata(
+        issuer="https://idp.example.test/",
+        authorization_endpoint="https://idp.example.test/authorize",
+        token_endpoint="https://idp.example.test/token",
+        jwks_uri="https://idp.example.test/jwks",
+        userinfo_endpoint=userinfo_endpoint,
+    )
+
+
+def _oidc_token(*, access_token: str | None) -> oidc_integration.OidcTokenResponse:
+    return oidc_integration.OidcTokenResponse(
+        access_token=access_token,
+        id_token="id-token",
+        refresh_token=None,
+        expires_at=None,
+        scopes=frozenset({"openid", "email", "profile"}),
     )

@@ -13,6 +13,7 @@ import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telem
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import {
+  abortError,
   AuthRequestError,
   beginDesktopProviderAuth,
   beginGitHubDesktopSignIn,
@@ -94,7 +95,11 @@ export async function signInWithGitHub(
     const recoverySession = pollGitHubDesktopSession(
       pending.state,
       pending.code_verifier,
-      controller.abortController.signal,
+      {
+        signal: controller.abortController.signal,
+        transientFailureMessage: "GitHub sign-in failed",
+        timeoutMessage: "GitHub sign-in timed out. Finish the browser flow and try again.",
+      },
     );
 
     const { session, source } = await Promise.race([
@@ -193,7 +198,11 @@ export async function linkDesktopProvider(
     const recoverySession = pollGitHubDesktopSession(
       pending.state,
       pending.code_verifier,
-      controller.abortController.signal,
+      {
+        signal: controller.abortController.signal,
+        transientFailureMessage: "Provider linking failed",
+        timeoutMessage: "Provider linking timed out. Finish the browser flow and try again.",
+      },
     );
 
     const { session, source } = await Promise.race([
@@ -290,7 +299,11 @@ export async function signInWithSso(
     const recoverySession = pollGitHubDesktopSession(
       pending.state,
       pending.code_verifier,
-      controller.abortController.signal,
+      {
+        signal: controller.abortController.signal,
+        transientFailureMessage: "SSO sign-in failed",
+        timeoutMessage: "SSO sign-in timed out. Finish the browser flow and try again.",
+      },
     );
 
     const { session, source } = await Promise.race([
@@ -339,4 +352,8 @@ export async function signOut(deps: AuthOrchestrationDeps): Promise<{
   return {
     provider: "github",
   };
+}
+
+export async function cancelActiveAuthFlow(message = "Sign-in cancelled."): Promise<void> {
+  await clearPendingGitHubAuth(undefined, abortError(message));
 }

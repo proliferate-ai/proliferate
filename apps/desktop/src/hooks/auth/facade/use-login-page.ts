@@ -17,6 +17,7 @@ export function useLoginPage() {
     signInAvailable: githubSignInAvailable,
     signInChecking: githubSignInChecking,
     signInUnavailableDescription: githubSignInUnavailableDescription,
+    cancelSignIn: cancelGitHubSignIn,
   } = useGitHubSignIn();
   const {
     signIn: signInWithSso,
@@ -26,6 +27,7 @@ export function useLoginPage() {
     signInChecking: ssoSignInChecking,
     signInUnavailableDescription: ssoSignInUnavailableDescription,
     displayName: ssoDisplayName,
+    cancelSignIn: cancelSsoSignIn,
   } = useSsoSignIn();
   const canContinueLocally = !isProductAuthRequired();
 
@@ -54,6 +56,16 @@ export function useLoginPage() {
     navigate(redirectTarget, { replace: true });
   }
 
+  function handleCancelSignIn() {
+    if (ssoSubmitting) {
+      void cancelSsoSignIn();
+      return;
+    }
+    if (submitting) {
+      void cancelGitHubSignIn();
+    }
+  }
+
   return {
     submitting,
     error: error ?? ssoError,
@@ -68,6 +80,7 @@ export function useLoginPage() {
     ssoDisplayName,
     handleGitHubSignIn,
     handleSsoSignIn,
+    handleCancelSignIn,
     handleContinueLocally,
     canContinueLocally,
   };

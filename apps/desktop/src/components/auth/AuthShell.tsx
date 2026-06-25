@@ -21,6 +21,7 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
     signInAvailable,
     signInChecking,
     signInUnavailableDescription,
+    cancelSignIn,
   } = useGitHubSignIn();
   const {
     signIn: signInWithSso,
@@ -30,8 +31,10 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
     signInChecking: ssoSignInChecking,
     signInUnavailableDescription: ssoSignInUnavailableDescription,
     displayName: ssoDisplayName,
+    cancelSignIn: cancelSsoSignIn,
   } = useSsoSignIn();
   const busy = submitting || ssoSubmitting;
+  const handleCancelSignIn = ssoSubmitting ? cancelSsoSignIn : cancelSignIn;
 
   return (
     <AuthScreenLayout
@@ -54,6 +57,9 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       }}
       onSsoSignIn={() => {
         void signInWithSso();
+      }}
+      onCancelSignIn={() => {
+        void handleCancelSignIn();
       }}
     />
   );

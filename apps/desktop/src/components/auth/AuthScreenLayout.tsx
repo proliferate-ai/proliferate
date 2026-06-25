@@ -33,6 +33,7 @@ export interface AuthScreenLayoutProps {
   ssoSignInUnavailableDescription?: string;
   ssoDisplayName?: string | null;
   onSsoSignIn?: () => void;
+  onCancelSignIn?: () => void;
   canContinueLocally?: boolean;
   onContinueLocally?: () => void;
 }
@@ -55,11 +56,13 @@ export function AuthScreenLayout({
   ssoSignInUnavailableDescription = "",
   ssoDisplayName = null,
   onSsoSignIn,
+  onCancelSignIn,
   canContinueLocally = false,
   onContinueLocally,
 }: AuthScreenLayoutProps) {
   const showAuth = mode === "auth";
   const showSso = showAuth && ssoSignInAvailable;
+  const showCancelSignIn = showAuth && Boolean(onCancelSignIn) && (submitting || ssoSubmitting);
   const showUnavailableMessage = showAuth
     && !ssoSignInChecking
     && !ssoSignInAvailable
@@ -165,7 +168,19 @@ export function AuthScreenLayout({
               unavailable / local text (which can wrap to multiple lines) never
               changes the centered column height — the mark stays pinned. */}
           <div className="absolute inset-x-0 top-full mt-3 text-center">
-            {showAuth && error
+            {showCancelSignIn
+              ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onCancelSignIn}
+                  className="inline h-auto px-0 py-0 text-muted-foreground underline underline-offset-4 hover:bg-transparent hover:text-foreground"
+                >
+                  {AUTH_LOGIN_LABELS.cancelSignIn}
+                </Button>
+              )
+              : showAuth && error
               ? <p className="text-sm text-destructive">{error}</p>
               : showUnavailableMessage
                 ? (

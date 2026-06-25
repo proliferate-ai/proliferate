@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -270,6 +270,27 @@ describe("AuthScreenLayout", () => {
     expect(screen.getByText("Continue with GitHub")).toBeTruthy();
     expect(screen.getByText("Continue with Google SSO")).toBeTruthy();
     expect(container.querySelector('[data-auth-provider-brand="google-sso"]')).toBeTruthy();
+  });
+
+  it("offers a cancel action while SSO sign-in is pending", () => {
+    const onCancelSignIn = vi.fn();
+
+    render(
+      <AuthScreenLayout
+        mode="auth"
+        githubSignInAvailable
+        ssoSignInAvailable
+        ssoSubmitting
+        ssoDisplayName="Okta SSO"
+        onGitHubSignIn={() => {}}
+        onSsoSignIn={() => {}}
+        onCancelSignIn={onCancelSignIn}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Cancel sign-in"));
+
+    expect(onCancelSignIn).toHaveBeenCalledTimes(1);
   });
 
   it("ignores user appearance text-size preferences", () => {

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useSsoDiscovery } from "@/hooks/access/cloud/auth/use-sso-discovery";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import { isAbortError } from "@/lib/integrations/auth/proliferate-auth";
 import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 
 export interface UseSsoSignInResult {
@@ -13,12 +14,13 @@ export interface UseSsoSignInResult {
   signInUnavailableDescription: string;
   displayName: string | null;
   clearError: () => void;
+  cancelSignIn: () => Promise<void>;
 }
 
 // Owns SSO sign-in form state and submit callback. Discovery stays in the Cloud
 // access hook so the login surface can render only when deployment SSO is enabled.
 export function useSsoSignIn(): UseSsoSignInResult {
-  const { signInWithSso } = useAuthActions();
+  const { cancelAuthFlow, signInWithSso } = useAuthActions();
   const { cloudEnabled } = useAppCapabilities();
   const {
     data: ssoDiscovery,
@@ -49,6 +51,10 @@ export function useSsoSignIn(): UseSsoSignInResult {
         ...options,
       });
     } catch (err) {
+      if (isAbortError(err)) {
+        setError(null);
+        throw err;
+      }
       setError(err instanceof Error ? err.message : "SSO sign-in failed");
       throw err;
     } finally {
@@ -66,6 +72,12 @@ export function useSsoSignIn(): UseSsoSignInResult {
     setError(null);
   }, []);
 
+  const cancelSignIn = useCallback(async () => {
+    setSubmitting(false);
+    setError(null);
+    await cancelAuthFlow("SSO sign-in cancelled.");
+  }, [cancelAuthFlow]);
+
   return {
     signIn,
     submitting,
@@ -75,5 +87,6 @@ export function useSsoSignIn(): UseSsoSignInResult {
     signInUnavailableDescription,
     displayName: ssoDiscovery?.displayName ?? null,
     clearError,
+    cancelSignIn,
   };
 }

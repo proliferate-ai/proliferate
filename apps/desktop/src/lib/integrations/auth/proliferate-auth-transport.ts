@@ -77,8 +77,8 @@ export async function parseAuthError(response: Response): Promise<AuthRequestErr
   )
 }
 
-export function abortError(): Error {
-  return new DOMException("Aborted", "AbortError")
+export function abortError(message = "Aborted"): Error {
+  return new DOMException(message, "AbortError")
 }
 
 export function isAbortError(error: unknown): error is Error {

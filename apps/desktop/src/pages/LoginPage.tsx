@@ -16,6 +16,7 @@ export function LoginPage() {
     ssoDisplayName,
     handleGitHubSignIn,
     handleSsoSignIn,
+    handleCancelSignIn,
     handleContinueLocally,
     canContinueLocally,
   } = useLoginPage();
@@ -37,6 +38,7 @@ export function LoginPage() {
       ssoDisplayName={ssoDisplayName}
       onGitHubSignIn={() => void handleGitHubSignIn()}
       onSsoSignIn={() => void handleSsoSignIn()}
+      onCancelSignIn={handleCancelSignIn}
       canContinueLocally={canContinueLocally}
       onContinueLocally={handleContinueLocally}
     />

@@ -201,7 +201,7 @@ async def verify_oidc_identity(
         access_token=token.access_token,
     )
     _validate_nonce(claims, nonce_hash)
-    if claims.get("email") is None and token.access_token and metadata.userinfo_endpoint:
+    if _needs_userinfo_claims(claims) and token.access_token and metadata.userinfo_endpoint:
         userinfo = await _fetch_userinfo(metadata.userinfo_endpoint, token.access_token)
         claims = {**userinfo, **claims}
     subject = claims.get("sub")
@@ -210,7 +210,7 @@ async def verify_oidc_identity(
     email = claims.get("email") if isinstance(claims.get("email"), str) else None
     display_name = claims.get("name") if isinstance(claims.get("name"), str) else None
     avatar_url = claims.get("picture") if isinstance(claims.get("picture"), str) else None
-    email_verified = _claim_bool(claims.get("email_verified"), default=False)
+    email_verified = _claim_bool(claims.get("email_verified"), default=True)
     return VerifiedSsoIdentity(
         provider_subject=subject,
         email=email,
@@ -289,6 +289,10 @@ async def _fetch_userinfo(userinfo_endpoint: str, access_token: str) -> dict[str
     if not isinstance(payload, dict):
         raise SsoIntegrationError("OIDC userinfo response is invalid.")
     return payload
+
+
+def _needs_userinfo_claims(claims: dict[str, object]) -> bool:
+    return claims.get("email") is None or claims.get("email_verified") is None
 
 
 def _validate_nonce(claims: dict[str, object], nonce_hash: str) -> None:
