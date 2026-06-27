@@ -196,6 +196,23 @@ async def complete_github_app_callback(
     return return_to or _redirect_after_callback()
 
 
+async def complete_github_app_installation_callback(
+    db: AsyncSession,
+    *,
+    installation_id: str | None,
+    setup_action: str | None,
+) -> str:
+    del setup_action
+    if installation_id is None or not installation_id.strip():
+        raise CloudApiError(
+            "github_app_installation_id_required",
+            "GitHub App installation callback is missing the installation id.",
+            status_code=400,
+        )
+    await refresh_github_app_installation_cache(db)
+    return _redirect_after_callback()
+
+
 async def refresh_github_app_installation_cache(db: AsyncSession) -> None:
     try:
         installations = await list_github_app_installations()

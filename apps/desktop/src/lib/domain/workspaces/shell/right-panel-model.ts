@@ -5,7 +5,7 @@ import {
   type ViewerTargetKey,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 
-export type RightPanelTool = "scratch" | "git" | "settings";
+export type RightPanelTool = "scratch" | "git";
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelTool}`
   | `terminal:${string}`
@@ -46,7 +46,6 @@ export const RIGHT_PANEL_BROWSER_TAB_LIMIT = 5;
 export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
   "scratch",
   "git",
-  "settings",
 ];
 export const DEFAULT_RIGHT_PANEL_HEADER_ORDER: RightPanelHeaderEntryKey[] =
   DEFAULT_RIGHT_PANEL_TOOL_ORDER.map((tool) => rightPanelToolHeaderKey(tool));
@@ -119,10 +118,8 @@ export function parseRightPanelHeaderEntryKey(
   return null;
 }
 
-export function availableRightPanelTools(isCloudWorkspaceSelected: boolean): RightPanelTool[] {
-  return DEFAULT_RIGHT_PANEL_TOOL_ORDER.filter(
-    (tool) => tool !== "settings" || isCloudWorkspaceSelected,
-  );
+export function availableRightPanelTools(_isCloudWorkspaceSelected: boolean): RightPanelTool[] {
+  return DEFAULT_RIGHT_PANEL_TOOL_ORDER;
 }
 
 export function clampRightPanelWidth(width: number): number {

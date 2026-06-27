@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
+from proliferate.server.cloud.github_app import api as github_app_api
 from proliferate.server.cloud.github_app import service
 
 
@@ -93,3 +94,65 @@ async def test_complete_github_app_callback_schedules_managed_sandbox_bootstrap(
         ("refresh", None),
         ("bootstrap", user_id),
     ]
+
+
+@pytest.mark.asyncio
+async def test_complete_github_app_installation_callback_refreshes_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service.settings, "frontend_base_url", "https://app.example.test")
+    calls: list[str] = []
+
+    async def fake_refresh_github_app_installation_cache(db: object) -> None:
+        del db
+        calls.append("refresh")
+
+    monkeypatch.setattr(
+        service,
+        "refresh_github_app_installation_cache",
+        fake_refresh_github_app_installation_cache,
+    )
+
+    redirect_url = await service.complete_github_app_installation_callback(
+        object(),
+        installation_id="142900805",
+        setup_action="install",
+    )
+
+    assert redirect_url == "https://app.example.test/settings/account"
+    assert calls == ["refresh"]
+
+
+@pytest.mark.asyncio
+async def test_github_app_callback_accepts_installation_callback_without_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str | None, str | None]] = []
+
+    async def fake_complete_github_app_installation_callback(
+        db: object,
+        *,
+        installation_id: str | None,
+        setup_action: str | None,
+    ) -> str:
+        del db
+        calls.append((installation_id, setup_action))
+        return "proliferate://settings/account"
+
+    monkeypatch.setattr(
+        github_app_api,
+        "complete_github_app_installation_callback",
+        fake_complete_github_app_installation_callback,
+    )
+
+    response = await github_app_api.github_app_callback_endpoint(
+        code="ignored-by-install-callback",
+        state=None,
+        installation_id="142900805",
+        setup_action="install",
+        db=object(),
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "proliferate://settings/account"
+    assert calls == [("142900805", "install")]

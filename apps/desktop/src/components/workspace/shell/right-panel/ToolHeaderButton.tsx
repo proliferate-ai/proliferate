@@ -1,7 +1,6 @@
 import type { ComponentType } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
-  CloudIcon,
   AppShellReviewIcon,
   ScratchPadIcon,
   type IconProps,
@@ -26,7 +25,6 @@ interface ToolConfig {
 const PANEL_TOOLS: Record<RightPanelTool, ToolConfig> = {
   scratch: { label: "Scratch", icon: ScratchPadIcon },
   git: { label: "Changes", icon: AppShellReviewIcon },
-  settings: { label: "Cloud environment", icon: CloudIcon },
 };
 
 export function ToolHeaderButton({

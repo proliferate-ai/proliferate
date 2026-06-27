@@ -23,9 +23,9 @@ import {
 import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 describe("right panel domain", () => {
-  it("gates cloud settings to cloud workspaces", () => {
+  it("uses the same built-in tools for local and cloud workspaces", () => {
     expect(availableRightPanelTools(false)).toEqual(["scratch", "git"]);
-    expect(availableRightPanelTools(true)).toEqual(["scratch", "git", "settings"]);
+    expect(availableRightPanelTools(true)).toEqual(["scratch", "git"]);
   });
 
   it("defaults to scratch for new right-panel state", () => {
@@ -38,8 +38,9 @@ describe("right panel domain", () => {
     ]);
   });
 
-  it("does not parse the retired Files tool", () => {
+  it("does not parse retired tools", () => {
     expect(parseRightPanelHeaderEntryKey("tool:files")).toBeNull();
+    expect(parseRightPanelHeaderEntryKey("tool:settings")).toBeNull();
   });
 
   it("parses browser entry keys", () => {
@@ -60,13 +61,13 @@ describe("right panel domain", () => {
     });
   });
 
-  it("drops cloud settings for local workspaces and falls back to scratch", () => {
+  it("drops the retired cloud settings tab and falls back to scratch", () => {
     const state = reconcileRightPanelWorkspaceState(
       {
         activeEntryKey: "tool:settings",
         headerOrder: ["tool:settings", "tool:files"],
       } as never,
-      { isCloudWorkspaceSelected: false },
+      { isCloudWorkspaceSelected: true },
     );
 
     expect(state.activeEntryKey).toBe("tool:scratch");
@@ -275,17 +276,16 @@ describe("right panel domain", () => {
     const state = reorderToolInRightPanelState(
       {
         activeEntryKey: "tool:git",
-        headerOrder: ["tool:git", "tool:settings"],
+        headerOrder: ["tool:git", "tool:scratch"],
       },
-      "settings",
+      "scratch",
       "git",
       true,
     );
 
     expect(state.headerOrder).toEqual([
-      "tool:settings",
-      "tool:git",
       "tool:scratch",
+      "tool:git",
     ]);
     expect(state.activeEntryKey).toBe("tool:git");
   });
