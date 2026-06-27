@@ -7,7 +7,6 @@ import math
 import re
 import secrets
 import shlex
-import time
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import PurePosixPath
@@ -55,6 +54,15 @@ from proliferate.server.cloud.agent_auth.models import DesktopAgentAuthConfigApp
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
+from proliferate.server.cloud.managed_sandboxes.repo_runtime_connections import (
+    ManagedSandboxRepoRuntimeConnection,
+    cached_repo_runtime_connection_for_current_sandbox,
+    remember_repo_runtime_connection,
+    repo_runtime_connection_cache_has_entry,
+    repo_runtime_connection_cache_key,
+    repo_runtime_connection_lock,
+    reset_repo_runtime_connection_cache_for_tests,
+)
 from proliferate.server.cloud.managed_sandboxes.transactions import (
     commit_managed_sandbox_session,
 )
@@ -136,117 +144,17 @@ class _ManagedSandboxRuntimeProfile:
 
 
 @dataclass(frozen=True)
-class ManagedSandboxRepoRuntimeConnection:
-    anyharness_workspace_id: str
-    anyharness_repo_root_id: str | None
-    runtime_generation: int
-
-
-@dataclass(frozen=True)
 class ManagedSandboxWorkspaceRuntimeConnection:
     anyharness_workspace_id: str
     anyharness_repo_root_id: str | None
     runtime_generation: int
 
 
-@dataclass(frozen=True)
-class _RepoRuntimeConnectionCacheKey:
-    user_id: UUID
-    cloud_repo_config_id: UUID
-    git_owner: str
-    git_repo_name: str
-    default_branch: str
-    files_version: int
-    env_vars_version: int
-    setup_script_version: int
-
-
-@dataclass(frozen=True)
-class _CachedRepoRuntimeConnection:
-    connection: ManagedSandboxRepoRuntimeConnection
-    expires_at_monotonic: float
-
-
-_REPO_RUNTIME_CONNECTION_CACHE_TTL_SECONDS = 60.0
-_repo_runtime_connection_cache: dict[
-    _RepoRuntimeConnectionCacheKey,
-    _CachedRepoRuntimeConnection,
-] = {}
-_repo_runtime_connection_locks: dict[_RepoRuntimeConnectionCacheKey, asyncio.Lock] = {}
 _workspace_runtime_connection_locks: dict[UUID, asyncio.Lock] = {}
 
 
-def _repo_runtime_connection_cache_key(
-    *,
-    user_id: UUID,
-    repo_config: CloudRepoConfigValue,
-) -> _RepoRuntimeConnectionCacheKey:
-    return _RepoRuntimeConnectionCacheKey(
-        user_id=user_id,
-        cloud_repo_config_id=repo_config.id,
-        git_owner=repo_config.git_owner.lower(),
-        git_repo_name=repo_config.git_repo_name.lower(),
-        default_branch=repo_config.default_branch,
-        files_version=repo_config.files_version,
-        env_vars_version=repo_config.env_vars_version,
-        setup_script_version=repo_config.setup_script_version,
-    )
-
-
-def _cached_repo_runtime_connection(
-    key: _RepoRuntimeConnectionCacheKey,
-) -> ManagedSandboxRepoRuntimeConnection | None:
-    cached = _repo_runtime_connection_cache.get(key)
-    if cached is None:
-        return None
-    if cached.expires_at_monotonic <= time.monotonic():
-        _repo_runtime_connection_cache.pop(key, None)
-        return None
-    return cached.connection
-
-
-async def _cached_repo_runtime_connection_for_current_sandbox(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    key: _RepoRuntimeConnectionCacheKey,
-) -> ManagedSandboxRepoRuntimeConnection | None:
-    cached = _cached_repo_runtime_connection(key)
-    if cached is None:
-        return None
-    sandbox = await load_personal_managed_sandbox(db, user_id)
-    if (
-        sandbox is None
-        or not _runtime_access_ready(sandbox)
-        or cached.runtime_generation != sandbox.runtime_generation
-    ):
-        _repo_runtime_connection_cache.pop(key, None)
-        return None
-    return cached
-
-
-def _repo_runtime_connection_lock(key: _RepoRuntimeConnectionCacheKey) -> asyncio.Lock:
-    lock = _repo_runtime_connection_locks.get(key)
-    if lock is None:
-        lock = asyncio.Lock()
-        _repo_runtime_connection_locks[key] = lock
-    return lock
-
-
-def _remember_repo_runtime_connection(
-    key: _RepoRuntimeConnectionCacheKey,
-    connection: ManagedSandboxRepoRuntimeConnection,
-) -> ManagedSandboxRepoRuntimeConnection:
-    _repo_runtime_connection_cache[key] = _CachedRepoRuntimeConnection(
-        connection=connection,
-        expires_at_monotonic=time.monotonic() + _REPO_RUNTIME_CONNECTION_CACHE_TTL_SECONDS,
-    )
-    return connection
-
-
 def _reset_managed_sandbox_repo_runtime_connection_cache_for_tests() -> None:
-    _repo_runtime_connection_cache.clear()
-    _repo_runtime_connection_locks.clear()
+    reset_repo_runtime_connection_cache_for_tests()
     _workspace_runtime_connection_locks.clear()
 
 
@@ -774,7 +682,7 @@ async def ensure_managed_sandbox_repo_runtime_connection(
             "Configure this GitHub repo for cloud use before resolving its runtime.",
             status_code=404,
         )
-    cache_key = _repo_runtime_connection_cache_key(
+    cache_key = repo_runtime_connection_cache_key(
         user_id=user.id,
         repo_config=repo_config,
     )
@@ -784,25 +692,31 @@ async def ensure_managed_sandbox_repo_runtime_connection(
         git_owner=repo_config.git_owner,
         git_repo_name=repo_config.git_repo_name,
     )
-    cached = await _cached_repo_runtime_connection_for_current_sandbox(
-        db,
-        user_id=user.id,
-        key=cache_key,
+    cached = (
+        cached_repo_runtime_connection_for_current_sandbox(
+            cache_key,
+            await load_personal_managed_sandbox(db, user.id),
+        )
+        if repo_runtime_connection_cache_has_entry(cache_key)
+        else None
     )
     if cached is not None:
         return cached
 
-    async with _repo_runtime_connection_lock(cache_key):
+    async with repo_runtime_connection_lock(cache_key):
         await require_github_cloud_repo_authority(
             db,
             user_id=user.id,
             git_owner=repo_config.git_owner,
             git_repo_name=repo_config.git_repo_name,
         )
-        cached = await _cached_repo_runtime_connection_for_current_sandbox(
-            db,
-            user_id=user.id,
-            key=cache_key,
+        cached = (
+            cached_repo_runtime_connection_for_current_sandbox(
+                cache_key,
+                await load_personal_managed_sandbox(db, user.id),
+            )
+            if repo_runtime_connection_cache_has_entry(cache_key)
+            else None
         )
         if cached is not None:
             return cached
@@ -812,7 +726,7 @@ async def ensure_managed_sandbox_repo_runtime_connection(
             user,
             repo_config=repo_config,
         )
-        return _remember_repo_runtime_connection(cache_key, connection)
+        return remember_repo_runtime_connection(cache_key, connection)
 
 
 async def _resolve_managed_sandbox_repo_runtime_connection(

@@ -20,6 +20,7 @@ from proliferate.server.cloud.worker.commands import (
     record_command_result,
 )
 from proliferate.server.cloud.worker.control.service import wait_for_worker_control
+from proliferate.server.cloud.worker.github_credentials import refresh_worker_github_credentials
 from proliferate.server.cloud.worker.models import (
     WorkerCommandDeliveryRequest,
     WorkerCommandLeaseRequest,
@@ -45,7 +46,6 @@ from proliferate.server.cloud.worker.models import (
     WorkerUpdateStatusRequest,
     WorkerUpdateStatusResponse,
 )
-from proliferate.server.cloud.worker.github_credentials import refresh_worker_github_credentials
 from proliferate.server.cloud.worker.revoked_jti import list_revoked_jtis
 from proliferate.server.cloud.worker.service import (
     enroll_worker,
