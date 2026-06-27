@@ -112,6 +112,7 @@ async def test_ensure_persists_e2b_id_when_runtime_launch_fails(
     user = await _create_user(db_session)
     provider = _FakeSandboxProvider()
     monkeypatch.setattr(service.settings, "e2b_template_name", "test-template")
+    _patch_supervised_runtime_launch_dependencies(monkeypatch)
     monkeypatch.setattr(service, "get_configured_sandbox_provider", lambda: provider)
     monkeypatch.setattr(service, "check_runtime_bundle_preinstalled", _async_return(True))
 
@@ -186,6 +187,26 @@ def _async_return(value: object):
     return _inner
 
 
+def _patch_supervised_runtime_launch_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        service,
+        "cloud_worker_base_url",
+        lambda: "https://worker-control.example.invalid",
+    )
+
+    async def _ensure_runtime_target_enrollment(*_args: object, **kwargs: object) -> object:
+        return SimpleNamespace(
+            target_id=kwargs["target_id"],
+            enrollment_token="enrollment-token",
+        )
+
+    monkeypatch.setattr(
+        service,
+        "ensure_runtime_target_enrollment",
+        _ensure_runtime_target_enrollment,
+    )
+
+
 @pytest.mark.asyncio
 async def test_managed_runtime_stages_stale_bundle_before_launch(
     db_session: AsyncSession,
@@ -204,6 +225,7 @@ async def test_managed_runtime_stages_stale_bundle_before_launch(
         return {"anyharness": object(), "worker": object(), "supervisor": object()}
 
     monkeypatch.setattr(service.settings, "e2b_template_name", "test-template")
+    _patch_supervised_runtime_launch_dependencies(monkeypatch)
     monkeypatch.setattr(service, "get_configured_sandbox_provider", lambda: provider)
     monkeypatch.setattr(service, "run_sandbox_command_logged", _command_ok)
     monkeypatch.setattr(service, "check_runtime_bundle_preinstalled", _async_return(False))
@@ -218,7 +240,7 @@ async def test_managed_runtime_stages_stale_bundle_before_launch(
     assert "managed_runtime_stop_previous" in calls
     assert "stage_runtime_bundle" in calls
     assert calls.index("managed_runtime_stop_previous") < calls.index("stage_runtime_bundle")
-    assert calls.index("stage_runtime_bundle") < calls.index("managed_runtime_launch")
+    assert calls.index("stage_runtime_bundle") < calls.index("managed_runtime_launch_supervisor")
 
 
 @pytest.mark.asyncio
@@ -322,6 +344,7 @@ async def test_managed_runtime_launch_applies_target_auth_config_and_agents(
         return list(required_agent_kinds)
 
     monkeypatch.setattr(service.settings, "e2b_template_name", "test-template")
+    _patch_supervised_runtime_launch_dependencies(monkeypatch)
     monkeypatch.setattr(service, "get_configured_sandbox_provider", lambda: provider)
     monkeypatch.setattr(service, "run_sandbox_command_logged", _command_ok)
     monkeypatch.setattr(service, "check_runtime_bundle_preinstalled", _async_return(True))
@@ -349,10 +372,19 @@ async def test_managed_runtime_launch_applies_target_auth_config_and_agents(
     )
     assert profile.primary_target_id is not None
 
-    launch_script = next(
-        content for path, content in provider.writes if path.endswith("/start-anyharness.sh")
+    worker_config = next(
+        content
+        for path, content in provider.writes
+        if path.endswith("/.proliferate/worker/config.toml")
     )
-    assert f"ANYHARNESS_RUNTIME_TARGET_ID={profile.primary_target_id}" in launch_script
+    assert 'cloud_base_url = "https://worker-control.example.invalid"' in worker_config
+    assert 'enrollment_token = "enrollment-token"' in worker_config
+    supervisor_config = next(
+        content
+        for path, content in provider.writes
+        if path.endswith("/.proliferate/supervisor/config.toml")
+    )
+    assert f'ANYHARNESS_RUNTIME_TARGET_ID = "{profile.primary_target_id}"' in supervisor_config
     assert (
         "/home/user/.claude/cloud-auth.json",
         '{"ok":true}',

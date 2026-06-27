@@ -26,6 +26,9 @@ from proliferate.server.cloud.github_app.models import (
     GitHubAppConnectResponse,
     GitHubAppStatusResponse,
 )
+from proliferate.server.cloud.managed_sandboxes.materialization.service import (
+    schedule_github_app_authorized_sandbox_bootstrap,
+)
 from proliferate.utils.time import utcnow
 
 _STATE_AUDIENCE = "github-app-connect"
@@ -189,6 +192,7 @@ async def complete_github_app_callback(
         authorization=authorization,
     )
     await refresh_github_app_installation_cache(db)
+    schedule_github_app_authorized_sandbox_bootstrap(db, user_id=user_id)
     return return_to or _redirect_after_callback()
 
 

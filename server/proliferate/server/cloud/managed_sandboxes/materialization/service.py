@@ -32,6 +32,36 @@ async def reconcile_after_sandbox_ready(
     await repos.reconcile_configured_repos_for_sandbox(db, sandbox=sandbox, run_setup=False)
 
 
+def schedule_github_app_authorized_sandbox_bootstrap(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> None:
+    async def _bootstrap(fresh_db: AsyncSession) -> None:
+        user = await users_store.get_user_by_id(fresh_db, user_id)
+        if user is None:
+            return
+        from proliferate.server.cloud.managed_sandboxes.service import (
+            ensure_managed_sandbox_ready,
+        )
+
+        sandbox = await ensure_managed_sandbox_ready(fresh_db, user)
+        await reconcile_after_sandbox_ready(fresh_db, sandbox=sandbox)
+
+    async def _run() -> None:
+        try:
+            await transactions.run_with_fresh_session(_bootstrap)
+        except Exception as exc:
+            log_cloud_event(
+                "managed sandbox github app bootstrap failed",
+                user_id=user_id,
+                error=format_exception_message(exc),
+                error_type=exc.__class__.__name__,
+            )
+
+    _defer_materialization(db, _run)
+
+
 def schedule_global_secret_materialization_for_user(
     db: AsyncSession,
     *,
