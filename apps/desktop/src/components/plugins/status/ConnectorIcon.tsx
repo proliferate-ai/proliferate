@@ -23,6 +23,7 @@ import renderIcon from "@/assets/connector-icons/render.svg";
 import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import sentryIcon from "@/assets/connector-icons/sentry.svg";
 import sentryDarkIcon from "@/assets/connector-icons/sentry-dark.svg";
+import slackIcon from "@/assets/connector-icons/slack.svg";
 import stripeIcon from "@/assets/connector-icons/stripe.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
 import vercelIcon from "@/assets/connector-icons/vercel.svg";
@@ -126,6 +127,7 @@ const CONNECTOR_ICON_IMAGES = {
     darkSrc: sentryDarkIcon,
     darkTileClassName: "bg-background",
   },
+  slack: { lightSrc: slackIcon },
   stripe: { lightSrc: stripeIcon },
   supabase: { lightSrc: supabaseIcon },
   vercel: { lightSrc: vercelIcon },
