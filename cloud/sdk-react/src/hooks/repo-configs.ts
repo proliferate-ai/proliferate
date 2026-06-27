@@ -13,6 +13,7 @@ import {
   cloudRepoConfigKey,
   cloudRepoConfigsKey,
   organizationCloudRepoConfigsKey,
+  repoConfigsKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
@@ -71,6 +72,7 @@ export function useSaveCloudRepoConfig() {
       saveCloudRepoConfig(gitOwner, gitRepoName, body, client),
     onSuccess: (response, { gitOwner, gitRepoName }) => {
       queryClient.setQueryData(cloudRepoConfigKey(gitOwner, gitRepoName), response);
+      void queryClient.invalidateQueries({ queryKey: repoConfigsKey() });
       void queryClient.invalidateQueries({ queryKey: cloudRepoConfigsKey() });
       void queryClient.invalidateQueries({ queryKey: cloudGitRepositoriesRootKey() });
     },

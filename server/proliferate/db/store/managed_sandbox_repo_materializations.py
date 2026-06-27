@@ -19,6 +19,7 @@ class ManagedSandboxRepoMaterializationValue:
     id: UUID
     managed_sandbox_id: UUID
     cloud_repo_config_id: UUID
+    repo_environment_id: UUID | None
     sandbox_generation: int
     status: str
     repo_path: str
@@ -41,6 +42,7 @@ def materialization_value(
         id=row.id,
         managed_sandbox_id=row.managed_sandbox_id,
         cloud_repo_config_id=row.cloud_repo_config_id,
+        repo_environment_id=row.repo_environment_id,
         sandbox_generation=row.sandbox_generation,
         status=row.status,
         repo_path=row.repo_path,
@@ -98,6 +100,7 @@ async def begin_repo_materialization(
     *,
     managed_sandbox_id: UUID,
     cloud_repo_config_id: UUID,
+    repo_environment_id: UUID | None = None,
     sandbox_generation: int,
     repo_path: str,
 ) -> ManagedSandboxRepoMaterializationValue:
@@ -109,6 +112,7 @@ async def begin_repo_materialization(
             .values(
                 managed_sandbox_id=managed_sandbox_id,
                 cloud_repo_config_id=cloud_repo_config_id,
+                repo_environment_id=repo_environment_id,
                 sandbox_generation=sandbox_generation,
                 status="running",
                 repo_path=repo_path,
@@ -127,6 +131,7 @@ async def begin_repo_materialization(
                 index_elements=["managed_sandbox_id", "cloud_repo_config_id"],
                 set_={
                     "sandbox_generation": sandbox_generation,
+                    "repo_environment_id": repo_environment_id,
                     "status": "running",
                     "repo_path": repo_path,
                     "anyharness_repo_root_id": case(

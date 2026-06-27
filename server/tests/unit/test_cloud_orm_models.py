@@ -40,6 +40,8 @@ def test_cloud_orm_package_registers_all_cloud_tables() -> None:
         "sandbox_profile_agent_auth_revision",
         "sandbox_profile_target_state",
         "cloud_target_runtime_access",
+        "repo_config",
+        "repo_environment",
     }
 
     assert expected_tables <= set(Base.metadata.tables)

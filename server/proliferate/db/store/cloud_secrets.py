@@ -49,6 +49,7 @@ class CloudSecretSetValue:
     user_id: UUID | None
     organization_id: UUID | None
     cloud_repo_config_id: UUID | None
+    repo_environment_id: UUID | None
     version: int
     created_by_user_id: UUID | None
     updated_by_user_id: UUID | None
@@ -81,6 +82,7 @@ class CloudSecretSetPayload:
     user_id: UUID | None
     organization_id: UUID | None
     cloud_repo_config_id: UUID | None
+    repo_environment_id: UUID | None
     version: int
     env_vars: tuple[CloudSecretEnvVarPayload, ...]
     files: tuple[CloudSecretFilePayload, ...]
@@ -178,6 +180,7 @@ async def _secret_set_value(
         user_id=row.user_id,
         organization_id=row.organization_id,
         cloud_repo_config_id=row.cloud_repo_config_id,
+        repo_environment_id=row.repo_environment_id,
         version=row.version,
         created_by_user_id=row.created_by_user_id,
         updated_by_user_id=row.updated_by_user_id,
@@ -195,6 +198,7 @@ async def _get_or_create_secret_set(
     user_id: UUID | None,
     organization_id: UUID | None,
     cloud_repo_config_id: UUID | None,
+    repo_environment_id: UUID | None,
     actor_user_id: UUID,
 ) -> CloudSecretSet:
     now = utcnow()
@@ -203,6 +207,7 @@ async def _get_or_create_secret_set(
         "user_id": user_id,
         "organization_id": organization_id,
         "cloud_repo_config_id": cloud_repo_config_id,
+        "repo_environment_id": repo_environment_id,
         "version": 0,
         "created_by_user_id": actor_user_id,
         "updated_by_user_id": actor_user_id,
@@ -230,12 +235,12 @@ async def _get_or_create_secret_set(
         )
     elif scope_kind == "workspace":
         insert_stmt = insert_stmt.on_conflict_do_nothing(
-            index_elements=[CloudSecretSet.cloud_repo_config_id],
+            index_elements=[CloudSecretSet.repo_environment_id],
             index_where=CloudSecretSet.scope_kind == "workspace",
         )
         where = (
             CloudSecretSet.scope_kind == "workspace",
-            CloudSecretSet.cloud_repo_config_id == cloud_repo_config_id,
+            CloudSecretSet.repo_environment_id == repo_environment_id,
         )
     else:
         raise ValueError(f"Unsupported cloud secret scope: {scope_kind}")
@@ -256,6 +261,7 @@ async def get_or_create_personal_secret_set(
         user_id=user_id,
         organization_id=None,
         cloud_repo_config_id=None,
+        repo_environment_id=None,
         actor_user_id=actor_user_id,
     )
     return await _secret_set_value(db, row)
@@ -273,6 +279,7 @@ async def get_or_create_organization_secret_set(
         user_id=None,
         organization_id=organization_id,
         cloud_repo_config_id=None,
+        repo_environment_id=None,
         actor_user_id=actor_user_id,
     )
     return await _secret_set_value(db, row)
@@ -281,8 +288,9 @@ async def get_or_create_organization_secret_set(
 async def get_or_create_workspace_secret_set(
     db: AsyncSession,
     *,
-    cloud_repo_config_id: UUID,
+    repo_environment_id: UUID,
     actor_user_id: UUID,
+    cloud_repo_config_id: UUID | None = None,
 ) -> CloudSecretSetValue:
     row = await _get_or_create_secret_set(
         db,
@@ -290,6 +298,7 @@ async def get_or_create_workspace_secret_set(
         user_id=None,
         organization_id=None,
         cloud_repo_config_id=cloud_repo_config_id,
+        repo_environment_id=repo_environment_id,
         actor_user_id=actor_user_id,
     )
     return await _secret_set_value(db, row)
@@ -330,13 +339,13 @@ async def load_organization_secret_set(
 async def load_workspace_secret_set(
     db: AsyncSession,
     *,
-    cloud_repo_config_id: UUID,
+    repo_environment_id: UUID,
 ) -> CloudSecretSetValue | None:
     row = (
         await db.execute(
             select(CloudSecretSet).where(
                 CloudSecretSet.scope_kind == "workspace",
-                CloudSecretSet.cloud_repo_config_id == cloud_repo_config_id,
+                CloudSecretSet.repo_environment_id == repo_environment_id,
             )
         )
     ).scalar_one_or_none()
@@ -359,6 +368,7 @@ async def load_secret_set_payload(
         user_id=row.user_id,
         organization_id=row.organization_id,
         cloud_repo_config_id=row.cloud_repo_config_id,
+        repo_environment_id=row.repo_environment_id,
         version=row.version,
         env_vars=tuple(_env_payload(item) for item in env_rows),
         files=tuple(_file_payload(item) for item in file_rows),
@@ -386,9 +396,9 @@ async def load_organization_secret_payload(
 async def load_workspace_secret_payload(
     db: AsyncSession,
     *,
-    cloud_repo_config_id: UUID,
+    repo_environment_id: UUID,
 ) -> CloudSecretSetPayload | None:
-    value = await load_workspace_secret_set(db, cloud_repo_config_id=cloud_repo_config_id)
+    value = await load_workspace_secret_set(db, repo_environment_id=repo_environment_id)
     return None if value is None else await load_secret_set_payload(db, secret_set_id=value.id)
 
 

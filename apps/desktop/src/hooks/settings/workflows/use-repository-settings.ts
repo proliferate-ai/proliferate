@@ -3,6 +3,7 @@ import type { GitBranchRef } from "@anyharness/sdk";
 import {
   useRepoRootGitBranchesQuery,
 } from "@anyharness/sdk-react";
+import { useSaveLocalRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import {
   buildLocalEnvironmentSavePatch,
   isLocalEnvironmentDraftDirty,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/domain/settings/environment-draft";
 import { resolveAutoDetectedBranch } from "@/lib/domain/settings/branch-selection";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 
 const EMPTY_BRANCHES: GitBranchRef[] = [];
@@ -23,6 +25,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     sourceRoot ? state.repoConfigs[sourceRoot] : undefined,
   );
   const setRepoConfig = useRepoPreferencesStore((state) => state.setRepoConfig);
+  const saveLocalEnvironment = useSaveLocalRepoEnvironment();
   const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({
     repoRootId: repository?.repoRootId ?? null,
     enabled: !!repository,
@@ -90,12 +93,32 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     }
     const nextConfig = buildLocalEnvironmentSavePatch(state.draft);
     setRepoConfig(sourceRoot, nextConfig);
+    if (repository?.gitOwner && repository.gitRepoName) {
+      const { gitOwner, gitRepoName, gitProvider } = repository;
+      void (async () => {
+        const { installId } = await loadAnonymousTelemetryBootstrap();
+        await saveLocalEnvironment.mutateAsync({
+          gitOwner,
+          gitRepoName,
+          body: {
+            gitProvider: gitProvider ?? "github",
+            desktopInstallId: installId,
+            localPath: sourceRoot,
+            defaultBranch: nextConfig.defaultBranch,
+            setupScript: nextConfig.setupScript,
+            runCommand: nextConfig.runCommand,
+          },
+        });
+      })().catch(() => {
+        // Local preferences remain authoritative when Cloud is unavailable.
+      });
+    }
     setState((current) => ({
       ...current,
       baseline: nextConfig,
       draft: nextConfig,
     }));
-  }, [setRepoConfig, sourceRoot, state.draft]);
+  }, [repository, saveLocalEnvironment, setRepoConfig, sourceRoot, state.draft]);
 
   const revert = useCallback(() => {
     setState((current) => ({

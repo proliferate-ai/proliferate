@@ -10,7 +10,9 @@ import type {
 export async function listCloudRepoConfigs(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoConfigsListResponse> {
-  return (await client.GET("/v1/cloud/repos/configs")).data!;
+  return (
+    await client.GET("/v1/cloud/repos/configs")
+  ).data!;
 }
 
 export async function listOrganizationCloudRepoConfigs(

@@ -148,17 +148,11 @@ def schedule_workspace_secret_materialization_for_repo(
         )
 
         sandbox = await ensure_managed_sandbox_ready(fresh_db, user)
-        materialization = await repos.ensure_repo_materialized(
+        await repos.ensure_repo_materialized(
             fresh_db,
             sandbox=sandbox,
             repo_config=repo_config,
             run_setup=False,
-        )
-        await secrets.materialize_workspace_secrets(
-            fresh_db,
-            sandbox=sandbox,
-            repo_config=repo_config,
-            repo_path=materialization.repo_path,
         )
 
     async def _run() -> None:

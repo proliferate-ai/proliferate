@@ -12,6 +12,11 @@ const cloudHooks = vi.hoisted(() => ({
   useCloudGitRepositories: vi.fn(),
   useValidateCloudRepoBranches: vi.fn(),
   useLoadCloudRepoConfig: vi.fn(),
+  useCloudSecrets: vi.fn(),
+  usePutCloudSecretEnvVar: vi.fn(),
+  useDeleteCloudSecretEnvVar: vi.fn(),
+  usePutCloudSecretFile: vi.fn(),
+  useDeleteCloudSecretFile: vi.fn(),
   saveMutateAsync: vi.fn(),
 }));
 
@@ -23,6 +28,11 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCloudGitRepositories: cloudHooks.useCloudGitRepositories,
   useValidateCloudRepoBranches: cloudHooks.useValidateCloudRepoBranches,
   useLoadCloudRepoConfig: cloudHooks.useLoadCloudRepoConfig,
+  useCloudSecrets: cloudHooks.useCloudSecrets,
+  usePutCloudSecretEnvVar: cloudHooks.usePutCloudSecretEnvVar,
+  useDeleteCloudSecretEnvVar: cloudHooks.useDeleteCloudSecretEnvVar,
+  usePutCloudSecretFile: cloudHooks.usePutCloudSecretFile,
+  useDeleteCloudSecretFile: cloudHooks.useDeleteCloudSecretFile,
 }));
 
 const cloudConfigs = [
@@ -91,6 +101,41 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     });
     cloudHooks.useValidateCloudRepoBranches.mockReturnValue({ mutateAsync: vi.fn() });
     cloudHooks.useLoadCloudRepoConfig.mockReturnValue({ mutateAsync: vi.fn() });
+    cloudHooks.useCloudSecrets.mockReturnValue({
+      data: {
+        scopeKind: "workspace",
+        version: 0,
+        envVars: [],
+        files: [],
+        materialization: {
+          status: "pending",
+          lastError: null,
+          materializedAt: null,
+        },
+      },
+      isLoading: false,
+      error: null,
+    });
+    cloudHooks.usePutCloudSecretEnvVar.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
+    cloudHooks.useDeleteCloudSecretEnvVar.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
+    cloudHooks.usePutCloudSecretFile.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
+    cloudHooks.useDeleteCloudSecretFile.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
   });
 
   afterEach(() => {
@@ -141,7 +186,7 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     expect(screen.queryByText("Cloud enabled")).not.toBeNull();
   });
 
-  it("saves cloud-only detail edits with the existing core request body", async () => {
+  it("saves cloud-only detail edits without legacy secret fields", async () => {
     render(
       <CloudEnvironmentsSettingsSurface
         mode="cloud-only"
@@ -165,7 +210,6 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       body: {
         configured: true,
         defaultBranch: "main",
-        envVars: { FEATURE_FLAG: "1" },
         setupScript: "npm ci",
         runCommand: "",
       },

@@ -43,8 +43,8 @@ def _payload_key(payload: secret_store.CloudSecretSetPayload) -> str:
         return f"personal:{payload.user_id}"
     if payload.scope_kind == "organization" and payload.organization_id is not None:
         return f"organization:{payload.organization_id}"
-    if payload.scope_kind == "workspace" and payload.cloud_repo_config_id is not None:
-        return f"workspace:{payload.cloud_repo_config_id}"
+    if payload.scope_kind == "workspace" and payload.repo_environment_id is not None:
+        return f"workspace:{payload.repo_environment_id}"
     return f"{payload.scope_kind}:{payload.id}"
 
 
@@ -155,11 +155,11 @@ async def materialize_global_secrets(
 async def workspace_secret_relative_paths(
     db: AsyncSession,
     *,
-    cloud_repo_config_id: UUID,
+    repo_environment_id: UUID,
 ) -> tuple[str, ...]:
     payload = await secret_store.load_workspace_secret_payload(
         db,
-        cloud_repo_config_id=cloud_repo_config_id,
+        repo_environment_id=repo_environment_id,
     )
     if payload is None:
         return ()
@@ -171,19 +171,21 @@ async def materialize_workspace_secrets(
     *,
     sandbox: ManagedSandboxValue,
     repo_config: CloudRepoConfigValue,
+    repo_environment_id: UUID | None = None,
     repo_path: str,
     target: MaterializationTarget | None = None,
     base_env: dict[str, str] | None = None,
     base_files: dict[str, str] | None = None,
 ) -> None:
+    resolved_repo_environment_id = repo_environment_id or repo_config.id
     payload = await secret_store.load_workspace_secret_payload(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=resolved_repo_environment_id,
     )
     materialization = await begin_workspace_secret_materialization(
         db,
         managed_sandbox_id=sandbox.id,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=resolved_repo_environment_id,
         cloud_secret_set_id=payload.id if payload is not None else None,
         sandbox_generation=sandbox.runtime_generation,
     )

@@ -73,7 +73,7 @@ async def _managed_materialization_paths(
 ) -> tuple[str, ...]:
     workspace_secret_paths = await workspace_secret_relative_paths(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=repo_config.id,
     )
     return tuple(
         sorted(
@@ -164,6 +164,7 @@ async def ensure_repo_materialized(
         db,
         managed_sandbox_id=sandbox.id,
         cloud_repo_config_id=repo_config.id,
+        repo_environment_id=repo_config.id,
         sandbox_generation=sandbox.runtime_generation,
         repo_path=repo_path(repo_config),
     )
@@ -198,6 +199,7 @@ async def ensure_repo_materialized(
             db,
             sandbox=sandbox,
             repo_config=repo_config,
+            repo_environment_id=repo_config.id,
             repo_path=materialization.repo_path,
             target=target,
             base_env=repo_config.env_vars,

@@ -29,10 +29,12 @@ class CloudSecretSet(Base):
         ),
         CheckConstraint(
             "((scope_kind = 'personal' AND user_id IS NOT NULL "
-            "AND organization_id IS NULL AND cloud_repo_config_id IS NULL) OR "
+            "AND organization_id IS NULL AND cloud_repo_config_id IS NULL "
+            "AND repo_environment_id IS NULL) OR "
             "(scope_kind = 'organization' AND organization_id IS NOT NULL "
-            "AND user_id IS NULL AND cloud_repo_config_id IS NULL) OR "
-            "(scope_kind = 'workspace' AND cloud_repo_config_id IS NOT NULL "
+            "AND user_id IS NULL AND cloud_repo_config_id IS NULL "
+            "AND repo_environment_id IS NULL) OR "
+            "(scope_kind = 'workspace' AND repo_environment_id IS NOT NULL "
             "AND user_id IS NULL AND organization_id IS NULL))",
             name="ck_cloud_secret_set_scope_fields",
         ),
@@ -49,8 +51,8 @@ class CloudSecretSet(Base):
             postgresql_where=text("scope_kind = 'organization'"),
         ),
         Index(
-            "ux_cloud_secret_set_workspace",
-            "cloud_repo_config_id",
+            "ux_cloud_secret_set_workspace_environment",
+            "repo_environment_id",
             unique=True,
             postgresql_where=text("scope_kind = 'workspace'"),
         ),
@@ -70,6 +72,11 @@ class CloudSecretSet(Base):
     )
     cloud_repo_config_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cloud_repo_config.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    repo_environment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("repo_environment.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
     )
@@ -144,8 +151,10 @@ class ManagedSandboxSecretMaterialization(Base):
             name="ck_managed_sandbox_secret_materialization_status",
         ),
         CheckConstraint(
-            "((materialization_kind = 'global' AND cloud_repo_config_id IS NULL) OR "
-            "(materialization_kind = 'workspace' AND cloud_repo_config_id IS NOT NULL))",
+            "((materialization_kind = 'global' "
+            "AND cloud_repo_config_id IS NULL "
+            "AND repo_environment_id IS NULL) OR "
+            "(materialization_kind = 'workspace' AND repo_environment_id IS NOT NULL))",
             name="ck_managed_sandbox_secret_materialization_scope",
         ),
         Index(
@@ -155,9 +164,9 @@ class ManagedSandboxSecretMaterialization(Base):
             postgresql_where=text("materialization_kind = 'global'"),
         ),
         Index(
-            "ux_managed_sandbox_secret_materialization_workspace",
+            "ux_managed_sandbox_secret_materialization_workspace_environment",
             "managed_sandbox_id",
-            "cloud_repo_config_id",
+            "repo_environment_id",
             unique=True,
             postgresql_where=text("materialization_kind = 'workspace'"),
         ),
@@ -184,11 +193,16 @@ class ManagedSandboxSecretMaterialization(Base):
         index=True,
         nullable=True,
     )
+    repo_environment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("repo_environment.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     sandbox_generation: Mapped[int] = mapped_column(Integer, default=0)
     applied_version: Mapped[int] = mapped_column(Integer, default=0)
     applied_versions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     applied_manifest_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(32))
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     materialized_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
