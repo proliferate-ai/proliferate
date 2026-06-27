@@ -54,7 +54,6 @@ export function CloudEnvironmentDetail({
       body: buildCoreCloudEnvironmentSaveRequest({
         configured: draft.configured,
         defaultBranch: draft.defaultBranch,
-        envVars: {},
         setupScript: draft.setupScript,
         runCommand: draft.runCommand,
       }),
