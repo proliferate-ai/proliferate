@@ -40,12 +40,29 @@ export interface PutCloudSecretFileRequest {
   content: string;
 }
 
+export interface PutCloudSecretFileUploadRequest {
+  path: string;
+  file: Blob;
+  fileName?: string;
+}
+
 export interface DeleteCloudSecretFileRequest {
   path: string;
 }
 
 function repoSecretsPath(gitOwner: string, gitRepoName: string): string {
   return `/v1/cloud/repos/${encodeURIComponent(gitOwner)}/${encodeURIComponent(gitRepoName)}/secrets`;
+}
+
+function secretFileUploadForm(body: PutCloudSecretFileUploadRequest): FormData {
+  const formData = new FormData();
+  formData.set("path", body.path);
+  if (body.fileName) {
+    formData.set("file", body.file, body.fileName);
+  } else {
+    formData.set("file", body.file);
+  }
+  return formData;
 }
 
 export async function getPersonalCloudSecrets(
@@ -87,6 +104,17 @@ export async function putPersonalCloudSecretFile(
     method: "PUT",
     path: "/v1/cloud/secrets/personal/files",
     body,
+  });
+}
+
+export async function uploadPersonalCloudSecretFile(
+  body: PutCloudSecretFileUploadRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudSecretsResponse> {
+  return client.requestForm<CloudSecretsResponse>({
+    method: "PUT",
+    path: "/v1/cloud/secrets/personal/files/upload",
+    formData: secretFileUploadForm(body),
   });
 }
 
@@ -144,6 +172,18 @@ export async function putOrganizationCloudSecretFile(
     method: "PUT",
     path: `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/secrets/files`,
     body,
+  });
+}
+
+export async function uploadOrganizationCloudSecretFile(
+  organizationId: string,
+  body: PutCloudSecretFileUploadRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudSecretsResponse> {
+  return client.requestForm<CloudSecretsResponse>({
+    method: "PUT",
+    path: `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/secrets/files/upload`,
+    formData: secretFileUploadForm(body),
   });
 }
 
@@ -206,6 +246,19 @@ export async function putWorkspaceCloudSecretFile(
     method: "PUT",
     path: `${repoSecretsPath(gitOwner, gitRepoName)}/files`,
     body,
+  });
+}
+
+export async function uploadWorkspaceCloudSecretFile(
+  gitOwner: string,
+  gitRepoName: string,
+  body: PutCloudSecretFileUploadRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudSecretsResponse> {
+  return client.requestForm<CloudSecretsResponse>({
+    method: "PUT",
+    path: `${repoSecretsPath(gitOwner, gitRepoName)}/files/upload`,
+    formData: secretFileUploadForm(body),
   });
 }
 

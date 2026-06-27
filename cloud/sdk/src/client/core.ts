@@ -20,9 +20,18 @@ export interface ProliferateStreamRequestInput {
   signal?: AbortSignal;
 }
 
+export interface ProliferateRequestFormInput {
+  method: "POST" | "PUT" | "PATCH";
+  path: string;
+  query?: Record<string, string | number | boolean | null | undefined>;
+  formData: FormData;
+  signal?: AbortSignal;
+}
+
 export interface ProliferateCloudClient extends ProliferateOpenApiClient {
   readonly baseUrl: string;
   requestJson<TResponse>(input: ProliferateRequestJsonInput): Promise<TResponse>;
+  requestForm<TResponse>(input: ProliferateRequestFormInput): Promise<TResponse>;
   streamRequest(input: ProliferateStreamRequestInput): Promise<Response>;
   buildUrl(
     path: string,
@@ -34,6 +43,13 @@ export interface CreateProliferateClientOptions {
   baseUrl: string;
   middleware?: Middleware[];
   streamRequest?: (input: ProliferateStreamRequestInput) => Promise<Response>;
+}
+
+interface MiddlewareCallbackBase {
+  schemaPath: string;
+  params: Record<string, never>;
+  id: string | undefined;
+  options: Record<string, never>;
 }
 
 export class ProliferateClientError extends Error {
@@ -87,8 +103,8 @@ export function createProliferateClient(
 ): ProliferateCloudClient {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const client = createClient<paths>({ baseUrl });
-  client.use(createProliferateErrorMiddleware());
-  for (const middleware of options.middleware ?? []) {
+  const middlewares = [createProliferateErrorMiddleware(), ...(options.middleware ?? [])];
+  for (const middleware of middlewares) {
     client.use(middleware);
   }
 
@@ -103,6 +119,16 @@ export function createProliferateClient(
       headers: input.headers,
       signal: input.signal,
     }));
+  extended.requestForm = async function requestForm<TResponse>(
+    input: ProliferateRequestFormInput,
+  ): Promise<TResponse> {
+    const response = await executeFormRequest({
+      baseUrl,
+      input,
+      middlewares,
+    });
+    return await response.json() as TResponse;
+  };
   extended.requestJson = async function requestJson<TResponse>(
     input: ProliferateRequestJsonInput,
   ): Promise<TResponse> {
@@ -128,6 +154,107 @@ export function createProliferateClient(
     return response.data as TResponse;
   };
   return extended;
+}
+
+async function executeFormRequest(input: {
+  baseUrl: string;
+  input: ProliferateRequestFormInput;
+  middlewares: Middleware[];
+}): Promise<Response> {
+  const { baseUrl, input: requestInput, middlewares } = input;
+  let request = new Request(buildProliferateUrl(baseUrl, requestInput.path, requestInput.query), {
+    method: requestInput.method,
+    body: requestInput.formData,
+    headers: {
+      accept: "application/json",
+    },
+    signal: requestInput.signal,
+  });
+  const callbackInput: MiddlewareCallbackBase = {
+    schemaPath: requestInput.path,
+    params: {},
+    id: undefined,
+    options: {},
+  };
+
+  for (const middleware of middlewares) {
+    const result = await middleware.onRequest?.(({
+      ...callbackInput,
+      request,
+    }) as never);
+    if (result instanceof Response) {
+      return await applyResponseMiddlewares({
+        request,
+        response: result,
+        callbackInput,
+        middlewares,
+      });
+    }
+    if (result instanceof Request) {
+      request = result;
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(request.clone());
+  } catch (error) {
+    response = await applyErrorMiddlewares({
+      request,
+      error,
+      callbackInput,
+      middlewares,
+    });
+  }
+  return await applyResponseMiddlewares({
+    request,
+    response,
+    callbackInput,
+    middlewares,
+  });
+}
+
+async function applyErrorMiddlewares(input: {
+  request: Request;
+  error: unknown;
+  callbackInput: MiddlewareCallbackBase;
+  middlewares: Middleware[];
+}): Promise<Response> {
+  let error = input.error;
+  for (let index = input.middlewares.length - 1; index >= 0; index -= 1) {
+    const result = await input.middlewares[index]?.onError?.(({
+      ...input.callbackInput,
+      request: input.request,
+      error,
+    }) as never);
+    if (result instanceof Response) {
+      return result;
+    }
+    if (result instanceof Error) {
+      error = result;
+    }
+  }
+  throw error;
+}
+
+async function applyResponseMiddlewares(input: {
+  request: Request;
+  response: Response;
+  callbackInput: MiddlewareCallbackBase;
+  middlewares: Middleware[];
+}): Promise<Response> {
+  let response = input.response;
+  for (let index = input.middlewares.length - 1; index >= 0; index -= 1) {
+    const result = await input.middlewares[index]?.onResponse?.(({
+      ...input.callbackInput,
+      request: input.request,
+      response,
+    }) as never);
+    if (result instanceof Response) {
+      response = result;
+    }
+  }
+  return response;
 }
 
 let configuredClient: ProliferateCloudClient | null = null;

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
@@ -21,6 +22,20 @@ from proliferate.server.cloud.secrets.models import (
 )
 
 router = APIRouter(tags=["cloud-secrets"])
+
+
+async def _read_uploaded_secret_file(file: UploadFile) -> str:
+    content = await file.read()
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise CloudApiError(
+            "invalid_secret_file_upload",
+            "Secret files must be UTF-8 text.",
+            status_code=400,
+        ) from error
+    finally:
+        await file.close()
 
 
 @router.get("/secrets/personal", response_model=CloudSecretsResponse)
@@ -80,6 +95,25 @@ async def put_personal_secret_file_endpoint(
             user_id=user.id,
             path=body.path,
             content=body.content,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return cloud_secrets_payload(value, materialization=materialization)
+
+
+@router.put("/secrets/personal/files/upload", response_model=CloudSecretsResponse)
+async def upload_personal_secret_file_endpoint(
+    path: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> CloudSecretsResponse:
+    try:
+        value, materialization = await service.set_personal_secret_file(
+            db,
+            user_id=user.id,
+            path=path,
+            content=await _read_uploaded_secret_file(file),
         )
     except CloudApiError as error:
         raise_cloud_error(error)
@@ -183,6 +217,30 @@ async def put_organization_secret_file_endpoint(
             organization_id=organization_id,
             path=body.path,
             content=body.content,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return cloud_secrets_payload(value, materialization=materialization)
+
+
+@router.put(
+    "/organizations/{organization_id}/secrets/files/upload",
+    response_model=CloudSecretsResponse,
+)
+async def upload_organization_secret_file_endpoint(
+    organization_id: UUID,
+    path: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> CloudSecretsResponse:
+    try:
+        value, materialization = await service.set_organization_secret_file(
+            db,
+            user_id=user.id,
+            organization_id=organization_id,
+            path=path,
+            content=await _read_uploaded_secret_file(file),
         )
     except CloudApiError as error:
         raise_cloud_error(error)
@@ -302,6 +360,32 @@ async def put_workspace_secret_file_endpoint(
             git_repo_name=git_repo_name,
             path=body.path,
             content=body.content,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return cloud_secrets_payload(value, materialization=materialization)
+
+
+@router.put(
+    "/repos/{git_owner}/{git_repo_name}/secrets/files/upload",
+    response_model=CloudSecretsResponse,
+)
+async def upload_workspace_secret_file_endpoint(
+    git_owner: str,
+    git_repo_name: str,
+    path: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> CloudSecretsResponse:
+    try:
+        value, materialization = await service.set_workspace_secret_file(
+            db,
+            user_id=user.id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            path=path,
+            content=await _read_uploaded_secret_file(file),
         )
     except CloudApiError as error:
         raise_cloud_error(error)

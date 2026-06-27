@@ -757,6 +757,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/secrets/personal/files/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload Personal Secret File Endpoint */
+        put: operations["upload_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_upload_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/organizations/{organization_id}/secrets": {
         parameters: {
             query?: never;
@@ -810,6 +827,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/organizations/{organization_id}/secrets/files/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload Organization Secret File Endpoint */
+        put: operations["upload_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_upload_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repos/{git_owner}/{git_repo_name}/secrets": {
         parameters: {
             query?: never;
@@ -858,6 +892,23 @@ export interface paths {
         post?: never;
         /** Delete Workspace Secret File Endpoint */
         delete: operations["delete_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repos/{git_owner}/{git_repo_name}/secrets/files/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload Workspace Secret File Endpoint */
+        put: operations["upload_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_upload_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5169,6 +5220,27 @@ export interface components {
             id_token: string;
             /** User */
             user?: string | null;
+        };
+        /** Body_upload_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_upload_put */
+        Body_upload_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_upload_put: {
+            /** Path */
+            path: string;
+            /** File */
+            file: string;
+        };
+        /** Body_upload_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_upload_put */
+        Body_upload_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_upload_put: {
+            /** Path */
+            path: string;
+            /** File */
+            file: string;
+        };
+        /** Body_upload_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_upload_put */
+        Body_upload_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_upload_put: {
+            /** Path */
+            path: string;
+            /** File */
+            file: string;
         };
         /** BootstrapWorkspaceRemoteAccessRequest */
         BootstrapWorkspaceRemoteAccessRequest: {
@@ -10697,9 +10769,11 @@ export interface operations {
     };
     github_app_callback_endpoint_auth_github_app_callback_get: {
         parameters: {
-            query: {
-                code: string;
-                state: string;
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                installation_id?: string | null;
+                setup_action?: string | null;
             };
             header?: never;
             path?: never;
@@ -11844,6 +11918,39 @@ export interface operations {
             };
         };
     };
+    upload_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_upload_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_upload_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_organization_secrets_endpoint_v1_cloud_organizations__organization_id__secrets_get: {
         parameters: {
             query?: never;
@@ -11990,6 +12097,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DeleteCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_upload_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_upload_put"];
             };
         };
         responses: {
@@ -12164,6 +12306,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DeleteCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_upload_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_upload_put"];
             };
         };
         responses: {

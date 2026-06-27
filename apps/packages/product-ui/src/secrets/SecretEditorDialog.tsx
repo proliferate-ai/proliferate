@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
-import { Check, ChevronDown } from "@proliferate/ui/icons";
+import { Check, ChevronDown, CloudUpload } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
@@ -25,8 +25,12 @@ export interface SecretEditorDialogProps {
   saving?: boolean;
   error?: string | null;
   onClose: () => void;
-  onSave: (input: { kind: SecretEditorKind; nameOrPath: string; secret: string }) => void;
+  onSave: (input: SecretEditorSaveInput) => void;
 }
+
+export type SecretEditorSaveInput =
+  | { kind: "env"; nameOrPath: string; secret: string }
+  | { kind: "file"; nameOrPath: string; file: File };
 
 const SECRET_KIND_LABELS: Record<SecretEditorKind, string> = {
   env: "Environment variable",
@@ -47,6 +51,7 @@ export function SecretEditorDialog({
   const [kind, setKind] = useState<SecretEditorKind>("env");
   const [nameOrPath, setNameOrPath] = useState("");
   const [secret, setSecret] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!open || !state) {
@@ -55,14 +60,15 @@ export function SecretEditorDialog({
     setKind(state.kind);
     setNameOrPath(state.nameOrPath ?? "");
     setSecret("");
+    setSelectedFile(null);
   }, [open, state]);
 
   const editing = state?.mode === "edit";
   const title = editing ? "Update secret" : "Add secret";
   const pathLabel = filePathMode === "absolute" ? "Absolute path" : "Repo-relative path";
-  const valueLabel = kind === "env" ? "Value" : "File content";
   const nameLabel = kind === "env" ? "Variable name" : pathLabel;
-  const canSave = nameOrPath.trim().length > 0 && secret.length > 0 && !saving;
+  const hasSecretValue = kind === "env" ? secret.length > 0 : selectedFile !== null;
+  const canSave = nameOrPath.trim().length > 0 && hasSecretValue && !saving;
   const description = useMemo(() => {
     if (kind === "env") {
       return "Values are stored encrypted and shown only as metadata after saving.";
@@ -77,7 +83,26 @@ export function SecretEditorDialog({
     if (!canSave) {
       return;
     }
-    onSave({ kind, nameOrPath: nameOrPath.trim(), secret });
+    if (kind === "env") {
+      onSave({ kind, nameOrPath: nameOrPath.trim(), secret });
+      return;
+    }
+    if (selectedFile) {
+      onSave({ kind, nameOrPath: nameOrPath.trim(), file: selectedFile });
+    }
+  }
+
+  function handleKindChange(nextKind: SecretEditorKind) {
+    setKind(nextKind);
+    setSecret("");
+    setSelectedFile(null);
+  }
+
+  function handleFileChange(file: File | null) {
+    setSelectedFile(file);
+    if (file && filePathMode === "relative" && nameOrPath.trim().length === 0) {
+      setNameOrPath(file.name);
+    }
   }
 
   return (
@@ -104,7 +129,7 @@ export function SecretEditorDialog({
         {editing ? null : (
           <div className="space-y-1.5">
             <Label className="mb-0 text-sm font-medium text-foreground">Type</Label>
-            <SecretKindSelect value={kind} onChange={setKind} />
+            <SecretKindSelect value={kind} onChange={handleKindChange} />
           </div>
         )}
         <Label className="block space-y-1.5 text-sm font-medium text-foreground">
@@ -116,16 +141,38 @@ export function SecretEditorDialog({
             onChange={(event) => setNameOrPath(event.currentTarget.value)}
           />
         </Label>
-        <Label className="block space-y-1.5 text-sm font-medium text-foreground">
-          <span className="block">{valueLabel}</span>
-          <Textarea
-            value={secret}
-            data-telemetry-mask
-            className="h-36 font-mono text-sm"
-            placeholder={editing ? "Replacement secret" : "Secret value"}
-            onChange={(event) => setSecret(event.currentTarget.value)}
-          />
-        </Label>
+        {kind === "env" ? (
+          <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+            <span className="block">Value</span>
+            <Textarea
+              value={secret}
+              data-telemetry-mask
+              className="h-36 font-mono text-sm"
+              placeholder={editing ? "Replacement secret" : "Secret value"}
+              onChange={(event) => setSecret(event.currentTarget.value)}
+            />
+          </Label>
+        ) : (
+          <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+            <span className="block">Upload file</span>
+            <div className="flex flex-col gap-2 rounded-md border border-input bg-surface-control p-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CloudUpload className="size-4 shrink-0" />
+                <span className="min-w-0 truncate">
+                  {selectedFile
+                    ? `${selectedFile.name} · ${formatBytes(selectedFile.size)}`
+                    : "Choose a UTF-8 text file to upload."}
+                </span>
+              </div>
+              <Input
+                type="file"
+                data-telemetry-mask
+                className="h-auto cursor-pointer py-2"
+                onChange={(event) => handleFileChange(event.currentTarget.files?.[0] ?? null)}
+              />
+            </div>
+          </Label>
+        )}
         {error ? (
           <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-sm text-destructive">
             {error}
@@ -182,4 +229,16 @@ function SecretKindSelect({
       )}
     </PopoverButton>
   );
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) {
+    return `${value} bytes`;
+  }
+  const kib = value / 1024;
+  if (kib < 1024) {
+    return `${kib.toFixed(kib >= 10 ? 0 : 1)} KiB`;
+  }
+  const mib = kib / 1024;
+  return `${mib.toFixed(mib >= 10 ? 0 : 1)} MiB`;
 }

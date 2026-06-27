@@ -15,6 +15,9 @@ import {
   putPersonalCloudSecretFile,
   putWorkspaceCloudSecretEnvVar,
   putWorkspaceCloudSecretFile,
+  uploadOrganizationCloudSecretFile,
+  uploadPersonalCloudSecretFile,
+  uploadWorkspaceCloudSecretFile,
   type CloudSecretsResponse,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
@@ -43,7 +46,9 @@ export interface DeleteCloudSecretEnvVarInput {
 export interface PutCloudSecretFileInput {
   scope: CloudSecretsScope;
   path: string;
-  content: string;
+  content?: string;
+  file?: Blob;
+  fileName?: string;
 }
 
 export interface DeleteCloudSecretFileInput {
@@ -138,7 +143,29 @@ export function usePutCloudSecretFile() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
   return useMutation<CloudSecretsResponse, Error, PutCloudSecretFileInput>({
-    mutationFn: ({ scope, path, content }) => {
+    mutationFn: ({ scope, path, content, file, fileName }) => {
+      if (file) {
+        switch (scope.kind) {
+          case "personal":
+            return uploadPersonalCloudSecretFile({ path, file, fileName }, client);
+          case "organization":
+            return uploadOrganizationCloudSecretFile(
+              scope.organizationId,
+              { path, file, fileName },
+              client,
+            );
+          case "workspace":
+            return uploadWorkspaceCloudSecretFile(
+              scope.gitOwner,
+              scope.gitRepoName,
+              { path, file, fileName },
+              client,
+            );
+        }
+      }
+      if (content === undefined) {
+        throw new Error("Secret file content is required.");
+      }
       switch (scope.kind) {
         case "personal":
           return putPersonalCloudSecretFile({ path, content }, client);

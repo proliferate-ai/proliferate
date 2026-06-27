@@ -60,8 +60,8 @@ export function CloudSecretsSettingsSurface({
       onDeleteEnvVar={(name) => {
         deleteEnvVar.mutate({ scope, name });
       }}
-      onSaveFile={(path, content) => {
-        putFile.mutate({ scope, path, content });
+      onSaveFile={(path, file) => {
+        putFile.mutate({ scope, path, file, fileName: file.name });
       }}
       onDeleteFile={(path) => {
         deleteFile.mutate({ scope, path });

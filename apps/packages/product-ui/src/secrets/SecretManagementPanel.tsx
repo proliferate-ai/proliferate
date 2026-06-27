@@ -8,6 +8,7 @@ import { SettingsCardRow } from "../settings/SettingsCardRow";
 import { SecretDeleteDialog, type SecretDeleteDialogState } from "./SecretDeleteDialog";
 import {
   SecretEditorDialog,
+  type SecretEditorSaveInput,
   type SecretEditorDialogState,
   type SecretFilePathMode,
 } from "./SecretEditorDialog";
@@ -41,7 +42,7 @@ export interface SecretManagementPanelProps {
   error?: string | null;
   onSaveEnvVar: (name: string, value: string) => void;
   onDeleteEnvVar: (name: string) => void;
-  onSaveFile: (path: string, content: string) => void;
+  onSaveFile: (path: string, file: File) => void;
   onDeleteFile: (path: string) => void;
 }
 
@@ -73,11 +74,11 @@ export function SecretManagementPanel({
   );
   const status = materialization?.status ?? "pending";
 
-  function handleEditorSave(input: { kind: "env" | "file"; nameOrPath: string; secret: string }) {
+  function handleEditorSave(input: SecretEditorSaveInput) {
     if (input.kind === "env") {
       onSaveEnvVar(input.nameOrPath, input.secret);
     } else {
-      onSaveFile(input.nameOrPath, input.secret);
+      onSaveFile(input.nameOrPath, input.file);
     }
     setEditorState(null);
   }
