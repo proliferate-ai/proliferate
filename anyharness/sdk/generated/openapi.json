@@ -2741,6 +2741,148 @@
         }
       }
     },
+    "/v1/skills": {
+      "get": {
+        "tags": [
+          "skills"
+        ],
+        "operationId": "list_skills",
+        "responses": {
+          "200": {
+            "description": "Installed local skills",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledSkillsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/skills/install": {
+      "post": {
+        "tags": [
+          "skills"
+        ],
+        "operationId": "install_skill",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Installed local skill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledSkill"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Audit confirmation required or install blocked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/skills/marketplace/search": {
+      "get": {
+        "tags": [
+          "skills"
+        ],
+        "operationId": "search_marketplace",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Marketplace search query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum result count",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marketplace skill search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketplaceSkillSearchResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Marketplace auth required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/skills/{skill_id}": {
+      "delete": {
+        "tags": [
+          "skills"
+        ],
+        "operationId": "delete_skill",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "description": "Local skill ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted local skill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteSkillResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/terminal-command-runs/{command_run_id}": {
       "get": {
         "tags": [
@@ -5556,6 +5698,87 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/skills": {
+      "get": {
+        "tags": [
+          "skills"
+        ],
+        "operationId": "list_workspace_skills",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace local skills",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSkillsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/skills/{skill_id}": {
+      "patch": {
+        "tags": [
+          "skills"
+        ],
+        "operationId": "update_workspace_skill",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "skill_id",
+            "in": "path",
+            "description": "Local skill ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceSkillRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workspace local skill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSkill"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/terminals": {
       "get": {
         "tags": [
@@ -8350,6 +8573,17 @@
           }
         }
       },
+      "DeleteSkillResponse": {
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
       "DeleteWorkspaceFileEntryResponse": {
         "type": "object",
         "required": [
@@ -9387,6 +9621,29 @@
           }
         }
       },
+      "InstallSkillRequest": {
+        "type": "object",
+        "required": [
+          "skillId"
+        ],
+        "properties": {
+          "allowMissingAudit": {
+            "type": "boolean"
+          },
+          "allowWarningAudit": {
+            "type": "boolean"
+          },
+          "enableForWorkspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "skillId": {
+            "type": "string"
+          }
+        }
+      },
       "InstallWorkspaceMobilityArchiveRequest": {
         "type": "object",
         "required": [
@@ -9442,6 +9699,95 @@
           },
           "workspaceId": {
             "type": "string"
+          }
+        }
+      },
+      "InstalledSkill": {
+        "type": "object",
+        "required": [
+          "skillId",
+          "sourceKind",
+          "source",
+          "slug",
+          "displayName",
+          "description",
+          "installCount",
+          "auditStatus",
+          "installedAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "auditStatus": {
+            "$ref": "#/components/schemas/LocalSkillAuditStatus"
+          },
+          "audits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LocalSkillAuditEntry"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LocalSkillFileSummary"
+            }
+          },
+          "hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "installUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installedAt": {
+            "type": "string"
+          },
+          "skillId": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourceKind": {
+            "$ref": "#/components/schemas/RuntimeSkillSourceKind"
+          },
+          "sourceUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "InstalledSkillsResponse": {
+        "type": "object",
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstalledSkill"
+            }
           }
         }
       },
@@ -9792,6 +10138,64 @@
           }
         }
       },
+      "LocalSkillAuditEntry": {
+        "type": "object",
+        "required": [
+          "provider",
+          "status"
+        ],
+        "properties": {
+          "auditedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "riskLevel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/LocalSkillAuditStatus"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LocalSkillAuditStatus": {
+        "type": "string",
+        "enum": [
+          "pass",
+          "warn",
+          "fail",
+          "missing"
+        ]
+      },
+      "LocalSkillFileSummary": {
+        "type": "object",
+        "required": [
+          "path",
+          "byteSize"
+        ],
+        "properties": {
+          "byteSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
       "LoginCommand": {
         "type": "object",
         "required": [
@@ -9818,6 +10222,97 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "MarketplaceSkill": {
+        "type": "object",
+        "required": [
+          "skillId",
+          "slug",
+          "name",
+          "description",
+          "source",
+          "sourceType",
+          "installCount",
+          "auditStatus",
+          "installed"
+        ],
+        "properties": {
+          "auditStatus": {
+            "$ref": "#/components/schemas/LocalSkillAuditStatus"
+          },
+          "audits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LocalSkillAuditEntry"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LocalSkillFileSummary"
+            }
+          },
+          "hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "installUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "skillId": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MarketplaceSkillSearchResponse": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketplaceSkill"
+            }
           }
         }
       },
@@ -14318,7 +14813,8 @@
         "enum": [
           "catalog",
           "plugin",
-          "user"
+          "user",
+          "skills_sh"
         ]
       },
       "ScheduleSubagentWakeRequest": {
@@ -16455,6 +16951,17 @@
           }
         }
       },
+      "UpdateWorkspaceSkillRequest": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
       "UpdateWorktreeRetentionPolicyRequest": {
         "type": "object",
         "required": [
@@ -17540,6 +18047,32 @@
           },
           "workspace": {
             "$ref": "#/components/schemas/Workspace"
+          }
+        }
+      },
+      "WorkspaceSkill": {
+        "type": "object",
+        "required": [
+          "skill",
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "skill": {
+            "$ref": "#/components/schemas/InstalledSkill"
+          }
+        }
+      },
+      "WorkspaceSkillsResponse": {
+        "type": "object",
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSkill"
+            }
           }
         }
       },

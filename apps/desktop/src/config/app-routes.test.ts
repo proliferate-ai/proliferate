@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes";
 
 describe("app routes", () => {
-  it("registers personal integrations and workflows as top-level routes", () => {
+  it("registers personal integrations, skills, and workflows as top-level routes", () => {
     expect(APP_ROUTES.integrations).toBe("/integrations");
+    expect(APP_ROUTES.skills).toBe("/skills");
     expect(APP_ROUTES.workflows).toBe("/workflows");
   });
 

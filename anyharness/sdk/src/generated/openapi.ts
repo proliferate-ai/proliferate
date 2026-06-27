@@ -852,6 +852,70 @@ export interface paths {
         patch: operations["update_session_title"];
         trace?: never;
     };
+    "/v1/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_skills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/skills/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["install_skill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/skills/marketplace/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search_marketplace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/skills/{skill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_skill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/terminal-command-runs/{command_run_id}": {
         parameters: {
             query?: never;
@@ -1684,6 +1748,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_workspace_skills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/skills/{skill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_workspace_skill"];
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/terminals": {
         parameters: {
             query?: never;
@@ -2338,6 +2434,9 @@ export interface components {
         CurrentPullRequestResponse: {
             pullRequest?: null | components["schemas"]["PullRequestSummary"];
         };
+        DeleteSkillResponse: {
+            deleted: boolean;
+        };
         DeleteWorkspaceFileEntryResponse: {
             kind: components["schemas"]["WorkspaceFileKind"];
             path: string;
@@ -2579,6 +2678,12 @@ export interface components {
             alreadyInstalled: boolean;
             installedArtifacts: components["schemas"]["ArtifactStatus"][];
         };
+        InstallSkillRequest: {
+            allowMissingAudit?: boolean;
+            allowWarningAudit?: boolean;
+            enableForWorkspaceId?: string | null;
+            skillId: string;
+        };
         InstallWorkspaceMobilityArchiveRequest: {
             archive: components["schemas"]["WorkspaceMobilityArchive"];
             operationId?: string | null;
@@ -2591,6 +2696,27 @@ export interface components {
             importedSessionIds: string[];
             sourceWorkspacePath: string;
             workspaceId: string;
+        };
+        InstalledSkill: {
+            auditStatus: components["schemas"]["LocalSkillAuditStatus"];
+            audits?: components["schemas"]["LocalSkillAuditEntry"][];
+            description: string;
+            displayName: string;
+            files?: components["schemas"]["LocalSkillFileSummary"][];
+            hash?: string | null;
+            /** Format: int64 */
+            installCount: number;
+            installUrl?: string | null;
+            installedAt: string;
+            skillId: string;
+            slug: string;
+            source: string;
+            sourceKind: components["schemas"]["RuntimeSkillSourceKind"];
+            sourceUrl?: string | null;
+            updatedAt: string;
+        };
+        InstalledSkillsResponse: {
+            skills?: components["schemas"]["InstalledSkill"][];
         };
         /** @enum {string} */
         InteractionDecision: "allow" | "deny";
@@ -2667,12 +2793,47 @@ export interface components {
             directoryPath: string;
             entries: components["schemas"]["WorkspaceFileEntry"][];
         };
+        LocalSkillAuditEntry: {
+            auditedAt?: string | null;
+            provider: string;
+            riskLevel?: string | null;
+            status: components["schemas"]["LocalSkillAuditStatus"];
+            summary?: string | null;
+        };
+        /** @enum {string} */
+        LocalSkillAuditStatus: "pass" | "warn" | "fail" | "missing";
+        LocalSkillFileSummary: {
+            /** Format: int64 */
+            byteSize: number;
+            path: string;
+        };
         LoginCommand: {
             args: string[];
             program: string;
         };
         MarkReviewRevisionReadyRequest: {
             revisedPlanId?: string | null;
+        };
+        MarketplaceSkill: {
+            auditStatus: components["schemas"]["LocalSkillAuditStatus"];
+            audits?: components["schemas"]["LocalSkillAuditEntry"][];
+            description: string;
+            files?: components["schemas"]["LocalSkillFileSummary"][];
+            hash?: string | null;
+            /** Format: int64 */
+            installCount: number;
+            installUrl?: string | null;
+            installed: boolean;
+            name: string;
+            skillId: string;
+            slug: string;
+            source: string;
+            sourceType: string;
+            sourceUrl?: string | null;
+        };
+        MarketplaceSkillSearchResponse: {
+            query: string;
+            skills?: components["schemas"]["MarketplaceSkill"][];
         };
         McpElicitationBooleanField: components["schemas"]["McpElicitationFieldBase"];
         McpElicitationField: (components["schemas"]["McpElicitationTextField"] & {
@@ -3721,7 +3882,7 @@ export interface components {
             sourceKind: components["schemas"]["RuntimeSkillSourceKind"];
         };
         /** @enum {string} */
-        RuntimeSkillSourceKind: "catalog" | "plugin" | "user";
+        RuntimeSkillSourceKind: "catalog" | "plugin" | "user" | "skills_sh";
         ScheduleSubagentWakeRequest: Record<string, never>;
         ScheduleSubagentWakeResponse: {
             alreadyScheduled: boolean;
@@ -4195,6 +4356,9 @@ export interface components {
             handoffOpId?: string | null;
             mode: components["schemas"]["WorkspaceMobilityRuntimeMode"];
         };
+        UpdateWorkspaceSkillRequest: {
+            enabled: boolean;
+        };
         UpdateWorktreeRetentionPolicyRequest: {
             /** Format: int32 */
             maxMaterializedWorktreesPerRepo: number;
@@ -4426,6 +4590,13 @@ export interface components {
             outcome: components["schemas"]["WorkspaceRetireOutcome"];
             preflight: components["schemas"]["WorkspaceRetirePreflightResponse"];
             workspace: components["schemas"]["Workspace"];
+        };
+        WorkspaceSkill: {
+            enabled: boolean;
+            skill: components["schemas"]["InstalledSkill"];
+        };
+        WorkspaceSkillsResponse: {
+            skills?: components["schemas"]["WorkspaceSkill"][];
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
@@ -6613,6 +6784,116 @@ export interface operations {
             };
         };
     };
+    list_skills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed local skills */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstalledSkillsResponse"];
+                };
+            };
+        };
+    };
+    install_skill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description Installed local skill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstalledSkill"];
+                };
+            };
+            /** @description Audit confirmation required or install blocked */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    search_marketplace: {
+        parameters: {
+            query?: {
+                /** @description Marketplace search query */
+                q?: string;
+                /** @description Maximum result count */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marketplace skill search results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceSkillSearchResponse"];
+                };
+            };
+            /** @description Marketplace auth required */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_skill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Local skill ID */
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted local skill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteSkillResponse"];
+                };
+            };
+        };
+    };
     get_terminal_command_run: {
         parameters: {
             query?: never;
@@ -8651,6 +8932,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_workspace_skills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace local skills */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSkillsResponse"];
+                };
+            };
+        };
+    };
+    update_workspace_skill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Local skill ID */
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated workspace local skill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSkill"];
                 };
             };
         };

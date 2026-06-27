@@ -1,5 +1,5 @@
 use anyharness_contract::v1::{
-    RuntimeArtifactPayload, RuntimeArtifactStatus, RuntimeConfigExternalScope,
+    RuntimeArtifactPayload, RuntimeArtifactRef, RuntimeArtifactStatus, RuntimeConfigExternalScope,
     RuntimeConfigManifest, RuntimeConfigRevision, RuntimeCredentialValue, SessionMcpBindingSummary,
 };
 
@@ -11,6 +11,20 @@ pub struct RuntimeConfigSessionContext {
     pub mcp_servers: Vec<SessionMcpServer>,
     pub mcp_binding_summaries: Vec<SessionMcpBindingSummary>,
     pub skills: Vec<RuntimeConfigSessionSkill>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeConfigExtraSkills {
+    pub workspace_id: String,
+    pub skills: Vec<anyharness_contract::v1::RuntimeSkill>,
+    pub artifacts: Vec<RuntimeArtifactRef>,
+    pub artifact_payloads: Vec<RuntimeArtifactPayload>,
+}
+
+impl RuntimeConfigExtraSkills {
+    pub fn is_empty(&self) -> bool {
+        self.skills.is_empty()
+    }
 }
 
 #[derive(Debug, Clone)]

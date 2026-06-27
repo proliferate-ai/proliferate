@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   anyHarnessGitBaseWorktreeDiffFilesKey,
   anyHarnessGitDiffKey,
+  anyHarnessMarketplaceSkillsKey,
+  anyHarnessMarketplaceSkillsScopeKey,
   anyHarnessSessionEventsKey,
+  anyHarnessSkillsKey,
+  anyHarnessWorkspaceSkillsKey,
 } from "./query-keys.js";
 
 describe("sdk-react query keys", () => {
@@ -78,5 +82,36 @@ describe("sdk-react query keys", () => {
       "src/old-app.ts",
       "src/app.ts",
     ]);
+  });
+
+  it("keys installed, marketplace, and workspace-local skills separately", () => {
+    expect(anyHarnessSkillsKey(" http://runtime.test ")).toEqual([
+      "anyharness",
+      "http://runtime.test",
+      "skills",
+    ]);
+    expect(anyHarnessMarketplaceSkillsScopeKey("http://runtime.test")).toEqual([
+      "anyharness",
+      "http://runtime.test",
+      "skills",
+      "marketplace",
+    ]);
+    expect(anyHarnessMarketplaceSkillsKey("http://runtime.test", " code review ", 5))
+      .toEqual([
+        "anyharness",
+        "http://runtime.test",
+        "skills",
+        "marketplace",
+        "code review",
+        5,
+      ]);
+    expect(anyHarnessWorkspaceSkillsKey("http://runtime.test", "workspace-1"))
+      .toEqual([
+        "anyharness",
+        "http://runtime.test",
+        "skills",
+        "workspace",
+        "workspace-1",
+      ]);
   });
 });

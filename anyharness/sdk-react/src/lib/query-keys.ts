@@ -6,6 +6,33 @@ export function anyHarnessRuntimeHealthKey(runtimeUrl: string | null | undefined
   return [...anyHarnessRuntimeKey(runtimeUrl), "health"] as const;
 }
 
+export function anyHarnessSkillsKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "skills"] as const;
+}
+
+export function anyHarnessMarketplaceSkillsScopeKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessSkillsKey(runtimeUrl), "marketplace"] as const;
+}
+
+export function anyHarnessMarketplaceSkillsKey(
+  runtimeUrl: string | null | undefined,
+  query: string | null | undefined,
+  limit?: number | null,
+) {
+  return [
+    ...anyHarnessMarketplaceSkillsScopeKey(runtimeUrl),
+    query?.trim() ?? "",
+    limit ?? null,
+  ] as const;
+}
+
+export function anyHarnessWorkspaceSkillsKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessSkillsKey(runtimeUrl), "workspace", workspaceId ?? null] as const;
+}
+
 export function anyHarnessAgentsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "agents"] as const;
 }

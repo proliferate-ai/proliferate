@@ -15,6 +15,7 @@ use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
 use crate::domains::agents::auth::{AgentAuthSelectionRequired, AgentAuthService};
+use crate::domains::local_skills::service::LocalSkillService;
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
@@ -32,9 +33,9 @@ mod pending_prompts;
 mod prompt;
 mod replay;
 mod startup;
-pub(crate) mod view;
 #[cfg(test)]
 mod tests;
+pub(crate) mod view;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
@@ -46,6 +47,7 @@ pub struct SessionRuntime {
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
     runtime_config_service: Arc<RuntimeConfigService>,
+    local_skill_service: Arc<LocalSkillService>,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
@@ -264,6 +266,7 @@ impl SessionRuntime {
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
         runtime_config_service: Arc<RuntimeConfigService>,
+        local_skill_service: Arc<LocalSkillService>,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
@@ -279,6 +282,7 @@ impl SessionRuntime {
             session_extensions,
             product_mcp_launch_catalog,
             runtime_config_service,
+            local_skill_service,
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,

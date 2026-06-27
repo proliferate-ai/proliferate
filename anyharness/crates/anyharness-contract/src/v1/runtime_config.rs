@@ -207,6 +207,7 @@ pub enum RuntimeSkillSourceKind {
     Catalog,
     Plugin,
     User,
+    SkillsSh,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

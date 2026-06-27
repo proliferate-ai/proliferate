@@ -63,7 +63,19 @@ impl SessionRuntime {
             required_agent_auth_revision,
             origin,
         )?;
-        if let Some(expected) = expected_runtime_config_revision.as_ref() {
+        let local_skills = self
+            .local_skill_service
+            .runtime_config_skills_for_workspace(workspace_id)
+            .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
+        if !local_skills.is_empty() {
+            self.runtime_config_service
+                .bind_session_with_extra_skills(
+                    &record.id,
+                    expected_runtime_config_revision.as_ref(),
+                    local_skills,
+                )
+                .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
+        } else if let Some(expected) = expected_runtime_config_revision.as_ref() {
             self.runtime_config_service
                 .bind_session_to_expected(&record.id, expected)
                 .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;

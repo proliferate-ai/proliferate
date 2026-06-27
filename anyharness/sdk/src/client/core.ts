@@ -13,6 +13,7 @@ import { ReviewsClient } from "./reviews.js";
 import { RuntimeConfigClient } from "./runtime-config.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
+import { SkillsClient } from "./skills.js";
 import { TerminalsClient } from "./terminals.js";
 import { WorktreesClient } from "./worktrees.js";
 import { WorkspacesClient } from "./workspaces.js";
@@ -376,6 +377,7 @@ export class AnyHarnessClient {
   readonly cowork: CoworkClient;
   readonly files: FilesClient;
   readonly sessions: SessionsClient;
+  readonly skills: SkillsClient;
   readonly git: GitClient;
   readonly pullRequests: PullRequestsClient;
   readonly terminals: TerminalsClient;
@@ -396,6 +398,7 @@ export class AnyHarnessClient {
     this.cowork = new CoworkClient(transport);
     this.files = new FilesClient(transport);
     this.sessions = new SessionsClient(transport);
+    this.skills = new SkillsClient(transport);
     this.git = new GitClient(transport);
     this.pullRequests = new PullRequestsClient(transport);
     this.terminals = new TerminalsClient(transport);
