@@ -1,4 +1,4 @@
-import { CircleUserRound, CreditCard, GitBranch, LifeBuoy, Shield, UsersRound } from "lucide-react";
+import { CircleUserRound, CreditCard, GitBranch, KeyRound, LifeBuoy, Shield, UsersRound } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -13,6 +13,8 @@ import { AccountSettingsSection } from "./AccountSettingsSection";
 import { BillingSettingsSection } from "./BillingSettingsSection";
 import { EnvironmentsSettingsSection } from "./EnvironmentsSettingsSection";
 import { OrganizationSettingsSection } from "./OrganizationSettingsSection";
+import { OrganizationSecretsSettingsSection } from "./OrganizationSecretsSettingsSection";
+import { PersonalSecretsSettingsSection } from "./PersonalSecretsSettingsSection";
 import { SsoSettingsSection } from "./SsoSettingsSection";
 import { SupportSettingsSection } from "./SupportSettingsSection";
 
@@ -46,10 +48,14 @@ export function SettingsScreen() {
       >
         {activeSection === "account" ? (
           <AccountSettingsSection />
+        ) : activeSection === "personal-secrets" ? (
+          <PersonalSecretsSettingsSection />
         ) : activeSection === "environments" ? (
           <EnvironmentsSettingsSection />
         ) : activeSection === "organization" ? (
           <OrganizationSettingsSection />
+        ) : activeSection === "organization-secrets" ? (
+          <OrganizationSecretsSettingsSection />
         ) : activeSection === "sso" ? (
           <SsoSettingsSection />
         ) : activeSection === "billing" ? (
@@ -81,6 +87,8 @@ function settingsIcon(token: CloudSettingsIconToken) {
       return <GitBranch size={SETTINGS_ICON_SIZE} />;
     case "organization":
       return <UsersRound size={SETTINGS_ICON_SIZE} />;
+    case "secrets":
+      return <KeyRound size={SETTINGS_ICON_SIZE} />;
     case "sso":
       return <Shield size={SETTINGS_ICON_SIZE} />;
     case "billing":

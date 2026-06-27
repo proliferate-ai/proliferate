@@ -17,7 +17,9 @@ export type SettingsNavIconId =
   | "organization-limits"
   | "organization-members"
   | "organization-model-policy"
+  | "organization-secrets"
   | "organization-sso"
+  | "personal-secrets"
   | "support"
   | "worktrees";
 
@@ -58,6 +60,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
       { kind: "section", id: "keyboard", label: "Keyboard shortcuts", iconId: "keyboard" },
       { kind: "section", id: "account", label: "Account", iconId: "account" },
+      { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
     ],
   },
   {
@@ -69,6 +72,13 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: "organization",
         label: "Organization settings",
         iconId: "organization",
+        adminOnly: true,
+      },
+      {
+        kind: "section",
+        id: "organization-secrets",
+        label: "Organization secrets",
+        iconId: "organization-secrets",
         adminOnly: true,
       },
       {

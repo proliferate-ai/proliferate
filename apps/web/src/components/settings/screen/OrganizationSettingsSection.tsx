@@ -3,7 +3,6 @@ import type { FormEvent } from "react";
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -117,17 +116,6 @@ export function OrganizationSettingsSection() {
           </div>
         )}
       </SettingsCard>
-      {organization.currentTeam ? (
-        <CloudSecretsSettingsSurface
-          scope={{
-            kind: "organization",
-            organizationId: organization.currentTeam.id,
-            canManage: organization.currentTeam.membership?.status === "active"
-              && (organization.currentTeam.membership.role === "owner"
-                || organization.currentTeam.membership.role === "admin"),
-          }}
-        />
-      ) : null}
     </section>
   );
 }
