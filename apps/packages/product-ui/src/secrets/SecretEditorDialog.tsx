@@ -1,10 +1,12 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
+import { Check, ChevronDown } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 export type SecretEditorKind = "env" | "file";
@@ -25,6 +27,13 @@ export interface SecretEditorDialogProps {
   onClose: () => void;
   onSave: (input: { kind: SecretEditorKind; nameOrPath: string; secret: string }) => void;
 }
+
+const SECRET_KIND_LABELS: Record<SecretEditorKind, string> = {
+  env: "Environment variable",
+  file: "File",
+};
+
+const SECRET_KIND_OPTIONS: readonly SecretEditorKind[] = ["env", "file"];
 
 export function SecretEditorDialog({
   open,
@@ -93,16 +102,10 @@ export function SecretEditorDialog({
     >
       <form id="secret-editor-form" className="space-y-4" onSubmit={submit}>
         {editing ? null : (
-          <Label className="block space-y-1.5 text-sm font-medium text-foreground">
-            <span className="block">Type</span>
-            <Select
-              value={kind}
-              onChange={(event) => setKind(event.currentTarget.value as SecretEditorKind)}
-            >
-              <option value="env">Environment variable</option>
-              <option value="file">File</option>
-            </Select>
-          </Label>
+          <div className="space-y-1.5">
+            <Label className="mb-0 text-sm font-medium text-foreground">Type</Label>
+            <SecretKindSelect value={kind} onChange={setKind} />
+          </div>
         )}
         <Label className="block space-y-1.5 text-sm font-medium text-foreground">
           <span className="block">{nameLabel}</span>
@@ -130,5 +133,53 @@ export function SecretEditorDialog({
         ) : null}
       </form>
     </ModalShell>
+  );
+}
+
+function SecretKindSelect({
+  value,
+  onChange,
+}: {
+  value: SecretEditorKind;
+  onChange: (value: SecretEditorKind) => void;
+}) {
+  return (
+    <PopoverButton
+      align="start"
+      side="bottom"
+      className={`w-[min(32rem,calc(100vw-2rem))] ${POPOVER_SURFACE_CLASS}`}
+      trigger={(
+        <Button
+          type="button"
+          variant="outline"
+          size="md"
+          className="h-9 w-full justify-between rounded-md border-input bg-surface-control px-3 text-sm font-normal text-foreground shadow-none hover:bg-list-hover data-[state=open]:ring-1 data-[state=open]:ring-ring"
+        >
+          <span className="min-w-0 truncate text-left">{SECRET_KIND_LABELS[value]}</span>
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+        </Button>
+      )}
+    >
+      {(close) => (
+        <div className="max-h-64 overflow-y-auto">
+          {SECRET_KIND_OPTIONS.map((option) => {
+            const selected = option === value;
+            return (
+              <PopoverMenuItem
+                key={option}
+                label={SECRET_KIND_LABELS[option]}
+                trailing={selected ? <Check className="size-3.5" /> : <span className="size-3.5" />}
+                aria-selected={selected}
+                role="option"
+                onClick={() => {
+                  onChange(option);
+                  close();
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+    </PopoverButton>
   );
 }
