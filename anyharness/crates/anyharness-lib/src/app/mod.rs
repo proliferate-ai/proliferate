@@ -21,6 +21,8 @@ use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
+use crate::domains::local_skills::service::LocalSkillService;
+use crate::domains::local_skills::store::LocalSkillStore;
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
@@ -70,6 +72,7 @@ use crate::domains::workspaces::service::WorkspaceService;
 use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
+use crate::integrations::skills_sh::SkillsShClient;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
 use crate::persistence::Db;
@@ -100,6 +103,7 @@ pub struct AppState {
     pub agent_auth_service: Arc<AgentAuthService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub runtime_config_service: Arc<RuntimeConfigService>,
+    pub local_skill_service: Arc<LocalSkillService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub workspace_setup_runtime: Arc<WorkspaceSetupRuntime>,
@@ -185,6 +189,11 @@ impl AppState {
         let runtime_config_service = Arc::new(RuntimeConfigService::new(RuntimeConfigStore::new(
             db.clone(),
         )));
+        let local_skill_service = Arc::new(LocalSkillService::new(
+            LocalSkillStore::new(db.clone()),
+            runtime_home.clone(),
+            SkillsShClient::from_env(),
+        ));
         if let Ok(status) = runtime_config_service.status() {
             if let (Some(revision), Some(manifest)) = (status.current_revision, status.manifest) {
                 auth_manager.apply_runtime_config(&revision, &manifest);
@@ -325,6 +334,7 @@ impl AppState {
             session_extensions,
             product_mcp_launch_catalog,
             runtime_config_service.clone(),
+            local_skill_service.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
@@ -437,6 +447,7 @@ impl AppState {
             agent_auth_service,
             agent_reconcile_service,
             runtime_config_service,
+            local_skill_service,
             repo_root_service,
             workspace_runtime,
             workspace_setup_runtime,

@@ -5,6 +5,7 @@ import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPa
 import { IntegrationsPage } from "@/pages/IntegrationsPage";
 import { MainPage } from "@/pages/MainPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { SkillsPage } from "@/pages/SkillsPage";
 import { WorkflowsPage } from "@/pages/WorkflowsPage";
 import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
 
@@ -63,6 +64,7 @@ export function AuthenticatedAppHost({
           />
           <Route path="plugins" element={<LegacyRouteRedirect to={APP_ROUTES.integrations} />} />
           <Route path="integrations" element={<IntegrationsPage />} />
+          <Route path="skills" element={<SkillsPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />

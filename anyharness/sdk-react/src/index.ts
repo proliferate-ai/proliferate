@@ -23,6 +23,10 @@ export type {
 export {
   anyHarnessRuntimeKey,
   anyHarnessRuntimeHealthKey,
+  anyHarnessSkillsKey,
+  anyHarnessMarketplaceSkillsScopeKey,
+  anyHarnessMarketplaceSkillsKey,
+  anyHarnessWorkspaceSkillsKey,
   anyHarnessAgentsKey,
   anyHarnessAgentLaunchOptionsKey,
   anyHarnessAgentLaunchOptionsPrefixKey,
@@ -87,6 +91,14 @@ export {
   useCloseAgentLoginTerminalMutation,
   useReconcileAgentsMutation,
 } from "./hooks/agents.js";
+export {
+  useAnyHarnessInstalledSkillsQuery,
+  useAnyHarnessMarketplaceSkillsQuery,
+  useAnyHarnessInstallSkillMutation,
+  useAnyHarnessDeleteSkillMutation,
+  useAnyHarnessWorkspaceSkillsQuery,
+  useAnyHarnessUpdateWorkspaceSkillMutation,
+} from "./hooks/skills.js";
 export {
   useRepoRootsQuery,
   useReadRepoRootFileMutation,

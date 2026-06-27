@@ -49,6 +49,10 @@ export function useWorkspaceSidebarActions() {
     goToTopLevelRoute(APP_ROUTES.integrations);
   }, [goToTopLevelRoute]);
 
+  const handleGoSkills = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.skills);
+  }, [goToTopLevelRoute]);
+
   const handleGoWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
@@ -191,6 +195,7 @@ export function useWorkspaceSidebarActions() {
     handleAddRepo,
     handleGoHome,
     handleGoIntegrations,
+    handleGoSkills,
     handleGoWorkflows,
     handleSidebarIndicatorAction,
     handleMarkWorkspaceDone,

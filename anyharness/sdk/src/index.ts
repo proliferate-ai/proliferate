@@ -60,6 +60,21 @@ export type {
 } from "./types/runtime-config.js";
 
 export type {
+  LocalSkillAuditStatus,
+  LocalSkillAuditEntry,
+  LocalSkillFileSummary,
+  InstalledSkill,
+  InstalledSkillsResponse,
+  InstallSkillRequest,
+  DeleteSkillResponse,
+  WorkspaceSkill,
+  WorkspaceSkillsResponse,
+  UpdateWorkspaceSkillRequest,
+  MarketplaceSkill,
+  MarketplaceSkillSearchResponse,
+} from "./types/skills.js";
+
+export type {
   ReplayRecordingSummary,
   ListReplayRecordingsResponse,
   ExportReplayRecordingRequest,

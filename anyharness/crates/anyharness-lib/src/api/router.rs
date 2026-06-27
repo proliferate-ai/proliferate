@@ -12,10 +12,11 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth_config, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
-    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, runtime_config, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
-    workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
+    local_skills, mobility, plans, processes, product_mcp, replay, repo_roots, reviews,
+    runtime_config, sessions, sessions_config, sessions_events, sessions_fork,
+    sessions_interactions, sessions_lifecycle, sessions_pending, sessions_prompt, sessions_resume,
+    subagents, terminals, workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup,
+    workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
@@ -69,6 +70,14 @@ pub fn build_router(state: AppState) -> Router {
             "/runtime-config",
             get(runtime_config::get_runtime_config).put(runtime_config::apply_runtime_config),
         )
+        // Local skills
+        .route("/skills", get(local_skills::list_skills))
+        .route(
+            "/skills/marketplace/search",
+            get(local_skills::search_marketplace),
+        )
+        .route("/skills/install", post(local_skills::install_skill))
+        .route("/skills/{skill_id}", delete(local_skills::delete_skill))
         // Workspaces
         .route(
             "/workspaces",
@@ -171,6 +180,14 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/detect-setup",
             get(workspaces_setup::detect_project_setup),
+        )
+        .route(
+            "/workspaces/{workspace_id}/skills",
+            get(local_skills::list_workspace_skills),
+        )
+        .route(
+            "/workspaces/{workspace_id}/skills/{skill_id}",
+            patch(local_skills::update_workspace_skill),
         )
         .route(
             "/workspaces/{workspace_id}/setup-status",

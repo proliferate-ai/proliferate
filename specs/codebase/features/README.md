@@ -25,6 +25,7 @@ low-level runtime contracts.
 | Delegated work / subagents | Delegated work lifecycle, parent/subagent coordination, review agents, queued wakes, and transcript/composer integration. | [delegated-work.md](delegated-work.md), [agent-features/definitions/subagents.md](agent-features/definitions/subagents.md) |
 | Artifacts | Cowork artifacts, artifact MCP definition, artifact product behavior, and artifact transcript/workflow surfaces. | [cowork-artifacts.md](cowork-artifacts.md), [agent-features/definitions/artifacts.md](agent-features/definitions/artifacts.md) |
 | Agent features / product MCPs | Product MCP server pattern and concrete agent-feature MCP definitions for reviews, subagents, artifacts, cowork, and prompt/skill policy. | [agent-features/servers.md](agent-features/servers.md), [agent-features/definitions/README.md](agent-features/definitions/README.md) |
+| Local skills | Desktop local Skills section, skills.sh marketplace install flow, per-workspace enablement, and local runtime bridge semantics. | [local-skills.md](local-skills.md) |
 | Settings and admin IA | Settings/admin information architecture, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings-admin-ia.md](settings-admin-ia.md) |
 | Support reporting | Desktop support report uploads, sanitization, diagnostics, and support-submitted issue handoff. | [support-reporting.md](support-reporting.md) |
 | Terminals | Workspace terminal pane UX, terminal record actions, and the creation grid contract for new terminals. | [terminals.md](terminals.md) |
@@ -42,6 +43,7 @@ Use this map before creating a new spec:
 | Terminals | [terminals.md](terminals.md) owns terminal pane UX and the creation grid contract. Runtime ownership remains under [../structures/anyharness/README.md](../structures/anyharness/README.md). |
 | Computer Use | No dedicated computer-use feature spec yet. Product MCP ownership is in [agent-features/servers.md](agent-features/servers.md); create a feature spec before adding user-visible Computer Use workflow, permissions, or QA behavior. |
 | Plugins | Runtime/config ownership lives in [../primitives/mcp-skills.md](../primitives/mcp-skills.md). Create a plugins feature spec only for user-facing catalog/install/manage workflows that exceed the primitive contract. |
+| Local skills | [local-skills.md](local-skills.md) owns the Desktop local-first Skills manager; [../primitives/mcp-skills.md](../primitives/mcp-skills.md) owns the shared runtime skill bridge. |
 | Product MCP Structure | Covered by [agent-features/servers.md](agent-features/servers.md) and concrete definitions under [agent-features/definitions/](agent-features/definitions/). |
 
 ## Agent Feature Coverage
@@ -56,6 +58,7 @@ new feature spec or Product MCP definition:
 | Sub Agents | [delegated-work.md](delegated-work.md) and [agent-features/definitions/subagents.md](agent-features/definitions/subagents.md). |
 | Computer Use | No concrete feature spec or Product MCP definition yet; create one before user-visible Computer Use workflow, permission, or QA changes. |
 | Plugins | [../primitives/mcp-skills.md](../primitives/mcp-skills.md) owns runtime/config expansion; create a feature spec only for catalog/install/manage UX. |
+| Local skills | [local-skills.md](local-skills.md). |
 
 ## Adding A Feature Spec
 

@@ -1,6 +1,7 @@
 export const APP_ROUTES = {
   home: "/",
   integrations: "/integrations",
+  skills: "/skills",
   workflows: "/workflows",
   settings: "/settings",
 } as const;

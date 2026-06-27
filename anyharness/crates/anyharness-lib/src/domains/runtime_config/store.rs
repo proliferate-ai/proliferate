@@ -162,6 +162,26 @@ impl RuntimeConfigStore {
                     manifest_json,
                 ],
             )?;
+            for artifact in &record.artifact_payloads {
+                conn.execute(
+                    "INSERT INTO runtime_config_artifacts (
+                        hash, content_type, byte_size, source_ref, content, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
+                     ON CONFLICT(hash) DO UPDATE SET
+                        content_type = excluded.content_type,
+                        byte_size = excluded.byte_size,
+                        source_ref = excluded.source_ref,
+                        content = excluded.content,
+                        updated_at = datetime('now')",
+                    params![
+                        artifact.hash,
+                        artifact.content_type,
+                        artifact.byte_size,
+                        artifact.source_ref.as_deref(),
+                        artifact.content,
+                    ],
+                )?;
+            }
             Ok(())
         })
     }

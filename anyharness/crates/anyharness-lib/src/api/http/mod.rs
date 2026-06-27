@@ -15,6 +15,7 @@ mod git_contract;
 mod git_task;
 pub mod health;
 pub mod hosting;
+pub mod local_skills;
 pub mod mobility;
 mod mobility_archive_contract;
 mod mobility_contract;

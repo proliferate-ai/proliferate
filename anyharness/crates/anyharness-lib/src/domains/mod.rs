@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod artifacts;
 pub mod cowork;
+pub mod local_skills;
 pub mod mobility;
 pub mod plans;
 pub mod plugins;

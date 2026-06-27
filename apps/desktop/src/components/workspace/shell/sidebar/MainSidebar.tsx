@@ -98,6 +98,7 @@ export const MainSidebar = memo(function MainSidebar() {
   } = useCloudWorkspaceActions();
 
   const isOnIntegrations = location.pathname === APP_ROUTES.integrations;
+  const isOnSkills = location.pathname === APP_ROUTES.skills;
   const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
   const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
@@ -270,10 +271,12 @@ export const MainSidebar = memo(function MainSidebar() {
           <SidebarPrimaryNavigation
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
             integrationsActive={isOnIntegrations}
+            skillsActive={isOnSkills}
             workflowsActive={isOnWorkflows}
             supportActive={false}
             onGoHome={actions.handleGoHome}
             onGoIntegrations={actions.handleGoIntegrations}
+            onGoSkills={actions.handleGoSkills}
             onGoWorkflows={actions.handleGoWorkflows}
             onOpenSupport={handleOpenSupport}
             shortcutRevealVisible={shortcutRevealVisible}

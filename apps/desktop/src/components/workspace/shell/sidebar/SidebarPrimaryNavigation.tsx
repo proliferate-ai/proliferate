@@ -2,6 +2,7 @@ import {
   Blocks,
   Home,
   LifeBuoy,
+  Sparkles,
   Zap,
 } from "@proliferate/ui/icons";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
@@ -10,6 +11,7 @@ import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
   integrationsActive: boolean;
+  skillsActive: boolean;
   workflowsActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
@@ -19,6 +21,7 @@ interface SidebarPrimaryNavigationProps {
   };
   onGoHome: () => void;
   onGoIntegrations: () => void;
+  onGoSkills: () => void;
   onGoWorkflows: () => void;
   onOpenSupport: () => void;
 }
@@ -26,12 +29,14 @@ interface SidebarPrimaryNavigationProps {
 export function SidebarPrimaryNavigation({
   homeActive,
   integrationsActive,
+  skillsActive,
   workflowsActive,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
   onGoHome,
   onGoIntegrations,
+  onGoSkills,
   onGoWorkflows,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
@@ -48,6 +53,12 @@ export function SidebarPrimaryNavigation({
       active: integrationsActive,
       icon: <Blocks className="size-4" />,
       label: "Integrations",
+    },
+    {
+      id: "skills",
+      active: skillsActive,
+      icon: <Sparkles className="size-4" />,
+      label: "Skills",
     },
     {
       id: "workflows",
@@ -71,6 +82,9 @@ export function SidebarPrimaryNavigation({
         break;
       case "integrations":
         onGoIntegrations();
+        break;
+      case "skills":
+        onGoSkills();
         break;
       case "workflows":
         onGoWorkflows();

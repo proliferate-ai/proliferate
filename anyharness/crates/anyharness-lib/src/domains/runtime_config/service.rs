@@ -1,19 +1,19 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use anyharness_contract::v1::{
-    RuntimeArtifactPayload, RuntimeArtifactRef, RuntimeArtifactStatus, RuntimeConfigManifest,
-    RuntimeConfigRevisionExpectation, RuntimeCredentialValue, RuntimeMcpLaunch,
-    RuntimeMcpNamedValue, RuntimeMcpServer, RuntimeMcpTemplatePart, RuntimeMcpValue, RuntimeSkill,
-    SessionMcpBindingSummary,
+    RuntimeArtifactPayload, RuntimeArtifactRef, RuntimeArtifactStatus, RuntimeConfigExternalScope,
+    RuntimeConfigManifest, RuntimeConfigRevision, RuntimeConfigRevisionExpectation,
+    RuntimeCredentialValue, RuntimeMcpLaunch, RuntimeMcpNamedValue, RuntimeMcpServer,
+    RuntimeMcpTemplatePart, RuntimeMcpValue, RuntimeSkill, SessionMcpBindingSummary,
 };
 use sha2::{Digest, Sha256};
 use url::Url;
 
 use super::model::{
-    scope_key, RuntimeConfigApplyInput, RuntimeConfigApplyOutcome, RuntimeConfigRecord,
-    RuntimeConfigSessionContext, RuntimeConfigSessionSkill, RuntimeConfigSessionSkillResource,
-    RuntimeConfigStatus,
+    scope_key, RuntimeConfigApplyInput, RuntimeConfigApplyOutcome, RuntimeConfigExtraSkills,
+    RuntimeConfigRecord, RuntimeConfigSessionContext, RuntimeConfigSessionSkill,
+    RuntimeConfigSessionSkillResource, RuntimeConfigStatus,
 };
 use super::store::RuntimeConfigStore;
 use crate::domains::sessions::mcp_bindings::model::{
@@ -114,6 +114,23 @@ impl RuntimeConfigService {
         let current = self.record_for_expected(expected)?;
         self.store.set_session_context(session_id, &current)?;
         self.session_inputs_from_record(current)
+    }
+
+    pub fn bind_session_with_extra_skills(
+        &self,
+        session_id: &str,
+        expected: Option<&RuntimeConfigRevisionExpectation>,
+        extra: RuntimeConfigExtraSkills,
+    ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
+        let mut record = match expected {
+            Some(expected) => self.record_for_expected(expected)?,
+            None => empty_local_skills_record(&extra),
+        };
+        if !extra.is_empty() {
+            merge_extra_skills(&mut record, extra);
+        }
+        self.store.set_session_context(session_id, &record)?;
+        self.session_inputs_from_record(record)
     }
 
     pub fn session_context(
@@ -237,6 +254,72 @@ impl RuntimeConfigService {
     ) -> Result<RuntimeConfigSessionInputs, RuntimeConfigError> {
         session_inputs_from_record(current, self)
     }
+}
+
+fn empty_local_skills_record(extra: &RuntimeConfigExtraSkills) -> RuntimeConfigRecord {
+    let mut record = RuntimeConfigRecord {
+        revision: RuntimeConfigRevision {
+            id: "local-skills:empty".to_string(),
+            sequence: 0,
+            content_hash: "sha256:empty".to_string(),
+            external_scope: Some(RuntimeConfigExternalScope {
+                provider: "local-skills".to_string(),
+                id: extra.workspace_id.clone(),
+                target_id: None,
+            }),
+        },
+        manifest: RuntimeConfigManifest {
+            mcp_servers: Vec::new(),
+            mcp_binding_summaries: Vec::new(),
+            skills: Vec::new(),
+            artifacts: Vec::new(),
+            direct_attach_auth: None,
+            warnings: Vec::new(),
+        },
+        artifact_payloads: Vec::new(),
+    };
+    update_local_only_revision_hash(&mut record);
+    record
+}
+
+fn merge_extra_skills(record: &mut RuntimeConfigRecord, extra: RuntimeConfigExtraSkills) {
+    let mut artifact_hashes = record
+        .manifest
+        .artifacts
+        .iter()
+        .map(|artifact| artifact.hash.clone())
+        .collect::<HashSet<_>>();
+    let mut payload_hashes = record
+        .artifact_payloads
+        .iter()
+        .map(|artifact| artifact.hash.clone())
+        .collect::<HashSet<_>>();
+    for artifact in extra.artifacts {
+        if artifact_hashes.insert(artifact.hash.clone()) {
+            record.manifest.artifacts.push(artifact);
+        }
+    }
+    for payload in extra.artifact_payloads {
+        if payload_hashes.insert(payload.hash.clone()) {
+            record.artifact_payloads.push(payload);
+        }
+    }
+    record.manifest.skills.extend(extra.skills);
+    if record
+        .revision
+        .external_scope
+        .as_ref()
+        .is_some_and(|scope| scope.provider == "local-skills")
+    {
+        update_local_only_revision_hash(record);
+    }
+}
+
+fn update_local_only_revision_hash(record: &mut RuntimeConfigRecord) {
+    let manifest_json = serde_json::to_vec(&record.manifest).unwrap_or_default();
+    let digest = format!("{:x}", Sha256::digest(&manifest_json));
+    record.revision.id = format!("local-skills:{digest}");
+    record.revision.content_hash = format!("sha256:{digest}");
 }
 
 fn session_inputs_from_record(
@@ -685,12 +768,13 @@ fn runtime_skill_to_session_skill(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::runtime_config::model::RuntimeConfigExtraSkills;
     use crate::persistence::Db;
     use anyharness_contract::v1::{
-        RuntimeArtifactRef, RuntimeConfigExternalScope, RuntimeConfigRevision,
-        RuntimeCredentialRef, RuntimeCredentialUse, RuntimeMcpNamedValue, RuntimeMcpServer,
-        RuntimeMcpTransport, RuntimeSkill, RuntimeSkillSourceKind, SessionMcpBindingOutcome,
-        SessionMcpBindingSummary, SessionMcpTransport,
+        RuntimeArtifactPayload, RuntimeArtifactRef, RuntimeConfigExternalScope,
+        RuntimeConfigRevision, RuntimeCredentialRef, RuntimeCredentialUse, RuntimeMcpNamedValue,
+        RuntimeMcpServer, RuntimeMcpTransport, RuntimeSkill, RuntimeSkillSourceKind,
+        SessionMcpBindingOutcome, SessionMcpBindingSummary, SessionMcpTransport,
     };
 
     #[test]
@@ -726,6 +810,71 @@ mod tests {
             external_scope: None,
         });
         assert!(matches!(stale, Err(RuntimeConfigError::Stale)));
+    }
+
+    #[test]
+    fn bind_session_with_extra_skills_appends_skills_sh_context() {
+        let db = Db::open_in_memory().expect("db");
+        let service = RuntimeConfigService::new(RuntimeConfigStore::new(db));
+        let request = apply_request();
+        service.apply_config(request.clone()).expect("apply");
+        let local_content = "# Local skill\n";
+        let local_hash = runtime_artifact_hash(local_content);
+        let local_artifact = RuntimeArtifactRef {
+            hash: local_hash.clone(),
+            content_type: "text/markdown".to_string(),
+            byte_size: local_content.as_bytes().len() as i64,
+            source_ref: Some("skills_sh:owner/repo/local:SKILL.md".to_string()),
+            resource_id: None,
+            display_name: None,
+        };
+        let extra = RuntimeConfigExtraSkills {
+            workspace_id: "workspace-1".to_string(),
+            skills: vec![RuntimeSkill {
+                id: "owner/repo/local".to_string(),
+                source_kind: RuntimeSkillSourceKind::SkillsSh,
+                display_name: "Local skill".to_string(),
+                description: "Local instructions".to_string(),
+                instruction_artifact: local_artifact.clone(),
+                resources: Vec::new(),
+                required_mcp_server_ids: Vec::new(),
+                credential_refs: Vec::new(),
+            }],
+            artifacts: vec![local_artifact],
+            artifact_payloads: vec![RuntimeArtifactPayload {
+                hash: local_hash,
+                content_type: "text/markdown".to_string(),
+                byte_size: local_content.as_bytes().len() as i64,
+                source_ref: Some("skills_sh:owner/repo/local:SKILL.md".to_string()),
+                resource_id: None,
+                display_name: None,
+                content: local_content.to_string(),
+            }],
+        };
+
+        let inputs = service
+            .bind_session_with_extra_skills(
+                "session-1",
+                Some(&RuntimeConfigRevisionExpectation {
+                    revision_id: request.revision.id.clone(),
+                    sequence: Some(request.revision.sequence),
+                    content_hash: request.revision.content_hash.clone(),
+                    external_scope: request.revision.external_scope.clone(),
+                }),
+                extra,
+            )
+            .expect("bind");
+
+        assert_eq!(inputs.context.revision.id, request.revision.id);
+        assert_eq!(inputs.context.skills.len(), 2);
+        assert!(inputs.context.skills.iter().any(|skill| {
+            skill.skill_id == "owner/repo/local" && skill.instructions == local_content
+        }));
+        let context = service
+            .session_context("session-1")
+            .expect("context")
+            .expect("stored context");
+        assert_eq!(context.skills.len(), 2);
     }
 
     #[test]
