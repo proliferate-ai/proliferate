@@ -58,6 +58,47 @@ async def _load_workspace_materialization(
     )
 
 
+def _secret_set_materialization_key(value: CloudSecretSetValue) -> str:
+    if value.scope_kind == "personal" and value.user_id is not None:
+        return f"personal:{value.user_id}"
+    if value.scope_kind == "organization" and value.organization_id is not None:
+        return f"organization:{value.organization_id}"
+    if value.scope_kind == "workspace" and value.cloud_repo_config_id is not None:
+        return f"workspace:{value.cloud_repo_config_id}"
+    return f"{value.scope_kind}:{value.id}"
+
+
+def _secret_set_has_desired_state(value: CloudSecretSetValue) -> bool:
+    return value.version > 0 and (len(value.env_vars) > 0 or len(value.files) > 0)
+
+
+def _materialization_ready_for_secret_set(
+    value: CloudSecretSetValue,
+    materialization: ManagedSandboxSecretMaterializationValue | None,
+) -> bool:
+    return (
+        materialization is not None
+        and materialization.status == "ready"
+        and materialization.applied_versions.get(_secret_set_materialization_key(value))
+        == value.version
+    )
+
+
+def _should_repair_stale_materialization(
+    value: CloudSecretSetValue,
+    materialization: ManagedSandboxSecretMaterializationValue | None,
+) -> bool:
+    if not _secret_set_has_desired_state(value):
+        return False
+    if materialization is None:
+        return True
+    if materialization.status == "running":
+        return False
+    if materialization.status == "error":
+        return False
+    return not _materialization_ready_for_secret_set(value, materialization)
+
+
 async def _require_organization_member(
     db: AsyncSession,
     *,
@@ -129,7 +170,10 @@ async def get_personal_secrets(
         user_id=user_id,
         actor_user_id=user_id,
     )
-    return value, await _load_user_global_materialization(db, user_id)
+    materialization = await _load_user_global_materialization(db, user_id)
+    if _should_repair_stale_materialization(value, materialization):
+        schedule_global_secret_materialization_for_user(db, user_id=user_id)
+    return value, materialization
 
 
 async def set_personal_secret_env_var(
@@ -216,7 +260,13 @@ async def get_organization_secrets(
         organization_id=organization_id,
         actor_user_id=user_id,
     )
-    return value, await _load_user_global_materialization(db, user_id)
+    materialization = await _load_user_global_materialization(db, user_id)
+    if _should_repair_stale_materialization(value, materialization):
+        schedule_global_secret_materialization_for_organization(
+            db,
+            organization_id=organization_id,
+        )
+    return value, materialization
 
 
 async def set_organization_secret_env_var(
@@ -345,11 +395,19 @@ async def get_workspace_secrets(
         cloud_repo_config_id=repo_config.id,
         actor_user_id=user_id,
     )
-    return value, await _load_workspace_materialization(
+    materialization = await _load_workspace_materialization(
         db,
         user_id=user_id,
         cloud_repo_config_id=repo_config.id,
     )
+    if _should_repair_stale_materialization(value, materialization):
+        schedule_workspace_secret_materialization_for_repo(
+            db,
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+    return value, materialization
 
 
 async def set_workspace_secret_env_var(
