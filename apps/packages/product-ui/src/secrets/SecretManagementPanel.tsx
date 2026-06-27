@@ -42,7 +42,7 @@ export interface SecretManagementPanelProps {
   error?: string | null;
   onSaveEnvVar: (name: string, value: string) => void;
   onDeleteEnvVar: (name: string) => void;
-  onSaveFile: (path: string, file: File) => void;
+  onSaveFile: (path: string, input: { content: string } | { file: File }) => void;
   onDeleteFile: (path: string) => void;
 }
 
@@ -77,8 +77,10 @@ export function SecretManagementPanel({
   function handleEditorSave(input: SecretEditorSaveInput) {
     if (input.kind === "env") {
       onSaveEnvVar(input.nameOrPath, input.secret);
+    } else if ("file" in input) {
+      onSaveFile(input.nameOrPath, { file: input.file });
     } else {
-      onSaveFile(input.nameOrPath, input.file);
+      onSaveFile(input.nameOrPath, { content: input.content });
     }
     setEditorState(null);
   }

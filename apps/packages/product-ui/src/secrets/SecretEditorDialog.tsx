@@ -1,15 +1,15 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
-import { Check, ChevronDown, CloudUpload } from "@proliferate/ui/icons";
+import { CloudUpload } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 export type SecretEditorKind = "env" | "file";
+export type SecretFileContentSource = "text" | "upload";
 export type SecretFilePathMode = "absolute" | "relative";
 
 export interface SecretEditorDialogState {
@@ -30,6 +30,7 @@ export interface SecretEditorDialogProps {
 
 export type SecretEditorSaveInput =
   | { kind: "env"; nameOrPath: string; secret: string }
+  | { kind: "file"; nameOrPath: string; content: string }
   | { kind: "file"; nameOrPath: string; file: File };
 
 const SECRET_KIND_LABELS: Record<SecretEditorKind, string> = {
@@ -38,6 +39,11 @@ const SECRET_KIND_LABELS: Record<SecretEditorKind, string> = {
 };
 
 const SECRET_KIND_OPTIONS: readonly SecretEditorKind[] = ["env", "file"];
+const FILE_CONTENT_SOURCE_LABELS: Record<SecretFileContentSource, string> = {
+  text: "Paste text",
+  upload: "Upload file",
+};
+const FILE_CONTENT_SOURCE_OPTIONS: readonly SecretFileContentSource[] = ["text", "upload"];
 
 export function SecretEditorDialog({
   open,
@@ -52,6 +58,7 @@ export function SecretEditorDialog({
   const [nameOrPath, setNameOrPath] = useState("");
   const [secret, setSecret] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileContentSource, setFileContentSource] = useState<SecretFileContentSource>("text");
 
   useEffect(() => {
     if (!open || !state) {
@@ -61,13 +68,15 @@ export function SecretEditorDialog({
     setNameOrPath(state.nameOrPath ?? "");
     setSecret("");
     setSelectedFile(null);
+    setFileContentSource("text");
   }, [open, state]);
 
   const editing = state?.mode === "edit";
   const title = editing ? "Update secret" : "Add secret";
   const pathLabel = filePathMode === "absolute" ? "Absolute path" : "Repo-relative path";
   const nameLabel = kind === "env" ? "Variable name" : pathLabel;
-  const hasSecretValue = kind === "env" ? secret.length > 0 : selectedFile !== null;
+  const hasSecretValue =
+    kind === "env" || fileContentSource === "text" ? secret.length > 0 : selectedFile !== null;
   const canSave = nameOrPath.trim().length > 0 && hasSecretValue && !saving;
   const description = useMemo(() => {
     if (kind === "env") {
@@ -87,6 +96,10 @@ export function SecretEditorDialog({
       onSave({ kind, nameOrPath: nameOrPath.trim(), secret });
       return;
     }
+    if (fileContentSource === "text") {
+      onSave({ kind, nameOrPath: nameOrPath.trim(), content: secret });
+      return;
+    }
     if (selectedFile) {
       onSave({ kind, nameOrPath: nameOrPath.trim(), file: selectedFile });
     }
@@ -96,6 +109,7 @@ export function SecretEditorDialog({
     setKind(nextKind);
     setSecret("");
     setSelectedFile(null);
+    setFileContentSource("text");
   }
 
   function handleFileChange(file: File | null) {
@@ -103,6 +117,12 @@ export function SecretEditorDialog({
     if (file && filePathMode === "relative" && nameOrPath.trim().length === 0) {
       setNameOrPath(file.name);
     }
+  }
+
+  function handleFileContentSourceChange(nextSource: SecretFileContentSource) {
+    setFileContentSource(nextSource);
+    setSecret("");
+    setSelectedFile(null);
   }
 
   return (
@@ -129,7 +149,17 @@ export function SecretEditorDialog({
         {editing ? null : (
           <div className="space-y-1.5">
             <Label className="mb-0 text-sm font-medium text-foreground">Type</Label>
-            <SecretKindSelect value={kind} onChange={handleKindChange} />
+            <Select
+              value={kind}
+              onChange={(event) =>
+                handleKindChange(event.currentTarget.value as SecretEditorKind)}
+            >
+              {SECRET_KIND_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {SECRET_KIND_LABELS[option]}
+                </option>
+              ))}
+            </Select>
           </div>
         )}
         <Label className="block space-y-1.5 text-sm font-medium text-foreground">
@@ -137,7 +167,13 @@ export function SecretEditorDialog({
           <Input
             value={nameOrPath}
             disabled={editing}
-            placeholder={kind === "env" ? "API_TOKEN" : filePathMode === "absolute" ? "/home/user/.env" : ".env.local"}
+            placeholder={
+              kind === "env"
+                ? "API_TOKEN"
+                : filePathMode === "absolute"
+                  ? "/home/user/.env"
+                  : ".env.local"
+            }
             onChange={(event) => setNameOrPath(event.currentTarget.value)}
           />
         </Label>
@@ -153,25 +189,58 @@ export function SecretEditorDialog({
             />
           </Label>
         ) : (
-          <Label className="block space-y-1.5 text-sm font-medium text-foreground">
-            <span className="block">Upload file</span>
-            <div className="flex flex-col gap-2 rounded-md border border-input bg-surface-control p-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CloudUpload className="size-4 shrink-0" />
-                <span className="min-w-0 truncate">
-                  {selectedFile
-                    ? `${selectedFile.name} · ${formatBytes(selectedFile.size)}`
-                    : "Choose a UTF-8 text file to upload."}
-                </span>
-              </div>
-              <Input
-                type="file"
-                data-telemetry-mask
-                className="h-auto cursor-pointer py-2"
-                onChange={(event) => handleFileChange(event.currentTarget.files?.[0] ?? null)}
-              />
-            </div>
-          </Label>
+          <>
+            <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+              <span className="block">Content source</span>
+              <Select
+                value={fileContentSource}
+                onChange={(event) =>
+                  handleFileContentSourceChange(
+                    event.currentTarget.value as SecretFileContentSource,
+                  )}
+              >
+                {FILE_CONTENT_SOURCE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {FILE_CONTENT_SOURCE_LABELS[option]}
+                  </option>
+                ))}
+              </Select>
+            </Label>
+            {fileContentSource === "text" ? (
+              <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+                <span className="block">File content</span>
+                <Textarea
+                  value={secret}
+                  data-telemetry-mask
+                  className="h-52 font-mono text-sm"
+                  placeholder={editing ? "Replacement file content" : "Secret file content"}
+                  onChange={(event) => setSecret(event.currentTarget.value)}
+                />
+              </Label>
+            ) : (
+              <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+                <span className="block">Upload file</span>
+                <div className="flex flex-col gap-2 rounded-md border border-input bg-surface-control p-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <CloudUpload className="size-4 shrink-0" />
+                    <span className="min-w-0 truncate">
+                      {selectedFile
+                        ? `${selectedFile.name} · ${formatBytes(selectedFile.size)}`
+                        : "Choose a UTF-8 text file to upload."}
+                    </span>
+                  </div>
+                  <Input
+                    type="file"
+                    data-telemetry-mask
+                    className="h-auto cursor-pointer py-2"
+                    onChange={(event) =>
+                      handleFileChange(event.currentTarget.files?.[0] ?? null)
+                    }
+                  />
+                </div>
+              </Label>
+            )}
+          </>
         )}
         {error ? (
           <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-sm text-destructive">
@@ -180,54 +249,6 @@ export function SecretEditorDialog({
         ) : null}
       </form>
     </ModalShell>
-  );
-}
-
-function SecretKindSelect({
-  value,
-  onChange,
-}: {
-  value: SecretEditorKind;
-  onChange: (value: SecretEditorKind) => void;
-}) {
-  return (
-    <PopoverButton
-      align="start"
-      side="bottom"
-      className={`w-[min(32rem,calc(100vw-2rem))] ${POPOVER_SURFACE_CLASS}`}
-      trigger={(
-        <Button
-          type="button"
-          variant="outline"
-          size="md"
-          className="h-9 w-full justify-between rounded-md border-input bg-surface-control px-3 text-sm font-normal text-foreground shadow-none hover:bg-list-hover data-[state=open]:ring-1 data-[state=open]:ring-ring"
-        >
-          <span className="min-w-0 truncate text-left">{SECRET_KIND_LABELS[value]}</span>
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </Button>
-      )}
-    >
-      {(close) => (
-        <div className="max-h-64 overflow-y-auto">
-          {SECRET_KIND_OPTIONS.map((option) => {
-            const selected = option === value;
-            return (
-              <PopoverMenuItem
-                key={option}
-                label={SECRET_KIND_LABELS[option]}
-                trailing={selected ? <Check className="size-3.5" /> : <span className="size-3.5" />}
-                aria-selected={selected}
-                role="option"
-                onClick={() => {
-                  onChange(option);
-                  close();
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
-    </PopoverButton>
   );
 }
 
