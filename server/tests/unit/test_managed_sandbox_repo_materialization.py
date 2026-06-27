@@ -12,20 +12,11 @@ from proliferate.db.store.managed_sandbox_repo_materializations import (
     ManagedSandboxRepoMaterializationValue,
 )
 from proliferate.db.store.managed_sandboxes import ManagedSandboxValue
-from proliferate.server.cloud.managed_sandboxes import repo_materialization
-
-
-def _repo_file(relative_path: str) -> CloudRepoFileValue:
-    now = datetime.now(UTC)
-    return CloudRepoFileValue(
-        relative_path=relative_path,
-        content="value",
-        content_sha256="sha",
-        byte_size=5,
-        created_at=now,
-        updated_at=now,
-        last_synced_at=now,
-    )
+from proliferate.server.cloud.managed_sandboxes.materialization import (
+    github_credentials,
+    manifests,
+    repos,
+)
 
 
 def _repo_config(
@@ -113,8 +104,8 @@ def _materialization(
     )
 
 
-def test_session_env_contents_matches_anyharness_materialized_env_contract() -> None:
-    contents = repo_materialization._session_env_contents(
+def test_render_env_file_matches_anyharness_materialized_env_contract() -> None:
+    contents = manifests.render_env_file(
         {
             "API_BASE_URL": "https://example.test",
             "QUOTED": "a'b",
@@ -128,101 +119,146 @@ def test_session_env_contents_matches_anyharness_materialized_env_contract() -> 
     )
 
 
-def test_materialization_freshness_includes_env_var_version() -> None:
-    repo_config = _repo_config(
-        env_vars={"API_BASE_URL": "https://example.test"}, env_vars_version=2
-    )
-    materialization = _materialization(applied_env_vars_version=1)
+def test_materialization_freshness_is_repo_lifecycle_not_secret_version() -> None:
+    repo_config = _repo_config(env_vars={"API_BASE_URL": "https://example.test"})
+    materialization = _materialization(applied_env_vars_version=0)
 
-    assert not repo_materialization._materialization_versions_match(
+    assert repos._materialization_versions_match(
         materialization,
         sandbox=_sandbox(),
         repo_config=repo_config,
         run_setup=False,
     )
 
-    current = _materialization(applied_env_vars_version=2)
-    assert repo_materialization._materialization_versions_match(
-        current,
-        sandbox=_sandbox(),
+    stale_generation = _materialization(sandbox_generation=0)
+    assert not repos._materialization_versions_match(
+        stale_generation,
+        sandbox=_sandbox(runtime_generation=1),
         repo_config=repo_config,
         run_setup=False,
     )
 
 
+def test_materialization_freshness_includes_setup_version_when_setup_runs() -> None:
+    repo_config = _repo_config(setup_script="pnpm install", setup_script_version=2)
+    materialization = _materialization(applied_setup_script_version=1)
+
+    assert not repos._materialization_versions_match(
+        materialization,
+        sandbox=_sandbox(),
+        repo_config=repo_config,
+        run_setup=True,
+    )
+
+    current = _materialization(applied_setup_script_version=2)
+    assert repos._materialization_versions_match(
+        current,
+        sandbox=_sandbox(),
+        repo_config=repo_config,
+        run_setup=True,
+    )
+
+
 @pytest.mark.asyncio
-async def test_apply_repo_env_vars_writes_private_session_env(
+async def test_managed_materialization_paths_include_workspace_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _workspace_secret_relative_paths(
+        *_args: object,
+        **_kwargs: object,
+    ) -> tuple[str, ...]:
+        return (".env.example", "config/app.env")
+
+    monkeypatch.setattr(
+        repos,
+        "workspace_secret_relative_paths",
+        _workspace_secret_relative_paths,
+    )
+
+    assert await repos._managed_materialization_paths(
+        object(),
+        repo_config=_repo_config(),
+    ) == (
+        ".env.example",
+        ".proliferate/env/workspace.env",
+        ".proliferate/env/workspace.manifest.json",
+        "config/app.env",
+    )
+
+
+@pytest.mark.asyncio
+async def test_clone_dirty_check_allows_managed_workspace_secret_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[dict[str, Any]] = []
 
-    async def _capture_command(*_args: object, **kwargs: Any) -> SimpleNamespace:
+    async def _capture_script(*_args: object, **kwargs: Any) -> None:
         calls.append(kwargs)
-        return SimpleNamespace(exit_code=0, stdout="", stderr="")
 
-    monkeypatch.setattr(repo_materialization, "run_sandbox_command_logged", _capture_command)
-    repo_config = _repo_config(env_vars={"API_BASE_URL": "https://example.test"})
+    async def _workspace_secret_relative_paths(
+        *_args: object,
+        **_kwargs: object,
+    ) -> tuple[str, ...]:
+        return (".env.example", "config/app.env")
 
-    await repo_materialization._apply_repo_env_vars(
+    monkeypatch.setattr(repos, "run_materialization_script", _capture_script)
+    monkeypatch.setattr(
+        repos,
+        "workspace_secret_relative_paths",
+        _workspace_secret_relative_paths,
+    )
+
+    await repos._clone_or_update_repo(
         object(),
         object(),
-        runtime_context=object(),
+        repo_config=_repo_config(),
         repo_path="/home/user/workspace/repos/acme/rocket",
-        repo_config=repo_config,
-        managed_sandbox_id=uuid.uuid4(),
+        sandbox=_sandbox(),
     )
 
     assert calls
-    call = calls[0]
-    assert call["label"] == "managed_repo_apply_env_vars"
-    assert call["envs"]["PROLIFERATE_HAS_SESSION_ENV"] == "1"
-    assert (
-        "export API_BASE_URL='https://example.test'"
-        in call["envs"]["PROLIFERATE_SESSION_ENV_CONTENTS"]
-    )
-    command = call["command"]
-    assert ".proliferate/env/session.env" in command
-    assert "chmod 600" in command
-    assert "Refusing to materialize repo env vars through a symlink." in command
+    command = calls[0]["script"]
+    assert ".proliferate/env/workspace.env" in command
+    assert ".proliferate/env/workspace.manifest.json" in command
+    assert ".env.example" in command
+    assert "config/app.env" in command
+    assert "status --porcelain=v1 -z --untracked-files=all" in command
+    assert "Repository has unmanaged local changes" in command
 
 
 @pytest.mark.asyncio
-async def test_clone_dirty_check_allows_managed_materialization_paths(
+async def test_git_credential_readiness_uses_worker_lease(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[dict[str, Any]] = []
 
-    async def _capture_command(*_args: object, **kwargs: Any) -> SimpleNamespace:
+    async def _capture_script(*_args: object, **kwargs: Any) -> None:
         calls.append(kwargs)
-        return SimpleNamespace(exit_code=0, stdout="", stderr="")
 
-    monkeypatch.setattr(repo_materialization, "run_sandbox_command_logged", _capture_command)
-    repo_config = _repo_config(
-        tracked_files=(
-            _repo_file(".env.example"),
-            _repo_file("config/app.env"),
-        )
+    monkeypatch.setattr(
+        github_credentials,
+        "run_materialization_script",
+        _capture_script,
+    )
+    target = SimpleNamespace(
+        runtime_context=SimpleNamespace(home_dir="/home/user"),
+    )
+    sandbox = SimpleNamespace(id=uuid.uuid4())
+
+    result = await github_credentials.ensure_sandbox_git_credentials_ready(
+        object(),
+        sandbox=sandbox,
+        user_id=uuid.uuid4(),
+        target=target,
     )
 
-    await repo_materialization._clone_or_update_repo(
-        object(),
-        object(),
-        runtime_context=object(),
-        repo_config=repo_config,
-        repo_path="/home/user/workspace/repos/acme/rocket",
-        managed_sandbox_id=uuid.uuid4(),
-    )
-
+    assert result is target
     assert calls
-    assert "envs" not in calls[0]
-    command = calls[0]["command"]
+    assert calls[0]["label"] == "managed_sandbox_git_credentials_ready"
+    command = calls[0]["script"]
     assert "proliferate-git-credential-helper" in command
     assert ".proliferate/git/github.com/token" in command
     assert ".proliferate/git/github.com/meta.json" in command
     assert "github_app_user_to_server" in command
     assert "GitHub credentials are not ready in the managed sandbox." in command
-    assert ".proliferate/env/session.env" in command
-    assert ".env.example" in command
-    assert "config/app.env" in command
-    assert "status --porcelain=v1 -z --untracked-files=all" in command
-    assert "Repository has unmanaged local changes" in command
+    assert "credential.https://github.com.helper" in command

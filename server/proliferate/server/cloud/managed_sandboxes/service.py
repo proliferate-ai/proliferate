@@ -1481,15 +1481,14 @@ async def _best_effort_reconcile_repos(
 ) -> None:
     if user_id is None:
         return
-    from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
-        reconcile_configured_repos_for_sandbox,
+    from proliferate.server.cloud.managed_sandboxes.materialization.service import (
+        reconcile_after_sandbox_ready,
     )
 
     try:
-        await reconcile_configured_repos_for_sandbox(
+        await reconcile_after_sandbox_ready(
             db,
             sandbox=sandbox,
-            run_setup=False,
         )
         await commit_managed_sandbox_session(db)
     except Exception as exc:

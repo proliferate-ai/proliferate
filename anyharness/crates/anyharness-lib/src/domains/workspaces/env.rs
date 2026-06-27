@@ -2,19 +2,62 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+const GLOBAL_SECRET_ENV_PATH: &str = "secrets/global.env";
+const MATERIALIZED_WORKSPACE_ENV_PATH: &str = ".proliferate/env/workspace.env";
 const MATERIALIZED_SESSION_ENV_PATH: &str = ".proliferate/env/session.env";
+
+pub fn read_global_secret_env(runtime_home: &Path) -> anyhow::Result<BTreeMap<String, String>> {
+    read_optional_env_file(&runtime_home.join(GLOBAL_SECRET_ENV_PATH))
+}
+
+pub fn read_materialized_workspace_env(
+    workspace_path: &Path,
+) -> anyhow::Result<BTreeMap<String, String>> {
+    read_optional_env_file(&workspace_path.join(MATERIALIZED_WORKSPACE_ENV_PATH))
+}
 
 pub fn read_materialized_session_env(
     workspace_path: &Path,
 ) -> anyhow::Result<BTreeMap<String, String>> {
-    let path = workspace_path.join(MATERIALIZED_SESSION_ENV_PATH);
-    let Ok(contents) = fs::read_to_string(&path) else {
-        return Ok(BTreeMap::new());
-    };
-    parse_materialized_session_env(&contents)
+    read_optional_env_file(&workspace_path.join(MATERIALIZED_SESSION_ENV_PATH))
 }
 
-fn parse_materialized_session_env(contents: &str) -> anyhow::Result<BTreeMap<String, String>> {
+pub fn merge_env_overrides_protecting_metadata(
+    base_env: impl IntoIterator<Item = (String, String)>,
+    override_env: impl IntoIterator<Item = (String, String)>,
+) -> Vec<(String, String)> {
+    let mut merged = BTreeMap::from_iter(base_env);
+    merge_unprotected_env(&mut merged, override_env);
+    merged.into_iter().collect()
+}
+
+pub fn merge_unprotected_env(
+    target: &mut BTreeMap<String, String>,
+    env: impl IntoIterator<Item = (String, String)>,
+) {
+    for (name, value) in env {
+        if !is_proliferate_metadata_key(&name) {
+            target.insert(name, value);
+        }
+    }
+}
+
+fn read_optional_env_file(path: &Path) -> anyhow::Result<BTreeMap<String, String>> {
+    match fs::read_to_string(path) {
+        Ok(contents) => parse_materialized_env_file(&contents),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
+        Err(error) => Err(anyhow::anyhow!(
+            "failed to read materialized env file {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+fn is_proliferate_metadata_key(name: &str) -> bool {
+    name.starts_with("PROLIFERATE_")
+}
+
+fn parse_materialized_env_file(contents: &str) -> anyhow::Result<BTreeMap<String, String>> {
     let mut env = BTreeMap::new();
     for (index, raw_line) in contents.lines().enumerate() {
         let line = raw_line.trim();
@@ -81,11 +124,13 @@ fn parse_materialized_env_value(value: &str) -> anyhow::Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_materialized_session_env;
+    use std::collections::BTreeMap;
+
+    use super::{merge_env_overrides_protecting_metadata, parse_materialized_env_file};
 
     #[test]
     fn parses_worker_generated_session_env() {
-        let parsed = parse_materialized_session_env(
+        let parsed = parse_materialized_env_file(
             "# Generated\nexport ANTHROPIC_API_KEY='sk-test'\nexport QUOTED='a'\\''b'\n",
         )
         .unwrap();
@@ -99,7 +144,35 @@ mod tests {
 
     #[test]
     fn rejects_invalid_env_names() {
-        let error = parse_materialized_session_env("export 1BAD='no'\n").unwrap_err();
+        let error = parse_materialized_env_file("export 1BAD='no'\n").unwrap_err();
         assert!(error.to_string().contains("invalid materialized env line"));
+    }
+
+    #[test]
+    fn env_overrides_cannot_replace_proliferate_metadata() {
+        let merged = merge_env_overrides_protecting_metadata(
+            BTreeMap::from([
+                (
+                    "PROLIFERATE_WORKSPACE_ID".to_string(),
+                    "workspace-1".to_string(),
+                ),
+                ("SHARED".to_string(), "base".to_string()),
+            ]),
+            BTreeMap::from([
+                (
+                    "PROLIFERATE_WORKSPACE_ID".to_string(),
+                    "spoofed".to_string(),
+                ),
+                ("SHARED".to_string(), "override".to_string()),
+            ]),
+        )
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            merged.get("PROLIFERATE_WORKSPACE_ID").map(String::as_str),
+            Some("workspace-1")
+        );
+        assert_eq!(merged.get("SHARED").map(String::as_str), Some("override"));
     }
 }

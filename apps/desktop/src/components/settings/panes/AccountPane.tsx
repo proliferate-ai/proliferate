@@ -5,6 +5,7 @@ import {
   type AccountPasswordCredentialSubmit,
   type AccountProviderView,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
+import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { setPasswordCredential } from "@proliferate/cloud-sdk";
 import { useCreateGitHubAppConnectUrl, useGitHubAppStatus } from "@proliferate/cloud-sdk-react";
@@ -303,6 +304,10 @@ export function AccountPane() {
         }}
         error={signInError || providerLinkError}
       />
+
+      {isAuthenticated && !devAuthBypassed ? (
+        <CloudSecretsSettingsSurface scope={{ kind: "personal" }} />
+      ) : null}
     </section>
   );
 }

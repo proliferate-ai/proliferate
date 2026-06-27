@@ -6,6 +6,7 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
@@ -51,6 +52,10 @@ export function OrganizationPane() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const teamCheckoutQuery = useCurrentTeamCheckout(authStatus === "authenticated");
   const teamCheckoutActions = useTeamCheckoutActions();
+  const canManageOrganizationSecrets =
+    activeOrganization?.membership?.status === "active"
+    && (activeOrganization.membership.role === "owner"
+      || activeOrganization.membership.role === "admin");
 
   useEffect(() => {
     setSettingsName(activeOrganization?.name ?? "");
@@ -265,6 +270,14 @@ export function OrganizationPane() {
           />
 
           <OrganizationBillingLinkSection />
+
+          <CloudSecretsSettingsSurface
+            scope={{
+              kind: "organization",
+              organizationId: activeOrganization.id,
+              canManage: canManageOrganizationSecrets,
+            }}
+          />
         </>
       ) : null}
     </section>

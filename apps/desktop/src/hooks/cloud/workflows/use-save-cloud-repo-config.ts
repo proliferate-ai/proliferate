@@ -58,14 +58,13 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
     mutationFn: async ({
       configured = true,
       defaultBranch,
-      envVars,
-      trackedFilePaths,
       setupScript,
       runCommand,
     }) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
+      const trackedFilePaths: string[] = [];
       const canReadTrackedFiles =
         repository.availability !== "cloud" && trackedFilePaths.length > 0;
       if (canReadTrackedFiles && !runtimeUrl.trim()) {
@@ -74,17 +73,17 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
 
       const files = canReadTrackedFiles
         ? await buildTrackedFilesPayload(runtimeUrl, repository, trackedFilePaths)
-        : undefined;
+        : [];
       return await saveCloudRepoConfig(repository.gitOwner, repository.gitRepoName, {
         configured,
         defaultBranch,
-        envVars,
+        envVars: {},
         setupScript,
         runCommand,
         files,
       });
     },
-    onSuccess: async (response, variables) => {
+    onSuccess: async (response) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         return;
       }
@@ -92,11 +91,8 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       await invalidateCloudRepoConfigs(repository);
 
       trackProductEvent("cloud_repo_config_saved", {
-        env_var_count: Object.keys(variables.envVars).length,
-        tracked_file_count: response.trackedFiles.length,
-        ...(variables.trackedFilePaths.length > 0
-          ? { tracked_file_source: repository.localWorkspaceId ? "workspace" : "repo_root" }
-          : {}),
+        env_var_count: 0,
+        tracked_file_count: 0,
         has_setup_script: response.setupScript.trim().length > 0,
         has_run_command: response.runCommand.trim().length > 0,
       });
@@ -122,8 +118,8 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
           domain: "cloud_repo_config",
         },
         extras: {
-          envVarCount: Object.keys(variables.envVars).length,
-          trackedFileCount: variables.trackedFilePaths.length,
+          envVarCount: 0,
+          trackedFileCount: 0,
           hasSetupScript: variables.setupScript.trim().length > 0,
           hasRunCommand: variables.runCommand.trim().length > 0,
         },

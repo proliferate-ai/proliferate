@@ -1,21 +1,18 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CloudIcon } from "@proliferate/ui/icons";
+import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import {
   EnvironmentPanel,
   EnvironmentPanelRow,
   EnvironmentSection,
 } from "@proliferate/ui/layout/EnvironmentLayout";
 import { CloudDefaultBranchCard } from "@/components/cloud/repo-settings/CloudDefaultBranchCard";
-import { RepoEnvVarsCard } from "@/components/cloud/repo-settings/RepoEnvVarsCard";
 import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";
 import { RepoSetupScriptCard } from "@/components/cloud/repo-settings/RepoSetupScriptCard";
-import { RepoTrackedFilesCard } from "@/components/cloud/repo-settings/RepoTrackedFilesCard";
 import { useCloudRepoBranches } from "@/hooks/access/cloud/use-cloud-repo-branches";
 import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
 import { useCloudRepoConfigDraft } from "@/hooks/cloud/ui/use-cloud-repo-config-draft";
-import { useCloudRepoSetupSuggestions } from "@/hooks/cloud/derived/use-cloud-repo-setup-suggestions";
-import { useResyncCloudRepoFile } from "@/hooks/cloud/workflows/use-resync-cloud-repo-file";
 import { useSaveCloudRepoConfig } from "@/hooks/cloud/workflows/use-save-cloud-repo-config";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 import {
@@ -38,7 +35,6 @@ interface CloudRepoSettingsEditorProps {
   savedConfig: CloudRepoConfig | null | undefined;
   localSetupScript: string;
   localRunCommand: string;
-  suggestedPaths: string[];
   isLoadingConfig: boolean;
   cloudActive: boolean;
 }
@@ -64,7 +60,6 @@ function CloudRepoSettingsEditor({
   savedConfig,
   localSetupScript,
   localRunCommand,
-  suggestedPaths,
   isLoadingConfig,
   cloudActive,
 }: CloudRepoSettingsEditorProps) {
@@ -75,7 +70,6 @@ function CloudRepoSettingsEditor({
     sourceKey: `${repository.sourceRoot}:${repository.repoRootId}`,
   });
   const saveMutation = useSaveCloudRepoConfig(repository);
-  const resyncFileMutation = useResyncCloudRepoFile(repository);
   const {
     data: branchInfo,
     isLoading: isLoadingBranches,
@@ -83,7 +77,7 @@ function CloudRepoSettingsEditor({
   } = useCloudRepoBranches(repository.gitOwner, repository.gitRepoName, cloudActive);
   const configured = savedConfig?.configured ?? false;
   const repoLabel = `${repository.gitOwner}/${repository.gitRepoName}`;
-  const errorMessage = saveMutation.error?.message ?? resyncFileMutation.error?.message ?? null;
+  const errorMessage = saveMutation.error?.message ?? null;
   const saveDisabled =
     !cloudActive || isLoadingConfig || saveMutation.isPending || !draft.canSave;
   const revertDisabled = saveMutation.isPending || !draft.dirty;
@@ -98,7 +92,11 @@ function CloudRepoSettingsEditor({
         : "Disabled";
 
   async function handleSave() {
-    const response = await saveMutation.mutateAsync(draft.savePayload);
+    const response = await saveMutation.mutateAsync({
+      ...draft.savePayload,
+      envVars: {},
+      trackedFilePaths: [],
+    });
     draft.resetFromSavedConfig(response);
   }
 
@@ -168,31 +166,14 @@ function CloudRepoSettingsEditor({
         onChange={draft.setSetupScript}
       />
 
-      <RepoEnvVarsCard
-        rows={draft.envVarRows}
-        onAddRow={draft.addEnvVarRow}
-        onUpdateRow={draft.updateEnvVarRow}
-        onRemoveRow={draft.removeEnvVarRow}
+      <CloudSecretsSettingsSurface
+        scope={{
+          kind: "workspace",
+          gitOwner: repository.gitOwner,
+          gitRepoName: repository.gitRepoName,
+        }}
+        enabled={cloudActive && configured}
       />
-
-      {repository.availability !== "cloud" && (
-        <RepoTrackedFilesCard
-          trackedFilePaths={draft.trackedFilePaths}
-          trackedFiles={savedConfig?.trackedFiles ?? []}
-          suggestedPaths={suggestedPaths}
-          canSyncTrackedFiles={cloudActive && configured && draft.configured}
-          syncPathInFlight={
-            resyncFileMutation.isPending
-              ? (resyncFileMutation.variables?.relativePath ?? null)
-              : null
-          }
-          onAddTrackedFile={draft.addTrackedFile}
-          onRemoveTrackedFile={draft.removeTrackedFile}
-          onResyncTrackedFile={(relativePath) => {
-            void resyncFileMutation.mutateAsync({ relativePath });
-          }}
-        />
-      )}
     </EnvironmentSection>
   );
 }
@@ -220,7 +201,6 @@ export function CloudRepoSection({
     cloudRepository?.gitRepoName,
     cloudQueryEnabled,
   );
-  const { suggestedPaths } = useCloudRepoSetupSuggestions(repository.repoRootId);
 
   if (!cloudRepository) {
     return (
@@ -255,7 +235,6 @@ export function CloudRepoSection({
       savedConfig={savedConfig}
       localSetupScript={localSetupScript}
       localRunCommand={localRunCommand}
-      suggestedPaths={suggestedPaths}
       isLoadingConfig={isLoadingConfig}
       cloudActive={cloudActive}
     />

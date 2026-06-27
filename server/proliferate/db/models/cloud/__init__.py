@@ -20,6 +20,7 @@ from . import repo_config as repo_config  # noqa: F401
 from . import runtime_config as runtime_config  # noqa: F401
 from . import runtime_environments as runtime_environments  # noqa: F401
 from . import sandboxes as sandboxes  # noqa: F401
+from . import secrets as secrets  # noqa: F401
 from . import skills as skills  # noqa: F401
 from . import slack as slack  # noqa: F401
 from . import sync as sync  # noqa: F401

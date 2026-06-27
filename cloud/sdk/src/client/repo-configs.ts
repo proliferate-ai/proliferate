@@ -76,6 +76,7 @@ export function buildMinimalCloudRepoConfigRequest(
     envVars: {},
     setupScript: "",
     runCommand: "",
+    files: [],
   };
 }
 
@@ -86,9 +87,10 @@ export function buildReenableCloudRepoConfigRequest(
   return {
     configured: true,
     defaultBranch: config.defaultBranch ?? defaultBranch,
-    envVars: config.envVars ?? {},
+    envVars: {},
     setupScript: config.setupScript ?? "",
     runCommand: config.runCommand ?? "",
+    files: [],
   };
 }
 

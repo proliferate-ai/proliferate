@@ -7,6 +7,7 @@ import type {
 import { AccountSettingsPane } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 
 import { useWebAccountSettingsActions } from "../../../hooks/settings/workflows/use-web-account-settings-actions";
 
@@ -36,6 +37,7 @@ export function AccountSettingsSection() {
           signOut: account.signOut,
         })}
       />
+      <CloudSecretsSettingsSurface scope={{ kind: "personal" }} enabled={Boolean(account.viewer)} />
     </section>
   );
 }
