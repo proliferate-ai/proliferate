@@ -89,6 +89,7 @@ async function main() {
         "test -x /home/user/.proliferate/bin/proliferate-supervisor",
         "/home/user/.proliferate/bin/proliferate-supervisor --version",
         "test -x /home/user/.proliferate/bin/proliferate-git-credential-helper",
+        'test "$(stat -c "%U:%G:%a" /home/user/.proliferate/bin/proliferate-git-credential-helper)" = "user:user:700"',
       ].join(" && "),
       {
         timeoutMs: 30_000,
@@ -130,6 +131,10 @@ async function main() {
         'credential_output="$(printf "protocol=https\\nhost=github.com\\n\\n" | "$helper" get)"',
         'printf "%s\\n" "$credential_output" | grep -qx "username=x-access-token"',
         'printf "%s\\n" "$credential_output" | grep -qx "password=template-smoke-token"',
+        'git config --global credential.https://github.com.helper "!$helper"',
+        'git_output="$(printf "protocol=https\\nhost=github.com\\n\\n" | GIT_TERMINAL_PROMPT=0 git credential fill)"',
+        'printf "%s\\n" "$git_output" | grep -qx "username=x-access-token"',
+        'printf "%s\\n" "$git_output" | grep -qx "password=template-smoke-token"',
         'override_file="$(mktemp)"',
         'printf "override-token\\n" > "$override_file"',
         'override_output="$(printf "protocol=https\\nhost=www.github.com\\n\\n" | PROLIFERATE_GIT_TOKEN_FILE="$override_file" "$helper" get)"',

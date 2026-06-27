@@ -347,6 +347,10 @@ function buildTemplateDefinition() {
         mode: 0o700,
       }
     )
+    .runCmd(
+      "chown user:user /home/user/.proliferate/bin/proliferate-git-credential-helper && chmod 700 /home/user/.proliferate/bin/proliferate-git-credential-helper",
+      { user: "root" }
+    )
     .makeDir("/home/user/workspace", { mode: 0o755, user: "user" })
     .setUser("user")
     .runCmd(

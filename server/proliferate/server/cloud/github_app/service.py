@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 from jose import JWTError, jwt
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.config import settings
+from proliferate.constants.auth import DESKTOP_REDIRECT_SCHEMES
 from proliferate.db.models.auth import User
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import (
@@ -28,6 +29,7 @@ from proliferate.server.cloud.github_app.models import (
 from proliferate.utils.time import utcnow
 
 _STATE_AUDIENCE = "github-app-connect"
+_WEB_RETURN_PATHS = frozenset({"/settings", "/settings/account"})
 
 
 def _callback_url() -> str:
@@ -48,21 +50,61 @@ def _redirect_after_callback() -> str:
     return base.rstrip("/") + "/settings/account" if base != "/" else "/"
 
 
-def _state_for_user(user_id: UUID) -> str:
+def _validate_return_to(return_to: str | None) -> str | None:
+    if return_to is None:
+        return None
+    value = return_to.strip()
+    if not value or any(ord(char) < 32 for char in value):
+        raise CloudApiError(
+            "github_app_return_target_invalid",
+            "GitHub App return target is invalid.",
+            status_code=400,
+        )
+    parsed = urlsplit(value)
+    if parsed.scheme in DESKTOP_REDIRECT_SCHEMES:
+        if parsed.hostname == "settings" and parsed.path in {"", "/", "/account"}:
+            return value
+        raise CloudApiError(
+            "github_app_return_target_invalid",
+            "GitHub App desktop return target is not allowed.",
+            status_code=400,
+        )
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        frontend_base = settings.frontend_base_url.strip().rstrip("/")
+        frontend = urlsplit(frontend_base) if frontend_base else None
+        if (
+            frontend is not None
+            and parsed.scheme == frontend.scheme
+            and parsed.netloc == frontend.netloc
+            and parsed.path in _WEB_RETURN_PATHS
+            and not parsed.fragment
+        ):
+            return value
+    raise CloudApiError(
+        "github_app_return_target_invalid",
+        "GitHub App return target is not allowed.",
+        status_code=400,
+    )
+
+
+def _state_for_user(user_id: UUID, *, return_to: str | None) -> str:
     now = datetime.now(UTC)
+    payload: dict[str, object] = {
+        "aud": _STATE_AUDIENCE,
+        "sub": str(user_id),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=10)).timestamp()),
+    }
+    if return_to:
+        payload["return_to"] = return_to
     return jwt.encode(
-        {
-            "aud": _STATE_AUDIENCE,
-            "sub": str(user_id),
-            "iat": int(now.timestamp()),
-            "exp": int((now + timedelta(minutes=10)).timestamp()),
-        },
+        payload,
         settings.cloud_secret_key,
         algorithm="HS256",
     )
 
 
-def _user_id_from_state(state: str) -> UUID:
+def _state_payload(state: str) -> tuple[UUID, str | None]:
     try:
         payload = jwt.decode(
             state,
@@ -84,19 +126,22 @@ def _user_id_from_state(state: str) -> UUID:
             status_code=400,
         )
     try:
-        return UUID(subject)
+        user_id = UUID(subject)
     except ValueError as exc:
         raise CloudApiError(
             "github_app_state_invalid",
             "GitHub App authorization state is invalid or expired.",
             status_code=400,
         ) from exc
+    return_to = payload.get("return_to")
+    return user_id, return_to if isinstance(return_to, str) and return_to else None
 
 
 async def create_github_app_connect_url(
     db: AsyncSession,
     *,
     user: User,
+    return_to: str | None = None,
 ) -> GitHubAppConnectResponse:
     del db
     client_id = settings.github_app_client_id.strip()
@@ -106,11 +151,12 @@ async def create_github_app_connect_url(
             "GitHub App authorization is not configured.",
             status_code=503,
         )
+    validated_return_to = _validate_return_to(return_to)
     query = urlencode(
         {
             "client_id": client_id,
             "redirect_uri": _callback_url(),
-            "state": _state_for_user(user.id),
+            "state": _state_for_user(user.id, return_to=validated_return_to),
         }
     )
     return GitHubAppConnectResponse(
@@ -124,7 +170,7 @@ async def complete_github_app_callback(
     code: str,
     state: str,
 ) -> str:
-    user_id = _user_id_from_state(state)
+    user_id, return_to = _state_payload(state)
     try:
         authorization = await exchange_github_app_code(code=code, redirect_uri=_callback_url())
     except GitHubIntegrationError as exc:
@@ -139,7 +185,7 @@ async def complete_github_app_callback(
         authorization=authorization,
     )
     await refresh_github_app_installation_cache(db)
-    return _redirect_after_callback()
+    return return_to or _redirect_after_callback()
 
 
 async def refresh_github_app_installation_cache(db: AsyncSession) -> None:
@@ -173,7 +219,7 @@ async def get_github_app_status(
         github_login=authorization.github_login,
         status=status,
         token_expires_at=authorization.token_expires_at,
-        action="reauthorize" if status == "needs_reauth" else None,
+        action="reauthorize" if status in {"expired", "needs_reauth"} else None,
     )
     if git_owner is None or git_repo_name is None or status != "ready":
         return base

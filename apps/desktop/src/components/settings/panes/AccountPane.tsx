@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AccountSettingsPane,
@@ -45,6 +45,7 @@ export function AccountPane() {
   const [signingOut, setSigningOut] = useState(false);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [providerLinkError, setProviderLinkError] = useState<string | null>(null);
+  const githubAppStatusRefreshTimersRef = useRef<number[]>([]);
   const devAuthBypassed = isDevAuthBypassed();
   const isAuthenticated = status === "authenticated";
   const authViewerCacheScope = user?.id
@@ -118,6 +119,15 @@ export function AccountPane() {
       ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=160`
       : null);
 
+  useEffect(() => () => {
+    clearGitHubAppStatusRefreshTimers(githubAppStatusRefreshTimersRef.current);
+  }, []);
+
+  useEffect(() => {
+    clearGitHubAppStatusRefreshTimers(githubAppStatusRefreshTimersRef.current);
+    githubAppStatusRefreshTimersRef.current = [];
+  }, [authViewerCacheScope]);
+
   async function handleSignOut() {
     setSigningOut(true);
     try {
@@ -144,9 +154,14 @@ export function AccountPane() {
   async function handleConnectGitHubApp() {
     setProviderLinkError(null);
     try {
-      const response = await githubAppConnect.mutateAsync();
+      const response = await githubAppConnect.mutateAsync({
+        returnTo: "proliferate://settings/account?source=github_app_callback",
+      });
       await openExternal(response.authorizationUrl);
-      scheduleGitHubAppStatusRefresh(() => { void githubAppStatus.refetch(); });
+      clearGitHubAppStatusRefreshTimers(githubAppStatusRefreshTimersRef.current);
+      githubAppStatusRefreshTimersRef.current = scheduleGitHubAppStatusRefresh(() => {
+        void githubAppStatus.refetch();
+      });
     } catch (error) {
       setProviderLinkError(
         error instanceof Error ? error.message : "GitHub App connection failed",
@@ -310,7 +325,9 @@ function buildGitHubAppServiceView({
   onManage: () => void;
 }) {
   const connected = status?.connected === true;
-  const needsReconnect = status?.status === "needs_reauth" || status?.action === "reauthorize";
+  const needsReconnect = status?.status === "expired"
+    || status?.status === "needs_reauth"
+    || status?.action === "reauthorize";
   return {
     id: "github-app",
     label: "Proliferate GitHub App",
@@ -343,9 +360,15 @@ function buildGitHubAppServiceView({
   };
 }
 
-function scheduleGitHubAppStatusRefresh(refetch: () => void) {
-  for (const delayMs of [2_000, 5_000, 10_000, 20_000, 40_000, 80_000]) {
-    window.setTimeout(refetch, delayMs);
+function scheduleGitHubAppStatusRefresh(refetch: () => void): number[] {
+  return [2_000, 5_000, 10_000, 20_000, 40_000, 80_000].map((delayMs) => (
+    window.setTimeout(refetch, delayMs)
+  ));
+}
+
+function clearGitHubAppStatusRefreshTimers(timerIds: number[]) {
+  for (const timerId of timerIds) {
+    window.clearTimeout(timerId);
   }
 }
 

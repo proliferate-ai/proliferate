@@ -6384,15 +6384,15 @@ export interface components {
             /** Githublogin */
             githubLogin?: string | null;
             /** Status */
-            status?: string | null;
+            status?: ("ready" | "expired" | "revoked" | "needs_reauth") | null;
             /** Tokenexpiresat */
             tokenExpiresAt?: string | null;
             /** Installationstate */
-            installationState?: string | null;
+            installationState?: ("missing" | "installed") | null;
             /** Repocovered */
             repoCovered?: boolean | null;
             /** Action */
-            action?: ("connect" | "reauthorize" | "install" | "grant_repo_access" | "manage") | null;
+            action?: ("connect" | "reauthorize" | "install" | "grant_repo_access") | null;
         };
         /** GrantAllocationInfo */
         GrantAllocationInfo: {
@@ -11406,7 +11406,9 @@ export interface operations {
     };
     github_app_connect_endpoint_v1_cloud_github_app_connect_get: {
         parameters: {
-            query?: never;
+            query?: {
+                returnTo?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11420,6 +11422,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitHubAppConnectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -37,10 +37,12 @@ pub struct GitHubCredentialMeta {
     pub refresh_after: DateTime<Utc>,
 }
 
-pub fn credential_paths() -> GitHubCredentialPaths {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+pub fn credential_paths() -> Result<GitHubCredentialPaths, WorkerError> {
+    let home = dirs::home_dir().ok_or_else(|| {
+        materialization_error("HOME is not available for GitHub credential materialization")
+    })?;
     let proliferate_root = home.join(".proliferate");
-    GitHubCredentialPaths {
+    Ok(GitHubCredentialPaths {
         root: proliferate_root.join("git").join("github.com"),
         token: proliferate_root
             .join("git")
@@ -53,7 +55,7 @@ pub fn credential_paths() -> GitHubCredentialPaths {
         helper: proliferate_root
             .join("bin")
             .join("proliferate-git-credential-helper"),
-    }
+    })
 }
 
 pub fn current_lease_request() -> Result<GitHubCredentialLeaseRequest, WorkerError> {
@@ -71,7 +73,7 @@ pub fn lease_is_fresh() -> Result<bool, WorkerError> {
     if meta.provider != PROVIDER || meta.token_kind != TOKEN_KIND {
         return Ok(false);
     }
-    let paths = credential_paths();
+    let paths = credential_paths()?;
     let Ok(token) = fs::read_to_string(&paths.token) else {
         return Ok(false);
     };
@@ -83,7 +85,7 @@ pub fn lease_is_fresh() -> Result<bool, WorkerError> {
 }
 
 pub fn read_meta() -> Result<Option<GitHubCredentialMeta>, WorkerError> {
-    let paths = credential_paths();
+    let paths = credential_paths()?;
     match fs::read(&paths.meta) {
         Ok(contents) => serde_json::from_slice(&contents)
             .map(Some)
@@ -110,7 +112,7 @@ pub fn write_lease(lease: &GitHubCredentialLeaseResponse) -> Result<(), WorkerEr
         )));
     }
     validate_secret("accessToken", &lease.access_token)?;
-    let paths = credential_paths();
+    let paths = credential_paths()?;
     std::fs::create_dir_all(&paths.root).map_err(|source| WorkerError::CreateParent {
         path: paths.root.clone(),
         source,
@@ -134,7 +136,7 @@ pub fn write_lease(lease: &GitHubCredentialLeaseResponse) -> Result<(), WorkerEr
 }
 
 pub fn ensure_global_git_config() -> Result<(), WorkerError> {
-    let paths = credential_paths();
+    let paths = credential_paths()?;
     if !paths.helper.is_file() {
         return Err(materialization_error(format!(
             "git credential helper is missing: {}",

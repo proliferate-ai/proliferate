@@ -26,11 +26,12 @@ callback_router = APIRouter(tags=["github-app"])
 
 @router.get("/connect", response_model=GitHubAppConnectResponse)
 async def github_app_connect_endpoint(
+    return_to: str | None = Query(default=None, alias="returnTo"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> GitHubAppConnectResponse:
     try:
-        return await create_github_app_connect_url(db, user=user)
+        return await create_github_app_connect_url(db, user=user, return_to=return_to)
     except CloudApiError as error:
         raise_cloud_error(error)
 

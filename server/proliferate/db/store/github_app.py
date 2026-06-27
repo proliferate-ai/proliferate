@@ -27,7 +27,7 @@ from proliferate.utils.time import utcnow
 _CACHE_FRESHNESS_SECONDS = 600
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class GitHubAppAuthorizationValue:
     id: UUID
     user_id: UUID

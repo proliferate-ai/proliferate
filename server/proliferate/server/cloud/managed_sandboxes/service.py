@@ -205,6 +205,26 @@ def _cached_repo_runtime_connection(
     return cached.connection
 
 
+async def _cached_repo_runtime_connection_for_current_sandbox(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    key: _RepoRuntimeConnectionCacheKey,
+) -> ManagedSandboxRepoRuntimeConnection | None:
+    cached = _cached_repo_runtime_connection(key)
+    if cached is None:
+        return None
+    sandbox = await load_personal_managed_sandbox(db, user_id)
+    if (
+        sandbox is None
+        or not _runtime_access_ready(sandbox)
+        or cached.runtime_generation != sandbox.runtime_generation
+    ):
+        _repo_runtime_connection_cache.pop(key, None)
+        return None
+    return cached
+
+
 def _repo_runtime_connection_lock(key: _RepoRuntimeConnectionCacheKey) -> asyncio.Lock:
     lock = _repo_runtime_connection_locks.get(key)
     if lock is None:
@@ -764,7 +784,11 @@ async def ensure_managed_sandbox_repo_runtime_connection(
         git_owner=repo_config.git_owner,
         git_repo_name=repo_config.git_repo_name,
     )
-    cached = _cached_repo_runtime_connection(cache_key)
+    cached = await _cached_repo_runtime_connection_for_current_sandbox(
+        db,
+        user_id=user.id,
+        key=cache_key,
+    )
     if cached is not None:
         return cached
 
@@ -775,7 +799,11 @@ async def ensure_managed_sandbox_repo_runtime_connection(
             git_owner=repo_config.git_owner,
             git_repo_name=repo_config.git_repo_name,
         )
-        cached = _cached_repo_runtime_connection(cache_key)
+        cached = await _cached_repo_runtime_connection_for_current_sandbox(
+            db,
+            user_id=user.id,
+            key=cache_key,
+        )
         if cached is not None:
             return cached
 

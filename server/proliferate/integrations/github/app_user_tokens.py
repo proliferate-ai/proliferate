@@ -18,7 +18,7 @@ class GitHubAppInvalidGrant(GitHubIntegrationError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class GitHubAppUserAuthorization:
     access_token: str
     refresh_token: str | None

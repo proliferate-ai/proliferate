@@ -17,18 +17,22 @@ GitHubAppStatusAction = Literal[
     "reauthorize",
     "install",
     "grant_repo_access",
-    "manage",
 ]
+GitHubAppAuthorizationStatus = Literal["ready", "expired", "revoked", "needs_reauth"]
+GitHubAppInstallationState = Literal["missing", "installed"]
 
 
 class GitHubAppStatusResponse(BaseModel):
     connected: bool
     github_login: str | None = Field(default=None, serialization_alias="githubLogin")
-    status: str | None = None
+    status: GitHubAppAuthorizationStatus | None = None
     token_expires_at: datetime | None = Field(
         default=None,
         serialization_alias="tokenExpiresAt",
     )
-    installation_state: str | None = Field(default=None, serialization_alias="installationState")
+    installation_state: GitHubAppInstallationState | None = Field(
+        default=None,
+        serialization_alias="installationState",
+    )
     repo_covered: bool | None = Field(default=None, serialization_alias="repoCovered")
     action: GitHubAppStatusAction | None = None

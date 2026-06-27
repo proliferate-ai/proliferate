@@ -14,7 +14,7 @@ pub struct GitHubCredentialLeaseRequest {
     pub current_expires_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHubCredentialLeaseResponse {
     pub provider: String,

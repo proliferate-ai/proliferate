@@ -165,7 +165,9 @@ function buildGitHubAppServiceView({
   onManage: () => void;
 }) {
   const connected = status?.connected === true;
-  const needsReconnect = status?.status === "needs_reauth" || status?.action === "reauthorize";
+  const needsReconnect = status?.status === "expired"
+    || status?.status === "needs_reauth"
+    || status?.action === "reauthorize";
   return {
     id: "github-app",
     label: "Proliferate GitHub App",

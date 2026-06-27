@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createGitHubAppConnectUrl,
   getGitHubAppStatus,
+  type CreateGitHubAppConnectUrlOptions,
   type GitHubAppConnectResponse,
   type GitHubAppStatusResponse,
   type GetGitHubAppStatusOptions,
@@ -30,8 +31,8 @@ export function useGitHubAppStatus(
 export function useCreateGitHubAppConnectUrl() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
-  return useMutation<GitHubAppConnectResponse, Error>({
-    mutationFn: () => createGitHubAppConnectUrl(client),
+  return useMutation<GitHubAppConnectResponse, Error, CreateGitHubAppConnectUrlOptions | void>({
+    mutationFn: (options) => createGitHubAppConnectUrl(options ?? {}, client),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: githubAppStatusRootKey(client.baseUrl),

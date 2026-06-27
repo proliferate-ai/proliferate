@@ -60,6 +60,12 @@ describe("desktopNavigationTarget", () => {
     );
   });
 
+  it("routes account settings deep links to account settings", () => {
+    expect(desktopNavigationTarget("proliferate://settings/account?source=github_app_callback")).toBe(
+      "/settings?source=github_app_callback&section=account",
+    );
+  });
+
   it("routes organization join links to the members settings section", () => {
     expect(
       desktopNavigationTarget("proliferate://join/org-123"),

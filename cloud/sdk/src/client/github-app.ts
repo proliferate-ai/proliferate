@@ -10,12 +10,20 @@ export interface GetGitHubAppStatusOptions {
   gitRepoName?: string | null;
 }
 
+export interface CreateGitHubAppConnectUrlOptions {
+  returnTo?: string | null;
+}
+
 export async function createGitHubAppConnectUrl(
+  options: CreateGitHubAppConnectUrlOptions = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<GitHubAppConnectResponse> {
   return client.requestJson<GitHubAppConnectResponse>({
     method: "GET",
     path: "/v1/cloud/github-app/connect",
+    query: {
+      returnTo: options.returnTo,
+    },
   });
 }
 

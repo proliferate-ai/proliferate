@@ -136,7 +136,7 @@ class WorkerGitHubCredentialLeaseRequest(BaseModel):
 class WorkerGitHubCredentialLeaseResponse(BaseModel):
     provider: str = "github"
     token_kind: str = Field(default="github_app_user_to_server", serialization_alias="tokenKind")
-    access_token: str = Field(serialization_alias="accessToken")
+    access_token: str = Field(serialization_alias="accessToken", repr=False)
     actor_login: str | None = Field(default=None, serialization_alias="actorLogin")
     actor_id: str | None = Field(default=None, serialization_alias="actorId")
     issued_at: str = Field(serialization_alias="issuedAt")
