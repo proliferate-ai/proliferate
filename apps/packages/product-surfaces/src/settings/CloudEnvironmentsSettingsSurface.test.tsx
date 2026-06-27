@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudEnvironmentsSettingsSurface } from "./CloudEnvironmentsSettingsSurface";
 
 const cloudHooks = vi.hoisted(() => ({
-  useCloudRepoConfigs: vi.fn(),
+  useRepoConfigs: vi.fn(),
   useCloudRepoConfig: vi.fn(),
   useCloudRepoBranches: vi.fn(),
   useSaveCloudRepoConfig: vi.fn(),
@@ -21,7 +21,7 @@ const cloudHooks = vi.hoisted(() => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudRepoConfigs: cloudHooks.useCloudRepoConfigs,
+  useRepoConfigs: cloudHooks.useRepoConfigs,
   useCloudRepoConfig: cloudHooks.useCloudRepoConfig,
   useCloudRepoBranches: cloudHooks.useCloudRepoBranches,
   useSaveCloudRepoConfig: cloudHooks.useSaveCloudRepoConfig,
@@ -35,20 +35,50 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useDeleteCloudSecretFile: cloudHooks.useDeleteCloudSecretFile,
 }));
 
-const cloudConfigs = [
+const repoConfigs = [
   {
+    id: "repo-desktop-cloud",
+    ownerScope: "personal",
+    gitProvider: "github",
     gitOwner: "octo",
     gitRepoName: "desktop-cloud",
-    configured: true,
-    configuredAt: "2026-05-24T09:00:00.000Z",
-    filesVersion: 0,
+    environments: [{
+      id: "env-desktop-cloud",
+      repoConfigId: "repo-desktop-cloud",
+      kind: "cloud",
+      desktopInstallId: null,
+      localPath: null,
+      configured: true,
+      configuredAt: "2026-05-24T09:00:00.000Z",
+      defaultBranch: "main",
+      setupScript: "",
+      setupScriptVersion: 0,
+      runCommand: "",
+      configVersion: 1,
+      legacyCloudRepoConfigId: "repo-desktop-cloud",
+    }],
   },
   {
+    id: "repo-web-only",
+    ownerScope: "personal",
+    gitProvider: "github",
     gitOwner: "octo",
     gitRepoName: "web-only",
-    configured: false,
-    configuredAt: "2026-05-23T09:00:00.000Z",
-    filesVersion: 1,
+    environments: [{
+      id: "env-web-only",
+      repoConfigId: "repo-web-only",
+      kind: "cloud",
+      desktopInstallId: null,
+      localPath: null,
+      configured: false,
+      configuredAt: "2026-05-23T09:00:00.000Z",
+      defaultBranch: "main",
+      setupScript: "",
+      setupScriptVersion: 0,
+      runCommand: "",
+      configVersion: 1,
+      legacyCloudRepoConfigId: "repo-web-only",
+    }],
   },
 ];
 
@@ -68,8 +98,8 @@ function repoConfig(overrides: Record<string, unknown> = {}) {
 
 describe("CloudEnvironmentsSettingsSurface", () => {
   beforeEach(() => {
-    cloudHooks.useCloudRepoConfigs.mockReturnValue({
-      data: { configs: cloudConfigs },
+    cloudHooks.useRepoConfigs.mockReturnValue({
+      data: { repositories: repoConfigs },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),

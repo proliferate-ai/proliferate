@@ -5,7 +5,7 @@ import {
   useCloudAgentCatalog,
   useCloudCapabilities,
   useCloudRepoBranches,
-  useCloudRepoConfigs,
+  useRepoConfigs,
   useCloudTargets,
   useTargetLive,
   useVisibleCloudWorkspaces,
@@ -62,7 +62,7 @@ export function useWebHomeScreen() {
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<HomePendingPrompt | null>(null);
-  const repoConfigs = useCloudRepoConfigs();
+  const repoConfigs = useRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
   const agentAuthCredentials = useAgentAuthCredentials();
@@ -70,9 +70,25 @@ export function useWebHomeScreen() {
   const targets = useCloudTargets();
   const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
   const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
+  const configuredCloudRepos = useMemo(
+    () => (repoConfigs.data?.repositories ?? []).flatMap((repo) => {
+      const cloudEnvironment = repo.environments.find((environment) =>
+        environment.kind === "cloud"
+      );
+      if (!cloudEnvironment) {
+        return [];
+      }
+      return [{
+        gitOwner: repo.gitOwner,
+        gitRepoName: repo.gitRepoName,
+        configured: cloudEnvironment.configured,
+      }];
+    }),
+    [repoConfigs.data?.repositories],
+  );
   const repoOptions = useMemo(
-    () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
-    [repoConfigs.data?.configs],
+    () => buildRepoOptions(configuredCloudRepos, webEnv.defaultCloudRepo),
+    [configuredCloudRepos],
   );
   const selectedRepo = useMemo(
     () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,

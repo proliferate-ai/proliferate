@@ -1,7 +1,8 @@
+import { useMemo } from "react";
 import {
   useAuthViewer,
   useCloudBilling,
-  useCloudRepoConfigs,
+  useRepoConfigs,
   useOrganizations,
 } from "@proliferate/cloud-sdk-react";
 
@@ -11,7 +12,7 @@ export function useMobileSettingsModel(account: MobileSettingsAccountSummary) {
   const viewer = useAuthViewer();
   const organizations = useOrganizations();
   const billing = useCloudBilling({ ownerScope: "personal" });
-  const repoConfigs = useCloudRepoConfigs();
+  const repoConfigs = useRepoConfigs();
 
   const displayName =
     viewer.data?.user.display_name?.trim()
@@ -41,7 +42,22 @@ export function useMobileSettingsModel(account: MobileSettingsAccountSummary) {
       : viewer.data?.onboardingState === "active"
         ? "Active"
         : "Setup";
-  const configuredRepos = (repoConfigs.data?.configs ?? []).filter((repo) => repo.configured);
+  const configuredRepos = useMemo(
+    () => (repoConfigs.data?.repositories ?? []).flatMap((repo) => {
+      const cloudEnvironment = repo.environments.find((environment) =>
+        environment.kind === "cloud"
+      );
+      if (!cloudEnvironment?.configured) {
+        return [];
+      }
+      return [{
+        gitOwner: repo.gitOwner,
+        gitRepoName: repo.gitRepoName,
+        configured: true,
+      }];
+    }),
+    [repoConfigs.data?.repositories],
+  );
   const organizationRows = organizations.data?.organizations ?? [];
 
   return {
