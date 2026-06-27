@@ -7,28 +7,20 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
-from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organization_store
+from proliferate.db.store import users as users_store
 from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.managed_sandboxes import ManagedSandboxValue
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.managed_sandboxes import transactions
 from proliferate.server.cloud.managed_sandboxes.materialization import repos, secrets
-
-
-async def _run_with_fresh_session(
-    callback: Callable[[AsyncSession], Awaitable[None]],
-) -> None:
-    async with db_engine.async_session_factory() as fresh_db:
-        await callback(fresh_db)
-        await db_engine.commit_session(fresh_db)
 
 
 def _defer_materialization(
     db: AsyncSession,
     callback: Callable[[], Awaitable[None]],
 ) -> None:
-    db_engine.defer_after_commit(db, callback)
+    transactions.defer_after_commit(db, callback)
 
 
 async def reconcile_after_sandbox_ready(
@@ -46,7 +38,7 @@ def schedule_global_secret_materialization_for_user(
     user_id: UUID,
 ) -> None:
     async def _materialize(fresh_db: AsyncSession) -> None:
-        user = await fresh_db.get(User, user_id)
+        user = await users_store.get_user_by_id(fresh_db, user_id)
         if user is None:
             return
         from proliferate.server.cloud.managed_sandboxes.service import (
@@ -58,7 +50,7 @@ def schedule_global_secret_materialization_for_user(
 
     async def _run() -> None:
         try:
-            await _run_with_fresh_session(_materialize)
+            await transactions.run_with_fresh_session(_materialize)
         except Exception as exc:
             log_cloud_event(
                 "managed sandbox global secret materialization failed",
@@ -82,7 +74,7 @@ def schedule_global_secret_materialization_for_organization(
         )
 
         for member in members:
-            user = await fresh_db.get(User, member.membership.user_id)
+            user = await users_store.get_user_by_id(fresh_db, member.membership.user_id)
             if user is None:
                 continue
             sandbox = await ensure_managed_sandbox_ready(fresh_db, user)
@@ -90,7 +82,7 @@ def schedule_global_secret_materialization_for_organization(
 
     async def _run() -> None:
         try:
-            await _run_with_fresh_session(_materialize)
+            await transactions.run_with_fresh_session(_materialize)
         except Exception as exc:
             log_cloud_event(
                 "managed sandbox organization secret materialization failed",
@@ -110,7 +102,7 @@ def schedule_workspace_secret_materialization_for_repo(
     git_repo_name: str,
 ) -> None:
     async def _materialize(fresh_db: AsyncSession) -> None:
-        user = await fresh_db.get(User, user_id)
+        user = await users_store.get_user_by_id(fresh_db, user_id)
         if user is None:
             return
         repo_config = await get_cloud_repo_config(
@@ -141,7 +133,7 @@ def schedule_workspace_secret_materialization_for_repo(
 
     async def _run() -> None:
         try:
-            await _run_with_fresh_session(_materialize)
+            await transactions.run_with_fresh_session(_materialize)
         except Exception as exc:
             log_cloud_event(
                 "managed sandbox workspace secret materialization failed",
