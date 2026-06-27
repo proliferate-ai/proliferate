@@ -7,6 +7,7 @@ import {
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { setPasswordCredential } from "@proliferate/cloud-sdk";
+import { useCreateGitHubAppConnectUrl, useGitHubAppStatus } from "@proliferate/cloud-sdk-react";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
@@ -49,6 +50,12 @@ export function AccountPane() {
   const authViewerCacheScope = user?.id
     ? `desktop-account:${user.id}`
     : "desktop-account:anonymous";
+  const githubAppStatus = useGitHubAppStatus(
+    {},
+    isAuthenticated && !devAuthBypassed,
+    authViewerCacheScope,
+  );
+  const githubAppConnect = useCreateGitHubAppConnectUrl();
   const authViewer = useAuthViewer(
     isAuthenticated && !devAuthBypassed && cloudSignInAvailable,
     authViewerCacheScope,
@@ -134,6 +141,23 @@ export function AccountPane() {
     }
   }
 
+  async function handleConnectGitHubApp() {
+    setProviderLinkError(null);
+    try {
+      const response = await githubAppConnect.mutateAsync();
+      await openExternal(response.authorizationUrl);
+      scheduleGitHubAppStatusRefresh(() => { void githubAppStatus.refetch(); });
+    } catch (error) {
+      setProviderLinkError(
+        error instanceof Error ? error.message : "GitHub App connection failed",
+      );
+    }
+  }
+
+  async function handleManageGitHubApp() {
+    await openExternal("https://github.com/settings/installations");
+  }
+
   async function handleSetPassword(input: AccountPasswordCredentialSubmit) {
     await setPasswordCredential({
       currentPassword: input.currentPassword,
@@ -182,6 +206,15 @@ export function AccountPane() {
           googleAvailable: googleAvailability?.enabled !== false,
           showProviders: isAuthenticated && !devAuthBypassed,
         })}
+        connectedServices={isAuthenticated && !devAuthBypassed
+          ? [buildGitHubAppServiceView({
+              status: githubAppStatus.data,
+              loading: githubAppStatus.isLoading,
+              connecting: githubAppConnect.isPending,
+              onConnect: handleConnectGitHubApp,
+              onManage: handleManageGitHubApp,
+            })]
+          : []}
         passwordCredential={isAuthenticated && !devAuthBypassed
           ? {
               enabled: authViewer.data?.passwordCredential.enabled ?? false,
@@ -256,6 +289,64 @@ export function AccountPane() {
       />
     </section>
   );
+}
+
+function buildGitHubAppServiceView({
+  status,
+  loading,
+  connecting,
+  onConnect,
+  onManage,
+}: {
+  status: {
+    connected: boolean;
+    githubLogin?: string | null;
+    status?: string | null;
+    action?: string | null;
+  } | undefined;
+  loading: boolean;
+  connecting: boolean;
+  onConnect: () => void;
+  onManage: () => void;
+}) {
+  const connected = status?.connected === true;
+  const needsReconnect = status?.status === "needs_reauth" || status?.action === "reauthorize";
+  return {
+    id: "github-app",
+    label: "Proliferate GitHub App",
+    description: "Required for Proliferate Cloud repositories.",
+    accountLabel: status?.githubLogin ? `@${status.githubLogin}` : null,
+    statusLabel: loading
+      ? "Checking"
+      : connected
+        ? "Connected"
+        : needsReconnect
+          ? "Reconnect"
+          : "Not connected",
+    tone: connected ? "success" as const : needsReconnect ? "warning" as const : "neutral" as const,
+    action: connected
+      ? {
+          label: "Manage GitHub App",
+          onClick: () => { void onManage(); },
+        }
+      : {
+          label: connecting
+            ? "Opening GitHub..."
+            : needsReconnect
+              ? "Reconnect GitHub App"
+              : "Connect GitHub App",
+          icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
+          loading: connecting,
+          disabled: connecting,
+          onClick: () => { void onConnect(); },
+        },
+  };
+}
+
+function scheduleGitHubAppStatusRefresh(refetch: () => void) {
+  for (const delayMs of [2_000, 5_000, 10_000, 20_000, 40_000, 80_000]) {
+    window.setTimeout(refetch, delayMs);
+  }
 }
 
 function buildAccountProviderViews({

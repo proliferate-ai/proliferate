@@ -30,6 +30,7 @@ from proliferate.integrations.anyharness import (
 )
 from proliferate.integrations.sandbox import get_configured_sandbox_provider
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.managed_sandboxes.service import load_managed_sandbox_runtime_access
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
@@ -98,7 +99,6 @@ async def reconcile_configured_repos_for_sandbox(
     db: AsyncSession,
     *,
     sandbox: ManagedSandboxValue,
-    github_token: str,
     run_setup: bool,
 ) -> None:
     if sandbox.owner_user_id is None:
@@ -115,11 +115,16 @@ async def reconcile_configured_repos_for_sandbox(
         if repo_config is None or not repo_config.configured:
             continue
         try:
+            await require_github_cloud_repo_authority(
+                db,
+                user_id=sandbox.owner_user_id,
+                git_owner=repo_config.git_owner,
+                git_repo_name=repo_config.git_repo_name,
+            )
             await ensure_repo_materialized(
                 db,
                 sandbox=sandbox,
                 repo_config=repo_config,
-                github_token=github_token,
                 run_setup=run_setup,
             )
         except Exception as exc:
@@ -138,7 +143,6 @@ async def ensure_repo_materialized(
     *,
     sandbox: ManagedSandboxValue,
     repo_config: CloudRepoConfigValue,
-    github_token: str,
     run_setup: bool,
 ) -> ManagedSandboxRepoMaterializationValue:
     existing = await load_repo_materialization(
@@ -176,7 +180,6 @@ async def ensure_repo_materialized(
             runtime_context=runtime_context,
             repo_config=repo_config,
             repo_path=materialization.repo_path,
-            github_token=github_token,
             managed_sandbox_id=sandbox.id,
         )
         resolved = await resolve_runtime_workspace(
@@ -242,7 +245,6 @@ async def _clone_or_update_repo(
     runtime_context: object,
     repo_config: CloudRepoConfigValue,
     repo_path: str,
-    github_token: str,
     managed_sandbox_id: object,
 ) -> None:
     branch = (repo_config.default_branch or "").strip()
@@ -257,25 +259,30 @@ async def _clone_or_update_repo(
         [
             "set -eu",
             "command -v git >/dev/null 2>&1",
+            'helper="$HOME/.proliferate/bin/proliferate-git-credential-helper"',
+            'token_file="$HOME/.proliferate/git/github.com/token"',
+            'test -x "$helper"',
+            'test -s "$token_file"',
+            'git config --global credential.https://github.com.helper "!$helper"',
+            (
+                "git config --global --get-all url.https://github.com/.insteadOf "
+                "| grep -Fx 'git@github.com:' >/dev/null "
+                "|| git config --global --add url.https://github.com/.insteadOf git@github.com:"
+            ),
+            (
+                "git config --global --get-all url.https://github.com/.insteadOf "
+                "| grep -Fx 'ssh://git@github.com/' >/dev/null "
+                "|| git config --global --add url.https://github.com/.insteadOf "
+                "ssh://git@github.com/"
+            ),
             f"mkdir -p {quoted_repo_parent}",
-            'askpass="$(mktemp /tmp/proliferate-git-askpass.XXXXXX)"',
             'managed_paths_file="$(mktemp /tmp/proliferate-managed-paths.XXXXXX)"',
             'unmanaged_status_file="$(mktemp /tmp/proliferate-unmanaged-status.XXXXXX)"',
-            'cleanup() { rm -f "$askpass" "$managed_paths_file" "$unmanaged_status_file"; }',
+            'cleanup() { rm -f "$managed_paths_file" "$unmanaged_status_file"; }',
             "trap cleanup EXIT",
-            "cat > \"$askpass\" <<'EOF'",
-            "#!/bin/sh",
-            'case "$1" in',
-            "  *Username*) echo x-access-token ;;",
-            "  *Password*) printf '%s\\n' \"$GITHUB_TOKEN\" ;;",
-            "  *) echo ;;",
-            "esac",
-            "EOF",
-            'chmod 700 "$askpass"',
             "cat > \"$managed_paths_file\" <<'EOF'",
             managed_paths,
             "EOF",
-            'export GIT_ASKPASS="$askpass"',
             "export GIT_TERMINAL_PROMPT=0",
             f"if [ -d {quoted_repo_path}/.git ]; then",
             f"  git -C {quoted_repo_path} remote set-url origin {quoted_repo_url}",
@@ -327,7 +334,6 @@ async def _clone_or_update_repo(
             label="managed_repo_clone_or_update",
             command="bash -lc " + shlex.quote(script),
             runtime_context=runtime_context,  # type: ignore[arg-type]
-            envs={"GITHUB_TOKEN": github_token},
             timeout_seconds=300,
             log_output_on_success=True,
         ),

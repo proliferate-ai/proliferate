@@ -6,6 +6,7 @@ pub mod commands;
 pub mod control;
 pub mod events;
 pub mod exposures;
+pub mod github_credentials;
 pub mod heartbeat;
 pub mod inventory;
 pub mod revoked_jti;

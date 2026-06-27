@@ -88,6 +88,7 @@ async function main() {
         "/home/user/.proliferate/bin/proliferate-worker --version",
         "test -x /home/user/.proliferate/bin/proliferate-supervisor",
         "/home/user/.proliferate/bin/proliferate-supervisor --version",
+        "test -x /home/user/.proliferate/bin/proliferate-git-credential-helper",
       ].join(" && "),
       {
         timeoutMs: 30_000,
@@ -116,6 +117,31 @@ async function main() {
         );
       }
     }
+
+    const helperCheck = await sandbox.commands.run(
+      [
+        "set -eu",
+        'helper="/home/user/.proliferate/bin/proliferate-git-credential-helper"',
+        'empty_output="$(printf "protocol=https\\nhost=github.com\\n\\n" | "$helper" get)"',
+        'test -z "$empty_output"',
+        "mkdir -p /home/user/.proliferate/git/github.com",
+        'printf "template-smoke-token\\n" > /home/user/.proliferate/git/github.com/token',
+        'chmod 600 /home/user/.proliferate/git/github.com/token',
+        'credential_output="$(printf "protocol=https\\nhost=github.com\\n\\n" | "$helper" get)"',
+        'printf "%s\\n" "$credential_output" | grep -qx "username=x-access-token"',
+        'printf "%s\\n" "$credential_output" | grep -qx "password=template-smoke-token"',
+        'override_file="$(mktemp)"',
+        'printf "override-token\\n" > "$override_file"',
+        'override_output="$(printf "protocol=https\\nhost=www.github.com\\n\\n" | PROLIFERATE_GIT_TOKEN_FILE="$override_file" "$helper" get)"',
+        'printf "%s\\n" "$override_output" | grep -qx "password=override-token"',
+        'wrong_host="$(printf "protocol=https\\nhost=example.com\\n\\n" | "$helper" get)"',
+        'test -z "$wrong_host"',
+      ].join("\n"),
+      {
+        timeoutMs: 30_000,
+      }
+    );
+    assertSuccessful(helperCheck, "Git credential helper did not satisfy Git protocol checks");
 
     const supervisorCheck = await sandbox.commands.run(
       [

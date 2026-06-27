@@ -40,12 +40,7 @@ from proliferate.server.cloud.event_logging import format_exception_message, log
 from proliferate.server.cloud.managed_sandboxes.service import (
     ensure_managed_sandbox_workspace_record_runtime_connection,
 )
-from proliferate.server.cloud.repos.service import (
-    get_linked_github_account,
-)
-from proliferate.server.cloud.repos.service import (
-    get_repo_branches_for_user as get_github_repo_branches,
-)
+from proliferate.server.cloud.repos.service import get_linked_github_account
 from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provision
 from proliferate.server.cloud.sandbox_profiles import service as sandbox_profile_service
 from proliferate.server.cloud.workspaces.access import (
@@ -64,6 +59,7 @@ from proliferate.server.cloud.workspaces.provisioning.models import (
 )
 from proliferate.server.cloud.workspaces.provisioning.preflight import (
     bootstrap_repo_config_tx,
+    load_github_app_repo_branches_tx,
     load_personal_agent_auth_agent_kinds,
     load_repo_config_value_tx,
     raise_if_cloud_workspace_start_denied,
@@ -556,13 +552,16 @@ async def start_cloud_workspace(
             status_code=409,
         )
 
-    repo_branches = await get_github_repo_branches(
-        user,
+    repo_branches = await load_github_app_repo_branches_tx(
+        user.id,
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
-        missing_access_message="Connect a GitHub account before starting a cloud workspace.",
+        missing_access_message=(
+            "Connect the Proliferate GitHub App before starting a cloud workspace."
+        ),
         repo_access_required_message=(
-            "Reconnect GitHub and grant repository access before starting a cloud workspace."
+            "Reconnect the Proliferate GitHub App and grant repository access before "
+            "starting a cloud workspace."
         ),
     )
     base_branch = workspace.git_base_branch or workspace.git_branch

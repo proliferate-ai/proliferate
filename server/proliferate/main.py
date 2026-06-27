@@ -49,6 +49,7 @@ from proliferate.server.cloud.agent_auth.reconciler import (
 )
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.gateway.api import router as gateway_router
+from proliferate.server.cloud.github_app.api import callback_router as github_app_callback_router
 from proliferate.server.cloud.mobility.reconciler import (
     start_mobility_cleanup_reconciler,
     stop_mobility_cleanup_reconciler,
@@ -203,6 +204,7 @@ def create_app() -> FastAPI:
     # the generic identity `/{surface}/{provider}/start` and `/{provider}/callback`
     # routes, which would otherwise shadow them (capturing `sso`/`oidc` as `{provider}`).
     app.include_router(sso_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+    app.include_router(github_app_callback_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(identity_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(auth_viewer_router, prefix=f"{api_prefix}/v1", tags=["auth"])
 

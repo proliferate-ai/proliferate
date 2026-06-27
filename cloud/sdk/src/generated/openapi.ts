@@ -209,6 +209,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/github-app/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Callback Endpoint */
+        get: operations["github_app_callback_endpoint_auth_github_app_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/github/link/start": {
         parameters: {
             query?: never;
@@ -653,6 +670,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/github-app/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Connect Endpoint */
+        get: operations["github_app_connect_endpoint_v1_cloud_github_app_connect_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/github-app/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Status Endpoint */
+        get: operations["github_app_status_endpoint_v1_cloud_github_app_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/managed-sandbox": {
         parameters: {
             query?: never;
@@ -699,6 +750,40 @@ export interface paths {
         put?: never;
         /** Wake Managed Sandbox Endpoint */
         post: operations["wake_managed_sandbox_endpoint_v1_cloud_managed_sandbox_wake_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/managed-sandbox/repos/{git_owner}/{git_repo_name}/runtime-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Managed Sandbox Repo Runtime Connection Endpoint */
+        post: operations["ensure_managed_sandbox_repo_runtime_connection_endpoint_v1_cloud_managed_sandbox_repos__git_owner___git_repo_name__runtime_connection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/managed-sandbox/workspaces/{workspace_id}/runtime-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Managed Sandbox Workspace Runtime Connection Endpoint */
+        post: operations["ensure_managed_sandbox_workspace_runtime_connection_endpoint_v1_cloud_managed_sandbox_workspaces__workspace_id__runtime_connection_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1576,6 +1661,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-config/desktop-apply-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desktop Agent Auth Config Apply Request Endpoint */
+        post: operations["desktop_agent_auth_config_apply_request_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_config_desktop_apply_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-config/desktop-apply-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desktop Agent Auth Config Apply Status Endpoint */
+        post: operations["desktop_agent_auth_config_apply_status_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_config_desktop_apply_status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-run-configs": {
         parameters: {
             query?: never;
@@ -1936,6 +2055,23 @@ export interface paths {
         put?: never;
         /** E2B Webhook Endpoint */
         post: operations["e2b_webhook_endpoint_v1_cloud_webhooks_e2b_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/webhooks/github-app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Github App Webhook Endpoint */
+        post: operations["github_app_webhook_endpoint_v1_cloud_webhooks_github_app_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6010,6 +6146,45 @@ export interface components {
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
         };
+        /** DesktopAgentAuthConfigApplyRequestInput */
+        DesktopAgentAuthConfigApplyRequestInput: {
+            /** Targetid */
+            targetId?: string | null;
+        };
+        /** DesktopAgentAuthConfigApplyResponse */
+        DesktopAgentAuthConfigApplyResponse: {
+            /** Applyrequest */
+            applyRequest: {
+                [key: string]: unknown;
+            };
+            /** Syncedfiles */
+            syncedFiles?: components["schemas"]["DesktopAgentAuthSyncedFileMaterialization"][];
+        };
+        /** DesktopAgentAuthConfigApplyStatusRequest */
+        DesktopAgentAuthConfigApplyStatusRequest: {
+            /** Targetid */
+            targetId?: string | null;
+            /** Revision */
+            revision: number;
+            /** Status */
+            status: string;
+            /**
+             * Applied
+             * @default true
+             */
+            applied: boolean;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /** DesktopAgentAuthSyncedFileMaterialization */
+        DesktopAgentAuthSyncedFileMaterialization: {
+            /** Relativepath */
+            relativePath: string;
+            /** Content */
+            content: string;
+        };
         /** DesktopRuntimeConfigApplyRequest */
         DesktopRuntimeConfigApplyRequest: {
             /** Targetid */
@@ -6196,6 +6371,28 @@ export interface components {
         GenerateWorkspaceNameResponse: {
             /** Name */
             name: string;
+        };
+        /** GitHubAppConnectResponse */
+        GitHubAppConnectResponse: {
+            /** Authorizationurl */
+            authorizationUrl: string;
+        };
+        /** GitHubAppStatusResponse */
+        GitHubAppStatusResponse: {
+            /** Connected */
+            connected: boolean;
+            /** Githublogin */
+            githubLogin?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Tokenexpiresat */
+            tokenExpiresAt?: string | null;
+            /** Installationstate */
+            installationState?: string | null;
+            /** Repocovered */
+            repoCovered?: boolean | null;
+            /** Action */
+            action?: ("connect" | "reauthorize" | "install" | "grant_repo_access" | "manage") | null;
         };
         /** GrantAllocationInfo */
         GrantAllocationInfo: {
@@ -6428,6 +6625,15 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** ManagedSandboxRepoRuntimeConnectionResponse */
+        ManagedSandboxRepoRuntimeConnectionResponse: {
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnessreporootid */
+            anyharnessRepoRootId: string | null;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
+        };
         /** ManagedSandboxResponse */
         ManagedSandboxResponse: {
             /** Id */
@@ -6456,6 +6662,15 @@ export interface components {
             lastHealthAt: string | null;
             /** Destroyedat */
             destroyedAt: string | null;
+        };
+        /** ManagedSandboxWorkspaceRuntimeConnectionResponse */
+        ManagedSandboxWorkspaceRuntimeConnectionResponse: {
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnessreporootid */
+            anyharnessRepoRootId: string | null;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
         };
         /** MaterializeTargetConfigRequest */
         MaterializeTargetConfigRequest: {
@@ -9502,6 +9717,11 @@ export interface components {
             displayName: string | null;
             repo: components["schemas"]["RepoRef"];
             /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "materializing" | "needs_rematerialization" | "ready" | "archived" | "error";
+            /**
              * Workspacestatus
              * @enum {string}
              */
@@ -9764,6 +9984,11 @@ export interface components {
             /** Displayname */
             displayName: string | null;
             repo: components["schemas"]["RepoRef"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "materializing" | "needs_rematerialization" | "ready" | "archived" | "error";
             /**
              * Workspacestatus
              * @enum {string}
@@ -10218,6 +10443,38 @@ export interface operations {
                 state?: string | null;
                 code?: string | null;
                 error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_callback_endpoint_auth_github_app_callback_get: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
             };
             header?: never;
             path?: never;
@@ -11147,6 +11404,58 @@ export interface operations {
             };
         };
     };
+    github_app_connect_endpoint_v1_cloud_github_app_connect_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubAppConnectResponse"];
+                };
+            };
+        };
+    };
+    github_app_status_endpoint_v1_cloud_github_app_status_get: {
+        parameters: {
+            query?: {
+                gitOwner?: string | null;
+                gitRepoName?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubAppStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_managed_sandbox_endpoint_v1_cloud_managed_sandbox_get: {
         parameters: {
             query?: never;
@@ -11223,6 +11532,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedSandboxResponse"];
+                };
+            };
+        };
+    };
+    ensure_managed_sandbox_repo_runtime_connection_endpoint_v1_cloud_managed_sandbox_repos__git_owner___git_repo_name__runtime_connection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedSandboxRepoRuntimeConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensure_managed_sandbox_workspace_runtime_connection_endpoint_v1_cloud_managed_sandbox_workspaces__workspace_id__runtime_connection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedSandboxWorkspaceRuntimeConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -12990,6 +13362,76 @@ export interface operations {
             };
         };
     };
+    desktop_agent_auth_config_apply_request_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_config_desktop_apply_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopAgentAuthConfigApplyRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopAgentAuthConfigApplyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desktop_agent_auth_config_apply_status_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_config_desktop_apply_status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopAgentAuthConfigApplyStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_agent_run_configs_endpoint_v1_cloud_agent_run_configs_get: {
         parameters: {
             query?: {
@@ -13923,6 +14365,36 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["E2BWebhookReceipt"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_webhook_endpoint_v1_cloud_webhooks_github_app_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-github-event"?: string | null;
+                "x-hub-signature-256"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

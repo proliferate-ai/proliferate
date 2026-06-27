@@ -128,6 +128,23 @@ class WorkerMaterializationReportResponse(BaseModel):
     updated: bool
 
 
+class WorkerGitHubCredentialLeaseRequest(BaseModel):
+    current_lease_id: str | None = Field(default=None, alias="currentLeaseId")
+    current_expires_at: str | None = Field(default=None, alias="currentExpiresAt")
+
+
+class WorkerGitHubCredentialLeaseResponse(BaseModel):
+    provider: str = "github"
+    token_kind: str = Field(default="github_app_user_to_server", serialization_alias="tokenKind")
+    access_token: str = Field(serialization_alias="accessToken")
+    actor_login: str | None = Field(default=None, serialization_alias="actorLogin")
+    actor_id: str | None = Field(default=None, serialization_alias="actorId")
+    issued_at: str = Field(serialization_alias="issuedAt")
+    expires_at: str = Field(serialization_alias="expiresAt")
+    refresh_after: str = Field(serialization_alias="refreshAfter")
+    lease_id: str = Field(serialization_alias="leaseId")
+
+
 class WorkerCommandLeaseRequest(BaseModel):
     supported_kinds: list[str] = Field(default_factory=list, alias="supportedKinds")
     lease_timeout_seconds: int | None = Field(default=None, alias="leaseTimeoutSeconds")

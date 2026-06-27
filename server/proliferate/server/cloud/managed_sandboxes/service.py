@@ -16,7 +16,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.store import read_ready_github_grant_for_user
 from proliferate.config import settings
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
@@ -55,6 +54,7 @@ from proliferate.server.cloud.agent_auth.desktop_materialization import (
 from proliferate.server.cloud.agent_auth.models import DesktopAgentAuthConfigApplyStatusRequest
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.managed_sandboxes.transactions import (
     commit_managed_sandbox_session,
 )
@@ -758,11 +758,23 @@ async def ensure_managed_sandbox_repo_runtime_connection(
         user_id=user.id,
         repo_config=repo_config,
     )
+    await require_github_cloud_repo_authority(
+        db,
+        user_id=user.id,
+        git_owner=repo_config.git_owner,
+        git_repo_name=repo_config.git_repo_name,
+    )
     cached = _cached_repo_runtime_connection(cache_key)
     if cached is not None:
         return cached
 
     async with _repo_runtime_connection_lock(cache_key):
+        await require_github_cloud_repo_authority(
+            db,
+            user_id=user.id,
+            git_owner=repo_config.git_owner,
+            git_repo_name=repo_config.git_repo_name,
+        )
         cached = _cached_repo_runtime_connection(cache_key)
         if cached is not None:
             return cached
@@ -781,14 +793,6 @@ async def _resolve_managed_sandbox_repo_runtime_connection(
     *,
     repo_config: CloudRepoConfigValue,
 ) -> ManagedSandboxRepoRuntimeConnection:
-    github_grant = await read_ready_github_grant_for_user(db, user_id=user.id)
-    if github_grant is None:
-        raise CloudApiError(
-            "github_link_required",
-            "Connect GitHub before resolving a managed sandbox repo runtime.",
-            status_code=400,
-        )
-
     sandbox = await ensure_managed_sandbox_ready(db, user)
     from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
         ensure_repo_materialized,
@@ -798,7 +802,6 @@ async def _resolve_managed_sandbox_repo_runtime_connection(
         db,
         sandbox=sandbox,
         repo_config=repo_config,
-        github_token=github_grant.access_token,
         run_setup=False,
     )
     if not materialization.anyharness_workspace_id:
@@ -1536,9 +1539,6 @@ async def _best_effort_reconcile_repos(
 ) -> None:
     if user_id is None:
         return
-    github_grant = await read_ready_github_grant_for_user(db, user_id=user_id)
-    if github_grant is None:
-        return
     from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
         reconcile_configured_repos_for_sandbox,
     )
@@ -1547,7 +1547,6 @@ async def _best_effort_reconcile_repos(
         await reconcile_configured_repos_for_sandbox(
             db,
             sandbox=sandbox,
-            github_token=github_grant.access_token,
             run_setup=False,
         )
         await commit_managed_sandbox_session(db)
