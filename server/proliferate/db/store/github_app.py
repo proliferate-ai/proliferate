@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
@@ -15,11 +16,6 @@ from proliferate.db.models.cloud.github_app import (
     GitHubAppAuthorization,
     GitHubAppInstallation,
     GitHubAppInstallationRepository,
-)
-from proliferate.integrations.github import (
-    GitHubAppInstallationInfo,
-    GitHubAppRepositoryCoverage,
-    GitHubAppUserAuthorization,
 )
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
@@ -68,6 +64,32 @@ class GitHubAppInstallationRepositoryValue:
     private: bool
     default_branch: str | None
     updated_at: datetime
+
+
+class GitHubAppUserAuthorizationPayload(Protocol):
+    access_token: str
+    refresh_token: str | None
+    expires_at: datetime | None
+    refresh_token_expires_at: datetime | None
+    github_user_id: str
+    github_login: str
+    permissions: dict[str, object]
+
+
+class GitHubAppInstallationPayload(Protocol):
+    github_installation_id: str
+    account_login: str
+    account_type: str
+    repository_selection: str
+    permissions: dict[str, object]
+    suspended_at: datetime | None
+
+
+class GitHubAppRepositoryCoveragePayload(Protocol):
+    covered: bool
+    repository_id: str | None
+    private: bool | None
+    default_branch: str | None
 
 
 def _parse_json_object(value: str | None) -> dict[str, object]:
@@ -149,7 +171,7 @@ async def upsert_github_app_authorization(
     db: AsyncSession,
     *,
     user_id: UUID,
-    authorization: GitHubAppUserAuthorization,
+    authorization: GitHubAppUserAuthorizationPayload,
 ) -> GitHubAppAuthorizationValue:
     now = utcnow()
     row = (
@@ -202,7 +224,7 @@ async def mark_github_app_authorization_needs_reauth(
 async def upsert_github_app_installation(
     db: AsyncSession,
     *,
-    installation: GitHubAppInstallationInfo,
+    installation: GitHubAppInstallationPayload,
 ) -> GitHubAppInstallationValue:
     now = utcnow()
     await db.execute(
@@ -328,7 +350,7 @@ async def upsert_installation_repo_cache(
     installation_id: UUID,
     owner: str,
     name: str,
-    coverage: GitHubAppRepositoryCoverage,
+    coverage: GitHubAppRepositoryCoveragePayload,
 ) -> None:
     if not coverage.covered or coverage.repository_id is None:
         await delete_installation_repo_cache(

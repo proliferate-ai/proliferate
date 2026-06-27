@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Protocol
 from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
@@ -12,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_REDIRECT_SCHEMES
-from proliferate.db.models.auth import User
 from proliferate.db.store import github_app as github_app_store
 from proliferate.integrations.github import (
     GitHubAppInstallationInfo,
@@ -30,6 +30,10 @@ from proliferate.utils.time import utcnow
 
 _STATE_AUDIENCE = "github-app-connect"
 _WEB_RETURN_PATHS = frozenset({"/settings", "/settings/account"})
+
+
+class CurrentUser(Protocol):
+    id: UUID
 
 
 def _callback_url() -> str:
@@ -140,7 +144,7 @@ def _state_payload(state: str) -> tuple[UUID, str | None]:
 async def create_github_app_connect_url(
     db: AsyncSession,
     *,
-    user: User,
+    user: CurrentUser,
     return_to: str | None = None,
 ) -> GitHubAppConnectResponse:
     del db
@@ -200,7 +204,7 @@ async def refresh_github_app_installation_cache(db: AsyncSession) -> None:
 async def get_github_app_status(
     db: AsyncSession,
     *,
-    user: User,
+    user: CurrentUser,
     git_owner: str | None,
     git_repo_name: str | None,
 ) -> GitHubAppStatusResponse:
