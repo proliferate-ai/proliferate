@@ -27,6 +27,7 @@ import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { buildGitHubAppConnectedServiceView } from "./account/GitHubAppConnectedService";
 
 export function AccountPane() {
   const navigate = useNavigate();
@@ -222,7 +223,7 @@ export function AccountPane() {
           showProviders: isAuthenticated && !devAuthBypassed,
         })}
         connectedServices={isAuthenticated && !devAuthBypassed
-          ? [buildGitHubAppServiceView({
+          ? [buildGitHubAppConnectedServiceView({
               status: githubAppStatus.data,
               loading: githubAppStatus.isLoading,
               connecting: githubAppConnect.isPending,
@@ -304,60 +305,6 @@ export function AccountPane() {
       />
     </section>
   );
-}
-
-function buildGitHubAppServiceView({
-  status,
-  loading,
-  connecting,
-  onConnect,
-  onManage,
-}: {
-  status: {
-    connected: boolean;
-    githubLogin?: string | null;
-    status?: string | null;
-    action?: string | null;
-  } | undefined;
-  loading: boolean;
-  connecting: boolean;
-  onConnect: () => void;
-  onManage: () => void;
-}) {
-  const connected = status?.connected === true;
-  const needsReconnect = status?.status === "expired"
-    || status?.status === "needs_reauth"
-    || status?.action === "reauthorize";
-  return {
-    id: "github-app",
-    label: "Proliferate GitHub App",
-    description: "Required for Proliferate Cloud repositories.",
-    accountLabel: status?.githubLogin ? `@${status.githubLogin}` : null,
-    statusLabel: loading
-      ? "Checking"
-      : connected
-        ? "Connected"
-        : needsReconnect
-          ? "Reconnect"
-          : "Not connected",
-    tone: connected ? "success" as const : needsReconnect ? "warning" as const : "neutral" as const,
-    action: connected
-      ? {
-          label: "Manage GitHub App",
-          onClick: () => { void onManage(); },
-        }
-      : {
-          label: connecting
-            ? "Opening GitHub..."
-            : needsReconnect
-              ? "Reconnect GitHub App"
-              : "Connect GitHub App",
-          icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
-          loading: connecting,
-          disabled: connecting,
-          onClick: () => { void onConnect(); },
-        },
-  };
 }
 
 function scheduleGitHubAppStatusRefresh(refetch: () => void): number[] {
