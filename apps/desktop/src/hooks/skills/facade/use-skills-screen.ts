@@ -40,6 +40,7 @@ export function useSkillsScreen() {
   const workspaceSkillsById = new Map(
     (workspaceSkillsQuery.data?.skills ?? []).map((item) => [item.skill.skillId, item]),
   );
+  const workspaceSkillsLoading = !!selectedWorkspaceId && workspaceSkillsQuery.isPending;
 
   const submitSearch = useCallback(() => {
     setSearchQuery(searchInput.trim());
@@ -145,7 +146,7 @@ export function useSkillsScreen() {
     installedSkills: installedQuery.data?.skills ?? [],
     marketplaceSkills: marketplaceQuery.data?.skills ?? [],
     workspaceSkillsById: workspaceSkillsById as Map<string, WorkspaceSkill>,
-    installedLoading: installedQuery.isPending || workspaceSkillsQuery.isPending,
+    installedLoading: installedQuery.isPending || workspaceSkillsLoading,
     installedError: installedQuery.error ?? workspaceSkillsQuery.error,
     marketplaceLoading: marketplaceQuery.isPending,
     marketplaceError: marketplaceQuery.error,
