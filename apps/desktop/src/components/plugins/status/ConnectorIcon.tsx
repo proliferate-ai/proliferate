@@ -1,5 +1,6 @@
 import type { SVGProps } from "react";
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
+import atlassianIcon from "@/assets/connector-icons/atlassian.svg";
 import axiomIcon from "@/assets/connector-icons/axiom.svg";
 import axiomDarkIcon from "@/assets/connector-icons/axiom-dark.svg";
 import cloudflareIcon from "@/assets/connector-icons/cloudflare.svg";
@@ -8,16 +9,23 @@ import exaIcon from "@/assets/connector-icons/exa.svg";
 import filesystemIcon from "@/assets/connector-icons/filesystem.svg";
 import gmailIcon from "@/assets/connector-icons/gmail.svg";
 import gitlabIcon from "@/assets/connector-icons/gitlab.svg";
+import googleIcon from "@/assets/connector-icons/google.svg";
+import googleCalendarIcon from "@/assets/connector-icons/google_calendar.svg";
+import googleDriveIcon from "@/assets/connector-icons/google_drive.svg";
+import granolaIcon from "@/assets/connector-icons/granola.svg";
 import huggingfaceIcon from "@/assets/connector-icons/huggingface.svg";
 import neonIcon from "@/assets/connector-icons/neon.svg";
 import notionIcon from "@/assets/connector-icons/notion.png";
 import playwrightIcon from "@/assets/connector-icons/playwright.svg";
 import posthogIcon from "@/assets/connector-icons/posthog.svg";
+import railwayIcon from "@/assets/connector-icons/railway.svg";
 import renderIcon from "@/assets/connector-icons/render.svg";
 import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import sentryIcon from "@/assets/connector-icons/sentry.svg";
 import sentryDarkIcon from "@/assets/connector-icons/sentry-dark.svg";
+import stripeIcon from "@/assets/connector-icons/stripe.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
+import vercelIcon from "@/assets/connector-icons/vercel.svg";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { selectConnectorIconTileClass } from "@/lib/domain/mcp/connector-icon-tile";
 import {
@@ -86,6 +94,7 @@ interface ConnectorIconImageConfig {
 }
 
 const CONNECTOR_ICON_IMAGES = {
+  atlassian: { lightSrc: atlassianIcon },
   axiom: {
     lightSrc: axiomIcon,
     darkSrc: axiomDarkIcon,
@@ -97,11 +106,16 @@ const CONNECTOR_ICON_IMAGES = {
   filesystem: { lightSrc: filesystemIcon },
   gmail: { lightSrc: gmailIcon },
   gitlab: { lightSrc: gitlabIcon },
+  google: { lightSrc: googleIcon },
+  google_calendar: { lightSrc: googleCalendarIcon },
+  google_drive: { lightSrc: googleDriveIcon },
+  granola: { lightSrc: granolaIcon },
   huggingface: { lightSrc: huggingfaceIcon },
   neon: { lightSrc: neonIcon },
   notion: { lightSrc: notionIcon },
   playwright: { lightSrc: playwrightIcon },
   posthog: { lightSrc: posthogIcon },
+  railway: { lightSrc: railwayIcon },
   render: {
     lightSrc: renderIcon,
     darkSrc: renderDarkIcon,
@@ -112,7 +126,9 @@ const CONNECTOR_ICON_IMAGES = {
     darkSrc: sentryDarkIcon,
     darkTileClassName: "bg-background",
   },
+  stripe: { lightSrc: stripeIcon },
   supabase: { lightSrc: supabaseIcon },
+  vercel: { lightSrc: vercelIcon },
 } as const;
 
 type ConnectorIconSize = "sm" | "md" | "lg";

@@ -274,7 +274,7 @@ definitions:
     implementation: upstream_mcp
     mcpUrl: https://gmailmcp.googleapis.com/mcp/v1
     defaultEnabled: true
-    iconId: google
+    iconId: gmail
     authModes:
       - kind: oauth2
         clientStrategy: static
@@ -290,7 +290,7 @@ definitions:
     implementation: upstream_mcp
     mcpUrl: https://drivemcp.googleapis.com/mcp/v1
     defaultEnabled: true
-    iconId: google
+    iconId: google_drive
     authModes:
       - kind: oauth2
         clientStrategy: static
@@ -306,7 +306,7 @@ definitions:
     implementation: upstream_mcp
     mcpUrl: https://calendarmcp.googleapis.com/mcp/v1
     defaultEnabled: true
-    iconId: google
+    iconId: google_calendar
     authModes:
       - kind: oauth2
         clientStrategy: static
