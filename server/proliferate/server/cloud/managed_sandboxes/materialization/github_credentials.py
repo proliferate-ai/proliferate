@@ -73,7 +73,10 @@ async def ensure_sandbox_git_credentials_ready(
                 "const now = Date.now();",
                 "if (meta.provider !== 'github') process.exit(1);",
                 "if (meta.tokenKind !== 'github_app_user_to_server') process.exit(1);",
-                "if (!Number.isFinite(refreshAfter) || !Number.isFinite(expiresAt)) process.exit(1);",
+                (
+                    "if (!Number.isFinite(refreshAfter) || "
+                    "!Number.isFinite(expiresAt)) process.exit(1);"
+                ),
                 "if (now >= refreshAfter || now + 10 * 60 * 1000 >= expiresAt) process.exit(1);",
                 "NODE",
                 "  then",
@@ -88,11 +91,15 @@ async def ensure_sandbox_git_credentials_ready(
                 "fi",
                 "git config --global credential.useHttpPath true",
                 "git config --global --unset-all credential.helper || true",
-                'git config --global --replace-all credential.https://github.com.helper "!$helper"',
+                (
+                    "git config --global --replace-all "
+                    'credential.https://github.com.helper "!$helper"'
+                ),
                 (
                     "git config --global --get-all url.https://github.com/.insteadOf "
                     "| grep -Fx 'git@github.com:' >/dev/null "
-                    "|| git config --global --add url.https://github.com/.insteadOf git@github.com:"
+                    "|| git config --global --add "
+                    "url.https://github.com/.insteadOf git@github.com:"
                 ),
                 (
                     "git config --global --get-all url.https://github.com/.insteadOf "

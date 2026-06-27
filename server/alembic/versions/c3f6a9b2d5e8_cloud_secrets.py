@@ -1,7 +1,7 @@
 """cloud secrets
 
 Revision ID: c3f6a9b2d5e8
-Revises: c2e5f8a1b4d7
+Revises: c3f6a9b2d4e8
 Create Date: 2026-06-26 00:00:00.000000
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c3f6a9b2d5e8"
-down_revision: str | Sequence[str] | None = "c2e5f8a1b4d7"
+down_revision: str | Sequence[str] | None = "c3f6a9b2d4e8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
