@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
@@ -92,8 +93,8 @@ export function SecretEditorDialog({
     >
       <form id="secret-editor-form" className="space-y-4" onSubmit={submit}>
         {editing ? null : (
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-foreground">Type</span>
+          <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+            <span className="block">Type</span>
             <Select
               value={kind}
               onChange={(event) => setKind(event.currentTarget.value as SecretEditorKind)}
@@ -101,19 +102,19 @@ export function SecretEditorDialog({
               <option value="env">Environment variable</option>
               <option value="file">File</option>
             </Select>
-          </label>
+          </Label>
         )}
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-foreground">{nameLabel}</span>
+        <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+          <span className="block">{nameLabel}</span>
           <Input
             value={nameOrPath}
             disabled={editing}
             placeholder={kind === "env" ? "API_TOKEN" : filePathMode === "absolute" ? "/home/user/.env" : ".env.local"}
             onChange={(event) => setNameOrPath(event.currentTarget.value)}
           />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-foreground">{valueLabel}</span>
+        </Label>
+        <Label className="block space-y-1.5 text-sm font-medium text-foreground">
+          <span className="block">{valueLabel}</span>
           <Textarea
             value={secret}
             data-telemetry-mask
@@ -121,7 +122,7 @@ export function SecretEditorDialog({
             placeholder={editing ? "Replacement secret" : "Secret value"}
             onChange={(event) => setSecret(event.currentTarget.value)}
           />
-        </label>
+        </Label>
         {error ? (
           <div className="rounded-md border border-destructive/25 bg-destructive-subtle px-3 py-2 text-sm text-destructive">
             {error}
