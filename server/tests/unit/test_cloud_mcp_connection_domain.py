@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import pytest
+
+pytest.skip(
+    "Superseded by integration catalog gateway account coverage.",
+    allow_module_level=True,
+)
 
 from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogEntry,

@@ -183,6 +183,9 @@ async def discover_authorization_server_metadata(
                     if payload.get("registration_endpoint")
                     else None
                 ),
+                client_id_metadata_document_supported=(
+                    payload.get("client_id_metadata_document_supported") is True
+                ),
                 token_endpoint_auth_methods_supported=_string_tuple(
                     payload.get("token_endpoint_auth_methods_supported")
                 ),

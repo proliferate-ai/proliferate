@@ -12,12 +12,10 @@ from proliferate.server.cloud.commands.api import router as commands_router
 from proliferate.server.cloud.compute.api import router as compute_router
 from proliferate.server.cloud.events.api import router as events_router
 from proliferate.server.cloud.github_app.api import router as github_app_router
-from proliferate.server.cloud.integration_policy.api import router as integration_policy_router
+from proliferate.server.cloud.integration_gateway.api import router as integration_gateway_router
+from proliferate.server.cloud.integrations.api import router as integrations_router
 from proliferate.server.cloud.live.api import router as live_router
 from proliferate.server.cloud.managed_sandboxes.api import router as managed_sandboxes_router
-from proliferate.server.cloud.mcp_catalog.api import router as mcp_catalog_router
-from proliferate.server.cloud.mcp_connections.api import router as mcp_connections_router
-from proliferate.server.cloud.mcp_oauth.api import router as mcp_oauth_router
 from proliferate.server.cloud.mobility.api import router as mobility_router
 from proliferate.server.cloud.plugins.api import router as plugins_router
 from proliferate.server.cloud.repo_config.api import router as repo_config_router
@@ -59,10 +57,8 @@ router.include_router(mobility_router)
 router.include_router(sandbox_profiles_router)
 router.include_router(agent_auth_router)
 router.include_router(agent_run_config_router)
-router.include_router(integration_policy_router)
-router.include_router(mcp_catalog_router)
-router.include_router(mcp_connections_router)
-router.include_router(mcp_oauth_router)
+router.include_router(integrations_router)
+router.include_router(integration_gateway_router)
 router.include_router(plugins_router)
 router.include_router(skills_router)
 # SLACK BOT PARKED: /v1/cloud/slack/* is intentionally disabled and returns 404.

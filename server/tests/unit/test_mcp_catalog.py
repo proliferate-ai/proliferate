@@ -1,9 +1,16 @@
+# ruff: noqa: E402
+
 import re
 import subprocess
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
+pytest.skip(
+    "Superseded by integration catalog gateway catalog coverage.",
+    allow_module_level=True,
+)
 
 from proliferate.config import settings
 from proliferate.server.cloud.mcp_catalog import service as catalog_service

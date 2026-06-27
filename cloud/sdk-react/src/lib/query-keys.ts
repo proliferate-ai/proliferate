@@ -56,6 +56,30 @@ export function cloudMcpOAuthFlowKey(flowId: string | null) {
   return [...cloudPluginInventoryRootKey(), "mcp-oauth-flow", flowId] as const;
 }
 
+export function cloudIntegrationsRootKey() {
+  return [...cloudRootKey(), "integrations"] as const;
+}
+
+export function cloudIntegrationDefinitionsKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "definitions", organizationId] as const;
+}
+
+export function cloudIntegrationAccountsKey() {
+  return [...cloudIntegrationsRootKey(), "accounts"] as const;
+}
+
+export function cloudIntegrationAvailabilityKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "availability", organizationId] as const;
+}
+
+export function cloudIntegrationToolMetadataKey() {
+  return [...cloudIntegrationsRootKey(), "tool-metadata"] as const;
+}
+
+export function cloudIntegrationOAuthFlowKey(flowId: string | null) {
+  return [...cloudIntegrationsRootKey(), "oauth-flow", flowId] as const;
+}
+
 export function cloudConfiguredPluginsKey() {
   return [...cloudPluginInventoryRootKey(), "configured-plugins"] as const;
 }

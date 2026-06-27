@@ -1,0 +1,362 @@
+version: 1
+definitions:
+  - key: linear
+    displayName: Linear
+    namespace: linear
+    providerGroup: linear
+    docsUrl: https://linear.app/docs/mcp
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.linear.app/mcp
+    defaultEnabled: true
+    iconId: linear
+    authModes:
+      - kind: oauth2
+        clientStrategy: client_metadata_document
+      - kind: api_key
+        label: Linear API key
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: github
+    displayName: GitHub
+    namespace: github
+    providerGroup: github
+    docsUrl: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/use-the-github-mcp-server
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://api.githubcopilot.com/mcp/
+    defaultEnabled: true
+    iconId: github
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: GITHUB_MCP_CLIENT_ID
+        clientSecretEnv: GITHUB_MCP_CLIENT_SECRET
+      - kind: api_key
+        label: GitHub PAT
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: atlassian
+    displayName: Atlassian
+    namespace: atlassian
+    providerGroup: atlassian
+    docsUrl: https://support.atlassian.com/atlassian-rovo-mcp-server/docs/getting-started-with-the-atlassian-remote-mcp-server/
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.atlassian.com/v1/mcp
+    defaultEnabled: true
+    iconId: atlassian
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+      - kind: api_key
+        label: Atlassian API token
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: sentry
+    displayName: Sentry
+    namespace: sentry
+    providerGroup: sentry
+    docsUrl: https://docs.sentry.io/product/sentry-mcp/
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.sentry.dev/mcp
+    defaultEnabled: true
+    iconId: sentry
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+
+  - key: stripe
+    displayName: Stripe
+    namespace: stripe
+    providerGroup: stripe
+    docsUrl: https://docs.stripe.com/mcp
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.stripe.com
+    defaultEnabled: true
+    iconId: stripe
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: STRIPE_MCP_CLIENT_ID
+        clientSecretEnv: STRIPE_MCP_CLIENT_SECRET
+      - kind: api_key
+        label: Stripe restricted key
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: posthog
+    displayName: PostHog
+    namespace: posthog
+    providerGroup: posthog
+    docsUrl: https://posthog.com/docs/model-context-protocol
+    transport: http
+    implementation: upstream_mcp
+    mcpUrlBySetting:
+      settingId: region
+      variants:
+        - value: us
+          url: https://mcp.posthog.com/mcp
+        - value: eu
+          url: https://mcp-eu.posthog.com/mcp
+    settings:
+      - id: region
+        label: Region
+        default: us
+        options:
+          - value: us
+            label: US
+          - value: eu
+            label: EU
+    defaultEnabled: true
+    iconId: posthog
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+      - kind: api_key
+        label: PostHog API key
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: supabase
+    displayName: Supabase
+    namespace: supabase
+    providerGroup: supabase
+    docsUrl: https://supabase.com/docs/guides/ai-tools/mcp
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.supabase.com/mcp
+    defaultEnabled: true
+    iconId: supabase
+    flags:
+      devOnlyRecommended: true
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+      - kind: api_key
+        label: Supabase PAT
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: neon
+    displayName: Neon
+    namespace: neon
+    providerGroup: neon
+    docsUrl: https://neon.com/docs/ai/neon-mcp-server
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.neon.tech/mcp
+    defaultEnabled: true
+    iconId: neon
+    flags:
+      devOnlyRecommended: true
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+      - kind: api_key
+        label: Neon API key
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: cloudflare_api
+    displayName: Cloudflare API
+    namespace: cloudflare_api
+    providerGroup: cloudflare
+    docsUrl: https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.cloudflare.com/mcp
+    toolSurfaceKind: code_mode
+    defaultEnabled: true
+    iconId: cloudflare
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: CLOUDFLARE_MCP_CLIENT_ID
+        clientSecretEnv: CLOUDFLARE_MCP_CLIENT_SECRET
+      - kind: api_key
+        label: Cloudflare API token
+        placement:
+          type: header
+          name: Authorization
+          template: "Bearer {{token}}"
+
+  - key: context7
+    displayName: Context7
+    namespace: context7
+    providerGroup: context7
+    docsUrl: https://context7.com/docs/resources/all-clients
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.context7.com/mcp
+    defaultEnabled: true
+    iconId: context7
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+      - kind: api_key
+        label: Context7 API key
+        placement:
+          type: header
+          name: CONTEXT7_API_KEY
+          template: "{{token}}"
+
+  - key: notion
+    displayName: Notion
+    namespace: notion
+    providerGroup: notion
+    docsUrl: https://developers.notion.com/guides/mcp/get-started-with-mcp
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.notion.com/mcp
+    defaultEnabled: true
+    iconId: notion
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+
+  - key: slack
+    displayName: Slack
+    namespace: slack
+    providerGroup: slack
+    docsUrl: https://docs.slack.dev/ai/slack-mcp-server/
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.slack.com/mcp
+    defaultEnabled: true
+    iconId: slack
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: CLOUD_MCP_SLACK_CLIENT_ID
+        clientSecretEnv: CLOUD_MCP_SLACK_CLIENT_SECRET
+        tokenEndpointAuthMethodEnv: CLOUD_MCP_SLACK_TOKEN_ENDPOINT_AUTH_METHOD
+
+  - key: granola
+    displayName: Granola
+    namespace: granola
+    providerGroup: granola
+    docsUrl: https://docs.granola.ai/help-center/sharing/integrations/mcp
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.granola.ai/mcp
+    defaultEnabled: true
+    iconId: granola
+    authModes:
+      - kind: oauth2
+        clientStrategy: dcr
+
+  - key: google_gmail
+    displayName: Gmail
+    namespace: gmail
+    providerGroup: google_workspace
+    docsUrl: https://developers.google.com/workspace/guides/configure-mcp-servers
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://gmailmcp.googleapis.com/mcp/v1
+    defaultEnabled: true
+    iconId: google
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID
+        clientSecretEnv: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET
+
+  - key: google_drive
+    displayName: Google Drive
+    namespace: google_drive
+    providerGroup: google_workspace
+    docsUrl: https://developers.google.com/workspace/guides/configure-mcp-servers
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://drivemcp.googleapis.com/mcp/v1
+    defaultEnabled: true
+    iconId: google
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID
+        clientSecretEnv: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET
+
+  - key: google_calendar
+    displayName: Google Calendar
+    namespace: google_calendar
+    providerGroup: google_workspace
+    docsUrl: https://developers.google.com/workspace/guides/configure-mcp-servers
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://calendarmcp.googleapis.com/mcp/v1
+    defaultEnabled: true
+    iconId: google
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID
+        clientSecretEnv: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET
+
+  - key: vercel
+    displayName: Vercel
+    namespace: vercel
+    providerGroup: vercel
+    docsUrl: https://vercel.com/docs/mcp/deploy-mcp-servers-to-vercel
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.vercel.com
+    defaultEnabled: true
+    iconId: vercel
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: VERCEL_MCP_CLIENT_ID
+        clientSecretEnv: VERCEL_MCP_CLIENT_SECRET
+
+  - key: railway
+    displayName: Railway
+    namespace: railway
+    providerGroup: railway
+    docsUrl: https://docs.railway.com/ai/mcp-server
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.railway.com
+    defaultEnabled: true
+    iconId: railway
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: RAILWAY_MCP_CLIENT_ID
+        clientSecretEnv: RAILWAY_MCP_CLIENT_SECRET
+
+  - key: render
+    displayName: Render
+    namespace: render
+    providerGroup: render
+    docsUrl: https://render.com/docs/mcp-server
+    transport: http
+    implementation: upstream_mcp
+    mcpUrl: https://mcp.render.com/mcp
+    defaultEnabled: true
+    iconId: render
+    authModes:
+      - kind: oauth2
+        clientStrategy: static
+        clientIdEnv: RENDER_MCP_CLIENT_ID
+        clientSecretEnv: RENDER_MCP_CLIENT_SECRET

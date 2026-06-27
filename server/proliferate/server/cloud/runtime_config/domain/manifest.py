@@ -4,6 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 
+from proliferate.config import settings
 from proliferate.server.cloud.mcp_catalog.domain.rendering import parse_settings, validate_settings
 from proliferate.server.cloud.mcp_catalog.domain.types import (
     ArgTemplate,
@@ -36,22 +37,38 @@ def compile_runtime_config_manifest(
     *,
     sandbox_profile_id: str,
     direct_attach_auth: dict[str, object] | None = None,
+    integration_gateway_enabled: bool = False,
 ) -> CompiledRuntimeConfigManifest:
     warning_payloads = [_warning_payload(warning) for warning in plan.warnings]
     blocking_error_payloads = tuple(_warning_payload(blocker) for blocker in plan.blocking_errors)
-    runtime_manifest_payload = {
-        "mcpServers": [_mcp_server_payload(server) for server in plan.mcp_servers],
-        "mcpBindingSummaries": [
+    mcp_servers = [_mcp_server_payload(server) for server in plan.mcp_servers]
+    binding_summaries = [
+        {
+            "id": binding.server_id,
+            "serverName": binding.server_name,
+            "displayName": binding.display_name,
+            "transport": binding.transport,
+            "outcome": "applied",
+            "reason": None,
+        }
+        for binding in plan.mcp_binding_summaries
+    ]
+    if integration_gateway_enabled:
+        gateway_server = _integration_gateway_mcp_server_payload(sandbox_profile_id)
+        mcp_servers.append(gateway_server)
+        binding_summaries.append(
             {
-                "id": binding.server_id,
-                "serverName": binding.server_name,
-                "displayName": binding.display_name,
-                "transport": binding.transport,
+                "id": gateway_server["id"],
+                "serverName": gateway_server["serverName"],
+                "displayName": "Proliferate Integrations",
+                "transport": "http",
                 "outcome": "applied",
                 "reason": None,
             }
-            for binding in plan.mcp_binding_summaries
-        ],
+        )
+    runtime_manifest_payload = {
+        "mcpServers": mcp_servers,
+        "mcpBindingSummaries": binding_summaries,
         "skills": [_skill_payload(skill) for skill in plan.skills],
         "artifacts": [_artifact_payload(artifact) for artifact in plan.artifacts],
         "warnings": warning_payloads,
@@ -136,6 +153,42 @@ def _mcp_server_payload(server) -> dict[str, object]:  # noqa: ANN001
         "transport": entry.transport,
         "launch": launch,
         "credentialRefs": credential_refs,
+    }
+
+
+def _integration_gateway_mcp_server_payload(sandbox_profile_id: str) -> dict[str, object]:
+    credential_ref = f"integration-gateway:{sandbox_profile_id}:token"
+    return {
+        "id": "integration-gateway:proliferate_integrations",
+        "connectionId": "proliferate_integrations",
+        "connectionDbId": None,
+        "catalogEntryId": "proliferate_integrations",
+        "catalogEntryVersion": 1,
+        "serverName": "proliferate_integrations",
+        "transport": "http",
+        "launch": {
+            "kind": "http",
+            "url": _mcp_value_literal(
+                f"{settings.api_base_url.rstrip('/')}/v1/cloud/integration-gateway/mcp"
+            ),
+            "headers": [
+                {
+                    "name": "Authorization",
+                    "value": {"kind": "credential", "credentialRef": credential_ref},
+                }
+            ],
+            "query": [],
+        },
+        "credentialRefs": [
+            {
+                "credentialRef": credential_ref,
+                "usedIn": "mcp_launch_header",
+                "mcpServerId": "integration-gateway:proliferate_integrations",
+                "fieldName": "Authorization",
+                "authKind": "integration_gateway",
+                "authVersion": 1,
+            }
+        ],
     }
 
 

@@ -17,6 +17,7 @@ class AuthorizationServerMetadata:
     authorization_endpoint: str
     token_endpoint: str
     registration_endpoint: str | None
+    client_id_metadata_document_supported: bool
     token_endpoint_auth_methods_supported: tuple[str, ...]
 
 

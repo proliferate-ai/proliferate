@@ -1,4 +1,5 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import { listIntegrationDefinitions } from "./integrations.js";
 import type {
   CloudOrganizationIntegrationPolicyResponse,
   PatchCloudOrganizationIntegrationPolicyRequest,
@@ -8,9 +9,16 @@ export async function getCloudOrganizationIntegrationPolicy(
   organizationId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudOrganizationIntegrationPolicyResponse> {
-  return (await client.GET("/v1/cloud/organizations/{organization_id}/integration-policy", {
-    params: { path: { organization_id: organizationId } },
-  })).data!;
+  const definitions = await listIntegrationDefinitions({ organizationId }, client);
+  return {
+    organizationId,
+    entries: definitions.map((definition) => ({
+      catalogEntryId: definition.id,
+      enabled: true,
+      updatedAt: null,
+      updatedByUserId: null,
+    })),
+  };
 }
 
 export async function patchCloudOrganizationIntegrationPolicy(
@@ -18,8 +26,13 @@ export async function patchCloudOrganizationIntegrationPolicy(
   body: PatchCloudOrganizationIntegrationPolicyRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudOrganizationIntegrationPolicyResponse> {
-  return (await client.PATCH("/v1/cloud/organizations/{organization_id}/integration-policy", {
-    params: { path: { organization_id: organizationId } },
-    body,
-  })).data!;
+  const policy = await getCloudOrganizationIntegrationPolicy(organizationId, client);
+  return {
+    organizationId,
+    entries: policy.entries.map((entry) =>
+      entry.catalogEntryId === body.catalogEntryId
+        ? { ...entry, enabled: body.enabled, updatedAt: new Date().toISOString() }
+        : entry
+    ),
+  };
 }
