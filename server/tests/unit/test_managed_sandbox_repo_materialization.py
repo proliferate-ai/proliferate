@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import subprocess
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -13,6 +15,7 @@ from proliferate.db.store.managed_sandbox_repo_materializations import (
 )
 from proliferate.db.store.managed_sandboxes import ManagedSandboxValue
 from proliferate.server.cloud.managed_sandboxes.materialization import (
+    commands,
     github_credentials,
     manifests,
     repos,
@@ -119,6 +122,32 @@ def test_render_env_file_matches_anyharness_materialized_env_contract() -> None:
     )
 
 
+def test_path_safety_guard_rejects_symlink_ancestor(tmp_path: Path) -> None:
+    tmp_root = tmp_path.resolve()
+    root = tmp_root / "repo"
+    outside = tmp_root / "outside"
+    root.mkdir()
+    outside.mkdir()
+    (root / "config").symlink_to(outside, target_is_directory=True)
+    script = "\n".join(
+        [
+            "set -eu",
+            commands._path_safety_functions(),
+            f"ensure_safe_target_parent {str(root / 'config' / '.env')!r} {str(root)!r}",
+        ]
+    )
+
+    result = subprocess.run(
+        ["bash", "-lc", script],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 47
+    assert "symlink component" in result.stderr
+
+
 def test_materialization_freshness_is_repo_lifecycle_not_secret_version() -> None:
     repo_config = _repo_config(env_vars={"API_BASE_URL": "https://example.test"})
     materialization = _materialization(applied_env_vars_version=0)
@@ -135,6 +164,22 @@ def test_materialization_freshness_is_repo_lifecycle_not_secret_version() -> Non
         stale_generation,
         sandbox=_sandbox(runtime_generation=1),
         repo_config=repo_config,
+        run_setup=False,
+    )
+
+    stale_env = _repo_config(env_vars={"API_BASE_URL": "https://example.test"}, env_vars_version=2)
+    assert not repos._materialization_versions_match(
+        materialization,
+        sandbox=_sandbox(),
+        repo_config=stale_env,
+        run_setup=False,
+    )
+
+    stale_files = _repo_config(files_version=2)
+    assert not repos._materialization_versions_match(
+        materialization,
+        sandbox=_sandbox(),
+        repo_config=stale_files,
         run_setup=False,
     )
 
@@ -177,12 +222,25 @@ async def test_managed_materialization_paths_include_workspace_secrets(
 
     assert await repos._managed_materialization_paths(
         object(),
-        repo_config=_repo_config(),
+        repo_config=_repo_config(
+            tracked_files=(
+                CloudRepoFileValue(
+                    relative_path="legacy.env",
+                    content="LEGACY=1\n",
+                    content_sha256="sha",
+                    byte_size=9,
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                    last_synced_at=datetime.now(UTC),
+                ),
+            )
+        ),
     ) == (
         ".env.example",
         ".proliferate/env/workspace.env",
         ".proliferate/env/workspace.manifest.json",
         "config/app.env",
+        "legacy.env",
     )
 
 
@@ -211,7 +269,19 @@ async def test_clone_dirty_check_allows_managed_workspace_secret_paths(
     await repos._clone_or_update_repo(
         object(),
         object(),
-        repo_config=_repo_config(),
+        repo_config=_repo_config(
+            tracked_files=(
+                CloudRepoFileValue(
+                    relative_path="legacy.env",
+                    content="LEGACY=1\n",
+                    content_sha256="sha",
+                    byte_size=9,
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                    last_synced_at=datetime.now(UTC),
+                ),
+            )
+        ),
         repo_path="/home/user/workspace/repos/acme/rocket",
         sandbox=_sandbox(),
     )
@@ -222,6 +292,7 @@ async def test_clone_dirty_check_allows_managed_workspace_secret_paths(
     assert ".proliferate/env/workspace.manifest.json" in command
     assert ".env.example" in command
     assert "config/app.env" in command
+    assert "legacy.env" in command
     assert "status --porcelain=v1 -z --untracked-files=all" in command
     assert "Repository has unmanaged local changes" in command
 

@@ -50,8 +50,10 @@ def _payload_key(payload: secret_store.CloudSecretSetPayload) -> str:
 
 def _merge_env_payloads(
     payloads: list[secret_store.CloudSecretSetPayload],
+    *,
+    base_env: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    merged: dict[str, str] = {}
+    merged: dict[str, str] = dict(base_env or {})
     for payload in payloads:
         for item in payload.env_vars:
             merged[item.name] = item.value
@@ -171,6 +173,8 @@ async def materialize_workspace_secrets(
     repo_config: CloudRepoConfigValue,
     repo_path: str,
     target: MaterializationTarget | None = None,
+    base_env: dict[str, str] | None = None,
+    base_files: dict[str, str] | None = None,
 ) -> None:
     payload = await secret_store.load_workspace_secret_payload(
         db,
@@ -188,12 +192,19 @@ async def materialize_workspace_secrets(
         target = target or await connect_materialization_target(sandbox)
         payloads = [payload] if payload is not None else []
         versions = _versions(payloads)
+        if base_env:
+            versions[f"cloud-repo-config:{repo_config.id}:env"] = repo_config.env_vars_version
+        if base_files:
+            versions[f"cloud-repo-config:{repo_config.id}:files"] = repo_config.files_version
         env_path = workspace_secret_env_path(repo_path)
         manifest_path = workspace_secret_manifest_path(repo_path)
-        desired_files = {
-            repo_relative_path(repo_path, item.path): item.content
-            for item in (payload.files if payload is not None else ())
-        }
+        desired_files = dict(base_files or {})
+        desired_files.update(
+            {
+                repo_relative_path(repo_path, item.path): item.content
+                for item in (payload.files if payload is not None else ())
+            }
+        )
         manifest = MaterializedSecretManifest(
             kind="workspace",
             env_path=env_path,
@@ -204,19 +215,22 @@ async def materialize_workspace_secrets(
             target,
             sandbox_id=sandbox.id,
             path=env_path,
-            content=render_env_file(_merge_env_payloads(payloads)),
+            content=render_env_file(_merge_env_payloads(payloads, base_env=base_env)),
+            allowed_root=repo_path,
         )
         await reconcile_owned_files(
             target,
             sandbox_id=sandbox.id,
             previous_paths=file_paths_from_manifest(materialization.applied_manifest),
             desired_files=desired_files,
+            allowed_root=repo_path,
         )
         await write_private_file(
             target,
             sandbox_id=sandbox.id,
             path=manifest_path,
             content=render_manifest_json(manifest, versions=versions),
+            allowed_root=repo_path,
         )
         await mark_secret_materialization_ready(
             db,

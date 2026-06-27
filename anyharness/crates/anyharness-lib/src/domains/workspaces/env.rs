@@ -22,6 +22,17 @@ pub fn read_materialized_session_env(
     read_optional_env_file(&workspace_path.join(MATERIALIZED_SESSION_ENV_PATH))
 }
 
+pub fn read_materialized_launch_env(
+    runtime_home: &Path,
+    workspace_path: &Path,
+) -> anyhow::Result<BTreeMap<String, String>> {
+    let mut env = BTreeMap::new();
+    merge_unprotected_env(&mut env, read_global_secret_env(runtime_home)?);
+    merge_unprotected_env(&mut env, read_materialized_workspace_env(workspace_path)?);
+    merge_unprotected_env(&mut env, read_materialized_session_env(workspace_path)?);
+    Ok(env)
+}
+
 pub fn merge_env_overrides_protecting_metadata(
     base_env: impl IntoIterator<Item = (String, String)>,
     override_env: impl IntoIterator<Item = (String, String)>,
@@ -125,8 +136,40 @@ fn parse_materialized_env_value(value: &str) -> anyhow::Result<String> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{merge_env_overrides_protecting_metadata, parse_materialized_env_file};
+    use super::{
+        merge_env_overrides_protecting_metadata, parse_materialized_env_file,
+        read_materialized_launch_env,
+    };
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(label: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "anyharness-env-{label}-{}-{unique}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
 
     #[test]
     fn parses_worker_generated_session_env() {
@@ -174,5 +217,39 @@ mod tests {
             Some("workspace-1")
         );
         assert_eq!(merged.get("SHARED").map(String::as_str), Some("override"));
+    }
+
+    #[test]
+    fn launch_env_merges_global_workspace_and_session_env() {
+        let runtime_home = TestDir::new("runtime-home");
+        let workspace = TestDir::new("workspace");
+        std::fs::create_dir_all(runtime_home.path().join("secrets")).unwrap();
+        std::fs::create_dir_all(workspace.path().join(".proliferate/env")).unwrap();
+        std::fs::write(
+            runtime_home.path().join("secrets/global.env"),
+            "SHARED='global'\nGLOBAL_ONLY='global'\n",
+        )
+        .unwrap();
+        std::fs::write(
+            workspace.path().join(".proliferate/env/workspace.env"),
+            "SHARED='workspace'\nWORKSPACE_ONLY='workspace'\n",
+        )
+        .unwrap();
+        std::fs::write(
+            workspace.path().join(".proliferate/env/session.env"),
+            "SHARED='session'\nSESSION_ONLY='session'\nPROLIFERATE_WORKSPACE_ID='spoofed'\n",
+        )
+        .unwrap();
+
+        let env = read_materialized_launch_env(runtime_home.path(), workspace.path()).unwrap();
+
+        assert_eq!(env.get("GLOBAL_ONLY").map(String::as_str), Some("global"));
+        assert_eq!(
+            env.get("WORKSPACE_ONLY").map(String::as_str),
+            Some("workspace")
+        );
+        assert_eq!(env.get("SESSION_ONLY").map(String::as_str), Some("session"));
+        assert_eq!(env.get("SHARED").map(String::as_str), Some("session"));
+        assert!(!env.contains_key("PROLIFERATE_WORKSPACE_ID"));
     }
 }

@@ -60,6 +60,8 @@ def _materialization_versions_match(
     return (
         materialization.status == "ready"
         and materialization.sandbox_generation == sandbox.runtime_generation
+        and materialization.applied_files_version == repo_config.files_version
+        and materialization.applied_env_vars_version == repo_config.env_vars_version
         and setup_matches
     )
 
@@ -78,6 +80,7 @@ async def _managed_materialization_paths(
             {
                 _WORKSPACE_ENV_RELATIVE_PATH,
                 _WORKSPACE_ENV_MANIFEST_RELATIVE_PATH,
+                *(item.relative_path for item in repo_config.tracked_files),
                 *workspace_secret_paths,
             }
         )
@@ -197,6 +200,11 @@ async def ensure_repo_materialized(
             repo_config=repo_config,
             repo_path=materialization.repo_path,
             target=target,
+            base_env=repo_config.env_vars,
+            base_files={
+                str(PurePosixPath(materialization.repo_path) / item.relative_path): item.content
+                for item in repo_config.tracked_files
+            },
         )
         if run_setup and repo_config.setup_script.strip():
             await start_remote_workspace_setup(
@@ -216,9 +224,9 @@ async def ensure_repo_materialized(
             materialization.id,
             anyharness_repo_root_id=resolved.repo_root_id,
             anyharness_workspace_id=resolved.workspace_id,
-            applied_files_version=0,
+            applied_files_version=repo_config.files_version,
             applied_setup_script_version=applied_setup_script_version,
-            applied_env_vars_version=0,
+            applied_env_vars_version=repo_config.env_vars_version,
         )
         if ready is None:
             raise RuntimeError("Repo materialization row disappeared.")

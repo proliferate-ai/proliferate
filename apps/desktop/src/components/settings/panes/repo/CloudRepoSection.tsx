@@ -92,10 +92,17 @@ function CloudRepoSettingsEditor({
         : "Disabled";
 
   async function handleSave() {
+    const {
+      configured,
+      defaultBranch,
+      setupScript,
+      runCommand,
+    } = draft.savePayload;
     const response = await saveMutation.mutateAsync({
-      ...draft.savePayload,
-      envVars: {},
-      trackedFilePaths: [],
+      configured,
+      defaultBranch,
+      setupScript,
+      runCommand,
     });
     draft.resetFromSavedConfig(response);
   }

@@ -704,6 +704,165 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/secrets/personal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Personal Secrets Endpoint */
+        get: operations["get_personal_secrets_endpoint_v1_cloud_secrets_personal_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/secrets/personal/env-vars/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Personal Secret Env Var Endpoint */
+        put: operations["put_personal_secret_env_var_endpoint_v1_cloud_secrets_personal_env_vars__name__put"];
+        post?: never;
+        /** Delete Personal Secret Env Var Endpoint */
+        delete: operations["delete_personal_secret_env_var_endpoint_v1_cloud_secrets_personal_env_vars__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/secrets/personal/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Personal Secret File Endpoint */
+        put: operations["put_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_put"];
+        post?: never;
+        /** Delete Personal Secret File Endpoint */
+        delete: operations["delete_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Organization Secrets Endpoint */
+        get: operations["get_organization_secrets_endpoint_v1_cloud_organizations__organization_id__secrets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/secrets/env-vars/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Organization Secret Env Var Endpoint */
+        put: operations["put_organization_secret_env_var_endpoint_v1_cloud_organizations__organization_id__secrets_env_vars__name__put"];
+        post?: never;
+        /** Delete Organization Secret Env Var Endpoint */
+        delete: operations["delete_organization_secret_env_var_endpoint_v1_cloud_organizations__organization_id__secrets_env_vars__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/secrets/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Organization Secret File Endpoint */
+        put: operations["put_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_put"];
+        post?: never;
+        /** Delete Organization Secret File Endpoint */
+        delete: operations["delete_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repos/{git_owner}/{git_repo_name}/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workspace Secrets Endpoint */
+        get: operations["get_workspace_secrets_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repos/{git_owner}/{git_repo_name}/secrets/env-vars/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Workspace Secret Env Var Endpoint */
+        put: operations["put_workspace_secret_env_var_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_env_vars__name__put"];
+        post?: never;
+        /** Delete Workspace Secret Env Var Endpoint */
+        delete: operations["delete_workspace_secret_env_var_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_env_vars__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repos/{git_owner}/{git_repo_name}/secrets/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Workspace Secret File Endpoint */
+        put: operations["put_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_put"];
+        post?: never;
+        /** Delete Workspace Secret File Endpoint */
+        delete: operations["delete_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/managed-sandbox": {
         parameters: {
             query?: never;
@@ -5417,6 +5576,55 @@ export interface components {
             /** Content */
             content?: string | null;
         };
+        /** CloudSecretEnvVarMetadata */
+        CloudSecretEnvVarMetadata: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Bytesize */
+            byteSize: number;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** CloudSecretFileMetadata */
+        CloudSecretFileMetadata: {
+            /** Id */
+            id: string;
+            /** Path */
+            path: string;
+            /** Bytesize */
+            byteSize: number;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** CloudSecretsMaterializationResponse */
+        CloudSecretsMaterializationResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "ready" | "error";
+            /** Lasterror */
+            lastError: string | null;
+            /** Materializedat */
+            materializedAt: string | null;
+        };
+        /** CloudSecretsResponse */
+        CloudSecretsResponse: {
+            /**
+             * Scopekind
+             * @enum {string}
+             */
+            scopeKind: "personal" | "organization" | "workspace";
+            /** Version */
+            version: number;
+            /** Envvars */
+            envVars: components["schemas"]["CloudSecretEnvVarMetadata"][];
+            /** Files */
+            files: components["schemas"]["CloudSecretFileMetadata"][];
+            materialization?: components["schemas"]["CloudSecretsMaterializationResponse"] | null;
+        };
         /** CloudSessionEventResponse */
         CloudSessionEventResponse: {
             /** Targetid */
@@ -6145,6 +6353,11 @@ export interface components {
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
+        };
+        /** DeleteCloudSecretFileRequest */
+        DeleteCloudSecretFileRequest: {
+            /** Path */
+            path: string;
         };
         /** DesktopAgentAuthConfigApplyRequestInput */
         DesktopAgentAuthConfigApplyRequestInput: {
@@ -7517,6 +7730,18 @@ export interface components {
             /** Content */
             content: string;
         };
+        /** PutCloudSecretEnvVarRequest */
+        PutCloudSecretEnvVarRequest: {
+            /** Value */
+            value: string;
+        };
+        /** PutCloudSecretFileRequest */
+        PutCloudSecretFileRequest: {
+            /** Path */
+            path: string;
+            /** Content */
+            content: string;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
@@ -7878,7 +8103,7 @@ export interface components {
             /** Envvars */
             envVars?: {
                 [key: string]: string;
-            };
+            } | null;
             /**
              * Setupscript
              * @default
@@ -7901,7 +8126,7 @@ export interface components {
             /** Envvars */
             envVars?: {
                 [key: string]: string;
-            };
+            } | null;
             /**
              * Setupscript
              * @default
@@ -11454,6 +11679,501 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitHubAppStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_personal_secrets_endpoint_v1_cloud_secrets_personal_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+        };
+    };
+    put_personal_secret_env_var_endpoint_v1_cloud_secrets_personal_env_vars__name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutCloudSecretEnvVarRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_personal_secret_env_var_endpoint_v1_cloud_secrets_personal_env_vars__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_personal_secret_file_endpoint_v1_cloud_secrets_personal_files_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_organization_secrets_endpoint_v1_cloud_organizations__organization_id__secrets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_organization_secret_env_var_endpoint_v1_cloud_organizations__organization_id__secrets_env_vars__name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutCloudSecretEnvVarRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_organization_secret_env_var_endpoint_v1_cloud_organizations__organization_id__secrets_env_vars__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_organization_secret_file_endpoint_v1_cloud_organizations__organization_id__secrets_files_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_secrets_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_workspace_secret_env_var_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_env_vars__name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutCloudSecretEnvVarRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workspace_secret_env_var_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_env_vars__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workspace_secret_file_endpoint_v1_cloud_repos__git_owner___git_repo_name__secrets_files_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteCloudSecretFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretsResponse"];
                 };
             };
             /** @description Validation Error */

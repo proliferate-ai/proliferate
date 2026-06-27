@@ -18,7 +18,6 @@ export interface SecretMetadata {
   id: string;
   name?: string;
   path?: string;
-  sha256: string;
   byteSize: number;
   updatedAt: string;
 }
@@ -180,12 +179,8 @@ function secretMetadataToListItem(item: SecretMetadata, label: string): SecretLi
   return {
     id: item.id,
     label,
-    detail: `${item.byteSize} bytes · ${shortHash(item.sha256)} · ${formatDate(item.updatedAt)}`,
+    detail: `${item.byteSize} bytes · ${formatDate(item.updatedAt)}`,
   };
-}
-
-function shortHash(value: string): string {
-  return value.length > 12 ? value.slice(0, 12) : value;
 }
 
 function formatDate(value: string): string {

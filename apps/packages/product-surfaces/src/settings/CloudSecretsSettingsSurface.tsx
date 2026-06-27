@@ -44,14 +44,12 @@ export function CloudSecretsSettingsSurface({
       envVars={(secrets.data?.envVars ?? []).map((item) => ({
         id: item.id,
         name: item.name,
-        sha256: item.valueSha256,
         byteSize: item.byteSize,
         updatedAt: item.updatedAt,
       }))}
       files={(secrets.data?.files ?? []).map((item) => ({
         id: item.id,
         path: item.path,
-        sha256: item.contentSha256,
         byteSize: item.byteSize,
         updatedAt: item.updatedAt,
       }))}

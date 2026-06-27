@@ -20,7 +20,6 @@ from proliferate.db.store.managed_sandbox_secrets import (
 class CloudSecretEnvVarMetadata(BaseModel):
     id: str
     name: str
-    value_sha256: str = Field(serialization_alias="valueSha256")
     byte_size: int = Field(serialization_alias="byteSize")
     updated_at: str = Field(serialization_alias="updatedAt")
 
@@ -28,7 +27,6 @@ class CloudSecretEnvVarMetadata(BaseModel):
 class CloudSecretFileMetadata(BaseModel):
     id: str
     path: str
-    content_sha256: str = Field(serialization_alias="contentSha256")
     byte_size: int = Field(serialization_alias="byteSize")
     updated_at: str = Field(serialization_alias="updatedAt")
 
@@ -70,7 +68,6 @@ def _env_payload(value: CloudSecretEnvVarValue) -> CloudSecretEnvVarMetadata:
     return CloudSecretEnvVarMetadata(
         id=str(value.id),
         name=value.name,
-        value_sha256=value.value_sha256,
         byte_size=value.byte_size,
         updated_at=value.updated_at.isoformat(),
     )
@@ -80,7 +77,6 @@ def _file_payload(value: CloudSecretFileValue) -> CloudSecretFileMetadata:
     return CloudSecretFileMetadata(
         id=str(value.id),
         path=value.path,
-        content_sha256=value.content_sha256,
         byte_size=value.byte_size,
         updated_at=value.updated_at.isoformat(),
     )

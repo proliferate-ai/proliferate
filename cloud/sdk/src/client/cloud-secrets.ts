@@ -6,7 +6,6 @@ export type CloudSecretsMaterializationStatus = "pending" | "running" | "ready" 
 export interface CloudSecretEnvVarMetadata {
   id: string;
   name: string;
-  valueSha256: string;
   byteSize: number;
   updatedAt: string;
 }
@@ -14,7 +13,6 @@ export interface CloudSecretEnvVarMetadata {
 export interface CloudSecretFileMetadata {
   id: string;
   path: string;
-  contentSha256: string;
   byteSize: number;
   updatedAt: string;
 }

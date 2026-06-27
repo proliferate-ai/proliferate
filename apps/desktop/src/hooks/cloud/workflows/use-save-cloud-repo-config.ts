@@ -14,8 +14,8 @@ import { emitRuntimeInputSyncEvent } from "../lifecycle/runtime-input-sync-event
 interface SaveCloudRepoConfigInput {
   configured?: boolean;
   defaultBranch: string | null;
-  envVars: Record<string, string>;
-  trackedFilePaths: string[];
+  envVars?: Record<string, string>;
+  trackedFilePaths?: string[];
   setupScript: string;
   runCommand: string;
 }
@@ -58,13 +58,14 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
     mutationFn: async ({
       configured = true,
       defaultBranch,
+      envVars,
+      trackedFilePaths = [],
       setupScript,
       runCommand,
     }) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
-      const trackedFilePaths: string[] = [];
       const canReadTrackedFiles =
         repository.availability !== "cloud" && trackedFilePaths.length > 0;
       if (canReadTrackedFiles && !runtimeUrl.trim()) {
@@ -73,17 +74,17 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
 
       const files = canReadTrackedFiles
         ? await buildTrackedFilesPayload(runtimeUrl, repository, trackedFilePaths)
-        : [];
+        : undefined;
       return await saveCloudRepoConfig(repository.gitOwner, repository.gitRepoName, {
         configured,
         defaultBranch,
-        envVars: {},
+        ...(envVars ? { envVars } : {}),
         setupScript,
         runCommand,
-        files,
+        ...(files ? { files } : {}),
       });
     },
-    onSuccess: async (response) => {
+    onSuccess: async (response, variables) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         return;
       }
@@ -91,8 +92,8 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       await invalidateCloudRepoConfigs(repository);
 
       trackProductEvent("cloud_repo_config_saved", {
-        env_var_count: 0,
-        tracked_file_count: 0,
+        env_var_count: variables.envVars ? Object.keys(variables.envVars).length : 0,
+        tracked_file_count: variables.trackedFilePaths?.length ?? 0,
         has_setup_script: response.setupScript.trim().length > 0,
         has_run_command: response.runCommand.trim().length > 0,
       });
@@ -118,8 +119,8 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
           domain: "cloud_repo_config",
         },
         extras: {
-          envVarCount: 0,
-          trackedFileCount: 0,
+          envVarCount: variables.envVars ? Object.keys(variables.envVars).length : 0,
+          trackedFileCount: variables.trackedFilePaths?.length ?? 0,
           hasSetupScript: variables.setupScript.trim().length > 0,
           hasRunCommand: variables.runCommand.trim().length > 0,
         },
