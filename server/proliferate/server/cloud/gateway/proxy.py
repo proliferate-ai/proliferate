@@ -92,9 +92,7 @@ def _upstream_url(base_url: str, raw_path: str, query_string: str) -> str:
 
 
 def _request_headers(headers: Mapping[str, str], *, upstream_token: str) -> dict[str, str]:
-    forwarded = {
-        name: value for name, value in headers.items() if not _should_strip_header(name)
-    }
+    forwarded = {name: value for name, value in headers.items() if not _should_strip_header(name)}
     forwarded["authorization"] = f"Bearer {upstream_token}"
     return forwarded
 

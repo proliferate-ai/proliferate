@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity, OwnerSelection
+from proliferate.db.store.cloud_workspace_lifecycle import archive_cloud_workspace_record
 from proliferate.db.store.cloud_workspaces import (
     get_active_cloud_workspace_for_managed_profile_branch,
     get_active_cloud_workspace_for_runtime_branch,
@@ -17,7 +18,6 @@ from proliferate.db.store.cloud_workspaces import (
     update_workspace_branch,
     update_workspace_display_name,
 )
-from proliferate.db.store.cloud_workspace_lifecycle import archive_cloud_workspace_record
 from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces as list_cloud_workspaces_store,
 )

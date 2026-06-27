@@ -100,8 +100,7 @@ async def test_http_proxy_preserves_path_query_and_injects_sandbox_auth(
     assert client.sent_request is not None
     assert client.sent_request.method == "POST"
     assert str(client.sent_request.url) == (
-        "https://sandbox.example.test/v1/sessions/ws%2Fencoded"
-        "?cursor=abc&repeat=1&repeat=2"
+        "https://sandbox.example.test/v1/sessions/ws%2Fencoded?cursor=abc&repeat=1&repeat=2"
     )
     assert client.sent_request.content == b"payload"
     assert client.forwarded_headers is not None
@@ -121,10 +120,12 @@ async def test_http_proxy_preserves_path_query_and_injects_sandbox_auth(
 
 
 def test_websocket_headers_strip_product_protocol_auth() -> None:
-    forwarded = proxy._websocket_headers({
-        "sec-websocket-protocol": "proliferate-gateway-bearer, product-token",
-        "x-client-header": "kept",
-    })
+    forwarded = proxy._websocket_headers(
+        {
+            "sec-websocket-protocol": "proliferate-gateway-bearer, product-token",
+            "x-client-header": "kept",
+        }
+    )
 
     assert forwarded == {"x-client-header": "kept"}
 

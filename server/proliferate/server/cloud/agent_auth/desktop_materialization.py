@@ -17,8 +17,8 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.models import (
     DesktopAgentAuthConfigApplyResponse,
-    DesktopAgentAuthSyncedFileMaterialization,
     DesktopAgentAuthConfigApplyStatusRequest,
+    DesktopAgentAuthSyncedFileMaterialization,
     WorkerAgentAuthSelectionPlan,
 )
 from proliferate.server.cloud.agent_auth.worker_cleanup import _pending_cleanup_entries_from_json
@@ -209,7 +209,8 @@ async def _require_desktop_profile_owner(
     if profile.owner_scope == "personal" and profile.owner_user_id == actor_user_id:
         return
     raise AgentAuthError(
-        "Desktop agent-auth config can only be materialized for the signed-in user's personal profile.",
+        "Desktop agent-auth config can only be materialized for the signed-in user's "
+        "personal profile.",
         code="agent_auth_desktop_profile_unsupported",
         status_code=403,
     )
@@ -254,7 +255,8 @@ def _reject_desktop_incompatible_selection(selection: SandboxAgentAuthSelectionR
     if selection.materialization_mode in {"gateway_env", "synced_files"}:
         return
     raise AgentAuthError(
-        "Managed sandbox gateway access does not support this agent credential materialization mode.",
+        "Managed sandbox gateway access does not support this agent credential "
+        "materialization mode.",
         code="agent_auth_materialization_mode_unsupported",
         status_code=409,
     )

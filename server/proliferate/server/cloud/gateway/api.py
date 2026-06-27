@@ -10,8 +10,8 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.gateway.access import (
     GatewayWebSocketAuthError,
-    authenticate_product_user_for_gateway_websocket,
     accepted_gateway_websocket_subprotocol,
+    authenticate_product_user_for_gateway_websocket,
     product_token_from_websocket,
 )
 from proliferate.server.cloud.gateway.proxy import (

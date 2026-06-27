@@ -35,23 +35,17 @@ def _websocket(
 
 def test_product_token_from_websocket_protocol() -> None:
     websocket = _websocket(
-        sec_websocket_protocol=(
-            f"{GATEWAY_WEBSOCKET_BEARER_PROTOCOL}, product-token"
-        ),
+        sec_websocket_protocol=(f"{GATEWAY_WEBSOCKET_BEARER_PROTOCOL}, product-token"),
     )
 
     assert product_token_from_websocket(websocket) == "product-token"
-    assert accepted_gateway_websocket_subprotocol(websocket) == (
-        GATEWAY_WEBSOCKET_BEARER_PROTOCOL
-    )
+    assert accepted_gateway_websocket_subprotocol(websocket) == (GATEWAY_WEBSOCKET_BEARER_PROTOCOL)
 
 
 def test_product_token_from_websocket_keeps_legacy_query_support() -> None:
     websocket = _websocket(
         query="access_token=query-token",
-        sec_websocket_protocol=(
-            f"{GATEWAY_WEBSOCKET_BEARER_PROTOCOL}, protocol-token"
-        ),
+        sec_websocket_protocol=(f"{GATEWAY_WEBSOCKET_BEARER_PROTOCOL}, protocol-token"),
     )
 
     assert product_token_from_websocket(websocket) == "query-token"

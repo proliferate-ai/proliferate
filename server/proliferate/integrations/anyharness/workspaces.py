@@ -215,7 +215,9 @@ async def create_remote_worktree_workspace(
             )
         ) from exc
     except httpx.HTTPError as exc:
-        raise CloudRuntimeReconnectError("Failed to create AnyHarness worktree workspace.") from exc
+        raise CloudRuntimeReconnectError(
+            "Failed to create AnyHarness worktree workspace."
+        ) from exc
 
     return _parse_resolved_workspace(
         payload,

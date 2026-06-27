@@ -12,8 +12,8 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
-    CloudWorkspaceCleanupState,
     WORKSPACE_REPO_APPLY_LOCK_SALT,
+    CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
     WorkspaceStatus,
 )
@@ -292,9 +292,7 @@ async def attach_anyharness_workspace_id_to_managed_repo_workspaces(
     now = utcnow()
     preferred = (preferred_branch or "").strip()
     canonical_workspaces = [
-        workspace
-        for workspace in workspaces
-        if not preferred or workspace.git_branch == preferred
+        workspace for workspace in workspaces if not preferred or workspace.git_branch == preferred
     ]
 
     for workspace in canonical_workspaces:

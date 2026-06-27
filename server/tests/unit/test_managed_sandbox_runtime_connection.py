@@ -202,9 +202,12 @@ async def test_workspace_runtime_connection_creates_branch_worktree(
         "git_repo_name": "Repo",
     }
     assert calls["runtime_access_sandbox"] is sandbox
+    expected_worktree_path = (
+        f"/home/user/workspace/worktrees/Owner/Repo/feature-test-{str(workspace_id)[:8]}"
+    )
     assert calls["create_worktree"] == {
         "repo_root_id": "repo-root",
-        "target_path": f"/home/user/workspace/worktrees/Owner/Repo/feature-test-{str(workspace_id)[:8]}",
+        "target_path": expected_worktree_path,
         "new_branch_name": "feature/test",
         "base_branch": "main",
         "origin": {"kind": "human", "entrypoint": "desktop"},
@@ -213,7 +216,7 @@ async def test_workspace_runtime_connection_creates_branch_worktree(
     assert calls["attach"] == {
         "workspace_id": workspace_id,
         "anyharness_workspace_id": "branch-workspace",
-        "worktree_path": f"/home/user/workspace/worktrees/Owner/Repo/feature-test-{str(workspace_id)[:8]}",
+        "worktree_path": expected_worktree_path,
         "runtime_generation": 12,
     }
 

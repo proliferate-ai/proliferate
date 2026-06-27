@@ -540,7 +540,9 @@ async def start_cloud_workspace(
 ) -> WorkspaceDetail:
     workspace = await cloud_workspace_user_can_interact_with_db(db, user.id, workspace_id)
     has_requested_revision = bool((requested_base_sha or "").strip())
-    is_managed_workspace = workspace.sandbox_profile_id is not None and workspace.target_id is not None
+    is_managed_workspace = (
+        workspace.sandbox_profile_id is not None and workspace.target_id is not None
+    )
     if start_request_should_return_existing(workspace.status) and not has_requested_revision:
         if is_managed_workspace and not workspace.anyharness_workspace_id:
             return await _finalize_managed_cloud_workspace(user, workspace)

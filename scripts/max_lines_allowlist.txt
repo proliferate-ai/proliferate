@@ -34,7 +34,7 @@ apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 632 ex
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
 apps/desktop/src/lib/workflows/sessions/session-runtime.test.ts 608 managed sandbox gateway cases extend existing session runtime test coverage
 apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split
-server/proliferate/auth/identity/store.py 687 managed sandbox GitHub grant read path extends existing identity store
+server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/server/cloud/commands/domain/payload.py 549 existing cloud command payload validator with workspace materialization policies
 server/proliferate/server/cloud/agent_auth/models.py 563 managed sandbox desktop apply response extends existing cloud agent auth API schema module pending request/response split
 server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split

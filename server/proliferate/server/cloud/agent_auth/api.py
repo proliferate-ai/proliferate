@@ -11,7 +11,6 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.constants.cloud import CloudAgentKind
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.agent_auth.models import (
     AgentAuthCredentialResponse,
     AgentAuthCredentialShareResponse,
@@ -61,6 +60,7 @@ from proliferate.server.cloud.agent_auth.service import (
     sync_synced_credential_for_user,
     worker_agent_auth_materialization_plan,
 )
+from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.sandbox_profiles.service import get_profile
 from proliferate.server.cloud.worker.auth import authenticate_worker
 

@@ -649,8 +649,7 @@ async def linked_provider_payloads(
 
 async def backfill_legacy_oauth_accounts_for_user(db: AsyncSession, *, user_id: UUID) -> None:
     result = await db.execute(
-        select(OAuthAccount)
-        .where(
+        select(OAuthAccount).where(
             OAuthAccount.user_id == user_id,
             OAuthAccount.oauth_name.in_(("github", "google")),
         )
