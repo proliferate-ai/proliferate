@@ -95,7 +95,7 @@ export function PluginIconTile({
     return (
       <span
         aria-hidden="true"
-        className={`flex shrink-0 items-center justify-center overflow-hidden border border-border/70 ${brandAsset.tileClassName ?? "bg-brand-logo-tile"} ${brandAsset.darkTileClassName ?? "dark:bg-transparent"} ${PLUGIN_GLYPH_TILE_SIZE[size]}`}
+        className={`flex shrink-0 items-center justify-center overflow-hidden ${brandAsset.tileClassName ?? "bg-brand-logo-tile"} ${brandAsset.darkTileClassName ?? "dark:bg-transparent"} ${PLUGIN_GLYPH_TILE_SIZE[size]}`}
       >
         <PluginBrandImage asset={brandAsset} />
       </span>
@@ -106,7 +106,7 @@ export function PluginIconTile({
   return (
     <span
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center border border-border/70 bg-transparent text-muted-foreground ${PLUGIN_GLYPH_TILE_SIZE[size]}`}
+      className={`flex shrink-0 items-center justify-center bg-transparent text-muted-foreground ${PLUGIN_GLYPH_TILE_SIZE[size]}`}
     >
       <Icon className={`${PLUGIN_GLYPH_ICON_SIZE[size]} shrink-0`} />
     </span>
