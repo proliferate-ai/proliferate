@@ -29,12 +29,16 @@ anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1880 existing SDK oversi
 anyharness/sdk/src/reducer/transcript.ts 1575 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/keychain.rs 760 existing desktop native oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
-apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 662 existing desktop oversized test file
+apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 632 existing desktop oversized test file
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
+apps/desktop/src/lib/workflows/sessions/session-runtime.test.ts 608 managed sandbox gateway cases extend existing session runtime test coverage
+apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split
+server/proliferate/auth/identity/store.py 687 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/server/cloud/commands/domain/payload.py 549 existing cloud command payload validator with workspace materialization policies
-server/proliferate/server/cloud/agent_auth/models.py 537 existing cloud agent auth API schema module pending request/response split
+server/proliferate/server/cloud/agent_auth/models.py 563 managed sandbox desktop apply response extends existing cloud agent auth API schema module pending request/response split
 server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split
+server/proliferate/server/cloud/managed_sandboxes/service.py 1560 initial managed sandbox lifecycle orchestration pending lifecycle/materialization split
 server/proliferate/constants/cloud.py 614 existing cloud constants module with command and target config enums
 server/tests/integration/schema_migration_assertions.py 890 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
@@ -43,6 +47,7 @@ server/tests/integration/test_billing_api.py 2038 existing server oversized inte
 server/tests/integration/test_cloud_agent_auth_api.py 1897 existing server oversized integration test
 server/tests/integration/test_cloud_api.py 2576 existing server oversized integration test
 server/tests/integration/test_cloud_commands_api.py 4889 existing server oversized integration test
+server/tests/integration/test_cloud_workspace_lifecycle_store.py 602 managed sandbox runtime metadata extends existing workspace lifecycle store coverage
 server/tests/integration/test_sandbox_profile_foundation.py 1222 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
