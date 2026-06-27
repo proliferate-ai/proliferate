@@ -249,9 +249,7 @@ async def _clone_or_update_repo(
     quoted_repo_url = shlex.quote(repo_url)
     quoted_branch = shlex.quote(branch) if branch else ""
     clone_branch_args = f"--branch {quoted_branch} " if branch else ""
-    managed_paths = "\n".join(
-        await _managed_materialization_paths(db, repo_config=repo_config)
-    )
+    managed_paths = "\n".join(await _managed_materialization_paths(db, repo_config=repo_config))
     script = "\n".join(
         [
             "set -eu",

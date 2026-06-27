@@ -43,9 +43,7 @@ def workspace_secret_env_path(repo_path_value: str) -> str:
 
 
 def workspace_secret_manifest_path(repo_path_value: str) -> str:
-    return str(
-        PurePosixPath(repo_path_value) / ".proliferate" / "env" / "workspace.manifest.json"
-    )
+    return str(PurePosixPath(repo_path_value) / ".proliferate" / "env" / "workspace.manifest.json")
 
 
 def repo_relative_path(repo_path_value: str, relative_path: str) -> str:
