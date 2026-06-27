@@ -1574,6 +1574,66 @@ class TestCloudRepoConfig:
         assert len(records) == 1
 
     @pytest.mark.asyncio
+    async def test_concurrent_first_local_environment_save_returns_success(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "local-repo-environment-race@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        payload = {
+            "gitProvider": "github",
+            "desktopInstallId": "desktop-dev",
+            "localPath": "/Users/example/proliferate",
+            "defaultBranch": "main",
+            "setupScript": "pnpm install",
+            "runCommand": "pnpm dev",
+        }
+
+        responses = await asyncio.gather(
+            client.put(
+                "/v1/cloud/repositories/proliferate-ai/proliferate/environments/local",
+                headers=headers,
+                json=payload,
+            ),
+            client.put(
+                "/v1/cloud/repositories/proliferate-ai/proliferate/environments/local",
+                headers=headers,
+                json=payload,
+            ),
+        )
+
+        assert [response.status_code for response in responses] == [200, 200]
+
+        repo_records = (
+            (
+                await db_session.execute(
+                    select(RepoConfig).where(
+                        RepoConfig.user_id == uuid.UUID(session["user_id"]),
+                        RepoConfig.git_owner == "proliferate-ai",
+                        RepoConfig.git_repo_name == "proliferate",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(repo_records) == 1
+        environment_records = (
+            (
+                await db_session.execute(
+                    select(RepoEnvironment).where(
+                        RepoEnvironment.repo_config_id == repo_records[0].id,
+                        RepoEnvironment.environment_kind == "local",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(environment_records) == 1
+
+    @pytest.mark.asyncio
     async def test_repository_environment_endpoints_bridge_to_legacy_cloud_config(
         self,
         client: AsyncClient,
