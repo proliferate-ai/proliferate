@@ -187,6 +187,10 @@
       "types": "./dist/plugins/OrganizationIntegrationsPolicySurface.d.ts",
       "import": "./dist/plugins/OrganizationIntegrationsPolicySurface.js"
     },
+    "./plugins/PluginGlyph": {
+      "types": "./dist/plugins/PluginGlyph.d.ts",
+      "import": "./dist/plugins/PluginGlyph.js"
+    },
     "./settings/SettingsCard": {
       "types": "./dist/settings/SettingsCard.d.ts",
       "import": "./dist/settings/SettingsCard.js"

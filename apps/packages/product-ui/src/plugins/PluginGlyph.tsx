@@ -113,15 +113,44 @@ export function PluginIconTile({
   );
 }
 
-function PluginBrandImage({ asset }: { asset: PluginBrandAsset }) {
+export function PluginInlineIcon({
+  iconId,
+  className = "size-3",
+}: {
+  iconId: string;
+  className?: string;
+}) {
+  const brandAsset = PLUGIN_BRAND_ASSETS[iconId];
+  if (brandAsset) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`inline-flex shrink-0 items-center justify-center overflow-hidden ${className}`}
+      >
+        <PluginBrandImage asset={brandAsset} className="size-full object-contain" />
+      </span>
+    );
+  }
+
+  const Icon = PLUGIN_GLYPH_ICONS[iconId] ?? Globe;
+  return <Icon aria-hidden="true" className={`${className} shrink-0`} />;
+}
+
+function PluginBrandImage({
+  asset,
+  className = "size-full object-contain",
+}: {
+  asset: PluginBrandAsset;
+  className?: string;
+}) {
   if (asset.darkSrc) {
     return (
       <>
-        <img src={asset.src} alt="" className="size-full object-contain dark:hidden" />
-        <img src={asset.darkSrc} alt="" className="hidden size-full object-contain dark:block" />
+        <img src={asset.src} alt="" className={`${className} dark:hidden`} />
+        <img src={asset.darkSrc} alt="" className={`hidden ${className} dark:block`} />
       </>
     );
   }
 
-  return <img src={asset.src} alt="" className="size-full object-contain" />;
+  return <img src={asset.src} alt="" className={className} />;
 }

@@ -8,10 +8,13 @@ import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { describeToolCallDisplay } from "@proliferate/product-domain/chats/tools/tool-call-display";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { deriveGenericToolOutput } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
+import { integrationGatewayToolNameFromMcpName } from "@/lib/domain/chat/integration-tool-call-presentation";
+import { useIntegrationToolCallPresentation } from "@/providers/IntegrationToolMetadataProvider";
 import {
   ActionDisclosureRow,
   PlainActionRow,
 } from "./CollapsedActionRowPrimitives";
+import { IntegrationToolIcon } from "./IntegrationToolIcon";
 
 export function GenericActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);
@@ -20,19 +23,29 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
   );
   const toolName = toolCallPart?.title ?? item.title ?? item.nativeToolName ?? "Tool call";
   const display = describeToolCallDisplay(item, toolName);
+  const integrationGatewayToolName =
+    integrationGatewayToolNameFromMcpName(item.nativeToolName)
+    ?? integrationGatewayToolNameFromMcpName(toolName);
+  const integrationPresentation =
+    useIntegrationToolCallPresentation(integrationGatewayToolName);
+  const displayLabel = integrationPresentation?.toolDisplayName ?? display.label;
+  const displayHint = integrationPresentation?.providerDisplayName ?? display.hint;
+  const displayIcon = integrationPresentation
+    ? <IntegrationToolIcon iconId={integrationPresentation.iconId} />
+    : <Settings />;
   const label = item.status === "failed"
-    ? `${display.label} failed`
+    ? `${displayLabel} failed`
     : item.status === "in_progress"
-      ? `${display.label} running`
-      : display.label;
+      ? `${displayLabel} running`
+      : displayLabel;
   const output = deriveGenericToolOutput(item);
 
   if (output) {
     return (
       <div>
         <ActionDisclosureRow
-          label={display.hint ? `${label} ${display.hint}` : label}
-          icon={<Settings />}
+          label={displayHint ? `${label} ${displayHint}` : label}
+          icon={displayIcon}
           expanded={expanded}
           failed={item.status === "failed"}
           onToggle={() => setExpanded((value) => !value)}
@@ -60,7 +73,8 @@ export function GenericActionRow({ item }: { item: ToolCallItem }) {
   return (
     <PlainActionRow
       tone={item.status === "failed" ? "failed" : "normal"}
-      label={display.hint ? `${label} ${display.hint}` : label}
+      label={displayHint ? `${label} ${displayHint}` : label}
+      icon={displayIcon}
     />
   );
 }
