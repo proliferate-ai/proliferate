@@ -230,7 +230,7 @@ def upgrade() -> None:
                     id, id, 'cloud', NULL, NULL,
                     configured, configured_at, default_branch, setup_script,
                     setup_script_version, run_command,
-                    GREATEST(files_version, env_vars_version, setup_script_version),
+                    GREATEST(files_version, env_vars_version, setup_script_version, CASE WHEN configured THEN 1 ELSE 0 END),
                     id, created_at, updated_at, NULL
                 FROM cloud_repo_config
                 ON CONFLICT DO NOTHING
