@@ -484,6 +484,35 @@ def test_oauth_manifest_materializes_access_token_header() -> None:
     ]
 
 
+def test_integration_gateway_header_uses_bearer_template() -> None:
+    plan = resolve_runtime_config(_input(mcps=(), skills=(), plugins=(), catalog=()))
+
+    compiled = compile_runtime_config_manifest(
+        plan,
+        sandbox_profile_id="profile-1",
+        integration_gateway_enabled=True,
+    )
+
+    server = compiled.manifest["mcpServers"][0]
+    assert server["serverName"] == "proliferate_integrations"
+    assert server["launch"]["headers"] == [
+        {
+            "name": "Authorization",
+            "value": {
+                "kind": "template",
+                "parts": [
+                    {"kind": "literal", "value": "Bearer "},
+                    {
+                        "kind": "credential",
+                        "credentialRef": "integration-gateway:profile-1:token",
+                    },
+                ],
+            },
+        }
+    ]
+    assert server["credentialRefs"][0]["credentialRef"] == "integration-gateway:profile-1:token"
+
+
 def test_runtime_config_materialization_fragment_alias_round_trips() -> None:
     plan = TargetConfigMaterializationPlan(
         target_config_id="config-1",

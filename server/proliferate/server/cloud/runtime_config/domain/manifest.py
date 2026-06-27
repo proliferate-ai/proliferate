@@ -174,7 +174,13 @@ def _integration_gateway_mcp_server_payload(sandbox_profile_id: str) -> dict[str
             "headers": [
                 {
                     "name": "Authorization",
-                    "value": {"kind": "credential", "credentialRef": credential_ref},
+                    "value": {
+                        "kind": "template",
+                        "parts": [
+                            {"kind": "literal", "value": "Bearer "},
+                            {"kind": "credential", "credentialRef": credential_ref},
+                        ],
+                    },
                 }
             ],
             "query": [],
