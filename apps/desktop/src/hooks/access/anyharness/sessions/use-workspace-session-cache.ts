@@ -66,13 +66,15 @@ export function useWorkspaceSessionCache() {
   const upsertWorkspaceSessionRecord = useCallback((
     workspaceId: string,
     session: Session,
+    options?: WorkspaceSessionCacheOptions,
   ) => {
+    const targetRuntimeUrl = options?.runtimeUrl ?? runtimeUrl;
     queryClient.setQueryData(
-      anyHarnessSessionKey(runtimeUrl, workspaceId, session.id),
+      anyHarnessSessionKey(targetRuntimeUrl, workspaceId, session.id),
       session,
     );
     queryClient.setQueryData<WorkspaceSession[]>(
-      anyHarnessSessionsKey(runtimeUrl, workspaceId),
+      anyHarnessSessionsKey(targetRuntimeUrl, workspaceId),
       (sessions) => upsertWorkspaceSession(sessions, {
         ...session,
         workspaceId,
