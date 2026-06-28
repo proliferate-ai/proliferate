@@ -8,6 +8,7 @@ import {
   useIntegrationToolMetadata,
 } from "@proliferate/cloud-sdk-react";
 import type { IntegrationToolMetadata } from "@proliferate/cloud-sdk";
+import { integrationToolDisplayNameFromMetadata } from "@/lib/domain/chat/integration-tool-call-presentation";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 export interface IntegrationToolCallPresentation {
@@ -64,7 +65,7 @@ function addProviderTools(
       gatewayToolName: tool.gatewayToolName,
       providerDisplayName: provider.displayName,
       iconId: provider.iconId,
-      toolDisplayName: tool.displayName,
+      toolDisplayName: integrationToolDisplayNameFromMetadata(tool),
     });
   }
 }

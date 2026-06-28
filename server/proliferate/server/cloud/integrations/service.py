@@ -61,7 +61,10 @@ from proliferate.server.cloud.integrations.domain.oauth_strategy import (
     choose_oauth_mode,
     static_oauth_client_config,
 )
-from proliferate.server.cloud.integrations.domain.tool_names import gateway_tool_name
+from proliferate.server.cloud.integrations.domain.tool_names import (
+    gateway_tool_name,
+    integration_tool_display_name,
+)
 from proliferate.server.cloud.integrations.models import (
     IntegrationAccountResponse,
     IntegrationAuthModeModel,
@@ -692,22 +695,28 @@ async def list_integration_tool_metadata(
         cache = await get_or_refresh_tool_cache(db, account)
         config = parse_definition_config(account.definition.config_json)
         tools = _tools_from_cache(cache)
+        metadata_tools: list[IntegrationToolMetadataTool] = []
+        for tool in tools:
+            tool_name = tool.get("name")
+            if not isinstance(tool_name, str):
+                continue
+            metadata_tools.append(
+                IntegrationToolMetadataTool(
+                    gatewayToolName=gateway_tool_name(
+                        account.definition.namespace, tool_name
+                    ),
+                    upstreamToolName=tool_name,
+                    displayName=integration_tool_display_name(
+                        account.definition.namespace, tool_name
+                    ),
+                )
+            )
         result.append(
             IntegrationToolMetadata(
                 namespace=account.definition.namespace,
                 displayName=account.definition.display_name,
                 iconId=config.get("iconId") if isinstance(config.get("iconId"), str) else None,
-                tools=[
-                    IntegrationToolMetadataTool(
-                        gatewayToolName=gateway_tool_name(
-                            account.definition.namespace, tool["name"]
-                        ),
-                        upstreamToolName=tool["name"],
-                        displayName=str(tool.get("description") or tool["name"]),
-                    )
-                    for tool in tools
-                    if isinstance(tool.get("name"), str)
-                ],
+                tools=metadata_tools,
             )
         )
     return result
