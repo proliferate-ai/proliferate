@@ -36,6 +36,7 @@ from proliferate.db.store.managed_sandboxes import (
     record_managed_sandbox_provider_sandbox,
     update_managed_sandbox_status,
 )
+from proliferate.db.store.managed_sandbox_repo_materializations import load_repo_materialization
 from proliferate.integrations.anyharness import (
     CloudRuntimeReconnectError,
     apply_agent_auth_config,
@@ -135,6 +136,7 @@ class _ManagedWorkspaceRow(Protocol):
     git_base_branch: str | None
     origin: str
     status: str
+    runtime_generation: int
     anyharness_workspace_id: str | None
     worktree_path: str | None
 
@@ -813,6 +815,14 @@ async def ensure_managed_sandbox_workspace_record_runtime_connection(
             status_code=409,
         )
 
+    known_connection = await _known_workspace_runtime_connection_if_current(
+        db,
+        user=user,
+        workspace=workspace,
+    )
+    if known_connection is not None:
+        return known_connection
+
     repo_connection = await ensure_managed_sandbox_repo_runtime_connection(
         db,
         user,
@@ -940,6 +950,48 @@ async def ensure_managed_sandbox_workspace_record_runtime_connection(
     return ManagedSandboxWorkspaceRuntimeConnection(
         anyharness_workspace_id=materialized.workspace_id,
         anyharness_repo_root_id=materialized.repo_root_id,
+        runtime_generation=sandbox.runtime_generation,
+    )
+
+
+async def _known_workspace_runtime_connection_if_current(
+    db: AsyncSession,
+    *,
+    user: _UserWithId,
+    workspace: _ManagedWorkspaceRow,
+) -> ManagedSandboxWorkspaceRuntimeConnection | None:
+    if workspace.status != "ready" or not workspace.anyharness_workspace_id:
+        return None
+
+    sandbox = await load_personal_managed_sandbox(db, user.id)
+    if (
+        sandbox is None
+        or sandbox.status != "ready"
+        or not _runtime_access_ready(sandbox)
+        or workspace.runtime_generation != sandbox.runtime_generation
+    ):
+        return None
+
+    repo_config = await get_cloud_repo_config(
+        db,
+        user_id=user.id,
+        git_owner=workspace.git_owner,
+        git_repo_name=workspace.git_repo_name,
+    )
+    materialization = (
+        await load_repo_materialization(
+            db,
+            managed_sandbox_id=sandbox.id,
+            cloud_repo_config_id=repo_config.id,
+        )
+        if repo_config is not None
+        else None
+    )
+    return ManagedSandboxWorkspaceRuntimeConnection(
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        anyharness_repo_root_id=(
+            materialization.anyharness_repo_root_id if materialization is not None else None
+        ),
         runtime_generation=sandbox.runtime_generation,
     )
 
