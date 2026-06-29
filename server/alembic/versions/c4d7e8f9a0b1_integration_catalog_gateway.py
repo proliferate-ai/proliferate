@@ -340,12 +340,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("cloud_integration_policy")
-    op.drop_table("cloud_integration_tool_schema_cache")
-    op.drop_table("cloud_integration_oauth_flow")
-    op.drop_table("cloud_integration_oauth_client")
-    op.drop_table("cloud_integration_account")
-    op.drop_table("cloud_integration_definition")
+    raise RuntimeError(
+        "Downgrade for integration catalog gateway is unsupported because the upgrade "
+        "migrates data from the old cloud MCP tables and then drops them. Restore from "
+        "backup or migrate forward."
+    )
 
 
 def _backfill_from_old_mcp_tables() -> None:

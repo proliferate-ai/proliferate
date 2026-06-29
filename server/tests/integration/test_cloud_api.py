@@ -52,6 +52,7 @@ from proliferate.integrations.mcp_oauth import (
     ProtectedResourceMetadata,
     RegisteredOAuthClient,
 )
+from proliferate.integrations.mcp_remote import McpRemoteError, McpRemoteTool
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.repo_config import service as repo_config_service
@@ -584,6 +585,50 @@ class TestCloudIntegrations:
         assert flows[0].return_path == "/plugins/connect/complete"
 
     @pytest.mark.asyncio
+    async def test_oauth_start_rejects_empty_authorization_server_metadata(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _discover_protected_resource_metadata(
+            _server_url: str,
+        ) -> ProtectedResourceMetadata:
+            return ProtectedResourceMetadata(
+                authorization_servers=(),
+                resource="https://linear.example.com/mcp",
+                challenged_scope=None,
+            )
+
+        monkeypatch.setattr(
+            "proliferate.server.cloud.integrations.service.discover_protected_resource_metadata",
+            _discover_protected_resource_metadata,
+        )
+
+        session = await _register_and_login(
+            client,
+            "cloud-integrations-empty-auth-server@example.com",
+        )
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        definitions = (
+            await client.get("/v1/cloud/integrations/definitions", headers=headers)
+        ).json()
+        linear = next(definition for definition in definitions if definition["key"] == "linear")
+        account = await client.post(
+            "/v1/cloud/integrations/accounts",
+            headers=headers,
+            json={"definitionId": linear["id"], "authKind": "oauth2"},
+        )
+        assert account.status_code == 200
+
+        started = await client.post(
+            f"/v1/cloud/integrations/accounts/{account.json()['id']}/oauth/start",
+            headers=headers,
+        )
+
+        assert started.status_code == 409
+        assert started.json()["detail"]["code"] == "integration_oauth_unavailable"
+
+    @pytest.mark.asyncio
     async def test_org_custom_definition_validates_admin_and_url(
         self,
         client: AsyncClient,
@@ -658,6 +703,86 @@ class TestCloudIntegrations:
         assert owner_create.status_code == 200
         assert owner_create.json()["source"] == "org_custom"
         assert owner_create.json()["namespace"] == "internal_mcp"
+
+        member_list = await client.get(
+            "/v1/cloud/integrations/definitions",
+            headers=member_headers,
+            params={"organizationId": organization_id},
+        )
+        assert member_list.status_code == 200
+        assert any(item["namespace"] == "internal_mcp" for item in member_list.json())
+
+        outsider = await _register_and_login(
+            client,
+            "cloud-integrations-custom-outsider@example.com",
+        )
+        outsider_response = await client.get(
+            "/v1/cloud/integrations/definitions",
+            headers={"Authorization": f"Bearer {outsider['access_token']}"},
+            params={"organizationId": organization_id},
+        )
+        assert outsider_response.status_code == 404
+        assert outsider_response.json()["detail"]["code"] == "organization_not_found"
+
+        outsider_availability = await client.get(
+            "/v1/cloud/integrations/availability",
+            headers={"Authorization": f"Bearer {outsider['access_token']}"},
+            params={"organizationId": organization_id},
+        )
+        assert outsider_availability.status_code == 404
+        assert outsider_availability.json()["detail"]["code"] == "organization_not_found"
+
+    @pytest.mark.asyncio
+    async def test_tool_metadata_skips_failing_accounts(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _list_tools(
+            *,
+            url: str,
+            headers: dict[str, str],
+        ) -> tuple[McpRemoteTool, ...]:
+            if "context7" in url:
+                raise McpRemoteError("mcp_http_error", "Context7 is unavailable.")
+            return (
+                McpRemoteTool(
+                    name="capture_event",
+                    description="Capture an event.",
+                    input_schema={},
+                ),
+            )
+
+        monkeypatch.setattr(
+            "proliferate.server.cloud.integrations.service.mcp_remote.list_tools",
+            _list_tools,
+        )
+
+        session = await _register_and_login(client, "cloud-integrations-tools@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        definitions = {
+            definition["key"]: definition
+            for definition in (
+                await client.get("/v1/cloud/integrations/definitions", headers=headers)
+            ).json()
+        }
+        for key in ("context7", "posthog"):
+            response = await client.post(
+                "/v1/cloud/integrations/accounts",
+                headers=headers,
+                json={
+                    "definitionId": definitions[key]["id"],
+                    "authKind": "api_key",
+                    "apiKey": f"{key}-token",
+                },
+            )
+            assert response.status_code == 200
+
+        metadata = await client.get("/v1/cloud/integrations/tool-metadata", headers=headers)
+
+        assert metadata.status_code == 200
+        assert [item["namespace"] for item in metadata.json()] == ["posthog"]
+        assert metadata.json()[0]["tools"][0]["gatewayToolName"] == "posthog__capture_event"
 
 
 class TestCloudRepoConfig:

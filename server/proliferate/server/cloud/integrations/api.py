@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,10 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud.integrations.access import (
+    IntegrationDefinitionScopeAccess,
+    integration_definition_scope_user_can_read,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.models import (
     CreateIntegrationAccountRequest,
@@ -48,11 +52,10 @@ router = APIRouter(prefix="/integrations")
 
 @router.get("/definitions", response_model=list[IntegrationDefinitionResponse])
 async def list_integration_definitions_endpoint(
-    organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    _user: User = Depends(current_product_user),
+    access: IntegrationDefinitionScopeAccess = Depends(integration_definition_scope_user_can_read),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[IntegrationDefinitionResponse]:
-    return await list_integration_definitions(db, organization_id=organization_id)
+    return await list_integration_definitions(db, organization_id=access.organization_id)
 
 
 @router.post("/definitions", response_model=IntegrationDefinitionResponse)
@@ -189,9 +192,9 @@ async def cancel_integration_oauth_flow_endpoint(
     responses={303: {"description": "Redirect to web OAuth completion"}},
 )
 async def integration_oauth_callback_endpoint(
-    code: str | None = Query(default=None),
-    state: str | None = Query(default=None),
-    error: str | None = Query(default=None),
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
     db: AsyncSession = Depends(get_async_session),
 ) -> Response:
     if not state:
@@ -231,14 +234,13 @@ async def integration_oauth_callback_endpoint(
 
 @router.get("/availability", response_model=list[IntegrationAvailabilityItem])
 async def integration_availability_endpoint(
-    organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    user: User = Depends(current_product_user),
+    access: IntegrationDefinitionScopeAccess = Depends(integration_definition_scope_user_can_read),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[IntegrationAvailabilityItem]:
     return await list_integration_availability(
         db,
-        user_id=user.id,
-        organization_id=organization_id,
+        user_id=access.user_id,
+        organization_id=access.organization_id,
     )
 
 

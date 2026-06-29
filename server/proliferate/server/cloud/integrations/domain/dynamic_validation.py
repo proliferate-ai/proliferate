@@ -39,6 +39,12 @@ async def validate_dynamic_http_mcp_definition(
     )
     try:
         resource_metadata = await discover_protected_resource_metadata(cleaned_mcp_url)
+        if not resource_metadata.authorization_servers:
+            raise CloudApiError(
+                "integration_oauth_unavailable",
+                "The integration server did not advertise any authorization servers.",
+                status_code=400,
+            )
         issuer = resource_metadata.authorization_servers[0]
         authorization_metadata = await discover_authorization_server_metadata(issuer)
     except McpOAuthProviderError as exc:

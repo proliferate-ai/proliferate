@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integration_gateway.access import (
+from proliferate.server.cloud.integration_gateway.dependencies import (
     integration_gateway_grant_from_request,
 )
 from proliferate.server.cloud.integration_gateway.service import (

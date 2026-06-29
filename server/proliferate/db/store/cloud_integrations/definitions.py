@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -209,3 +209,15 @@ async def get_definition_by_key(
         await db.execute(query.order_by(CloudIntegrationDefinition.source.asc()))
     ).scalars().first()
     return _definition_record(row) if row is not None else None
+
+
+async def count_active_seed_definitions(db: AsyncSession) -> int:
+    return int(
+        await db.scalar(
+            select(func.count(CloudIntegrationDefinition.id)).where(
+                CloudIntegrationDefinition.source == "seed",
+                CloudIntegrationDefinition.archived_at.is_(None),
+            )
+        )
+        or 0
+    )

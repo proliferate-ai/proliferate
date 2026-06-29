@@ -313,6 +313,12 @@ async def start_integration_oauth_flow(
     )
     mcp_url = render_mcp_url(config, _json_object(account.account.settings_json))
     resource_metadata = await discover_protected_resource_metadata(mcp_url)
+    if not resource_metadata.authorization_servers:
+        raise CloudApiError(
+            "integration_oauth_unavailable",
+            "The integration server did not advertise any authorization servers.",
+            status_code=409,
+        )
     issuer = resource_metadata.authorization_servers[0]
     authorization_metadata = await discover_authorization_server_metadata(issuer)
     redirect_uri = _redirect_uri()
@@ -692,7 +698,20 @@ async def list_integration_tool_metadata(
     accounts = await account_store.list_ready_accounts_for_personal_profile(db, user_id)
     result: list[IntegrationToolMetadata] = []
     for account in accounts:
-        cache = await get_or_refresh_tool_cache(db, account)
+        try:
+            cache = await get_or_refresh_tool_cache(db, account)
+        except (CloudApiError, mcp_remote.McpRemoteError):
+            cache_key = tool_schema_cache_key(
+                account=account.account,
+                definition=account.definition,
+            )
+            cache = await tool_cache_store.get_tool_schema_cache(
+                db,
+                account_id=account.account.id,
+                cache_key=cache_key,
+            )
+            if cache is None:
+                continue
         config = parse_definition_config(account.definition.config_json)
         tools = _tools_from_cache(cache)
         metadata_tools: list[IntegrationToolMetadataTool] = []
