@@ -1,7 +1,9 @@
 export type CloudSettingsSectionId =
   | "account"
+  | "personal-secrets"
   | "environments"
   | "organization"
+  | "organization-secrets"
   | "sso"
   | "teams"
   | "billing"
@@ -13,6 +15,7 @@ export type CloudSettingsIconToken =
   | "account"
   | "branch"
   | "organization"
+  | "secrets"
   | "sso"
   | "billing"
   | "support";
@@ -32,6 +35,12 @@ export const WEB_CLOUD_SETTINGS_SECTIONS: readonly CloudSettingsSectionDefinitio
     mobileRelevant: true,
   },
   {
+    id: "personal-secrets",
+    label: "Personal secrets",
+    iconToken: "secrets",
+    mobileRelevant: true,
+  },
+  {
     id: "environments",
     label: "Environments",
     iconToken: "branch",
@@ -41,6 +50,12 @@ export const WEB_CLOUD_SETTINGS_SECTIONS: readonly CloudSettingsSectionDefinitio
     id: "organization",
     label: "Organization",
     iconToken: "organization",
+    mobileRelevant: true,
+  },
+  {
+    id: "organization-secrets",
+    label: "Organization secrets",
+    iconToken: "secrets",
     mobileRelevant: true,
   },
   {
@@ -65,8 +80,10 @@ export const WEB_CLOUD_SETTINGS_SECTIONS: readonly CloudSettingsSectionDefinitio
 
 const SECTION_IDS = new Set<CloudSettingsSectionId>([
   "account",
+  "personal-secrets",
   "environments",
   "organization",
+  "organization-secrets",
   "sso",
   "teams",
   "billing",

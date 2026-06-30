@@ -157,7 +157,7 @@ describe("useMainScreenActions right panel actions", () => {
     const { result, spies } = renderActions({
       rightPanelState: {
         ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
-        activeEntryKey: "tool:settings",
+        activeEntryKey: "tool:git",
       },
       rightPanelOpen: false,
     });

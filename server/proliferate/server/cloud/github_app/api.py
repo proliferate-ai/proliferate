@@ -16,6 +16,7 @@ from proliferate.server.cloud.github_app.models import (
 )
 from proliferate.server.cloud.github_app.service import (
     complete_github_app_callback,
+    complete_github_app_installation_callback,
     create_github_app_connect_url,
     get_github_app_status,
 )
@@ -56,12 +57,27 @@ async def github_app_status_endpoint(
 
 @callback_router.get("/github-app/callback")
 async def github_app_callback_endpoint(
-    code: str,
-    state: str,
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    installation_id: str | None = Query(default=None),
+    setup_action: str | None = Query(default=None),
     db: AsyncSession = Depends(get_async_session),
 ) -> RedirectResponse:
     try:
-        redirect_url = await complete_github_app_callback(db, code=code, state=state)
+        if state is not None:
+            if code is None:
+                raise CloudApiError(
+                    "github_app_code_required",
+                    "GitHub App authorization callback is missing the authorization code.",
+                    status_code=400,
+                )
+            redirect_url = await complete_github_app_callback(db, code=code, state=state)
+        else:
+            redirect_url = await complete_github_app_installation_callback(
+                db,
+                installation_id=installation_id,
+                setup_action=setup_action,
+            )
     except CloudApiError as error:
         raise_cloud_error(error)
     return RedirectResponse(redirect_url, status_code=302)

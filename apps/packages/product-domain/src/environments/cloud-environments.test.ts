@@ -96,7 +96,6 @@ describe("cloud environment helpers", () => {
     expect(buildMinimalCloudEnvironmentConfigRequest("main")).toEqual({
       configured: true,
       defaultBranch: "main",
-      envVars: {},
       setupScript: "",
       runCommand: "",
     });
@@ -110,22 +109,19 @@ describe("cloud environment helpers", () => {
     }, "main")).toEqual({
       configured: true,
       defaultBranch: "release",
-      envVars: { API_BASE_URL: "https://api.example" },
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
     });
   });
 
-  it("builds core editor save requests without files and normalizes env keys", () => {
+  it("builds core editor save requests without legacy env or file fields", () => {
     expect(buildCoreCloudEnvironmentSaveRequest({
       defaultBranch: null,
-      envVars: { " B ": "2", "": "ignored", A: "1" },
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
     })).toEqual({
       configured: true,
       defaultBranch: null,
-      envVars: { A: "1", B: "2" },
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
     });
@@ -133,13 +129,11 @@ describe("cloud environment helpers", () => {
     expect(buildCoreCloudEnvironmentSaveRequest({
       configured: false,
       defaultBranch: "main",
-      envVars: { A: "1" },
       setupScript: "x",
       runCommand: "y",
     })).toEqual({
       configured: false,
       defaultBranch: null,
-      envVars: {},
       setupScript: "",
       runCommand: "",
     });

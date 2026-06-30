@@ -105,6 +105,17 @@ export function Keyboard({ className, ...props }: IconProps) {
   );
 }
 
+export function KeyRound({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M2.6 18.4 8 13" />
+      <path d="m6 15 2.5 2.5" />
+      <path d="m9 12 2.5 2.5" />
+      <circle cx="15.5" cy="8.5" r="5.5" />
+    </svg>
+  );
+}
+
 export function Pencil({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

@@ -8,15 +8,14 @@ import {
 import { buildCoreCloudEnvironmentSaveRequest } from "@proliferate/product-domain/environments/cloud-environments";
 import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import { CloudEnvironmentEditor } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
-import type { CloudEnvironmentEnvVarRowView } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { CloudSecretsSettingsSurface } from "../CloudSecretsSettingsSurface";
 
 interface CloudEnvironmentDraftState {
   configured: boolean;
   defaultBranch: string | null;
   setupScript: string;
   runCommand: string;
-  envVarRows: CloudEnvironmentEnvVarRowView[];
 }
 
 export function CloudEnvironmentDetail({
@@ -55,7 +54,6 @@ export function CloudEnvironmentDetail({
       body: buildCoreCloudEnvironmentSaveRequest({
         configured: draft.configured,
         defaultBranch: draft.defaultBranch,
-        envVars: draft.envVars,
         setupScript: draft.setupScript,
         runCommand: draft.runCommand,
       }),
@@ -77,14 +75,17 @@ export function CloudEnvironmentDetail({
       branchError={branches.error instanceof Error ? branches.error.message : null}
       setupScript={draft.setupScript}
       runCommand={draft.runCommand}
-      envVarRows={draft.envVarRows}
       saving={saveConfig.isPending}
       saveDisabled={!enabled || config.isLoading || saveConfig.isPending || !draft.canSave}
       revertDisabled={saveConfig.isPending || !draft.dirty}
       disableDisabled={!draft.configured}
       error={saveConfig.error?.message ?? null}
-      trackedFileCount={config.data?.trackedFiles.length ?? 0}
-      trackedFilesReadOnly
+      secretsSlot={(
+        <CloudSecretsSettingsSurface
+          scope={{ kind: "workspace", gitOwner, gitRepoName }}
+          enabled={enabled && savedConfigured}
+        />
+      )}
       breadcrumb={(
         <Button
           type="button"
@@ -98,9 +99,6 @@ export function CloudEnvironmentDetail({
       onDefaultBranchChange={draft.setDefaultBranch}
       onSetupScriptChange={draft.setSetupScript}
       onRunCommandChange={draft.setRunCommand}
-      onAddEnvVar={draft.addEnvVar}
-      onUpdateEnvVar={draft.updateEnvVar}
-      onRemoveEnvVar={draft.removeEnvVar}
       onSave={() => {
         void handleSave();
       }}
@@ -134,11 +132,7 @@ function useCloudEnvironmentCoreDraft(
     }
   }, [initial, sourceKey, state.draft, state.revertDraft, state.sourceKey]);
 
-  const envVars = useMemo(() => rowsToEnvVars(state.draft.envVarRows), [state.draft.envVarRows]);
-  const normalizedDraft = useMemo(() => ({
-    ...state.draft,
-    envVarRows: buildEnvVarRows(envVars),
-  }), [envVars, state.draft]);
+  const normalizedDraft = state.draft;
   const dirty = isDraftDirty(normalizedDraft, state.revertDraft);
   const configurable = !state.baseline.configured && normalizedDraft.configured;
 
@@ -158,47 +152,11 @@ function useCloudEnvironmentCoreDraft(
     defaultBranch: normalizedDraft.defaultBranch,
     setupScript: normalizedDraft.setupScript,
     runCommand: normalizedDraft.runCommand,
-    envVarRows: state.draft.envVarRows,
-    envVars,
     dirty,
     canSave: dirty || configurable,
     setDefaultBranch: (defaultBranch: string | null) => patch({ defaultBranch }),
     setSetupScript: (setupScript: string) => patch({ setupScript }),
     setRunCommand: (runCommand: string) => patch({ runCommand }),
-    addEnvVar: () => {
-      setState((current) => ({
-        ...current,
-        draft: {
-          ...current.draft,
-          configured: true,
-          envVarRows: [...current.draft.envVarRows, { id: createRowId(), key: "", value: "" }],
-        },
-      }));
-    },
-    updateEnvVar: (
-      rowId: string,
-      rowPatch: Partial<Pick<CloudEnvironmentEnvVarRowView, "key" | "value">>,
-    ) => {
-      setState((current) => ({
-        ...current,
-        draft: {
-          ...current.draft,
-          configured: true,
-          envVarRows: current.draft.envVarRows.map((row) =>
-            row.id === rowId ? { ...row, ...rowPatch } : row),
-        },
-      }));
-    },
-    removeEnvVar: (rowId: string) => {
-      setState((current) => ({
-        ...current,
-        draft: {
-          ...current.draft,
-          configured: true,
-          envVarRows: current.draft.envVarRows.filter((row) => row.id !== rowId),
-        },
-      }));
-    },
     revert: () => {
       setState((current) => ({
         ...current,
@@ -252,14 +210,7 @@ function buildSavedDraft(
     defaultBranch: config?.defaultBranch ?? null,
     setupScript: config?.setupScript ?? "",
     runCommand: config?.runCommand ?? "",
-    envVarRows: buildEnvVarRows(config?.envVars ?? {}),
   };
-}
-
-function buildEnvVarRows(envVars: Record<string, string>): CloudEnvironmentEnvVarRowView[] {
-  return Object.entries(envVars)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => ({ id: createRowId(), key, value }));
 }
 
 function isDraftDirty(
@@ -269,19 +220,5 @@ function isDraftDirty(
   return draft.configured !== baseline.configured
     || draft.defaultBranch !== baseline.defaultBranch
     || draft.setupScript !== baseline.setupScript
-    || draft.runCommand !== baseline.runCommand
-    || JSON.stringify(rowsToEnvVars(draft.envVarRows)) !== JSON.stringify(rowsToEnvVars(baseline.envVarRows));
-}
-
-function rowsToEnvVars(rows: readonly CloudEnvironmentEnvVarRowView[]): Record<string, string> {
-  return Object.fromEntries(
-    rows
-      .map((row) => [row.key.trim(), row.value] as const)
-      .filter(([key]) => key.length > 0)
-      .sort(([left], [right]) => left.localeCompare(right)),
-  );
-}
-
-function createRowId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `row-${Math.random().toString(36).slice(2)}`;
+    || draft.runCommand !== baseline.runCommand;
 }

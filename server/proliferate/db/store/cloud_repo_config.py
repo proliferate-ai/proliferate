@@ -445,7 +445,7 @@ async def _save_repo_config_record(
     record: CloudRepoConfig,
     configured: bool,
     default_branch: str | None,
-    env_vars: dict[str, str],
+    env_vars: dict[str, str] | None,
     setup_script: str,
     run_command: str,
     files: list[CloudRepoFileInput] | None,
@@ -456,7 +456,7 @@ async def _save_repo_config_record(
     existing_env_vars = (
         decrypt_json(record.env_vars_ciphertext) if record.env_vars_ciphertext else {}
     )
-    if existing_env_vars != env_vars:
+    if env_vars is not None and existing_env_vars != env_vars:
         record.env_vars_version += 1
         record.env_vars_ciphertext = encrypt_json(env_vars)
     if record.setup_script != setup_script:
@@ -527,7 +527,7 @@ async def save_cloud_repo_config(
     configured: bool,
     cloud_repo_limit: int | None,
     default_branch: str | None,
-    env_vars: dict[str, str],
+    env_vars: dict[str, str] | None,
     setup_script: str,
     run_command: str,
     files: list[CloudRepoFileInput] | None,
@@ -567,7 +567,7 @@ async def save_organization_cloud_repo_config(
     git_repo_name: str,
     configured: bool,
     default_branch: str | None,
-    env_vars: dict[str, str],
+    env_vars: dict[str, str] | None,
     setup_script: str,
     run_command: str,
     files: list[CloudRepoFileInput] | None,

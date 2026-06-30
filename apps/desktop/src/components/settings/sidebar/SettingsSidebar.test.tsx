@@ -133,8 +133,10 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Appearance",
       "Keyboard shortcuts",
       "Account",
+      "Personal secrets",
       "Admin",
       "Organization settings",
+      "Organization secrets",
       "Members",
       "Billing",
       "Integrations",
@@ -186,6 +188,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       expect(screen.queryByText("Admin")).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Members/ })).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Organization settings/ })).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /Organization secrets/ })).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Integrations/ })).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Model policy/ })).not.toBeNull();
@@ -196,6 +199,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.queryByText("Admin")).toBeNull();
     expect(screen.queryByRole("button", { name: /Members/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Organization secrets/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Billing/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Integrations/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Model policy/ })).toBeNull();
@@ -296,6 +300,12 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
       digit: 6,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization");
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 8,
     })).toBe(true);
     expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
 

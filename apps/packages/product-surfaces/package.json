@@ -19,6 +19,10 @@
       "types": "./dist/settings/CloudEnvironmentsSettingsSurface.d.ts",
       "import": "./dist/settings/CloudEnvironmentsSettingsSurface.js"
     },
+    "./settings/CloudSecretsSettingsSurface": {
+      "types": "./dist/settings/CloudSecretsSettingsSurface.d.ts",
+      "import": "./dist/settings/CloudSecretsSettingsSurface.js"
+    },
     "./settings/CloudOrganizationIntegrationsPolicySurface": {
       "types": "./dist/settings/CloudOrganizationIntegrationsPolicySurface.d.ts",
       "import": "./dist/settings/CloudOrganizationIntegrationsPolicySurface.js"

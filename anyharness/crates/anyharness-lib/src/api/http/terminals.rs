@@ -17,6 +17,7 @@ use crate::domains::terminals::model::{
     TerminalPurpose as InternalTerminalPurpose, TerminalRecord as InternalTerminalRecord,
     TerminalStatus as InternalTerminalStatus,
 };
+use crate::domains::workspaces::env::merge_env_overrides_protecting_metadata;
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use anyharness_contract::v1::terminals::{
@@ -43,6 +44,20 @@ fn resolve_workspace(state: &AppState, workspace_id: &str) -> Result<WorkspaceRe
             )
         })?;
     Ok(ws)
+}
+
+async fn build_workspace_env_for_api(
+    state: &AppState,
+    workspace: &WorkspaceRecord,
+) -> Result<Vec<(String, String)>, ApiError> {
+    let workspace_runtime = state.workspace_runtime.clone();
+    let workspace_for_env = workspace.clone();
+    tokio::task::spawn_blocking(move || {
+        workspace_runtime.build_workspace_env(&workspace_for_env, None)
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("workspace env task failed: {e}")))?
+    .map_err(|e| ApiError::internal(e.to_string()))
 }
 
 #[utoipa::path(
@@ -96,31 +111,11 @@ pub async fn create_terminal(
         .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let ws = resolve_workspace(&state, &workspace_id)?;
-    let env_vars = match tokio::task::spawn_blocking({
-        let workspace_runtime = state.workspace_runtime.clone();
-        let ws_for_env = ws.clone();
-        move || workspace_runtime.build_workspace_env(&ws_for_env, None)
-    })
-    .await
-    {
-        Ok(Ok(env_vars)) => env_vars,
-        Ok(Err(error)) => {
-            tracing::warn!(
-                workspace_id = %ws.id,
-                error = %error,
-                "failed to build terminal workspace env; creating terminal without workspace env"
-            );
-            Vec::new()
-        }
-        Err(error) => {
-            tracing::warn!(
-                workspace_id = %ws.id,
-                error = %error,
-                "terminal workspace env task failed; creating terminal without workspace env"
-            );
-            Vec::new()
-        }
-    };
+    let env_vars = build_workspace_env_for_api(&state, &ws).await?;
+    let startup_command_env = merge_env_overrides_protecting_metadata(
+        env_vars.clone(),
+        request.startup_command_env.unwrap_or_default(),
+    );
     let record = state
         .terminal_service
         .create_terminal(
@@ -136,11 +131,7 @@ pub async fn create_terminal(
                     .unwrap_or(InternalTerminalPurpose::General),
                 env: env_vars,
                 startup_command: request.startup_command,
-                startup_command_env: request
-                    .startup_command_env
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect(),
+                startup_command_env,
                 startup_command_timeout_ms: request.startup_command_timeout_ms,
                 cols: request.cols,
                 rows: request.rows,
@@ -194,10 +185,14 @@ pub async fn start_terminal_command(
             "INVALID_TERMINAL_COMMAND",
         ));
     }
+    let ws = resolve_workspace(&state, &terminal_for_gate.workspace_id)?;
+    let env_vars = build_workspace_env_for_api(&state, &ws).await?;
+    let command_env =
+        merge_env_overrides_protecting_metadata(env_vars, request.env.unwrap_or_default());
     let run = terminal_handle
         .run_command(RunTerminalCommandOptions {
             command,
-            env: request.env.unwrap_or_default().into_iter().collect(),
+            env: command_env,
             interrupt: request.interrupt.unwrap_or(false),
             timeout_ms: request.timeout_ms,
         })

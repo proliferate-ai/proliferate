@@ -17,7 +17,7 @@ use crate::domains::agents::readiness::launch_options::{
 };
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
-use crate::domains::workspaces::env::read_materialized_session_env;
+use crate::domains::workspaces::env::read_materialized_launch_env;
 
 impl SessionService {
     /// Is `value` a model this SESSION may switch to live? The catalog is
@@ -56,7 +56,8 @@ impl SessionService {
                     .workspace_store
                     .find_by_id(workspace_id)?
                     .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
-                read_materialized_session_env(Path::new(&workspace.path)).unwrap_or_default()
+                read_materialized_launch_env(&self.runtime_home, Path::new(&workspace.path))
+                    .unwrap_or_default()
             }
             None => BTreeMap::new(),
         };

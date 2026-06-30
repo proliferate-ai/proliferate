@@ -174,7 +174,7 @@ async def save_repo_config(
     git_repo_name: str,
     body: SaveCloudRepoConfigRequest,
 ) -> CloudRepoConfigValue:
-    env_vars = normalize_env_vars(body.env_vars)
+    env_vars = normalize_env_vars(body.env_vars) if body.env_vars is not None else None
     default_branch = await _validate_repo_access_and_default_branch(
         db,
         user_id,
@@ -243,7 +243,7 @@ async def save_organization_repo_config(
         user_id=user_id,
         organization_id=organization_id,
     )
-    env_vars = normalize_env_vars(body.env_vars)
+    env_vars = normalize_env_vars(body.env_vars) if body.env_vars is not None else None
     default_branch = await _validate_repo_access_and_default_branch(
         db,
         user_id,

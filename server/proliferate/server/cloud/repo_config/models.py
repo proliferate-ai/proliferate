@@ -58,7 +58,7 @@ class SaveCloudRepoConfigFile(BaseModel):
 class SaveCloudRepoConfigRequest(BaseModel):
     configured: bool
     default_branch: str | None = Field(default=None, alias="defaultBranch")
-    env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
+    env_vars: dict[str, str] | None = Field(default=None, alias="envVars")
     setup_script: str = Field(default="", alias="setupScript")
     run_command: str = Field(default="", alias="runCommand")
     files: list[SaveCloudRepoConfigFile] | None = None
@@ -67,7 +67,7 @@ class SaveCloudRepoConfigRequest(BaseModel):
 class SaveOrganizationCloudRepoConfigRequest(BaseModel):
     configured: bool
     default_branch: str | None = Field(default=None, alias="defaultBranch")
-    env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
+    env_vars: dict[str, str] | None = Field(default=None, alias="envVars")
     setup_script: str = Field(default="", alias="setupScript")
     run_command: str = Field(default="", alias="runCommand")
     files: list[SaveCloudRepoConfigFile] | None = None
@@ -113,7 +113,7 @@ def repo_config_payload(
         configured=value.configured,
         configured_at=_to_iso(value.configured_at),
         default_branch=value.default_branch,
-        env_vars=value.env_vars,
+        env_vars={},
         setup_script=value.setup_script,
         run_command=value.run_command,
         files_version=value.files_version,
