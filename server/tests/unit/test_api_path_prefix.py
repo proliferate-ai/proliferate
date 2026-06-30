@@ -47,7 +47,7 @@ def test_create_app_mounts_routes_without_api_prefix_by_default(
     assert "/auth/{surface}/sso/start" in paths
     assert "/auth/sso/oidc/callback" in paths
     assert "/v1/telemetry/anonymous" in paths
-    assert "/v1/automations" in paths
+    assert "/v1/automations" not in paths
 
 
 def test_slack_bot_routes_are_parked() -> None:
@@ -84,7 +84,7 @@ def test_create_app_mounts_routes_under_api_prefix_when_configured(
     assert "/api/auth/{surface}/sso/start" in paths
     assert "/api/auth/sso/oidc/callback" in paths
     assert "/api/v1/telemetry/anonymous" in paths
-    assert "/api/v1/automations" in paths
+    assert "/api/v1/automations" not in paths
 
 
 def test_identity_web_session_cookie_path_uses_api_prefix(
