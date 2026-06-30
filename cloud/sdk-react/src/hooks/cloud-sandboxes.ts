@@ -7,12 +7,12 @@ import {
   type CloudSandboxResponse,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
-import { managedSandboxKey } from "../lib/query-keys.js";
+import { cloudSandboxKey } from "../lib/query-keys.js";
 
 export function useCloudSandbox(enabled = true) {
   const client = useCloudClient();
   return useQuery<CloudSandboxResponse | null>({
-    queryKey: managedSandboxKey(),
+    queryKey: cloudSandboxKey(),
     queryFn: () => getCloudSandbox(client),
     enabled,
   });
@@ -24,7 +24,7 @@ export function useEnsureCloudSandbox() {
   return useMutation<CloudSandboxResponse, Error>({
     mutationFn: () => ensureCloudSandbox(client),
     onSuccess: (response) => {
-      queryClient.setQueryData(managedSandboxKey(), response);
+      queryClient.setQueryData(cloudSandboxKey(), response);
     },
   });
 }
@@ -35,7 +35,7 @@ export function useWakeCloudSandbox() {
   return useMutation<CloudSandboxResponse, Error>({
     mutationFn: () => wakeCloudSandbox(client),
     onSuccess: (response) => {
-      queryClient.setQueryData(managedSandboxKey(), response);
+      queryClient.setQueryData(cloudSandboxKey(), response);
     },
   });
 }
@@ -46,7 +46,7 @@ export function useDestroyCloudSandbox() {
   return useMutation<CloudSandboxResponse | null, Error>({
     mutationFn: () => destroyCloudSandbox(client),
     onSuccess: (response) => {
-      queryClient.setQueryData(managedSandboxKey(), response);
+      queryClient.setQueryData(cloudSandboxKey(), response);
     },
   });
 }
