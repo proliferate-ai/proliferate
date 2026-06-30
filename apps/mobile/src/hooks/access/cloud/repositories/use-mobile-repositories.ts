@@ -1,6 +1,6 @@
 import {
   useCloudGitRepositories,
-  useSaveCloudRepoConfig,
+  useSaveRepoEnvironment,
 } from "@proliferate/cloud-sdk-react";
 
 export function useMobileGitRepositories(visible: boolean) {
@@ -8,5 +8,5 @@ export function useMobileGitRepositories(visible: boolean) {
 }
 
 export function useSaveMobileRepoConfig() {
-  return useSaveCloudRepoConfig();
+  return useSaveRepoEnvironment();
 }

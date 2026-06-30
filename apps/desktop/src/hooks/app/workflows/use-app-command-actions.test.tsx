@@ -52,16 +52,24 @@ vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
 
-vi.mock("@/hooks/access/cloud/use-cloud-repo-configs", () => ({
-  useCloudRepoConfigs: () => ({
+vi.mock("@proliferate/cloud-sdk-react", () => ({
+  useRepoConfigs: () => ({
     data: {
-      configs: [{
+      repositories: [{
+        id: "repo-config-1",
+        gitProvider: "github",
         gitOwner: "proliferate-ai",
         gitRepoName: "repo-b",
-        configured: true,
-        configuredAt: null,
-        defaultBranch: "main",
-        filesVersion: 0,
+        environments: [{
+          id: "repo-environment-1",
+          repoConfigId: "repo-config-1",
+          kind: "cloud",
+          desktopInstallId: null,
+          localPath: null,
+          defaultBranch: "main",
+          setupScript: "",
+          runCommand: "",
+        }],
       }],
     },
     isPending: false,

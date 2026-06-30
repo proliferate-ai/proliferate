@@ -13,7 +13,6 @@ from proliferate.config import settings
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.constants.slack import SLACK_REPO_MODE_AUTO, SLACK_REPO_MODE_FIXED
 from proliferate.db.store import cloud_agent_run_config as run_config_store
-from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.cloud_slack import bot_configs as bot_config_store
 from proliferate.db.store.cloud_slack import connections as connection_store
@@ -301,26 +300,6 @@ async def list_repo_routing_profiles(
     organization_id: UUID,
 ) -> list[CloudRepoRoutingProfileRecord]:
     await _require_org_admin(db, user_id=user.id, organization_id=organization_id)
-    repos = await repo_store.list_organization_cloud_repo_configs(
-        db,
-        organization_id=organization_id,
-    )
-    for repo in repos:
-        if not repo.configured:
-            continue
-        existing = await routing_profile_store.get_profile_for_repo(
-            db,
-            cloud_repo_config_id=repo.id,
-        )
-        if existing is not None:
-            continue
-        await routing_profile_store.upsert_profile(
-            db,
-            cloud_repo_config_id=repo.id,
-            organization_id=organization_id,
-            display_name=f"{repo.git_owner}/{repo.git_repo_name}",
-            description=None,
-        )
     return await routing_profile_store.list_profiles_for_org(
         db,
         organization_id=organization_id,
@@ -334,22 +313,11 @@ async def list_repo_routing_profile_details(
     organization_id: UUID,
 ) -> list[SlackRepoRoutingProfileDetails]:
     profiles = await list_repo_routing_profiles(db, user, organization_id=organization_id)
-    repo_by_id = {
-        repo.id: repo
-        for repo in await repo_store.list_organization_cloud_repo_configs(
-            db,
-            organization_id=organization_id,
-        )
-    }
     return [
         SlackRepoRoutingProfileDetails(
             profile=profile,
-            git_owner=repo_by_id[profile.cloud_repo_config_id].git_owner
-            if profile.cloud_repo_config_id in repo_by_id
-            else None,
-            git_repo_name=repo_by_id[profile.cloud_repo_config_id].git_repo_name
-            if profile.cloud_repo_config_id in repo_by_id
-            else None,
+            git_owner=None,
+            git_repo_name=None,
         )
         for profile in profiles
     ]
@@ -470,19 +438,13 @@ async def _require_org_repo(
     *,
     organization_id: UUID,
     repo_id: UUID,
-) -> repo_store.CloudRepoConfigValue:
-    repo = await repo_store.get_cloud_repo_config_by_id(db, cloud_repo_config_id=repo_id)
-    if (
-        repo is None
-        or repo.owner_scope != "organization"
-        or repo.organization_id != organization_id
-    ):
-        raise CloudApiError(
-            "cloud_repo_not_found",
-            "Cloud repo config not found.",
-            status_code=404,
-        )
-    return repo
+) -> None:
+    del db, organization_id, repo_id
+    raise CloudApiError(
+        "slack_repo_routing_unavailable",
+        "Slack repo routing is unavailable until Slack is retargeted to repo environments.",
+        status_code=409,
+    )
 
 
 def _required_str(payload: dict[str, object], key: str) -> str:

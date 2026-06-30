@@ -19,20 +19,36 @@ describe("cloud workspace creation helpers", () => {
   it("builds configured repo keys from configured summaries only", () => {
     const keys = buildConfiguredCloudRepoKeys([
       {
+        id: "repo-rocket",
+        gitProvider: "github",
         gitOwner: "acme",
         gitRepoName: "rocket",
-        configured: true,
-        configuredAt: null,
-        defaultBranch: "main",
-        filesVersion: 1,
+        environments: [{
+          id: "env-rocket-cloud",
+          repoConfigId: "repo-rocket",
+          kind: "cloud",
+          desktopInstallId: null,
+          localPath: null,
+          defaultBranch: "main",
+          setupScript: "",
+          runCommand: "",
+        }],
       },
       {
+        id: "repo-draft",
+        gitProvider: "github",
         gitOwner: "acme",
         gitRepoName: "draft",
-        configured: false,
-        configuredAt: null,
-        defaultBranch: null,
-        filesVersion: 0,
+        environments: [{
+          id: "env-draft-local",
+          repoConfigId: "repo-draft",
+          kind: "local",
+          desktopInstallId: "desktop-1",
+          localPath: "/repos/draft",
+          defaultBranch: null,
+          setupScript: "",
+          runCommand: "",
+        }],
       },
     ]);
 

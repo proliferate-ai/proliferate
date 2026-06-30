@@ -12,25 +12,6 @@ export function useSettingsRepositories() {
   const hiddenRepoRootIds = useWorkspaceUiStore((state) => state.hiddenRepoRootIds);
   const { cloudActive } = useCloudAvailabilityState();
   const repoConfigsQuery = useRepoConfigs(cloudActive);
-  const cloudRepoConfigs = useMemo(
-    () => (repoConfigsQuery.data?.repositories ?? []).flatMap((repo) => {
-      const cloudEnvironment = repo.environments.find((environment) =>
-        environment.kind === "cloud"
-      );
-      if (!cloudEnvironment) {
-        return [];
-      }
-      return [{
-        gitOwner: repo.gitOwner,
-        gitRepoName: repo.gitRepoName,
-        configured: true,
-        configuredAt: null,
-        defaultBranch: cloudEnvironment.defaultBranch,
-        filesVersion: 0,
-      }];
-    }),
-    [repoConfigsQuery.data?.repositories],
-  );
 
   const repositories = useMemo(() => {
     const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
@@ -39,9 +20,9 @@ export function useSettingsRepositories() {
         workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
       ),
       repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
-      cloudRepoConfigs,
+      repoConfigsQuery.data?.repositories ?? [],
     );
-  }, [cloudRepoConfigs, hiddenRepoRootIds, localWorkspaces, repoRoots]);
+  }, [hiddenRepoRootIds, localWorkspaces, repoConfigsQuery.data?.repositories, repoRoots]);
 
   return {
     repositories,

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
@@ -28,9 +28,9 @@ export function useHomeScreen() {
   } = useAgentCatalog();
   const { cloudActive } = useCloudAvailabilityState();
   const {
-    data: cloudRepoConfigs,
-    isPending: cloudRepoConfigsPending,
-  } = useCloudRepoConfigs(cloudActive);
+    data: repoConfigs,
+    isPending: repoConfigsPending,
+  } = useRepoConfigs(cloudActive);
   const {
     localWorkspaces,
     repoRoots,
@@ -47,11 +47,11 @@ export function useHomeScreen() {
         workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
       ),
       repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
-      cloudRepoConfigs?.configs ?? [],
+      repoConfigs?.repositories ?? [],
     );
-  }, [cloudRepoConfigs?.configs, hiddenRepoRootIds, localWorkspaces, repoRoots]);
+  }, [hiddenRepoRootIds, localWorkspaces, repoConfigs?.repositories, repoRoots]);
   const cloudRepoConfigsLoading =
-    cloudActive && cloudRepoConfigsPending && !cloudRepoConfigs;
+    cloudActive && repoConfigsPending && !repoConfigs;
   const onboardingCards = useMemo(
     () => buildHomeOnboardingCards({
       repositories,
@@ -59,15 +59,15 @@ export function useHomeScreen() {
       readyAgentCount: readyAgents.length,
       agentsLoading,
       defaultChatAgentKind,
-      cloudRepoConfigs: cloudRepoConfigs?.configs,
+      repoConfigs: repoConfigs?.repositories,
       cloudRepoConfigsLoading,
     }),
     [
       agentsLoading,
-      cloudRepoConfigs?.configs,
       cloudRepoConfigsLoading,
       defaultChatAgentKind,
       repositories,
+      repoConfigs?.repositories,
       repositoriesLoading,
       readyAgents.length,
     ],
@@ -75,9 +75,9 @@ export function useHomeScreen() {
   const repositoryToConfigure = useMemo(
     () => findHomeUnconfiguredGitHubRepository({
       repositories,
-      cloudRepoConfigs: cloudRepoConfigs?.configs,
+      repoConfigs: repoConfigs?.repositories,
     }),
-    [cloudRepoConfigs?.configs, repositories],
+    [repoConfigs?.repositories, repositories],
   );
   function handleHomeAction(actionId: HomeActionId) {
     switch (actionId) {

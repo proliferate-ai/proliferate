@@ -3,7 +3,6 @@ import {
   createRuntimeInputSyncQueueState,
   dequeueRuntimeInputSyncDescriptor,
   enqueueRuntimeInputSyncDescriptors,
-  MAX_RUNTIME_INPUT_SYNC_TRACKED_FILE_BYTES,
   runtimeInputSyncDescriptorTrackedFileSourceKind,
   runtimeInputSyncDescriptorSourceKind,
   type RuntimeInputSyncDescriptor,
@@ -11,14 +10,10 @@ import {
   type RuntimeInputSyncQueueState,
   type RuntimeInputSyncTrigger,
 } from "@/lib/domain/cloud/runtime-input-sync";
-import { readRepoTrackedTextFile } from "@/lib/access/anyharness/workspace-file-transport";
-import { resyncCloudRepoFileFromLocal } from "@proliferate/cloud-sdk/client/repo-configs";
-import { getCloudRepoConfig } from "@proliferate/cloud-sdk/client/repo-configs";
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useAgentAuthCache } from "@/hooks/access/cloud/use-agent-auth-cache";
-import { useCloudRepoConfigCache } from "@/hooks/access/cloud/use-cloud-repo-config-cache";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
@@ -51,18 +46,6 @@ function isOnline(): boolean {
   return typeof navigator === "undefined" ? true : navigator.onLine;
 }
 
-async function sha256Text(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function contentByteLength(value: string): number {
-  return new TextEncoder().encode(value).byteLength;
-}
-
 function classifyRuntimeInputSyncFailure(error: unknown): RuntimeInputSyncFailureKind {
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
@@ -93,16 +76,10 @@ export function useRuntimeInputSyncRuntime() {
   const [online, setOnline] = useState(isOnline);
   const queueRef = useRef<RuntimeInputSyncQueueState>(createRuntimeInputSyncQueueState());
   const inFlightRef = useRef(false);
-  const runtimeUrlRef = useRef(runtimeUrl);
   const keepFreshActiveRef = useRef(false);
   const previousOnlineRef = useRef(online);
   const { invalidateAgentAuth } = useAgentAuthCache();
-  const { invalidateCloudRepoConfigs } = useCloudRepoConfigCache();
   const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
-
-  useEffect(() => {
-    runtimeUrlRef.current = runtimeUrl;
-  }, [runtimeUrl]);
 
   const keepFreshActive =
     preferencesHydrated && cloudRuntimeInputSyncEnabled && cloudActive && online;
@@ -114,53 +91,6 @@ export function useRuntimeInputSyncRuntime() {
   const enqueue = useCallback((descriptors: RuntimeInputSyncDescriptor[]) => {
     queueRef.current = enqueueRuntimeInputSyncDescriptors(queueRef.current, descriptors);
   }, []);
-
-  const syncRepoFile = useCallback(async (
-    descriptor: Extract<RuntimeInputSyncDescriptor, { kind: "repo_tracked_file" }>,
-  ) => {
-    const runtimeUrl = runtimeUrlRef.current.trim();
-    if (!runtimeUrl) {
-      throw new Error("Local runtime is unavailable.");
-    }
-    const config = await getCloudRepoConfig(descriptor.gitOwner, descriptor.gitRepoName);
-    const metadata = config.trackedFiles.find(
-      (file: { relativePath: string; contentSha256: string }) =>
-        file.relativePath === descriptor.relativePath,
-    );
-    if (!config.configured || !metadata) {
-      return;
-    }
-
-    const file = await readRepoTrackedTextFile(
-      runtimeUrl,
-      {
-        localWorkspaceId: descriptor.localWorkspaceId,
-        repoRootId: descriptor.repoRootId,
-      },
-      descriptor.relativePath,
-    );
-    const content = file.content;
-    if (contentByteLength(content) > MAX_RUNTIME_INPUT_SYNC_TRACKED_FILE_BYTES) {
-      throw new Error("Tracked file is too large.");
-    }
-    if (await sha256Text(content) === metadata.contentSha256) {
-      return;
-    }
-
-    const response = await resyncCloudRepoFileFromLocal(
-      descriptor.gitOwner,
-      descriptor.gitRepoName,
-      {
-        relativePath: descriptor.relativePath,
-        content,
-      },
-    );
-    await invalidateCloudRepoConfigs(descriptor);
-    trackProductEvent("cloud_repo_file_resynced", {
-      tracked_file_count: response.trackedFiles.length,
-      tracked_file_source: file.sourceKind,
-    });
-  }, [invalidateCloudRepoConfigs]);
 
   const processDescriptor = useCallback(async (
     descriptor: RuntimeInputSyncDescriptor,
@@ -180,10 +110,9 @@ export function useRuntimeInputSyncRuntime() {
         return;
       }
       case "repo_tracked_file":
-        await syncRepoFile(descriptor);
         return;
     }
-  }, [invalidateAgentAuth, invalidateWorkspaceCollections, syncRepoFile]);
+  }, [invalidateAgentAuth, invalidateWorkspaceCollections]);
 
   const runQueuedDescriptors = useCallback(async (trigger: RuntimeInputSyncTrigger) => {
     if (

@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
+import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
@@ -55,9 +55,9 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
   const { cloudActive } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
   const {
-    data: cloudRepoConfigs,
-    isPending: isCloudRepoConfigsPending,
-  } = useCloudRepoConfigs(cloudActive);
+    data: repoConfigs,
+    isPending: isRepoConfigsPending,
+  } = useRepoConfigs(cloudActive);
   const {
     repoRoots,
     localWorkspaces,
@@ -76,12 +76,12 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
   } = useCreateCloudWorkspace();
 
   const configuredCloudRepoKeys = useMemo(
-    () => buildConfiguredCloudRepoKeys(cloudRepoConfigs?.configs),
-    [cloudRepoConfigs?.configs],
+    () => buildConfiguredCloudRepoKeys(repoConfigs?.repositories),
+    [repoConfigs?.repositories],
   );
   const cloudRepoConfigsInitialLoading = cloudActive
-    && isCloudRepoConfigsPending
-    && !cloudRepoConfigs;
+    && isRepoConfigsPending
+    && !repoConfigs;
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
   const homeNewWorkspaceScope = useMemo(() => {
     if (

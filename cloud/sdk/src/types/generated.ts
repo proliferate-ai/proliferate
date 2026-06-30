@@ -268,20 +268,10 @@ export type CloudGitRepositorySummary = Schema<"CloudGitRepositorySummary">;
 export type CloudGitRepositoriesResponse =
   Schema<"CloudGitRepositoriesResponse">;
 export type CloudRepoBranchesResponse = Schema<"RepoBranchesResponse">;
-export type CloudRepoConfigSummary    = Schema<"CloudRepoConfigSummary">;
-export type CloudRepoConfigsListResponse = Schema<"CloudRepoConfigsListResponse">;
-export type CloudRepoFileMetadata     = Schema<"CloudRepoFileMetadata">;
-export type CloudRepoConfigResponse   = Schema<"CloudRepoConfigResponse">;
-export type SaveCloudRepoConfigRequest = Schema<"SaveCloudRepoConfigRequest">;
-export type SaveOrganizationCloudRepoConfigRequest =
-  Schema<"SaveOrganizationCloudRepoConfigRequest">;
 export type RepoConfigResponse = Schema<"RepoConfigResponse">;
 export type RepoConfigsListResponse = Schema<"RepoConfigsListResponse">;
 export type RepoEnvironmentResponse = Schema<"RepoEnvironmentResponse">;
-export type SaveCloudRepoEnvironmentRequest =
-  Schema<"SaveCloudRepoEnvironmentRequest">;
-export type SaveLocalRepoEnvironmentRequest =
-  Schema<"SaveLocalRepoEnvironmentRequest">;
+export type SaveRepoEnvironmentRequest = Schema<"SaveRepoEnvironmentRequest">;
 export type AutomationOwnerScope = "personal" | "organization";
 export type AutomationTargetMode = "local" | "personal_cloud" | "shared_cloud";
 export type AutomationRunStatus =
@@ -606,32 +596,6 @@ export type CreateSkillConfiguredItemRequest =
   Schema<"CreateSkillConfiguredItemRequest">;
 export type PatchSkillConfiguredItemRequest =
   Schema<"PatchSkillConfiguredItemRequest">;
-export type PutCloudRepoFileRequest   = Schema<"PutCloudRepoFileRequest">;
-export interface CloudWorkspaceRepoConfigStatusResponse {
-  currentRepoFilesVersion: number;
-  repoFilesAppliedVersion: number;
-  repoFilesAppliedAt: string | null;
-  filesOutOfSync: boolean;
-  trackedFiles: CloudRepoFileMetadata[];
-  envVarKeys: string[];
-  postReadyPhase: string;
-  postReadyFilesTotal: number;
-  postReadyFilesApplied: number;
-  postReadyStartedAt: string | null;
-  postReadyCompletedAt: string | null;
-  lastApplyFailedPath: string | null;
-  lastApplyError: string | null;
-}
-export interface ResyncCloudWorkspaceFilesResponse extends CloudWorkspaceRepoConfigStatusResponse {
-  workspaceId: string;
-}
-export interface RunCloudWorkspaceSetupResponse {
-  workspaceId: string;
-  command: string;
-  terminalId?: string | null;
-  commandRunId?: string | null;
-  status: string;
-}
 export type CloudWorktreeRetentionPolicyRequest =
   Schema<"CloudWorktreeRetentionPolicyRequest">;
 export type CloudWorktreeRetentionPolicyResponse =

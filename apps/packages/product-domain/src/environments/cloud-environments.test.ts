@@ -94,20 +94,20 @@ describe("cloud environment helpers", () => {
 
   it("builds add and re-enable requests without tracked files", () => {
     expect(buildMinimalCloudEnvironmentConfigRequest("main")).toEqual({
-      configured: true,
+      kind: "cloud",
+      gitProvider: "github",
       defaultBranch: "main",
       setupScript: "",
       runCommand: "",
     });
 
     expect(buildReenableCloudEnvironmentConfigRequest({
-      configured: false,
       defaultBranch: "release",
-      envVars: { API_BASE_URL: "https://api.example" },
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
     }, "main")).toEqual({
-      configured: true,
+      kind: "cloud",
+      gitProvider: "github",
       defaultBranch: "release",
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
@@ -120,22 +120,11 @@ describe("cloud environment helpers", () => {
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
     })).toEqual({
-      configured: true,
+      kind: "cloud",
+      gitProvider: "github",
       defaultBranch: null,
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
-    });
-
-    expect(buildCoreCloudEnvironmentSaveRequest({
-      configured: false,
-      defaultBranch: "main",
-      setupScript: "x",
-      runCommand: "y",
-    })).toEqual({
-      configured: false,
-      defaultBranch: null,
-      setupScript: "",
-      runCommand: "",
     });
   });
 });

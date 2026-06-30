@@ -11,7 +11,6 @@ from proliferate.db.store.cloud_mobility.events import (
     record_cloud_workspace_mobility_event_for_user,
 )
 from proliferate.db.store.cloud_mobility.handoffs import load_active_user_handoff_op_for_user
-from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
@@ -200,15 +199,8 @@ async def preflight_cloud_workspace_handoff(
                 )
 
     repo_config_started = time.perf_counter()
-    repo_config = await load_cloud_repo_config_for_user(
-        db, user_id=user_id, git_owner=workspace.git_owner, git_repo_name=workspace.git_repo_name
-    )
     repo_config_elapsed_ms = duration_ms(repo_config_started)
-    excluded_paths = (
-        [item.relative_path for item in repo_config.tracked_files]
-        if repo_config is not None
-        else []
-    )
+    excluded_paths: list[str] = []
     if normalized_requested_branch != workspace.git_branch:
         blockers.append(
             _mobility_blocker(

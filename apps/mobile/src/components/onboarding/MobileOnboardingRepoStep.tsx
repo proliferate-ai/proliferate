@@ -11,7 +11,7 @@ import {
 import {
   useCloudGitRepositories,
   useRepoConfigs,
-  useSaveCloudRepoConfig,
+  useSaveRepoEnvironment,
 } from "@proliferate/cloud-sdk-react";
 
 import { colors, spacing } from "../../styles/tokens";
@@ -24,7 +24,7 @@ import {
 export function MobileOnboardingRepoStep({ onDone }: { onDone: () => void }) {
   const repos = useCloudGitRepositories({}, true);
   const configured = useRepoConfigs();
-  const save = useSaveCloudRepoConfig();
+  const save = useSaveRepoEnvironment();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -36,7 +36,7 @@ export function MobileOnboardingRepoStep({ onDone }: { onDone: () => void }) {
           const cloudEnvironment = config.environments.find((environment) =>
             environment.kind === "cloud"
           );
-          return cloudEnvironment?.configured
+          return cloudEnvironment
             ? [`${config.gitOwner}/${config.gitRepoName}`]
             : [];
         }),
@@ -62,9 +62,9 @@ export function MobileOnboardingRepoStep({ onDone }: { onDone: () => void }) {
         gitOwner,
         gitRepoName,
         body: {
-          configured: true,
+          kind: "cloud",
+          gitProvider: "github",
           defaultBranch,
-          envVars: {},
           setupScript: "",
           runCommand: "",
         },

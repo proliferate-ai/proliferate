@@ -8,18 +8,13 @@ from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER
 from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store.cloud_repo_config import (
-    CloudRepoConfigValue,
-    get_cloud_repo_config,
-    get_organization_cloud_repo_config,
-)
 from proliferate.db.store.cloud_workspace_creation import CloudRepoLimitExceededError
 from proliferate.db.store.cloud_workspaces import (
     get_existing_cloud_workspace,
     list_active_cloud_workspace_branches_for_user_repo,
     list_active_managed_cloud_workspace_branches_for_profile_repo,
-    load_any_cloud_workspace_for_repo,
 )
+from proliferate.db.store.repositories import RepoEnvironmentValue, get_cloud_repo_environment
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.billing.authorization import (
@@ -35,10 +30,6 @@ from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kind
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
-from proliferate.server.cloud.repo_config.service import (
-    bootstrap_repo_config,
-    load_repo_config_value,
-)
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import (
     get_linked_github_account,
@@ -91,22 +82,11 @@ async def load_personal_agent_auth_agent_kinds(user_id: UUID) -> tuple[str, ...]
         return result
 
 
-async def load_repo_config_value_tx(
+async def load_repo_environment_tx(
     user_id: UUID, git_owner: str, git_repo_name: str
-) -> CloudRepoConfigValue | None:
+) -> RepoEnvironmentValue | None:
     async with db_session.open_async_session() as db:
-        return await load_repo_config_value(
-            db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
-        )
-
-
-async def bootstrap_repo_config_tx(
-    user_id: UUID,
-    git_owner: str,
-    git_repo_name: str,
-) -> CloudRepoConfigValue:
-    async with db_session.open_async_transaction() as db:
-        return await bootstrap_repo_config(
+        return await get_cloud_repo_environment(
             db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
         )
 
@@ -170,26 +150,12 @@ async def resolve_new_cloud_workspace_create(
             status_code=400,
         )
 
-    repo_config = await load_repo_config_value_tx(user.id, git_owner, git_repo_name)
-    if repo_config is None or not repo_config.configured:
-        async with db_session.open_async_session() as db:
-            existing_repo_workspace = await load_any_cloud_workspace_for_repo(
-                db,
-                user_id=user.id,
-                git_owner=git_owner,
-                git_repo_name=git_repo_name,
-            )
-        if existing_repo_workspace is None:
-            raise CloudApiError(
-                "cloud_repo_not_configured",
-                "Configure cloud settings for this repo before creating a cloud workspace.",
-                status_code=409,
-            )
-        repo_config = await bootstrap_repo_config_tx(user.id, git_owner, git_repo_name)
-        log_cloud_event(
-            "cloud repo config auto-bootstrapped",
-            user_id=user.id,
-            repo=f"{git_owner}/{git_repo_name}",
+    repo_environment = await load_repo_environment_tx(user.id, git_owner, git_repo_name)
+    if repo_environment is None:
+        raise CloudApiError(
+            "cloud_repo_not_configured",
+            "Configure cloud settings for this repo before creating a cloud workspace.",
+            status_code=409,
         )
 
     repo_branches = await load_github_app_repo_branches_tx(
@@ -206,7 +172,7 @@ async def resolve_new_cloud_workspace_create(
     )
 
     resolved_base_branch = cleaned_base_branch or None
-    saved_default_branch = (repo_config.default_branch or "").strip() or None
+    saved_default_branch = (repo_environment.default_branch or "").strip() or None
     if resolved_base_branch is None and saved_default_branch:
         if saved_default_branch in repo_branches.branches:
             resolved_base_branch = saved_default_branch
@@ -368,12 +334,7 @@ async def resolve_new_managed_cloud_workspace_create(
                     "Organization sandbox profile is invalid.",
                     status_code=409,
                 )
-            repo_config = await get_organization_cloud_repo_config(
-                db,
-                organization_id=profile.organization_id,
-                git_owner=git_owner,
-                git_repo_name=git_repo_name,
-            )
+            repo_environment = None
         else:
             if profile.owner_user_id is None:
                 raise CloudApiError(
@@ -381,13 +342,13 @@ async def resolve_new_managed_cloud_workspace_create(
                     "Personal sandbox profile is invalid.",
                     status_code=409,
                 )
-            repo_config = await get_cloud_repo_config(
+            repo_environment = await get_cloud_repo_environment(
                 db,
                 user_id=profile.owner_user_id,
                 git_owner=git_owner,
                 git_repo_name=git_repo_name,
             )
-        if repo_config is None or not repo_config.configured:
+        if repo_environment is None:
             raise CloudApiError(
                 "cloud_repo_not_configured",
                 "Configure cloud settings for this repo before creating a cloud workspace.",
@@ -417,7 +378,7 @@ async def resolve_new_managed_cloud_workspace_create(
             sandbox_profile_id=profile.id,
         )
         billing_subject_id = profile.billing_subject_id
-        saved_default_branch = (repo_config.default_branch or "").strip() or None
+        saved_default_branch = (repo_environment.default_branch or "").strip() or None
         profile_owner_scope = profile.owner_scope
 
     repo_branches = await load_github_app_repo_branches_tx(

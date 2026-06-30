@@ -2,8 +2,7 @@ import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   RepoConfigsListResponse,
   RepoEnvironmentResponse,
-  SaveCloudRepoEnvironmentRequest,
-  SaveLocalRepoEnvironmentRequest,
+  SaveRepoEnvironmentRequest,
 } from "../types/index.js";
 
 export async function listRepositories(
@@ -15,32 +14,15 @@ export async function listRepositories(
   });
 }
 
-export async function saveLocalRepoEnvironment(
+export async function saveRepoEnvironment(
   gitOwner: string,
   gitRepoName: string,
-  body: SaveLocalRepoEnvironmentRequest,
+  body: SaveRepoEnvironmentRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<RepoEnvironmentResponse> {
   return client.requestJson<RepoEnvironmentResponse>({
     method: "PUT",
-    path: "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/local",
-    pathParams: {
-      git_owner: gitOwner,
-      git_repo_name: gitRepoName,
-    },
-    body,
-  });
-}
-
-export async function saveCloudRepoEnvironment(
-  gitOwner: string,
-  gitRepoName: string,
-  body: SaveCloudRepoEnvironmentRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<RepoEnvironmentResponse> {
-  return client.requestJson<RepoEnvironmentResponse>({
-    method: "PUT",
-    path: "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/cloud",
+    path: "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environment",
     pathParams: {
       git_owner: gitOwner,
       git_repo_name: gitRepoName,

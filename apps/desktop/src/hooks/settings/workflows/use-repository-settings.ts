@@ -3,7 +3,7 @@ import type { GitBranchRef } from "@anyharness/sdk";
 import {
   useRepoRootGitBranchesQuery,
 } from "@anyharness/sdk-react";
-import { useRepoConfigs, useSaveLocalRepoEnvironment } from "@proliferate/cloud-sdk-react";
+import { useRepoConfigs, useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import {
   buildLocalEnvironmentSavePatch,
   isLocalEnvironmentDraftDirty,
@@ -25,7 +25,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     sourceRoot ? state.repoConfigs[sourceRoot] : undefined,
   );
   const setRepoConfig = useRepoPreferencesStore((state) => state.setRepoConfig);
-  const saveLocalEnvironment = useSaveLocalRepoEnvironment();
+  const saveEnvironment = useSaveRepoEnvironment();
   const repoConfigs = useRepoConfigs(Boolean(repository?.gitOwner && repository.gitRepoName));
   const [desktopInstallId, setDesktopInstallId] = useState<string | null>(null);
   const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({
@@ -142,16 +142,21 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     }
     const nextConfig = buildLocalEnvironmentSavePatch(state.draft);
     setRepoConfig(sourceRoot, nextConfig);
-    if (repository?.gitOwner && repository.gitRepoName) {
-      const { gitOwner, gitRepoName, gitProvider } = repository;
+    if (
+      repository?.gitOwner
+      && repository.gitRepoName
+      && (repository.gitProvider ?? "github").toLowerCase() === "github"
+    ) {
+      const { gitOwner, gitRepoName } = repository;
       void (async () => {
         const installId = desktopInstallId
           ?? (await loadAnonymousTelemetryBootstrap()).installId;
-        await saveLocalEnvironment.mutateAsync({
+        await saveEnvironment.mutateAsync({
           gitOwner,
           gitRepoName,
           body: {
-            gitProvider: gitProvider ?? "github",
+            kind: "local",
+            gitProvider: "github",
             desktopInstallId: installId,
             localPath: sourceRoot,
             defaultBranch: nextConfig.defaultBranch,
@@ -171,7 +176,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
   }, [
     desktopInstallId,
     repository,
-    saveLocalEnvironment,
+    saveEnvironment,
     setRepoConfig,
     sourceRoot,
     state.draft,

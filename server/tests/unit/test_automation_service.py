@@ -2,30 +2,20 @@ from datetime import UTC, datetime
 import uuid
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from proliferate.background.config import (
-    AUTOMATIONS_EXECUTE_RUN_TASK,
-    AUTOMATIONS_EXECUTION_QUEUE,
-)
-from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus
 from proliferate.constants.automations import (
     AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
+from proliferate.constants.cloud import GitProvider, RepoEnvironmentKind
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation
 from proliferate.db.models.auth import User
-from proliferate.db.models.background import BackgroundOutboxTask
 from proliferate.db.models.billing import BillingSubject
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
-from proliferate.db.models.cloud.targets import (
-    CloudTarget,
-    CloudTargetStatus as CloudTargetStatusRow,
-)
-from proliferate.db.models.cloud.repo_config import CloudRepoConfig
-from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.errors import ProliferateError
 from proliferate.server.automations import service as automation_service
 from proliferate.server.automations.errors import AutomationInvalidField, AutomationServiceError
@@ -49,40 +39,33 @@ async def _add_user(session, user_id: uuid.UUID, *, email: str = "automation@exa
     await session.flush()
 
 
-async def _create_online_target(  # type: ignore[no-untyped-def]
+async def _create_cloud_repo_environment(  # type: ignore[no-untyped-def]
     session,
     *,
     user_id: uuid.UUID,
-    kind: str = CloudTargetKind.managed_cloud.value,
-):
-    target = await targets_store.create_target(
-        session,
-        display_name="Automation target",
-        kind=kind,
-        owner_scope="personal",
-        owner_user_id=user_id,
-        organization_id=None,
-        created_by_user_id=user_id,
-        default_workspace_root="~/work",
+    git_owner: str = "proliferate-ai",
+    git_repo_name: str = "proliferate",
+) -> RepoEnvironment:
+    repo_config = RepoConfig(
+        user_id=user_id,
+        git_provider=GitProvider.github,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
     )
-    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
-    await session.execute(
-        update(CloudTarget)
-        .where(CloudTarget.id == target.id)
-        .values(status=CloudTargetStatus.online.value, updated_at=now)
-    )
-    await session.execute(
-        update(CloudTargetStatusRow)
-        .where(CloudTargetStatusRow.target_id == target.id)
-        .values(
-            status=CloudTargetStatus.online.value,
-            last_seen_at=now,
-            last_heartbeat_at=now,
-            updated_at=now,
-        )
-    )
+    session.add(repo_config)
     await session.flush()
-    return target
+    repo_environment = RepoEnvironment(
+        repo_config_id=repo_config.id,
+        environment_kind=RepoEnvironmentKind.cloud,
+        desktop_install_id=None,
+        local_path=None,
+        default_branch=None,
+        setup_script="",
+        run_command="",
+    )
+    session.add(repo_environment)
+    await session.flush()
+    return repo_environment
 
 
 async def _create_agent_run_config(
@@ -163,19 +146,23 @@ async def test_create_automation_bootstraps_repo_config(
             )
 
         async with engine_module.async_session_factory() as session:
-            repo_config = (
+            repo_config, repo_environment = (
                 await session.execute(
-                    select(CloudRepoConfig).where(
-                        CloudRepoConfig.user_id == user_id,
-                        CloudRepoConfig.git_owner == "proliferate-ai",
-                        CloudRepoConfig.git_repo_name == "proliferate",
+                    select(RepoConfig, RepoEnvironment)
+                    .join(RepoEnvironment, RepoEnvironment.repo_config_id == RepoConfig.id)
+                    .where(
+                        RepoConfig.user_id == user_id,
+                        RepoConfig.git_owner == "proliferate-ai",
+                        RepoConfig.git_repo_name == "proliferate",
+                        RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
                     )
                 )
-            ).scalar_one()
+            ).one()
 
         assert response.git_owner == "proliferate-ai"
         assert response.git_repo_name == "proliferate"
-        assert repo_config.configured is True
+        assert repo_config.git_provider == GitProvider.github
+        assert repo_environment.local_path is None
     finally:
         engine_module.async_session_factory = original_factory
 
@@ -219,10 +206,10 @@ async def test_create_automation_repo_bootstrap_uses_request_transaction(
         async with engine_module.async_session_factory() as session:
             repo_config = (
                 await session.execute(
-                    select(CloudRepoConfig).where(
-                        CloudRepoConfig.user_id == user_id,
-                        CloudRepoConfig.git_owner == "proliferate-ai",
-                        CloudRepoConfig.git_repo_name == "proliferate",
+                    select(RepoConfig).where(
+                        RepoConfig.user_id == user_id,
+                        RepoConfig.git_owner == "proliferate-ai",
+                        RepoConfig.git_repo_name == "proliferate",
                     )
                 )
             ).scalar_one_or_none()
@@ -246,22 +233,11 @@ async def test_resume_cloud_automation_with_run_config(
     engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
     user_id = uuid.uuid4()
     automation_id = uuid.uuid4()
-    repo_config_id = uuid.uuid4()
 
     try:
         async with engine_module.async_session_factory() as session:
             await _add_user(session, user_id, email="automation-resume@example.com")
-            session.add(
-                CloudRepoConfig(
-                    id=repo_config_id,
-                    owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
-                    user_id=user_id,
-                    git_owner="proliferate-ai",
-                    git_repo_name="proliferate",
-                    configured=True,
-                )
-            )
-            await session.flush()
+            repo_environment = await _create_cloud_repo_environment(session, user_id=user_id)
             run_config = await _create_agent_run_config(session, user_id=user_id)
             session.add(
                 Automation(
@@ -270,7 +246,7 @@ async def test_resume_cloud_automation_with_run_config(
                     owner_user_id=user_id,
                     organization_id=None,
                     created_by_user_id=user_id,
-                    cloud_repo_config_id=repo_config_id,
+                    repo_environment_id=repo_environment.id,
                     title="Daily check",
                     prompt="Check the repo.",
                     schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
@@ -369,27 +345,11 @@ async def test_cloud_automation_snapshots_selected_run_config(
                     cloudAgentRunConfigId=run_config.id,
                 ),
             )
-            run = await automation_service.run_automation_now(session, user_id, automation.id)
-
-        async with engine_module.async_session_factory() as session:
-            outbox_task = (
-                await session.execute(
-                    select(BackgroundOutboxTask).where(
-                        BackgroundOutboxTask.idempotency_key
-                        == f"{AUTOMATIONS_EXECUTE_RUN_TASK}:{run.id}"
-                    )
-                )
-            ).scalar_one()
+            with pytest.raises(AutomationServiceError) as exc:
+                await automation_service.run_automation_now(session, user_id, automation.id)
 
         assert automation.cloud_agent_run_config_id == run_config.id
-        assert run.agent_run_config_snapshot_json is not None
-        assert run.agent_run_config_snapshot_json["config_id"] == str(run_config.id)
-        assert run.agent_kind == "codex"
-        assert run.model_id == "gpt-5.4"
-        assert outbox_task.task_name == AUTOMATIONS_EXECUTE_RUN_TASK
-        assert outbox_task.queue == AUTOMATIONS_EXECUTION_QUEUE
-        assert outbox_task.status == "pending"
-        assert outbox_task.idempotency_key == f"{AUTOMATIONS_EXECUTE_RUN_TASK}:{run.id}"
+        assert exc.value.code == "cloud_automation_execution_unavailable"
     finally:
         engine_module.async_session_factory = original_factory
 
@@ -428,12 +388,8 @@ async def test_cloud_automation_uses_personal_cloud_target_mode_default(
                     cloudAgentRunConfigId=run_config.id,
                 ),
             )
-            run = await automation_service.run_automation_now(session, user_id, automation.id)
 
         assert automation.target_mode == AUTOMATION_TARGET_MODE_PERSONAL_CLOUD
-        assert run.target_mode == AUTOMATION_TARGET_MODE_PERSONAL_CLOUD
-        assert run.agent_run_config_snapshot_json is not None
-        assert run.agent_run_config_snapshot_json["config_id"] == str(run_config.id)
     finally:
         engine_module.async_session_factory = original_factory
 
@@ -451,23 +407,12 @@ async def test_manual_run_for_existing_automation_uses_current_run_config(
         lambda: datetime(2026, 4, 20, 12, 0, tzinfo=UTC),
     )
     user_id = uuid.uuid4()
-    repo_config_id = uuid.uuid4()
     automation_id = uuid.uuid4()
 
     try:
         async with engine_module.async_session_factory() as session, session.begin():
             await _add_user(session, user_id, email="automation-legacy-target@example.com")
-            session.add(
-                CloudRepoConfig(
-                    id=repo_config_id,
-                    owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
-                    user_id=user_id,
-                    git_owner="proliferate-ai",
-                    git_repo_name="proliferate",
-                    configured=True,
-                )
-            )
-            await session.flush()
+            repo_environment = await _create_cloud_repo_environment(session, user_id=user_id)
             run_config = await _create_agent_run_config(session, user_id=user_id)
             session.add(
                 Automation(
@@ -476,7 +421,7 @@ async def test_manual_run_for_existing_automation_uses_current_run_config(
                     owner_user_id=user_id,
                     organization_id=None,
                     created_by_user_id=user_id,
-                    cloud_repo_config_id=repo_config_id,
+                    repo_environment_id=repo_environment.id,
                     title="Existing automation",
                     prompt="Check the repo.",
                     schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
@@ -491,11 +436,10 @@ async def test_manual_run_for_existing_automation_uses_current_run_config(
                 )
             )
 
-            run = await automation_service.run_automation_now(session, user_id, automation_id)
+            with pytest.raises(AutomationServiceError) as exc:
+                await automation_service.run_automation_now(session, user_id, automation_id)
 
-        assert run.agent_run_config_snapshot_json is not None
-        assert run.agent_run_config_snapshot_json["config_id"] == str(run_config.id)
-        assert run.agent_kind == "codex"
+        assert exc.value.code == "cloud_automation_execution_unavailable"
     finally:
         engine_module.async_session_factory = original_factory
 

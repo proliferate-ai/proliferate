@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import type { GitBranchRef, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useRepoRootGitBranchesQuery } from "@anyharness/sdk-react";
+import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import {
@@ -53,7 +53,7 @@ export function useHomeNextRepositorySelection({
   const workspaceLastInteracted = useWorkspaceUiStore((state) => state.workspaceLastInteracted);
   const repoConfigs = useRepoPreferencesStore((state) => state.repoConfigs);
   const { cloudActive } = useCloudAvailabilityState();
-  const cloudRepoConfigsQuery = useCloudRepoConfigs(cloudActive);
+  const repoConfigsQuery = useRepoConfigs(cloudActive);
 
   const repositories = useMemo(() => {
     const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
@@ -62,9 +62,9 @@ export function useHomeNextRepositorySelection({
         workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
       ),
       repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
-      cloudRepoConfigsQuery.data?.configs ?? [],
+      repoConfigsQuery.data?.repositories ?? [],
     );
-  }, [cloudRepoConfigsQuery.data?.configs, hiddenRepoRootIds, localWorkspaces, repoRoots]);
+  }, [hiddenRepoRootIds, localWorkspaces, repoConfigsQuery.data?.repositories, repoRoots]);
 
   const selectedRepository = useMemo(() => (
     destination === "repository"
@@ -131,11 +131,11 @@ export function useHomeNextRepositorySelection({
       : null;
   }, [selectedRepository]);
   const configuredCloudRepoKeys = useMemo(
-    () => buildConfiguredCloudRepoKeys(cloudRepoConfigsQuery.data?.configs),
-    [cloudRepoConfigsQuery.data?.configs],
+    () => buildConfiguredCloudRepoKeys(repoConfigsQuery.data?.repositories),
+    [repoConfigsQuery.data?.repositories],
   );
   const cloudRepoConfigsInitialLoading =
-    cloudActive && cloudRepoConfigsQuery.isPending && !cloudRepoConfigsQuery.data;
+    cloudActive && repoConfigsQuery.isPending && !repoConfigsQuery.data;
   const cloudRepoActionBySourceRoot = useMemo(() => buildCloudRepoActionBySourceRoot({
     repositories,
     cloudActive,

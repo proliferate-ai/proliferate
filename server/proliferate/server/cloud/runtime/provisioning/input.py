@@ -7,10 +7,6 @@ from uuid import UUID
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.db import engine as db_engine
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store.cloud_repo_config import (
-    get_organization_cloud_repo_config,
-    load_cloud_repo_config_for_user,
-)
 from proliferate.db.store.cloud_runtime_environments import (
     attach_target_to_runtime_environment,
     ensure_runtime_environment_for_workspace_id,
@@ -177,29 +173,8 @@ async def load_provision_input(
             status_code=400,
         )
 
-    if workspace.owner_scope == "organization" and workspace.organization_id is not None:
-        async with db_engine.async_session_factory() as db:
-            repo_config = await get_organization_cloud_repo_config(
-                db,
-                organization_id=workspace.organization_id,
-                git_owner=workspace.git_owner,
-                git_repo_name=workspace.git_repo_name,
-            )
-    else:
-        async with db_engine.async_session_factory() as db:
-            repo_config = await load_cloud_repo_config_for_user(
-                db,
-                user_id=workspace.user_id,
-                git_owner=workspace.git_owner,
-                git_repo_name=workspace.git_repo_name,
-            )
-
-    if repo_config is not None and repo_config.configured:
-        repo_env_vars = repo_config.env_vars
-        repo_env_version = repo_config.env_vars_version
-    else:
-        repo_env_vars = {}
-        repo_env_version = 0
+    repo_env_vars = {}
+    repo_env_version = 0
 
     return CloudProvisionInput(
         workspace_id=workspace.id,

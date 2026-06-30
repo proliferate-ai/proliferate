@@ -132,6 +132,52 @@ describe("new workspace command targets", () => {
     });
   });
 
+  it("does not expose local workspace targets for cloud-only repositories", () => {
+    const scope = buildRepositoryNewWorkspaceCommandScope(
+      {
+        ...repository,
+        sourceRoot: "cloud:proliferate-ai/proliferate",
+        repoRootId: "",
+        localWorkspaceId: null,
+        cloudConfigured: true,
+        availability: "cloud",
+      },
+      null,
+      "home",
+      "main",
+    );
+
+    expect(resolveNewWorkspaceCommandTarget({
+      commandKind: "local",
+      scope,
+    })).toEqual({
+      commandKind: "local",
+      disabledReason: "Select a repository workspace first.",
+    });
+
+    expect(resolveNewWorkspaceCommandTarget({
+      commandKind: "worktree",
+      scope,
+    })).toEqual({
+      commandKind: "worktree",
+      disabledReason: "Select a repository workspace first.",
+    });
+
+    expect(resolveNewWorkspaceCommandTarget({
+      commandKind: "cloud",
+      scope,
+      cloudRepoAction: { kind: "create", label: "New cloud workspace" },
+    })).toMatchObject({
+      commandKind: "cloud",
+      cloudActionKind: "create",
+      target: {
+        gitOwner: "proliferate-ai",
+        gitRepoName: "proliferate",
+      },
+      disabledReason: null,
+    });
+  });
+
   it("falls back to the selected workspace repository when no explicit scope exists", () => {
     const scope = buildSelectedWorkspaceNewWorkspaceCommandScope({
       selectedWorkspaceId: "workspace-local",

@@ -15,6 +15,7 @@ import {
   makeCloudWorkspace,
   makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
+  makeRepoConfig,
   makeRepoRoot,
 } from "./sidebar-test-fixtures";
 
@@ -35,6 +36,62 @@ describe("repo-root seeded groups", () => {
     expect(groups[0]?.sourceRoot).toBe("/tmp/empty-repo");
     expect(groups[0]?.repoRootId).toBe("repo-root-empty");
     expect(groups[0]?.items).toEqual([]);
+  });
+
+  it("shows zero-workspace cloud repo environments in the sidebar", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [],
+      repoConfigs: [
+        makeRepoConfig({
+          id: "repo-config-cloud-only",
+          repoName: "cloud-only",
+        }),
+      ],
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      sourceRoot: "cloud:proliferate-ai/cloud-only",
+      name: "cloud-only",
+      repoRootId: null,
+      localSourceRoot: null,
+      cloudRepoTarget: {
+        gitOwner: "proliferate-ai",
+        gitRepoName: "cloud-only",
+      },
+      items: [],
+    });
+  });
+
+  it("merges configured cloud environments into matching local repo groups", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [],
+      repoRoots: [
+        makeRepoRoot({
+          id: "repo-root-proliferate",
+          repoName: "proliferate",
+          sourceRoot: "/tmp/proliferate",
+        }),
+      ],
+      repoConfigs: [
+        makeRepoConfig({
+          id: "repo-config-proliferate",
+          repoName: "proliferate",
+        }),
+      ],
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      sourceRoot: "/tmp/proliferate",
+      repoRootId: "repo-root-proliferate",
+      localSourceRoot: "/tmp/proliferate",
+      cloudRepoTarget: {
+        gitOwner: "proliferate-ai",
+        gitRepoName: "proliferate",
+      },
+      items: [],
+    });
   });
 
   it("keeps a repo-root-backed group when all matching workspaces are archived", () => {
