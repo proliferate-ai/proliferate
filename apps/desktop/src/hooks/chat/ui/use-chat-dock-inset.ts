@@ -5,8 +5,6 @@ import {
   computeChatSurfaceBottomInsetPx,
 } from "@/config/chat-layout";
 
-const CHAT_DOCK_RESIZE_SETTLE_MS = 90;
-
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
   const [metrics, setMetrics] = useState({
@@ -54,21 +52,18 @@ export function useChatDockInset() {
       return;
     }
 
-    let settleTimer: number | null = null;
+    // Coalesce resize bursts onto the next animation frame only. The composer
+    // autosizes discretely (per line), so the transcript inset must follow on
+    // the next frame — a debounce here made the transcript lag the textarea
+    // visibly when adding/removing lines.
     const scheduleMeasure = () => {
-      if (settleTimer !== null) {
-        window.clearTimeout(settleTimer);
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
       }
-      settleTimer = window.setTimeout(() => {
-        settleTimer = null;
-        if (frameId !== null) {
-          window.cancelAnimationFrame(frameId);
-        }
-        frameId = window.requestAnimationFrame(() => {
-          frameId = null;
-          measure();
-        });
-      }, CHAT_DOCK_RESIZE_SETTLE_MS);
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        measure();
+      });
     };
 
     const observer = new ResizeObserver(() => {
@@ -87,9 +82,6 @@ export function useChatDockInset() {
 
     return () => {
       observer.disconnect();
-      if (settleTimer !== null) {
-        window.clearTimeout(settleTimer);
-      }
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }

@@ -261,6 +261,28 @@ describe("useTranscriptStickToBottom", () => {
     expect(viewport.scrollTop).toBe(2200);
   });
 
+  it("glueToBottom re-snaps to the bottom as a row measures taller a frame later", () => {
+    const handle = renderHarness();
+    const { viewport } = handle.current;
+    // A new row entered at its estimate; the engine is pinned and snapping.
+    setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 0 });
+
+    act(() => {
+      handle.current.api.glueToBottom();
+    });
+    act(() => {
+      flushRafRound();
+    });
+    expect(viewport.scrollTop).toBe(1000);
+
+    // The row's real (taller) height lands a frame later; glue follows it.
+    setMetrics(viewport, { scrollHeight: 1600, clientHeight: 300, scrollTop: 1000 });
+    act(() => {
+      flushRafRound();
+    });
+    expect(viewport.scrollTop).toBe(1600);
+  });
+
   it("bails the glue loop if the user scrolls up mid-resume", () => {
     const handle = renderHarness();
     const { viewport } = handle.current;

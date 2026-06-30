@@ -38,6 +38,13 @@ export interface TranscriptStickToBottom {
   onViewportScroll: (viewport: HTMLDivElement) => void;
   /** Imperative snap to the true bottom (always snaps; callers gate on pinnedRef). */
   scrollToBottom: () => void;
+  /**
+   * Re-snap to the bottom each frame until measured scrollHeight stabilizes.
+   * Use after a content change while pinned: a row enters at its estimated
+   * height and corrects a frame later, so the single-shot scrollToBottom leaves
+   * a momentary gap/jump at the bottom. Bails the instant the user unpins.
+   */
+  glueToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
   handleScrollToBottomClick: () => void;
   /** Wrap ANY external scrollTop/scrollToOffset write so its scroll event is excluded from pin/direction. */
@@ -283,6 +290,7 @@ export function useTranscriptStickToBottom({
     pinnedRef,
     onViewportScroll,
     scrollToBottom,
+    glueToBottom: startGlueLoop,
     handleScrollToBottomClick,
     notifyProgrammaticScroll,
     setPinned,
