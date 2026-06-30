@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
 import { useSettingsRepositories } from "@/hooks/settings/derived/use-settings-repositories";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
@@ -36,7 +36,7 @@ export function useAutomationTargetSelection({
 }: UseAutomationTargetSelectionInput) {
   const isOrganization = ownerScope === "organization";
   const { data: repoConfigsData, isLoading: repoConfigsLoading } =
-    useRepoConfigs(enabled && !isOrganization);
+    useRepositories(enabled && !isOrganization);
   const { repositories } = useSettingsRepositories();
   const { cloudWorkspaces, isLoading: repoProjectionLoading } =
     useStandardRepoProjection();

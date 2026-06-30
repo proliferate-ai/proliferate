@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
@@ -30,7 +30,7 @@ export function useHomeScreen() {
   const {
     data: repoConfigs,
     isPending: repoConfigsPending,
-  } = useRepoConfigs(cloudActive);
+  } = useRepositories(cloudActive);
   const {
     localWorkspaces,
     repoRoots,

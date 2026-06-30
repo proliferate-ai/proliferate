@@ -8,15 +8,15 @@ import {
 } from "@proliferate/cloud-sdk";
 import {
   cloudGitRepositoriesRootKey,
-  repoConfigsKey,
+  repositoriesKey,
   repoEnvironmentKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
-export function useRepoConfigs(enabled = true) {
+export function useRepositories(enabled = true) {
   const client = useCloudClient();
   return useQuery<RepoConfigsListResponse>({
-    queryKey: repoConfigsKey(),
+    queryKey: repositoriesKey(),
     queryFn: () => listRepositories(client),
     enabled,
   });
@@ -52,7 +52,7 @@ export function useSaveRepoEnvironment() {
           response,
         );
       }
-      void queryClient.invalidateQueries({ queryKey: repoConfigsKey() });
+      void queryClient.invalidateQueries({ queryKey: repositoriesKey() });
       void queryClient.invalidateQueries({ queryKey: cloudGitRepositoriesRootKey() });
     },
   });

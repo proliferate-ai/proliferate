@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudEnvironmentsSettingsSurface } from "./CloudEnvironmentsSettingsSurface";
 
 const cloudHooks = vi.hoisted(() => ({
-  useRepoConfigs: vi.fn(),
+  useRepositories: vi.fn(),
   useCloudRepoBranches: vi.fn(),
   useSaveRepoEnvironment: vi.fn(),
   useCloudGitRepositories: vi.fn(),
@@ -19,7 +19,7 @@ const cloudHooks = vi.hoisted(() => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useRepoConfigs: cloudHooks.useRepoConfigs,
+  useRepositories: cloudHooks.useRepositories,
   useCloudRepoBranches: cloudHooks.useCloudRepoBranches,
   useSaveRepoEnvironment: cloudHooks.useSaveRepoEnvironment,
   useCloudGitRepositories: cloudHooks.useCloudGitRepositories,
@@ -70,7 +70,7 @@ const repoConfigs = [
 
 describe("CloudEnvironmentsSettingsSurface", () => {
   beforeEach(() => {
-    cloudHooks.useRepoConfigs.mockReturnValue({
+    cloudHooks.useRepositories.mockReturnValue({
       data: { repositories: repoConfigs },
       isLoading: false,
       isError: false,

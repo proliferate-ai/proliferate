@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
-import { useRepoConfigs, useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
+import { useRepositories, useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import { buildCoreCloudEnvironmentSaveRequest } from "@proliferate/product-domain/environments/cloud-environments";
 import { CloudEnvironmentEditor } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
 import { CloudIcon } from "@proliferate/ui/icons";
@@ -149,7 +149,7 @@ export function CloudRepoSection({
   );
   const cloudRepository = isCloudRepository(repository) ? repository : null;
   const cloudQueryEnabled = cloudActive && Boolean(cloudRepository);
-  const repoConfigs = useRepoConfigs(cloudQueryEnabled);
+  const repoConfigs = useRepositories(cloudQueryEnabled);
   const cloudEnvironment = useMemo(() => {
     if (!cloudRepository) {
       return null;

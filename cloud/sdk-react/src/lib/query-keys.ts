@@ -146,7 +146,7 @@ export function cloudGitRepositoriesKey(
   ] as const;
 }
 
-export function repoConfigsKey() {
+export function repositoriesKey() {
   return [...cloudRootKey(), "repositories"] as const;
 }
 
@@ -158,7 +158,7 @@ export function repoEnvironmentKey(
   localPath: string | null = null,
 ) {
   return [
-    ...repoConfigsKey(),
+    ...repositoriesKey(),
     gitOwner,
     gitRepoName,
     "environments",

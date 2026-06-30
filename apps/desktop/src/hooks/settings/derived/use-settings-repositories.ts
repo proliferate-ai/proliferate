@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import {
   buildSettingsRepositoryEntries,
 } from "@/lib/domain/settings/repositories";
@@ -11,7 +11,7 @@ export function useSettingsRepositories() {
   const { localWorkspaces, repoRoots } = useStandardRepoProjection();
   const hiddenRepoRootIds = useWorkspaceUiStore((state) => state.hiddenRepoRootIds);
   const { cloudActive } = useCloudAvailabilityState();
-  const repoConfigsQuery = useRepoConfigs(cloudActive);
+  const repoConfigsQuery = useRepositories(cloudActive);
 
   const repositories = useMemo(() => {
     const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);

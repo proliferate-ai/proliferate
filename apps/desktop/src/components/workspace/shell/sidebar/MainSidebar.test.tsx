@@ -114,7 +114,7 @@ vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useRepoConfigs: () => ({ data: { repositories: [] }, isPending: false }),
+  useRepositories: () => ({ data: { repositories: [] }, isPending: false }),
 }));
 
 vi.mock("@/hooks/ui/debug/use-debug-render-count", () => ({

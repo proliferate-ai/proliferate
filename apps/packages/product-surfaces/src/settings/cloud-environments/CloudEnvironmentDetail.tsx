@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import {
   useCloudRepoBranches,
-  useRepoConfigs,
+  useRepositories,
   useSaveRepoEnvironment,
 } from "@proliferate/cloud-sdk-react";
 import { buildCoreCloudEnvironmentSaveRequest } from "@proliferate/product-domain/environments/cloud-environments";
@@ -31,7 +31,7 @@ export function CloudEnvironmentDetail({
   onSaved: () => void;
 }) {
   const repoId = formatGitRepoId({ gitOwner, gitRepoName });
-  const repoConfigs = useRepoConfigs(enabled);
+  const repoConfigs = useRepositories(enabled);
   const cloudEnvironment = useMemo(() => {
     const repo = repoConfigs.data?.repositories.find((candidate) =>
       candidate.gitProvider === "github"

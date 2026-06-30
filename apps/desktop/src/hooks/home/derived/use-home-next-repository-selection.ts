@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { GitBranchRef, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useRepoRootGitBranchesQuery } from "@anyharness/sdk-react";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
@@ -53,7 +53,7 @@ export function useHomeNextRepositorySelection({
   const workspaceLastInteracted = useWorkspaceUiStore((state) => state.workspaceLastInteracted);
   const repoConfigs = useRepoPreferencesStore((state) => state.repoConfigs);
   const { cloudActive } = useCloudAvailabilityState();
-  const repoConfigsQuery = useRepoConfigs(cloudActive);
+  const repoConfigsQuery = useRepositories(cloudActive);
 
   const repositories = useMemo(() => {
     const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);

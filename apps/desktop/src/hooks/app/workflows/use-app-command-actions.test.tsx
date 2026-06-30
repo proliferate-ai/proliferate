@@ -53,7 +53,7 @@ vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useRepoConfigs: () => ({
+  useRepositories: () => ({
     data: {
       repositories: [{
         id: "repo-config-1",

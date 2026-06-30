@@ -5,7 +5,7 @@ import {
   useCloudAgentCatalog,
   useCloudCapabilities,
   useCloudRepoBranches,
-  useRepoConfigs,
+  useRepositories,
   useCloudTargets,
   useTargetLive,
   useVisibleCloudWorkspaces,
@@ -62,7 +62,7 @@ export function useWebHomeScreen() {
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<HomePendingPrompt | null>(null);
-  const repoConfigs = useRepoConfigs();
+  const repoConfigs = useRepositories();
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
   const agentAuthCredentials = useAgentAuthCredentials();

@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import {
   useCloudGitRepositories,
-  useRepoConfigs,
+  useRepositories,
   useSaveRepoEnvironment,
 } from "@proliferate/cloud-sdk-react";
 
@@ -23,7 +23,7 @@ import {
 
 export function MobileOnboardingRepoStep({ onDone }: { onDone: () => void }) {
   const repos = useCloudGitRepositories({}, true);
-  const configured = useRepoConfigs();
+  const configured = useRepositories();
   const save = useSaveRepoEnvironment();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

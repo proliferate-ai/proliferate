@@ -3,7 +3,7 @@ import {
   useCloudAgentCatalog,
   useCloudCapabilities,
   useCloudRepoBranches,
-  useRepoConfigs,
+  useRepositories,
   useCloudTargets,
   useAgentAuthCredentials,
   useTargetLive,
@@ -36,7 +36,7 @@ export function useMobileHomeLaunchModel() {
     modeId: null,
     controlValues: {},
   });
-  const repoConfigs = useRepoConfigs();
+  const repoConfigs = useRepositories();
   const targets = useCloudTargets();
   const agentAuthCredentials = useAgentAuthCredentials();
   const liveTargetId = runtimeId === "cloud" ? null : runtimeId;

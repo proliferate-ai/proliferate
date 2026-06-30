@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SidebarFooter } from "./SidebarFooter";
@@ -70,7 +70,7 @@ export const MainSidebar = memo(function MainSidebar() {
   const {
     data: repoConfigs,
     isPending: isRepoConfigsPending,
-  } = useRepoConfigs(cloudActive);
+  } = useRepositories(cloudActive);
   const showToast = useToastStore((state) => state.show);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {

@@ -3,7 +3,7 @@ import type { GitBranchRef } from "@anyharness/sdk";
 import {
   useRepoRootGitBranchesQuery,
 } from "@anyharness/sdk-react";
-import { useRepoConfigs, useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
+import { useRepositories, useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import {
   buildLocalEnvironmentSavePatch,
   isLocalEnvironmentDraftDirty,
@@ -26,7 +26,7 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
   );
   const setRepoConfig = useRepoPreferencesStore((state) => state.setRepoConfig);
   const saveEnvironment = useSaveRepoEnvironment();
-  const repoConfigs = useRepoConfigs(Boolean(repository?.gitOwner && repository.gitRepoName));
+  const repoConfigs = useRepositories(Boolean(repository?.gitOwner && repository.gitRepoName));
   const [desktopInstallId, setDesktopInstallId] = useState<string | null>(null);
   const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({
     repoRootId: repository?.repoRootId ?? null,

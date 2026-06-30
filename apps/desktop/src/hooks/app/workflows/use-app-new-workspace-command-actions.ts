@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
@@ -57,7 +57,7 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
   const {
     data: repoConfigs,
     isPending: isRepoConfigsPending,
-  } = useRepoConfigs(cloudActive);
+  } = useRepositories(cloudActive);
   const {
     repoRoots,
     localWorkspaces,

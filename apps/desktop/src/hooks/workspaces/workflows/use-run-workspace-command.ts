@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
@@ -70,7 +70,7 @@ export function useRunWorkspaceCommand({
   const localRunCommand = useRepoPreferencesStore((state) =>
     localSourceRoot ? state.repoConfigs[localSourceRoot]?.runCommand ?? "" : "",
   );
-  const repoConfigsQuery = useRepoConfigs(isCloudWorkspace && selectedCloudWorkspace !== undefined);
+  const repoConfigsQuery = useRepositories(isCloudWorkspace && selectedCloudWorkspace !== undefined);
   const cloudEnvironment = useMemo(() => {
     const repo = repoConfigsQuery.data?.repositories.find((candidate) =>
       candidate.gitProvider === "github"
