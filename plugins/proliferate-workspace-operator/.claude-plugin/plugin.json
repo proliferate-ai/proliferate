@@ -1,0 +1,29 @@
+{
+  "name": "proliferate-workspace-operator",
+  "version": "0.1.0",
+  "description": "Operate Proliferate local and cloud agent workspaces with reproducible checks.",
+  "author": {
+    "name": "Proliferate contributors"
+  },
+  "skills": "./skills/",
+  "repository": "https://github.com/proliferate-ai/proliferate",
+  "keywords": [
+    "agent-plugin",
+    "evals",
+    "proliferate"
+  ],
+  "interface": {
+    "displayName": "Proliferate Workspace Operator",
+    "shortDescription": "Operate Proliferate local and cloud agent workspaces with reproducible checks.",
+    "longDescription": "Guide agents through Proliferate workspace setup, local/cloud execution, task handoff, and result verification without assuming a single harness.",
+    "developerName": "Proliferate contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "workspace setup",
+      "cloud/local agent routing",
+      "task handoff",
+      "result verification"
+    ],
+    "defaultPrompt": "Use the Proliferate plugin to plan the workflow, identify verification checks, and produce plugin eval metadata."
+  }
+}
