@@ -3,6 +3,11 @@ import type {
   CloudWorkspaceSummary,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
+export type CloudWorkspaceStatusFields = {
+  status?: CloudWorkspaceStatus | null;
+  workspaceStatus?: CloudWorkspaceStatus | null;
+};
+
 const PENDING_STATUSES = new Set<CloudWorkspaceStatus>([
   "pending",
   "materializing",
@@ -23,7 +28,13 @@ export type CloudStartBlockReason = (typeof START_BLOCK_REASONS)[number];
 
 const START_BLOCK_REASON_SET: ReadonlySet<string> = new Set(START_BLOCK_REASONS);
 
-export function isCloudWorkspacePending(status: string): boolean {
+export function resolveCloudWorkspaceStatus(
+  workspace: CloudWorkspaceStatusFields | null | undefined,
+): CloudWorkspaceStatus | null {
+  return workspace?.status ?? workspace?.workspaceStatus ?? null;
+}
+
+export function isCloudWorkspacePending(status: string | null | undefined): boolean {
   return PENDING_STATUSES.has(status as CloudWorkspaceStatus);
 }
 
@@ -40,13 +51,14 @@ function isPostReadyPending(phase: string | null | undefined): boolean {
 export function isCloudWorkspacePostReadyPending(
   workspace: CloudWorkspaceSummary,
 ): boolean {
-  return workspace.status === "ready" && isPostReadyPending(workspace.postReadyPhase);
+  return resolveCloudWorkspaceStatus(workspace) === "ready"
+    && isPostReadyPending(workspace.postReadyPhase);
 }
 
 export function isCloudWorkspaceFailedBeforeReady(
   workspace: CloudWorkspaceSummary,
 ): boolean {
-  return workspace.status === "error"
+  return resolveCloudWorkspaceStatus(workspace) === "error"
     && workspace.readyAt == null
     && workspace.productLifecycle !== "archived";
 }
@@ -54,17 +66,19 @@ export function isCloudWorkspaceFailedBeforeReady(
 export function shouldPollCloudWorkspaceForUpdates(
   workspace: CloudWorkspaceSummary,
 ): boolean {
-  return isCloudWorkspacePending(workspace.status) || isCloudWorkspacePostReadyPending(workspace);
+  return isCloudWorkspacePending(resolveCloudWorkspaceStatus(workspace))
+    || isCloudWorkspacePostReadyPending(workspace);
 }
 
 export function shouldShowCloudWorkspaceStatusScreen(
   workspace: CloudWorkspaceSummary,
 ): boolean {
+  const status = resolveCloudWorkspaceStatus(workspace);
   return (
     workspace.actionBlockKind != null
-    || isCloudWorkspacePending(workspace.status)
-    || workspace.status === "error"
-    || workspace.status === "archived"
+    || isCloudWorkspacePending(status)
+    || status === "error"
+    || status === "archived"
     || isCloudWorkspacePostReadyPending(workspace)
   );
 }

@@ -39,9 +39,6 @@ class CloudTestConfig:
     e2b_api_key: str | None
     e2b_template_name: str | None
     e2b_webhook_signature_secret: str | None
-    daytona_api_key: str | None
-    daytona_server_url: str
-    daytona_target: str
     claude_auth_path: Path | None
     codex_auth_path: Path | None
     gemini_auth_path: Path | None

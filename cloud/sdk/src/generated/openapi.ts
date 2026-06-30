@@ -653,24 +653,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/workspaces/{workspace_id}/repo-config-status": {
+    "/v1/cloud/managed-sandbox": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Cloud Workspace Repo Config Status Endpoint */
-        get: operations["get_cloud_workspace_repo_config_status_endpoint_v1_cloud_workspaces__workspace_id__repo_config_status_get"];
+        /** Get Managed Sandbox Endpoint */
+        get: operations["get_managed_sandbox_endpoint_v1_cloud_managed_sandbox_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Destroy Managed Sandbox Endpoint */
+        delete: operations["destroy_managed_sandbox_endpoint_v1_cloud_managed_sandbox_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/workspaces/{workspace_id}/resync-files": {
+    "/v1/cloud/managed-sandbox/ensure": {
         parameters: {
             query?: never;
             header?: never;
@@ -679,15 +680,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resync Cloud Workspace Files Endpoint */
-        post: operations["resync_cloud_workspace_files_endpoint_v1_cloud_workspaces__workspace_id__resync_files_post"];
+        /** Ensure Managed Sandbox Endpoint */
+        post: operations["ensure_managed_sandbox_endpoint_v1_cloud_managed_sandbox_ensure_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/workspaces/{workspace_id}/run-setup": {
+    "/v1/cloud/managed-sandbox/wake": {
         parameters: {
             query?: never;
             header?: never;
@@ -696,43 +697,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run Cloud Workspace Setup Endpoint */
-        post: operations["run_cloud_workspace_setup_endpoint_v1_cloud_workspaces__workspace_id__run_setup_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/worktree-retention-policy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Cloud Worktree Retention Policy Endpoint */
-        get: operations["get_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_get"];
-        /** Put Cloud Worktree Retention Policy Endpoint */
-        put: operations["put_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Cloud Capabilities Endpoint */
-        get: operations["cloud_capabilities_endpoint_v1_cloud_capabilities_get"];
-        put?: never;
-        post?: never;
+        /** Wake Managed Sandbox Endpoint */
+        post: operations["wake_managed_sandbox_endpoint_v1_cloud_managed_sandbox_wake_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -978,6 +944,41 @@ export interface paths {
         head?: never;
         /** Update Cloud Workspace Display Name Endpoint */
         patch: operations["update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch"];
+        trace?: never;
+    };
+    "/v1/cloud/worktree-retention-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Worktree Retention Policy Endpoint */
+        get: operations["get_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_get"];
+        /** Put Cloud Worktree Retention Policy Endpoint */
+        put: operations["put_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cloud Capabilities Endpoint */
+        get: operations["cloud_capabilities_endpoint_v1_cloud_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/cloud/workspaces/{cloud_workspace_id}/claim": {
@@ -5255,6 +5256,8 @@ export interface components {
             configured: boolean;
             /** Configuredat */
             configuredAt: string | null;
+            /** Defaultbranch */
+            defaultBranch: string | null;
             /** Filesversion */
             filesVersion: number;
         };
@@ -5639,35 +5642,6 @@ export interface components {
             pendingInteractions: components["schemas"]["CloudPendingInteractionResponse"][];
             /** Lasteventseq */
             lastEventSeq: number;
-        };
-        /** CloudWorkspaceRepoConfigStatusResponse */
-        CloudWorkspaceRepoConfigStatusResponse: {
-            /** Currentrepofilesversion */
-            currentRepoFilesVersion: number;
-            /** Repofilesappliedversion */
-            repoFilesAppliedVersion: number;
-            /** Repofilesappliedat */
-            repoFilesAppliedAt: string | null;
-            /** Filesoutofsync */
-            filesOutOfSync: boolean;
-            /** Trackedfiles */
-            trackedFiles: components["schemas"]["CloudRepoFileMetadata"][];
-            /** Envvarkeys */
-            envVarKeys: string[];
-            /** Postreadyphase */
-            postReadyPhase: string;
-            /** Postreadyfilestotal */
-            postReadyFilesTotal: number;
-            /** Postreadyfilesapplied */
-            postReadyFilesApplied: number;
-            /** Postreadystartedat */
-            postReadyStartedAt: string | null;
-            /** Postreadycompletedat */
-            postReadyCompletedAt: string | null;
-            /** Lastapplyfailedpath */
-            lastApplyFailedPath: string | null;
-            /** Lastapplyerror */
-            lastApplyError: string | null;
         };
         /** CloudWorkspaceSnapshotResponse */
         CloudWorkspaceSnapshotResponse: {
@@ -6453,6 +6427,35 @@ export interface components {
             owner: string;
             /** Name */
             name: string;
+        };
+        /** ManagedSandboxResponse */
+        ManagedSandboxResponse: {
+            /** Id */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Status */
+            status: string;
+            /** Lasterror */
+            lastError: string | null;
+            /** E2Btemplateref */
+            e2bTemplateRef: string;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Readyat */
+            readyAt: string | null;
+            /** Lasthealthat */
+            lastHealthAt: string | null;
+            /** Destroyedat */
+            destroyedAt: string | null;
         };
         /** MaterializeTargetConfigRequest */
         MaterializeTargetConfigRequest: {
@@ -7376,37 +7379,6 @@ export interface components {
             /** Basebranch */
             baseBranch: string;
         };
-        /** ResyncCloudWorkspaceFilesResponse */
-        ResyncCloudWorkspaceFilesResponse: {
-            /** Currentrepofilesversion */
-            currentRepoFilesVersion: number;
-            /** Repofilesappliedversion */
-            repoFilesAppliedVersion: number;
-            /** Repofilesappliedat */
-            repoFilesAppliedAt: string | null;
-            /** Filesoutofsync */
-            filesOutOfSync: boolean;
-            /** Trackedfiles */
-            trackedFiles: components["schemas"]["CloudRepoFileMetadata"][];
-            /** Envvarkeys */
-            envVarKeys: string[];
-            /** Postreadyphase */
-            postReadyPhase: string;
-            /** Postreadyfilestotal */
-            postReadyFilesTotal: number;
-            /** Postreadyfilesapplied */
-            postReadyFilesApplied: number;
-            /** Postreadystartedat */
-            postReadyStartedAt: string | null;
-            /** Postreadycompletedat */
-            postReadyCompletedAt: string | null;
-            /** Lastapplyfailedpath */
-            lastApplyFailedPath: string | null;
-            /** Lastapplyerror */
-            lastApplyError: string | null;
-            /** Workspaceid */
-            workspaceId: string;
-        };
         /** RevokeClaimTokenResponse */
         RevokeClaimTokenResponse: {
             /** Tokenid */
@@ -7425,19 +7397,6 @@ export interface components {
             targetId: string;
             /** Revoked */
             revoked: boolean;
-        };
-        /** RunCloudWorkspaceSetupResponse */
-        RunCloudWorkspaceSetupResponse: {
-            /** Workspaceid */
-            workspaceId: string;
-            /** Command */
-            command: string;
-            /** Terminalid */
-            terminalId?: string | null;
-            /** Commandrunid */
-            commandRunId?: string | null;
-            /** Status */
-            status: string;
         };
         /** RuntimeConfigArtifactRefModel */
         RuntimeConfigArtifactRefModel: {
@@ -11188,100 +11147,7 @@ export interface operations {
             };
         };
     };
-    get_cloud_workspace_repo_config_status_endpoint_v1_cloud_workspaces__workspace_id__repo_config_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudWorkspaceRepoConfigStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    resync_cloud_workspace_files_endpoint_v1_cloud_workspaces__workspace_id__resync_files_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResyncCloudWorkspaceFilesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_cloud_workspace_setup_endpoint_v1_cloud_workspaces__workspace_id__run_setup_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunCloudWorkspaceSetupResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_get: {
+    get_managed_sandbox_endpoint_v1_cloud_managed_sandbox_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -11296,45 +11162,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
+                    "application/json": components["schemas"]["ManagedSandboxResponse"] | null;
                 };
             };
         };
     };
-    put_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CloudWorktreeRetentionPolicyRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cloud_capabilities_endpoint_v1_cloud_capabilities_get: {
+    destroy_managed_sandbox_endpoint_v1_cloud_managed_sandbox_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -11349,7 +11182,47 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudCapabilitiesResponse"];
+                    "application/json": components["schemas"]["ManagedSandboxResponse"] | null;
+                };
+            };
+        };
+    };
+    ensure_managed_sandbox_endpoint_v1_cloud_managed_sandbox_ensure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedSandboxResponse"];
+                };
+            };
+        };
+    };
+    wake_managed_sandbox_endpoint_v1_cloud_managed_sandbox_wake_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedSandboxResponse"];
                 };
             };
         };
@@ -11894,6 +11767,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
+                };
+            };
+        };
+    };
+    put_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudWorktreeRetentionPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cloud_capabilities_endpoint_v1_cloud_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCapabilitiesResponse"];
                 };
             };
         };

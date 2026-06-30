@@ -8,6 +8,7 @@ import type {
   AgentModelRegistry,
   AgentModelRegistryModel,
 } from "@/lib/domain/agents/model-options";
+import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   buildHomeNextModelGroups,
@@ -354,7 +355,7 @@ describe("home-next model helpers", () => {
 });
 
 describe("resolveHomeLaunchTarget", () => {
-  const repository = {
+  const repository: SettingsRepositoryEntry = {
     sourceRoot: "/repo",
     name: "repo",
     secondaryLabel: null,
@@ -364,6 +365,8 @@ describe("resolveHomeLaunchTarget", () => {
     gitProvider: "github",
     gitOwner: "owner",
     gitRepoName: "repo",
+    cloudConfigured: false,
+    availability: "local",
   };
 
   it("resolves cloud base branch without generating a target branch", () => {

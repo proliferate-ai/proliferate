@@ -14,7 +14,7 @@ Template rollback is covered by
 
 - Read access to the affected Proliferate database.
 - CloudWatch, Sentry, or server log access for the affected environment.
-- Provider dashboard access for the configured `SANDBOX_PROVIDER`.
+- E2B dashboard access for the affected environment.
 - GitHub Actions access when the failure follows a template or deploy change.
 - Secret-store access only when an incident owner asks you to verify provider
   credentials or runtime injection config.

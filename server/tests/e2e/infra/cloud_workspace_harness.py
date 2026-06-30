@@ -13,7 +13,7 @@ import httpx
 
 from tests.e2e.cloud.helpers.shared import DEFAULT_CLOUD_TEST_TIMEOUT_SECONDS
 
-CloudProviderKind = Literal["e2b", "daytona"]
+CloudProviderKind = Literal["e2b"]
 
 
 @dataclass(frozen=True)

@@ -6,9 +6,9 @@ import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/us
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
-  getCloudWorkspaceConnection,
   updateCloudWorkspaceDisplayName,
 } from "@proliferate/cloud-sdk/client/workspaces";
+import { getCloudWorkspaceConnectionWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -24,6 +24,7 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
 
 interface UpdateWorkspaceDisplayNameInput {
   /** Logical workspace id. */
@@ -141,15 +142,16 @@ async function clearCloudRuntimeWorkspaceDisplayName(input: {
       input.selectedCloudRuntime.cloudWorkspaceId === input.cloudWorkspaceId
         && input.selectedCloudRuntime.connectionInfo
         ? input.selectedCloudRuntime.connectionInfo
-        : await getCloudWorkspaceConnection(input.cloudWorkspaceId);
+        : await getCloudWorkspaceConnectionWithRetry(input.cloudWorkspaceId);
     if (!connectionInfo?.anyharnessWorkspaceId) {
       return;
     }
+    const freshConnectionInfo = await withFreshManagedSandboxGatewayAccessToken(connectionInfo);
 
     await updateAnyHarnessWorkspaceDisplayName(
       {
-        runtimeUrl: connectionInfo.runtimeUrl,
-        authToken: connectionInfo.accessToken,
+        runtimeUrl: freshConnectionInfo.runtimeUrl,
+        authToken: freshConnectionInfo.accessToken,
       },
       connectionInfo.anyharnessWorkspaceId,
       { displayName: null },

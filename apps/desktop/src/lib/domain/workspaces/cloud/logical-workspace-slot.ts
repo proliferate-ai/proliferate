@@ -44,16 +44,16 @@ export function preferCloudWorkspaceForLogicalSlot(
     return candidate;
   }
 
-  const candidateSelected = cloudWorkspaceSelectedByMaterialization(candidate, currentSelectionId);
-  const currentSelected = cloudWorkspaceSelectedByMaterialization(current, currentSelectionId);
-  if (candidateSelected !== currentSelected) {
-    return candidateSelected ? candidate : current;
-  }
-
   const candidateArchived = cloudWorkspaceIsArchived(candidate);
   const currentArchived = cloudWorkspaceIsArchived(current);
   if (candidateArchived !== currentArchived) {
     return candidateArchived ? current : candidate;
+  }
+
+  const candidateSelected = cloudWorkspaceSelectedByMaterialization(candidate, currentSelectionId);
+  const currentSelected = cloudWorkspaceSelectedByMaterialization(current, currentSelectionId);
+  if (candidateSelected !== currentSelected) {
+    return candidateSelected ? candidate : current;
   }
 
   return cloudWorkspaceTimestamp(candidate) >= cloudWorkspaceTimestamp(current)

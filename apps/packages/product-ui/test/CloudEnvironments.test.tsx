@@ -30,32 +30,35 @@ describe("cloud environment product UI", () => {
     expect(screen.getByLabelText("GitHub repository")).toBeTruthy();
   });
 
-  it("renders local checkouts separately from cloud environments", () => {
+  it("renders local and cloud repositories in one list", () => {
     const onSelectLocal = vi.fn();
     const onSelectCloud = vi.fn();
 
     render(
       <CloudEnvironmentList
-        localCheckouts={[{
-          id: "/repo",
-          name: "repo",
-          description: "/repo",
-          cloudStatusLabel: "Cloud configured",
-        }]}
         cloudEnvironments={[{
+          id: "/repo",
+          fullName: "acme/repo",
+          description: "/repo",
+          configured: true,
+          locationState: "local_and_cloud",
+          localSourceRoot: "/repo",
+        }, {
           id: "acme/rocket",
           fullName: "acme/rocket",
           description: "Cloud-only environment",
           configured: true,
-          localState: "cloud_only",
+          locationState: "cloud_only",
         }]}
         onSelectLocalCheckout={onSelectLocal}
         onSelectCloudEnvironment={onSelectCloud}
       />,
     );
 
-    expect(screen.getByText("Local checkouts")).toBeTruthy();
-    expect(screen.getByText("Cloud environments")).toBeTruthy();
+    expect(screen.getByText("Repositories")).toBeTruthy();
+    expect(screen.getByText("acme/repo")).toBeTruthy();
+    expect(screen.getByText("Local")).toBeTruthy();
+    expect(screen.getAllByText("Cloud enabled").length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByText("Configure")[0]!);
     expect(onSelectLocal).toHaveBeenCalledWith("/repo");
     fireEvent.click(screen.getAllByText("Configure")[1]!);

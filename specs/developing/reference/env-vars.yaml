@@ -318,14 +318,8 @@
   tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════
-# Server: Sandbox Providers
+# Server: Managed E2B Sandbox Provider
 # ═══════════════════════════════════════════════════════════════════════
-
-- name: SANDBOX_PROVIDER
-  secret: false
-  default: "e2b"
-  description: "Cloud sandbox provider: e2b or daytona"
-  tags: [local-dev, self-hosted, production]
 
 - name: E2B_API_KEY
   secret: true
@@ -350,24 +344,6 @@
   default: ""
   description: Stripe webhook signing secret for billing event intake
   tags: [local-dev, production]
-
-- name: DAYTONA_API_KEY
-  secret: true
-  default: ""
-  description: Daytona provisioning auth
-  tags: [local-dev, self-hosted, production]
-
-- name: DAYTONA_SERVER_URL
-  secret: false
-  default: "https://app.daytona.io/api"
-  description: Daytona API base URL
-  tags: [local-dev, self-hosted, production]
-
-- name: DAYTONA_TARGET
-  secret: false
-  default: "us"
-  description: Daytona target/region
-  tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud Workspaces
@@ -766,7 +742,7 @@
   tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════
-# Server: Cloud Runtime Injection (both E2B and Daytona)
+# Server: Cloud Runtime Injection (E2B)
 # ═══════════════════════════════════════════════════════════════════════
 
 - name: CLOUD_RUNTIME_SOURCE_BINARY_PATH

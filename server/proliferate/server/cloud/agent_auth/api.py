@@ -17,6 +17,9 @@ from proliferate.server.cloud.agent_auth.models import (
     AgentAuthMutationResponse,
     CreateGatewayCredentialRequest,
     CreateGatewayCredentialResponse,
+    DesktopAgentAuthConfigApplyRequestInput,
+    DesktopAgentAuthConfigApplyResponse,
+    DesktopAgentAuthConfigApplyStatusRequest,
     EnsureFreeManagedCreditsRequest,
     EnsureFreeManagedCreditsResponse,
     EnsureManagedCreditsRequest,
@@ -42,11 +45,13 @@ from proliferate.server.cloud.agent_auth.models import (
 )
 from proliferate.server.cloud.agent_auth.service import (
     create_gateway_credential,
+    desktop_agent_auth_config_apply_request,
     ensure_free_managed_credits_for_user,
     ensure_managed_credits_for_organization,
     list_credentials_for_response,
     list_selections,
     list_target_states,
+    record_desktop_agent_auth_config_status,
     record_worker_agent_auth_status,
     revoke_credential,
     revoke_credential_share,
@@ -55,6 +60,8 @@ from proliferate.server.cloud.agent_auth.service import (
     sync_synced_credential_for_user,
     worker_agent_auth_materialization_plan,
 )
+from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.sandbox_profiles.service import get_profile
 from proliferate.server.cloud.worker.auth import authenticate_worker
 
 router = APIRouter()
@@ -284,6 +291,51 @@ async def list_agent_auth_target_states_endpoint(
             sandbox_profile_id=sandbox_profile_id,
         )
     ]
+
+
+@router.post(
+    "/sandbox-profiles/{sandbox_profile_id}/agent-auth-config/desktop-apply-request",
+    response_model=DesktopAgentAuthConfigApplyResponse,
+)
+async def desktop_agent_auth_config_apply_request_endpoint(
+    sandbox_profile_id: UUID,
+    body: DesktopAgentAuthConfigApplyRequestInput,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> DesktopAgentAuthConfigApplyResponse:
+    try:
+        profile = await get_profile(db, user=user, sandbox_profile_id=sandbox_profile_id)
+        return await desktop_agent_auth_config_apply_request(
+            db,
+            profile=profile,
+            target_id=body.target_id,
+            actor_user_id=user.id,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post(
+    "/sandbox-profiles/{sandbox_profile_id}/agent-auth-config/desktop-apply-status",
+    response_model=AgentAuthMutationResponse,
+)
+async def desktop_agent_auth_config_apply_status_endpoint(
+    sandbox_profile_id: UUID,
+    body: DesktopAgentAuthConfigApplyStatusRequest,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> AgentAuthMutationResponse:
+    try:
+        profile = await get_profile(db, user=user, sandbox_profile_id=sandbox_profile_id)
+        await record_desktop_agent_auth_config_status(
+            db,
+            profile=profile,
+            body=body,
+            actor_user_id=user.id,
+        )
+        return AgentAuthMutationResponse(changed=True)
+    except CloudApiError as error:
+        raise_cloud_error(error)
 
 
 @worker_router.get(

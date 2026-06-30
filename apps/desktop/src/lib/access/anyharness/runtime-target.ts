@@ -1,13 +1,16 @@
 import type { AgentAuthAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
+import { resolveManagedSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/managed-sandbox-gateway";
 import {
   getCloudWorkspaceConnectionWithRetry,
   getCloudWorkspaceWithRetry,
 } from "@/lib/access/cloud/workspace-connection-retry";
-import { issueCloudWorkspaceDirectAccessToken } from "@proliferate/cloud-sdk/client/claims";
 import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
 import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
+import { cloudWorkspaceUsesManagedSandboxGateway } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 
 type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
   targetId?: string | null;
@@ -17,12 +20,20 @@ export interface RuntimeTarget {
   location: "local" | "cloud" | "target";
   baseUrl: string;
   authToken?: string;
+  webSocketAuthTransport?: TerminalWebSocketAuthTransport;
   anyharnessWorkspaceId: string;
   runtimeGeneration: number;
+  runtimeAccessKind?: "direct" | "proliferate-gateway";
   cloudWorkspaceId?: string;
   targetId?: string;
   allowedAgentKinds?: AgentAuthAgentKind[];
   readyAgentKinds?: AgentAuthAgentKind[];
+}
+
+export function runtimeTargetUsesCloudCommand(
+  target: Pick<RuntimeTarget, "location" | "runtimeAccessKind">,
+): boolean {
+  return target.location === "cloud" && target.runtimeAccessKind !== "proliferate-gateway";
 }
 
 export async function resolveRuntimeTargetForWorkspace(
@@ -68,7 +79,7 @@ export async function resolveRuntimeTargetForWorkspace(
     await getCloudWorkspaceWithRetry(cloudWorkspaceId);
   if (!cloudWorkspace) throw new Error("Cloud workspace not found.");
   const cloudWorkspaceCommandMetadata = cloudWorkspace as CloudWorkspaceCommandMetadata;
-  if (cloudWorkspace.status !== "ready") {
+  if (resolveCloudWorkspaceStatus(cloudWorkspace) !== "ready") {
     throw new Error("Cloud workspace is not ready yet.");
   }
 
@@ -90,24 +101,20 @@ export async function resolveRuntimeTargetForWorkspace(
     };
   }
 
-  if (cloudWorkspace.visibility === "claimed") {
-    const token = await issueCloudWorkspaceDirectAccessToken(
-      cloudWorkspace.id,
-      {
-        targetAnyharnessWorkspaceId: cloudWorkspace.anyharnessWorkspaceId ?? undefined,
-      },
-      { clientKind: "desktop" },
-    );
+  if (cloudWorkspaceUsesManagedSandboxGateway(cloudWorkspace)) {
+    const connection = await resolveManagedSandboxGatewayConnectionForWorkspace(cloudWorkspace);
     return {
       location: "cloud",
-      baseUrl: token.anyharnessBaseUrl,
-      authToken: token.token,
-      anyharnessWorkspaceId: token.anyharnessWorkspaceId,
-      runtimeGeneration: cloudWorkspace.runtime?.generation ?? 0,
+      baseUrl: connection.runtimeUrl,
+      authToken: connection.accessToken,
+      webSocketAuthTransport: connection.webSocketAuthTransport,
+      anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
+      runtimeGeneration: connection.runtimeGeneration,
+      runtimeAccessKind: "proliferate-gateway",
       cloudWorkspaceId: cloudWorkspace.id,
-      targetId: token.targetId,
-      allowedAgentKinds: cloudWorkspace.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
-      readyAgentKinds: cloudWorkspace.readyAgentKinds.filter(isCloudAgentRuntimeKind),
+      targetId: cloudWorkspaceCommandMetadata.targetId ?? undefined,
+      allowedAgentKinds: connection.allowedAgentKinds.filter(isCloudAgentRuntimeKind),
+      readyAgentKinds: connection.readyAgentKinds.filter(isCloudAgentRuntimeKind),
     };
   }
 
@@ -119,6 +126,7 @@ export async function resolveRuntimeTargetForWorkspace(
     authToken: connection.accessToken,
     anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
     runtimeGeneration: connection.runtimeGeneration,
+    runtimeAccessKind: "direct",
     cloudWorkspaceId: cloudWorkspace.id,
     targetId: cloudWorkspaceCommandMetadata.targetId ?? undefined,
     allowedAgentKinds: connection.allowedAgentKinds.filter(isCloudAgentRuntimeKind),

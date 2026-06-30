@@ -150,6 +150,10 @@ export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }
 
+export function managedSandboxKey() {
+  return [...cloudRootKey(), "managed-sandbox"] as const;
+}
+
 export function organizationCloudRepoConfigsKey(organizationId: string | null) {
   return [...cloudRootKey(), "organizations", organizationId, "repo-configs"] as const;
 }
@@ -180,20 +184,6 @@ export function organizationCloudRepoConfigKey(
   gitRepoName: string,
 ) {
   return [...organizationCloudRepoConfigsKey(organizationId), gitOwner, gitRepoName] as const;
-}
-
-export function cloudWorkspaceRepoConfigStatusKey(
-  workspaceId: string,
-  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
-) {
-  return [
-    ...cloudRootKey(),
-    "workspaces",
-    workspaceId,
-    "repo-config-status",
-    owner.ownerScope,
-    owner.organizationId,
-  ] as const;
 }
 
 export function cloudWorkspaceConnectionKey(
@@ -235,15 +225,6 @@ export function isCloudWorkspaceConnectionQueryKey(
     && queryKey[1] === "workspaces"
     && typeof queryKey[2] === "string"
     && queryKey[3] === "connection";
-}
-
-export function isCloudWorkspaceRepoConfigStatusQueryKey(
-  queryKey: readonly unknown[],
-): boolean {
-  return queryKey[0] === "cloud"
-    && queryKey[1] === "workspaces"
-    && typeof queryKey[2] === "string"
-    && queryKey[3] === "repo-config-status";
 }
 
 export function automationsRootKey() {

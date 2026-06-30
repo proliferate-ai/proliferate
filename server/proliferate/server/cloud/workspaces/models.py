@@ -189,6 +189,14 @@ class WorkspaceSummary(BaseModel):
     target_id: str | None = Field(default=None, serialization_alias="targetId")
     display_name: str | None = Field(serialization_alias="displayName")
     repo: RepoRef
+    status: Literal[
+        "pending",
+        "materializing",
+        "needs_rematerialization",
+        "ready",
+        "archived",
+        "error",
+    ]
     workspace_status: Literal[
         "pending",
         "materializing",

@@ -22,25 +22,27 @@ export interface CloudEnvironmentSavedConfigInput {
   runCommand?: string | null;
 }
 
-export interface CloudEnvironmentLocalCheckoutInput extends CloudEnvironmentRepoIdentity {
+export interface CloudEnvironmentLocalCheckoutInput {
+  gitOwner?: string | null;
+  gitRepoName?: string | null;
   sourceRoot: string;
   name: string;
   secondaryLabel?: string | null;
 }
 
-export type CloudEnvironmentLocalState = "cloud_only" | "local_and_cloud";
+export type CloudEnvironmentLocationState = "local_only" | "local_and_cloud" | "cloud_only";
 export type CloudEnvironmentConfigState = "configured" | "disabled";
 
 export interface CloudEnvironmentListItem {
   id: string;
-  gitOwner: string;
-  gitRepoName: string;
+  gitOwner: string | null;
+  gitRepoName: string | null;
   fullName: string;
   label: string;
   description: string;
-  configured: boolean;
-  configState: CloudEnvironmentConfigState;
-  localState: CloudEnvironmentLocalState;
+  configured: boolean | null;
+  configState: CloudEnvironmentConfigState | null;
+  locationState: CloudEnvironmentLocationState;
   localSourceRoot: string | null;
   filesVersion: number | null;
 }
@@ -64,8 +66,26 @@ function normalizedRepoKey(input: CloudEnvironmentRepoIdentity): string {
   return formatGitRepoId(input).toLowerCase();
 }
 
+function localCheckoutRepoKey(input: CloudEnvironmentLocalCheckoutInput): string | null {
+  return input.gitOwner && input.gitRepoName
+    ? normalizedRepoKey({
+      gitOwner: input.gitOwner,
+      gitRepoName: input.gitRepoName,
+    })
+    : null;
+}
+
 function repoFullName(input: CloudEnvironmentRepoIdentity): string {
   return formatGitRepoId(input);
+}
+
+function localCheckoutFullName(input: CloudEnvironmentLocalCheckoutInput): string {
+  return input.gitOwner && input.gitRepoName
+    ? repoFullName({
+      gitOwner: input.gitOwner,
+      gitRepoName: input.gitRepoName,
+    })
+    : input.name;
 }
 
 export function hasCloudEnvironmentWritePermission(permission: string | null | undefined): boolean {
@@ -154,29 +174,57 @@ export function buildCloudEnvironmentListItems(input: {
 }): CloudEnvironmentListItem[] {
   const localByRepo = new Map<string, CloudEnvironmentLocalCheckoutInput>();
   for (const local of input.localCheckouts ?? []) {
-    localByRepo.set(normalizedRepoKey(local), local);
+    const key = localCheckoutRepoKey(local);
+    if (key) {
+      localByRepo.set(key, local);
+    }
+  }
+  const configByRepo = new Map<string, CloudEnvironmentConfigSummaryInput>();
+  for (const config of input.configs) {
+    configByRepo.set(normalizedRepoKey(config), config);
   }
 
-  return input.configs
-    .map((config) => {
+  const localItems = (input.localCheckouts ?? []).map((local) => {
+    const key = localCheckoutRepoKey(local);
+    const config = key ? configByRepo.get(key) ?? null : null;
+    const fullName = localCheckoutFullName(local);
+    return {
+      id: local.sourceRoot,
+      gitOwner: local.gitOwner ?? null,
+      gitRepoName: local.gitRepoName ?? null,
+      fullName,
+      label: fullName,
+      description: local.secondaryLabel || local.sourceRoot,
+      configured: config?.configured ?? null,
+      configState: config ? config.configured ? "configured" : "disabled" : null,
+      locationState: config ? "local_and_cloud" : "local_only",
+      localSourceRoot: local.sourceRoot,
+      filesVersion: config?.filesVersion ?? null,
+    } satisfies CloudEnvironmentListItem;
+  });
+
+  const cloudOnlyItems = input.configs
+    .flatMap((config) => {
+      if (localByRepo.has(normalizedRepoKey(config))) {
+        return [];
+      }
       const fullName = repoFullName(config);
-      const local = localByRepo.get(normalizedRepoKey(config)) ?? null;
-      return {
+      return [{
         id: fullName,
         gitOwner: config.gitOwner,
         gitRepoName: config.gitRepoName,
         fullName,
         label: fullName,
-        description: local
-          ? local.secondaryLabel || local.sourceRoot
-          : "Cloud-only environment",
+        description: "Cloud-only environment",
         configured: config.configured,
         configState: config.configured ? "configured" : "disabled",
-        localState: local ? "local_and_cloud" : "cloud_only",
-        localSourceRoot: local?.sourceRoot ?? null,
+        locationState: "cloud_only",
+        localSourceRoot: null,
         filesVersion: config.filesVersion ?? null,
-      } satisfies CloudEnvironmentListItem;
-    })
+      } satisfies CloudEnvironmentListItem];
+    });
+
+  return [...localItems, ...cloudOnlyItems]
     .sort(compareCloudEnvironmentListItems);
 }
 
@@ -184,13 +232,26 @@ function compareCloudEnvironmentListItems(
   left: CloudEnvironmentListItem,
   right: CloudEnvironmentListItem,
 ): number {
+  const leftLocationRank = cloudEnvironmentLocationRank(left.locationState);
+  const rightLocationRank = cloudEnvironmentLocationRank(right.locationState);
+  if (leftLocationRank !== rightLocationRank) {
+    return leftLocationRank - rightLocationRank;
+  }
   if (left.configured !== right.configured) {
     return left.configured ? -1 : 1;
   }
-  if (left.localState !== right.localState) {
-    return left.localState === "local_and_cloud" ? -1 : 1;
-  }
   return left.fullName.localeCompare(right.fullName);
+}
+
+function cloudEnvironmentLocationRank(locationState: CloudEnvironmentLocationState): number {
+  switch (locationState) {
+    case "local_and_cloud":
+      return 0;
+    case "local_only":
+      return 1;
+    case "cloud_only":
+      return 2;
+  }
 }
 
 function normalizeEnvVars(envVars: Record<string, string>): Record<string, string> {

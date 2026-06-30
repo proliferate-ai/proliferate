@@ -12,26 +12,17 @@ from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.repo_config.models import (
     CloudRepoConfigResponse,
     CloudRepoConfigsListResponse,
-    CloudWorkspaceRepoConfigStatusResponse,
     PutCloudRepoFileRequest,
-    ResyncCloudWorkspaceFilesResponse,
-    RunCloudWorkspaceSetupResponse,
     SaveCloudRepoConfigRequest,
     SaveOrganizationCloudRepoConfigRequest,
     repo_config_payload,
     repo_config_summary_payload,
-    resync_cloud_workspace_files_payload,
-    run_cloud_workspace_setup_payload,
-    workspace_repo_config_status_payload,
 )
 from proliferate.server.cloud.repo_config.service import (
     get_organization_repo_config,
     get_repo_config,
-    get_workspace_repo_config_status,
     list_organization_repo_configs,
     list_repo_configs,
-    resync_workspace_files,
-    run_workspace_setup,
     save_organization_repo_config,
     save_repo_config,
     save_repo_file,
@@ -193,51 +184,3 @@ async def save_cloud_repo_file_endpoint(
     except CloudApiError as error:
         raise_cloud_error(error)
     return repo_config_payload(value)
-
-
-@router.get(
-    "/workspaces/{workspace_id}/repo-config-status",
-    response_model=CloudWorkspaceRepoConfigStatusResponse,
-)
-async def get_cloud_workspace_repo_config_status_endpoint(
-    workspace_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> CloudWorkspaceRepoConfigStatusResponse:
-    try:
-        status = await get_workspace_repo_config_status(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return workspace_repo_config_status_payload(status)
-
-
-@router.post(
-    "/workspaces/{workspace_id}/resync-files",
-    response_model=ResyncCloudWorkspaceFilesResponse,
-)
-async def resync_cloud_workspace_files_endpoint(
-    workspace_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> ResyncCloudWorkspaceFilesResponse:
-    try:
-        status = await resync_workspace_files(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return resync_cloud_workspace_files_payload(status)
-
-
-@router.post(
-    "/workspaces/{workspace_id}/run-setup",
-    response_model=RunCloudWorkspaceSetupResponse,
-)
-async def run_cloud_workspace_setup_endpoint(
-    workspace_id: UUID,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> RunCloudWorkspaceSetupResponse:
-    try:
-        status = await run_workspace_setup(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return run_cloud_workspace_setup_payload(status)

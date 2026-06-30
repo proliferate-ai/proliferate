@@ -31,3 +31,18 @@ export function cloudWorkspaceUsesCloudRuntime(
   const sandboxType = workspace?.sandboxType ?? "managed_personal";
   return sandboxType !== "local" && sandboxType !== "ssh" && sandboxType !== "self_hosted";
 }
+
+export function cloudWorkspaceUsesManagedSandboxGateway(
+  workspace: Pick<
+    CloudWorkspaceSummary,
+    "directTargetContext" | "executionTarget" | "sandboxType"
+  > | null | undefined,
+): boolean {
+  if (!workspace || !cloudWorkspaceUsesCloudRuntime(workspace)) {
+    return false;
+  }
+  const sandboxType = workspace.sandboxType ?? "managed_personal";
+  return sandboxType === "managed_personal"
+    || sandboxType === "managed_shared"
+    || workspace.executionTarget?.kind === "managed_cloud";
+}

@@ -23,6 +23,7 @@ export interface CloudRepoConfigSummary {
   gitRepoName: string;
   configured: boolean;
   configuredAt: string | null;
+  defaultBranch?: string | null;
   filesVersion: number;
 }
 

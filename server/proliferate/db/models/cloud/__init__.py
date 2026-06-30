@@ -11,6 +11,7 @@ from . import cloud_target_runtime_access as cloud_target_runtime_access  # noqa
 from . import commands as commands  # noqa: F401
 from . import exposures as exposures  # noqa: F401
 from . import integrations as integrations  # noqa: F401
+from . import managed_sandboxes as managed_sandboxes  # noqa: F401
 from . import mcp as mcp  # noqa: F401
 from . import mobility as mobility  # noqa: F401
 from . import plugins as plugins  # noqa: F401

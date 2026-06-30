@@ -1,7 +1,10 @@
 import { useCallback } from "react";
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import { getCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
-import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import {
+  isCloudWorkspacePending,
+  resolveCloudWorkspaceStatus,
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 
 const CLOUD_WORKSPACE_READY_POLL_MS = 3_000;
 const CLOUD_WORKSPACE_READY_TIMEOUT_MS = 120_000;
@@ -9,17 +12,18 @@ const CLOUD_WORKSPACE_READY_TIMEOUT_MS = 120_000;
 export function describeCloudWorkspaceNotReadyFailure(
   workspace: CloudWorkspaceDetail,
 ): string | null {
-  if (workspace.status === "ready") {
+  const status = resolveCloudWorkspaceStatus(workspace);
+  if (status === "ready") {
     return null;
   }
-  if (workspace.status === "error") {
+  if (status === "error") {
     return workspace.lastError
       ?? workspace.statusDetail
       ?? "Cloud workspace provisioning failed.";
   }
-  if (!isCloudWorkspacePending(workspace.status)) {
+  if (!isCloudWorkspacePending(status)) {
     return workspace.statusDetail
-      ?? `Cloud workspace stopped before it became ready (${workspace.status}).`;
+      ?? `Cloud workspace stopped before it became ready (${status ?? "unknown"}).`;
   }
   return null;
 }
@@ -33,7 +37,7 @@ export function useCloudWorkspaceReadinessWaiter() {
       if (!workspace) {
         throw new Error("Cloud workspace not found.");
       }
-      if (workspace.status === "ready") {
+      if (resolveCloudWorkspaceStatus(workspace) === "ready") {
         return workspace;
       }
       const failureMessage = describeCloudWorkspaceNotReadyFailure(workspace);

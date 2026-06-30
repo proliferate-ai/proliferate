@@ -48,6 +48,7 @@ from proliferate.server.cloud.agent_auth.reconciler import (
     stop_agent_gateway_reconciler,
 )
 from proliferate.server.cloud.api import router as cloud_router
+from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.cloud.mobility.reconciler import (
     start_mobility_cleanup_reconciler,
     stop_mobility_cleanup_reconciler,
@@ -78,22 +79,14 @@ def _validate_cloud_billing_configuration() -> None:
     billing_mode = settings.cloud_billing_mode
     if billing_mode == "off":
         return
-    if settings.sandbox_provider != "e2b":
-        if billing_mode == "enforce":
-            raise RuntimeError(
-                "cloud_billing_mode=enforce currently requires sandbox_provider=e2b."
-            )
-        return
     if not settings.e2b_api_key:
         raise RuntimeError(
-            f"cloud_billing_mode={billing_mode} with sandbox_provider=e2b requires "
+            f"cloud_billing_mode={billing_mode} requires "
             "E2B_API_KEY so metering and reconciliation can run."
         )
 
 
 def _validate_e2b_template_configuration() -> None:
-    if settings.sandbox_provider != "e2b":
-        return
     if settings.debug:
         return
     if not settings.e2b_api_key:
@@ -101,7 +94,7 @@ def _validate_e2b_template_configuration() -> None:
     if settings.e2b_template_name.strip():
         return
     raise RuntimeError(
-        "sandbox_provider=e2b with E2B_API_KEY set requires E2B_TEMPLATE_NAME in "
+        "E2B_API_KEY set requires E2B_TEMPLATE_NAME in "
         "non-debug environments so cloud provisioning uses the published runtime "
         "template instead of the base E2B image."
     )
@@ -162,22 +155,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Start the local Postgres container with `make server-db-up` and run "
             "`make server-migrate` before starting the API."
         ) from exc
-    if settings.sandbox_provider == "e2b" and settings.cloud_billing_mode in {
-        "observe",
-        "enforce",
-    }:
+    if settings.cloud_billing_mode in {"observe", "enforce"}:
         start_billing_reconciler()
-    start_cloud_setup_monitor()
     start_agent_gateway_reconciler()
     start_mobility_cleanup_reconciler()
+    start_cloud_setup_monitor()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
+        await stop_cloud_setup_monitor()
         await stop_mobility_cleanup_reconciler()
         await stop_agent_gateway_reconciler()
-        await stop_cloud_setup_monitor()
         await stop_billing_reconciler()
         flush_server_sentry()
 
@@ -227,6 +217,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(analytics_router, prefix=f"{api_prefix}/v1", tags=["analytics"])
     app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
+    app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])

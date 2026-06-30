@@ -66,6 +66,19 @@ def test_workspace_summary_projects_ready_at() -> None:
     assert ready_payload.model_dump(by_alias=True)["readyAt"] == "2026-05-30T07:30:45+00:00"
 
 
+def test_workspace_summary_serializes_legacy_and_current_status_keys() -> None:
+    workspace = _workspace(origin_json=None)
+    workspace.status = "ready"
+
+    payload = workspace_summary_payload(workspace)
+    dumped = payload.model_dump(by_alias=True)
+
+    assert payload.status == "ready"
+    assert payload.workspace_status == "ready"
+    assert dumped["status"] == "ready"
+    assert dumped["workspaceStatus"] == "ready"
+
+
 def test_workspace_summary_projects_creator_context_when_present() -> None:
     payload = workspace_summary_payload(
         _workspace(origin_json='{"kind":"system","entrypoint":"cloud"}'),
@@ -106,3 +119,25 @@ def test_workspace_summary_drops_malformed_origin(monkeypatch: pytest.MonkeyPatc
     assert warnings[0][0] == "invalid cloud workspace origin JSON"
     assert warnings[0][1]["extra"]["table"] == "cloud_workspace"
     assert warnings[0][1]["extra"]["row_id"] == str(workspace.id)
+
+
+def test_managed_workspace_summary_marks_ready_runtime_running_without_target_heartbeat() -> None:
+    workspace = _workspace(origin_json=None)
+    workspace.status = "ready"
+    workspace.target_id = uuid.uuid4()
+    workspace.anyharness_workspace_id = "workspace-1"
+
+    payload = workspace_summary_payload(workspace, target_kind=None, target_online=False)
+
+    assert payload.runtime.status == "running"
+    assert payload.sandbox_type == "managed_personal"
+
+
+def test_managed_workspace_summary_marks_materializing_runtime_provisioning() -> None:
+    workspace = _workspace(origin_json=None)
+    workspace.status = "materializing"
+    workspace.target_id = uuid.uuid4()
+
+    payload = workspace_summary_payload(workspace, target_kind=None, target_online=False)
+
+    assert payload.runtime.status == "provisioning"

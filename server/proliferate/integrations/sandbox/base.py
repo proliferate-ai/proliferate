@@ -10,7 +10,6 @@ from typing import Any, Protocol, runtime_checkable
 
 class SandboxProviderKind(StrEnum):
     e2b = "e2b"
-    daytona = "daytona"
 
 
 class SandboxProviderError(RuntimeError):

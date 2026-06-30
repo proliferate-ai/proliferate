@@ -61,13 +61,14 @@ export function useHomeNextState({
       return null;
     }
 
-    if (repository.branchQuery.isLoading) {
+    const selectedRepositoryIsCloudOnly = repository.selectedRepository.availability === "cloud";
+    if (!selectedRepositoryIsCloudOnly && repository.branchQuery.isLoading) {
       return "Loading branches";
     }
-    if (repository.branchQuery.isError) {
+    if (!selectedRepositoryIsCloudOnly && repository.branchQuery.isError) {
       return "Couldn't load branches";
     }
-    if (repository.branchOptions.length === 0) {
+    if (!selectedRepositoryIsCloudOnly && repository.branchOptions.length === 0) {
       return "No local branches found";
     }
     if (!repository.selectedBranchName) {

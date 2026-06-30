@@ -6,7 +6,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity, OwnerSelection
+from proliferate.db.store.cloud_workspace_lifecycle import archive_cloud_workspace_record
 from proliferate.db.store.cloud_workspaces import (
+    get_active_cloud_workspace_for_managed_profile_branch,
+    get_active_cloud_workspace_for_runtime_branch,
+    get_cloud_workspace_by_id,
     list_claimed_organization_workspaces_for_user,
     list_exposed_cloud_workspaces_for_user,
     list_organization_workspaces_for_admin_audit,
@@ -158,9 +162,91 @@ async def sync_cloud_workspace_branch(
             "Branch name is required.",
             status_code=400,
         )
-    workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
+    workspace = await _load_workspace_for_branch_sync(db, user_id, workspace_id)
+    if workspace.git_branch == cleaned_branch_name:
+        return await _build_workspace_detail_for_request(db, workspace)
+
+    conflict = await _find_branch_sync_conflict(db, workspace, cleaned_branch_name)
+    if conflict is not None:
+        if _is_managed_workspace_projection_sibling(workspace, conflict):
+            if workspace.archived_at is None:
+                await archive_cloud_workspace_record(db, workspace=workspace)
+            return await _build_workspace_detail_for_request(db, conflict)
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{cleaned_branch_name}'.",
+            status_code=409,
+        )
+
     workspace = await update_workspace_branch(db, workspace, cleaned_branch_name)
     return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def _find_branch_sync_conflict(
+    db: AsyncSession,
+    workspace: object,
+    branch_name: str,
+) -> object | None:
+    runtime_environment_id = getattr(workspace, "runtime_environment_id", None)
+    if runtime_environment_id is not None:
+        return await get_active_cloud_workspace_for_runtime_branch(
+            db,
+            runtime_environment_id=runtime_environment_id,
+            git_branch=branch_name,
+            exclude_workspace_id=workspace.id,
+        )
+    sandbox_profile_id = getattr(workspace, "sandbox_profile_id", None)
+    target_id = getattr(workspace, "target_id", None)
+    if sandbox_profile_id is None or target_id is None:
+        return None
+    return await get_active_cloud_workspace_for_managed_profile_branch(
+        db,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+        git_provider=workspace.git_provider,
+        git_owner=workspace.git_owner,
+        git_repo_name=workspace.git_repo_name,
+        git_branch=branch_name,
+        exclude_workspace_id=workspace.id,
+    )
+
+
+async def _load_workspace_for_branch_sync(
+    db: AsyncSession,
+    user_id: UUID,
+    workspace_id: UUID,
+) -> object:
+    try:
+        return await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
+    except CloudApiError as error:
+        if error.code != "workspace_not_found":
+            raise
+        workspace = await get_cloud_workspace_by_id(db, workspace_id)
+        if not (
+            workspace is not None
+            and workspace.archived_at is not None
+            and workspace.owner_scope == "personal"
+            and workspace.owner_user_id == user_id
+            and workspace.sandbox_profile_id is not None
+            and workspace.target_id is not None
+        ):
+            raise
+        return workspace
+
+
+def _is_managed_workspace_projection_sibling(
+    left: object,
+    right: object,
+) -> bool:
+    return bool(
+        getattr(left, "sandbox_profile_id", None)
+        and getattr(left, "target_id", None)
+        and getattr(left, "sandbox_profile_id", None) == getattr(right, "sandbox_profile_id", None)
+        and getattr(left, "target_id", None) == getattr(right, "target_id", None)
+        and getattr(left, "git_provider", None) == getattr(right, "git_provider", None)
+        and getattr(left, "git_owner", None) == getattr(right, "git_owner", None)
+        and getattr(left, "git_repo_name", None) == getattr(right, "git_repo_name", None)
+    )
 
 
 async def sync_cloud_workspace_display_name(

@@ -1,6 +1,7 @@
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import { getCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   elapsedMs,
   logLatency,
@@ -24,11 +25,12 @@ export async function resolveCloudWorkspaceReadiness(
   if (!cloudWorkspace) {
     return { kind: "cloud-missing", cloudWorkspaceId };
   }
+  const workspaceStatus = resolveCloudWorkspaceStatus(cloudWorkspace);
 
   logLatency("workspace.select.cloud_lookup", {
     workspaceId: context.workspaceId,
     cloudWorkspaceId,
-    status: cloudWorkspace.status,
+    status: workspaceStatus,
     elapsedMs: elapsedMs(cloudLookupStartedAt),
   });
 
@@ -36,19 +38,19 @@ export async function resolveCloudWorkspaceReadiness(
     return { kind: "stale", cloudWorkspaceId };
   }
 
-  if (cloudWorkspace.status !== "ready") {
+  if (workspaceStatus !== "ready") {
     resetWorkspaceEditorState();
     markWorkspaceViewed(context.workspaceId);
     logLatency("workspace.select.cloud_not_ready", {
       workspaceId: context.workspaceId,
       cloudWorkspaceId,
-      status: cloudWorkspace.status,
+      status: workspaceStatus,
       totalElapsedMs: elapsedMs(context.selectionStartedAt),
     });
     return {
       kind: "cloud-pending",
       cloudWorkspaceId,
-      status: cloudWorkspace.status,
+      status: workspaceStatus ?? "pending",
     };
   }
 

@@ -7,26 +7,19 @@ import { SettingsCard } from "../settings/SettingsCard";
 import { SettingsCardRow } from "../settings/SettingsCardRow";
 import { SettingsPageHeader } from "../settings/SettingsPageHeader";
 
-export interface LocalCheckoutEnvironmentView {
-  id: string;
-  name: string;
-  description: string;
-  cloudStatusLabel?: string | null;
-}
-
 export interface CloudEnvironmentListItemView {
   id: string;
   fullName: string;
   description: string;
-  configured: boolean;
-  localState: "cloud_only" | "local_and_cloud";
+  configured: boolean | null;
+  locationState: "local_only" | "local_and_cloud" | "cloud_only";
+  localSourceRoot?: string | null;
   trackedFileCount?: number | null;
 }
 
 export interface CloudEnvironmentListProps {
   title?: string;
   description?: string;
-  localCheckouts?: readonly LocalCheckoutEnvironmentView[];
   cloudEnvironments: readonly CloudEnvironmentListItemView[];
   loadingCloudEnvironments?: boolean;
   cloudUnavailableReason?: string | null;
@@ -39,7 +32,6 @@ export interface CloudEnvironmentListProps {
 export function CloudEnvironmentList({
   title = "Environments",
   description = "Configure local checkouts and personal cloud environments.",
-  localCheckouts = [],
   cloudEnvironments,
   loadingCloudEnvironments = false,
   cloudUnavailableReason = null,
@@ -52,54 +44,10 @@ export function CloudEnvironmentList({
     <section className="space-y-6">
       <SettingsPageHeader title={title} description={description} />
 
-      {onSelectLocalCheckout ? (
-        <section className="space-y-3">
-          <SectionHeading
-            title="Local checkouts"
-            description="Folders present on this computer."
-          />
-          <SettingsCard>
-            {localCheckouts.length === 0 ? (
-              <SettingsCardRow
-                label="No local checkouts"
-                description="Add a folder from Desktop to configure local defaults."
-              />
-            ) : (
-              localCheckouts.map((checkout) => (
-                <SettingsCardRow
-                  key={checkout.id}
-                  label={(
-                    <span className="flex min-w-0 items-center gap-2">
-                      <Folder size={14} className="shrink-0 text-muted-foreground" />
-                      <span className="truncate">{checkout.name}</span>
-                    </span>
-                  )}
-                  description={checkout.description}
-                >
-                  <div className="flex items-center gap-2">
-                    {checkout.cloudStatusLabel ? (
-                      <Badge tone="info">{checkout.cloudStatusLabel}</Badge>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => onSelectLocalCheckout(checkout.id)}
-                    >
-                      Configure
-                    </Button>
-                  </div>
-                </SettingsCardRow>
-              ))
-            )}
-          </SettingsCard>
-        </section>
-      ) : null}
-
       <section className="space-y-3">
         <SectionHeading
-          title="Cloud environments"
-          description="GitHub repositories configured for Proliferate Cloud. These do not have to be cloned locally."
+          title="Repositories"
+          description="Local checkouts and GitHub repositories configured for Proliferate Cloud."
           action={onAddCloudEnvironment ? (
             <Button type="button" size="sm" onClick={onAddCloudEnvironment}>
               <Plus size={14} />
@@ -114,11 +62,11 @@ export function CloudEnvironmentList({
               description={cloudUnavailableReason}
             />
           ) : loadingCloudEnvironments && cloudEnvironments.length === 0 ? (
-            <SettingsCardRow label="Cloud environments" description="Loading..." />
+            <SettingsCardRow label="Repositories" description="Loading..." />
           ) : cloudEnvironments.length === 0 ? (
             <SettingsCardRow
-              label="No cloud environments"
-              description="Add a GitHub repo to use it from web, mobile, or Desktop cloud workspaces."
+              label="No repositories"
+              description="Add a local checkout or GitHub repo to use it from Desktop, web, or mobile."
             />
           ) : (
             cloudEnvironments.map((environment) => (
@@ -126,24 +74,36 @@ export function CloudEnvironmentList({
                 key={environment.id}
                 label={(
                   <span className="flex min-w-0 items-center gap-2">
-                    <Cloud size={14} className="shrink-0 text-muted-foreground" />
+                    {environment.locationState === "cloud_only" ? (
+                      <Cloud size={14} className="shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Folder size={14} className="shrink-0 text-muted-foreground" />
+                    )}
                     <span className="truncate">{environment.fullName}</span>
                   </span>
                 )}
                 description={environmentDescription(environment)}
               >
                 <div className="flex items-center gap-2">
-                  <Badge tone={environment.configured ? "success" : "warning"}>
-                    {environment.configured ? "Enabled" : "Disabled"}
-                  </Badge>
-                  <Badge tone={environment.localState === "local_and_cloud" ? "info" : "neutral"}>
-                    {environment.localState === "local_and_cloud" ? "Local + cloud" : "Cloud only"}
-                  </Badge>
+                  {environment.localSourceRoot ? (
+                    <Badge tone="neutral">Local</Badge>
+                  ) : null}
+                  {environment.configured !== null ? (
+                    <Badge tone={environment.configured ? "success" : "warning"}>
+                      {environment.configured ? "Cloud enabled" : "Cloud disabled"}
+                    </Badge>
+                  ) : null}
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={() => onSelectCloudEnvironment(environment.id)}
+                    onClick={() => {
+                      if (environment.localSourceRoot && onSelectLocalCheckout) {
+                        onSelectLocalCheckout(environment.localSourceRoot);
+                        return;
+                      }
+                      onSelectCloudEnvironment(environment.id);
+                    }}
                   >
                     Configure
                   </Button>

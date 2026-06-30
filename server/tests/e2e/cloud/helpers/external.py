@@ -42,14 +42,10 @@ async def ensure_external_server(
     env.update(
         {
             "DATABASE_URL": database_url,
-            "SANDBOX_PROVIDER": provider_kind,
             "CLOUD_BILLING_MODE": "off",
             "E2B_API_KEY": config.e2b_api_key or "",
             "E2B_TEMPLATE_NAME": config.e2b_template_name or "",
             "E2B_WEBHOOK_SIGNATURE_SECRET": config.e2b_webhook_signature_secret or "",
-            "DAYTONA_API_KEY": config.daytona_api_key or "",
-            "DAYTONA_SERVER_URL": config.daytona_server_url,
-            "DAYTONA_TARGET": config.daytona_target,
         }
     )
     process = await asyncio.create_subprocess_exec(

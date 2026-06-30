@@ -23,6 +23,7 @@ describe("cloud workspace creation helpers", () => {
         gitRepoName: "rocket",
         configured: true,
         configuredAt: null,
+        defaultBranch: "main",
         filesVersion: 1,
       },
       {
@@ -30,6 +31,7 @@ describe("cloud workspace creation helpers", () => {
         gitRepoName: "draft",
         configured: false,
         configuredAt: null,
+        defaultBranch: null,
         filesVersion: 0,
       },
     ]);

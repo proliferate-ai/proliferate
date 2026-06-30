@@ -3,6 +3,7 @@ import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-lau
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import {
   resolveRuntimeTargetForWorkspace,
+  runtimeTargetUsesCloudCommand,
 } from "@/lib/access/anyharness/runtime-target";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import {
@@ -23,13 +24,8 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import {
-  pendingConfigChangesForSessionIntents,
-} from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
-import {
-  sessionIntentsForSession,
-} from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import {
   assertDirectSessionCreateRuntimeConfigStamped,
+  prepareManagedSandboxGatewayAgentAuthConfig,
   prepareLocalSessionRuntimeConfig,
 } from "@/lib/access/anyharness/session-runtime-config";
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
@@ -43,6 +39,11 @@ import { buildLatencyRequestOptions } from "@/hooks/sessions/workflows/session-c
 import {
   materializeSessionRecord,
 } from "@/hooks/sessions/workflows/session-creation-local-state";
+import {
+  materializeExistingSession,
+  pendingConfigValuesForSession,
+  requeuePromptIntentsBlockedOnMaterialization,
+} from "@/hooks/sessions/workflows/session-creation-materialization-helpers";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { buildDesktopLaunchModelRegistries } from "@/lib/domain/agents/cloud-launch-catalog";
 import { startCloudSessionCommandResult } from "@/lib/access/cloud/session-commands";
@@ -140,7 +141,7 @@ export async function materializeSessionCreation({
 
   const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
   let session: Session;
-  if (target.location === "cloud") {
+  if (runtimeTargetUsesCloudCommand(target)) {
     if (!target.cloudWorkspaceId || !target.targetId) {
       throw new Error("Cloud workspace is missing command routing metadata.");
     }
@@ -157,16 +158,13 @@ export async function materializeSessionCreation({
     session = startResult.session
       ?? await getSession(targetConnection, startResult.sessionId, requestOptions);
   } else {
-    assertDirectSessionCreateRuntimeConfigStamped(target);
-    const expectedRuntimeConfigRevision = await prepareLocalSessionRuntimeConfig(
+    const expectedRuntimeConfigRevision = await prepareDirectSessionRuntimeConfig({
+      target,
       targetConnection,
       requestOptions,
-    );
-    logLatency("session.create.materialize.runtime_config_prepared", {
-      clientSessionId: pendingSessionId,
+      pendingSessionId,
       workspaceId,
-      hasExpectedRuntimeConfigRevision: Boolean(expectedRuntimeConfigRevision),
-      elapsedMs: Date.now() - materializeStartedAt,
+      materializeStartedAt,
     });
     session = await createSession(targetConnection, {
       workspaceId: target.anyharnessWorkspaceId,
@@ -242,6 +240,11 @@ export async function materializeSessionCreation({
     pendingSessionId,
     launchedSession.id,
   );
+  requeuePromptIntentsBlockedOnMaterialization({
+    clientSessionId: pendingSessionId,
+    materializedSessionId: launchedSession.id,
+    workspaceId,
+  });
   logLatency("session.create.materialized", {
     clientSessionId: pendingSessionId,
     materializedSessionId: launchedSession.id,
@@ -277,110 +280,39 @@ export async function materializeSessionCreation({
   return pendingSessionId;
 }
 
-function materializeExistingSession({
-  existingProjectedRecord,
-  existingSession,
-  fallbackModelId,
-  latencyFlowId,
-  launchIntentId,
+async function prepareDirectSessionRuntimeConfig({
+  target,
+  targetConnection,
+  requestOptions,
   pendingSessionId,
-  resolvedModeId,
-  upsertWorkspaceSessionRecord,
   workspaceId,
+  materializeStartedAt,
 }: {
-  existingProjectedRecord: SessionRuntimeRecord | null;
-  existingSession: Session;
-  fallbackModelId: string;
-  latencyFlowId?: string | null;
-  launchIntentId?: string | null;
-  pendingSessionId: string;
-  resolvedModeId: string | null;
-  upsertWorkspaceSessionRecord: (workspaceId: string, session: Session) => void;
-  workspaceId: string;
-}): string {
-  annotateLatencyFlow(latencyFlowId, {
-    targetSessionId: existingSession.id,
-  });
-  const realRecord = materializedRecordFromExistingSession({
-    clientSessionId: pendingSessionId,
-    session: existingSession,
-    workspaceId,
-    fallbackModelId,
-    fallbackModeId: resolvedModeId,
-    fallbackTitle: existingProjectedRecord?.title ?? null,
-    pendingConfigChanges: {},
-  });
-  materializeSessionRecord(pendingSessionId, existingSession.id, realRecord);
-  useSessionIntentStore.getState().bindMaterializedSession(
-    pendingSessionId,
-    existingSession.id,
-  );
-  if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
-    rememberLastViewedSession(workspaceId, existingSession.id);
-  }
-  upsertWorkspaceSessionRecord(workspaceId, existingSession);
-  if (launchIntentId) {
-    useChatLaunchIntentStore.getState().markMaterializedIfActive(
-      launchIntentId,
-      {
-        clientSessionId: pendingSessionId,
-        workspaceId,
-        sessionId: existingSession.id,
-      },
-    );
-  }
-  return pendingSessionId;
-}
-
-function pendingConfigValuesForSession(sessionId: string): Record<string, string> {
-  const pendingConfigChanges = pendingConfigChangesForSessionIntents(
-    sessionIntentsForSession(useSessionIntentStore.getState(), sessionId),
-  );
-  return Object.fromEntries(
-    Object.values(pendingConfigChanges)
-      .map((change) => [change.rawConfigId, change.value] as const),
-  );
-}
-
-function materializedRecordFromExistingSession({
-  clientSessionId,
-  session,
-  workspaceId,
-  fallbackModelId,
-  fallbackModeId,
-  fallbackTitle,
-  pendingConfigChanges,
-}: {
-  clientSessionId: string;
-  session: Session;
-  workspaceId: string;
-  fallbackModelId: string;
-  fallbackModeId: string | null;
-  fallbackTitle: string | null;
-  pendingConfigChanges: SessionRuntimeRecord["pendingConfigChanges"];
-}): SessionRuntimeRecord {
-  return {
-    ...createEmptySessionRecord(clientSessionId, session.agentKind, {
-      workspaceId,
-      materializedSessionId: session.id,
-      modelId: session.modelId ?? fallbackModelId,
-      requestedModelId: session.requestedModelId ?? fallbackModelId,
-      modeId: session.modeId ?? fallbackModeId,
-      title: session.title ?? fallbackTitle,
-      actionCapabilities: session.actionCapabilities,
-      liveConfig: session.liveConfig ?? null,
-      executionSummary: session.executionSummary ?? null,
-      mcpBindingSummaries: session.mcpBindingSummaries ?? null,
-      lastPromptAt: session.lastPromptAt ?? null,
-      hasAttemptedPrompt: getSessionRecord(clientSessionId)?.hasAttemptedPrompt ?? false,
-      optimisticPrompt: null,
-      pendingConfigChanges,
-      sessionRelationship: { kind: "root" },
-    }),
-    status: resolveStatusFromExecutionSummary(
-      session.executionSummary,
-      session.status ?? "idle",
-    ),
-    transcriptHydrated: true,
+  target: Awaited<ReturnType<typeof resolveRuntimeTargetForWorkspace>>;
+  targetConnection: {
+    runtimeUrl: string;
+    authToken?: string;
   };
+  requestOptions: ReturnType<typeof buildLatencyRequestOptions>;
+  pendingSessionId: string;
+  workspaceId: string;
+  materializeStartedAt: number;
+}) {
+  assertDirectSessionCreateRuntimeConfigStamped(target);
+  await prepareManagedSandboxGatewayAgentAuthConfig(
+    target,
+    targetConnection,
+    requestOptions,
+  );
+  const expectedRuntimeConfigRevision = await prepareLocalSessionRuntimeConfig(
+    targetConnection,
+    requestOptions,
+  );
+  logLatency("session.create.materialize.runtime_config_prepared", {
+    clientSessionId: pendingSessionId,
+    workspaceId,
+    hasExpectedRuntimeConfigRevision: Boolean(expectedRuntimeConfigRevision),
+    elapsedMs: Date.now() - materializeStartedAt,
+  });
+  return expectedRuntimeConfigRevision;
 }

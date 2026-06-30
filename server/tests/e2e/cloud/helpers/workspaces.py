@@ -3,15 +3,12 @@ from __future__ import annotations
 import asyncio
 import time
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import httpx
-import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -82,56 +79,6 @@ async def create_cloud_workspace(
     return response.json()
 
 
-def _is_daytona_resource_limit_error(exc: CloudE2ETestError) -> bool:
-    message = str(exc)
-    return any(
-        marker in message
-        for marker in (
-            "Total CPU limit exceeded",
-            "Total disk limit exceeded",
-            "Depleted credits",
-            "Organization is suspended",
-        )
-    )
-
-
-async def cleanup_stale_daytona_test_sandboxes(
-    *,
-    older_than: timedelta = timedelta(hours=1),
-) -> int:
-    def _cleanup() -> int:
-        from daytona import Daytona, DaytonaConfig
-        from proliferate.constants.sandbox.daytona import DAYTONA_DELETE_TIMEOUT_SECONDS
-
-        client = Daytona(
-            DaytonaConfig(
-                api_key=settings.daytona_api_key,
-                api_url=settings.daytona_server_url,
-                target=settings.daytona_target,
-            )
-        )
-        page = client.list()
-        cutoff = datetime.now(UTC) - older_than
-        deleted = 0
-        for sandbox in page.items:
-            created_at = getattr(sandbox, "created_at", None)
-            labels = getattr(sandbox, "labels", None) or {}
-            created = None
-            if isinstance(created_at, str) and created_at:
-                with suppress(ValueError):
-                    created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            if created is None or created > cutoff:
-                continue
-            if "cloud_sandbox_id" not in labels and "workspace_id" not in labels:
-                continue
-            with suppress(Exception):
-                client.delete(sandbox, timeout=DAYTONA_DELETE_TIMEOUT_SECONDS)
-                deleted += 1
-        return deleted
-
-    return await asyncio.to_thread(_cleanup)
-
-
 async def get_cloud_workspace(
     client: httpx.AsyncClient,
     auth: AuthSession,
@@ -194,7 +141,7 @@ async def create_ready_cloud_workspace(
     branch_prefix: str,
 ) -> tuple[str, dict[str, object]]:
     last_error: Exception | None = None
-    for attempt in range(2):
+    for _attempt in range(2):
         branch_name = unique_branch_name(branch_prefix)
         workspace: dict[str, object] | None = None
         try:
@@ -213,21 +160,7 @@ async def create_ready_cloud_workspace(
             return branch_name, workspace
         except CloudE2ETestError as exc:
             last_error = exc
-            if provider_kind != "daytona" or not _is_daytona_resource_limit_error(exc):
-                raise
-            if workspace is not None:
-                await force_delete_cloud_workspace_records(db_session, str(workspace["id"]))
-            await cleanup_stale_provider_test_workspaces(
-                db_session,
-                provider_kind=provider_kind,
-                github_owner=config.github_owner,
-                github_repo=config.github_repo,
-            )
-            await cleanup_stale_daytona_test_sandboxes()
-            if attempt == 0:
-                await asyncio.sleep(15.0)
-                continue
-            pytest.skip(f"Daytona capacity unavailable: {exc}")
+            raise
 
     assert last_error is not None
     raise last_error

@@ -34,6 +34,10 @@ class SandboxProfileSnapshot:
     updated_at: datetime
     archived_at: datetime | None
 
+    @property
+    def agent_auth_revision(self) -> int:
+        return self.desired_agent_auth_revision
+
 
 def _profile_snapshot(
     row: SandboxProfile,

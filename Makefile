@@ -34,6 +34,7 @@ PROD_DB_SECRET ?= proliferate/prod/database
 PROD_DB_INSTANCE ?= proliferate-prod
 SQL ?= select version_num from alembic_version;
 LOCAL_CODEX_ACP ?= $(HOME)/codex-acp/target/debug/codex-acp
+DEV_ANYHARNESS_TARGET_DIR ?= target/runtime-local
 CLOUD_SSH_WORKER_API_PORT ?= 8044
 CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
@@ -104,10 +105,10 @@ endif
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
         release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
-        test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
+        test-agent-runtime-cloud-e2b \
         cloud-runtime-build publish-cloud-template-env-local \
         test-cloud-ssh-worker dev-cloud-ssh-worker \
-        test-cloud-e2b test-cloud-daytona test-cloud-all test-cloud-webhooks \
+        test-cloud-e2b test-cloud-all test-cloud-webhooks \
         cloud-openapi cloud-client-generate \
         stripe-setup-test \
         stage-sidecar \
@@ -121,11 +122,14 @@ endif
 dev: setup run
 
 dev-artifacts-ready:
-	@runtime_bin="$${CARGO_TARGET_DIR:-target}/debug/anyharness"; \
+	@runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
 	missing_rust=0; \
 	missing_frontend=0; \
 	if [ ! -x "$$runtime_bin" ]; then \
 		echo "Missing AnyHarness runtime binary: $$runtime_bin"; \
+		missing_rust=1; \
+	elif grep -a -q "sidecar is not available\\|unsupported target placeholder" "$$runtime_bin" 2>/dev/null; then \
+		echo "AnyHarness runtime binary is a sidecar placeholder: $$runtime_bin"; \
 		missing_rust=1; \
 	fi; \
 	for artifact in $(DEV_FRONTEND_ARTIFACTS); do \
@@ -355,7 +359,7 @@ run: dev-artifacts-ready
 		fi; \
 		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$$STRIPE_FORWARD_TO" & \
 	fi; \
-	runtime_bin="$${CARGO_TARGET_DIR:-target}/debug/anyharness"; \
+	runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
 	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, desktop :$$PROLIFERATE_WEB_PORT, web :$$PROLIFERATE_HOSTED_WEB_PORT, mobile web :$$PROLIFERATE_MOBILE_WEB_PORT"; \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 "$$runtime_bin" serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
@@ -772,9 +776,6 @@ publish-cloud-template-env-local:
 test-cloud-e2b: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 uv run python -m pytest tests/e2e/cloud -m "cloud_e2e and e2b and not live_webhook" -xvs
 
-test-cloud-daytona: cloud-runtime-build server-db-ready
-	cd server && RUN_CLOUD_E2E=1 uv run python -m pytest tests/e2e/cloud -m "cloud_e2e and daytona" -xvs
-
 test-cloud-webhooks: server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud/test_e2b_webhooks.py -m "live_webhook" -xvs
 
@@ -901,6 +902,7 @@ shared-build:
 
 build-rust:
 	$(CARGO) build --workspace
+	CARGO_TARGET_DIR="$(DEV_ANYHARNESS_TARGET_DIR)" $(CARGO) build -p anyharness
 
 runtime-build: build-rust
 
@@ -916,9 +918,6 @@ build: build-rust build-frontend
 
 test-agent-runtime-cloud-e2b: sdk-generate
 	cd anyharness/tests && pnpm run test:cloud:e2b
-
-test-agent-runtime-cloud-daytona: sdk-generate
-	cd anyharness/tests && pnpm run test:cloud:daytona
 
 # --- Install ---
 

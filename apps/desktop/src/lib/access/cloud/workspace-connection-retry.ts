@@ -7,8 +7,10 @@ import {
 } from "@/lib/access/cloud/client";
 import {
   getCloudWorkspace,
-  getCloudWorkspaceConnection,
+  getCloudWorkspaceConnection as getDirectCloudWorkspaceConnection,
 } from "@proliferate/cloud-sdk/client/workspaces";
+import { resolveManagedSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/managed-sandbox-gateway";
+import { cloudWorkspaceUsesManagedSandboxGateway } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 
 export const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
 export const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;
@@ -70,11 +72,28 @@ export function getCloudWorkspaceWithRetry(
   );
 }
 
+export async function getResolvedCloudWorkspaceConnection(
+  workspaceId: string,
+): Promise<CloudConnectionInfo> {
+  const workspace = await getCloudWorkspace(workspaceId);
+  if (!workspace) {
+    throw new ProliferateClientError(
+      "Cloud workspace not found.",
+      404,
+      "workspace_not_found",
+    );
+  }
+  if (cloudWorkspaceUsesManagedSandboxGateway(workspace)) {
+    return resolveManagedSandboxGatewayConnectionForWorkspace(workspace);
+  }
+  return getDirectCloudWorkspaceConnection(workspaceId);
+}
+
 export function getCloudWorkspaceConnectionWithRetry(
   workspaceId: string,
 ): Promise<CloudConnectionInfo> {
   return retryCloudWorkspaceRequest(
-    () => getCloudWorkspaceConnection(workspaceId),
+    () => getResolvedCloudWorkspaceConnection(workspaceId),
     "Failed to connect to cloud workspace.",
   );
 }

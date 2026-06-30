@@ -2,6 +2,7 @@ export interface TerminalStreamOptions {
   baseUrl: string;
   terminalId: string;
   authToken?: string;
+  webSocketAuthTransport?: TerminalWebSocketAuthTransport;
   afterSeq?: number;
   onData: (data: Uint8Array, frame: TerminalDataFrame) => void;
   onExit?: (code: number | null) => void;
@@ -12,6 +13,9 @@ export interface TerminalStreamOptions {
 }
 
 export type AgentLoginTerminalStreamOptions = TerminalStreamOptions;
+export type TerminalWebSocketAuthTransport = "query" | "protocol";
+
+export const TERMINAL_WEBSOCKET_BEARER_PROTOCOL = "proliferate-gateway-bearer";
 
 export interface TerminalDataFrame {
   type: "data";
@@ -68,7 +72,10 @@ function connectTerminalStream(
     .replace(/^http/, "ws")
     .replace(/\/+$/, "");
   const params = new URLSearchParams();
-  if (options.authToken) {
+  const useProtocolAuth = Boolean(
+    options.authToken && options.webSocketAuthTransport === "protocol",
+  );
+  if (options.authToken && !useProtocolAuth) {
     params.set("access_token", options.authToken);
   }
   if (options.afterSeq !== undefined) {
@@ -77,7 +84,10 @@ function connectTerminalStream(
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   const url = `${wsUrl}${pathname}${suffix}`;
 
-  const ws = new WebSocket(url);
+  const protocols = options.authToken && useProtocolAuth
+    ? [TERMINAL_WEBSOCKET_BEARER_PROTOCOL, options.authToken]
+    : undefined;
+  const ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url);
   ws.binaryType = "arraybuffer";
   let lastSeq = options.afterSeq ?? 0;
   let pendingResize: { cols: number; rows: number } | null = null;

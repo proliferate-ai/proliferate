@@ -30,6 +30,7 @@ function buildCards(overrides: Partial<Parameters<typeof buildHomeOnboardingCard
       gitRepoName: "proliferate",
       configured: true,
       configuredAt: "2026-05-01T00:00:00.000Z",
+      defaultBranch: "main",
       filesVersion: 1,
     }],
     cloudRepoConfigsLoading: false,
@@ -115,6 +116,7 @@ describe("findHomeUnconfiguredGitHubRepository", () => {
         gitRepoName: "proliferate",
         configured: true,
         configuredAt: "2026-05-01T00:00:00.000Z",
+        defaultBranch: "main",
         filesVersion: 1,
       }],
     })).toBeNull();

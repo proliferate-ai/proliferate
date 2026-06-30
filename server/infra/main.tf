@@ -39,10 +39,6 @@ variable "jwt_secret" {
   sensitive = true
 }
 
-variable "sandbox_provider" {
-  default = "e2b"
-}
-
 variable "e2b_api_key" {
   sensitive = true
   default   = ""
@@ -630,7 +626,6 @@ resource "aws_ecs_task_definition" "server" {
       environment = [
         { name = "DATABASE_URL", value = "postgresql+asyncpg://proliferate:${var.db_password}@${aws_db_instance.postgres.endpoint}/proliferate" },
         { name = "JWT_SECRET", value = var.jwt_secret },
-        { name = "SANDBOX_PROVIDER", value = var.sandbox_provider },
         { name = "E2B_API_KEY", value = var.e2b_api_key },
         { name = "E2B_TEMPLATE_NAME", value = var.e2b_template_name },
         { name = "PROLIFERATE_TELEMETRY_MODE", value = var.telemetry_mode },

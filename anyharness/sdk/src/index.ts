@@ -496,7 +496,11 @@ export type {
   RunCommandResponse,
 } from "./types/processes.js";
 
-export { connectAgentLoginTerminal, connectTerminal } from "./streams/terminals.js";
+export {
+  connectAgentLoginTerminal,
+  connectTerminal,
+  TERMINAL_WEBSOCKET_BEARER_PROTOCOL,
+} from "./streams/terminals.js";
 export type {
   AgentLoginTerminalStreamOptions,
   TerminalDataFrame,
@@ -504,6 +508,7 @@ export type {
   TerminalReplayGapFrame,
   TerminalStreamOptions,
   TerminalStreamHandle,
+  TerminalWebSocketAuthTransport,
 } from "./streams/terminals.js";
 
 export { streamSession } from "./streams/sessions.js";

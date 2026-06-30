@@ -13,6 +13,7 @@ interface CloudWorkspaceSettingsSummaryCardProps {
   errorMessage: string | null;
   isResyncingFiles: boolean;
   isRunningSetup: boolean;
+  canResyncFiles: boolean;
   canRunSetup: boolean;
   onResyncFiles: () => void;
   onRunSetup: () => void;
@@ -30,6 +31,7 @@ export function CloudWorkspaceSettingsSummaryCard({
   errorMessage,
   isResyncingFiles,
   isRunningSetup,
+  canResyncFiles,
   canRunSetup,
   onResyncFiles,
   onRunSetup,
@@ -59,14 +61,16 @@ export function CloudWorkspaceSettingsSummaryCard({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            loading={isResyncingFiles}
-            onClick={onResyncFiles}
-          >
-            Re-sync files
-          </Button>
+          {canResyncFiles && (
+            <Button
+              type="button"
+              variant="outline"
+              loading={isResyncingFiles}
+              onClick={onResyncFiles}
+            >
+              Re-sync files
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"

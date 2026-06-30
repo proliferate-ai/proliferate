@@ -5,6 +5,7 @@ import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -38,7 +39,7 @@ export function useStartCloudWorkspaceMutation(
       ]);
       trackProductEvent("cloud_workspace_started", {
         workspace_kind: "cloud",
-        status: workspace.status,
+        status: resolveCloudWorkspaceStatus(workspace) ?? "unknown",
         git_provider: workspace.repo.provider,
       });
     },
