@@ -66,8 +66,8 @@ export function CloudEnvironmentsSettingsSurface({
       return [{
         gitOwner: repository.gitOwner,
         gitRepoName: repository.gitRepoName,
-        configured: cloudEnvironment.configured,
-        configuredAt: cloudEnvironment.configuredAt,
+        configured: true,
+        configuredAt: null,
         filesVersion: null,
       }];
     }),

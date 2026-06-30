@@ -1,4 +1,4 @@
-import type { components } from "../generated/openapi.js";
+import type { Schema } from "./schema.js";
 
 // Narrow string unions — kept hand-written because the server declares these as `str`
 // and the generated types would be too loose (`string`) for UI switch/display logic.
@@ -116,7 +116,7 @@ export type CloudRuntimeStatus =
   | "disabled";
 
 export type CloudRuntimeAuthState =
-  components["schemas"]["WorkspaceRuntimeAuthState"];
+  Schema<"WorkspaceRuntimeAuthState">;
 export type CloudRuntimeAuthStatus = CloudRuntimeAuthState["status"];
 
 export interface CloudWorkspaceRuntimeSummary {
@@ -135,42 +135,42 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 }
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
-export type RepoRef                   = components["schemas"]["RepoRef"];
-export type ManagedSandboxResponse    = components["schemas"]["ManagedSandboxResponse"];
-export type BillingPlanInfo           = components["schemas"]["CloudPlanInfo"];
-export type BillingUrlResponse        = components["schemas"]["BillingUrlResponse"];
-export type OverageSettingsResponse   = components["schemas"]["OverageSettingsResponse"];
-export type BillingOwnerSelection     = components["schemas"]["BillingOwnerSelection"];
-export type OrganizationUpdateRequest = components["schemas"]["OrganizationUpdateRequest"];
-export type OrganizationInviteRequest = components["schemas"]["OrganizationInviteRequest"];
+export type RepoRef                   = Schema<"RepoRef">;
+export type ManagedSandboxResponse    = Schema<"ManagedSandboxResponse">;
+export type BillingPlanInfo           = Schema<"CloudPlanInfo">;
+export type BillingUrlResponse        = Schema<"BillingUrlResponse">;
+export type OverageSettingsResponse   = Schema<"OverageSettingsResponse">;
+export type BillingOwnerSelection     = Schema<"BillingOwnerSelection">;
+export type OrganizationUpdateRequest = Schema<"OrganizationUpdateRequest">;
+export type OrganizationInviteRequest = Schema<"OrganizationInviteRequest">;
 export type OrganizationMembershipUpdateRequest =
-  components["schemas"]["OrganizationMembershipUpdateRequest"];
+  Schema<"OrganizationMembershipUpdateRequest">;
 export type OrganizationInvitationAcceptRequest =
-  components["schemas"]["OrganizationInvitationAcceptRequest"];
+  Schema<"OrganizationInvitationAcceptRequest">;
 export type OrganizationStatus = "pending_checkout" | "active" | "suspended" | "archived";
-export type OrganizationResponse = components["schemas"]["OrganizationResponse"] & {
+export type OrganizationResponse = Schema<"OrganizationResponse"> & {
   status: OrganizationStatus;
 };
 export type OrganizationListResponse = Omit<
-  components["schemas"]["OrganizationListResponse"],
+  Schema<"OrganizationListResponse">,
   "organizations"
 > & {
   organizations: OrganizationResponse[];
 };
 export type OrganizationMemberResponse =
-  components["schemas"]["OrganizationMemberResponse"];
+  Schema<"OrganizationMemberResponse">;
 export type OrganizationMembersResponse =
-  components["schemas"]["OrganizationMembersResponse"];
+  Schema<"OrganizationMembersResponse">;
 export type OrganizationMembershipResponse =
-  components["schemas"]["OrganizationMembershipResponse"];
+  Schema<"OrganizationMembershipResponse">;
 export type OrganizationInvitationResponse =
-  components["schemas"]["OrganizationInvitationResponse"];
+  Schema<"OrganizationInvitationResponse">;
 export type OrganizationInvitationsResponse =
-  components["schemas"]["OrganizationInvitationsResponse"];
+  Schema<"OrganizationInvitationsResponse">;
 export type OrganizationJoinLinkResponse =
-  components["schemas"]["OrganizationJoinLinkResponse"];
+  Schema<"OrganizationJoinLinkResponse">;
 export type OrganizationInvitationAcceptResponse =
-  components["schemas"]["OrganizationInvitationAcceptResponse"];
+  Schema<"OrganizationInvitationAcceptResponse">;
 export interface TeamCheckoutRequest {
   teamName: string;
   inviteEmails?: string[];
@@ -234,51 +234,27 @@ export interface CloudWorkspaceSummary {
   claimId?: string | null;
   claimedAt?: string | null;
   claimSourceKind?: string | null;
-  billing?: components["schemas"]["WorkspaceBillingSummary"] | null;
-  allowedAgentKinds?: string[];
-  readyAgentKinds?: string[];
+  billing?: Schema<"WorkspaceBillingSummary"> | null;
+  allowedAgentKinds: string[];
+  readyAgentKinds: string[];
   anyharnessWorkspaceId?: string | null;
 }
-export type CloudWorkspaceDetail = Omit<
-  components["schemas"]["WorkspaceDetail"],
-  | "status"
-  | "workspaceStatus"
-  | "runtime"
-  | "actionBlockKind"
-  | "actionBlockReason"
-  | "visibility"
-> & {
-  targetId?: string | null;
-  status: CloudWorkspaceStatus;
-  workspaceStatus: CloudWorkspaceStatus;
-  productLifecycle?: CloudWorkspaceProductLifecycle;
-  runtime?: CloudWorkspaceRuntimeSummary;
-  executionTarget?: CloudWorkspaceExecutionTargetSummary;
-  selectedMaterializationId?: string | null;
-  primaryMaterialization?: CloudWorkspaceMaterializationSummary | null;
-  cloudAccess?: CloudWorkspaceCloudAccessSummary;
-  actionBlockKind?: string | null;
-  actionBlockReason?: string | null;
-  visibility: CloudWorkspaceVisibility;
-  exposure?: CloudWorkspaceExposureSummary | null;
-  exposureState?: CloudWorkspaceExposureState;
-  sandboxType?: CloudWorkspaceSandboxType;
-  lastActivityAt?: string | null;
-  lastSessionSummary?: CloudWorkspaceLastSessionSummary | null;
-};
-export type ClaimWorkspaceRequest = components["schemas"]["ClaimWorkspaceRequest"];
-export type ClaimWorkspaceResponse = components["schemas"]["ClaimWorkspaceResponse"];
+export interface CloudWorkspaceDetail extends CloudWorkspaceSummary {
+  [key: string]: unknown;
+}
+export type ClaimWorkspaceRequest = Schema<"ClaimWorkspaceRequest">;
+export type ClaimWorkspaceResponse = Schema<"ClaimWorkspaceResponse">;
 export type DirectAccessTokenRequest =
-  components["schemas"]["DirectAccessTokenRequest"];
+  Schema<"DirectAccessTokenRequest">;
 export type DirectAccessTokenResponse =
-  components["schemas"]["DirectAccessTokenResponse"];
+  Schema<"DirectAccessTokenResponse">;
 export type RevokeClaimTokenResponse =
-  components["schemas"]["RevokeClaimTokenResponse"];
-export type CloudOriginContext        = components["schemas"]["OriginContext"];
+  Schema<"RevokeClaimTokenResponse">;
+export type CloudOriginContext        = Schema<"OriginContext">;
 export type CloudWorkspaceCreatorContext =
-  components["schemas"]["WorkspaceCreatorContext"];
+  Schema<"WorkspaceCreatorContext">;
 export type CloudWorkspaceDirectTargetContext =
-  components["schemas"]["WorkspaceDirectTargetContext"];
+  Schema<"WorkspaceDirectTargetContext">;
 export interface CloudConnectionInfo {
   runtimeUrl: string;
   accessToken: string;
@@ -288,24 +264,24 @@ export interface CloudConnectionInfo {
   readyAgentKinds: string[];
   runtimeAuth: CloudRuntimeAuthState;
 }
-export type CloudGitRepositorySummary = components["schemas"]["CloudGitRepositorySummary"];
+export type CloudGitRepositorySummary = Schema<"CloudGitRepositorySummary">;
 export type CloudGitRepositoriesResponse =
-  components["schemas"]["CloudGitRepositoriesResponse"];
-export type CloudRepoBranchesResponse = components["schemas"]["RepoBranchesResponse"];
-export type CloudRepoConfigSummary    = components["schemas"]["CloudRepoConfigSummary"];
-export type CloudRepoConfigsListResponse = components["schemas"]["CloudRepoConfigsListResponse"];
-export type CloudRepoFileMetadata     = components["schemas"]["CloudRepoFileMetadata"];
-export type CloudRepoConfigResponse   = components["schemas"]["CloudRepoConfigResponse"];
-export type SaveCloudRepoConfigRequest = components["schemas"]["SaveCloudRepoConfigRequest"];
+  Schema<"CloudGitRepositoriesResponse">;
+export type CloudRepoBranchesResponse = Schema<"RepoBranchesResponse">;
+export type CloudRepoConfigSummary    = Schema<"CloudRepoConfigSummary">;
+export type CloudRepoConfigsListResponse = Schema<"CloudRepoConfigsListResponse">;
+export type CloudRepoFileMetadata     = Schema<"CloudRepoFileMetadata">;
+export type CloudRepoConfigResponse   = Schema<"CloudRepoConfigResponse">;
+export type SaveCloudRepoConfigRequest = Schema<"SaveCloudRepoConfigRequest">;
 export type SaveOrganizationCloudRepoConfigRequest =
-  components["schemas"]["SaveOrganizationCloudRepoConfigRequest"];
-export type RepoConfigResponse = components["schemas"]["RepoConfigResponse"];
-export type RepoConfigsListResponse = components["schemas"]["RepoConfigsListResponse"];
-export type RepoEnvironmentResponse = components["schemas"]["RepoEnvironmentResponse"];
+  Schema<"SaveOrganizationCloudRepoConfigRequest">;
+export type RepoConfigResponse = Schema<"RepoConfigResponse">;
+export type RepoConfigsListResponse = Schema<"RepoConfigsListResponse">;
+export type RepoEnvironmentResponse = Schema<"RepoEnvironmentResponse">;
 export type SaveCloudRepoEnvironmentRequest =
-  components["schemas"]["SaveCloudRepoEnvironmentRequest"];
+  Schema<"SaveCloudRepoEnvironmentRequest">;
 export type SaveLocalRepoEnvironmentRequest =
-  components["schemas"]["SaveLocalRepoEnvironmentRequest"];
+  Schema<"SaveLocalRepoEnvironmentRequest">;
 export type AutomationOwnerScope = "personal" | "organization";
 export type AutomationTargetMode = "local" | "personal_cloud" | "shared_cloud";
 export type AutomationRunStatus =
@@ -328,7 +304,7 @@ export interface AutomationResponse {
   gitRepoName: string;
   title: string;
   prompt: string;
-  schedule: components["schemas"]["AutomationScheduleResponse"];
+  schedule: Schema<"AutomationScheduleResponse">;
   targetMode: AutomationTargetMode;
   cloudAgentRunConfigId: string;
   enabled: boolean;
@@ -388,7 +364,7 @@ export interface CreateAutomationRequest {
   organizationId?: string | null;
   gitOwner: string;
   gitRepoName: string;
-  schedule: components["schemas"]["AutomationScheduleRequest"];
+  schedule: Schema<"AutomationScheduleRequest">;
   targetMode: AutomationTargetMode;
   cloudAgentRunConfigId: string;
 }
@@ -397,20 +373,20 @@ export interface UpdateAutomationRequest {
   prompt?: string | null;
   gitOwner?: string | null;
   gitRepoName?: string | null;
-  schedule?: components["schemas"]["AutomationScheduleRequest"] | null;
+  schedule?: Schema<"AutomationScheduleRequest"> | null;
   targetMode?: AutomationTargetMode | null;
   cloudAgentRunConfigId?: string | null;
 }
 export type LocalAutomationClaimRequest =
-  components["schemas"]["LocalAutomationClaimRequest"];
+  Schema<"LocalAutomationClaimRequest">;
 export type LocalAutomationClaimActionRequest =
-  components["schemas"]["LocalAutomationClaimActionRequest"];
+  Schema<"LocalAutomationClaimActionRequest">;
 export type LocalAutomationAttachWorkspaceRequest =
-  components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
+  Schema<"LocalAutomationAttachWorkspaceRequest">;
 export type LocalAutomationAttachSessionRequest =
-  components["schemas"]["LocalAutomationAttachSessionRequest"];
+  Schema<"LocalAutomationAttachSessionRequest">;
 export type LocalAutomationFailRequest =
-  components["schemas"]["LocalAutomationFailRequest"];
+  Schema<"LocalAutomationFailRequest">;
 export interface LocalAutomationRunClaimResponse {
   id: string;
   automationId: string;
@@ -438,47 +414,199 @@ export interface LocalAutomationMutationResponse {
   run: LocalAutomationRunClaimResponse | null;
   accepted: boolean;
 }
-export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogResponse"];
-export type CloudMcpCatalogEntry = components["schemas"]["ConnectorCatalogEntryModel"];
-export type CloudPluginPackage = components["schemas"]["PluginPackageModel"];
-export type CloudPluginPackageSkill = components["schemas"]["PluginPackageSkillModel"];
+export interface CloudMcpCatalogField {
+  id: string;
+  label: string;
+  placeholder: string;
+  helperText: string;
+  getTokenInstructions: string;
+  prefixHint?: string | null;
+}
+export interface CloudMcpSettingsOption {
+  value: string;
+  label: string;
+}
+export interface CloudMcpSettingsField {
+  id: string;
+  kind: "string" | "boolean" | "select" | "url";
+  label: string;
+  placeholder?: string | null;
+  helperText?: string | null;
+  required: boolean;
+  defaultValue?: string | boolean | null;
+  options?: CloudMcpSettingsOption[] | null;
+  affectsUrl: boolean;
+}
+export type CloudMcpArgTemplateSource =
+  | { kind: "static"; value: string }
+  | { kind: "workspace_path" }
+  | { kind: "secret"; fieldId: string }
+  | { kind: "setting"; fieldId: string };
+export type CloudMcpEnvTemplateSource =
+  | { kind: "static"; value: string }
+  | { kind: "secret"; fieldId: string }
+  | { kind: "setting"; fieldId: string };
+export type CloudMcpTemplateSource = CloudMcpArgTemplateSource | CloudMcpEnvTemplateSource;
+export interface CloudMcpCatalogEntry {
+  id: string;
+  version: number;
+  name: string;
+  oneLiner: string;
+  description: string;
+  docsUrl: string;
+  availability: "universal" | "local_only" | "cloud_only";
+  cloudSecretSync: boolean;
+  setupKind: "none" | "local_oauth";
+  serverNameBase: string;
+  iconId: string;
+  displayUrl?: string | null;
+  oauthClientMode?: "dcr" | "static" | null;
+  secretFields?: CloudMcpCatalogField[] | null;
+  requiredFields: CloudMcpCatalogField[];
+  settingsSchema?: CloudMcpSettingsField[] | null;
+  capabilities: string[];
+  transport: "stdio" | "http";
+  command?: string | null;
+  args?: Array<{ source: CloudMcpArgTemplateSource }> | null;
+  env?: Array<{ name: string; source: CloudMcpEnvTemplateSource }> | null;
+  authKind: "secret" | "oauth" | "none";
+  authStyle?: (
+    | { kind: "bearer" }
+    | { kind: "header"; headerName?: string | null }
+    | { kind: "query"; parameterName?: string | null }
+  ) | null;
+  authFieldId?: string | null;
+  url: string;
+}
+export interface CloudPluginPackageSkill {
+  id: string;
+  displayName: string;
+  description: string;
+  instructions: string;
+  requiredMcpServerRefs?: string[];
+  requiresCredentialBinding: boolean;
+  resources?: Array<{
+    resourceId: string;
+    displayName?: string | null;
+    contentType: string;
+    content: string;
+  }>;
+  defaultEnabled: boolean;
+  provenance?: {
+    sourceRepoUrl: string;
+    sourcePath: string;
+    sourceRef: string;
+    sourceSha256: string;
+    adaptedSha256: string;
+    sourceLicense: string;
+    importMode: "adapted" | "vendored";
+    reviewStatus: "reviewed" | "pending";
+    reviewer: string;
+    reviewedAt: string;
+    notes?: string | null;
+  };
+}
+export interface CloudPluginPackage {
+  id: string;
+  catalogEntryId: string;
+  version: string;
+  displayName: string;
+  description: string;
+  skills?: CloudPluginPackageSkill[];
+}
+export interface CloudMcpCatalogResponse {
+  entries: CloudMcpCatalogEntry[];
+  pluginPackages?: CloudPluginPackage[];
+}
 export type CloudOrganizationIntegrationPolicyItem =
-  components["schemas"]["CloudOrganizationIntegrationPolicyItem"];
+  Schema<"CloudOrganizationIntegrationPolicyItem">;
 export type CloudOrganizationIntegrationPolicyResponse =
-  components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
+  Schema<"CloudOrganizationIntegrationPolicyResponse">;
 export type PatchCloudOrganizationIntegrationPolicyRequest =
-  components["schemas"]["PatchCloudOrganizationIntegrationPolicyRequest"];
-export type CloudMcpConnection = components["schemas"]["CloudMcpConnectionResponse"];
-export type CloudMcpConnectionsResponse = components["schemas"]["CloudMcpConnectionsResponse"];
+  Schema<"PatchCloudOrganizationIntegrationPolicyRequest">;
+export interface CloudMcpConnection {
+  connectionId: string;
+  catalogEntryId: string;
+  catalogEntryVersion: number;
+  ownerScope: string;
+  ownerUserId?: string | null;
+  organizationId?: string | null;
+  enabled: boolean;
+  serverName: string;
+  authStatus: string;
+  settings: Record<string, unknown>;
+  publicToOrg: boolean;
+  publicOrganizationId?: string | null;
+  publicStatus: string;
+  publicUpdatedAt?: string | null;
+  publicUpdatedByUserId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: unknown;
+}
+export interface CloudMcpConnectionsResponse {
+  connections: CloudMcpConnection[];
+}
 export type CreateCloudMcpConnectionRequest =
-  components["schemas"]["CreateCloudMcpConnectionRequest"];
+  Schema<"CreateCloudMcpConnectionRequest">;
 export type PatchCloudMcpConnectionRequest =
-  components["schemas"]["PatchCloudMcpConnectionRequest"];
+  Schema<"PatchCloudMcpConnectionRequest">;
 export type PublicizeCloudMcpConnectionRequest =
-  components["schemas"]["PublicizeCloudMcpConnectionRequest"];
+  Schema<"PublicizeCloudMcpConnectionRequest">;
 export type PutCloudMcpSecretAuthRequest =
-  components["schemas"]["PutCloudMcpSecretAuthRequest"];
+  Schema<"PutCloudMcpSecretAuthRequest">;
 export type CloudMcpOAuthFlowStatusResponse =
-  components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
+  Schema<"CloudMcpOAuthFlowStatusResponse">;
 export type StartCloudMcpOAuthFlowRequest =
-  components["schemas"]["StartCloudMcpOAuthFlowRequest"];
+  Schema<"StartCloudMcpOAuthFlowRequest">;
 export type StartCloudMcpOAuthFlowResponse =
-  components["schemas"]["StartCloudMcpOAuthFlowResponse"];
-export type CloudPluginConfiguredItem =
-  components["schemas"]["PluginConfiguredItemResponse"];
-export type CloudPluginConfiguredItemsResponse =
-  components["schemas"]["PluginConfiguredItemsResponse"];
+  Schema<"StartCloudMcpOAuthFlowResponse">;
+export interface CloudPluginConfiguredItem {
+  id: string;
+  pluginId: string;
+  pluginVersion?: string | null;
+  enabled: boolean;
+  ownerScope: string;
+  ownerUserId?: string | null;
+  organizationId?: string | null;
+  publicToOrg: boolean;
+  publicOrganizationId?: string | null;
+  publicStatus: string;
+  configVersion?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+export interface CloudPluginConfiguredItemsResponse {
+  plugins: CloudPluginConfiguredItem[];
+}
 export type PatchPluginConfiguredItemRequest =
-  components["schemas"]["PatchPluginConfiguredItemRequest"];
-export type CloudSkillConfiguredItem =
-  components["schemas"]["SkillConfiguredItemResponse"];
-export type CloudSkillConfiguredItemsResponse =
-  components["schemas"]["SkillConfiguredItemsResponse"];
+  Schema<"PatchPluginConfiguredItemRequest">;
+export interface CloudSkillConfiguredItem {
+  id: string;
+  skillId: string;
+  skillSourceKind?: string | null;
+  skillVersion?: string | null;
+  pluginId?: string | null;
+  pluginVersion?: string | null;
+  enabled: boolean;
+  ownerScope: string;
+  ownerUserId?: string | null;
+  organizationId?: string | null;
+  publicToOrg: boolean;
+  publicOrganizationId?: string | null;
+  publicStatus: string;
+  configVersion?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+export interface CloudSkillConfiguredItemsResponse {
+  skills: CloudSkillConfiguredItem[];
+}
 export type CreateSkillConfiguredItemRequest =
-  components["schemas"]["CreateSkillConfiguredItemRequest"];
+  Schema<"CreateSkillConfiguredItemRequest">;
 export type PatchSkillConfiguredItemRequest =
-  components["schemas"]["PatchSkillConfiguredItemRequest"];
-export type PutCloudRepoFileRequest   = components["schemas"]["PutCloudRepoFileRequest"];
+  Schema<"PatchSkillConfiguredItemRequest">;
+export type PutCloudRepoFileRequest   = Schema<"PutCloudRepoFileRequest">;
 export interface CloudWorkspaceRepoConfigStatusResponse {
   currentRepoFilesVersion: number;
   repoFilesAppliedVersion: number;
@@ -505,9 +633,9 @@ export interface RunCloudWorkspaceSetupResponse {
   status: string;
 }
 export type CloudWorktreeRetentionPolicyRequest =
-  components["schemas"]["CloudWorktreeRetentionPolicyRequest"];
+  Schema<"CloudWorktreeRetentionPolicyRequest">;
 export type CloudWorktreeRetentionPolicyResponse =
-  components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
+  Schema<"CloudWorktreeRetentionPolicyResponse">;
 export interface CreateCloudWorkspaceRequest {
   gitProvider: "github";
   gitOwner: string;
@@ -521,84 +649,149 @@ export interface CreateCloudWorkspaceRequest {
   requiredAgentKind?: string | null;
   source?: "desktop" | "web" | "mobile" | null;
 }
-export type GenerateSessionTitleRequest = components["schemas"]["GenerateSessionTitleRequest"];
-export type GenerateSessionTitleResponse = components["schemas"]["GenerateSessionTitleResponse"];
-export type GenerateWorkspaceNameRequest = components["schemas"]["GenerateWorkspaceNameRequest"];
-export type GenerateWorkspaceNameResponse = components["schemas"]["GenerateWorkspaceNameResponse"];
-export type SupportMessageContext     = components["schemas"]["SupportMessageContext"];
-export type SendSupportMessageRequest = components["schemas"]["SupportMessageRequest"];
+export type GenerateSessionTitleRequest = Schema<"GenerateSessionTitleRequest">;
+export type GenerateSessionTitleResponse = Schema<"GenerateSessionTitleResponse">;
+export type GenerateWorkspaceNameRequest = Schema<"GenerateWorkspaceNameRequest">;
+export type GenerateWorkspaceNameResponse = Schema<"GenerateWorkspaceNameResponse">;
+export type SupportMessageContext     = Schema<"SupportMessageContext">;
+export type SendSupportMessageRequest = Schema<"SupportMessageRequest">;
 export type SupportReportCompleteRequest =
-  components["schemas"]["SupportReportCompleteRequest"];
+  Schema<"SupportReportCompleteRequest">;
 export type SupportReportCompleteResponse =
-  components["schemas"]["SupportReportCompleteResponse"];
+  Schema<"SupportReportCompleteResponse">;
 export type SupportReportCreateRequest =
-  components["schemas"]["SupportReportCreateRequest"];
+  Schema<"SupportReportCreateRequest">;
 export type SupportReportCreateResponse =
-  components["schemas"]["SupportReportCreateResponse"];
+  Schema<"SupportReportCreateResponse">;
 export type SupportReportServerCorrelation =
-  components["schemas"]["SupportReportServerCorrelation"];
+  Schema<"SupportReportServerCorrelation">;
 export type SupportReportTrackerResponse =
-  components["schemas"]["SupportReportTrackerResponse"];
-export type SupportReportUploadFile =
-  components["schemas"]["SupportReportUploadFile"];
+  Schema<"SupportReportTrackerResponse">;
 export type SupportReportUploadRequest =
-  components["schemas"]["SupportReportUploadRequest"];
-export type SupportReportUploadResponse =
-  components["schemas"]["SupportReportUploadResponse"];
-export type SupportReportUploadTargetsRequest =
-  components["schemas"]["SupportReportUploadTargetsRequest"];
+  Schema<"SupportReportUploadRequest">;
+export interface SupportReportUploadFile {
+  clientFileId: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+}
+export interface SupportReportUploadTarget {
+  clientFileId?: string | null;
+  objectKey: string;
+  putUrl: string;
+  contentType: string;
+  headers?: Record<string, string>;
+}
+export interface SupportReportUploadResponse {
+  reportId: string;
+  diagnostics?: SupportReportUploadTarget | null;
+  attachments?: SupportReportUploadTarget[];
+}
+export interface SupportReportUploadTargetsRequest {
+  diagnostics: {
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+  };
+  attachments?: Array<{
+    clientFileId: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+  }>;
+}
 export type SupportReportWorkspaceReference =
-  components["schemas"]["SupportReportWorkspaceReference"];
-export type CloudMobilityRepoRef = components["schemas"]["MobilityRepoRef"];
-export type CloudMobilityHandoffSummary = components["schemas"]["MobilityHandoffSummary"];
-export type CloudMobilityWorkspaceSummary = components["schemas"]["MobilityWorkspaceSummary"];
-export type CloudMobilityWorkspaceDetail = components["schemas"]["MobilityWorkspaceDetail"];
+  Schema<"SupportReportWorkspaceReference">;
+export interface CloudMobilityRepoRef {
+  provider: string;
+  owner: string;
+  name: string;
+  branch: string;
+}
+export interface CloudMobilityHandoffSummary {
+  id: string;
+  direction: "local_to_cloud" | "cloud_to_local";
+  sourceOwner: string;
+  targetOwner: string;
+  status: string;
+  phase: string;
+  requestedBranch: string;
+  requestedBaseSha?: string | null;
+  excludePaths: string[];
+  failureCode?: string | null;
+  failureDetail?: string | null;
+  startedAt: string;
+  heartbeatAt: string;
+  finalizedAt?: string | null;
+  cleanupCompletedAt?: string | null;
+  canonicalSide?: "source" | "destination" | null;
+}
+export interface CloudMobilityWorkspaceSummary {
+  id: string;
+  displayName?: string | null;
+  repo: CloudMobilityRepoRef;
+  owner: string;
+  lifecycleState: string;
+  statusDetail?: string | null;
+  lastError?: string | null;
+  cloudWorkspaceId?: string | null;
+  cloudLostAt?: string | null;
+  cloudLostReason?: string | null;
+  activeHandoff?: CloudMobilityHandoffSummary | null;
+  updatedAt: string | null;
+  createdAt: string | null;
+}
+export interface CloudMobilityWorkspaceDetail extends CloudMobilityWorkspaceSummary {
+  [key: string]: unknown;
+}
 export type EnsureCloudMobilityWorkspaceRequest =
-  components["schemas"]["EnsureMobilityWorkspaceRequest"];
+  Schema<"EnsureMobilityWorkspaceRequest">;
 export type CloudWorkspaceMobilityPreflightRequest =
-  components["schemas"]["WorkspaceMobilityPreflightRequest"];
+  Schema<"WorkspaceMobilityPreflightRequest">;
 export type CloudWorkspaceMobilityPreflightResponse =
-  components["schemas"]["WorkspaceMobilityPreflightResponse"];
+  Schema<"WorkspaceMobilityPreflightResponse">;
 export type StartCloudWorkspaceMobilityHandoffRequest =
-  components["schemas"]["StartWorkspaceMobilityHandoffRequest"];
+  Schema<"StartWorkspaceMobilityHandoffRequest">;
 export type UpdateCloudWorkspaceMobilityHandoffPhaseRequest =
-  components["schemas"]["UpdateWorkspaceMobilityHandoffPhaseRequest"];
+  Schema<"UpdateWorkspaceMobilityHandoffPhaseRequest">;
 export type FinalizeCloudWorkspaceMobilityHandoffRequest =
-  components["schemas"]["FinalizeWorkspaceMobilityHandoffRequest"];
+  Schema<"FinalizeWorkspaceMobilityHandoffRequest">;
 export type FailCloudWorkspaceMobilityHandoffRequest =
-  components["schemas"]["FailWorkspaceMobilityHandoffRequest"];
+  Schema<"FailWorkspaceMobilityHandoffRequest">;
 export type CloudMobilityCleanupItemSummary =
-  components["schemas"]["MobilityCleanupItemSummary"];
+  Schema<"MobilityCleanupItemSummary">;
 export type FailCloudMobilityCleanupItemRequest =
-  components["schemas"]["FailMobilityCleanupItemRequest"];
+  Schema<"FailMobilityCleanupItemRequest">;
 export type RepairCloudWorkspaceMobilityHandoffRequest =
-  components["schemas"]["RepairWorkspaceMobilityHandoffRequest"];
-export type CloudAgentCatalogResponse = components["schemas"]["AgentCatalogResponse"];
-export type CloudAgentCatalogAgent = components["schemas"]["AgentCatalogAgent"];
-export type CloudAgentCatalogSession = components["schemas"]["AgentCatalogSession"];
-export type CloudAgentCatalogModel = components["schemas"]["AgentCatalogModel"];
+  Schema<"RepairWorkspaceMobilityHandoffRequest">;
+export type CloudAgentCatalogResponse = Schema<"AgentCatalogResponse">;
+export type CloudAgentCatalogAgent = Schema<"AgentCatalogAgent">;
+export type CloudAgentCatalogSession = Schema<"AgentCatalogSession">;
+export type CloudAgentCatalogModel = Schema<"AgentCatalogModel">;
 export type CloudAgentCatalogModelControl =
-  components["schemas"]["AgentCatalogModelControl"];
+  Schema<"AgentCatalogModelControl">;
 export type CloudAgentCatalogSessionControl =
-  components["schemas"]["AgentCatalogSessionControl"];
+  Schema<"AgentCatalogSessionControl">;
 export type CloudAgentCatalogControlMapping =
-  components["schemas"]["AgentCatalogControlMapping"];
+  Schema<"AgentCatalogControlMapping">;
 export type CloudAgentCatalogAuthContext =
-  components["schemas"]["AgentCatalogAuthContext"];
+  Schema<"AgentCatalogAuthContext">;
 export type CloudAgentCatalogAvailability =
-  components["schemas"]["AgentCatalogAvailability"];
+  Schema<"AgentCatalogAvailability">;
 export type CloudAgentCatalogHarnessPins =
-  components["schemas"]["AgentCatalogHarnessPins"];
-export type CloudTargetConfig = components["schemas"]["CloudTargetConfigResponse"];
-export type TargetConfigSummary = components["schemas"]["TargetConfigSummaryModel"];
+  Schema<"AgentCatalogHarnessPins">;
+export type CloudTargetConfig = Schema<"CloudTargetConfigResponse">;
+export type TargetConfigSummary = Schema<"TargetConfigSummaryModel">;
 export type MaterializeTargetConfigRequest =
-  components["schemas"]["MaterializeTargetConfigRequest"];
+  Schema<"MaterializeTargetConfigRequest">;
 export type MaterializeTargetConfigResponse =
-  components["schemas"]["MaterializeTargetConfigResponse"];
+  Schema<"MaterializeTargetConfigResponse">;
 export type RefreshRuntimeConfigRequest =
-  components["schemas"]["RefreshRuntimeConfigRequest"];
-export type RuntimeConfigRevision = components["schemas"]["RuntimeConfigRevisionModel"];
+  Schema<"RefreshRuntimeConfigRequest">;
+export type RuntimeConfigRevision = Schema<"RuntimeConfigRevisionModel">;
 export type RuntimeConfigStatusResponse =
-  components["schemas"]["RuntimeConfigStatusResponse"];
+  Schema<"RuntimeConfigStatusResponse">;
 export type RuntimeConfigMaterializationFragment =
-  components["schemas"]["RuntimeConfigMaterializationFragment"];
+  Schema<"RuntimeConfigMaterializationFragment">;

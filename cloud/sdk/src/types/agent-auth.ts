@@ -1,4 +1,4 @@
-import type { components } from "../generated/openapi.js";
+import type { Schema } from "./schema.js";
 
 export type AgentAuthAgentKind = "claude" | "codex" | "opencode" | "gemini" | "grok";
 export type AgentAuthCredentialProviderId = "anthropic" | "openai" | "gemini" | "cursor" | "xai";
@@ -13,44 +13,44 @@ export type AgentGatewayProviderKind =
   | "openai_compatible";
 
 export type AgentAuthCredential =
-  components["schemas"]["AgentAuthCredentialResponse"];
+  Schema<"AgentAuthCredentialResponse">;
 export type AgentAuthCredentialShare =
-  components["schemas"]["AgentAuthCredentialShareResponse"];
+  Schema<"AgentAuthCredentialShareResponse">;
 export type AgentAuthMutationResponse =
-  components["schemas"]["AgentAuthMutationResponse"];
+  Schema<"AgentAuthMutationResponse">;
 export type AgentGatewayPolicy =
-  components["schemas"]["AgentGatewayPolicyResponse"];
+  Schema<"AgentGatewayPolicyResponse">;
 export type AgentGatewayProviderCredential =
-  components["schemas"]["AgentGatewayProviderCredentialResponse"];
+  Schema<"AgentGatewayProviderCredentialResponse">;
 export type AgentGatewayBudgetSubject =
-  components["schemas"]["AgentGatewayBudgetSubjectResponse"];
+  Schema<"AgentGatewayBudgetSubjectResponse">;
 export type AgentGatewayFreeCreditEntitlement =
-  components["schemas"]["AgentGatewayFreeCreditEntitlementResponse"];
+  Schema<"AgentGatewayFreeCreditEntitlementResponse">;
 export type CreateGatewayCredentialRequest =
-  components["schemas"]["CreateGatewayCredentialRequest"];
+  Schema<"CreateGatewayCredentialRequest">;
 export type CreateGatewayCredentialResponse =
-  components["schemas"]["CreateGatewayCredentialResponse"];
+  Schema<"CreateGatewayCredentialResponse">;
 export type SyncSyncedCredentialRequest =
-  | components["schemas"]["SyncSyncedCredentialEnvRequest"]
-  | components["schemas"]["SyncSyncedCredentialFileRequest"];
+  | Schema<"SyncSyncedCredentialEnvRequest">
+  | Schema<"SyncSyncedCredentialFileRequest">;
 export type SyncSyncedCredentialResponse =
-  components["schemas"]["SyncSyncedCredentialResponse"];
+  Schema<"SyncSyncedCredentialResponse">;
 export type EnsureManagedCreditsRequest =
-  components["schemas"]["EnsureManagedCreditsRequest"];
+  Schema<"EnsureManagedCreditsRequest">;
 export type EnsureManagedCreditsResponse =
-  components["schemas"]["EnsureManagedCreditsResponse"];
+  Schema<"EnsureManagedCreditsResponse">;
 export type EnsureFreeManagedCreditsRequest =
-  components["schemas"]["EnsureFreeManagedCreditsRequest"];
+  Schema<"EnsureFreeManagedCreditsRequest">;
 export type EnsureFreeManagedCreditsResponse =
-  components["schemas"]["EnsureFreeManagedCreditsResponse"];
+  Schema<"EnsureFreeManagedCreditsResponse">;
 export type SandboxProfile =
-  components["schemas"]["SandboxProfileResponse"];
+  Schema<"SandboxProfileResponse">;
 export type SandboxProfileTargetState =
-  components["schemas"]["SandboxProfileTargetStateResponse"];
+  Schema<"SandboxProfileTargetStateResponse">;
 export type SandboxAgentAuthSelection =
-  components["schemas"]["SandboxAgentAuthSelectionResponse"];
+  Schema<"SandboxAgentAuthSelectionResponse">;
 export type SandboxAgentAuthTargetState =
-  components["schemas"]["SandboxProfileAgentAuthTargetStateResponse"];
+  Schema<"SandboxProfileAgentAuthTargetStateResponse">;
 
 export interface AgentAuthCredentialListOptions {
   organizationId?: string | null;
@@ -98,6 +98,6 @@ export interface SelectAgentAuthCredentialInput {
 }
 
 export type AgentGatewayCapabilities =
-  components["schemas"]["AgentGatewayCapabilities"];
+  Schema<"AgentGatewayCapabilities">;
 export type CloudCapabilities =
-  components["schemas"]["CloudCapabilitiesResponse"];
+  Schema<"CloudCapabilitiesResponse">;

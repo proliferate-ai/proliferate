@@ -1,4 +1,5 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import { legacyOpenApiClient } from "./legacy.js";
 import type {
   CloudSkillConfiguredItem,
   CloudSkillConfiguredItemsResponse,
@@ -9,14 +10,14 @@ import type {
 export async function listConfiguredSkills(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudSkillConfiguredItemsResponse> {
-  return (await client.GET("/v1/cloud/skills")).data!;
+  return (await legacyOpenApiClient(client).GET("/v1/cloud/skills")).data!;
 }
 
 export async function createConfiguredSkill(
   body: CreateSkillConfiguredItemRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudSkillConfiguredItem> {
-  return (await client.POST("/v1/cloud/skills", { body })).data!;
+  return (await legacyOpenApiClient(client).POST("/v1/cloud/skills", { body })).data!;
 }
 
 export async function patchConfiguredSkill(
@@ -24,7 +25,7 @@ export async function patchConfiguredSkill(
   body: PatchSkillConfiguredItemRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudSkillConfiguredItem> {
-  return (await client.PATCH("/v1/cloud/skills/{item_id}", {
+  return (await legacyOpenApiClient(client).PATCH("/v1/cloud/skills/{item_id}", {
     params: { path: { item_id: itemId } },
     body,
   })).data!;
@@ -34,7 +35,7 @@ export async function deleteConfiguredSkill(
   itemId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<void> {
-  await client.DELETE("/v1/cloud/skills/{item_id}", {
+  await legacyOpenApiClient(client).DELETE("/v1/cloud/skills/{item_id}", {
     params: { path: { item_id: itemId } },
   });
 }

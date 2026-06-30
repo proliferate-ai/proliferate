@@ -124,7 +124,8 @@ export function useRuntimeInputSyncRuntime() {
     }
     const config = await getCloudRepoConfig(descriptor.gitOwner, descriptor.gitRepoName);
     const metadata = config.trackedFiles.find(
-      (file) => file.relativePath === descriptor.relativePath,
+      (file: { relativePath: string; contentSha256: string }) =>
+        file.relativePath === descriptor.relativePath,
     );
     if (!config.configured || !metadata) {
       return;
