@@ -5,7 +5,6 @@ import {
   buildWorkspaceCollections,
   workspaceCollectionsNeedActivityRefresh,
 } from "@/lib/domain/workspaces/cloud/collections";
-import { listCloudWorkspaces } from "@proliferate/cloud-sdk/client/workspaces";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -156,7 +155,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
       const connection = { runtimeUrl };
       try {
         const fetchStartedAt = performance.now();
-        const [localWorkspaces, repoRoots, cloudWorkspaces] = await Promise.all([
+        const [localWorkspaces, repoRoots] = await Promise.all([
           fallbackOnNonAbort(
             listRuntimeWorkspaces(
               connection,
@@ -179,15 +178,6 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
             ),
             cachedCollections?.repoRoots,
           ),
-          cloudActive
-            ? fallbackOnNonAbort(
-              listCloudWorkspaces(
-                { measurementOperationId: operationId, signal },
-                { ownerScope: "personal", lifecycle: "all" },
-              ),
-              null,
-            )
-          : Promise.resolve([]),
         ]);
         recordMeasurementWorkflowStep({
           operationId,
@@ -198,7 +188,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
         const collections = buildWorkspaceCollections(
           localWorkspaces,
           repoRoots,
-          cloudWorkspaces ?? [],
+          [],
         );
         recordMeasurementWorkflowStep({
           operationId,

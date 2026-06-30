@@ -23,7 +23,7 @@ interface ComputePaneProps {
 export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
-  const { data, isLoading } = useCloudTargets();
+  const { data, isLoading } = useCloudTargets(false);
   const targets: ComputeTargetSummary[] = data ?? EMPTY_TARGETS;
   const sshTargets = useMemo(
     () => targets.filter((target) => target.kind === "ssh"),

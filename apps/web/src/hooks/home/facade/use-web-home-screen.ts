@@ -6,8 +6,6 @@ import {
   useCloudCapabilities,
   useCloudRepoBranches,
   useRepositories,
-  useCloudTargets,
-  useTargetLive,
   useVisibleCloudWorkspaces,
 } from "@proliferate/cloud-sdk-react";
 import {
@@ -66,10 +64,7 @@ export function useWebHomeScreen() {
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
   const agentAuthCredentials = useAgentAuthCredentials();
-  const visibleWorkspaces = useVisibleCloudWorkspaces();
-  const targets = useCloudTargets();
-  const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
-  const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
+  const visibleWorkspaces = useVisibleCloudWorkspaces(false);
   const configuredCloudRepos = useMemo(
     () => (repoConfigs.data?.repositories ?? []).flatMap((repo) => {
       const cloudEnvironment = repo.environments.find((environment) =>
@@ -94,22 +89,9 @@ export function useWebHomeScreen() {
     () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
     [repoId, repoOptions],
   );
-  const liveTargets = useMemo(() => {
-    const liveTarget = targetLive.snapshot?.target;
-    if (!liveTarget) {
-      return targets.data;
-    }
-    const baseTargets = targets.data ?? [];
-    if (!baseTargets.some((target) => target.id === liveTarget.id)) {
-      return [...baseTargets, liveTarget];
-    }
-    return baseTargets.map((target) =>
-      target.id === liveTarget.id ? { ...target, ...liveTarget } : target
-    );
-  }, [targetLive.snapshot?.target, targets.data]);
   const runtimeOptions = useMemo(
-    () => buildRuntimeOptions(liveTargets),
-    [liveTargets],
+    () => buildRuntimeOptions([]),
+    [],
   );
   const selectedRuntime = useMemo(
     () => runtimeOptions.find((runtime) => runtime.id === runtimeId) ?? runtimeOptions[0] ?? null,
@@ -226,7 +208,7 @@ export function useWebHomeScreen() {
       }),
       buildRuntimeControl({
         runtimeOptions,
-        loading: targets.isLoading,
+        loading: false,
         selectedRuntime,
         onSelect: setRuntimeId,
       }),
@@ -240,7 +222,6 @@ export function useWebHomeScreen() {
       selectedBaseBranch,
       selectedRepo,
       selectedRuntime,
-      targets.isLoading,
     ],
   );
 

@@ -52,7 +52,7 @@ export function WebSidebarController({
     () => parseCloudSidebarRoute(location.pathname),
     [location.pathname],
   );
-  const workspaces = useVisibleCloudWorkspaces();
+  const workspaces = useVisibleCloudWorkspaces(false);
   const activeWorkspaceSnapshot = useCloudWorkspaceSnapshot(
     routeState.workspaceId,
     Boolean(routeState.workspaceId),

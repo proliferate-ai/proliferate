@@ -184,3 +184,22 @@ async def test_create_github_app_installation_url_uses_app_slug_and_state(
     assert response.installation_url.startswith(
         "https://github.com/apps/proliferate-dev/installations/new?state="
     )
+
+
+@pytest.mark.asyncio
+async def test_create_github_app_installation_url_allows_desktop_environment_return(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
+    monkeypatch.setattr(service.settings, "github_app_slug", "proliferate-dev")
+    org_user = _OrgUser(actor_user_id=uuid.uuid4(), organization_id=uuid.uuid4())
+
+    response = await service.create_github_app_installation_url(
+        object(),
+        org_user=org_user,
+        return_to="proliferate://settings/environments?source=github_app_installation_callback",
+    )
+
+    assert response.installation_url.startswith(
+        "https://github.com/apps/proliferate-dev/installations/new?state="
+    )

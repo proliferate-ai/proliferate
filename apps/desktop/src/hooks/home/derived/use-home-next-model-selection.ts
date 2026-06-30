@@ -3,16 +3,12 @@ import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useCloudTargets } from "@/hooks/access/cloud/targets/use-cloud-targets";
 import { useSandboxAgentAuthSelections } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries,
   type DesktopLaunchModelRegistry as ModelRegistry,
 } from "@/lib/domain/agents/cloud-launch-catalog";
-import type {
-  CloudTargetSummary,
-  SandboxAgentAuthSelection,
-} from "@proliferate/cloud-sdk";
+import type { SandboxAgentAuthSelection } from "@proliferate/cloud-sdk";
 import type { AgentCatalogSummary } from "@/lib/domain/agents/model-options";
 import { filterVisibleModelRegistries } from "@/lib/domain/chat/models/model-visibility";
 import {
@@ -43,7 +39,6 @@ export function useHomeNextModelSelection({
     error: agentsQueryError,
   } = useAgentCatalog();
   const isCloudLaunchTarget = repoLaunchKind === "cloud";
-  const cloudTargetsQuery = useCloudTargets(isCloudLaunchTarget);
   const modelRegistriesQuery = useCloudLaunchModelRegistries();
   const runtimeLaunchOptions = useAgentLaunchOptionsQuery();
   const modelRegistries = useMemo(
@@ -59,13 +54,9 @@ export function useHomeNextModelSelection({
     chatModelVisibilityOverridesByAgentKind:
       state.chatModelVisibilityOverridesByAgentKind,
   })));
-  const primaryCloudTarget = useMemo(
-    () => resolvePrimaryManagedCloudTarget(cloudTargetsQuery.data ?? []),
-    [cloudTargetsQuery.data],
-  );
   const cloudAgentSelectionsQuery = useSandboxAgentAuthSelections(
-    primaryCloudTarget?.sandboxProfileId ?? null,
-    isCloudLaunchTarget,
+    null,
+    false,
   );
   const visibleModelRegistries = useMemo(
     () => filterVisibleModelRegistries({
@@ -123,13 +114,11 @@ export function useHomeNextModelSelection({
     agentsLoading
     || modelRegistriesQuery.isLoading
     || (!isCloudLaunchTarget && runtimeLaunchOptions.isLoading)
-    || (isCloudLaunchTarget && cloudTargetsQuery.isLoading)
     || (isCloudLaunchTarget && cloudAgentSelectionsQuery.isLoading);
   const hasLoadError =
     agentsError
     || modelRegistriesQuery.isError
     || (!isCloudLaunchTarget && runtimeLaunchOptions.isError)
-    || (isCloudLaunchTarget && cloudTargetsQuery.isError)
     || (isCloudLaunchTarget && cloudAgentSelectionsQuery.isError);
   const hasLaunchableModel =
     modelGroups.length > 0
@@ -152,17 +141,6 @@ export function useHomeNextModelSelection({
       ?? (isCloudLaunchTarget ? null : runtimeLaunchOptions.error),
     modelAvailabilityState,
   };
-}
-
-function resolvePrimaryManagedCloudTarget(
-  targets: readonly CloudTargetSummary[],
-): CloudTargetSummary | null {
-  return targets.find((target) =>
-    target.kind === "managed_cloud"
-    && target.status === "online"
-    && target.profileTargetRole === "primary"
-    && Boolean(target.sandboxProfileId)
-  ) ?? null;
 }
 
 function buildCloudReadyAgentSummaries({

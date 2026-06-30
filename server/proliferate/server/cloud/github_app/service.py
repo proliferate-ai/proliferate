@@ -108,6 +108,7 @@ def _validate_return_to(return_to: str | None) -> str | None:
             "",
             "/",
             "/account",
+            "/environments",
             "/organization",
             "/organizations",
         }:
