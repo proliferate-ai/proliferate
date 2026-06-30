@@ -57,7 +57,7 @@ describe("resolveManagedSandboxGatewayConnectionForWorkspace", () => {
           requiresRestart: false,
         },
       },
-    } as CloudWorkspaceDetail);
+    } as unknown as CloudWorkspaceDetail);
 
     expect(connection).toMatchObject({
       runtimeUrl: "http://api.test/v1/gateway/managed-sandbox/anyharness",

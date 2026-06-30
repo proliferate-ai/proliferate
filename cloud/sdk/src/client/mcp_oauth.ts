@@ -1,4 +1,5 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import { legacyOpenApiClient } from "./legacy.js";
 import type {
   CloudMcpOAuthFlowStatusResponse,
   StartCloudMcpOAuthFlowRequest,
@@ -24,7 +25,7 @@ export async function startCloudMcpOAuthFlow(
   maybeClient?: ProliferateCloudClient,
 ): Promise<StartCloudMcpOAuthFlowResponse> {
   const { body, client } = resolveStartOAuthArgs(optionsOrClient, maybeClient);
-  return (await client.POST(
+  return (await legacyOpenApiClient(client).POST(
     "/v1/cloud/mcp/connections/{connection_id}/oauth/start",
     {
       params: { path: { connection_id: connectionId } },
@@ -37,7 +38,7 @@ export async function getCloudMcpOAuthFlowStatus(
   flowId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpOAuthFlowStatusResponse> {
-  return (await client.GET("/v1/cloud/mcp/oauth/flows/{flow_id}", {
+  return (await legacyOpenApiClient(client).GET("/v1/cloud/mcp/oauth/flows/{flow_id}", {
     params: { path: { flow_id: flowId } },
   })).data!;
 }
@@ -46,7 +47,7 @@ export async function cancelCloudMcpOAuthFlow(
   flowId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpOAuthFlowStatusResponse> {
-  return (await client.POST("/v1/cloud/mcp/oauth/flows/{flow_id}/cancel", {
+  return (await legacyOpenApiClient(client).POST("/v1/cloud/mcp/oauth/flows/{flow_id}/cancel", {
     params: { path: { flow_id: flowId } },
   })).data!;
 }

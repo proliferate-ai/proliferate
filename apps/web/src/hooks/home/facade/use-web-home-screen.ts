@@ -81,7 +81,7 @@ export function useWebHomeScreen() {
       return [{
         gitOwner: repo.gitOwner,
         gitRepoName: repo.gitRepoName,
-        configured: cloudEnvironment.configured,
+        configured: true,
       }];
     }),
     [repoConfigs.data?.repositories],

@@ -1,4 +1,3 @@
-import type { components } from "../generated/openapi.js";
 import type { CloudWorkspaceDetail } from "./generated.js";
 
 export interface CloudSessionConfigState {
@@ -8,21 +7,65 @@ export interface CloudSessionConfigState {
   updatedAt?: string | null;
 }
 
-export type CloudSessionProjection =
-  components["schemas"]["CloudSessionProjectionResponse"];
-export type CloudTranscriptItem =
-  components["schemas"]["CloudTranscriptItemResponse"];
-export type CloudPendingInteraction =
-  components["schemas"]["CloudPendingInteractionResponse"];
-export type CloudSessionSnapshot =
-  components["schemas"]["CloudSessionSnapshotResponse"];
-export type CloudSessionEventEnvelope =
-  components["schemas"]["WorkerSessionEventEnvelope"];
-export type CloudWorkspaceSnapshot = Omit<
-  components["schemas"]["CloudWorkspaceSnapshotResponse"],
-  "workspace"
-> & {
+export interface CloudSessionProjection {
+  sessionId: string;
+  workspaceId: string;
+  targetId: string;
+  title?: string | null;
+  status?: string | null;
+  phase?: string | null;
+  startedAt?: string | null;
+  lastEventAt?: string | null;
+  lastEventSeq: number;
+  pendingInteractionCount: number;
+  parentSessionId?: string | null;
+  config?: CloudSessionConfigState | null;
+  [key: string]: any;
+}
+
+export interface CloudTranscriptItem {
+  itemId: string;
+  sessionId?: string | null;
+  turnId?: string | null;
+  role?: string | null;
+  kind?: string | null;
+  createdAt?: string | null;
+  [key: string]: any;
+}
+
+export interface CloudPendingInteraction {
+  requestId: string;
+  sessionId?: string | null;
+  status?: string | null;
+  kind?: string | null;
+  commandId?: string | null;
+  prompt?: string | null;
+  createdAt?: string | null;
+  [key: string]: any;
+}
+
+export interface CloudSessionEventEnvelope {
+  turnId?: string | null;
+  itemId?: string | null;
+  timestamp?: string | null;
+  [key: string]: any;
+}
+
+export interface CloudSessionSnapshot {
+  session: CloudSessionProjection;
+  transcriptItems: CloudTranscriptItem[];
+  pendingInteractions: CloudPendingInteraction[];
+  [key: string]: any;
+}
+
+export interface CloudWorkspaceSnapshot {
   workspace: CloudWorkspaceDetail;
-};
-export type CloudTranscriptSnapshot =
-  components["schemas"]["CloudTranscriptSnapshotResponse"];
+  sessions: CloudSessionProjection[];
+  [key: string]: any;
+}
+
+export interface CloudTranscriptSnapshot {
+  transcriptItems: CloudTranscriptItem[];
+  pendingInteractions?: CloudPendingInteraction[];
+  [key: string]: any;
+}

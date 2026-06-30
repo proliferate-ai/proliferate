@@ -1,4 +1,5 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import { legacyOpenApiClient } from "./legacy.js";
 import type {
   CloudRepoConfigResponse,
   CloudRepoConfigsListResponse,
@@ -11,7 +12,7 @@ export async function listCloudRepoConfigs(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoConfigsListResponse> {
   return (
-    await client.GET("/v1/cloud/repos/configs")
+    await legacyOpenApiClient(client).GET("/v1/cloud/repos/configs")
   ).data!;
 }
 
@@ -32,7 +33,7 @@ export async function getCloudRepoConfig(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoConfigResponse> {
   return (
-    await client.GET("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
+    await legacyOpenApiClient(client).GET("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
     })
   ).data!;
@@ -62,7 +63,7 @@ export async function saveCloudRepoConfig(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoConfigResponse> {
   return (
-    await client.PUT("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
+    await legacyOpenApiClient(client).PUT("/v1/cloud/repos/{git_owner}/{git_repo_name}/config", {
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
       body,
     })
@@ -117,7 +118,7 @@ export async function resyncCloudRepoFileFromLocal(
   body: PutCloudRepoFileRequest,
 ): Promise<CloudRepoConfigResponse> {
   return (
-    await getProliferateClient().PUT("/v1/cloud/repos/{git_owner}/{git_repo_name}/files", {
+    await legacyOpenApiClient(getProliferateClient()).PUT("/v1/cloud/repos/{git_owner}/{git_repo_name}/files", {
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
       body,
     })

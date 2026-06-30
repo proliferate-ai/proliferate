@@ -1,4 +1,5 @@
 import { getProliferateClient } from "./core.js";
+import { legacyOpenApiClient } from "./legacy.js";
 import type {
   CloudMobilityCleanupItemSummary,
   CloudMobilityHandoffSummary,
@@ -16,14 +17,14 @@ import type {
 } from "../types/index.js";
 
 export async function listCloudMobilityWorkspaces(): Promise<CloudMobilityWorkspaceSummary[]> {
-  return (await getProliferateClient().GET("/v1/cloud/mobility/workspaces")).data!;
+  return (await legacyOpenApiClient(getProliferateClient()).GET("/v1/cloud/mobility/workspaces")).data!;
 }
 
 export async function ensureCloudMobilityWorkspace(
   input: EnsureCloudMobilityWorkspaceRequest,
 ): Promise<CloudMobilityWorkspaceDetail> {
   return (
-    await getProliferateClient().POST("/v1/cloud/mobility/workspaces/ensure", {
+    await legacyOpenApiClient(getProliferateClient()).POST("/v1/cloud/mobility/workspaces/ensure", {
       body: input,
     })
   ).data!;
@@ -33,7 +34,7 @@ export async function getCloudMobilityWorkspaceDetail(
   mobilityWorkspaceId: string,
 ): Promise<CloudMobilityWorkspaceDetail> {
   return (
-    await getProliferateClient().GET("/v1/cloud/mobility/workspaces/{mobility_workspace_id}", {
+    await legacyOpenApiClient(getProliferateClient()).GET("/v1/cloud/mobility/workspaces/{mobility_workspace_id}", {
       params: { path: { mobility_workspace_id: mobilityWorkspaceId } },
     })
   ).data!;
@@ -44,7 +45,7 @@ export async function preflightCloudWorkspaceHandoff(
   input: CloudWorkspaceMobilityPreflightRequest,
 ): Promise<CloudWorkspaceMobilityPreflightResponse> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/preflight",
       {
         params: { path: { mobility_workspace_id: mobilityWorkspaceId } },
@@ -59,7 +60,7 @@ export async function startCloudWorkspaceHandoff(
   input: StartCloudWorkspaceMobilityHandoffRequest,
 ): Promise<CloudMobilityHandoffSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/start",
       {
         params: { path: { mobility_workspace_id: mobilityWorkspaceId } },
@@ -74,7 +75,7 @@ export async function heartbeatCloudWorkspaceHandoff(
   handoffOpId: string,
 ): Promise<CloudMobilityHandoffSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/heartbeat",
       {
         params: {
@@ -94,7 +95,7 @@ export async function updateCloudWorkspaceHandoffPhase(
   input: UpdateCloudWorkspaceMobilityHandoffPhaseRequest,
 ): Promise<CloudMobilityHandoffSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/phase",
       {
         params: {
@@ -115,7 +116,7 @@ export async function finalizeCloudWorkspaceHandoff(
   input: FinalizeCloudWorkspaceMobilityHandoffRequest,
 ): Promise<CloudMobilityHandoffSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/finalize",
       {
         params: {
@@ -135,7 +136,7 @@ export async function completeCloudWorkspaceHandoffCleanup(
   handoffOpId: string,
 ): Promise<CloudMobilityHandoffSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-complete",
       {
         params: {
@@ -154,7 +155,7 @@ export async function listCloudWorkspaceHandoffCleanupItems(
   handoffOpId: string,
 ): Promise<CloudMobilityCleanupItemSummary[]> {
   return (
-    await getProliferateClient().GET(
+    await legacyOpenApiClient(getProliferateClient()).GET(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items",
       {
         params: {
@@ -174,7 +175,7 @@ export async function startCloudWorkspaceHandoffCleanupItem(
   cleanupItemId: string,
 ): Promise<CloudMobilityCleanupItemSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/start",
       {
         params: {
@@ -195,7 +196,7 @@ export async function completeCloudWorkspaceHandoffCleanupItem(
   cleanupItemId: string,
 ): Promise<CloudMobilityCleanupItemSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/complete",
       {
         params: {
@@ -217,7 +218,7 @@ export async function failCloudWorkspaceHandoffCleanupItem(
   input: FailCloudMobilityCleanupItemRequest,
 ): Promise<CloudMobilityCleanupItemSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-items/{cleanup_item_id}/fail",
       {
         params: {
@@ -239,7 +240,7 @@ export async function repairCloudWorkspaceHandoff(
   input: RepairCloudWorkspaceMobilityHandoffRequest,
 ): Promise<CloudMobilityHandoffSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/repair",
       {
         params: {
@@ -260,7 +261,7 @@ export async function failCloudWorkspaceHandoff(
   input: FailCloudWorkspaceMobilityHandoffRequest,
 ): Promise<CloudMobilityHandoffSummary> {
   return (
-    await getProliferateClient().POST(
+    await legacyOpenApiClient(getProliferateClient()).POST(
       "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/fail",
       {
         params: {

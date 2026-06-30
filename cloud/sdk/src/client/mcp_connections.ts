@@ -1,4 +1,5 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import { legacyOpenApiClient } from "./legacy.js";
 import type {
   CloudMcpConnection,
   CloudMcpConnectionsResponse,
@@ -11,14 +12,14 @@ import type {
 export async function listCloudMcpConnections(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnectionsResponse> {
-  return (await client.GET("/v1/cloud/mcp/connections")).data!;
+  return (await legacyOpenApiClient(client).GET("/v1/cloud/mcp/connections")).data!;
 }
 
 export async function createCloudMcpConnection(
   body: CreateCloudMcpConnectionRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await client.POST("/v1/cloud/mcp/connections", { body })).data!;
+  return (await legacyOpenApiClient(client).POST("/v1/cloud/mcp/connections", { body })).data!;
 }
 
 export async function patchCloudMcpConnection(
@@ -26,7 +27,7 @@ export async function patchCloudMcpConnection(
   body: PatchCloudMcpConnectionRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await client.PATCH("/v1/cloud/mcp/connections/{connection_id}", {
+  return (await legacyOpenApiClient(client).PATCH("/v1/cloud/mcp/connections/{connection_id}", {
     params: { path: { connection_id: connectionId } },
     body,
   })).data!;
@@ -37,7 +38,7 @@ export async function publicizeCloudMcpConnection(
   body: PublicizeCloudMcpConnectionRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await client.POST(
+  return (await legacyOpenApiClient(client).POST(
     "/v1/cloud/mcp/connections/{connection_id}/publicize",
     {
       params: { path: { connection_id: connectionId } },
@@ -50,7 +51,7 @@ export async function unpublicizeCloudMcpConnection(
   connectionId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await client.POST(
+  return (await legacyOpenApiClient(client).POST(
     "/v1/cloud/mcp/connections/{connection_id}/unpublicize",
     {
       params: { path: { connection_id: connectionId } },
@@ -63,7 +64,7 @@ export async function putCloudMcpSecretAuth(
   body: PutCloudMcpSecretAuthRequest,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await client.PUT(
+  return (await legacyOpenApiClient(client).PUT(
     "/v1/cloud/mcp/connections/{connection_id}/auth/secret",
     {
       params: { path: { connection_id: connectionId } },
@@ -76,7 +77,7 @@ export async function deleteCloudMcpConnectionV2(
   connectionId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<void> {
-  await client.DELETE("/v1/cloud/mcp/connections/{connection_id}", {
+  await legacyOpenApiClient(client).DELETE("/v1/cloud/mcp/connections/{connection_id}", {
     params: { path: { connection_id: connectionId } },
   });
 }

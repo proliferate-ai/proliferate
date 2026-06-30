@@ -23,8 +23,8 @@ export function useSettingsRepositories() {
       return [{
         gitOwner: repo.gitOwner,
         gitRepoName: repo.gitRepoName,
-        configured: cloudEnvironment.configured,
-        configuredAt: cloudEnvironment.configuredAt,
+        configured: true,
+        configuredAt: null,
         defaultBranch: cloudEnvironment.defaultBranch,
         filesVersion: 0,
       }];
