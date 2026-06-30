@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import {
   useCloudGitRepositories,
-  useCloudRepoConfigs,
+  useRepoConfigs,
   useSaveCloudRepoConfig,
 } from "@proliferate/cloud-sdk-react";
 
@@ -23,7 +23,7 @@ import {
 
 export function MobileOnboardingRepoStep({ onDone }: { onDone: () => void }) {
   const repos = useCloudGitRepositories({}, true);
-  const configured = useCloudRepoConfigs();
+  const configured = useRepoConfigs();
   const save = useSaveCloudRepoConfig();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,11 +31,17 @@ export function MobileOnboardingRepoStep({ onDone }: { onDone: () => void }) {
 
   const configuredKeys = useMemo(
     () => new Set(
-      (configured.data?.configs ?? [])
-        .filter((config) => config.configured)
-        .map((config) => `${config.gitOwner}/${config.gitRepoName}`),
+      (configured.data?.repositories ?? [])
+        .flatMap((config) => {
+          const cloudEnvironment = config.environments.find((environment) =>
+            environment.kind === "cloud"
+          );
+          return cloudEnvironment?.configured
+            ? [`${config.gitOwner}/${config.gitRepoName}`]
+            : [];
+        }),
     ),
-    [configured.data],
+    [configured.data?.repositories],
   );
 
   const available = useMemo(() => {

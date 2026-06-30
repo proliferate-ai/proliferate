@@ -150,6 +150,28 @@ export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }
 
+export function repoConfigsKey() {
+  return [...cloudRootKey(), "repositories"] as const;
+}
+
+export function repoEnvironmentKey(
+  gitOwner: string,
+  gitRepoName: string,
+  environmentKind: "local" | "cloud",
+  desktopInstallId: string | null = null,
+  localPath: string | null = null,
+) {
+  return [
+    ...repoConfigsKey(),
+    gitOwner,
+    gitRepoName,
+    "environments",
+    environmentKind,
+    desktopInstallId,
+    localPath,
+  ] as const;
+}
+
 export function cloudSecretsRootKey() {
   return [...cloudRootKey(), "secrets"] as const;
 }

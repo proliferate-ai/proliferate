@@ -30,7 +30,11 @@ export interface ConfigIntentDispatchDeps {
     workspaceId: string | null | undefined,
   ) => Parameters<typeof persistDefaultSessionModePreference>[0]["workspaceSurface"];
   setSessionConfigOptionMutation: SetSessionConfigOptionMutation;
-  upsertWorkspaceSessionRecord: (workspaceId: string, session: Session) => void;
+  upsertWorkspaceSessionRecord: (
+    workspaceId: string,
+    session: Session,
+    options?: { runtimeUrl?: string },
+  ) => void;
 }
 
 export async function dispatchConfigIntent(
@@ -47,7 +51,9 @@ export async function dispatchConfigIntent(
     dispatchedAt: new Date().toISOString(),
   });
   try {
-    const { workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(intent.clientSessionId);
+    const { connection, workspaceId, materializedSessionId } = await getSessionClientAndWorkspace(
+      intent.clientSessionId,
+    );
     useSessionIntentStore.getState().bindMaterializedSession(
       intent.clientSessionId,
       materializedSessionId,
@@ -58,7 +64,9 @@ export async function dispatchConfigIntent(
       request: { configId: intent.configId, value: intent.value },
     });
     if (workspaceId) {
-      deps.upsertWorkspaceSessionRecord(workspaceId, response.session);
+      deps.upsertWorkspaceSessionRecord(workspaceId, response.session, {
+        runtimeUrl: connection.runtimeUrl,
+      });
     }
     const latestSlot = getSessionRecord(intent.clientSessionId);
     const responseLiveConfig = response.liveConfig ?? response.session.liveConfig ?? null;

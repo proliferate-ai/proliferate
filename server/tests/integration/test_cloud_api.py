@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import hashlib
 import json
 import uuid
@@ -26,11 +26,13 @@ from proliferate.db.models.cloud.mcp import (
 )
 from proliferate.db.models.cloud.integrations import CloudOrganizationIntegrationPolicy
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
 from proliferate.db.engine import apply_rls_context_to_session
 from proliferate.db.models.organizations import Organization, OrganizationMembership
+from proliferate.db.store import github_app as github_app_store
 from proliferate.db.store.cloud_mcp.auth import (
     update_connection_auth_if_version,
     upsert_connection_auth,
@@ -42,10 +44,12 @@ from proliferate.db.store.cloud_mcp.oauth_flows import (
 from proliferate.db.store.cloud_mcp.oauth_clients import upsert_oauth_client
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.integrations.github import (
+    GitHubAppInstallationInfo,
     GitHubRepositoryPage,
     GitHubRepositorySummary,
     GitHubRepoBranches,
 )
+from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
 from proliferate.integrations.mcp_oauth import (
     AuthorizationServerMetadata,
     ProtectedResourceMetadata,
@@ -54,6 +58,7 @@ from proliferate.integrations.mcp_oauth import (
 )
 from proliferate.rls_context import with_rls_context
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
@@ -169,6 +174,45 @@ async def _link_github_account(db_session: AsyncSession, user_id: str) -> None:
     )
     db_session.add(account)
     await db_session.commit()
+
+
+async def _seed_github_app_repo_authority(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    user_id: str,
+    git_owner: str = "proliferate-ai",
+) -> None:
+    await github_app_store.upsert_github_app_authorization(
+        db_session,
+        user_id=uuid.UUID(user_id),
+        authorization=GitHubAppUserAuthorization(
+            access_token="github-app-user-token",
+            refresh_token="github-app-refresh-token",
+            expires_at=datetime.now(UTC) + timedelta(hours=8),
+            refresh_token_expires_at=datetime.now(UTC) + timedelta(days=180),
+            github_user_id="12345",
+            github_login="cloud-tester",
+            permissions={},
+        ),
+    )
+    await github_app_store.upsert_github_app_installation(
+        db_session,
+        installation=GitHubAppInstallationInfo(
+            github_installation_id="142900805",
+            account_login=git_owner,
+            account_type="Organization",
+            repository_selection="all",
+            permissions={"contents": "read", "pull_requests": "write"},
+            suspended_at=None,
+        ),
+    )
+    await db_session.commit()
+
+    async def _has_access(**_kwargs) -> bool:  # type: ignore[no-untyped-def]
+        return True
+
+    monkeypatch.setattr(repo_authority, "verify_github_app_user_repo_access", _has_access)
 
 
 async def _link_secondary_account(db_session: AsyncSession, user_id: str) -> None:
@@ -399,8 +443,18 @@ def _patch_repo_branches_lookup(
     resolver,
 ) -> None:
     monkeypatch.setattr(repos_service, "get_github_repo_branches", resolver)
-    monkeypatch.setattr(provisioning_preflight, "get_github_repo_branches", resolver)
-    monkeypatch.setattr(provisioning_service, "get_github_repo_branches", resolver)
+    monkeypatch.setattr(
+        provisioning_preflight,
+        "get_github_repo_branches",
+        resolver,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        provisioning_service,
+        "get_github_repo_branches",
+        resolver,
+        raising=False,
+    )
     monkeypatch.setattr(repo_config_service, "get_repo_branches_for_credentials", resolver)
 
 
@@ -1174,6 +1228,11 @@ class TestCloudRepoConfig:
         session = await _register_and_login(client, "cloud-repo-default-branch@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        await _seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+        )
 
         save_response = await client.put(
             "/v1/cloud/repos/proliferate-ai/proliferate/config",
@@ -1220,6 +1279,36 @@ class TestCloudRepoConfig:
         ).scalar_one()
         assert record.default_branch == "release"
         assert record.run_command == "make dev"
+
+        repositories_response = await client.get("/v1/cloud/repositories", headers=headers)
+        assert repositories_response.status_code == 200
+        repositories_payload = repositories_response.json()
+        assert repositories_payload["repositories"] == [
+            {
+                "id": str(record.id),
+                "ownerScope": "personal",
+                "gitProvider": "github",
+                "gitOwner": "proliferate-ai",
+                "gitRepoName": "proliferate",
+                "environments": [
+                    {
+                        "id": str(record.id),
+                        "repoConfigId": str(record.id),
+                        "kind": "cloud",
+                        "desktopInstallId": None,
+                        "localPath": None,
+                        "configured": True,
+                        "configuredAt": save_response.json()["configuredAt"],
+                        "defaultBranch": "release",
+                        "setupScript": "pnpm install",
+                        "setupScriptVersion": 1,
+                        "runCommand": "make dev",
+                        "configVersion": 1,
+                        "legacyCloudRepoConfigId": str(record.id),
+                    }
+                ],
+            }
+        ]
 
         organization_id = await _create_organization_for_user(db_session, session["user_id"])
 
@@ -1313,6 +1402,7 @@ class TestCloudRepoConfig:
     async def test_free_plan_repo_config_limit_blocks_second_configured_repo(
         self,
         client: AsyncClient,
+        db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
@@ -1327,6 +1417,11 @@ class TestCloudRepoConfig:
 
         session = await _register_and_login(client, "cloud-repo-config-limit@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+        )
         payload = {
             "configured": True,
             "defaultBranch": None,
@@ -1398,6 +1493,11 @@ class TestCloudRepoConfig:
         )
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        await _seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+        )
 
         save_response = await client.put(
             "/v1/cloud/repos/proliferate-ai/proliferate/config",
@@ -1431,6 +1531,11 @@ class TestCloudRepoConfig:
 
         session = await _register_and_login(client, "cloud-repo-config-race@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+        )
         payload = {
             "configured": True,
             "envVars": {"API_BASE_URL": "https://example.internal"},
@@ -1467,6 +1572,162 @@ class TestCloudRepoConfig:
             .all()
         )
         assert len(records) == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_first_local_environment_save_returns_success(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "local-repo-environment-race@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        payload = {
+            "gitProvider": "github",
+            "desktopInstallId": "desktop-dev",
+            "localPath": "/Users/example/proliferate",
+            "defaultBranch": "main",
+            "setupScript": "pnpm install",
+            "runCommand": "pnpm dev",
+        }
+
+        responses = await asyncio.gather(
+            client.put(
+                "/v1/cloud/repositories/proliferate-ai/proliferate/environments/local",
+                headers=headers,
+                json=payload,
+            ),
+            client.put(
+                "/v1/cloud/repositories/proliferate-ai/proliferate/environments/local",
+                headers=headers,
+                json=payload,
+            ),
+        )
+
+        assert [response.status_code for response in responses] == [200, 200]
+
+        repo_records = (
+            (
+                await db_session.execute(
+                    select(RepoConfig).where(
+                        RepoConfig.user_id == uuid.UUID(session["user_id"]),
+                        RepoConfig.git_owner == "proliferate-ai",
+                        RepoConfig.git_repo_name == "proliferate",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(repo_records) == 1
+        environment_records = (
+            (
+                await db_session.execute(
+                    select(RepoEnvironment).where(
+                        RepoEnvironment.repo_config_id == repo_records[0].id,
+                        RepoEnvironment.environment_kind == "local",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(environment_records) == 1
+
+    @pytest.mark.asyncio
+    async def test_repository_environment_endpoints_bridge_to_legacy_cloud_config(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
+
+        session = await _register_and_login(client, "repo-environment-bridge@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+        await _seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+        )
+
+        local_response = await client.put(
+            "/v1/cloud/repositories/proliferate-ai/proliferate/environments/local",
+            headers=headers,
+            json={
+                "gitProvider": "github",
+                "desktopInstallId": "desktop-dev",
+                "localPath": "/Users/example/proliferate",
+                "defaultBranch": "main",
+                "setupScript": "pnpm install",
+                "runCommand": "pnpm dev",
+            },
+        )
+        assert local_response.status_code == 200
+        assert local_response.json()["kind"] == "local"
+        assert local_response.json()["localPath"] == "/Users/example/proliferate"
+
+        cloud_response = await client.put(
+            "/v1/cloud/repositories/proliferate-ai/proliferate/environments/cloud",
+            headers=headers,
+            json={
+                "configured": True,
+                "defaultBranch": "release",
+                "setupScript": "uv sync",
+                "runCommand": "make run",
+            },
+        )
+        assert cloud_response.status_code == 200
+        assert cloud_response.json()["kind"] == "cloud"
+        assert cloud_response.json()["defaultBranch"] == "release"
+        assert cloud_response.json()["setupScript"] == "uv sync"
+        assert cloud_response.json()["runCommand"] == "make run"
+
+        legacy_response = await client.get(
+            "/v1/cloud/repos/proliferate-ai/proliferate/config",
+            headers=headers,
+        )
+        assert legacy_response.status_code == 200
+        assert legacy_response.json()["defaultBranch"] == "release"
+        assert legacy_response.json()["setupScript"] == "uv sync"
+        assert legacy_response.json()["runCommand"] == "make run"
+
+        repo_record = (
+            await db_session.execute(
+                select(RepoConfig).where(
+                    RepoConfig.user_id == uuid.UUID(session["user_id"]),
+                    RepoConfig.git_owner == "proliferate-ai",
+                    RepoConfig.git_repo_name == "proliferate",
+                )
+            )
+        ).scalar_one()
+        environment_rows = (
+            (
+                await db_session.execute(
+                    select(RepoEnvironment)
+                    .where(RepoEnvironment.repo_config_id == repo_record.id)
+                    .order_by(RepoEnvironment.environment_kind.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [row.environment_kind for row in environment_rows] == ["cloud", "local"]
+
+        repositories_response = await client.get("/v1/cloud/repositories", headers=headers)
+        assert repositories_response.status_code == 200
+        repositories_payload = repositories_response.json()
+        assert repositories_payload["repositories"][0]["gitOwner"] == "proliferate-ai"
+        assert {item["kind"] for item in repositories_payload["repositories"][0]["environments"]} == {
+            "cloud",
+            "local",
+        }
 
     @pytest.mark.asyncio
     async def test_sync_claude_main_config_rejects_nonportable_oauth_metadata(

@@ -13,7 +13,7 @@ import type {
 const mocks = vi.hoisted(() => ({
   useCloudAgentCatalog: vi.fn(),
   useAgentCatalog: vi.fn(),
-  useAgentLaunchOptionsQuery: vi.fn(),
+  useWorkspaceAgentLaunchOptionsQuery: vi.fn(),
   useSelectedCloudRuntimeState: vi.fn(),
 }));
 
@@ -25,8 +25,8 @@ vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: mocks.useAgentCatalog,
 }));
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useAgentLaunchOptionsQuery: mocks.useAgentLaunchOptionsQuery,
+vi.mock("@/hooks/access/anyharness/agents/use-workspace-agent-launch-options", () => ({
+  useWorkspaceAgentLaunchOptionsQuery: mocks.useWorkspaceAgentLaunchOptionsQuery,
 }));
 
 vi.mock("@/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
@@ -83,7 +83,7 @@ describe("useChatLaunchCatalog", () => {
         ["claude", { readiness: "ready" }],
       ]),
     });
-    mocks.useAgentLaunchOptionsQuery.mockReturnValue({
+    mocks.useWorkspaceAgentLaunchOptionsQuery.mockReturnValue({
       data: null,
       isLoading: false,
       isError: false,
@@ -112,8 +112,9 @@ describe("useChatLaunchCatalog", () => {
     const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
 
     expect(mocks.useCloudAgentCatalog).toHaveBeenCalledWith(true);
-    expect(mocks.useAgentLaunchOptionsQuery).toHaveBeenCalledWith({
+    expect(mocks.useWorkspaceAgentLaunchOptionsQuery).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
+      cloudConnectionInfo: null,
     });
     expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual([
       "claude",
@@ -143,7 +144,9 @@ describe("useChatLaunchCatalog", () => {
       refetch: vi.fn(),
     });
 
-    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+    const { result } = renderHook(() => useChatLaunchCatalog({
+      activeSelection: { kind: "claude", modelId: "opus[1m]" },
+    }));
 
     expect(result.current.error).toBe(error);
     expect(result.current.cloudCatalogError).toBe(error);
@@ -190,7 +193,7 @@ describe("useChatLaunchCatalog", () => {
       error: null,
       agentsByKind: new Map([["cursor", { readiness: "ready" }]]),
     });
-    mocks.useAgentLaunchOptionsQuery.mockReturnValue({
+    mocks.useWorkspaceAgentLaunchOptionsQuery.mockReturnValue({
       data: {
         workspaceId: "workspace-1",
         agents: [{
@@ -225,7 +228,16 @@ describe("useChatLaunchCatalog", () => {
     });
   });
 
-  it("uses cloud connection ready agents instead of local runtime readiness for cloud targets", () => {
+  it("uses managed cloud runtime launch options instead of stale cloud catalog models", () => {
+    mocks.useCloudAgentCatalog.mockReturnValue({
+      data: catalog([
+        launchAgent("codex", "gpt-5.5", "Codex"),
+        launchAgent("claude", "opus[1m]", "Claude"),
+      ]),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
     mocks.useAgentCatalog.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -235,21 +247,25 @@ describe("useChatLaunchCatalog", () => {
         ["claude", { readiness: "ready" }],
       ]),
     });
+    const cloudConnectionInfo = {
+      runtimeUrl: "https://api.local/v1/gateway/managed-sandbox/anyharness",
+      accessToken: "product-token",
+      anyharnessWorkspaceId: "cloud-workspace-1",
+      readyAgentKinds: ["codex"],
+    };
     mocks.useSelectedCloudRuntimeState.mockReturnValue({
-      connectionInfo: {
-        readyAgentKinds: ["codex"],
-      },
+      connectionInfo: cloudConnectionInfo,
     });
-    mocks.useAgentLaunchOptionsQuery.mockReturnValue({
+    mocks.useWorkspaceAgentLaunchOptionsQuery.mockReturnValue({
       data: {
-        workspaceId: "workspace-1",
+        workspaceId: "cloud-workspace-1",
         agents: [{
           kind: "claude",
           displayName: "Claude",
-          defaultModelId: "local-sonnet",
+          defaultModelId: "opus",
           models: [{
-            id: "local-sonnet",
-            displayName: "Local Sonnet",
+            id: "opus",
+            displayName: "Opus",
             isDefault: true,
             defaultOptIn: true,
           }],
@@ -259,13 +275,28 @@ describe("useChatLaunchCatalog", () => {
       isError: false,
       error: null,
     });
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "claude",
+      defaultChatModelIdByAgentKind: { claude: "opus[1m]" },
+    });
 
-    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+    const { result } = renderHook(() => useChatLaunchCatalog({
+      activeSelection: { kind: "claude", modelId: "opus[1m]" },
+    }));
 
-    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual(["codex"]);
+    expect(mocks.useWorkspaceAgentLaunchOptionsQuery).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      cloudConnectionInfo,
+    });
+    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual(["claude"]);
+    expect(result.current.launchAgents[0]?.models.map((model) => model.id)).toEqual(["opus"]);
     expect(result.current.defaultLaunchSelection).toEqual({
-      kind: "codex",
-      modelId: "gpt-5.5",
+      kind: "claude",
+      modelId: "opus",
+    });
+    expect(result.current.selectedLaunchSelection).toEqual({
+      kind: "claude",
+      modelId: "opus",
     });
   });
 

@@ -226,6 +226,262 @@ async def test_workspace_runtime_connection_creates_branch_worktree(
 
 
 @pytest.mark.asyncio
+async def test_workspace_runtime_connection_returns_current_binding_without_wake(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    workspace = SimpleNamespace(
+        id=uuid4(),
+        owner_scope="personal",
+        owner_user_id=user.id,
+        sandbox_profile_id=uuid4(),
+        target_id=uuid4(),
+        git_owner="Owner",
+        git_repo_name="Repo",
+        git_branch="feature",
+        git_base_branch="main",
+        origin="manual_desktop",
+        status="ready",
+        runtime_generation=17,
+        anyharness_workspace_id="existing-workspace",
+        worktree_path="/home/user/workspace/worktrees/Owner/Repo/feature-12345678",
+    )
+    sandbox_id = uuid4()
+    sandbox = SimpleNamespace(
+        id=sandbox_id,
+        status="ready",
+        runtime_generation=17,
+        e2b_sandbox_id="sandbox-17",
+        anyharness_base_url="https://runtime.example",
+        anyharness_bearer_token_ciphertext="token",
+        anyharness_data_key_ciphertext="data-key",
+    )
+    repo_config = SimpleNamespace(id=uuid4())
+    materialization = SimpleNamespace(anyharness_repo_root_id="repo-root")
+    calls: dict[str, object] = {}
+
+    async def load_sandbox(*_args: object, **_kwargs: object) -> object:
+        calls["load_sandbox"] = True
+        return sandbox
+
+    async def get_repo_config(*_args: object, **_kwargs: object) -> object:
+        calls["repo_config"] = _kwargs
+        return repo_config
+
+    async def load_materialization(*_args: object, **_kwargs: object) -> object:
+        calls["materialization"] = _kwargs
+        return materialization
+
+    async def unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("current workspace binding should not wake or materialize")
+
+    monkeypatch.setattr(service, "load_personal_managed_sandbox", load_sandbox)
+    monkeypatch.setattr(service, "get_cloud_repo_config", get_repo_config)
+    monkeypatch.setattr(service, "load_repo_materialization", load_materialization)
+    monkeypatch.setattr(
+        service,
+        "ensure_managed_sandbox_repo_runtime_connection",
+        unexpected,
+    )
+    monkeypatch.setattr(service, "ensure_managed_sandbox_ready", unexpected)
+
+    result = await service.ensure_managed_sandbox_workspace_record_runtime_connection(
+        cast(AsyncSession, object()),
+        cast(service._UserWithId, user),
+        workspace=workspace,
+    )
+
+    assert result.anyharness_workspace_id == "existing-workspace"
+    assert result.anyharness_repo_root_id == "repo-root"
+    assert result.runtime_generation == 17
+    assert calls == {
+        "load_sandbox": True,
+        "repo_config": {
+            "user_id": user.id,
+            "git_owner": "Owner",
+            "git_repo_name": "Repo",
+        },
+        "materialization": {
+            "managed_sandbox_id": sandbox_id,
+            "cloud_repo_config_id": repo_config.id,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_workspace_runtime_connection_repairs_stale_workspace_id_by_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    workspace_id = uuid4()
+    worktree_path = "/home/user/workspace/worktrees/Owner/Repo/feature-12345678"
+    workspace = SimpleNamespace(
+        id=workspace_id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        sandbox_profile_id=uuid4(),
+        target_id=uuid4(),
+        git_owner="Owner",
+        git_repo_name="Repo",
+        git_branch="feature",
+        git_base_branch="main",
+        origin="manual_desktop",
+        status="ready",
+        runtime_generation=12,
+        anyharness_workspace_id="stale-workspace",
+        worktree_path=worktree_path,
+    )
+    sandbox = SimpleNamespace(
+        status="ready",
+        runtime_generation=13,
+        e2b_sandbox_id="sandbox-13",
+        anyharness_base_url="https://runtime.example",
+        anyharness_bearer_token_ciphertext="token",
+        anyharness_data_key_ciphertext="data-key",
+    )
+    calls: dict[str, object] = {}
+
+    async def ensure_repo_connection(*_args: object, **_kwargs: object) -> object:
+        return service.ManagedSandboxRepoRuntimeConnection(
+            anyharness_workspace_id="base-workspace",
+            anyharness_repo_root_id="repo-root",
+            runtime_generation=13,
+        )
+
+    async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
+        return sandbox
+
+    async def load_sandbox(*_args: object, **_kwargs: object) -> object:
+        return sandbox
+
+    async def load_runtime_access(_sandbox: object) -> tuple[str, str, str]:
+        return ("https://runtime.example", "runtime-token", "data-key")
+
+    async def list_workspaces(*_args: object, **_kwargs: object) -> list[object]:
+        calls["listed"] = True
+        return []
+
+    async def resolve_workspace(*_args: object, **_kwargs: object) -> object:
+        calls["resolve"] = _kwargs
+        return SimpleNamespace(workspace_id="resolved-workspace", repo_root_id="repo-root")
+
+    async def create_worktree(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("existing worktree path should be resolved before creating")
+
+    async def attach_workspace_id(*_args: object, **_kwargs: object) -> object:
+        calls["attach"] = _kwargs
+        return workspace
+
+    monkeypatch.setattr(
+        service,
+        "ensure_managed_sandbox_repo_runtime_connection",
+        ensure_repo_connection,
+    )
+    monkeypatch.setattr(service, "load_personal_managed_sandbox", load_sandbox)
+    monkeypatch.setattr(service, "ensure_managed_sandbox_ready", ensure_sandbox)
+    monkeypatch.setattr(service, "load_managed_sandbox_runtime_access", load_runtime_access)
+    monkeypatch.setattr(service, "list_runtime_workspaces", list_workspaces)
+    monkeypatch.setattr(service, "resolve_runtime_workspace", resolve_workspace)
+    monkeypatch.setattr(service, "create_remote_worktree_workspace", create_worktree)
+    monkeypatch.setattr(service, "attach_anyharness_workspace_id", attach_workspace_id)
+
+    result = await service.ensure_managed_sandbox_workspace_record_runtime_connection(
+        cast(AsyncSession, object()),
+        cast(service._UserWithId, user),
+        workspace=workspace,
+    )
+
+    assert result.anyharness_workspace_id == "resolved-workspace"
+    assert result.anyharness_repo_root_id == "repo-root"
+    assert result.runtime_generation == 13
+    assert calls["listed"] is True
+    assert calls["resolve"] == {"runtime_workdir": worktree_path}
+    assert calls["attach"] == {
+        "workspace_id": workspace_id,
+        "anyharness_workspace_id": "resolved-workspace",
+        "worktree_path": worktree_path,
+        "runtime_generation": 13,
+    }
+
+
+@pytest.mark.asyncio
+async def test_workspace_runtime_connection_marks_error_when_worktree_creation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    workspace_id = uuid4()
+    workspace = SimpleNamespace(
+        id=workspace_id,
+        owner_scope="personal",
+        owner_user_id=user.id,
+        sandbox_profile_id=uuid4(),
+        target_id=uuid4(),
+        git_owner="Owner",
+        git_repo_name="Repo",
+        git_branch="feature",
+        git_base_branch="missing-base",
+        origin="manual_desktop",
+        status="pending",
+        anyharness_workspace_id=None,
+        worktree_path=None,
+    )
+    sandbox = SimpleNamespace(runtime_generation=14)
+    calls: dict[str, object] = {}
+
+    async def ensure_repo_connection(*_args: object, **_kwargs: object) -> object:
+        return service.ManagedSandboxRepoRuntimeConnection(
+            anyharness_workspace_id="base-workspace",
+            anyharness_repo_root_id="repo-root",
+            runtime_generation=14,
+        )
+
+    async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
+        return sandbox
+
+    async def load_runtime_access(_sandbox: object) -> tuple[str, str, str]:
+        return ("https://runtime.example", "runtime-token", "data-key")
+
+    async def create_worktree(*_args: object, **_kwargs: object) -> object:
+        raise service.CloudRuntimeReconnectError(
+            "git worktree add failed: fatal: not a valid object name: 'missing-base'"
+        )
+
+    async def mark_error(*_args: object, **_kwargs: object) -> None:
+        calls["mark_error"] = _kwargs
+
+    async def commit(_db: object) -> None:
+        calls["committed"] = True
+
+    monkeypatch.setattr(
+        service,
+        "ensure_managed_sandbox_repo_runtime_connection",
+        ensure_repo_connection,
+    )
+    monkeypatch.setattr(service, "ensure_managed_sandbox_ready", ensure_sandbox)
+    monkeypatch.setattr(service, "load_managed_sandbox_runtime_access", load_runtime_access)
+    monkeypatch.setattr(service, "create_remote_worktree_workspace", create_worktree)
+    monkeypatch.setattr(service, "mark_workspace_error_by_id", mark_error)
+    monkeypatch.setattr(service, "commit_managed_sandbox_session", commit)
+
+    with pytest.raises(CloudApiError) as error:
+        await service.ensure_managed_sandbox_workspace_record_runtime_connection(
+            cast(AsyncSession, object()),
+            cast(service._UserWithId, user),
+            workspace=workspace,
+        )
+
+    assert error.value.status_code == 502
+    assert error.value.code == "managed_cloud_workspace_materialization_failed"
+    assert "missing-base" in error.value.message
+    assert calls["mark_error"] == {
+        "status_detail": "Cloud workspace materialization failed",
+        "clear_runtime_metadata": True,
+        "clear_active_sandbox": False,
+    }
+    assert calls["committed"] is True
+
+
+@pytest.mark.asyncio
 async def test_runtime_connection_singleflights_concurrent_repo_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

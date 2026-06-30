@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useCloudRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudEnvironmentListItems,
 } from "@proliferate/product-domain/environments/cloud-environments";
@@ -43,7 +43,7 @@ export function CloudEnvironmentsSettingsSurface({
   onBackToList,
 }: CloudEnvironmentsSettingsSurfaceProps) {
   const [addOpen, setAddOpen] = useState(false);
-  const repoConfigs = useCloudRepoConfigs(enabled);
+  const repoConfigs = useRepoConfigs(enabled);
   const localCheckoutsForDomain = useMemo(
     () => localCheckouts
       .map((checkout) => ({
@@ -55,10 +55,28 @@ export function CloudEnvironmentsSettingsSurface({
       })),
     [localCheckouts],
   );
+  const cloudEnvironmentConfigs = useMemo(
+    () => (repoConfigs.data?.repositories ?? []).flatMap((repository) => {
+      const cloudEnvironment = repository.environments.find((environment) =>
+        environment.kind === "cloud"
+      );
+      if (!cloudEnvironment) {
+        return [];
+      }
+      return [{
+        gitOwner: repository.gitOwner,
+        gitRepoName: repository.gitRepoName,
+        configured: cloudEnvironment.configured,
+        configuredAt: cloudEnvironment.configuredAt,
+        filesVersion: null,
+      }];
+    }),
+    [repoConfigs.data?.repositories],
+  );
   const cloudEnvironmentItems = useMemo(() => buildCloudEnvironmentListItems({
-    configs: repoConfigs.data?.configs ?? [],
+    configs: cloudEnvironmentConfigs,
     localCheckouts: mode === "hybrid" ? localCheckoutsForDomain : [],
-  }), [localCheckoutsForDomain, mode, repoConfigs.data?.configs]);
+  }), [cloudEnvironmentConfigs, localCheckoutsForDomain, mode]);
 
   if (selectedCloudRepo && enabled) {
     return (

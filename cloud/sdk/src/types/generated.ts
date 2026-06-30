@@ -299,6 +299,13 @@ export type CloudRepoConfigResponse   = components["schemas"]["CloudRepoConfigRe
 export type SaveCloudRepoConfigRequest = components["schemas"]["SaveCloudRepoConfigRequest"];
 export type SaveOrganizationCloudRepoConfigRequest =
   components["schemas"]["SaveOrganizationCloudRepoConfigRequest"];
+export type RepoConfigResponse = components["schemas"]["RepoConfigResponse"];
+export type RepoConfigsListResponse = components["schemas"]["RepoConfigsListResponse"];
+export type RepoEnvironmentResponse = components["schemas"]["RepoEnvironmentResponse"];
+export type SaveCloudRepoEnvironmentRequest =
+  components["schemas"]["SaveCloudRepoEnvironmentRequest"];
+export type SaveLocalRepoEnvironmentRequest =
+  components["schemas"]["SaveLocalRepoEnvironmentRequest"];
 export type AutomationOwnerScope = "personal" | "organization";
 export type AutomationTargetMode = "local" | "personal_cloud" | "shared_cloud";
 export type AutomationRunStatus =

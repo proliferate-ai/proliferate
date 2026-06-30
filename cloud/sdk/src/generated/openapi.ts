@@ -583,6 +583,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Repositories Endpoint */
+        get: operations["list_repositories_endpoint_v1_cloud_repositories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Local Repo Environment Endpoint */
+        put: operations["save_local_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_local_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/cloud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Cloud Repo Environment Endpoint */
+        put: operations["save_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_cloud_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repos/configs": {
         parameters: {
             query?: never;
@@ -7878,6 +7929,64 @@ export interface components {
             /** Disabled */
             disabled?: boolean | null;
         };
+        /** RepoConfigResponse */
+        RepoConfigResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Gitprovider */
+            gitProvider: string;
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Environments */
+            environments: components["schemas"]["RepoEnvironmentResponse"][];
+        };
+        /** RepoConfigsListResponse */
+        RepoConfigsListResponse: {
+            /** Repositories */
+            repositories: components["schemas"]["RepoConfigResponse"][];
+        };
+        /** RepoEnvironmentResponse */
+        RepoEnvironmentResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Repoconfigid
+             * Format: uuid
+             */
+            repoConfigId: string;
+            /** Kind */
+            kind: string;
+            /** Desktopinstallid */
+            desktopInstallId: string | null;
+            /** Localpath */
+            localPath: string | null;
+            /** Configured */
+            configured: boolean;
+            /** Configuredat */
+            configuredAt: string | null;
+            /** Defaultbranch */
+            defaultBranch: string | null;
+            /** Setupscript */
+            setupScript: string;
+            /** Setupscriptversion */
+            setupScriptVersion: number;
+            /** Runcommand */
+            runCommand: string;
+            /** Configversion */
+            configVersion: number;
+            /** Legacycloudrepoconfigid */
+            legacyCloudRepoConfigId: string | null;
+        };
         /** RepoRef */
         RepoRef: {
             /** Provider */
@@ -8188,6 +8297,50 @@ export interface components {
             runCommand: string;
             /** Files */
             files?: components["schemas"]["SaveCloudRepoConfigFile"][] | null;
+        };
+        /** SaveCloudRepoEnvironmentRequest */
+        SaveCloudRepoEnvironmentRequest: {
+            /**
+             * Configured
+             * @default true
+             */
+            configured: boolean;
+            /** Defaultbranch */
+            defaultBranch?: string | null;
+            /**
+             * Setupscript
+             * @default
+             */
+            setupScript: string;
+            /**
+             * Runcommand
+             * @default
+             */
+            runCommand: string;
+        };
+        /** SaveLocalRepoEnvironmentRequest */
+        SaveLocalRepoEnvironmentRequest: {
+            /**
+             * Gitprovider
+             * @default github
+             */
+            gitProvider: string;
+            /** Desktopinstallid */
+            desktopInstallId: string;
+            /** Localpath */
+            localPath: string;
+            /** Defaultbranch */
+            defaultBranch?: string | null;
+            /**
+             * Setupscript
+             * @default
+             */
+            setupScript: string;
+            /**
+             * Runcommand
+             * @default
+             */
+            runCommand: string;
         };
         /** SaveOrganizationCloudRepoConfigRequest */
         SaveOrganizationCloudRepoConfigRequest: {
@@ -11465,6 +11618,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoBranchesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_repositories_endpoint_v1_cloud_repositories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoConfigsListResponse"];
+                };
+            };
+        };
+    };
+    save_local_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_local_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveLocalRepoEnvironmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoEnvironmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_cloud_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCloudRepoEnvironmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoEnvironmentResponse"];
                 };
             };
             /** @description Validation Error */

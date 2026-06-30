@@ -17,6 +17,7 @@ from . import mcp as mcp  # noqa: F401
 from . import mobility as mobility  # noqa: F401
 from . import plugins as plugins  # noqa: F401
 from . import repo_config as repo_config  # noqa: F401
+from . import repositories as repositories  # noqa: F401
 from . import runtime_config as runtime_config  # noqa: F401
 from . import runtime_environments as runtime_environments  # noqa: F401
 from . import sandboxes as sandboxes  # noqa: F401
