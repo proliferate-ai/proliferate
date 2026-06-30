@@ -221,6 +221,28 @@ async def list_cloud_repo_environments(
     return tuple(_environment_value(environment, repo) for environment, repo in rows)
 
 
+async def list_cloud_repo_environments_for_git_owner(
+    db: AsyncSession,
+    *,
+    git_owner: str,
+) -> tuple[RepoEnvironmentValue, ...]:
+    rows = (
+        await db.execute(
+            select(RepoEnvironment, RepoConfig)
+            .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
+            .where(
+                RepoConfig.git_provider == GitProvider.github,
+                RepoConfig.git_owner == git_owner,
+                RepoConfig.deleted_at.is_(None),
+                RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
+                RepoEnvironment.deleted_at.is_(None),
+            )
+            .order_by(RepoConfig.user_id.asc(), RepoConfig.git_repo_name.asc())
+        )
+    ).all()
+    return tuple(_environment_value(environment, repo) for environment, repo in rows)
+
+
 async def list_repo_configs_for_user(
     db: AsyncSession,
     *,
@@ -268,7 +290,9 @@ async def _upsert_environment(
         )
     row = (await db.execute(select(RepoEnvironment).where(*predicates))).scalar_one_or_none()
     now = utcnow()
-    normalized_default_branch = default_branch.strip() if default_branch and default_branch.strip() else None
+    normalized_default_branch = (
+        default_branch.strip() if default_branch and default_branch.strip() else None
+    )
     if row is None:
         row = RepoEnvironment(
             repo_config_id=repo.id,

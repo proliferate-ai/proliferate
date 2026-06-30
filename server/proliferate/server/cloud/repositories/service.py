@@ -15,9 +15,10 @@ from proliferate.db.store.repositories import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
-from proliferate.server.cloud.repositories.models import SaveRepoEnvironmentRequest
+from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
+from proliferate.server.cloud.repositories.models import SaveRepoEnvironmentRequest
 
 
 async def list_repositories(
@@ -91,7 +92,7 @@ async def save_cloud_environment(
                 f"The default branch '{default_branch}' was not found on GitHub.",
                 status_code=400,
             )
-    return await upsert_cloud_repo_environment(
+    repo_environment = await upsert_cloud_repo_environment(
         db,
         user_id=user_id,
         git_provider="github",
@@ -101,6 +102,11 @@ async def save_cloud_environment(
         setup_script=body.setup_script,
         run_command=body.run_command,
     )
+    await materialization_service.schedule_materialize_repo_environment(
+        db,
+        repo_environment_id=repo_environment.id,
+    )
+    return repo_environment
 
 
 async def save_repo_environment(

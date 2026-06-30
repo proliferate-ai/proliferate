@@ -12,7 +12,6 @@ from proliferate.server.cloud.secrets.models import cloud_secrets_payload
 
 def _workspace_secret_set(
     *,
-    cloud_repo_config_id: UUID,
     repo_environment_id: UUID,
     version: int,
 ) -> CloudSecretSetValue:
@@ -22,7 +21,6 @@ def _workspace_secret_set(
         scope_kind="workspace",
         user_id=None,
         organization_id=None,
-        cloud_repo_config_id=cloud_repo_config_id,
         repo_environment_id=repo_environment_id,
         version=version,
         created_by_user_id=uuid4(),
@@ -46,7 +44,6 @@ def _workspace_secret_set(
 
 def _workspace_materialization(
     *,
-    cloud_repo_config_id: UUID,
     repo_environment_id: UUID,
     applied_version: int,
     status: str = "ready",
@@ -57,7 +54,6 @@ def _workspace_materialization(
         cloud_sandbox_id=uuid4(),
         materialization_kind="workspace",
         cloud_secret_set_id=uuid4(),
-        cloud_repo_config_id=cloud_repo_config_id,
         repo_environment_id=repo_environment_id,
         sandbox_generation=1,
         applied_version=applied_version,
@@ -72,15 +68,12 @@ def _workspace_materialization(
 
 
 def test_cloud_secrets_payload_marks_ready_materialization_pending_when_version_is_stale() -> None:
-    cloud_repo_config_id = uuid4()
     repo_environment_id = uuid4()
     secret_set = _workspace_secret_set(
-        cloud_repo_config_id=cloud_repo_config_id,
         repo_environment_id=repo_environment_id,
         version=1,
     )
     materialization = _workspace_materialization(
-        cloud_repo_config_id=cloud_repo_config_id,
         repo_environment_id=repo_environment_id,
         applied_version=0,
     )
@@ -93,15 +86,12 @@ def test_cloud_secrets_payload_marks_ready_materialization_pending_when_version_
 
 
 def test_cloud_secrets_payload_keeps_ready_materialization_ready_when_version_is_current() -> None:
-    cloud_repo_config_id = uuid4()
     repo_environment_id = uuid4()
     secret_set = _workspace_secret_set(
-        cloud_repo_config_id=cloud_repo_config_id,
         repo_environment_id=repo_environment_id,
         version=1,
     )
     materialization = _workspace_materialization(
-        cloud_repo_config_id=cloud_repo_config_id,
         repo_environment_id=repo_environment_id,
         applied_version=1,
     )

@@ -14,6 +14,7 @@ from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_REDIRECT_SCHEMES
 from proliferate.db.store import github_app as github_app_store
+from proliferate.db.store import repositories as repositories_store
 from proliferate.integrations.github import (
     GitHubAppInstallationInfo,
     GitHubIntegrationError,
@@ -21,6 +22,7 @@ from proliferate.integrations.github import (
     get_github_app_installation,
     list_github_app_installations,
 )
+from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.models import (
     GitHubAppInstallationStartResponse,
@@ -35,6 +37,7 @@ from proliferate.server.cloud.github_app.repo_authority import (
     ensure_fresh_github_app_authorization,
     require_github_cloud_repo_authority,
 )
+from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.repos.domain.catalog import CloudGitRepositoriesPageRecord
 from proliferate.server.cloud.repos.domain.github_credentials import (
     CloudRepoGitHubCredentials,
@@ -293,6 +296,8 @@ async def complete_github_app_user_authorization_callback(
         user_id=user_id,
         authorization=authorization,
     )
+    await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(db, user_id=user_id)
+    await materialization_service.schedule_materialize_sandbox(db, user_id=user_id)
     await refresh_github_app_installation_cache(db)
     return return_to or _default_return_after_callback("account")
 
@@ -385,12 +390,21 @@ async def complete_github_app_installation_callback(
             "Could not verify GitHub App installation.",
             status_code=502,
         ) from exc
-    await github_app_store.upsert_github_app_installation(
+    installation_value = await github_app_store.upsert_github_app_installation(
         db,
         installation=installation,
         organization_id=organization_id,
         installed_by_user_id=actor_user_id,
     )
+    repo_environments = await repositories_store.list_cloud_repo_environments_for_git_owner(
+        db,
+        git_owner=installation_value.account_login,
+    )
+    for repo_environment in repo_environments:
+        await materialization_service.schedule_materialize_repo_environment(
+            db,
+            repo_environment_id=repo_environment.id,
+        )
     return return_to or _default_return_after_callback("organization")
 
 

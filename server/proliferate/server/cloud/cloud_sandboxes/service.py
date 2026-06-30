@@ -19,10 +19,10 @@ from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store import repositories as repo_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
-from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.cloud_sandboxes.repo_runtime_connections import (
     CloudSandboxRepoRuntimeConnection,
 )
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.crypto import decrypt_text
 
 
@@ -48,17 +48,25 @@ async def ensure_cloud_sandbox_ready(
     db: AsyncSession,
     user: _UserWithId,
 ) -> CloudSandboxValue:
+    return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
+
+
+async def ensure_personal_cloud_sandbox_exists(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> CloudSandboxValue:
     await sandbox_store.acquire_cloud_sandbox_owner_lock(
         db,
         owner_scope="personal",
-        owner_user_id=user.id,
+        owner_user_id=user_id,
         organization_id=None,
     )
-    billing_subject = await billing_subjects.ensure_personal_billing_subject(db, user.id)
+    billing_subject = await billing_subjects.ensure_personal_billing_subject(db, user_id)
     sandbox = await sandbox_store.ensure_personal_cloud_sandbox(
         db,
-        user_id=user.id,
-        created_by_user_id=user.id,
+        user_id=user_id,
+        created_by_user_id=user_id,
         billing_subject_id=billing_subject.id,
         e2b_template_ref="e2b",
     )
