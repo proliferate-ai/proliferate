@@ -11,6 +11,9 @@ LOCAL_PGUSER ?= proliferate
 LOCAL_PGPASSWORD ?= localdev
 LOCAL_PGDATABASE ?= proliferate
 USE_EXISTING_POSTGRES ?= 0
+LOCAL_REDIS_HOST ?= 127.0.0.1
+LOCAL_REDIS_PORT ?= 6379
+USE_EXISTING_REDIS ?= 0
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AGENT_GATEWAY ?= 0
@@ -87,6 +90,7 @@ DEV_FRONTEND_ARTIFACTS := \
 	apps/packages/product-surfaces/dist
 PROFILE_DB_READY_COMMAND = make server-db-ready;
 PROFILE_DB_ENSURE_COMMAND = LOCAL_PGHOST="$(LOCAL_PGHOST)" LOCAL_PGPORT="$(LOCAL_PGPORT)" LOCAL_PGUSER="$(LOCAL_PGUSER)" LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME";
+PROFILE_REDIS_READY_COMMAND = make server-redis-ready;
 ifneq ($(origin DATABASE_URL), undefined)
 PROFILE_DB_READY_COMMAND = :;
 PROFILE_DB_ENSURE_COMMAND = :;
@@ -99,7 +103,7 @@ endif
 endif
 
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
-        server-db-down server-db-ready db db-local db-ah server-migrate serve install \
+        server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
@@ -185,6 +189,7 @@ run: dev-artifacts-ready
 	$(AUTH_PROFILE_ENV_SOURCE) \
 	$(STRIPE_LOCAL_SECRET_ENV) \
 	$(LOCAL_CODEX_ACP_ENV) \
+	$(PROFILE_REDIS_READY_COMMAND) \
 	if [ "$$database_url_override_set" = "x" ]; then \
 		export DATABASE_URL="$$database_url_override_value"; \
 		use_profile_db=0; \
@@ -514,6 +519,45 @@ server-db-wait:
 server-db-down:
 	@docker compose -f server/docker-compose.yml stop db
 
+server-redis-up:
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "Docker is required for backend development. Install or start Docker and retry."; \
+		exit 1; \
+	}
+	@docker info >/dev/null 2>&1 || { \
+		echo "Docker is not running. Start Docker Desktop and retry."; \
+		exit 1; \
+	}
+	@docker compose -f server/docker-compose.yml up -d redis
+
+server-redis-wait:
+	@attempts=0; \
+	until docker compose -f server/docker-compose.yml exec -T redis redis-cli ping >/dev/null 2>&1; do \
+		attempts=$$((attempts + 1)); \
+		if [ $$attempts -ge 30 ]; then \
+			echo "Local Redis did not become ready. Check \`docker compose -f server/docker-compose.yml logs redis\`."; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+
+server-redis-down:
+	@docker compose -f server/docker-compose.yml stop redis
+
+server-redis-ready:
+ifeq ($(USE_EXISTING_REDIS),1)
+	@host="$(LOCAL_REDIS_HOST)"; port="$(LOCAL_REDIS_PORT)"; \
+	for _ in $$(seq 1 30); do \
+		python3 -c 'import socket, sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=1).close()' "$$host" "$$port" >/dev/null 2>&1 && exit 0; \
+		sleep 1; \
+	done; \
+	echo "Redis is not reachable at $$host:$$port." >&2; \
+	exit 1
+else
+	@$(MAKE) server-redis-up
+	@$(MAKE) server-redis-wait
+endif
+
 db: server-db-ready
 	@docker compose -f server/docker-compose.yml exec db psql -U proliferate -d proliferate
 
@@ -714,7 +758,7 @@ db-migrate-down: server-db-ready
 	cd server && .venv/bin/alembic downgrade base
 
 dev-server: export DEBUG := true
-dev-server: server-migrate
+dev-server: server-migrate server-redis-ready
 	@$(SERVER_ENV_SOURCE) \
 	$(STRIPE_LOCAL_SECRET_ENV) \
 	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000

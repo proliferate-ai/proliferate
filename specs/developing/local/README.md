@@ -102,14 +102,18 @@ you which explicit build target to run when they are missing.
 - automation scheduler worker against the same profile database
 - Tauri desktop app with generated profile identity
 
+The profile launcher also starts and waits for local Redis from
+`server/docker-compose.yml`. Redis backs RedBeat and the in-process cloud
+materialization locks used by managed cloud development.
+
 The Celery/RabbitMQ/redbeat worker-tier substrate is available for worker-tier
 migration testing. The profile launcher starts the automation scheduler, but it
 does not start Celery workers yet; cloud automation execution runs through the
 `automations.execution` Celery queue.
-For Slice 1 substrate checks, start the local broker stores explicitly:
+For Slice 1 worker-tier checks that need RabbitMQ, start RabbitMQ explicitly:
 
 ```bash
-docker compose -f server/docker-compose.yml up -d rabbitmq redis
+docker compose -f server/docker-compose.yml up -d rabbitmq
 ```
 
 Then verify the no-op worker app imports from `server/` without opening a broker
