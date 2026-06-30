@@ -25,6 +25,11 @@ export function AccountSettingsSection() {
           loadingProvider: account.loadingProvider,
           error: account.error,
           connectGitHub: account.connectGitHub,
+          connectGitHubApp: account.connectGitHubApp,
+          manageGitHubApp: account.manageGitHubApp,
+          githubAppStatus: account.githubAppStatus,
+          githubAppStatusLoading: account.githubAppStatusLoading,
+          githubAppConnecting: account.githubAppConnecting,
           connectGoogle: account.connectGoogle,
           connectApple: account.connectApple,
           setPassword: account.setPassword,
@@ -42,6 +47,11 @@ function buildAccountSettingsProps({
   loadingProvider,
   error,
   connectGitHub,
+  connectGitHubApp,
+  manageGitHubApp,
+  githubAppStatus,
+  githubAppStatusLoading,
+  githubAppConnecting,
   connectGoogle,
   connectApple,
   setPassword,
@@ -51,6 +61,16 @@ function buildAccountSettingsProps({
   loadingProvider: AuthProviderName | "sign-out" | null;
   error: string | null;
   connectGitHub: () => void;
+  connectGitHubApp: () => void;
+  manageGitHubApp: () => void;
+  githubAppStatus: {
+    connected: boolean;
+    githubLogin?: string | null;
+    status?: string | null;
+    action?: string | null;
+  } | undefined;
+  githubAppStatusLoading: boolean;
+  githubAppConnecting: boolean;
   connectGoogle: () => void;
   connectApple: () => void;
   setPassword: (input: AccountPasswordCredentialSubmit) => void | Promise<void>;
@@ -74,6 +94,15 @@ function buildAccountSettingsProps({
       : "GitHub is required before cloud workspaces and workflows can run end to end.",
     githubLabel,
     providers: buildProviderViews(linkedProviders, providerAvailability, Boolean(viewer?.githubConnected)),
+    connectedServices: viewer
+      ? [buildGitHubAppServiceView({
+          status: githubAppStatus,
+          loading: githubAppStatusLoading,
+          connecting: githubAppConnecting,
+          onConnect: connectGitHubApp,
+          onManage: manageGitHubApp,
+        })]
+      : [],
     passwordCredential: {
       enabled: viewer?.passwordCredential.enabled ?? false,
       setAt: viewer?.passwordCredential.setAt ?? null,
@@ -114,6 +143,60 @@ function buildAccountSettingsProps({
       },
     },
     error,
+  };
+}
+
+function buildGitHubAppServiceView({
+  status,
+  loading,
+  connecting,
+  onConnect,
+  onManage,
+}: {
+  status: {
+    connected: boolean;
+    githubLogin?: string | null;
+    status?: string | null;
+    action?: string | null;
+  } | undefined;
+  loading: boolean;
+  connecting: boolean;
+  onConnect: () => void;
+  onManage: () => void;
+}) {
+  const connected = status?.connected === true;
+  const needsReconnect = status?.status === "expired"
+    || status?.status === "needs_reauth"
+    || status?.action === "reauthorize";
+  return {
+    id: "github-app",
+    label: "Proliferate GitHub App",
+    description: "Required for Proliferate Cloud repositories.",
+    accountLabel: status?.githubLogin ? `@${status.githubLogin}` : null,
+    statusLabel: loading
+      ? "Checking"
+      : connected
+        ? "Connected"
+        : needsReconnect
+          ? "Reconnect"
+          : "Not connected",
+    tone: connected ? "success" as const : needsReconnect ? "warning" as const : "neutral" as const,
+    action: connected
+      ? {
+          label: "Manage GitHub App",
+          onClick: onManage,
+        }
+      : {
+          label: connecting
+            ? "Opening GitHub..."
+            : needsReconnect
+              ? "Reconnect GitHub App"
+              : "Connect GitHub App",
+          icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
+          loading: connecting,
+          disabled: connecting,
+          onClick: onConnect,
+        },
   };
 }
 

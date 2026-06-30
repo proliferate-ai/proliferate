@@ -34,6 +34,7 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     }
     if let Err(error) = lifecycle::heartbeat::send_once(&config, &cloud, &identity, &store).await {
         warn!(?error, "worker heartbeat failed");
+        refresh_github_credentials_after_heartbeat_failure(&config, &cloud, &identity).await;
     }
     if once {
         return Ok(());
@@ -71,7 +72,22 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
             lifecycle::heartbeat::send_once(&config, &cloud, &identity, &store).await
         {
             warn!(?error, "worker heartbeat failed");
+            refresh_github_credentials_after_heartbeat_failure(&config, &cloud, &identity).await;
         }
+    }
+}
+
+async fn refresh_github_credentials_after_heartbeat_failure(
+    config: &WorkerConfig,
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+) {
+    if let Err(error) = lifecycle::github_credentials::converge_once(config, cloud, identity).await
+    {
+        warn!(
+            ?error,
+            "github credential convergence failed after heartbeat failure"
+        );
     }
 }
 

@@ -149,6 +149,7 @@ export function classifyFile(path) {
       "Cargo.toml",
       ".github/workflows/release-cloud-template.yml",
       ".github/workflows/promote-cloud-template.yml",
+      "install/proliferate-git-credential-helper",
       "scripts/build-template.mjs",
       "scripts/smoke-cloud-template.mjs",
       "scripts/promote-cloud-template.mjs",

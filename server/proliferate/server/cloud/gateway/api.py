@@ -26,6 +26,7 @@ router = APIRouter(tags=["managed-sandbox-gateway"])
 @router.api_route(
     "/managed-sandbox/anyharness/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    include_in_schema=False,
 )
 async def proxy_managed_sandbox_anyharness_http(
     path: str,

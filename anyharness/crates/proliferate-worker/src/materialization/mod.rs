@@ -3,6 +3,7 @@ pub mod env;
 pub mod files;
 pub mod git;
 pub mod git_identity;
+pub mod github_credentials;
 pub mod repo_checkout;
 pub mod runtime_config;
 

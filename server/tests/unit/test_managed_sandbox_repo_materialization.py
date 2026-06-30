@@ -210,12 +210,17 @@ async def test_clone_dirty_check_allows_managed_materialization_paths(
         runtime_context=object(),
         repo_config=repo_config,
         repo_path="/home/user/workspace/repos/acme/rocket",
-        github_token="github-token",
         managed_sandbox_id=uuid.uuid4(),
     )
 
     assert calls
+    assert "envs" not in calls[0]
     command = calls[0]["command"]
+    assert "proliferate-git-credential-helper" in command
+    assert ".proliferate/git/github.com/token" in command
+    assert ".proliferate/git/github.com/meta.json" in command
+    assert "github_app_user_to_server" in command
+    assert "GitHub credentials are not ready in the managed sandbox." in command
     assert ".proliferate/env/session.env" in command
     assert ".env.example" in command
     assert "config/app.env" in command

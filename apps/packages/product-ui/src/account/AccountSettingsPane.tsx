@@ -37,6 +37,16 @@ export interface AccountActionView {
   onClick: () => void;
 }
 
+export interface AccountConnectedServiceView {
+  id: string;
+  label: string;
+  description: ReactNode;
+  accountLabel?: string | null;
+  statusLabel: string;
+  tone?: "neutral" | "success" | "warning" | "destructive";
+  action?: AccountActionView;
+}
+
 export interface AccountSettingsPaneProps {
   displayName: string;
   email: string;
@@ -57,6 +67,9 @@ export interface AccountSettingsPaneProps {
   accessDescription?: ReactNode;
   providersTitle?: string;
   providersDescription?: ReactNode;
+  connectedServicesTitle?: string;
+  connectedServicesDescription?: ReactNode;
+  connectedServices?: AccountConnectedServiceView[];
   passwordCredential?: AccountPasswordCredentialView;
   error?: ReactNode;
 }
@@ -73,6 +86,9 @@ export function AccountSettingsPane({
   accessDescription = "Sign in and link providers so web, mobile, and desktop resolve to the same Proliferate account.",
   providersTitle = "Connected providers",
   providersDescription = "GitHub is required for repository access. Add Google and Apple identities to sign in across devices without creating a separate account.",
+  connectedServicesTitle = "Connected services",
+  connectedServicesDescription = "Authorize services Proliferate uses inside managed cloud sandboxes.",
+  connectedServices = [],
   passwordCredential,
   error,
 }: AccountSettingsPaneProps) {
@@ -129,6 +145,26 @@ export function AccountSettingsPane({
         </div>
       </SettingsCard>
 
+      {connectedServices.length > 0 ? (
+        <SettingsCard>
+          <div className="space-y-3 p-4">
+            <div className="min-w-0 space-y-1">
+              <div className="text-sm font-medium text-foreground">
+                {connectedServicesTitle}
+              </div>
+              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+                {connectedServicesDescription}
+              </p>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-border">
+              {connectedServices.map((service) => (
+                <ConnectedServiceRow key={service.id} service={service} />
+              ))}
+            </div>
+          </div>
+        </SettingsCard>
+      ) : null}
+
       {passwordCredential ? (
         <AccountPasswordCredentialCard credential={passwordCredential} />
       ) : null}
@@ -157,6 +193,34 @@ function AccountAction({
       {!action.loading && action.icon ? action.icon : null}
       {action.label}
     </Button>
+  );
+}
+
+function ConnectedServiceRow({
+  service,
+}: {
+  service: AccountConnectedServiceView;
+}) {
+  return (
+    <div className="flex flex-col gap-3 border-b border-border-light px-3 py-2.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+          <span>{service.label}</span>
+          <Badge tone={service.tone ?? "neutral"} className="shrink-0">
+            {service.statusLabel}
+          </Badge>
+        </div>
+        <div className="text-muted-foreground">{service.description}</div>
+        {service.accountLabel ? (
+          <div className="truncate text-muted-foreground">{service.accountLabel}</div>
+        ) : null}
+      </div>
+      {service.action ? (
+        <div className="shrink-0">
+          <AccountAction action={service.action} variant="secondary" />
+        </div>
+      ) : null}
+    </div>
   );
 }
 

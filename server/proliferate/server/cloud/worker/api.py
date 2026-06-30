@@ -20,6 +20,7 @@ from proliferate.server.cloud.worker.commands import (
     record_command_result,
 )
 from proliferate.server.cloud.worker.control.service import wait_for_worker_control
+from proliferate.server.cloud.worker.github_credentials import refresh_worker_github_credentials
 from proliferate.server.cloud.worker.models import (
     WorkerCommandDeliveryRequest,
     WorkerCommandLeaseRequest,
@@ -31,6 +32,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerExposureListResponse,
+    WorkerGitHubCredentialLeaseRequest,
+    WorkerGitHubCredentialLeaseResponse,
     WorkerHeartbeatRequest,
     WorkerHeartbeatResponse,
     WorkerInventoryRequest,
@@ -107,6 +110,23 @@ async def worker_materialization_report_endpoint(
     try:
         auth = await authenticate_worker(db, authorization=authorization)
         return await record_materialization_report_and_commit(db, auth=auth, body=body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post(
+    "/github-credentials/refresh",
+    response_model=WorkerGitHubCredentialLeaseResponse,
+    include_in_schema=False,
+)
+async def worker_github_credentials_refresh_endpoint(
+    body: WorkerGitHubCredentialLeaseRequest,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerGitHubCredentialLeaseResponse:
+    try:
+        auth = await authenticate_worker(db, authorization=authorization)
+        return await refresh_worker_github_credentials(db, auth=auth, body=body)
     except CloudApiError as error:
         raise_cloud_error(error)
 

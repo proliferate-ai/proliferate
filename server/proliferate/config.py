@@ -171,6 +171,15 @@ class Settings(BaseSettings):
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
 
+    # GitHub App for managed-cloud repository authority.
+    github_app_id: str = ""
+    github_app_client_id: str = ""
+    github_app_client_secret: str = ""
+    github_app_webhook_secret: str = ""
+    github_app_callback_base_url: str = ""
+    github_app_private_key: str = ""
+    github_app_private_key_path: str = ""
+
     # Google OAuth
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""

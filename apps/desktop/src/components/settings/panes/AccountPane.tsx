@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AccountSettingsPane,
@@ -7,6 +7,7 @@ import {
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { setPasswordCredential } from "@proliferate/cloud-sdk";
+import { useCreateGitHubAppConnectUrl, useGitHubAppStatus } from "@proliferate/cloud-sdk-react";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
@@ -26,6 +27,7 @@ import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { buildGitHubAppConnectedServiceView } from "./account/GitHubAppConnectedService";
 
 export function AccountPane() {
   const navigate = useNavigate();
@@ -44,11 +46,18 @@ export function AccountPane() {
   const [signingOut, setSigningOut] = useState(false);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [providerLinkError, setProviderLinkError] = useState<string | null>(null);
+  const githubAppStatusRefreshTimersRef = useRef<number[]>([]);
   const devAuthBypassed = isDevAuthBypassed();
   const isAuthenticated = status === "authenticated";
   const authViewerCacheScope = user?.id
     ? `desktop-account:${user.id}`
     : "desktop-account:anonymous";
+  const githubAppStatus = useGitHubAppStatus(
+    {},
+    isAuthenticated && !devAuthBypassed,
+    authViewerCacheScope,
+  );
+  const githubAppConnect = useCreateGitHubAppConnectUrl();
   const authViewer = useAuthViewer(
     isAuthenticated && !devAuthBypassed && cloudSignInAvailable,
     authViewerCacheScope,
@@ -111,6 +120,15 @@ export function AccountPane() {
       ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=160`
       : null);
 
+  useEffect(() => () => {
+    clearGitHubAppStatusRefreshTimers(githubAppStatusRefreshTimersRef.current);
+  }, []);
+
+  useEffect(() => {
+    clearGitHubAppStatusRefreshTimers(githubAppStatusRefreshTimersRef.current);
+    githubAppStatusRefreshTimersRef.current = [];
+  }, [authViewerCacheScope]);
+
   async function handleSignOut() {
     setSigningOut(true);
     try {
@@ -132,6 +150,28 @@ export function AccountPane() {
     } finally {
       setLinkingGoogle(false);
     }
+  }
+
+  async function handleConnectGitHubApp() {
+    setProviderLinkError(null);
+    try {
+      const response = await githubAppConnect.mutateAsync({
+        returnTo: "proliferate://settings/account?source=github_app_callback",
+      });
+      await openExternal(response.authorizationUrl);
+      clearGitHubAppStatusRefreshTimers(githubAppStatusRefreshTimersRef.current);
+      githubAppStatusRefreshTimersRef.current = scheduleGitHubAppStatusRefresh(() => {
+        void githubAppStatus.refetch();
+      });
+    } catch (error) {
+      setProviderLinkError(
+        error instanceof Error ? error.message : "GitHub App connection failed",
+      );
+    }
+  }
+
+  async function handleManageGitHubApp() {
+    await openExternal("https://github.com/settings/installations");
   }
 
   async function handleSetPassword(input: AccountPasswordCredentialSubmit) {
@@ -182,6 +222,15 @@ export function AccountPane() {
           googleAvailable: googleAvailability?.enabled !== false,
           showProviders: isAuthenticated && !devAuthBypassed,
         })}
+        connectedServices={isAuthenticated && !devAuthBypassed
+          ? [buildGitHubAppConnectedServiceView({
+              status: githubAppStatus.data,
+              loading: githubAppStatus.isLoading,
+              connecting: githubAppConnect.isPending,
+              onConnect: handleConnectGitHubApp,
+              onManage: handleManageGitHubApp,
+            })]
+          : []}
         passwordCredential={isAuthenticated && !devAuthBypassed
           ? {
               enabled: authViewer.data?.passwordCredential.enabled ?? false,
@@ -256,6 +305,18 @@ export function AccountPane() {
       />
     </section>
   );
+}
+
+function scheduleGitHubAppStatusRefresh(refetch: () => void): number[] {
+  return [2_000, 5_000, 10_000, 20_000, 40_000, 80_000].map((delayMs) => (
+    window.setTimeout(refetch, delayMs)
+  ));
+}
+
+function clearGitHubAppStatusRefreshTimers(timerIds: number[]) {
+  for (const timerId of timerIds) {
+    window.clearTimeout(timerId);
+  }
 }
 
 function buildAccountProviderViews({

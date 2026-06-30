@@ -4,7 +4,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigSummaryValue,
@@ -29,6 +28,7 @@ from proliferate.server.billing.snapshots import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.repo_config.access import require_organization_repo_config_admin
 from proliferate.server.cloud.repo_config.models import (
     PutCloudRepoFileRequest,
@@ -134,21 +134,23 @@ async def _validate_repo_access_and_default_branch(
     if normalized_default_branch is None and not require_access:
         return None
 
-    github_grant = await get_ready_github_grant_for_user(db, user_id=user_id)
-    if github_grant is None:
-        raise CloudApiError(
-            "github_link_required",
-            "Connect a GitHub account before setting a cloud default branch.",
-            status_code=400,
-        )
-
-    repo_branches = await get_repo_branches_for_credentials(
-        CloudRepoGitHubCredentials(user_id=user_id, access_token=github_grant.access_token),
+    authority = await require_github_cloud_repo_authority(
+        db,
+        user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
-        missing_access_message="Connect a GitHub account before setting a cloud default branch.",
+    )
+
+    repo_branches = await get_repo_branches_for_credentials(
+        CloudRepoGitHubCredentials(user_id=user_id, access_token=authority.access_token),
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        missing_access_message=(
+            "Connect the Proliferate GitHub App before setting a cloud default branch."
+        ),
         repo_access_required_message=(
-            "Reconnect GitHub and grant repository access before setting a cloud default branch."
+            "Reconnect the Proliferate GitHub App and grant repository access before "
+            "setting a cloud default branch."
         ),
     )
     if normalized_default_branch is None:
@@ -333,6 +335,12 @@ async def bootstrap_repo_config(
     git_owner: str,
     git_repo_name: str,
 ) -> CloudRepoConfigValue:
+    await require_github_cloud_repo_authority(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
     billing_snapshot = await get_billing_snapshot(user_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
     try:
@@ -378,9 +386,6 @@ def _schedule_managed_sandbox_repo_materialization(
         sandbox = await load_personal_managed_sandbox(fresh_db, user_id)
         if sandbox is None or sandbox.status != "ready":
             return
-        github_grant = await get_ready_github_grant_for_user(fresh_db, user_id=user_id)
-        if github_grant is None:
-            return
         repo_config = await get_cloud_repo_config(
             fresh_db,
             user_id=user_id,
@@ -389,6 +394,12 @@ def _schedule_managed_sandbox_repo_materialization(
         )
         if repo_config is None or not repo_config.configured:
             return
+        await require_github_cloud_repo_authority(
+            fresh_db,
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
         from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
             ensure_repo_materialized,
         )
@@ -398,7 +409,6 @@ def _schedule_managed_sandbox_repo_materialization(
                 fresh_db,
                 sandbox=sandbox,
                 repo_config=repo_config,
-                github_token=github_grant.access_token,
                 run_setup=False,
             )
         except Exception as exc:

@@ -31,6 +31,11 @@ const DEFAULT_SUPERVISOR_BINARY_PATH = path.join(
   "release",
   "proliferate-supervisor"
 );
+const GIT_CREDENTIAL_HELPER_PATH = path.join(
+  REPO_ROOT,
+  "install",
+  "proliferate-git-credential-helper"
+);
 // Keep this aligned with the cloud-supported agent set in server/proliferate/constants/cloud.py.
 const TEMPLATE_AGENT_KINDS = ["claude", "codex"];
 
@@ -270,6 +275,10 @@ function prepareTemplateContext(bundlePaths) {
   fs.copyFileSync(bundlePaths.anyharness, path.join(contextDir, "anyharness"));
   fs.copyFileSync(bundlePaths.worker, path.join(contextDir, "proliferate-worker"));
   fs.copyFileSync(bundlePaths.supervisor, path.join(contextDir, "proliferate-supervisor"));
+  fs.copyFileSync(
+    GIT_CREDENTIAL_HELPER_PATH,
+    path.join(contextDir, "proliferate-git-credential-helper")
+  );
   return contextDir;
 }
 
@@ -331,6 +340,17 @@ function buildTemplateDefinition() {
     .copy("proliferate-supervisor", "/home/user/.proliferate/bin/proliferate-supervisor", {
       mode: 0o755,
     })
+    .copy(
+      "proliferate-git-credential-helper",
+      "/home/user/.proliferate/bin/proliferate-git-credential-helper",
+      {
+        mode: 0o700,
+      }
+    )
+    .runCmd(
+      "chown user:user /home/user/.proliferate/bin/proliferate-git-credential-helper && chmod 700 /home/user/.proliferate/bin/proliferate-git-credential-helper",
+      { user: "root" }
+    )
     .makeDir("/home/user/workspace", { mode: 0o755, user: "user" })
     .setUser("user")
     .runCmd(

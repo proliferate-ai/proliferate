@@ -10,6 +10,7 @@ from . import claims as claims  # noqa: F401
 from . import cloud_target_runtime_access as cloud_target_runtime_access  # noqa: F401
 from . import commands as commands  # noqa: F401
 from . import exposures as exposures  # noqa: F401
+from . import github_app as github_app  # noqa: F401
 from . import integrations as integrations  # noqa: F401
 from . import managed_sandboxes as managed_sandboxes  # noqa: F401
 from . import mcp as mcp  # noqa: F401

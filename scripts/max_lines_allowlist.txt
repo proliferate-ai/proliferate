@@ -38,7 +38,7 @@ server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read 
 server/proliferate/server/cloud/commands/domain/payload.py 549 existing cloud command payload validator with workspace materialization policies
 server/proliferate/server/cloud/agent_auth/models.py 563 managed sandbox desktop apply response extends existing cloud agent auth API schema module pending request/response split
 server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split
-server/proliferate/server/cloud/managed_sandboxes/service.py 1560 initial managed sandbox lifecycle orchestration pending lifecycle/materialization split
+server/proliferate/server/cloud/managed_sandboxes/service.py 1501 initial managed sandbox lifecycle orchestration pending lifecycle/materialization split
 server/proliferate/constants/cloud.py 614 existing cloud constants module with command and target config enums
 server/tests/integration/schema_migration_assertions.py 890 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test

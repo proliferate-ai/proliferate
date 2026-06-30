@@ -45,8 +45,8 @@ async def test_runtime_connection_materializes_repo_without_exposing_runtime_acc
         calls["repo_lookup"] = _kwargs
         return repo_config
 
-    async def get_github_grant(*_args: object, **_kwargs: object) -> object:
-        return SimpleNamespace(access_token="github-token")
+    async def require_github_authority(*_args: object, **_kwargs: object) -> None:
+        calls["github_authority"] = _kwargs
 
     async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
         calls["sandbox_ready"] = True
@@ -61,7 +61,7 @@ async def test_runtime_connection_materializes_repo_without_exposing_runtime_acc
         return 1
 
     monkeypatch.setattr(service, "get_cloud_repo_config", get_repo_config)
-    monkeypatch.setattr(service, "read_ready_github_grant_for_user", get_github_grant)
+    monkeypatch.setattr(service, "require_github_cloud_repo_authority", require_github_authority)
     monkeypatch.setattr(service, "ensure_managed_sandbox_ready", ensure_sandbox)
     monkeypatch.setattr(repo_materialization, "ensure_repo_materialized", ensure_materialized)
     monkeypatch.setattr(
@@ -88,10 +88,14 @@ async def test_runtime_connection_materializes_repo_without_exposing_runtime_acc
         "git_repo_name": "repo",
     }
     assert calls["sandbox_ready"] is True
+    assert calls["github_authority"] == {
+        "user_id": user.id,
+        "git_owner": "owner",
+        "git_repo_name": "repo",
+    }
     assert calls["materialization"] == {
         "sandbox": sandbox,
         "repo_config": repo_config,
-        "github_token": "github-token",
         "run_setup": False,
     }
     assert calls["workspace_projection_repair"] == {
@@ -236,14 +240,21 @@ async def test_runtime_connection_singleflights_concurrent_repo_resolution(
         env_vars_version=2,
         setup_script_version=3,
     )
-    sandbox = SimpleNamespace(runtime_generation=9)
+    sandbox = SimpleNamespace(
+        runtime_generation=9,
+        e2b_sandbox_id="sandbox-9",
+        anyharness_base_url="https://runtime.example",
+        anyharness_bearer_token_ciphertext="token",
+        anyharness_data_key_ciphertext="data-key",
+    )
     materialization = SimpleNamespace(
         anyharness_workspace_id="workspace-789",
         anyharness_repo_root_id="repo-root-789",
     )
     calls = {
         "repo_lookup": 0,
-        "github_grant": 0,
+        "github_authority": 0,
+        "sandbox_load": 0,
         "sandbox_ready": 0,
         "materialization": 0,
         "workspace_projection_repair": 0,
@@ -253,9 +264,12 @@ async def test_runtime_connection_singleflights_concurrent_repo_resolution(
         calls["repo_lookup"] += 1
         return repo_config
 
-    async def get_github_grant(*_args: object, **_kwargs: object) -> object:
-        calls["github_grant"] += 1
-        return SimpleNamespace(access_token="github-token")
+    async def require_github_authority(*_args: object, **_kwargs: object) -> None:
+        calls["github_authority"] += 1
+
+    async def load_sandbox(*_args: object, **_kwargs: object) -> object:
+        calls["sandbox_load"] += 1
+        return sandbox
 
     async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
         calls["sandbox_ready"] += 1
@@ -271,7 +285,8 @@ async def test_runtime_connection_singleflights_concurrent_repo_resolution(
         return 1
 
     monkeypatch.setattr(service, "get_cloud_repo_config", get_repo_config)
-    monkeypatch.setattr(service, "read_ready_github_grant_for_user", get_github_grant)
+    monkeypatch.setattr(service, "require_github_cloud_repo_authority", require_github_authority)
+    monkeypatch.setattr(service, "load_personal_managed_sandbox", load_sandbox)
     monkeypatch.setattr(service, "ensure_managed_sandbox_ready", ensure_sandbox)
     monkeypatch.setattr(repo_materialization, "ensure_repo_materialized", ensure_materialized)
     monkeypatch.setattr(
@@ -297,8 +312,101 @@ async def test_runtime_connection_singleflights_concurrent_repo_resolution(
     assert {result.runtime_generation for result in results} == {9}
     assert calls == {
         "repo_lookup": 10,
-        "github_grant": 1,
+        "github_authority": 20,
+        "sandbox_load": 9,
         "sandbox_ready": 1,
         "materialization": 1,
         "workspace_projection_repair": 1,
     }
+
+
+@pytest.mark.asyncio
+async def test_runtime_connection_cache_rejects_previous_sandbox_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    repo_config = SimpleNamespace(
+        id=uuid4(),
+        configured=True,
+        git_owner="Owner",
+        git_repo_name="Repo",
+        default_branch="main",
+        files_version=1,
+        env_vars_version=2,
+        setup_script_version=3,
+    )
+    sandbox_v1 = SimpleNamespace(
+        runtime_generation=1,
+        e2b_sandbox_id="sandbox-1",
+        anyharness_base_url="https://runtime.example",
+        anyharness_bearer_token_ciphertext="token",
+        anyharness_data_key_ciphertext="data-key",
+    )
+    sandbox_v2 = SimpleNamespace(
+        runtime_generation=2,
+        e2b_sandbox_id="sandbox-2",
+        anyharness_base_url="https://runtime.example",
+        anyharness_bearer_token_ciphertext="token",
+        anyharness_data_key_ciphertext="data-key",
+    )
+    materializations = iter(
+        [
+            SimpleNamespace(
+                anyharness_workspace_id="workspace-v1",
+                anyharness_repo_root_id="repo-root-v1",
+            ),
+            SimpleNamespace(
+                anyharness_workspace_id="workspace-v2",
+                anyharness_repo_root_id="repo-root-v2",
+            ),
+        ]
+    )
+    current_sandbox = {"value": sandbox_v1}
+
+    async def get_repo_config(*_args: object, **_kwargs: object) -> object:
+        return repo_config
+
+    async def require_github_authority(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def load_sandbox(*_args: object, **_kwargs: object) -> object:
+        return current_sandbox["value"]
+
+    async def ensure_sandbox(*_args: object, **_kwargs: object) -> object:
+        return current_sandbox["value"]
+
+    async def ensure_materialized(*_args: object, **_kwargs: object) -> object:
+        return next(materializations)
+
+    async def attach_workspace_id(*_args: object, **_kwargs: object) -> int:
+        return 1
+
+    monkeypatch.setattr(service, "get_cloud_repo_config", get_repo_config)
+    monkeypatch.setattr(service, "require_github_cloud_repo_authority", require_github_authority)
+    monkeypatch.setattr(service, "load_personal_managed_sandbox", load_sandbox)
+    monkeypatch.setattr(service, "ensure_managed_sandbox_ready", ensure_sandbox)
+    monkeypatch.setattr(repo_materialization, "ensure_repo_materialized", ensure_materialized)
+    monkeypatch.setattr(
+        service,
+        "attach_anyharness_workspace_id_to_managed_repo_workspaces",
+        attach_workspace_id,
+    )
+
+    first = await service.ensure_managed_sandbox_repo_runtime_connection(
+        cast(AsyncSession, object()),
+        cast(service._UserWithId, user),
+        git_owner="Owner",
+        git_repo_name="Repo",
+    )
+    current_sandbox["value"] = sandbox_v2
+    second = await service.ensure_managed_sandbox_repo_runtime_connection(
+        cast(AsyncSession, object()),
+        cast(service._UserWithId, user),
+        git_owner="Owner",
+        git_repo_name="Repo",
+    )
+
+    assert first.anyharness_workspace_id == "workspace-v1"
+    assert first.runtime_generation == 1
+    assert second.anyharness_workspace_id == "workspace-v2"
+    assert second.runtime_generation == 2
