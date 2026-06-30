@@ -1,4 +1,4 @@
-"""Gateway access resolution for managed sandbox runtimes."""
+"""Gateway access resolution for cloud sandbox runtimes."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.server.cloud.managed_sandboxes.service import (
-    ensure_managed_sandbox_ready,
-    load_managed_sandbox_runtime_access,
+from proliferate.server.cloud.cloud_sandboxes.service import (
+    ensure_cloud_sandbox_ready,
+    load_cloud_sandbox_runtime_access,
 )
 
 
@@ -21,24 +21,24 @@ class _UserWithId(Protocol):
 
 
 @dataclass(frozen=True)
-class ManagedSandboxGatewayAccess:
+class CloudSandboxGatewayAccess:
     upstream_base_url: str
     upstream_token: str
     runtime_generation: int
 
 
 @dataclass(frozen=True)
-class _CachedManagedSandboxGatewayAccess:
-    access: ManagedSandboxGatewayAccess
+class _CachedCloudSandboxGatewayAccess:
+    access: CloudSandboxGatewayAccess
     expires_at_monotonic: float
 
 
 _GATEWAY_ACCESS_CACHE_TTL_SECONDS = 60.0
-_gateway_access_cache: dict[UUID, _CachedManagedSandboxGatewayAccess] = {}
+_gateway_access_cache: dict[UUID, _CachedCloudSandboxGatewayAccess] = {}
 _gateway_access_locks: dict[UUID, asyncio.Lock] = {}
 
 
-def _cached_gateway_access(user_id: UUID) -> ManagedSandboxGatewayAccess | None:
+def _cached_gateway_access(user_id: UUID) -> CloudSandboxGatewayAccess | None:
     cached = _gateway_access_cache.get(user_id)
     if cached is None:
         return None
@@ -58,24 +58,24 @@ def _gateway_access_lock(user_id: UUID) -> asyncio.Lock:
 
 def _remember_gateway_access(
     user_id: UUID,
-    access: ManagedSandboxGatewayAccess,
-) -> ManagedSandboxGatewayAccess:
-    _gateway_access_cache[user_id] = _CachedManagedSandboxGatewayAccess(
+    access: CloudSandboxGatewayAccess,
+) -> CloudSandboxGatewayAccess:
+    _gateway_access_cache[user_id] = _CachedCloudSandboxGatewayAccess(
         access=access,
         expires_at_monotonic=time.monotonic() + _GATEWAY_ACCESS_CACHE_TTL_SECONDS,
     )
     return access
 
 
-def _reset_managed_sandbox_gateway_access_cache_for_tests() -> None:
+def _reset_cloud_sandbox_gateway_access_cache_for_tests() -> None:
     _gateway_access_cache.clear()
     _gateway_access_locks.clear()
 
 
-async def ensure_managed_sandbox_gateway_access(
+async def ensure_cloud_sandbox_gateway_access(
     db: AsyncSession,
     user: _UserWithId,
-) -> ManagedSandboxGatewayAccess:
+) -> CloudSandboxGatewayAccess:
     cached = _cached_gateway_access(user.id)
     if cached is not None:
         return cached
@@ -85,19 +85,19 @@ async def ensure_managed_sandbox_gateway_access(
         if cached is not None:
             return cached
 
-        access = await _resolve_managed_sandbox_gateway_access(db, user)
+        access = await _resolve_cloud_sandbox_gateway_access(db, user)
         return _remember_gateway_access(user.id, access)
 
 
-async def _resolve_managed_sandbox_gateway_access(
+async def _resolve_cloud_sandbox_gateway_access(
     db: AsyncSession,
     user: _UserWithId,
-) -> ManagedSandboxGatewayAccess:
-    sandbox = await ensure_managed_sandbox_ready(db, user)
-    upstream_base_url, upstream_token, _data_key = await load_managed_sandbox_runtime_access(
+) -> CloudSandboxGatewayAccess:
+    sandbox = await ensure_cloud_sandbox_ready(db, user)
+    upstream_base_url, upstream_token, _data_key = await load_cloud_sandbox_runtime_access(
         sandbox
     )
-    return ManagedSandboxGatewayAccess(
+    return CloudSandboxGatewayAccess(
         upstream_base_url=upstream_base_url,
         upstream_token=upstream_token,
         runtime_generation=sandbox.runtime_generation,

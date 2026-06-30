@@ -193,10 +193,10 @@ describe("assertDirectSessionCreateRuntimeConfigStamped", () => {
     })).not.toThrow();
   });
 
-  it("allows managed sandbox gateway session creation", () => {
+  it("allows cloud sandbox gateway session creation", () => {
     expect(() => assertDirectSessionCreateRuntimeConfigStamped({
       anyharnessWorkspaceId: "sandbox-workspace-1",
-      baseUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+      baseUrl: "http://api.local/v1/gateway/cloud-sandbox/anyharness",
       location: "cloud",
       runtimeGeneration: 1,
       runtimeAccessKind: "proliferate-gateway",
@@ -284,7 +284,7 @@ describe("prepareLocalSessionRuntimeConfig", () => {
     );
   });
 
-  it("applies runtime config through managed sandbox gateway targets", async () => {
+  it("applies runtime config through cloud sandbox gateway targets", async () => {
     mocks.ensurePersonalSandboxProfile.mockResolvedValue({
       id: "profile-1",
       primaryTargetId: "target-1",
@@ -348,7 +348,7 @@ describe("prepareLocalSessionRuntimeConfig", () => {
       changed: true,
     });
     const gatewayConnection = {
-      runtimeUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+      runtimeUrl: "http://api.local/v1/gateway/cloud-sandbox/anyharness",
       authToken: "product-token",
       anyharnessWorkspaceId: "sandbox-workspace-1",
     };

@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import BILLING_RECONCILER_LOCK_KEY
 from proliferate.db.models.billing import BillingDecisionEvent, UsageSegment, WebhookEventReceipt
-from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
 
@@ -66,10 +65,8 @@ async def _get_runtime_environment_billing_subject(
     db: AsyncSession,
     runtime_environment_id: UUID,
 ) -> tuple[UUID, UUID]:
-    environment = await db.get(CloudRuntimeEnvironment, runtime_environment_id)
-    if environment is None:
-        raise RuntimeError("Cloud runtime environment not found while opening usage segment.")
-    return environment.billing_subject_id, environment.user_id
+    del db, runtime_environment_id
+    raise RuntimeError("Cloud runtime environments have been removed.")
 
 
 async def resolve_billing_subject_id_for_workspace(

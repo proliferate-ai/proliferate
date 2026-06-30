@@ -136,7 +136,7 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
 export type RepoRef                   = Schema<"RepoRef">;
-export type ManagedSandboxResponse    = Schema<"ManagedSandboxResponse">;
+export type CloudSandboxResponse    = Schema<"CloudSandboxResponse">;
 export type BillingPlanInfo           = Schema<"CloudPlanInfo">;
 export type BillingUrlResponse        = Schema<"BillingUrlResponse">;
 export type OverageSettingsResponse   = Schema<"OverageSettingsResponse">;

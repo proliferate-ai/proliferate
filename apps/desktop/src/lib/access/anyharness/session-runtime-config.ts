@@ -87,11 +87,11 @@ export async function prepareLocalRuntimeConfigForTarget(
   if (target.location !== "local" && target.runtimeAccessKind !== "proliferate-gateway") {
     return null;
   }
-  await prepareManagedSandboxGatewayAgentAuthConfig(target, connection, options, config);
+  await prepareCloudSandboxGatewayAgentAuthConfig(target, connection, options, config);
   return prepareLocalSessionRuntimeConfig(connection, options, config);
 }
 
-export async function prepareManagedSandboxGatewayAgentAuthConfig(
+export async function prepareCloudSandboxGatewayAgentAuthConfig(
   target: RuntimeTarget,
   connection: AnyHarnessRuntimeConfigConnection,
   options?: ApplyRuntimeConfigOptions,
@@ -106,7 +106,7 @@ export async function prepareManagedSandboxGatewayAgentAuthConfig(
     profile.id,
     { targetId },
   );
-  await materializeManagedSandboxGatewaySyncedFiles(
+  await materializeCloudSandboxGatewaySyncedFiles(
     target,
     connection,
     response,
@@ -138,7 +138,7 @@ export async function prepareManagedSandboxGatewayAgentAuthConfig(
   });
 }
 
-async function materializeManagedSandboxGatewaySyncedFiles(
+async function materializeCloudSandboxGatewaySyncedFiles(
   target: RuntimeTarget,
   connection: AnyHarnessRuntimeConfigConnection,
   response: DesktopAgentAuthConfigApplyRequestResponse,

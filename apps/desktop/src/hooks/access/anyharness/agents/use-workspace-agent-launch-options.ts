@@ -6,7 +6,7 @@ import {
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { getAgentLaunchOptions } from "@/lib/access/anyharness/agents";
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
-import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
+import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 
 export function useWorkspaceAgentLaunchOptionsQuery({
   workspaceId,
@@ -31,7 +31,7 @@ export function useWorkspaceAgentLaunchOptionsQuery({
       if (!cloudConnectionInfo) {
         throw new Error("Cloud workspace connection is unavailable.");
       }
-      const freshConnection = await withFreshManagedSandboxGatewayAccessToken(
+      const freshConnection = await withFreshCloudSandboxGatewayAccessToken(
         cloudConnectionInfo,
       );
       return getAgentLaunchOptions(

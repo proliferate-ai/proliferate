@@ -1,4 +1,4 @@
-"""Shared service invariants for managed sandbox profile targets."""
+"""Shared service invariants for cloud sandbox profile targets."""
 
 from __future__ import annotations
 

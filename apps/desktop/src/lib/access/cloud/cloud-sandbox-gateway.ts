@@ -1,7 +1,7 @@
 import {
-  ensureManagedSandboxRepoRuntimeConnection,
-  ensureManagedSandboxWorkspaceRuntimeConnection,
-} from "@proliferate/cloud-sdk/client/managed-sandboxes";
+  ensureCloudSandboxRepoRuntimeConnection,
+  ensureCloudSandboxWorkspaceRuntimeConnection,
+} from "@proliferate/cloud-sdk/client/cloud-sandboxes";
 import type {
   CloudConnectionInfo,
   CloudRuntimeAuthState,
@@ -18,23 +18,23 @@ const CURRENT_RUNTIME_AUTH: CloudRuntimeAuthState = {
 
 export type AnyHarnessRuntimeAccessKind = "direct" | "proliferate-gateway";
 
-export type ManagedSandboxGatewayConnectionInfo = CloudConnectionInfo & {
+export type CloudSandboxGatewayConnectionInfo = CloudConnectionInfo & {
   runtimeAccessKind: "proliferate-gateway";
   webSocketAuthTransport: "protocol";
   anyharnessRepoRootId: string | null;
 };
 
-export function isManagedSandboxGatewayConnectionInfo(
+export function isCloudSandboxGatewayConnectionInfo(
   connection: CloudConnectionInfo | null | undefined,
-): connection is ManagedSandboxGatewayConnectionInfo {
+): connection is CloudSandboxGatewayConnectionInfo {
   return (connection as { runtimeAccessKind?: string } | null | undefined)?.runtimeAccessKind
     === "proliferate-gateway";
 }
 
-export async function withFreshManagedSandboxGatewayAccessToken<
+export async function withFreshCloudSandboxGatewayAccessToken<
   Connection extends CloudConnectionInfo,
 >(connection: Connection): Promise<Connection> {
-  if (!isManagedSandboxGatewayConnectionInfo(connection)) {
+  if (!isCloudSandboxGatewayConnectionInfo(connection)) {
     return connection;
   }
   return {
@@ -43,15 +43,15 @@ export async function withFreshManagedSandboxGatewayAccessToken<
   };
 }
 
-export async function resolveManagedSandboxGatewayConnectionForRepo(input: {
+export async function resolveCloudSandboxGatewayConnectionForRepo(input: {
   gitOwner: string;
   gitRepoName: string;
   allowedAgentKinds?: string[];
   readyAgentKinds?: string[];
   runtimeAuth?: CloudRuntimeAuthState | null;
-}): Promise<ManagedSandboxGatewayConnectionInfo> {
+}): Promise<CloudSandboxGatewayConnectionInfo> {
   const productToken = await getDesktopCloudAccessToken();
-  const runtime = await ensureManagedSandboxRepoRuntimeConnection(
+  const runtime = await ensureCloudSandboxRepoRuntimeConnection(
     input.gitOwner,
     input.gitRepoName,
   );
@@ -69,10 +69,10 @@ export async function resolveManagedSandboxGatewayConnectionForRepo(input: {
   };
 }
 
-export function resolveManagedSandboxGatewayConnectionForWorkspace(
+export function resolveCloudSandboxGatewayConnectionForWorkspace(
   workspace: CloudWorkspaceDetail,
-): Promise<ManagedSandboxGatewayConnectionInfo> {
-  return resolveManagedSandboxGatewayConnectionForCloudWorkspace({
+): Promise<CloudSandboxGatewayConnectionInfo> {
+  return resolveCloudSandboxGatewayConnectionForCloudWorkspace({
     workspaceId: workspace.id,
     allowedAgentKinds: workspace.allowedAgentKinds,
     readyAgentKinds: workspace.readyAgentKinds,
@@ -80,14 +80,14 @@ export function resolveManagedSandboxGatewayConnectionForWorkspace(
   });
 }
 
-export async function resolveManagedSandboxGatewayConnectionForCloudWorkspace(input: {
+export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(input: {
   workspaceId: string;
   allowedAgentKinds?: string[];
   readyAgentKinds?: string[];
   runtimeAuth?: CloudRuntimeAuthState | null;
-}): Promise<ManagedSandboxGatewayConnectionInfo> {
+}): Promise<CloudSandboxGatewayConnectionInfo> {
   const productToken = await getDesktopCloudAccessToken();
-  const runtime = await ensureManagedSandboxWorkspaceRuntimeConnection(input.workspaceId);
+  const runtime = await ensureCloudSandboxWorkspaceRuntimeConnection(input.workspaceId);
   return {
     runtimeUrl: runtime.gatewayAnyHarnessBaseUrl,
     accessToken: productToken,

@@ -7,10 +7,9 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.constants.cloud import GitProvider, RepoEnvironmentKind
 from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.utils.time import utcnow
 
@@ -19,23 +18,16 @@ from proliferate.utils.time import utcnow
 class RepoEnvironmentValue:
     id: UUID
     repo_config_id: UUID
-    owner_scope: str
-    user_id: UUID | None
-    organization_id: UUID | None
+    user_id: UUID
     git_provider: str
     git_owner: str
     git_repo_name: str
     environment_kind: str
     desktop_install_id: str | None
     local_path: str | None
-    configured: bool
-    configured_at: datetime | None
     default_branch: str | None
     setup_script: str
-    setup_script_version: int
     run_command: str
-    config_version: int
-    legacy_cloud_repo_config_id: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -43,39 +35,34 @@ class RepoEnvironmentValue:
 @dataclass(frozen=True)
 class RepoConfigValue:
     id: UUID
-    owner_scope: str
-    user_id: UUID | None
-    organization_id: UUID | None
+    user_id: UUID
     git_provider: str
     git_owner: str
     git_repo_name: str
-    legacy_cloud_repo_config_id: UUID | None
     created_at: datetime
     updated_at: datetime
     environments: tuple[RepoEnvironmentValue, ...]
+
+
+def _enum_value(value: object) -> str:
+    raw = getattr(value, "value", value)
+    return str(raw)
 
 
 def _environment_value(row: RepoEnvironment, repo: RepoConfig) -> RepoEnvironmentValue:
     return RepoEnvironmentValue(
         id=row.id,
         repo_config_id=row.repo_config_id,
-        owner_scope=repo.owner_scope,
         user_id=repo.user_id,
-        organization_id=repo.organization_id,
-        git_provider=repo.git_provider,
+        git_provider=_enum_value(repo.git_provider),
         git_owner=repo.git_owner,
         git_repo_name=repo.git_repo_name,
-        environment_kind=row.environment_kind,
+        environment_kind=_enum_value(row.environment_kind),
         desktop_install_id=row.desktop_install_id,
         local_path=row.local_path,
-        configured=row.configured,
-        configured_at=row.configured_at,
         default_branch=row.default_branch,
         setup_script=row.setup_script,
-        setup_script_version=row.setup_script_version,
         run_command=row.run_command,
-        config_version=row.config_version,
-        legacy_cloud_repo_config_id=row.legacy_cloud_repo_config_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -84,75 +71,35 @@ def _environment_value(row: RepoEnvironment, repo: RepoConfig) -> RepoEnvironmen
 async def _ensure_repo_config(
     db: AsyncSession,
     *,
-    repo_config_id: UUID | None = None,
-    owner_scope: str,
-    user_id: UUID | None,
-    organization_id: UUID | None,
+    user_id: UUID,
     git_provider: str,
     git_owner: str,
     git_repo_name: str,
-    legacy_cloud_repo_config_id: UUID | None,
-    created_at: datetime,
-    updated_at: datetime,
 ) -> RepoConfig:
-    values = {
-        "owner_scope": owner_scope,
-        "user_id": user_id,
-        "organization_id": organization_id,
-        "git_provider": git_provider,
-        "git_owner": git_owner,
-        "git_repo_name": git_repo_name,
-        "legacy_cloud_repo_config_id": legacy_cloud_repo_config_id,
-        "created_at": created_at,
-        "updated_at": updated_at,
-        "deleted_at": None,
-    }
-    if repo_config_id is not None:
-        values["id"] = repo_config_id
     row = (
         await db.execute(
-            pg_insert(RepoConfig)
-            .values(**values)
-            .on_conflict_do_nothing()
-            .returning(RepoConfig)
+            select(RepoConfig).where(
+                RepoConfig.user_id == user_id,
+                RepoConfig.git_provider == git_provider,
+                RepoConfig.git_owner == git_owner,
+                RepoConfig.git_repo_name == git_repo_name,
+                RepoConfig.deleted_at.is_(None),
+            )
         )
     ).scalar_one_or_none()
-    if row is None:
-        row = (
-            await db.execute(
-                select(RepoConfig).where(
-                    RepoConfig.owner_scope == owner_scope,
-                    RepoConfig.user_id == user_id,
-                    RepoConfig.organization_id == organization_id,
-                    RepoConfig.git_provider == git_provider,
-                    RepoConfig.git_owner == git_owner,
-                    RepoConfig.git_repo_name == git_repo_name,
-                    RepoConfig.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
-    if row is None and legacy_cloud_repo_config_id is not None:
-        row = (
-            await db.execute(
-                select(RepoConfig).where(
-                    RepoConfig.legacy_cloud_repo_config_id == legacy_cloud_repo_config_id,
-                    RepoConfig.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
-    if row is None:
-        raise RuntimeError("repo config upsert failed to return or reload row")
+    if row is not None:
+        return row
 
-    row.owner_scope = owner_scope
-    row.user_id = user_id
-    row.organization_id = organization_id
-    row.git_provider = git_provider
-    row.git_owner = git_owner
-    row.git_repo_name = git_repo_name
-    if legacy_cloud_repo_config_id is not None:
-        row.legacy_cloud_repo_config_id = legacy_cloud_repo_config_id
-    row.updated_at = updated_at
-    row.deleted_at = None
+    now = utcnow()
+    row = RepoConfig(
+        user_id=user_id,
+        git_provider=GitProvider(git_provider),
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(row)
     await db.flush()
     return row
 
@@ -172,25 +119,20 @@ async def _repo_value(db: AsyncSession, row: RepoConfig) -> RepoConfigValue:
     )
     return RepoConfigValue(
         id=row.id,
-        owner_scope=row.owner_scope,
         user_id=row.user_id,
-        organization_id=row.organization_id,
-        git_provider=row.git_provider,
+        git_provider=_enum_value(row.git_provider),
         git_owner=row.git_owner,
         git_repo_name=row.git_repo_name,
-        legacy_cloud_repo_config_id=row.legacy_cloud_repo_config_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
         environments=tuple(_environment_value(item, row) for item in environments),
     )
 
 
-async def get_repo_config_for_owner(
+async def get_repo_config_for_user(
     db: AsyncSession,
     *,
-    owner_scope: str,
-    user_id: UUID | None,
-    organization_id: UUID | None,
+    user_id: UUID,
     git_provider: str,
     git_owner: str,
     git_repo_name: str,
@@ -198,9 +140,7 @@ async def get_repo_config_for_owner(
     row = (
         await db.execute(
             select(RepoConfig).where(
-                RepoConfig.owner_scope == owner_scope,
                 RepoConfig.user_id == user_id,
-                RepoConfig.organization_id == organization_id,
                 RepoConfig.git_provider == git_provider,
                 RepoConfig.git_owner == git_owner,
                 RepoConfig.git_repo_name == git_repo_name,
@@ -223,14 +163,34 @@ async def get_cloud_repo_environment(
             select(RepoEnvironment, RepoConfig)
             .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
             .where(
-                RepoConfig.owner_scope == "personal",
                 RepoConfig.user_id == user_id,
-                RepoConfig.git_provider == "github",
+                RepoConfig.git_provider == GitProvider.github,
                 RepoConfig.git_owner == git_owner,
                 RepoConfig.git_repo_name == git_repo_name,
                 RepoConfig.deleted_at.is_(None),
-                RepoEnvironment.environment_kind == "cloud",
+                RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
                 RepoEnvironment.deleted_at.is_(None),
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    environment, repo = row
+    return _environment_value(environment, repo)
+
+
+async def get_repo_environment_by_id(
+    db: AsyncSession,
+    repo_environment_id: UUID,
+) -> RepoEnvironmentValue | None:
+    row = (
+        await db.execute(
+            select(RepoEnvironment, RepoConfig)
+            .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
+            .where(
+                RepoEnvironment.id == repo_environment_id,
+                RepoEnvironment.deleted_at.is_(None),
+                RepoConfig.deleted_at.is_(None),
             )
         )
     ).one_or_none()
@@ -250,10 +210,9 @@ async def list_cloud_repo_environments(
             select(RepoEnvironment, RepoConfig)
             .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
             .where(
-                RepoConfig.owner_scope == "personal",
                 RepoConfig.user_id == user_id,
                 RepoConfig.deleted_at.is_(None),
-                RepoEnvironment.environment_kind == "cloud",
+                RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
                 RepoEnvironment.deleted_at.is_(None),
             )
             .order_by(RepoConfig.git_owner.asc(), RepoConfig.git_repo_name.asc())
@@ -272,7 +231,6 @@ async def list_repo_configs_for_user(
             await db.execute(
                 select(RepoConfig)
                 .where(
-                    RepoConfig.owner_scope == "personal",
                     RepoConfig.user_id == user_id,
                     RepoConfig.deleted_at.is_(None),
                 )
@@ -283,6 +241,57 @@ async def list_repo_configs_for_user(
         .all()
     )
     return tuple([await _repo_value(db, row) for row in rows])
+
+
+async def _upsert_environment(
+    db: AsyncSession,
+    *,
+    repo: RepoConfig,
+    environment_kind: RepoEnvironmentKind,
+    desktop_install_id: str | None,
+    local_path: str | None,
+    default_branch: str | None,
+    setup_script: str,
+    run_command: str,
+) -> RepoEnvironment:
+    predicates = [
+        RepoEnvironment.repo_config_id == repo.id,
+        RepoEnvironment.environment_kind == environment_kind,
+        RepoEnvironment.deleted_at.is_(None),
+    ]
+    if environment_kind == RepoEnvironmentKind.local:
+        predicates.extend(
+            [
+                RepoEnvironment.desktop_install_id == desktop_install_id,
+                RepoEnvironment.local_path == local_path,
+            ]
+        )
+    row = (await db.execute(select(RepoEnvironment).where(*predicates))).scalar_one_or_none()
+    now = utcnow()
+    normalized_default_branch = default_branch.strip() if default_branch and default_branch.strip() else None
+    if row is None:
+        row = RepoEnvironment(
+            repo_config_id=repo.id,
+            environment_kind=environment_kind,
+            desktop_install_id=desktop_install_id,
+            local_path=local_path,
+            default_branch=normalized_default_branch,
+            setup_script=setup_script,
+            run_command=run_command,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+    else:
+        row.desktop_install_id = desktop_install_id
+        row.local_path = local_path
+        row.default_branch = normalized_default_branch
+        row.setup_script = setup_script
+        row.run_command = run_command
+        row.updated_at = now
+    repo.updated_at = now
+    await db.flush()
+    return row
 
 
 async def upsert_local_repo_environment(
@@ -298,184 +307,52 @@ async def upsert_local_repo_environment(
     setup_script: str,
     run_command: str,
 ) -> RepoEnvironmentValue:
-    now = utcnow()
     repo = await _ensure_repo_config(
         db,
-        owner_scope="personal",
         user_id=user_id,
-        organization_id=None,
         git_provider=git_provider,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
-        legacy_cloud_repo_config_id=None,
-        created_at=now,
-        updated_at=now,
     )
-
-    normalized_default_branch = default_branch.strip() if default_branch and default_branch.strip() else None
-    environment = (
-        await db.execute(
-            pg_insert(RepoEnvironment)
-            .values(
-                repo_config_id=repo.id,
-                environment_kind="local",
-                desktop_install_id=desktop_install_id,
-                local_path=local_path,
-                configured=True,
-                configured_at=now,
-                default_branch=normalized_default_branch,
-                setup_script=setup_script,
-                setup_script_version=1 if setup_script.strip() else 0,
-                run_command=run_command,
-                config_version=1,
-                legacy_cloud_repo_config_id=None,
-                created_at=now,
-                updated_at=now,
-                deleted_at=None,
-            )
-            .on_conflict_do_nothing()
-            .returning(RepoEnvironment)
-        )
-    ).scalar_one_or_none()
-    inserted_environment = environment is not None
-    if environment is None:
-        environment = (
-            await db.execute(
-                select(RepoEnvironment).where(
-                    RepoEnvironment.repo_config_id == repo.id,
-                    RepoEnvironment.environment_kind == "local",
-                    RepoEnvironment.desktop_install_id == desktop_install_id,
-                    RepoEnvironment.local_path == local_path,
-                    RepoEnvironment.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one()
-    if not inserted_environment:
-        setup_changed = environment.setup_script != setup_script
-        config_changed = (
-            setup_changed
-            or environment.run_command != run_command
-            or environment.default_branch != normalized_default_branch
-            or not environment.configured
-        )
-        environment.configured = True
-        environment.configured_at = environment.configured_at or now
-        environment.default_branch = normalized_default_branch
-        environment.setup_script = setup_script
-        if setup_changed:
-            environment.setup_script_version += 1
-        environment.run_command = run_command
-        if config_changed:
-            environment.config_version += 1
-        environment.updated_at = now
-    repo.updated_at = now
-    await db.flush()
+    environment = await _upsert_environment(
+        db,
+        repo=repo,
+        environment_kind=RepoEnvironmentKind.local,
+        desktop_install_id=desktop_install_id,
+        local_path=local_path,
+        default_branch=default_branch,
+        setup_script=setup_script,
+        run_command=run_command,
+    )
     return _environment_value(environment, repo)
 
 
-async def sync_cloud_environment_from_legacy_cloud_repo_config(
+async def upsert_cloud_repo_environment(
     db: AsyncSession,
     *,
-    cloud_repo_config_id: UUID,
-) -> RepoEnvironmentValue | None:
-    legacy = await db.get(CloudRepoConfig, cloud_repo_config_id)
-    if legacy is None:
-        return None
-
-    now = utcnow()
+    user_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    default_branch: str | None,
+    setup_script: str,
+    run_command: str,
+) -> RepoEnvironmentValue:
     repo = await _ensure_repo_config(
         db,
-        repo_config_id=legacy.id,
-        owner_scope=legacy.owner_scope,
-        user_id=legacy.user_id,
-        organization_id=legacy.organization_id,
-        git_provider="github",
-        git_owner=legacy.git_owner,
-        git_repo_name=legacy.git_repo_name,
-        legacy_cloud_repo_config_id=legacy.id,
-        created_at=legacy.created_at,
-        updated_at=now,
+        user_id=user_id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
     )
-
-    legacy_config_version = max(
-        legacy.files_version,
-        legacy.env_vars_version,
-        legacy.setup_script_version,
-        1 if legacy.configured else 0,
+    environment = await _upsert_environment(
+        db,
+        repo=repo,
+        environment_kind=RepoEnvironmentKind.cloud,
+        desktop_install_id=None,
+        local_path=None,
+        default_branch=default_branch,
+        setup_script=setup_script,
+        run_command=run_command,
     )
-    environment = (
-        await db.execute(
-            pg_insert(RepoEnvironment)
-            .values(
-                id=legacy.id,
-                repo_config_id=repo.id,
-                environment_kind="cloud",
-                desktop_install_id=None,
-                local_path=None,
-                configured=legacy.configured,
-                configured_at=legacy.configured_at,
-                default_branch=legacy.default_branch,
-                setup_script=legacy.setup_script,
-                setup_script_version=legacy.setup_script_version,
-                run_command=legacy.run_command,
-                config_version=legacy_config_version,
-                legacy_cloud_repo_config_id=legacy.id,
-                created_at=legacy.created_at,
-                updated_at=legacy.updated_at,
-                deleted_at=None,
-            )
-            .on_conflict_do_nothing()
-            .returning(RepoEnvironment)
-        )
-    ).scalar_one_or_none()
-    inserted_environment = environment is not None
-    if environment is None:
-        environment = (
-            await db.execute(
-                select(RepoEnvironment).where(
-                    RepoEnvironment.legacy_cloud_repo_config_id == legacy.id,
-                    RepoEnvironment.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
-    if environment is None:
-        environment = (
-            await db.execute(
-                select(RepoEnvironment).where(
-                    RepoEnvironment.repo_config_id == repo.id,
-                    RepoEnvironment.environment_kind == "cloud",
-                    RepoEnvironment.deleted_at.is_(None),
-                )
-            )
-        ).scalar_one()
-    if not inserted_environment:
-        environment_changed = (
-            environment.configured != legacy.configured
-            or environment.configured_at != legacy.configured_at
-            or environment.default_branch != legacy.default_branch
-            or environment.setup_script != legacy.setup_script
-            or environment.setup_script_version != legacy.setup_script_version
-            or environment.run_command != legacy.run_command
-            or environment.legacy_cloud_repo_config_id != legacy.id
-            or environment.deleted_at is not None
-        )
-        environment.repo_config_id = repo.id
-        environment.environment_kind = "cloud"
-        environment.desktop_install_id = None
-        environment.local_path = None
-        environment.configured = legacy.configured
-        environment.configured_at = legacy.configured_at
-        environment.default_branch = legacy.default_branch
-        environment.setup_script = legacy.setup_script
-        environment.setup_script_version = legacy.setup_script_version
-        environment.run_command = legacy.run_command
-        environment.config_version = max(
-            legacy_config_version,
-            environment.config_version + 1 if environment_changed else environment.config_version,
-        )
-        environment.legacy_cloud_repo_config_id = legacy.id
-        environment.updated_at = now
-        environment.deleted_at = None
-
-    await db.flush()
     return _environment_value(environment, repo)

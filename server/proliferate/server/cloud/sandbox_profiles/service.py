@@ -1,4 +1,4 @@
-"""Application service for managed cloud sandbox profiles."""
+"""Application service for cloud sandbox profiles."""
 
 from __future__ import annotations
 
@@ -147,7 +147,7 @@ async def enable_cloud(
         sandbox_profile_id=profile.id,
         created_by_user_id=user.id,
     )
-    await sandbox_store.ensure_managed_sandbox_for_target(
+    await sandbox_store.ensure_cloud_sandbox_for_target(
         db,
         sandbox_profile_id=profile.id,
         target_id=target.id,

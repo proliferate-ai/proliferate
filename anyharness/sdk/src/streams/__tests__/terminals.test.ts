@@ -60,7 +60,7 @@ describe("connectTerminal", () => {
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
 
     connectTerminal({
-      baseUrl: "https://api.test/v1/gateway/managed-sandbox/anyharness",
+      baseUrl: "https://api.test/v1/gateway/cloud-sandbox/anyharness",
       terminalId: "terminal/1",
       authToken: "product-token",
       webSocketAuthTransport: "protocol",
@@ -70,7 +70,7 @@ describe("connectTerminal", () => {
 
     expect(mockSockets).toHaveLength(1);
     expect(mockSockets[0]!.url).toBe(
-      "wss://api.test/v1/gateway/managed-sandbox/anyharness/v1/terminals/terminal%2F1/ws?after_seq=42",
+      "wss://api.test/v1/gateway/cloud-sandbox/anyharness/v1/terminals/terminal%2F1/ws?after_seq=42",
     );
     expect(mockSockets[0]!.url).not.toContain("product-token");
     expect(mockSockets[0]!.protocols).toEqual([

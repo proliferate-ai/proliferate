@@ -1,4 +1,4 @@
-"""API models for managed cloud sandboxes."""
+"""API models for cloud sandboxes."""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from proliferate.db.store.managed_sandboxes import ManagedSandboxValue
+from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 
 
 def _to_iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-class ManagedSandboxResponse(BaseModel):
+class CloudSandboxResponse(BaseModel):
     id: str
     owner_scope: str = Field(serialization_alias="ownerScope")
     owner_user_id: str | None = Field(serialization_alias="ownerUserId")
@@ -29,20 +29,20 @@ class ManagedSandboxResponse(BaseModel):
     destroyed_at: str | None = Field(serialization_alias="destroyedAt")
 
 
-class ManagedSandboxRepoRuntimeConnectionResponse(BaseModel):
+class CloudSandboxRepoRuntimeConnectionResponse(BaseModel):
     anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
     anyharness_repo_root_id: str | None = Field(serialization_alias="anyharnessRepoRootId")
     runtime_generation: int = Field(serialization_alias="runtimeGeneration")
 
 
-class ManagedSandboxWorkspaceRuntimeConnectionResponse(BaseModel):
+class CloudSandboxWorkspaceRuntimeConnectionResponse(BaseModel):
     anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
     anyharness_repo_root_id: str | None = Field(serialization_alias="anyharnessRepoRootId")
     runtime_generation: int = Field(serialization_alias="runtimeGeneration")
 
 
-def managed_sandbox_payload(value: ManagedSandboxValue) -> ManagedSandboxResponse:
-    return ManagedSandboxResponse(
+def cloud_sandbox_payload(value: CloudSandboxValue) -> CloudSandboxResponse:
+    return CloudSandboxResponse(
         id=str(value.id),
         owner_scope=value.owner_scope,
         owner_user_id=str(value.owner_user_id) if value.owner_user_id else None,

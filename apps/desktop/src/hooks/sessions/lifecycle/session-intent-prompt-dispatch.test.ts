@@ -210,17 +210,17 @@ describe("dispatchPromptIntent", () => {
       .toBeLessThan(mocks.mutateAsync.mock.invocationCallOrder[0]!);
   });
 
-  it("dispatches managed sandbox gateway prompts through AnyHarness", async () => {
+  it("dispatches cloud sandbox gateway prompts through AnyHarness", async () => {
     mocks.getSessionClientAndWorkspace.mockResolvedValue({
       connection: {
-        runtimeUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+        runtimeUrl: "http://api.local/v1/gateway/cloud-sandbox/anyharness",
         authToken: "product-token",
         anyharnessWorkspaceId: "sandbox-workspace-1",
       },
       target: {
         location: "cloud",
         runtimeAccessKind: "proliferate-gateway",
-        baseUrl: "http://api.local/v1/gateway/managed-sandbox/anyharness",
+        baseUrl: "http://api.local/v1/gateway/cloud-sandbox/anyharness",
         authToken: "product-token",
         anyharnessWorkspaceId: "sandbox-workspace-1",
         runtimeGeneration: 1,

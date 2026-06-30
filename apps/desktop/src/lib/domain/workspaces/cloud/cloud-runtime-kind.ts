@@ -32,7 +32,7 @@ export function cloudWorkspaceUsesCloudRuntime(
   return sandboxType !== "local" && sandboxType !== "ssh" && sandboxType !== "self_hosted";
 }
 
-export function cloudWorkspaceUsesManagedSandboxGateway(
+export function cloudWorkspaceUsesCloudSandboxGateway(
   workspace: Pick<
     CloudWorkspaceSummary,
     "directTargetContext" | "executionTarget" | "sandboxType"

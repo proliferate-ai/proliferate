@@ -12,8 +12,8 @@ from proliferate.db.store.cloud_secrets import (
     CloudSecretFileValue,
     CloudSecretSetValue,
 )
-from proliferate.db.store.managed_sandbox_secrets import (
-    ManagedSandboxSecretMaterializationValue,
+from proliferate.db.store.cloud_sandbox_secrets import (
+    CloudSandboxSecretMaterializationValue,
 )
 
 
@@ -98,7 +98,7 @@ def _secret_set_has_desired_state(value: CloudSecretSetValue) -> bool:
 
 def _secret_set_materialization_current(
     value: CloudSecretSetValue,
-    materialization: ManagedSandboxSecretMaterializationValue,
+    materialization: CloudSandboxSecretMaterializationValue,
 ) -> bool:
     return (
         materialization.applied_versions.get(_secret_set_materialization_key(value))
@@ -108,7 +108,7 @@ def _secret_set_materialization_current(
 
 def _materialization_payload(
     secret_set: CloudSecretSetValue,
-    materialization: ManagedSandboxSecretMaterializationValue | None,
+    materialization: CloudSandboxSecretMaterializationValue | None,
 ) -> CloudSecretsMaterializationResponse:
     if materialization is None:
         return CloudSecretsMaterializationResponse(
@@ -136,7 +136,7 @@ def _materialization_payload(
 def cloud_secrets_payload(
     value: CloudSecretSetValue,
     *,
-    materialization: ManagedSandboxSecretMaterializationValue | None,
+    materialization: CloudSandboxSecretMaterializationValue | None,
 ) -> CloudSecretsResponse:
     return CloudSecretsResponse(
         scope_kind=value.scope_kind,  # type: ignore[arg-type]

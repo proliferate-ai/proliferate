@@ -219,7 +219,7 @@ function sandboxDetail(
     return `Primary managed target is ${targetStatus}; waiting for it to come online.`;
   }
   if (!sandboxState.sandbox) {
-    return "No active managed sandbox exists for this target.";
+    return "No active cloud sandbox exists for this target.";
   }
   if (sandboxState.sandbox.blockedReason) {
     return `Sandbox blocked: ${sandboxState.sandbox.blockedReason}.`;

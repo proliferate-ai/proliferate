@@ -37,8 +37,8 @@ from proliferate.server.billing.snapshots import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.managed_sandboxes.service import (
-    ensure_managed_sandbox_workspace_record_runtime_connection,
+from proliferate.server.cloud.cloud_sandboxes.service import (
+    ensure_cloud_sandbox_workspace_record_runtime_connection,
 )
 from proliferate.server.cloud.repos.service import get_linked_github_account
 from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provision
@@ -138,7 +138,7 @@ async def _finalize_managed_cloud_workspace(
 ) -> WorkspaceDetail:
     try:
         async with db_session.open_async_session() as db:
-            connection = await ensure_managed_sandbox_workspace_record_runtime_connection(
+            connection = await ensure_cloud_sandbox_workspace_record_runtime_connection(
                 db,
                 user,
                 workspace=workspace,
@@ -149,7 +149,7 @@ async def _finalize_managed_cloud_workspace(
             if ready is None:
                 raise CloudApiError(
                     "cloud_workspace_not_found",
-                    "Cloud workspace disappeared during managed sandbox setup.",
+                    "Cloud workspace disappeared during cloud sandbox setup.",
                     status_code=404,
                 )
     except Exception as exc:

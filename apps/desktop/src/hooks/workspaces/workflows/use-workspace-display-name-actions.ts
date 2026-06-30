@@ -24,7 +24,7 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
+import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 
 interface UpdateWorkspaceDisplayNameInput {
   /** Logical workspace id. */
@@ -146,7 +146,7 @@ async function clearCloudRuntimeWorkspaceDisplayName(input: {
     if (!connectionInfo?.anyharnessWorkspaceId) {
       return;
     }
-    const freshConnectionInfo = await withFreshManagedSandboxGatewayAccessToken(connectionInfo);
+    const freshConnectionInfo = await withFreshCloudSandboxGatewayAccessToken(connectionInfo);
 
     await updateAnyHarnessWorkspaceDisplayName(
       {
