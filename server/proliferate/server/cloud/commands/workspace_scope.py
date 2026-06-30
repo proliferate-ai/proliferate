@@ -342,13 +342,13 @@ async def _resolve_managed_start_session_workspace(
     if workspace.sandbox_profile_id is None or workspace.target_id is None:
         raise CloudApiError(
             "cloud_command_workspace_target_missing",
-            "Workspace is missing its managed sandbox profile target.",
+            "Workspace is missing its cloud sandbox profile target.",
             status_code=409,
         )
     if workspace.materialized_target_id != target.id:
         raise CloudApiError(
             "cloud_command_workspace_target_stale",
-            "Workspace must be rematerialized on the active managed sandbox before commands run.",
+            "Workspace must be rematerialized on the active cloud sandbox before commands run.",
             status_code=409,
         )
     exposure = await exposures_store.get_active_workspace_exposure(

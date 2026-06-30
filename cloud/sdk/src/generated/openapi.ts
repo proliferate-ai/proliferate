@@ -844,7 +844,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/managed-sandbox": {
+    "/v1/cloud/cloud-sandbox": {
         parameters: {
             query?: never;
             header?: never;
@@ -852,17 +852,17 @@ export interface paths {
             cookie?: never;
         };
         /** Get Managed Sandbox Endpoint */
-        get: operations["get_managed_sandbox_endpoint_v1_cloud_managed_sandbox_get"];
+        get: operations["get_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_get"];
         put?: never;
         post?: never;
         /** Destroy Managed Sandbox Endpoint */
-        delete: operations["destroy_managed_sandbox_endpoint_v1_cloud_managed_sandbox_delete"];
+        delete: operations["destroy_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/managed-sandbox/ensure": {
+    "/v1/cloud/cloud-sandbox/ensure": {
         parameters: {
             query?: never;
             header?: never;
@@ -872,14 +872,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Ensure Managed Sandbox Endpoint */
-        post: operations["ensure_managed_sandbox_endpoint_v1_cloud_managed_sandbox_ensure_post"];
+        post: operations["ensure_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_ensure_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/managed-sandbox/wake": {
+    "/v1/cloud/cloud-sandbox/wake": {
         parameters: {
             query?: never;
             header?: never;
@@ -889,14 +889,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Wake Managed Sandbox Endpoint */
-        post: operations["wake_managed_sandbox_endpoint_v1_cloud_managed_sandbox_wake_post"];
+        post: operations["wake_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_wake_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/managed-sandbox/repos/{git_owner}/{git_repo_name}/runtime-connection": {
+    "/v1/cloud/cloud-sandbox/repos/{git_owner}/{git_repo_name}/runtime-connection": {
         parameters: {
             query?: never;
             header?: never;
@@ -906,14 +906,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Ensure Managed Sandbox Repo Runtime Connection Endpoint */
-        post: operations["ensure_managed_sandbox_repo_runtime_connection_endpoint_v1_cloud_managed_sandbox_repos__git_owner___git_repo_name__runtime_connection_post"];
+        post: operations["ensure_cloud_sandbox_repo_runtime_connection_endpoint_v1_cloud_cloud_sandbox_repos__git_owner___git_repo_name__runtime_connection_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/managed-sandbox/workspaces/{workspace_id}/runtime-connection": {
+    "/v1/cloud/cloud-sandbox/workspaces/{workspace_id}/runtime-connection": {
         parameters: {
             query?: never;
             header?: never;
@@ -923,7 +923,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Ensure Managed Sandbox Workspace Runtime Connection Endpoint */
-        post: operations["ensure_managed_sandbox_workspace_runtime_connection_endpoint_v1_cloud_managed_sandbox_workspaces__workspace_id__runtime_connection_post"];
+        post: operations["ensure_cloud_sandbox_workspace_runtime_connection_endpoint_v1_cloud_cloud_sandbox_workspaces__workspace_id__runtime_connection_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3479,8 +3479,8 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** ManagedSandboxRepoRuntimeConnectionResponse */
-        ManagedSandboxRepoRuntimeConnectionResponse: {
+        /** CloudSandboxRepoRuntimeConnectionResponse */
+        CloudSandboxRepoRuntimeConnectionResponse: {
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId: string;
             /** Anyharnessreporootid */
@@ -3488,8 +3488,8 @@ export interface components {
             /** Runtimegeneration */
             runtimeGeneration: number;
         };
-        /** ManagedSandboxResponse */
-        ManagedSandboxResponse: {
+        /** CloudSandboxResponse */
+        CloudSandboxResponse: {
             /** Id */
             id: string;
             /** Ownerscope */
@@ -3517,8 +3517,8 @@ export interface components {
             /** Destroyedat */
             destroyedAt: string | null;
         };
-        /** ManagedSandboxWorkspaceRuntimeConnectionResponse */
-        ManagedSandboxWorkspaceRuntimeConnectionResponse: {
+        /** CloudSandboxWorkspaceRuntimeConnectionResponse */
+        CloudSandboxWorkspaceRuntimeConnectionResponse: {
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId: string;
             /** Anyharnessreporootid */
@@ -6248,7 +6248,7 @@ export interface operations {
             };
         };
     };
-    get_managed_sandbox_endpoint_v1_cloud_managed_sandbox_get: {
+    get_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6263,12 +6263,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManagedSandboxResponse"] | null;
+                    "application/json": components["schemas"]["CloudSandboxResponse"] | null;
                 };
             };
         };
     };
-    destroy_managed_sandbox_endpoint_v1_cloud_managed_sandbox_delete: {
+    destroy_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -6283,12 +6283,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManagedSandboxResponse"] | null;
+                    "application/json": components["schemas"]["CloudSandboxResponse"] | null;
                 };
             };
         };
     };
-    ensure_managed_sandbox_endpoint_v1_cloud_managed_sandbox_ensure_post: {
+    ensure_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_ensure_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6303,12 +6303,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManagedSandboxResponse"];
+                    "application/json": components["schemas"]["CloudSandboxResponse"];
                 };
             };
         };
     };
-    wake_managed_sandbox_endpoint_v1_cloud_managed_sandbox_wake_post: {
+    wake_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_wake_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6323,12 +6323,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManagedSandboxResponse"];
+                    "application/json": components["schemas"]["CloudSandboxResponse"];
                 };
             };
         };
     };
-    ensure_managed_sandbox_repo_runtime_connection_endpoint_v1_cloud_managed_sandbox_repos__git_owner___git_repo_name__runtime_connection_post: {
+    ensure_cloud_sandbox_repo_runtime_connection_endpoint_v1_cloud_cloud_sandbox_repos__git_owner___git_repo_name__runtime_connection_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6346,7 +6346,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManagedSandboxRepoRuntimeConnectionResponse"];
+                    "application/json": components["schemas"]["CloudSandboxRepoRuntimeConnectionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6360,7 +6360,7 @@ export interface operations {
             };
         };
     };
-    ensure_managed_sandbox_workspace_runtime_connection_endpoint_v1_cloud_managed_sandbox_workspaces__workspace_id__runtime_connection_post: {
+    ensure_cloud_sandbox_workspace_runtime_connection_endpoint_v1_cloud_cloud_sandbox_workspaces__workspace_id__runtime_connection_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6377,7 +6377,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManagedSandboxWorkspaceRuntimeConnectionResponse"];
+                    "application/json": components["schemas"]["CloudSandboxWorkspaceRuntimeConnectionResponse"];
                 };
             };
             /** @description Validation Error */

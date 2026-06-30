@@ -247,7 +247,7 @@ async def provision_workspace(
                         "Cloud sandbox profile could not be prepared.",
                         status_code=500,
                     )
-                sandbox_record = await cloud_sandboxes.ensure_managed_sandbox_for_target(
+                sandbox_record = await cloud_sandboxes.ensure_cloud_sandbox_for_target(
                     db,
                     sandbox_profile_id=ctx.sandbox_profile_id,
                     target_id=ctx.target_id,
@@ -260,7 +260,7 @@ async def provision_workspace(
             if getattr(sandbox_record, "external_sandbox_id", None):
                 raise CloudApiError(
                     "cloud_sandbox_reuse_unavailable",
-                    "Existing managed cloud sandbox could not be reused safely.",
+                    "Existing cloud sandbox could not be reused safely.",
                     status_code=409,
                 )
             allocated_sandbox_this_attempt = True

@@ -20,7 +20,7 @@ from proliferate.db.store.cloud_repo_config import (
     save_organization_cloud_repo_config,
 )
 from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
-from proliferate.db.store.managed_sandboxes import load_personal_managed_sandbox
+from proliferate.db.store.cloud_sandboxes import load_personal_cloud_sandbox
 from proliferate.db.store.repositories import (
     sync_cloud_environment_from_legacy_cloud_repo_config,
 )
@@ -222,7 +222,7 @@ async def save_repo_config(
             ),
             status_code=409,
         ) from error
-    _schedule_managed_sandbox_repo_materialization(
+    _schedule_cloud_sandbox_repo_materialization(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -314,7 +314,7 @@ async def save_repo_file(
         relative_path=relative_path,
         content=body.content,
     )
-    _schedule_managed_sandbox_repo_materialization(
+    _schedule_cloud_sandbox_repo_materialization(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -376,7 +376,7 @@ async def bootstrap_repo_config(
             ),
             status_code=409,
         ) from error
-    _schedule_managed_sandbox_repo_materialization(
+    _schedule_cloud_sandbox_repo_materialization(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -390,7 +390,7 @@ async def bootstrap_repo_config(
     return value
 
 
-def _schedule_managed_sandbox_repo_materialization(
+def _schedule_cloud_sandbox_repo_materialization(
     db: AsyncSession,
     *,
     user_id: UUID,
@@ -402,7 +402,7 @@ def _schedule_managed_sandbox_repo_materialization(
         return
 
     async def _materialize(fresh_db: AsyncSession) -> None:
-        sandbox = await load_personal_managed_sandbox(fresh_db, user_id)
+        sandbox = await load_personal_cloud_sandbox(fresh_db, user_id)
         if sandbox is None or sandbox.status != "ready":
             return
         repo_config = await get_cloud_repo_config(
@@ -419,7 +419,7 @@ def _schedule_managed_sandbox_repo_materialization(
             git_owner=git_owner,
             git_repo_name=git_repo_name,
         )
-        from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
+        from proliferate.server.cloud.cloud_sandboxes.repo_materialization import (
             ensure_repo_materialized,
         )
 
@@ -432,8 +432,8 @@ def _schedule_managed_sandbox_repo_materialization(
             )
         except Exception as exc:
             log_cloud_event(
-                "managed sandbox repo materialization failed after repo config save",
-                managed_sandbox_id=sandbox.id,
+                "cloud sandbox repo materialization failed after repo config save",
+                cloud_sandbox_id=sandbox.id,
                 cloud_repo_config_id=repo_config.id,
                 repo=f"{git_owner}/{git_repo_name}",
                 error=format_exception_message(exc),

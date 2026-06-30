@@ -32,7 +32,7 @@ import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
-import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
+import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { TelemetryProvider } from "./TelemetryProvider";
 
 async function resolveWorkspaceConnectionWithCache(
@@ -47,7 +47,7 @@ async function resolveWorkspaceConnectionWithCache(
   const cachedConnection = await appQueryClient.fetchQuery(
     cloudWorkspaceConnectionQueryOptions(cloudWorkspaceId),
   );
-  const connection = await withFreshManagedSandboxGatewayAccessToken(cachedConnection);
+  const connection = await withFreshCloudSandboxGatewayAccessToken(cachedConnection);
   const webSocketAuthTransport = (
     connection as { webSocketAuthTransport?: TerminalWebSocketAuthTransport }
   ).webSocketAuthTransport;

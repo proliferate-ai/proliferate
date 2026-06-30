@@ -248,7 +248,7 @@ describe("useChatLaunchCatalog", () => {
       ]),
     });
     const cloudConnectionInfo = {
-      runtimeUrl: "https://api.local/v1/gateway/managed-sandbox/anyharness",
+      runtimeUrl: "https://api.local/v1/gateway/cloud-sandbox/anyharness",
       accessToken: "product-token",
       anyharnessWorkspaceId: "cloud-workspace-1",
       readyAgentKinds: ["codex"],

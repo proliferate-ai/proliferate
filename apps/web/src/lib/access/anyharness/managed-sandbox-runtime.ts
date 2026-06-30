@@ -1,10 +1,10 @@
 import { AnyHarnessClient } from "@anyharness/sdk";
 import type { CloudWorkspaceDetail, ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import {
-  ensureManagedSandboxWorkspaceRuntimeConnection,
-} from "@proliferate/cloud-sdk/client/managed-sandboxes";
+  ensureCloudSandboxWorkspaceRuntimeConnection,
+} from "@proliferate/cloud-sdk/client/cloud-sandboxes";
 
-export interface WebManagedSandboxRuntimeConnection {
+export interface WebCloudSandboxRuntimeConnection {
   runtimeUrl: string;
   authToken: string;
   anyharnessWorkspaceId: string;
@@ -14,21 +14,21 @@ export interface WebManagedSandboxRuntimeConnection {
   webSocketAuthTransport: "protocol";
 }
 
-export function isWebManagedSandboxWorkspace(
+export function isWebCloudSandboxWorkspace(
   workspace: Pick<CloudWorkspaceDetail, "sandboxType"> | null | undefined,
 ): boolean {
   return workspace?.sandboxType === "managed_personal" || workspace?.sandboxType === "managed_shared";
 }
 
-export async function resolveWebManagedSandboxWorkspaceConnection(input: {
+export async function resolveWebCloudSandboxWorkspaceConnection(input: {
   workspace: CloudWorkspaceDetail;
   productToken: string | null;
   client: ProliferateCloudClient;
-}): Promise<WebManagedSandboxRuntimeConnection> {
+}): Promise<WebCloudSandboxRuntimeConnection> {
   if (!input.productToken) {
     throw new Error("Cloud runtime unavailable. Sign in again and retry.");
   }
-  const runtime = await ensureManagedSandboxWorkspaceRuntimeConnection(
+  const runtime = await ensureCloudSandboxWorkspaceRuntimeConnection(
     input.workspace.id,
     input.client,
   );
@@ -43,15 +43,15 @@ export async function resolveWebManagedSandboxWorkspaceConnection(input: {
   };
 }
 
-export async function getWebManagedSandboxAnyHarnessClient(input: {
+export async function getWebCloudSandboxAnyHarnessClient(input: {
   workspace: CloudWorkspaceDetail;
   productToken: string | null;
   client: ProliferateCloudClient;
 }): Promise<{
-  connection: WebManagedSandboxRuntimeConnection;
+  connection: WebCloudSandboxRuntimeConnection;
   anyharness: AnyHarnessClient;
 }> {
-  const connection = await resolveWebManagedSandboxWorkspaceConnection(input);
+  const connection = await resolveWebCloudSandboxWorkspaceConnection(input);
   return {
     connection,
     anyharness: new AnyHarnessClient({

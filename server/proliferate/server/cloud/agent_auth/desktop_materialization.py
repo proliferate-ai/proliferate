@@ -255,7 +255,7 @@ def _reject_desktop_incompatible_selection(selection: SandboxAgentAuthSelectionR
     if selection.materialization_mode in {"gateway_env", "synced_files"}:
         return
     raise AgentAuthError(
-        "Managed sandbox gateway access does not support this agent credential "
+        "Cloud sandbox gateway access does not support this agent credential "
         "materialization mode.",
         code="agent_auth_materialization_mode_unsupported",
         status_code=409,

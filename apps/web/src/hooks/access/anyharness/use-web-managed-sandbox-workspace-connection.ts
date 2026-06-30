@@ -4,9 +4,9 @@ import { useCloudClient } from "@proliferate/cloud-sdk-react";
 import { useCallback } from "react";
 
 import { useAuthToken } from "../../../providers/WebCloudProvider";
-import { resolveWebManagedSandboxWorkspaceConnection } from "../../../lib/access/anyharness/managed-sandbox-runtime";
+import { resolveWebCloudSandboxWorkspaceConnection } from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 
-export function useWebManagedSandboxWorkspaceConnection(
+export function useWebCloudSandboxWorkspaceConnection(
   workspace: CloudWorkspaceDetail | null,
 ) {
   const { token } = useAuthToken();
@@ -19,7 +19,7 @@ export function useWebManagedSandboxWorkspaceConnection(
     if (workspace.id !== workspaceId) {
       throw new Error("Requested cloud workspace is not loaded.");
     }
-    const runtime = await resolveWebManagedSandboxWorkspaceConnection({
+    const runtime = await resolveWebCloudSandboxWorkspaceConnection({
       workspace,
       productToken: token,
       client,

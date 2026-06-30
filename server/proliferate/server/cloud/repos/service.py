@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER
-from proliferate.db.store.cloud_repo_config import list_cloud_repo_configs
+from proliferate.db.store.repositories import list_cloud_repo_environments
 from proliferate.integrations.github import (
     GitHubIntegrationError,
     GitHubInvalidCursor,
@@ -236,10 +236,8 @@ async def list_cloud_repositories(
         ) from exc
 
     config_states: dict[str, RepoConfigState] = {
-        normalized_repo_key(config.git_owner, config.git_repo_name): (
-            "configured" if config.configured else "disabled"
-        )
-        for config in await list_cloud_repo_configs(db, credentials.user_id)
+        normalized_repo_key(config.git_owner, config.git_repo_name): "configured"
+        for config in await list_cloud_repo_environments(db, user_id=credentials.user_id)
     }
     records: list[CloudGitRepositoryRecord] = []
     for repo in github_page.repositories:

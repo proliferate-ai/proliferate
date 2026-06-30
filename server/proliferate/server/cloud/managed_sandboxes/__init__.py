@@ -1,1 +1,0 @@
-"""Managed sandbox cloud domain."""

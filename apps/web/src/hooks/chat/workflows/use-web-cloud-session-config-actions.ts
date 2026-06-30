@@ -16,9 +16,9 @@ import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cl
 import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
 import type { UpdateSessionConfigPayload } from "../../../lib/access/cloud/cloud-command-payloads";
 import {
-  getWebManagedSandboxAnyHarnessClient,
-  isWebManagedSandboxWorkspace,
-} from "../../../lib/access/anyharness/managed-sandbox-runtime";
+  getWebCloudSandboxAnyHarnessClient,
+  isWebCloudSandboxWorkspace,
+} from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 
 type EnqueueCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
@@ -66,7 +66,7 @@ export function useWebCloudSessionConfigActions(input: {
       setPendingHomePromptStatus("Claim this shared workspace before changing session settings.");
       return;
     }
-    if (!isWebManagedSandboxWorkspace(workspace)) {
+    if (!isWebCloudSandboxWorkspace(workspace)) {
       const readiness = cloudCommandReadiness(workspace);
       if (!readiness.commandable) {
         setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
@@ -84,8 +84,8 @@ export function useWebCloudSessionConfigActions(input: {
       },
     }));
     try {
-      if (isWebManagedSandboxWorkspace(workspace)) {
-        const { anyharness } = await getWebManagedSandboxAnyHarnessClient({
+      if (isWebCloudSandboxWorkspace(workspace)) {
+        const { anyharness } = await getWebCloudSandboxAnyHarnessClient({
           workspace,
           productToken,
           client,

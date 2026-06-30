@@ -1,50 +1,50 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  destroyManagedSandbox,
-  ensureManagedSandbox,
-  getManagedSandbox,
-  wakeManagedSandbox,
-  type ManagedSandboxResponse,
+  destroyCloudSandbox,
+  ensureCloudSandbox,
+  getCloudSandbox,
+  wakeCloudSandbox,
+  type CloudSandboxResponse,
 } from "@proliferate/cloud-sdk";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import { managedSandboxKey } from "../lib/query-keys.js";
 
-export function useManagedSandbox(enabled = true) {
+export function useCloudSandbox(enabled = true) {
   const client = useCloudClient();
-  return useQuery<ManagedSandboxResponse | null>({
+  return useQuery<CloudSandboxResponse | null>({
     queryKey: managedSandboxKey(),
-    queryFn: () => getManagedSandbox(client),
+    queryFn: () => getCloudSandbox(client),
     enabled,
   });
 }
 
-export function useEnsureManagedSandbox() {
+export function useEnsureCloudSandbox() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
-  return useMutation<ManagedSandboxResponse, Error>({
-    mutationFn: () => ensureManagedSandbox(client),
+  return useMutation<CloudSandboxResponse, Error>({
+    mutationFn: () => ensureCloudSandbox(client),
     onSuccess: (response) => {
       queryClient.setQueryData(managedSandboxKey(), response);
     },
   });
 }
 
-export function useWakeManagedSandbox() {
+export function useWakeCloudSandbox() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
-  return useMutation<ManagedSandboxResponse, Error>({
-    mutationFn: () => wakeManagedSandbox(client),
+  return useMutation<CloudSandboxResponse, Error>({
+    mutationFn: () => wakeCloudSandbox(client),
     onSuccess: (response) => {
       queryClient.setQueryData(managedSandboxKey(), response);
     },
   });
 }
 
-export function useDestroyManagedSandbox() {
+export function useDestroyCloudSandbox() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
-  return useMutation<ManagedSandboxResponse | null, Error>({
-    mutationFn: () => destroyManagedSandbox(client),
+  return useMutation<CloudSandboxResponse | null, Error>({
+    mutationFn: () => destroyCloudSandbox(client),
     onSuccess: (response) => {
       queryClient.setQueryData(managedSandboxKey(), response);
     },

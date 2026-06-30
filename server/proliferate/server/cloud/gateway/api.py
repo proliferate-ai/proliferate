@@ -1,4 +1,4 @@
-"""HTTP routes for the managed sandbox AnyHarness gateway."""
+"""HTTP routes for the cloud sandbox AnyHarness gateway."""
 
 from __future__ import annotations
 
@@ -18,23 +18,23 @@ from proliferate.server.cloud.gateway.proxy import (
     proxy_http_to_anyharness,
     proxy_websocket_to_anyharness,
 )
-from proliferate.server.cloud.gateway.service import ensure_managed_sandbox_gateway_access
+from proliferate.server.cloud.gateway.service import ensure_cloud_sandbox_gateway_access
 
-router = APIRouter(tags=["managed-sandbox-gateway"])
+router = APIRouter(tags=["cloud-sandbox-gateway"])
 
 
 @router.api_route(
-    "/managed-sandbox/anyharness/{path:path}",
+    "/cloud-sandbox/anyharness/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
     include_in_schema=False,
 )
-async def proxy_managed_sandbox_anyharness_http(
+async def proxy_cloud_sandbox_anyharness_http(
     path: str,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> object:
-    access = await ensure_managed_sandbox_gateway_access(db, user)
+    access = await ensure_cloud_sandbox_gateway_access(db, user)
     return await proxy_http_to_anyharness(
         request,
         upstream_base_url=access.upstream_base_url,
@@ -43,8 +43,8 @@ async def proxy_managed_sandbox_anyharness_http(
     )
 
 
-@router.websocket("/managed-sandbox/anyharness/{path:path}")
-async def proxy_managed_sandbox_anyharness_websocket(
+@router.websocket("/cloud-sandbox/anyharness/{path:path}")
+async def proxy_cloud_sandbox_anyharness_websocket(
     websocket: WebSocket,
     path: str,
     db: AsyncSession = Depends(get_async_session),
@@ -54,7 +54,7 @@ async def proxy_managed_sandbox_anyharness_websocket(
             db,
             product_token_from_websocket(websocket),
         )
-        access = await ensure_managed_sandbox_gateway_access(db, user)
+        access = await ensure_cloud_sandbox_gateway_access(db, user)
     except GatewayWebSocketAuthError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return

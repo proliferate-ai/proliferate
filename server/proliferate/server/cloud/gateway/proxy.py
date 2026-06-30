@@ -1,4 +1,4 @@
-"""Async HTTP/SSE and WebSocket proxy helpers for the managed sandbox gateway."""
+"""Async HTTP/SSE and WebSocket proxy helpers for the cloud sandbox gateway."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from websockets.exceptions import ConnectionClosed
 
 from proliferate.server.cloud.errors import CloudApiError
 
-_ANYHARNESS_MARKER = "/managed-sandbox/anyharness"
+_ANYHARNESS_MARKER = "/cloud-sandbox/anyharness"
 _HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=30.0, pool=10.0)
 _STRIP_REQUEST_HEADERS = {
     "authorization",
@@ -143,8 +143,8 @@ async def proxy_http_to_anyharness(
     except httpx.RequestError as exc:
         await client.aclose()
         raise CloudApiError(
-            "managed_sandbox_gateway_unreachable",
-            "Managed sandbox runtime could not be reached.",
+            "cloud_sandbox_gateway_unreachable",
+            "Cloud sandbox runtime could not be reached.",
             status_code=502,
         ) from exc
 

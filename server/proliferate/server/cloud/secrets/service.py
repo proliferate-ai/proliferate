@@ -11,12 +11,12 @@ from proliferate.db.store import cloud_secrets as secret_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.cloud_repo_config import CloudRepoConfigValue, get_cloud_repo_config
 from proliferate.db.store.cloud_secrets import CloudSecretSetValue
-from proliferate.db.store.managed_sandbox_secrets import (
-    ManagedSandboxSecretMaterializationValue,
+from proliferate.db.store.cloud_sandbox_secrets import (
+    CloudSandboxSecretMaterializationValue,
     load_global_secret_materialization,
     load_workspace_secret_materialization,
 )
-from proliferate.db.store.managed_sandboxes import load_personal_managed_sandbox
+from proliferate.db.store.cloud_sandboxes import load_personal_cloud_sandbox
 from proliferate.db.store.organization_records import MembershipRecord
 from proliferate.db.store.repositories import (
     RepoEnvironmentValue,
@@ -24,7 +24,7 @@ from proliferate.db.store.repositories import (
     sync_cloud_environment_from_legacy_cloud_repo_config,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.managed_sandboxes.materialization.service import (
+from proliferate.server.cloud.cloud_sandboxes.materialization.service import (
     schedule_global_secret_materialization_for_organization,
     schedule_global_secret_materialization_for_user,
     schedule_workspace_secret_materialization_for_repo,
@@ -40,11 +40,11 @@ from proliferate.server.cloud.secrets.validation import (
 async def _load_user_global_materialization(
     db: AsyncSession,
     user_id: UUID,
-) -> ManagedSandboxSecretMaterializationValue | None:
-    sandbox = await load_personal_managed_sandbox(db, user_id)
+) -> CloudSandboxSecretMaterializationValue | None:
+    sandbox = await load_personal_cloud_sandbox(db, user_id)
     if sandbox is None:
         return None
-    return await load_global_secret_materialization(db, managed_sandbox_id=sandbox.id)
+    return await load_global_secret_materialization(db, cloud_sandbox_id=sandbox.id)
 
 
 async def _load_workspace_materialization(
@@ -52,13 +52,13 @@ async def _load_workspace_materialization(
     *,
     user_id: UUID,
     repo_environment_id: UUID,
-) -> ManagedSandboxSecretMaterializationValue | None:
-    sandbox = await load_personal_managed_sandbox(db, user_id)
+) -> CloudSandboxSecretMaterializationValue | None:
+    sandbox = await load_personal_cloud_sandbox(db, user_id)
     if sandbox is None:
         return None
     return await load_workspace_secret_materialization(
         db,
-        managed_sandbox_id=sandbox.id,
+        cloud_sandbox_id=sandbox.id,
         repo_environment_id=repo_environment_id,
     )
 
@@ -79,7 +79,7 @@ def _secret_set_has_desired_state(value: CloudSecretSetValue) -> bool:
 
 def _materialization_ready_for_secret_set(
     value: CloudSecretSetValue,
-    materialization: ManagedSandboxSecretMaterializationValue | None,
+    materialization: CloudSandboxSecretMaterializationValue | None,
 ) -> bool:
     return (
         materialization is not None
@@ -91,7 +91,7 @@ def _materialization_ready_for_secret_set(
 
 def _should_repair_stale_materialization(
     value: CloudSecretSetValue,
-    materialization: ManagedSandboxSecretMaterializationValue | None,
+    materialization: CloudSandboxSecretMaterializationValue | None,
 ) -> bool:
     if not _secret_set_has_desired_state(value):
         return False
@@ -186,7 +186,7 @@ async def get_personal_secrets(
     db: AsyncSession,
     *,
     user_id: UUID,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     value = await secret_store.get_or_create_personal_secret_set(
         db,
         user_id=user_id,
@@ -204,7 +204,7 @@ async def set_personal_secret_env_var(
     user_id: UUID,
     name: str,
     value: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     secret_set, _ = await get_personal_secrets(db, user_id=user_id)
     updated = await secret_store.upsert_secret_env_var(
         db,
@@ -222,7 +222,7 @@ async def delete_personal_secret_env_var(
     *,
     user_id: UUID,
     name: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     secret_set, _ = await get_personal_secrets(db, user_id=user_id)
     updated = await secret_store.delete_secret_env_var(
         db,
@@ -240,7 +240,7 @@ async def set_personal_secret_file(
     user_id: UUID,
     path: str,
     content: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     secret_set, _ = await get_personal_secrets(db, user_id=user_id)
     updated = await secret_store.upsert_secret_file(
         db,
@@ -258,7 +258,7 @@ async def delete_personal_secret_file(
     *,
     user_id: UUID,
     path: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     secret_set, _ = await get_personal_secrets(db, user_id=user_id)
     updated = await secret_store.delete_secret_file(
         db,
@@ -275,7 +275,7 @@ async def get_organization_secrets(
     *,
     user_id: UUID,
     organization_id: UUID,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_member(db, user_id=user_id, organization_id=organization_id)
     value = await secret_store.get_or_create_organization_secret_set(
         db,
@@ -298,7 +298,7 @@ async def set_organization_secret_env_var(
     organization_id: UUID,
     name: str,
     value: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
     secret_set, _ = await get_organization_secrets(
         db,
@@ -325,7 +325,7 @@ async def delete_organization_secret_env_var(
     user_id: UUID,
     organization_id: UUID,
     name: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
     secret_set, _ = await get_organization_secrets(
         db,
@@ -352,7 +352,7 @@ async def set_organization_secret_file(
     organization_id: UUID,
     path: str,
     content: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
     secret_set, _ = await get_organization_secrets(
         db,
@@ -379,7 +379,7 @@ async def delete_organization_secret_file(
     user_id: UUID,
     organization_id: UUID,
     path: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     await _require_organization_admin(db, user_id=user_id, organization_id=organization_id)
     secret_set, _ = await get_organization_secrets(
         db,
@@ -405,7 +405,7 @@ async def get_workspace_secrets(
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
@@ -440,7 +440,7 @@ async def set_workspace_secret_env_var(
     git_repo_name: str,
     name: str,
     value: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
@@ -479,7 +479,7 @@ async def delete_workspace_secret_env_var(
     git_owner: str,
     git_repo_name: str,
     name: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
@@ -518,7 +518,7 @@ async def set_workspace_secret_file(
     git_repo_name: str,
     path: str,
     content: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
@@ -557,7 +557,7 @@ async def delete_workspace_secret_file(
     git_owner: str,
     git_repo_name: str,
     path: str,
-) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
+) -> tuple[CloudSecretSetValue, CloudSandboxSecretMaterializationValue | None]:
     repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
