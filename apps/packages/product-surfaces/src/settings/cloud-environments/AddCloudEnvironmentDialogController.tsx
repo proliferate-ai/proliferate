@@ -317,6 +317,10 @@ function useCloudEnvironmentAddActions({
     }
   }
 
+  const loadingRepositories =
+    catalog.isLoading
+    || (catalog.isFetching && cursor === null && repositories.length === 0);
+
   return {
     query,
     manualValue,
@@ -325,7 +329,7 @@ function useCloudEnvironmentAddActions({
     error,
     addingRepoId,
     nextCursor: catalog.data?.nextCursor ?? null,
-    loading: catalog.isLoading,
+    loading: loadingRepositories,
     loadingMore: catalog.isFetching && cursor !== null,
     setQuery,
     setManualValue,
