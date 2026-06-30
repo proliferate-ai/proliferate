@@ -12,6 +12,7 @@ export * from "./hooks/cloud-secrets.js";
 export * from "./hooks/events.js";
 export * from "./hooks/github-app.js";
 export * from "./hooks/integration-policy.js";
+export * from "./hooks/integrations.js";
 export * from "./hooks/live.js";
 export * from "./hooks/managed-sandboxes.js";
 export * from "./hooks/mcp.js";

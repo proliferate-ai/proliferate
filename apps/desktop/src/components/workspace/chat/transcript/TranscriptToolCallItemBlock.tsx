@@ -22,7 +22,10 @@ import { deriveSubagentMcpReceiptPresentation } from "@proliferate/product-domai
 import { deriveSkillsToolResultPresentation } from "@proliferate/product-domain/chats/tools/skills-tool-result";
 import { describeToolCallDisplay } from "@proliferate/product-domain/chats/tools/tool-call-display";
 import { normalizeToolResultText } from "@proliferate/product-domain/chats/tools/tool-result-text";
+import { IntegrationToolIcon } from "@/components/workspace/chat/tool-calls/IntegrationToolIcon";
+import { integrationGatewayToolNameFromMcpName } from "@/lib/domain/chat/integration-tool-call-presentation";
 import { CHAT_VISIBLE_FILE_CHANGE_LIMIT } from "@/lib/domain/workspaces/changes/diff-display-policy";
+import { useIntegrationToolCallPresentation } from "@/providers/IntegrationToolMetadataProvider";
 import { ToolKindIcon } from "./TranscriptToolKindIcon";
 
 export function TranscriptToolCallItemBlock({
@@ -37,6 +40,15 @@ export function TranscriptToolCallItemBlock({
   const openCodingSession = useOpenCoworkCodingSession();
   const { selectWorkspace } = useWorkspaceSelection();
   const [showAllFileChanges, setShowAllFileChanges] = useState(false);
+  const toolCallPart = item.contentParts.find(
+    (part): part is ToolCallContentPart => part.type === "tool_call",
+  );
+  const toolName = toolCallPart?.title ?? item.title ?? item.nativeToolName ?? "Tool call";
+  const integrationGatewayToolName =
+    integrationGatewayToolNameFromMcpName(item.nativeToolName)
+    ?? integrationGatewayToolNameFromMcpName(toolName);
+  const integrationPresentation =
+    useIntegrationToolCallPresentation(integrationGatewayToolName);
 
   if (
     item.semanticKind === "cowork_artifact_create"
@@ -75,19 +87,20 @@ export function TranscriptToolCallItemBlock({
   const terminalParts = item.contentParts.filter(
     (part): part is TerminalOutputContentPart => part.type === "terminal_output",
   );
-  const toolCallPart = item.contentParts.find(
-    (part): part is ToolCallContentPart => part.type === "tool_call",
-  );
   const toolResultText = item.contentParts
     .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
     .map((part) => part.text)
     .join("\n\n");
   const normalizedResultText = normalizeToolResultText(toolResultText);
-  const toolName = toolCallPart?.title ?? item.title ?? item.nativeToolName ?? "Tool call";
   const rawInput = isRecord(item.rawInput);
   const bashDescription = readString(rawInput?.description) ?? undefined;
   const bashCommand = readString(rawInput?.command) ?? toolName;
   const fallbackDisplay = describeToolCallDisplay(item, toolName);
+  const displayLabel = integrationPresentation?.toolDisplayName ?? fallbackDisplay.label;
+  const displayHint = integrationPresentation?.providerDisplayName ?? fallbackDisplay.hint;
+  const displayIcon = integrationPresentation
+    ? <IntegrationToolIcon iconId={integrationPresentation.iconId} />
+    : <ToolKindIcon iconKey={fallbackDisplay.iconKey} />;
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
   const skillsToolResult = deriveSkillsToolResultPresentation(item, normalizedResultText);
@@ -213,12 +226,12 @@ export function TranscriptToolCallItemBlock({
 
   if (rows.length === 0 && normalizedResultText) {
     rows.push(
-        <GenericToolResultRow
-          key="result"
-          icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
-          label={fallbackDisplay.label}
-          status={status}
-        hint={fallbackDisplay.hint}
+      <GenericToolResultRow
+        key="result"
+        icon={displayIcon}
+        label={displayLabel}
+        status={status}
+        hint={displayHint}
         resultText={normalizedResultText}
       />,
     );
@@ -226,12 +239,12 @@ export function TranscriptToolCallItemBlock({
 
   if (rows.length === 0) {
     rows.push(
-        <GenericToolResultRow
-          key="tool"
-          icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
-          label={fallbackDisplay.label}
-          status={status}
-        hint={fallbackDisplay.hint}
+      <GenericToolResultRow
+        key="tool"
+        icon={displayIcon}
+        label={displayLabel}
+        status={status}
+        hint={displayHint}
       />,
     );
   }

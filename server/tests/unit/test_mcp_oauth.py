@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 from datetime import datetime
 from typing import Literal
 from uuid import uuid4
 
 import httpx
 import pytest
+
+pytest.skip(
+    "Superseded by integration catalog gateway OAuth coverage.",
+    allow_module_level=True,
+)
 
 from proliferate.config import settings
 from proliferate.db.store.cloud_mcp.types import CloudMcpOAuthClientRecord

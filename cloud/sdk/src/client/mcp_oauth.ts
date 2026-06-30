@@ -1,4 +1,9 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import {
+  cancelIntegrationOAuthFlow,
+  getIntegrationOAuthFlowStatus,
+  startIntegrationOAuthFlow,
+} from "./integrations.js";
 import type {
   CloudMcpOAuthFlowStatusResponse,
   StartCloudMcpOAuthFlowRequest,
@@ -24,31 +29,21 @@ export async function startCloudMcpOAuthFlow(
   maybeClient?: ProliferateCloudClient,
 ): Promise<StartCloudMcpOAuthFlowResponse> {
   const { body, client } = resolveStartOAuthArgs(optionsOrClient, maybeClient);
-  return (await client.POST(
-    "/v1/cloud/mcp/connections/{connection_id}/oauth/start",
-    {
-      params: { path: { connection_id: connectionId } },
-      ...(body ? { body } : {}),
-    },
-  )).data!;
+  return await startIntegrationOAuthFlow(connectionId, body, client);
 }
 
 export async function getCloudMcpOAuthFlowStatus(
   flowId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpOAuthFlowStatusResponse> {
-  return (await client.GET("/v1/cloud/mcp/oauth/flows/{flow_id}", {
-    params: { path: { flow_id: flowId } },
-  })).data!;
+  return await getIntegrationOAuthFlowStatus(flowId, client);
 }
 
 export async function cancelCloudMcpOAuthFlow(
   flowId: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpOAuthFlowStatusResponse> {
-  return (await client.POST("/v1/cloud/mcp/oauth/flows/{flow_id}/cancel", {
-    params: { path: { flow_id: flowId } },
-  })).data!;
+  return await cancelIntegrationOAuthFlow(flowId, client);
 }
 
 function resolveStartOAuthArgs(

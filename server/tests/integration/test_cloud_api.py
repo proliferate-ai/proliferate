@@ -19,18 +19,15 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_ACTIVE,
 )
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.db.models.cloud.mcp import (
-    CloudMcpConnection,
-    CloudMcpConnectionAuth,
-    CloudMcpOAuthFlow,
+from proliferate.db.models.cloud.integrations import (
+    CloudIntegrationAccount,
+    CloudIntegrationOAuthFlow,
 )
-from proliferate.db.models.cloud.integrations import CloudOrganizationIntegrationPolicy
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
-from proliferate.db.engine import apply_rls_context_to_session
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import github_app as github_app_store
 from proliferate.db.store.cloud_mcp.auth import (
@@ -54,9 +51,8 @@ from proliferate.integrations.mcp_oauth import (
     AuthorizationServerMetadata,
     ProtectedResourceMetadata,
     RegisteredOAuthClient,
-    TokenResponse,
 )
-from proliferate.rls_context import with_rls_context
+from proliferate.integrations.mcp_remote import McpRemoteError, McpRemoteTool
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app import repo_authority
 from proliferate.server.cloud.repo_config import service as repo_config_service
@@ -67,7 +63,7 @@ from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces.provisioning import preflight as provisioning_preflight
 from proliferate.server.cloud.workspaces.provisioning import service as provisioning_service
 from proliferate.server.cloud.workspaces.remote_access import service as remote_service
-from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
+from proliferate.utils.crypto import decrypt_json, encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
@@ -274,44 +270,20 @@ async def _add_organization_member(
     await db_session.commit()
 
 
-async def _insert_organization_integration_policy(
-    db_session: AsyncSession,
-    *,
-    actor_user_id: str,
-    organization_id: str,
-    catalog_entry_id: str,
-    enabled: bool,
-) -> None:
-    actor_uuid = uuid.UUID(actor_user_id)
-    organization_uuid = uuid.UUID(organization_id)
-    with with_rls_context(
-        actor_user_id=actor_uuid,
-        owner_scope="organization",
-        organization_id=organization_uuid,
-    ):
-        await apply_rls_context_to_session(db_session)
-        db_session.add(
-            CloudOrganizationIntegrationPolicy(
-                organization_id=organization_uuid,
-                catalog_entry_id=catalog_entry_id,
-                enabled=enabled,
-                updated_by_user_id=actor_uuid,
-            )
-        )
-        await db_session.commit()
-
-
 def _quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
-async def _create_rls_test_role(db_session: AsyncSession, role_name: str) -> None:
+async def _create_rls_test_role(
+    db_session: AsyncSession,
+    role_name: str,
+    *,
+    table_name: str,
+) -> None:
     quoted_role = _quote_identifier(role_name)
     await db_session.execute(text(f"CREATE ROLE {quoted_role} NOLOGIN"))
     await db_session.execute(text(f"GRANT USAGE ON SCHEMA public TO {quoted_role}"))
-    await db_session.execute(
-        text(f"GRANT SELECT ON cloud_organization_integration_policy TO {quoted_role}")
-    )
+    await db_session.execute(text(f"GRANT SELECT ON {table_name} TO {quoted_role}"))
     await db_session.commit()
 
 
@@ -324,95 +296,9 @@ async def _drop_rls_test_role(db_session: AsyncSession, role_name: str) -> None:
     await db_session.commit()
 
 
-async def _list_integration_policy_as_role(
-    db_session: AsyncSession,
-    *,
-    role_name: str,
-) -> list[tuple[uuid.UUID, str]]:
-    quoted_role = _quote_identifier(role_name)
-    await db_session.rollback()
-    await db_session.execute(text(f"SET LOCAL ROLE {quoted_role}"))
-    rows = (
-        await db_session.execute(
-            select(
-                CloudOrganizationIntegrationPolicy.organization_id,
-                CloudOrganizationIntegrationPolicy.catalog_entry_id,
-            ).order_by(CloudOrganizationIntegrationPolicy.catalog_entry_id)
-        )
-    ).all()
-    await db_session.rollback()
-    return [(row.organization_id, row.catalog_entry_id) for row in rows]
-
-
-async def _list_mcp_connections(
-    db_session: AsyncSession,
-    user_id: str,
-) -> list[CloudMcpConnection]:
-    return (
-        (
-            await db_session.execute(
-                select(CloudMcpConnection).where(
-                    CloudMcpConnection.owner_user_id == uuid.UUID(user_id)
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-
-async def _list_mcp_connection_auths(
-    db_session: AsyncSession,
-) -> list[CloudMcpConnectionAuth]:
-    return (await db_session.execute(select(CloudMcpConnectionAuth))).scalars().all()
-
-
 def _disable_workspace_provision(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         provisioning_service, "schedule_workspace_provision", lambda *_args, **_kwargs: None
-    )
-
-
-def _stub_mcp_oauth_start(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _discover_protected_resource_metadata(_server_url: str) -> ProtectedResourceMetadata:
-        return ProtectedResourceMetadata(
-            authorization_servers=("https://accounts.example.com",),
-            resource="https://linear.example.com/mcp",
-            challenged_scope="issues:read",
-        )
-
-    async def _discover_authorization_server_metadata(
-        _issuer: str,
-    ) -> AuthorizationServerMetadata:
-        return AuthorizationServerMetadata(
-            issuer="https://accounts.example.com",
-            authorization_endpoint="https://accounts.example.com/authorize",
-            token_endpoint="https://accounts.example.com/token",
-            registration_endpoint="https://accounts.example.com/register",
-            token_endpoint_auth_methods_supported=("none",),
-        )
-
-    async def _register_client(*_args: object, **_kwargs: object) -> RegisteredOAuthClient:
-        return RegisteredOAuthClient(
-            client_id="client-id",
-            client_secret=None,
-            client_secret_expires_at=None,
-            token_endpoint_auth_method=None,
-            registration_client_uri=None,
-            registration_access_token=None,
-        )
-
-    monkeypatch.setattr(
-        "proliferate.server.cloud.mcp_oauth.service.discover_protected_resource_metadata",
-        _discover_protected_resource_metadata,
-    )
-    monkeypatch.setattr(
-        "proliferate.server.cloud.mcp_oauth.service.discover_authorization_server_metadata",
-        _discover_authorization_server_metadata,
-    )
-    monkeypatch.setattr(
-        "proliferate.server.cloud.mcp_oauth.service.register_client",
-        _register_client,
     )
 
 
@@ -537,142 +423,64 @@ class TestCloudWorktreeRetentionPolicy:
         assert response.json()["detail"]["code"] == "invalid_worktree_retention_policy"
 
 
-class TestCloudOrganizationIntegrationPolicy:
+class TestCloudIntegrations:
     @pytest.mark.asyncio
-    async def test_owner_can_patch_policy_and_member_can_read_only(
+    async def test_seed_definitions_and_api_key_account_flow(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
     ) -> None:
-        owner = await _register_and_login(
-            client,
-            f"integration-policy-owner-{uuid.uuid4().hex[:8]}@example.com",
-        )
-        member = await _register_and_login(
-            client,
-            f"integration-policy-member-{uuid.uuid4().hex[:8]}@example.com",
-        )
-        organization_id = await _create_organization_for_user(db_session, owner["user_id"])
-        await _add_organization_member(
-            db_session,
-            organization_id=organization_id,
-            user_id=member["user_id"],
-        )
-        owner_headers = {"Authorization": f"Bearer {owner['access_token']}"}
-        member_headers = {"Authorization": f"Bearer {member['access_token']}"}
-        url = f"/v1/cloud/organizations/{organization_id}/integration-policy"
+        session = await _register_and_login(client, "cloud-integrations-api-key@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
 
-        defaults = await client.get(url, headers=owner_headers)
-
-        assert defaults.status_code == 200
-        default_entries = {entry["catalogEntryId"]: entry for entry in defaults.json()["entries"]}
-        assert default_entries["linear"]["enabled"] is True
-        assert default_entries["linear"]["updatedAt"] is None
-
-        patched = await client.patch(
-            url,
-            headers=owner_headers,
-            json={"catalogEntryId": "linear", "enabled": False},
+        definitions_response = await client.get(
+            "/v1/cloud/integrations/definitions",
+            headers=headers,
         )
 
-        assert patched.status_code == 200
-        patched_entries = {entry["catalogEntryId"]: entry for entry in patched.json()["entries"]}
-        assert patched_entries["linear"]["enabled"] is False
-        assert patched_entries["linear"]["updatedAt"] is not None
-        assert patched_entries["linear"]["updatedByUserId"] == owner["user_id"]
-
-        member_read = await client.get(url, headers=member_headers)
-        member_write = await client.patch(
-            url,
-            headers=member_headers,
-            json={"catalogEntryId": "linear", "enabled": True},
-        )
-
-        assert member_read.status_code == 200
-        member_entries = {
-            entry["catalogEntryId"]: entry for entry in member_read.json()["entries"]
+        assert definitions_response.status_code == 200
+        definitions = {definition["key"]: definition for definition in definitions_response.json()}
+        assert {"linear", "context7", "posthog"} <= definitions.keys()
+        assert definitions["linear"]["authModes"][0]["kind"] == "oauth2"
+        assert definitions["posthog"]["settings"][0] == {
+            "id": "region",
+            "label": "Region",
+            "default": "us",
+            "options": [{"value": "us", "label": "US"}, {"value": "eu", "label": "EU"}],
         }
-        assert member_entries["linear"]["enabled"] is False
-        assert member_write.status_code == 403
-        assert member_write.json()["detail"]["code"] == "organization_permission_denied"
 
-    @pytest.mark.asyncio
-    async def test_patch_rejects_unknown_catalog_entry(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        owner = await _register_and_login(
-            client,
-            f"integration-policy-missing-{uuid.uuid4().hex[:8]}@example.com",
-        )
-        organization_id = await _create_organization_for_user(db_session, owner["user_id"])
-
-        response = await client.patch(
-            f"/v1/cloud/organizations/{organization_id}/integration-policy",
-            headers={"Authorization": f"Bearer {owner['access_token']}"},
-            json={"catalogEntryId": "not-real", "enabled": False},
+        created = await client.post(
+            "/v1/cloud/integrations/accounts",
+            headers=headers,
+            json={
+                "definitionId": definitions["context7"]["id"],
+                "authKind": "api_key",
+                "apiKey": "ctx7sk-example",
+            },
         )
 
-        assert response.status_code == 404
-        assert response.json()["detail"]["code"] == "catalog_entry_not_found"
+        assert created.status_code == 200
+        assert created.json()["status"] == "ready"
+        assert created.json()["authKind"] == "api_key"
+        assert "ctx7sk-example" not in created.text
 
-    @pytest.mark.asyncio
-    async def test_rls_filters_policy_rows_without_org_filter(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        owner_a = await _register_and_login(
-            client,
-            f"integration-policy-rls-a-{uuid.uuid4().hex[:8]}@example.com",
-        )
-        owner_b = await _register_and_login(
-            client,
-            f"integration-policy-rls-b-{uuid.uuid4().hex[:8]}@example.com",
-        )
-        organization_a = await _create_organization_for_user(db_session, owner_a["user_id"])
-        organization_b = await _create_organization_for_user(db_session, owner_b["user_id"])
-        await _insert_organization_integration_policy(
-            db_session,
-            actor_user_id=owner_a["user_id"],
-            organization_id=organization_a,
-            catalog_entry_id="linear",
-            enabled=False,
-        )
-        await _insert_organization_integration_policy(
-            db_session,
-            actor_user_id=owner_b["user_id"],
-            organization_id=organization_b,
-            catalog_entry_id="github",
-            enabled=True,
-        )
-
-        role_name = f"rls_policy_{uuid.uuid4().hex}"
-        await _create_rls_test_role(db_session, role_name)
-        try:
-            unscoped_rows = await _list_integration_policy_as_role(
-                db_session,
-                role_name=role_name,
-            )
-            assert unscoped_rows == []
-
-            with with_rls_context(
-                actor_user_id=uuid.UUID(owner_a["user_id"]),
-                owner_scope="organization",
-                organization_id=uuid.UUID(organization_a),
-            ):
-                scoped_rows = await _list_integration_policy_as_role(
-                    db_session,
-                    role_name=role_name,
+        row = (
+            await db_session.execute(
+                select(CloudIntegrationAccount).where(
+                    CloudIntegrationAccount.owner_user_id == uuid.UUID(session["user_id"])
                 )
-        finally:
-            await _drop_rls_test_role(db_session, role_name)
+            )
+        ).scalar_one()
+        assert row.credential_ciphertext is not None
+        assert decrypt_json(row.credential_ciphertext)["apiKey"] == "ctx7sk-example"
 
-        assert scoped_rows == [(uuid.UUID(organization_a), "linear")]
+        availability = await client.get("/v1/cloud/integrations/availability", headers=headers)
 
+        assert availability.status_code == 200
+        context7 = next(item for item in availability.json() if item["namespace"] == "context7")
+        assert context7["accountId"] == created.json()["id"]
+        assert context7["status"] == "ready"
 
-class TestCloudMcpConnections:
     @pytest.mark.asyncio
     async def test_oauth_start_persists_web_return_target(
         self,
@@ -681,18 +489,66 @@ class TestCloudMcpConnections:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
-        _stub_mcp_oauth_start(monkeypatch)
-        session = await _register_and_login(client, "cloud-mcp-oauth-start-web@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "linear", "enabled": True},
+
+        async def _discover_protected_resource_metadata(
+            _server_url: str,
+        ) -> ProtectedResourceMetadata:
+            return ProtectedResourceMetadata(
+                authorization_servers=("https://accounts.example.com",),
+                resource="https://linear.example.com/mcp",
+                challenged_scope="issues:read",
+            )
+
+        async def _discover_authorization_server_metadata(
+            _issuer: str,
+        ) -> AuthorizationServerMetadata:
+            return AuthorizationServerMetadata(
+                issuer="https://accounts.example.com",
+                authorization_endpoint="https://accounts.example.com/authorize",
+                token_endpoint="https://accounts.example.com/token",
+                registration_endpoint="https://accounts.example.com/register",
+                token_endpoint_auth_methods_supported=("none",),
+                client_id_metadata_document_supported=False,
+            )
+
+        async def _register_client(*_args: object, **_kwargs: object) -> RegisteredOAuthClient:
+            return RegisteredOAuthClient(
+                client_id="client-id",
+                client_secret=None,
+                client_secret_expires_at=None,
+                token_endpoint_auth_method=None,
+                registration_client_uri=None,
+                registration_access_token=None,
+            )
+
+        monkeypatch.setattr(
+            "proliferate.server.cloud.integrations.service.discover_protected_resource_metadata",
+            _discover_protected_resource_metadata,
         )
-        assert created.status_code == 200
+        monkeypatch.setattr(
+            "proliferate.server.cloud.integrations.service.discover_authorization_server_metadata",
+            _discover_authorization_server_metadata,
+        )
+        monkeypatch.setattr(
+            "proliferate.server.cloud.integrations.service.register_client",
+            _register_client,
+        )
+
+        session = await _register_and_login(client, "cloud-integrations-oauth@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        definitions = (
+            await client.get("/v1/cloud/integrations/definitions", headers=headers)
+        ).json()
+        linear = next(definition for definition in definitions if definition["key"] == "linear")
+        account = await client.post(
+            "/v1/cloud/integrations/accounts",
+            headers=headers,
+            json={"definitionId": linear["id"], "authKind": "oauth2"},
+        )
+        assert account.status_code == 200
 
         started = await client.post(
-            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/oauth/start",
+            f"/v1/cloud/integrations/accounts/{account.json()['id']}/oauth/start",
             headers=headers,
             json={
                 "callbackSurface": "web",
@@ -706,507 +562,227 @@ class TestCloudMcpConnections:
         assert started.json()["authorizationUrl"].startswith(
             "https://accounts.example.com/authorize?"
         )
-        flows = (await db_session.execute(select(CloudMcpOAuthFlow))).scalars().all()
+        status_response = await client.get(
+            f"/v1/cloud/integrations/oauth/flows/{started.json()['flowId']}",
+            headers=headers,
+        )
+        assert status_response.status_code == 200
+        assert status_response.json()["flowId"] == started.json()["flowId"]
+        assert status_response.json()["status"] == "active"
+
+        cancelled = await client.post(
+            f"/v1/cloud/integrations/oauth/flows/{started.json()['flowId']}/cancel",
+            headers=headers,
+        )
+        assert cancelled.status_code == 200
+        assert cancelled.json()["flowId"] == started.json()["flowId"]
+        assert cancelled.json()["status"] == "cancelled"
+
+        flows = (await db_session.execute(select(CloudIntegrationOAuthFlow))).scalars().all()
         assert len(flows) == 1
         assert flows[0].callback_surface == "web"
         assert flows[0].final_surface == "desktop"
         assert flows[0].return_path == "/plugins/connect/complete"
 
     @pytest.mark.asyncio
-    async def test_oauth_start_rejects_invalid_return_target(
+    async def test_oauth_start_rejects_empty_authorization_server_metadata(
         self,
         client: AsyncClient,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
-        _stub_mcp_oauth_start(monkeypatch)
-        session = await _register_and_login(client, "cloud-mcp-oauth-start-invalid@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "linear", "enabled": True},
-        )
-        assert created.status_code == 200
-
-        unsafe_path = await client.post(
-            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/oauth/start",
-            headers=headers,
-            json={
-                "callbackSurface": "web",
-                "finalSurface": "web",
-                "returnPath": "https://evil.example.com/plugins/connect/complete",
-            },
-        )
-        unsupported_surface = await client.post(
-            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/oauth/start",
-            headers=headers,
-            json={
-                "callbackSurface": "mobile",
-                "finalSurface": "web",
-                "returnPath": "/plugins/connect/complete",
-            },
-        )
-
-        assert unsafe_path.status_code == 400
-        assert unsafe_path.json()["detail"]["code"] == "invalid_payload"
-        assert unsupported_surface.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_oauth_flow_status_not_found_uses_product_error_handler(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-mcp-oauth-missing@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        response = await client.get(
-            f"/v1/cloud/mcp/oauth/flows/{uuid.uuid4()}",
-            headers=headers,
-        )
-
-        assert response.status_code == 404
-        assert response.json() == {
-            "detail": {
-                "code": "not_found",
-                "message": "OAuth flow was not found.",
-            },
-        }
-
-    @pytest.mark.asyncio
-    async def test_catalog_connection_secret_flow(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-mcp-v2-secret@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        catalog = await client.get("/v1/cloud/mcp/catalog", headers=headers)
-        assert catalog.status_code == 200
-        assert catalog.json()["catalogVersion"]
-        context7_entry = next(
-            entry for entry in catalog.json()["entries"] if entry["id"] == "context7"
-        )
-        assert context7_entry["secretFields"] == context7_entry["requiredFields"]
-        assert context7_entry["displayUrl"] == "https://mcp.context7.com/mcp"
-        posthog_entry = next(
-            entry for entry in catalog.json()["entries"] if entry["id"] == "posthog"
-        )
-        assert posthog_entry["settingsSchema"][0]["id"] == "region"
-        assert posthog_entry["settingsSchema"][0]["defaultValue"] == "us"
-
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "context7", "enabled": True},
-        )
-        assert created.status_code == 200
-        connection_id = created.json()["connectionId"]
-        assert created.json()["authStatus"] == "needs_reconnect"
-
-        authed = await client.put(
-            f"/v1/cloud/mcp/connections/{connection_id}/auth/secret",
-            headers=headers,
-            json={"secretFields": {"api_key": "ctx7sk-example"}},
-        )
-        assert authed.status_code == 200
-        assert authed.json()["authStatus"] == "ready"
-
-    @pytest.mark.asyncio
-    async def test_posthog_settings_and_secret_auth_rejected(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-mcp-posthog@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={
-                "catalogEntryId": "posthog",
-                "enabled": True,
-                "settings": {
-                    "region": "eu",
-                    "organizationId": "org_123",
-                    "features": "flags",
-                },
-            },
-        )
-        assert created.status_code == 200
-        assert created.json()["settings"] == {
-            "features": "flags",
-            "organizationId": "org_123",
-            "region": "eu",
-        }
-
-        authed = await client.put(
-            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/auth/secret",
-            headers=headers,
-            json={"secretFields": {"apiKey": "phx-example"}},
-        )
-        assert authed.status_code == 400
-        assert authed.json()["detail"]["code"] == "invalid_payload"
-
-    @pytest.mark.asyncio
-    async def test_schema_settings_defaults_and_legacy_supabase_kind(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-mcp-settings@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-        posthog = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "posthog", "enabled": True},
-        )
-        assert posthog.status_code == 200
-        assert posthog.json()["settings"] == {"region": "us"}
-
-        supabase = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={
-                "catalogEntryId": "supabase",
-                "enabled": True,
-                "settings": {
-                    "kind": "supabase",
-                    "projectRef": "abcd1234",
-                    "readOnly": False,
-                },
-            },
-        )
-        assert supabase.status_code == 200
-        assert supabase.json()["settings"] == {
-            "projectRef": "abcd1234",
-            "readOnly": False,
-        }
-
-    @pytest.mark.asyncio
-    async def test_auth_compare_and_swap_rejects_stale_refresh_write(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-mcp-auth-version@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "linear", "enabled": True},
-        )
-        assert created.status_code == 200
-        records = await _list_mcp_connections(db_session, session["user_id"])
-        assert len(records) == 1
-
-        initial = await upsert_connection_auth(
-            db_session,
-            connection_db_id=records[0].id,
-            auth_kind="oauth",
-            auth_status="ready",
-            payload_ciphertext=encrypt_json({"accessToken": "first"}),
-            payload_format="oauth-bundle-v1",
-        )
-        updated = await update_connection_auth_if_version(
-            db_session,
-            connection_db_id=records[0].id,
-            expected_auth_version=initial.auth_version,
-            auth_kind="oauth",
-            auth_status="ready",
-            payload_ciphertext=encrypt_json({"accessToken": "second"}),
-            payload_format="oauth-bundle-v1",
-        )
-        assert updated is not None
-        assert updated.auth_version == initial.auth_version + 1
-
-        stale = await update_connection_auth_if_version(
-            db_session,
-            connection_db_id=records[0].id,
-            expected_auth_version=initial.auth_version,
-            auth_kind="oauth",
-            auth_status="ready",
-            payload_ciphertext=encrypt_json({"accessToken": "stale"}),
-            payload_format="oauth-bundle-v1",
-        )
-        assert stale is None
-
-        db_session.expire_all()
-        auths = await _list_mcp_connection_auths(db_session)
-        assert len(auths) == 1
-        assert auths[0].auth_version == updated.auth_version
-        assert auths[0].payload_ciphertext is not None
-        assert decrypt_json(auths[0].payload_ciphertext)["accessToken"] == "second"
-
-    @pytest.mark.asyncio
-    async def test_oauth_callback_claim_prevents_duplicate_exchange(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-mcp-oauth-claim@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "linear", "enabled": True},
-        )
-        assert created.status_code == 200
-        records = await _list_mcp_connections(db_session, session["user_id"])
-        assert len(records) == 1
-
-        state_hash = hashlib.sha256(b"oauth-state").hexdigest()
-        flow = await create_oauth_flow_canceling_existing(
-            db_session,
-            connection_db_id=records[0].id,
-            user_id=uuid.UUID(session["user_id"]),
-            state_hash=state_hash,
-            code_verifier_ciphertext=encrypt_text("verifier"),
-            issuer="https://accounts.example.com",
-            resource="https://linear.example.com/mcp",
-            client_id="client-id",
-            token_endpoint="https://accounts.example.com/token",
-            requested_scopes="[]",
-            redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
-            authorization_url="https://accounts.example.com/authorize",
-            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
-        )
-
-        claimed = await claim_active_oauth_flow_by_state_hash(db_session, state_hash)
-        assert claimed is not None
-        assert claimed.id == flow.id
-        assert claimed.status == "exchanging"
-        assert await claim_active_oauth_flow_by_state_hash(db_session, state_hash) is None
-
-    @pytest.mark.asyncio
-    async def test_oauth_callback_uses_cached_dcr_client_secret(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        session = await _register_and_login(client, "cloud-mcp-oauth-secret@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={
-                "catalogEntryId": "supabase",
-                "enabled": True,
-                "settings": {"projectRef": "abc"},
-            },
-        )
-        assert created.status_code == 200
-        records = await _list_mcp_connections(db_session, session["user_id"])
-        assert len(records) == 1
-
-        redirect_uri = "https://api.example.com/v1/cloud/mcp/oauth/callback"
-        await upsert_oauth_client(
-            db_session,
-            issuer="https://api.supabase.com",
-            redirect_uri=redirect_uri,
-            catalog_entry_id="supabase",
-            resource="https://mcp.supabase.com/mcp?project_ref=abc&read_only=true",
-            client_id="client-id",
-            client_secret_ciphertext=encrypt_text("client-secret"),
-            client_secret_expires_at=None,
-            token_endpoint_auth_method=None,
-            registration_client_uri=None,
-            registration_access_token_ciphertext=None,
-        )
-        state = "oauth-state-with-secret"
-        flow = await create_oauth_flow_canceling_existing(
-            db_session,
-            connection_db_id=records[0].id,
-            user_id=uuid.UUID(session["user_id"]),
-            state_hash=hashlib.sha256(state.encode("utf-8")).hexdigest(),
-            code_verifier_ciphertext=encrypt_text("verifier"),
-            issuer="https://api.supabase.com",
-            resource="https://mcp.supabase.com/mcp?project_ref=abc&read_only=true",
-            client_id="client-id",
-            token_endpoint="https://api.supabase.com/v1/oauth/token",
-            requested_scopes="[]",
-            redirect_uri=redirect_uri,
-            authorization_url="https://api.supabase.com/v1/oauth/authorize",
-            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
-        )
-        await db_session.commit()
-        captured: dict[str, object] = {}
-
-        async def _exchange_token(**kwargs: object) -> TokenResponse:
-            captured.update(kwargs)
-            return TokenResponse(
-                access_token="access-token",
-                refresh_token="refresh-token",
-                expires_at=datetime(2099, 1, 1, tzinfo=UTC),
-                scopes=(),
+        async def _discover_protected_resource_metadata(
+            _server_url: str,
+        ) -> ProtectedResourceMetadata:
+            return ProtectedResourceMetadata(
+                authorization_servers=(),
+                resource="https://linear.example.com/mcp",
+                challenged_scope=None,
             )
 
         monkeypatch.setattr(
-            "proliferate.server.cloud.mcp_oauth.service.exchange_token",
-            _exchange_token,
+            "proliferate.server.cloud.integrations.service.discover_protected_resource_metadata",
+            _discover_protected_resource_metadata,
         )
 
-        response = await client.get(
-            "/v1/cloud/mcp/oauth/callback",
-            params={"state": state, "code": "auth-code"},
+        session = await _register_and_login(
+            client,
+            "cloud-integrations-empty-auth-server@example.com",
+        )
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        definitions = (
+            await client.get("/v1/cloud/integrations/definitions", headers=headers)
+        ).json()
+        linear = next(definition for definition in definitions if definition["key"] == "linear")
+        account = await client.post(
+            "/v1/cloud/integrations/accounts",
+            headers=headers,
+            json={"definitionId": linear["id"], "authKind": "oauth2"},
+        )
+        assert account.status_code == 200
+
+        started = await client.post(
+            f"/v1/cloud/integrations/accounts/{account.json()['id']}/oauth/start",
+            headers=headers,
         )
 
-        assert response.status_code == 200
-        assert "Authorization done" in response.text
-        assert "Redirecting to desktop app..." in response.text
-        assert "Open Proliferate" in response.text
-        assert (
-            "proliferate://plugins?source=mcp_oauth_callback&amp;status=completed" in response.text
-        )
-        assert "access-token" not in response.text
-        assert "refresh-token" not in response.text
-        assert captured["client_secret"] == "client-secret"
-        assert captured["token_endpoint_auth_method"] is None
-
-        db_session.expire_all()
-        stored = await claim_active_oauth_flow_by_state_hash(db_session, flow.state_hash)
-        assert stored is None
-        auths = await _list_mcp_connection_auths(db_session)
-        assert len(auths) == 1
-        assert auths[0].payload_ciphertext is not None
-        payload = decrypt_json(auths[0].payload_ciphertext)
-        assert payload["redirectUri"] == redirect_uri
-        plugins = await client.get("/v1/cloud/plugins", headers=headers)
-        assert plugins.status_code == 200
-        assert any(
-            item["pluginId"] == "supabase" and item["enabled"]
-            for item in plugins.json()["plugins"]
-        )
+        assert started.status_code == 409
+        assert started.json()["detail"]["code"] == "integration_oauth_unavailable"
 
     @pytest.mark.asyncio
-    async def test_oauth_callback_failure_uses_safe_handoff_page(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        response = await client.get(
-            "/v1/cloud/mcp/oauth/callback",
-            params={"error": "access_denied", "state": "stale-state"},
-        )
-
-        assert response.status_code == 200
-        assert "Authorization failed" in response.text
-        assert "connecting this plugin again" in response.text
-        assert "Open Proliferate" in response.text
-        assert "access_denied" not in response.text
-        assert "proliferate://plugins?source=mcp_oauth_callback&amp;status=failed" in response.text
-
-    @pytest.mark.asyncio
-    async def test_oauth_callback_provider_error_uses_stored_web_return_target(
+    async def test_org_custom_definition_validates_admin_and_url(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
-        session = await _register_and_login(client, "cloud-mcp-oauth-web-return@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "linear", "enabled": True},
-        )
-        assert created.status_code == 200
-        records = await _list_mcp_connections(db_session, session["user_id"])
-        assert len(records) == 1
-
-        state = "oauth-web-return-state"
-        flow = await create_oauth_flow_canceling_existing(
+        owner = await _register_and_login(client, "cloud-integrations-custom-owner@example.com")
+        member = await _register_and_login(client, "cloud-integrations-custom-member@example.com")
+        organization_id = await _create_organization_for_user(db_session, owner["user_id"])
+        await _add_organization_member(
             db_session,
-            connection_db_id=records[0].id,
-            user_id=uuid.UUID(session["user_id"]),
-            state_hash=hashlib.sha256(state.encode("utf-8")).hexdigest(),
-            code_verifier_ciphertext=encrypt_text("verifier"),
-            issuer="https://accounts.example.com",
-            resource="https://linear.example.com/mcp",
-            client_id="client-id",
-            token_endpoint="https://accounts.example.com/token",
-            requested_scopes="[]",
-            redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
-            authorization_url="https://accounts.example.com/authorize",
-            callback_surface="web",
-            final_surface="desktop",
-            return_path="/plugins/connect/complete",
-            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+            organization_id=organization_id,
+            user_id=member["user_id"],
         )
-        await db_session.commit()
+        owner_headers = {"Authorization": f"Bearer {owner['access_token']}"}
+        member_headers = {"Authorization": f"Bearer {member['access_token']}"}
 
-        response = await client.get(
-            "/v1/cloud/mcp/oauth/callback",
-            params={"state": state, "error": "access_denied"},
+        invalid_url = await client.post(
+            "/v1/cloud/integrations/definitions",
+            headers=owner_headers,
+            json={
+                "organizationId": organization_id,
+                "displayName": "Internal MCP",
+                "namespace": "internal_mcp",
+                "mcpUrl": "http://mcp.example.com/mcp",
+            },
+        )
+        assert invalid_url.status_code == 400
+        assert invalid_url.json()["detail"]["code"] == "invalid_payload"
+
+        async def _validate_dynamic_http_mcp_definition(**kwargs: object):
+            from proliferate.server.cloud.integrations.domain.dynamic_validation import (
+                DynamicIntegrationValidationResult,
+            )
+
+            return DynamicIntegrationValidationResult(
+                display_name=str(kwargs["display_name"]).strip(),
+                namespace=str(kwargs["namespace"]).strip(),
+                mcp_url=str(kwargs["mcp_url"]).strip(),
+                issuer="https://accounts.example.com",
+                resource=str(kwargs["mcp_url"]).strip(),
+                client_strategy="dcr",
+            )
+
+        monkeypatch.setattr(
+            "proliferate.server.cloud.integrations.service.validate_dynamic_http_mcp_definition",
+            _validate_dynamic_http_mcp_definition,
         )
 
-        assert response.status_code == 303
-        assert response.headers["location"] == (
-            "https://app.example.com/plugins/connect/complete?"
-            f"source=mcp_oauth_callback&flowId={flow.id}&status=failed&"
-            "finalSurface=desktop&failureCode=access_denied"
+        member_create = await client.post(
+            "/v1/cloud/integrations/definitions",
+            headers=member_headers,
+            json={
+                "organizationId": organization_id,
+                "displayName": "Internal MCP",
+                "namespace": "internal_mcp",
+                "mcpUrl": "https://mcp.example.com/mcp",
+            },
         )
-        assert "access_denied" not in response.text
+        assert member_create.status_code == 403
+
+        owner_create = await client.post(
+            "/v1/cloud/integrations/definitions",
+            headers=owner_headers,
+            json={
+                "organizationId": organization_id,
+                "displayName": "Internal MCP",
+                "namespace": "internal_mcp",
+                "mcpUrl": "https://mcp.example.com/mcp",
+            },
+        )
+        assert owner_create.status_code == 200
+        assert owner_create.json()["source"] == "org_custom"
+        assert owner_create.json()["namespace"] == "internal_mcp"
+
+        member_list = await client.get(
+            "/v1/cloud/integrations/definitions",
+            headers=member_headers,
+            params={"organizationId": organization_id},
+        )
+        assert member_list.status_code == 200
+        assert any(item["namespace"] == "internal_mcp" for item in member_list.json())
+
+        outsider = await _register_and_login(
+            client,
+            "cloud-integrations-custom-outsider@example.com",
+        )
+        outsider_response = await client.get(
+            "/v1/cloud/integrations/definitions",
+            headers={"Authorization": f"Bearer {outsider['access_token']}"},
+            params={"organizationId": organization_id},
+        )
+        assert outsider_response.status_code == 404
+        assert outsider_response.json()["detail"]["code"] == "organization_not_found"
+
+        outsider_availability = await client.get(
+            "/v1/cloud/integrations/availability",
+            headers={"Authorization": f"Bearer {outsider['access_token']}"},
+            params={"organizationId": organization_id},
+        )
+        assert outsider_availability.status_code == 404
+        assert outsider_availability.json()["detail"]["code"] == "organization_not_found"
 
     @pytest.mark.asyncio
-    async def test_oauth_callback_after_connection_delete_preserves_web_return_target(
+    async def test_tool_metadata_skips_failing_accounts(
         self,
         client: AsyncClient,
-        db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
-        session = await _register_and_login(client, "cloud-mcp-oauth-deleted-return@example.com")
+        async def _list_tools(
+            *,
+            url: str,
+            headers: dict[str, str],
+        ) -> tuple[McpRemoteTool, ...]:
+            if "context7" in url:
+                raise McpRemoteError("mcp_http_error", "Context7 is unavailable.")
+            return (
+                McpRemoteTool(
+                    name="capture_event",
+                    description="Capture an event.",
+                    input_schema={},
+                ),
+            )
+
+        monkeypatch.setattr(
+            "proliferate.server.cloud.integrations.service.mcp_remote.list_tools",
+            _list_tools,
+        )
+
+        session = await _register_and_login(client, "cloud-integrations-tools@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
-        created = await client.post(
-            "/v1/cloud/mcp/connections",
-            headers=headers,
-            json={"catalogEntryId": "linear", "enabled": True},
-        )
-        assert created.status_code == 200
-        records = await _list_mcp_connections(db_session, session["user_id"])
-        assert len(records) == 1
+        definitions = {
+            definition["key"]: definition
+            for definition in (
+                await client.get("/v1/cloud/integrations/definitions", headers=headers)
+            ).json()
+        }
+        for key in ("context7", "posthog"):
+            response = await client.post(
+                "/v1/cloud/integrations/accounts",
+                headers=headers,
+                json={
+                    "definitionId": definitions[key]["id"],
+                    "authKind": "api_key",
+                    "apiKey": f"{key}-token",
+                },
+            )
+            assert response.status_code == 200
 
-        state = "oauth-deleted-web-return-state"
-        flow = await create_oauth_flow_canceling_existing(
-            db_session,
-            connection_db_id=records[0].id,
-            user_id=uuid.UUID(session["user_id"]),
-            state_hash=hashlib.sha256(state.encode("utf-8")).hexdigest(),
-            code_verifier_ciphertext=encrypt_text("verifier"),
-            issuer="https://accounts.example.com",
-            resource="https://linear.example.com/mcp",
-            client_id="client-id",
-            token_endpoint="https://accounts.example.com/token",
-            requested_scopes="[]",
-            redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
-            authorization_url="https://accounts.example.com/authorize",
-            callback_surface="web",
-            final_surface="desktop",
-            return_path="/plugins/connect/complete",
-            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
-        )
-        await db_session.commit()
+        metadata = await client.get("/v1/cloud/integrations/tool-metadata", headers=headers)
 
-        deleted = await client.delete(
-            f"/v1/cloud/mcp/connections/{records[0].connection_id}",
-            headers=headers,
-        )
-        assert deleted.status_code == 200
-
-        response = await client.get(
-            "/v1/cloud/mcp/oauth/callback",
-            params={"state": state, "code": "auth-code"},
-        )
-
-        assert response.status_code == 303
-        assert response.headers["location"] == (
-            "https://app.example.com/plugins/connect/complete?"
-            f"source=mcp_oauth_callback&flowId={flow.id}&status=cancelled&"
-            "finalSurface=desktop&failureCode=connection_deleted"
-        )
-        assert "connection_deleted" not in response.text
+        assert metadata.status_code == 200
+        assert [item["namespace"] for item in metadata.json()] == ["posthog"]
+        assert metadata.json()[0]["tools"][0]["gatewayToolName"] == "posthog__capture_event"
 
 
 class TestCloudRepoConfig:

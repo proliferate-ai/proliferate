@@ -33,6 +33,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
+import { IntegrationToolMetadataProvider } from "./IntegrationToolMetadataProvider";
 import { TelemetryProvider } from "./TelemetryProvider";
 
 async function resolveWorkspaceConnectionWithCache(
@@ -65,9 +66,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={appQueryClient}>
       <CloudClientProvider client={cloudClient}>
-        <WorkspaceProviders>
-          <TelemetryProvider>{children}</TelemetryProvider>
-        </WorkspaceProviders>
+        <IntegrationToolMetadataProvider>
+          <WorkspaceProviders>
+            <TelemetryProvider>{children}</TelemetryProvider>
+          </WorkspaceProviders>
+        </IntegrationToolMetadataProvider>
       </CloudClientProvider>
     </QueryClientProvider>
   );

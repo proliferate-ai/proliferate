@@ -16,6 +16,7 @@ export * from "./client/config.js";
 export * from "./client/events.js";
 export * from "./client/github-app.js";
 export * from "./client/integration_policy.js";
+export * from "./client/integrations.js";
 export * from "./client/deep-links.js";
 export * from "./client/live.js";
 export * from "./client/managed-sandboxes.js";

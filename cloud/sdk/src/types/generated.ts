@@ -438,32 +438,153 @@ export interface LocalAutomationMutationResponse {
   run: LocalAutomationRunClaimResponse | null;
   accepted: boolean;
 }
-export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogResponse"];
-export type CloudMcpCatalogEntry = components["schemas"]["ConnectorCatalogEntryModel"];
-export type CloudPluginPackage = components["schemas"]["PluginPackageModel"];
-export type CloudPluginPackageSkill = components["schemas"]["PluginPackageSkillModel"];
-export type CloudOrganizationIntegrationPolicyItem =
-  components["schemas"]["CloudOrganizationIntegrationPolicyItem"];
-export type CloudOrganizationIntegrationPolicyResponse =
-  components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
-export type PatchCloudOrganizationIntegrationPolicyRequest =
-  components["schemas"]["PatchCloudOrganizationIntegrationPolicyRequest"];
-export type CloudMcpConnection = components["schemas"]["CloudMcpConnectionResponse"];
-export type CloudMcpConnectionsResponse = components["schemas"]["CloudMcpConnectionsResponse"];
-export type CreateCloudMcpConnectionRequest =
-  components["schemas"]["CreateCloudMcpConnectionRequest"];
-export type PatchCloudMcpConnectionRequest =
-  components["schemas"]["PatchCloudMcpConnectionRequest"];
-export type PublicizeCloudMcpConnectionRequest =
-  components["schemas"]["PublicizeCloudMcpConnectionRequest"];
-export type PutCloudMcpSecretAuthRequest =
-  components["schemas"]["PutCloudMcpSecretAuthRequest"];
+export interface CloudMcpCatalogField {
+  id: string;
+  label: string;
+  placeholder: string;
+  helperText: string;
+  getTokenInstructions: string;
+  prefixHint?: string | null;
+}
+export interface CloudMcpCatalogSettingOption {
+  value: string;
+  label: string;
+}
+export interface CloudMcpCatalogSettingField {
+  id: string;
+  kind: "string" | "boolean" | "select" | "url";
+  label: string;
+  placeholder?: string | null;
+  helperText?: string | null;
+  required: boolean;
+  defaultValue?: string | boolean | null;
+  options?: CloudMcpCatalogSettingOption[];
+  affectsUrl: boolean;
+}
+export interface CloudMcpCatalogEntry {
+  id: string;
+  version: number;
+  name: string;
+  oneLiner: string;
+  description: string;
+  docsUrl: string;
+  availability: "universal" | "local_only" | "cloud_only";
+  cloudSecretSync: boolean;
+  setupKind?: "none" | "local_oauth" | null;
+  transport: "http" | "stdio";
+  authKind: "secret" | "oauth" | "none";
+  oauthClientMode?: "dcr" | "static" | null;
+  authStyle?:
+    | { kind: "bearer" }
+    | { kind: "header"; headerName?: string | null }
+    | { kind: "query"; parameterName?: string | null }
+    | null;
+  authFieldId?: string | null;
+  url: string;
+  displayUrl?: string | null;
+  command?: string | null;
+  args: Array<{
+    source:
+      | { kind: "workspace_path" }
+      | { kind: "secret"; fieldId: string }
+      | { kind: "setting"; fieldId: string }
+      | { kind: "static"; value: string };
+  }>;
+  env: Array<{
+    name: string;
+    source:
+      | { kind: "secret"; fieldId: string }
+      | { kind: "setting"; fieldId: string }
+      | { kind: "static"; value: string };
+  }>;
+  serverNameBase: string;
+  iconId: string;
+  secretFields: CloudMcpCatalogField[];
+  requiredFields: CloudMcpCatalogField[];
+  settingsSchema: CloudMcpCatalogSettingField[];
+  capabilities: string[];
+}
+export interface CloudPluginPackageSkill {
+  id: string;
+  displayName: string;
+  description: string;
+  instructions: string;
+  defaultEnabled: boolean;
+  requiresCredentialBinding: boolean;
+}
+export interface CloudPluginPackage {
+  id: string;
+  catalogEntryId: string;
+  version: string;
+  displayName: string;
+  description: string;
+  skills: CloudPluginPackageSkill[];
+}
+export interface CloudMcpCatalogResponse {
+  catalogVersion: string;
+  entries: CloudMcpCatalogEntry[];
+  pluginPackages: CloudPluginPackage[];
+}
+export interface CloudOrganizationIntegrationPolicyItem {
+  catalogEntryId: string;
+  enabled: boolean;
+  updatedAt: string | null;
+  updatedByUserId: string | null;
+}
+export interface CloudOrganizationIntegrationPolicyResponse {
+  organizationId: string;
+  entries: CloudOrganizationIntegrationPolicyItem[];
+}
+export interface PatchCloudOrganizationIntegrationPolicyRequest {
+  catalogEntryId: string;
+  enabled: boolean;
+}
+export interface CloudMcpConnection {
+  connectionId: string;
+  ownerScope: string;
+  ownerUserId?: string | null;
+  organizationId?: string | null;
+  catalogEntryId: string;
+  catalogEntryVersion: number;
+  serverName: string;
+  enabled: boolean;
+  publicToOrg: boolean;
+  publicOrganizationId?: string | null;
+  publicStatus: "private" | "public" | "pending" | "error";
+  publicUpdatedAt?: string | null;
+  publicUpdatedByUserId?: string | null;
+  authKind: "secret" | "oauth" | "none";
+  authStatus: "ready" | "needs_reconnect" | "error";
+  settings: Record<string, unknown>;
+  configVersion: number;
+  authVersion: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CloudMcpConnectionsResponse {
+  connections: CloudMcpConnection[];
+}
+export interface CreateCloudMcpConnectionRequest {
+  catalogEntryId: string;
+  enabled?: boolean;
+  settings?: Record<string, unknown>;
+}
+export interface PatchCloudMcpConnectionRequest {
+  enabled?: boolean | null;
+  settings?: Record<string, unknown> | null;
+}
+export interface PublicizeCloudMcpConnectionRequest {
+  organizationId: string;
+}
+export interface PutCloudMcpSecretAuthRequest {
+  secretFields: Record<string, string>;
+}
 export type CloudMcpOAuthFlowStatusResponse =
-  components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
+  components["schemas"]["IntegrationOAuthFlowStatusResponse"];
 export type StartCloudMcpOAuthFlowRequest =
-  components["schemas"]["StartCloudMcpOAuthFlowRequest"];
+  components["schemas"]["StartIntegrationOAuthFlowRequest"];
 export type StartCloudMcpOAuthFlowResponse =
-  components["schemas"]["StartCloudMcpOAuthFlowResponse"];
+  components["schemas"]["StartIntegrationOAuthFlowResponse"];
 export type CloudPluginConfiguredItem =
   components["schemas"]["PluginConfiguredItemResponse"];
 export type CloudPluginConfiguredItemsResponse =

@@ -9,9 +9,9 @@ from proliferate.config import settings
 from proliferate.constants.cloud import CloudCommandActorKind, CloudCommandKind, CloudCommandSource
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store.cloud_mcp.connections import (
-    list_enabled_connections_for_organization_profile,
-    list_enabled_connections_for_personal_profile,
+from proliferate.db.store.cloud_integrations.accounts import (
+    list_ready_accounts_for_organization_profile,
+    list_ready_accounts_for_personal_profile,
 )
 from proliferate.db.store.cloud_plugins import (
     list_enabled_plugins_for_organization_profile,
@@ -51,7 +51,6 @@ from proliferate.server.cloud.runtime_config.domain.manifest import (
 )
 from proliferate.server.cloud.runtime_config.domain.resolver import resolve_runtime_config
 from proliferate.server.cloud.runtime_config.domain.types import (
-    McpConnectionSnapshot,
     PluginConfiguredItemSnapshot,
     ResolverInput,
     SandboxProfileResolverSnapshot,
@@ -250,8 +249,9 @@ async def compile_profile_runtime_config(
                 "Personal sandbox profile is missing owner_user_id.",
                 status_code=409,
             )
-        mcp_records = await list_enabled_connections_for_personal_profile(
-            db, profile.owner_user_id
+        integration_records = await list_ready_accounts_for_personal_profile(
+            db,
+            profile.owner_user_id,
         )
         skill_records = await list_enabled_skills_for_personal_profile(db, profile.owner_user_id)
         plugin_records = await list_enabled_plugins_for_personal_profile(db, profile.owner_user_id)
@@ -262,7 +262,7 @@ async def compile_profile_runtime_config(
                 "Organization sandbox profile is missing organization_id.",
                 status_code=409,
             )
-        mcp_records = await list_enabled_connections_for_organization_profile(
+        integration_records = await list_ready_accounts_for_organization_profile(
             db,
             profile.organization_id,
         )
@@ -281,7 +281,7 @@ async def compile_profile_runtime_config(
             owner_user_id=str(profile.owner_user_id) if profile.owner_user_id else None,
             organization_id=str(profile.organization_id) if profile.organization_id else None,
         ),
-        mcp_connections=tuple(_mcp_resolver_snapshot(record) for record in mcp_records),
+        mcp_connections=(),
         skill_configured_items=tuple(_skill_resolver_snapshot(record) for record in skill_records),
         plugin_configured_items=tuple(
             _plugin_resolver_snapshot(record) for record in plugin_records
@@ -294,6 +294,7 @@ async def compile_profile_runtime_config(
         plan,
         sandbox_profile_id=str(profile.id),
         direct_attach_auth=_direct_attach_auth_payload(),
+        integration_gateway_enabled=bool(integration_records),
     )
 
 
@@ -443,33 +444,6 @@ def _revision_expectation_from_apply_revision(
         "contentHash": content_hash,
         "externalScope": external_scope if isinstance(external_scope, dict) else None,
     }
-
-
-def _mcp_resolver_snapshot(record) -> McpConnectionSnapshot:  # noqa: ANN001
-    auth_kind = record.auth.auth_kind if record.auth else None
-    auth_status = record.auth.auth_status if record.auth else None
-    auth_version = record.auth.auth_version if record.auth else None
-    return McpConnectionSnapshot(
-        id=str(record.id),
-        owner_scope=record.owner_scope,
-        owner_user_id=str(record.owner_user_id) if record.owner_user_id else None,
-        organization_id=str(record.organization_id) if record.organization_id else None,
-        connection_id=record.connection_id,
-        catalog_entry_id=record.catalog_entry_id,
-        catalog_entry_version=record.catalog_entry_version,
-        server_name=record.server_name,
-        enabled=record.enabled,
-        public_to_org=record.public_to_org,
-        public_organization_id=(
-            str(record.public_organization_id) if record.public_organization_id else None
-        ),
-        public_status=record.public_status,
-        settings_json=record.settings_json,
-        config_version=record.config_version,
-        auth_kind=auth_kind,
-        auth_status=auth_status,
-        auth_version=auth_version,
-    )
 
 
 def _skill_resolver_snapshot(record) -> SkillConfiguredItemSnapshot:  # noqa: ANN001

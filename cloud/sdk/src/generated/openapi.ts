@@ -2027,33 +2027,33 @@ export interface paths {
         patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
         trace?: never;
     };
-    "/v1/cloud/organizations/{organization_id}/integration-policy": {
+    "/v1/cloud/integrations/definitions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Organization Integration Policy Endpoint */
-        get: operations["get_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_get"];
+        /** List Integration Definitions Endpoint */
+        get: operations["list_integration_definitions_endpoint_v1_cloud_integrations_definitions_get"];
         put?: never;
-        post?: never;
+        /** Create Integration Definition Endpoint */
+        post: operations["create_integration_definition_endpoint_v1_cloud_integrations_definitions_post"];
         delete?: never;
         options?: never;
         head?: never;
-        /** Patch Organization Integration Policy Endpoint */
-        patch: operations["patch_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_patch"];
+        patch?: never;
         trace?: never;
     };
-    "/v1/cloud/mcp/catalog": {
+    "/v1/cloud/integrations/definitions/{definition_id}/client-metadata": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Cloud Mcp Catalog Endpoint */
-        get: operations["get_cloud_mcp_catalog_endpoint_v1_cloud_mcp_catalog_get"];
+        /** Integration Client Metadata Document Endpoint */
+        get: operations["integration_client_metadata_document_endpoint_v1_cloud_integrations_definitions__definition_id__client_metadata_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2062,25 +2062,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/mcp/connections": {
+    "/v1/cloud/integrations/accounts": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Cloud Mcp Connections Endpoint */
-        get: operations["list_cloud_mcp_connections_endpoint_v1_cloud_mcp_connections_get"];
+        /** List Integration Accounts Endpoint */
+        get: operations["list_integration_accounts_endpoint_v1_cloud_integrations_accounts_get"];
         put?: never;
-        /** Create Cloud Mcp Connection Endpoint */
-        post: operations["create_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections_post"];
+        /** Create Integration Account Endpoint */
+        post: operations["create_integration_account_endpoint_v1_cloud_integrations_accounts_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/mcp/connections/{connection_id}": {
+    "/v1/cloud/integrations/accounts/{account_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2090,15 +2090,15 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Cloud Mcp Connection Endpoint */
-        delete: operations["delete_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete"];
+        /** Delete Integration Account Endpoint */
+        delete: operations["delete_integration_account_endpoint_v1_cloud_integrations_accounts__account_id__delete"];
         options?: never;
         head?: never;
-        /** Patch Cloud Mcp Connection Endpoint */
-        patch: operations["patch_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__patch"];
+        /** Patch Integration Account Endpoint */
+        patch: operations["patch_integration_account_endpoint_v1_cloud_integrations_accounts__account_id__patch"];
         trace?: never;
     };
-    "/v1/cloud/mcp/connections/{connection_id}/publicize": {
+    "/v1/cloud/integrations/accounts/{account_id}/oauth/start": {
         parameters: {
             query?: never;
             header?: never;
@@ -2107,74 +2107,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Publicize Cloud Mcp Connection Endpoint */
-        post: operations["publicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__publicize_post"];
+        /** Start Integration Oauth Flow Endpoint */
+        post: operations["start_integration_oauth_flow_endpoint_v1_cloud_integrations_accounts__account_id__oauth_start_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/mcp/connections/{connection_id}/unpublicize": {
+    "/v1/cloud/integrations/oauth/flows/{flow_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Unpublicize Cloud Mcp Connection Endpoint */
-        post: operations["unpublicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__unpublicize_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/mcp/connections/{connection_id}/auth/secret": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Put Cloud Mcp Connection Secret Auth Endpoint */
-        put: operations["put_cloud_mcp_connection_secret_auth_endpoint_v1_cloud_mcp_connections__connection_id__auth_secret_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/mcp/connections/{connection_id}/oauth/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start Cloud Mcp Oauth Flow Endpoint */
-        post: operations["start_cloud_mcp_oauth_flow_endpoint_v1_cloud_mcp_connections__connection_id__oauth_start_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/mcp/oauth/flows/{flow_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Cloud Mcp Oauth Flow Endpoint */
-        get: operations["get_cloud_mcp_oauth_flow_endpoint_v1_cloud_mcp_oauth_flows__flow_id__get"];
+        /** Get Integration Oauth Flow Endpoint */
+        get: operations["get_integration_oauth_flow_endpoint_v1_cloud_integrations_oauth_flows__flow_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2183,7 +2132,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/mcp/oauth/flows/{flow_id}/cancel": {
+    "/v1/cloud/integrations/oauth/flows/{flow_id}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -2192,25 +2141,76 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Cloud Mcp Oauth Flow Endpoint */
-        post: operations["cancel_cloud_mcp_oauth_flow_endpoint_v1_cloud_mcp_oauth_flows__flow_id__cancel_post"];
+        /** Cancel Integration Oauth Flow Endpoint */
+        post: operations["cancel_integration_oauth_flow_endpoint_v1_cloud_integrations_oauth_flows__flow_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/mcp/oauth/callback": {
+    "/v1/cloud/integrations/oauth/callback": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Cloud Mcp Oauth Callback Endpoint */
-        get: operations["cloud_mcp_oauth_callback_endpoint_v1_cloud_mcp_oauth_callback_get"];
+        /** Integration Oauth Callback Endpoint */
+        get: operations["integration_oauth_callback_endpoint_v1_cloud_integrations_oauth_callback_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Integration Availability Endpoint */
+        get: operations["integration_availability_endpoint_v1_cloud_integrations_availability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/tool-metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Integration Tool Metadata Endpoint */
+        get: operations["integration_tool_metadata_endpoint_v1_cloud_integrations_tool_metadata_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integration-gateway/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Integration Gateway Mcp Post */
+        post: operations["integration_gateway_mcp_post_v1_cloud_integration_gateway_mcp_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5449,103 +5449,6 @@ export interface components {
              */
             repoConfigState: "missing" | "disabled" | "configured";
         };
-        /** CloudMcpConnectionResponse */
-        CloudMcpConnectionResponse: {
-            /** Connectionid */
-            connectionId: string;
-            /** Ownerscope */
-            ownerScope: string;
-            /** Owneruserid */
-            ownerUserId?: string | null;
-            /** Organizationid */
-            organizationId?: string | null;
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Catalogentryversion */
-            catalogEntryVersion: number;
-            /** Servername */
-            serverName: string;
-            /** Enabled */
-            enabled: boolean;
-            /** Publictoorg */
-            publicToOrg: boolean;
-            /** Publicorganizationid */
-            publicOrganizationId?: string | null;
-            /** Publicstatus */
-            publicStatus: string;
-            /** Publicupdatedat */
-            publicUpdatedAt?: string | null;
-            /** Publicupdatedbyuserid */
-            publicUpdatedByUserId?: string | null;
-            /**
-             * Authkind
-             * @enum {string}
-             */
-            authKind: "secret" | "oauth" | "none";
-            /**
-             * Authstatus
-             * @enum {string}
-             */
-            authStatus: "ready" | "needs_reconnect" | "error";
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            };
-            /** Configversion */
-            configVersion: number;
-            /** Authversion */
-            authVersion?: number | null;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** CloudMcpConnectionsResponse */
-        CloudMcpConnectionsResponse: {
-            /** Connections */
-            connections: components["schemas"]["CloudMcpConnectionResponse"][];
-        };
-        /** CloudMcpOAuthFlowStatusResponse */
-        CloudMcpOAuthFlowStatusResponse: {
-            /**
-             * Flowid
-             * Format: uuid
-             */
-            flowId: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "active" | "exchanging" | "completed" | "expired" | "cancelled" | "failed";
-            /** Authorizationurl */
-            authorizationUrl?: string | null;
-            /** Expiresat */
-            expiresAt: string;
-            /** Failurecode */
-            failureCode?: string | null;
-            /** Callbacksurface */
-            callbackSurface: string;
-            /** Finalsurface */
-            finalSurface: string;
-        };
-        /** CloudOrganizationIntegrationPolicyItem */
-        CloudOrganizationIntegrationPolicyItem: {
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Enabled */
-            enabled: boolean;
-            /** Updatedat */
-            updatedAt?: string | null;
-            /** Updatedbyuserid */
-            updatedByUserId?: string | null;
-        };
-        /** CloudOrganizationIntegrationPolicyResponse */
-        CloudOrganizationIntegrationPolicyResponse: {
-            /** Organizationid */
-            organizationId: string;
-            /** Entries */
-            entries: components["schemas"]["CloudOrganizationIntegrationPolicyItem"][];
-        };
         /** CloudPendingInteractionResponse */
         CloudPendingInteractionResponse: {
             /** Requestid */
@@ -6133,184 +6036,6 @@ export interface components {
              */
             source: "persisted" | "default";
         };
-        /** ConnectorArgTemplateModel */
-        ConnectorArgTemplateModel: {
-            /** Source */
-            source: components["schemas"]["ConnectorStaticTemplateSourceModel"] | components["schemas"]["ConnectorWorkspacePathTemplateSourceModel"] | components["schemas"]["ConnectorFieldTemplateSourceModel"];
-        };
-        /** ConnectorCatalogEntryModel */
-        ConnectorCatalogEntryModel: {
-            /** Id */
-            id: string;
-            /** Version */
-            version: number;
-            /** Name */
-            name: string;
-            /** Oneliner */
-            oneLiner: string;
-            /** Description */
-            description: string;
-            /** Docsurl */
-            docsUrl: string;
-            /**
-             * Availability
-             * @enum {string}
-             */
-            availability: "universal" | "local_only" | "cloud_only";
-            /** Cloudsecretsync */
-            cloudSecretSync: boolean;
-            /**
-             * Setupkind
-             * @default none
-             * @enum {string}
-             */
-            setupKind: "none" | "local_oauth";
-            /**
-             * Transport
-             * @enum {string}
-             */
-            transport: "http" | "stdio";
-            /**
-             * Authkind
-             * @enum {string}
-             */
-            authKind: "secret" | "oauth" | "none";
-            /** Oauthclientmode */
-            oauthClientMode?: ("dcr" | "static") | null;
-            authStyle?: components["schemas"]["ConnectorHttpAuthStyleModel"] | null;
-            /** Authfieldid */
-            authFieldId?: string | null;
-            /** Url */
-            url: string;
-            /** Displayurl */
-            displayUrl: string;
-            /** Command */
-            command?: string | null;
-            /** Args */
-            args?: components["schemas"]["ConnectorArgTemplateModel"][];
-            /** Env */
-            env?: components["schemas"]["ConnectorEnvTemplateModel"][];
-            /** Servernamebase */
-            serverNameBase: string;
-            /** Iconid */
-            iconId: string;
-            /** Secretfields */
-            secretFields: components["schemas"]["ConnectorCatalogFieldModel"][];
-            /** Requiredfields */
-            requiredFields: components["schemas"]["ConnectorCatalogFieldModel"][];
-            /** Settingsschema */
-            settingsSchema?: components["schemas"]["ConnectorSettingsFieldModel"][];
-            /** Capabilities */
-            capabilities: string[];
-        };
-        /** ConnectorCatalogFieldModel */
-        ConnectorCatalogFieldModel: {
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
-            /** Placeholder */
-            placeholder: string;
-            /** Helpertext */
-            helperText: string;
-            /** Gettokeninstructions */
-            getTokenInstructions: string;
-            /** Prefixhint */
-            prefixHint?: string | null;
-        };
-        /** ConnectorCatalogResponse */
-        ConnectorCatalogResponse: {
-            /** Catalogversion */
-            catalogVersion: string;
-            /** Entries */
-            entries: components["schemas"]["ConnectorCatalogEntryModel"][];
-            /** Pluginpackages */
-            pluginPackages?: components["schemas"]["PluginPackageModel"][];
-        };
-        /** ConnectorEnvTemplateModel */
-        ConnectorEnvTemplateModel: {
-            /** Name */
-            name: string;
-            /** Source */
-            source: components["schemas"]["ConnectorStaticTemplateSourceModel"] | components["schemas"]["ConnectorFieldTemplateSourceModel"];
-        };
-        /** ConnectorFieldTemplateSourceModel */
-        ConnectorFieldTemplateSourceModel: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "secret" | "setting";
-            /** Fieldid */
-            fieldId: string;
-        };
-        /** ConnectorHttpAuthStyleModel */
-        ConnectorHttpAuthStyleModel: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "bearer" | "header" | "query";
-            /** Headername */
-            headerName?: string | null;
-            /** Parametername */
-            parameterName?: string | null;
-        };
-        /** ConnectorSettingsFieldModel */
-        ConnectorSettingsFieldModel: {
-            /** Id */
-            id: string;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "string" | "boolean" | "select" | "url";
-            /** Label */
-            label: string;
-            /**
-             * Placeholder
-             * @default
-             */
-            placeholder: string;
-            /**
-             * Helpertext
-             * @default
-             */
-            helperText: string;
-            /** Required */
-            required: boolean;
-            /** Defaultvalue */
-            defaultValue?: string | boolean | null;
-            /** Options */
-            options?: components["schemas"]["ConnectorSettingsOptionModel"][];
-            /** Affectsurl */
-            affectsUrl: boolean;
-        };
-        /** ConnectorSettingsOptionModel */
-        ConnectorSettingsOptionModel: {
-            /** Value */
-            value: string;
-            /** Label */
-            label: string;
-        };
-        /** ConnectorStaticTemplateSourceModel */
-        ConnectorStaticTemplateSourceModel: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "static";
-            /** Value */
-            value: string;
-        };
-        /** ConnectorWorkspacePathTemplateSourceModel */
-        ConnectorWorkspacePathTemplateSourceModel: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "workspace_path";
-        };
         /** CreateAutomationRequest */
         CreateAutomationRequest: {
             /** Title */
@@ -6371,20 +6096,6 @@ export interface components {
             } | null;
             /** Source */
             source?: string | null;
-        };
-        /** CreateCloudMcpConnectionRequest */
-        CreateCloudMcpConnectionRequest: {
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Settings */
-            settings?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Enabled
-             * @default true
-             */
-            enabled: boolean;
         };
         /** CreateCloudWorkspaceRequest */
         CreateCloudWorkspaceRequest: {
@@ -6451,6 +6162,33 @@ export interface components {
             credential: components["schemas"]["AgentAuthCredentialResponse"];
             policy: components["schemas"]["AgentGatewayPolicyResponse"];
             providerCredential: components["schemas"]["AgentGatewayProviderCredentialResponse"];
+        };
+        /** CreateIntegrationAccountRequest */
+        CreateIntegrationAccountRequest: {
+            /** Definitionid */
+            definitionId: string;
+            /**
+             * Authkind
+             * @enum {string}
+             */
+            authKind: "oauth2" | "api_key" | "none";
+            /** Apikey */
+            apiKey?: string | null;
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** CreateIntegrationDefinitionRequest */
+        CreateIntegrationDefinitionRequest: {
+            /** Organizationid */
+            organizationId: string;
+            /** Displayname */
+            displayName: string;
+            /** Namespace */
+            namespace: string;
+            /** Mcpurl */
+            mcpUrl: string;
         };
         /** CreateSkillConfiguredItemRequest */
         CreateSkillConfiguredItemRequest: {
@@ -6760,6 +6498,204 @@ export interface components {
              * @default 0.1.0
              */
             version: string;
+        };
+        /** IntegrationAccountResponse */
+        IntegrationAccountResponse: {
+            /** Id */
+            id: string;
+            /** Definitionid */
+            definitionId: string;
+            /**
+             * Ownerscope
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Owneruserid */
+            ownerUserId?: string | null;
+            /** Organizationid */
+            organizationId?: string | null;
+            /**
+             * Authkind
+             * @enum {string}
+             */
+            authKind: "oauth2" | "api_key" | "none";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "setup_required" | "reauth_required" | "error" | "disabled";
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /** Authversion */
+            authVersion: number;
+            /** Tokenexpiresat */
+            tokenExpiresAt?: string | null;
+            /** Lasterrorcode */
+            lastErrorCode?: string | null;
+            /** Enabled */
+            enabled: boolean;
+            definition: components["schemas"]["IntegrationDefinitionResponse"];
+        };
+        /** IntegrationAuthModeModel */
+        IntegrationAuthModeModel: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "oauth2" | "api_key" | "none";
+            /** Clientstrategy */
+            clientStrategy?: ("dcr" | "client_metadata_document" | "static") | null;
+            /** Label */
+            label?: string | null;
+        };
+        /** IntegrationAvailabilityItem */
+        IntegrationAvailabilityItem: {
+            /** Definitionid */
+            definitionId: string;
+            /** Accountid */
+            accountId?: string | null;
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Iconid */
+            iconId?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "setup_required" | "reauth_required" | "refreshing" | "disabled" | "unavailable";
+            /** Authmodes */
+            authModes: ("oauth2" | "api_key" | "none")[];
+            /** Selectedauthkind */
+            selectedAuthKind?: ("oauth2" | "api_key" | "none") | null;
+            /** Toolcount */
+            toolCount?: number | null;
+            /** Reconnecturl */
+            reconnectUrl?: string | null;
+            /** Lasterrorcode */
+            lastErrorCode?: string | null;
+        };
+        /** IntegrationClientMetadataDocument */
+        IntegrationClientMetadataDocument: {
+            /** Client Name */
+            client_name: string;
+            /** Application Type */
+            application_type: string;
+            /** Redirect Uris */
+            redirect_uris: string[];
+            /** Grant Types */
+            grant_types: string[];
+            /** Response Types */
+            response_types: string[];
+            /** Token Endpoint Auth Method */
+            token_endpoint_auth_method: string;
+        };
+        /** IntegrationDefinitionResponse */
+        IntegrationDefinitionResponse: {
+            /** Id */
+            id: string;
+            /** Key */
+            key: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "seed" | "org_custom";
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Displayname */
+            displayName: string;
+            /** Namespace */
+            namespace: string;
+            /** Providergroup */
+            providerGroup?: string | null;
+            /**
+             * Transport
+             * @constant
+             */
+            transport: "http";
+            /**
+             * Implementation
+             * @enum {string}
+             */
+            implementation: "upstream_mcp" | "virtual_proliferate_mcp";
+            /** Enabledbydefault */
+            enabledByDefault: boolean;
+            /** Authmodes */
+            authModes: components["schemas"]["IntegrationAuthModeModel"][];
+            /** Settings */
+            settings: components["schemas"]["IntegrationSettingModel"][];
+            /** Flags */
+            flags: {
+                [key: string]: unknown;
+            };
+            /** Iconid */
+            iconId?: string | null;
+            /** Toolsurfacekind */
+            toolSurfaceKind: string;
+            /** Archivedat */
+            archivedAt?: string | null;
+        };
+        /** IntegrationOAuthFlowStatusResponse */
+        IntegrationOAuthFlowStatusResponse: {
+            /** Flowid */
+            flowId: string;
+            /** Status */
+            status: string;
+            /** Authorizationurl */
+            authorizationUrl?: string | null;
+            /** Failurecode */
+            failureCode?: string | null;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Callbacksurface */
+            callbackSurface: string;
+            /** Finalsurface */
+            finalSurface: string;
+        };
+        /** IntegrationSettingModel */
+        IntegrationSettingModel: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Default */
+            default: string;
+            /** Options */
+            options: components["schemas"]["IntegrationSettingOptionModel"][];
+        };
+        /** IntegrationSettingOptionModel */
+        IntegrationSettingOptionModel: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /** IntegrationToolMetadata */
+        IntegrationToolMetadata: {
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Iconid */
+            iconId?: string | null;
+            /** Tools */
+            tools: components["schemas"]["IntegrationToolMetadataTool"][];
+        };
+        /** IntegrationToolMetadataTool */
+        IntegrationToolMetadataTool: {
+            /** Gatewaytoolname */
+            gatewayToolName: string;
+            /** Upstreamtoolname */
+            upstreamToolName: string;
+            /** Displayname */
+            displayName: string;
         };
         /** LastSessionSummary */
         LastSessionSummary: {
@@ -7651,25 +7587,16 @@ export interface components {
             /** Newpassword */
             newPassword: string;
         };
-        /** PatchCloudMcpConnectionRequest */
-        PatchCloudMcpConnectionRequest: {
+        /** PatchIntegrationAccountRequest */
+        PatchIntegrationAccountRequest: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Apikey */
+            apiKey?: string | null;
             /** Settings */
             settings?: {
                 [key: string]: unknown;
             } | null;
-            /** Enabled */
-            enabled?: boolean | null;
-            /** Publictoorg */
-            publicToOrg?: boolean | null;
-            /** Publicorganizationid */
-            publicOrganizationId?: string | null;
-        };
-        /** PatchCloudOrganizationIntegrationPolicyRequest */
-        PatchCloudOrganizationIntegrationPolicyRequest: {
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Enabled */
-            enabled: boolean;
         };
         /** PatchPluginConfiguredItemRequest */
         PatchPluginConfiguredItemRequest: {
@@ -7750,101 +7677,6 @@ export interface components {
         PluginConfiguredItemsResponse: {
             /** Plugins */
             plugins: components["schemas"]["PluginConfiguredItemResponse"][];
-        };
-        /** PluginPackageModel */
-        PluginPackageModel: {
-            /** Id */
-            id: string;
-            /** Catalogentryid */
-            catalogEntryId: string;
-            /** Version */
-            version: string;
-            /** Displayname */
-            displayName: string;
-            /** Description */
-            description: string;
-            /** Skills */
-            skills?: components["schemas"]["PluginPackageSkillModel"][];
-        };
-        /** PluginPackageSkillModel */
-        PluginPackageSkillModel: {
-            /** Id */
-            id: string;
-            /** Displayname */
-            displayName: string;
-            /** Description */
-            description: string;
-            /** Instructions */
-            instructions: string;
-            /** Requiredmcpserverrefs */
-            requiredMcpServerRefs: string[];
-            /** Requirescredentialbinding */
-            requiresCredentialBinding: boolean;
-            /** Resources */
-            resources?: components["schemas"]["PluginSkillResourceModel"][];
-            /** Defaultenabled */
-            defaultEnabled: boolean;
-            provenance: components["schemas"]["PluginSkillProvenanceModel"];
-        };
-        /** PluginSkillProvenanceModel */
-        PluginSkillProvenanceModel: {
-            /** Sourcerepourl */
-            sourceRepoUrl: string;
-            /** Sourcepath */
-            sourcePath: string;
-            /** Sourceref */
-            sourceRef: string;
-            /** Sourcesha256 */
-            sourceSha256: string;
-            /** Adaptedsha256 */
-            adaptedSha256: string;
-            /** Sourcelicense */
-            sourceLicense: string;
-            /**
-             * Importmode
-             * @enum {string}
-             */
-            importMode: "adapted" | "vendored";
-            /**
-             * Reviewstatus
-             * @enum {string}
-             */
-            reviewStatus: "reviewed" | "pending";
-            /** Reviewer */
-            reviewer: string;
-            /** Reviewedat */
-            reviewedAt: string;
-            /**
-             * Notes
-             * @default
-             */
-            notes: string;
-        };
-        /** PluginSkillResourceModel */
-        PluginSkillResourceModel: {
-            /** Resourceid */
-            resourceId: string;
-            /** Displayname */
-            displayName?: string | null;
-            /** Contenttype */
-            contentType: string;
-            /** Content */
-            content: string;
-        };
-        /** PublicizeCloudMcpConnectionRequest */
-        PublicizeCloudMcpConnectionRequest: {
-            /**
-             * Organizationid
-             * Format: uuid
-             */
-            organizationId: string;
-        };
-        /** PutCloudMcpSecretAuthRequest */
-        PutCloudMcpSecretAuthRequest: {
-            /** Secretfields */
-            secretFields: {
-                [key: string]: string;
-            };
         };
         /** PutCloudRepoFileRequest */
         PutCloudRepoFileRequest: {
@@ -8501,30 +8333,29 @@ export interface components {
              */
             expiresAt: string;
         };
-        /** StartCloudMcpOAuthFlowRequest */
-        StartCloudMcpOAuthFlowRequest: {
+        /** StartIntegrationOAuthFlowRequest */
+        StartIntegrationOAuthFlowRequest: {
             /** Callbacksurface */
             callbackSurface?: ("desktop" | "web") | null;
             /** Finalsurface */
             finalSurface?: ("desktop" | "web") | null;
             /** Returnpath */
             returnPath?: string | null;
+            /** Clientstrategy */
+            clientStrategy?: ("dcr" | "client_metadata_document" | "static") | null;
         };
-        /** StartCloudMcpOAuthFlowResponse */
-        StartCloudMcpOAuthFlowResponse: {
-            /**
-             * Flowid
-             * Format: uuid
-             */
+        /** StartIntegrationOAuthFlowResponse */
+        StartIntegrationOAuthFlowResponse: {
+            /** Flowid */
             flowId: string;
+            /** Status */
+            status: string;
             /** Authorizationurl */
             authorizationUrl: string;
             /**
-             * Status
-             * @enum {string}
+             * Expiresat
+             * Format: date-time
              */
-            status: "active" | "exchanging" | "completed" | "expired" | "cancelled" | "failed";
-            /** Expiresat */
             expiresAt: string;
         };
         /** StartSsoAuthRequest */
@@ -14821,12 +14652,76 @@ export interface operations {
             };
         };
     };
-    get_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_get: {
+    list_integration_definitions_endpoint_v1_cloud_integrations_definitions_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationDefinitionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_integration_definition_endpoint_v1_cloud_integrations_definitions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIntegrationDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    integration_client_metadata_document_endpoint_v1_cloud_integrations_definitions__definition_id__client_metadata_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
+                definition_id: string;
             };
             cookie?: never;
         };
@@ -14838,7 +14733,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
+                    "application/json": components["schemas"]["IntegrationClientMetadataDocument"];
                 };
             };
             /** @description Validation Error */
@@ -14852,42 +14747,7 @@ export interface operations {
             };
         };
     };
-    patch_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatchCloudOrganizationIntegrationPolicyRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_cloud_mcp_catalog_endpoint_v1_cloud_mcp_catalog_get: {
+    list_integration_accounts_endpoint_v1_cloud_integrations_accounts_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -14902,32 +14762,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConnectorCatalogResponse"];
+                    "application/json": components["schemas"]["IntegrationAccountResponse"][];
                 };
             };
         };
     };
-    list_cloud_mcp_connections_endpoint_v1_cloud_mcp_connections_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionsResponse"];
-                };
-            };
-        };
-    };
-    create_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections_post: {
+    create_integration_account_endpoint_v1_cloud_integrations_accounts_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -14936,7 +14776,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateCloudMcpConnectionRequest"];
+                "application/json": components["schemas"]["CreateIntegrationAccountRequest"];
             };
         };
         responses: {
@@ -14946,7 +14786,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionResponse"];
+                    "application/json": components["schemas"]["IntegrationAccountResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14960,25 +14800,23 @@ export interface operations {
             };
         };
     };
-    delete_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete: {
+    delete_integration_account_endpoint_v1_cloud_integrations_accounts__account_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                connection_id: string;
+                account_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -14991,18 +14829,18 @@ export interface operations {
             };
         };
     };
-    patch_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__patch: {
+    patch_integration_account_endpoint_v1_cloud_integrations_accounts__account_id__patch: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                connection_id: string;
+                account_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PatchCloudMcpConnectionRequest"];
+                "application/json": components["schemas"]["PatchIntegrationAccountRequest"];
             };
         };
         responses: {
@@ -15012,7 +14850,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionResponse"];
+                    "application/json": components["schemas"]["IntegrationAccountResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15026,119 +14864,18 @@ export interface operations {
             };
         };
     };
-    publicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__publicize_post: {
+    start_integration_oauth_flow_endpoint_v1_cloud_integrations_accounts__account_id__oauth_start_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PublicizeCloudMcpConnectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    unpublicize_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__unpublicize_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    put_cloud_mcp_connection_secret_auth_endpoint_v1_cloud_mcp_connections__connection_id__auth_secret_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PutCloudMcpSecretAuthRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudMcpConnectionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_cloud_mcp_oauth_flow_endpoint_v1_cloud_mcp_connections__connection_id__oauth_start_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                connection_id: string;
+                account_id: string;
             };
             cookie?: never;
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["StartCloudMcpOAuthFlowRequest"] | null;
+                "application/json": components["schemas"]["StartIntegrationOAuthFlowRequest"] | null;
             };
         };
         responses: {
@@ -15148,7 +14885,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StartCloudMcpOAuthFlowResponse"];
+                    "application/json": components["schemas"]["StartIntegrationOAuthFlowResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15162,7 +14899,7 @@ export interface operations {
             };
         };
     };
-    get_cloud_mcp_oauth_flow_endpoint_v1_cloud_mcp_oauth_flows__flow_id__get: {
+    get_integration_oauth_flow_endpoint_v1_cloud_integrations_oauth_flows__flow_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -15179,7 +14916,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
+                    "application/json": components["schemas"]["IntegrationOAuthFlowStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15193,7 +14930,7 @@ export interface operations {
             };
         };
     };
-    cancel_cloud_mcp_oauth_flow_endpoint_v1_cloud_mcp_oauth_flows__flow_id__cancel_post: {
+    cancel_integration_oauth_flow_endpoint_v1_cloud_integrations_oauth_flows__flow_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -15210,7 +14947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
+                    "application/json": components["schemas"]["IntegrationOAuthFlowStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15224,7 +14961,7 @@ export interface operations {
             };
         };
     };
-    cloud_mcp_oauth_callback_endpoint_v1_cloud_mcp_oauth_callback_get: {
+    integration_oauth_callback_endpoint_v1_cloud_integrations_oauth_callback_get: {
         parameters: {
             query?: {
                 code?: string | null;
@@ -15260,6 +14997,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    integration_availability_endpoint_v1_cloud_integrations_availability_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationAvailabilityItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    integration_tool_metadata_endpoint_v1_cloud_integrations_tool_metadata_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationToolMetadata"][];
+                };
+            };
+        };
+    };
+    integration_gateway_mcp_post_v1_cloud_integration_gateway_mcp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

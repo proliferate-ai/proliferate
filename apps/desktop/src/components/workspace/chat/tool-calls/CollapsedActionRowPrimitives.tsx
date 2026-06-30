@@ -6,19 +6,29 @@ const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--te
 
 export function PlainActionRow({
   label,
+  icon,
   tone = "normal",
 }: {
   label: string;
+  icon?: ReactNode;
   tone?: "normal" | "failed";
 }) {
+  const textToneClass = tone === "failed" ? "text-destructive/80" : "text-muted-foreground/60";
+
   return (
     <div
       title={label}
-      className={`truncate text-chat leading-[var(--text-chat--line-height)] ${
-        tone === "failed" ? "text-destructive/80" : "text-muted-foreground/60"
-      }`}
+      className={`flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] ${textToneClass}`}
     >
-      {label}
+      {icon ? (
+        <span
+          aria-hidden="true"
+          className="flex size-3 shrink-0 items-center justify-center text-muted-foreground/50 [&_svg]:size-2.5"
+        >
+          {icon}
+        </span>
+      ) : null}
+      <span className="min-w-0 truncate">{label}</span>
     </div>
   );
 }
