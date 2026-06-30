@@ -3,66 +3,57 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from proliferate.constants.cloud import GitProvider, RepoEnvironmentKind
 from proliferate.db.models.base import Base, utcnow
+
+_GIT_PROVIDER_ENUM = Enum(
+    GitProvider,
+    name="git_provider",
+    native_enum=False,
+    values_callable=lambda values: [value.value for value in values],
+    validate_strings=True,
+)
+_REPO_ENVIRONMENT_KIND_ENUM = Enum(
+    RepoEnvironmentKind,
+    name="repo_environment_kind",
+    native_enum=False,
+    values_callable=lambda values: [value.value for value in values],
+    validate_strings=True,
+)
 
 
 class RepoConfig(Base):
     __tablename__ = "repo_config"
     __table_args__ = (
         CheckConstraint(
-            "owner_scope IN ('personal', 'organization')",
-            name="ck_repo_config_owner_scope",
-        ),
-        CheckConstraint(
-            "((owner_scope = 'personal' AND user_id IS NOT NULL "
-            "AND organization_id IS NULL) OR "
-            "(owner_scope = 'organization' AND organization_id IS NOT NULL "
-            "AND user_id IS NULL))",
-            name="ck_repo_config_owner_fields",
+            "git_provider IN ('github')",
+            name="ck_repo_config_git_provider",
         ),
         Index(
-            "ux_repo_config_personal_repo",
+            "ux_repo_config_user_repo",
             "user_id",
             "git_provider",
             "git_owner",
             "git_repo_name",
             unique=True,
-            postgresql_where=text("owner_scope = 'personal' AND deleted_at IS NULL"),
-        ),
-        Index(
-            "ux_repo_config_organization_repo",
-            "organization_id",
-            "git_provider",
-            "git_owner",
-            "git_repo_name",
-            unique=True,
-            postgresql_where=text("owner_scope = 'organization' AND deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    owner_scope: Mapped[str] = mapped_column(String(32), index=True)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
-        nullable=True,
     )
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("organization.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
+    git_provider: Mapped[GitProvider] = mapped_column(
+        _GIT_PROVIDER_ENUM,
+        default=GitProvider.github,
     )
-    git_provider: Mapped[str] = mapped_column(String(32), default="github")
     git_owner: Mapped[str] = mapped_column(String(255))
     git_repo_name: Mapped[str] = mapped_column(String(255))
-    legacy_cloud_repo_config_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="SET NULL"),
-        unique=True,
-        nullable=True,
-    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -106,21 +97,15 @@ class RepoEnvironment(Base):
         ForeignKey("repo_config.id", ondelete="CASCADE"),
         index=True,
     )
-    environment_kind: Mapped[str] = mapped_column(String(32), index=True)
+    environment_kind: Mapped[RepoEnvironmentKind] = mapped_column(
+        _REPO_ENVIRONMENT_KIND_ENUM,
+        index=True,
+    )
     desktop_install_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     local_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    configured: Mapped[bool] = mapped_column(default=False)
-    configured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     default_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     setup_script: Mapped[str] = mapped_column(Text, default="")
-    setup_script_version: Mapped[int] = mapped_column(default=0)
     run_command: Mapped[str] = mapped_column(Text, default="")
-    config_version: Mapped[int] = mapped_column(default=0)
-    legacy_cloud_repo_config_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="SET NULL"),
-        unique=True,
-        nullable=True,
-    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

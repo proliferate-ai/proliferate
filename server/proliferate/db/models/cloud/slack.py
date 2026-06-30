@@ -79,7 +79,7 @@ class SlackBotConfig(Base):
             name="ck_slack_bot_config_repo_mode",
         ),
         CheckConstraint(
-            "repo_mode != 'fixed' OR fixed_cloud_repo_config_id IS NOT NULL",
+            "repo_mode != 'fixed' OR fixed_repo_environment_id IS NOT NULL",
             name="ck_slack_bot_config_fixed_repo_present",
         ),
     )
@@ -99,11 +99,11 @@ class SlackBotConfig(Base):
         default="auto",
         server_default=text("'auto'"),
     )
-    fixed_cloud_repo_config_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="SET NULL"),
+    fixed_repo_environment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("repo_environment.id", ondelete="SET NULL"),
         nullable=True,
     )
-    allowed_cloud_repo_config_ids: Mapped[str | None] = mapped_column(Text)
+    allowed_repo_environment_ids: Mapped[str | None] = mapped_column(Text)
     default_agent_kind: Mapped[str | None] = mapped_column(String(32))
     default_agent_run_config_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cloud_agent_run_config.id", ondelete="SET NULL"),
@@ -149,18 +149,10 @@ class SlackThreadWork(Base):
         index=True,
     )
     cloud_session_id: Mapped[str | None] = mapped_column(String(255))
-    cloud_workspace_exposure_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_workspace_exposure.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    cloud_session_projection_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sessions.id", ondelete="SET NULL"),
-        nullable=True,
-    )
     root_message_ts: Mapped[str] = mapped_column(String(255), nullable=False)
     bot_ack_message_ts: Mapped[str | None] = mapped_column(String(255))
-    initial_repo_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="RESTRICT"),
+    initial_repo_environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("repo_environment.id", ondelete="RESTRICT"),
     )
     agent_run_config_snapshot_json: Mapped[dict[str, object] | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(
@@ -287,8 +279,8 @@ class CloudRepoRoutingProfile(Base):
     __tablename__ = "cloud_repo_routing_profile"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    cloud_repo_config_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="CASCADE"),
+    repo_environment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("repo_environment.id", ondelete="CASCADE"),
         unique=True,
         index=True,
     )
