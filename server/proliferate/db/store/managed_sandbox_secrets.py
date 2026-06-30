@@ -22,6 +22,7 @@ class ManagedSandboxSecretMaterializationValue:
     materialization_kind: str
     cloud_secret_set_id: UUID | None
     cloud_repo_config_id: UUID | None
+    repo_environment_id: UUID | None
     sandbox_generation: int
     applied_version: int
     applied_versions: dict[str, int]
@@ -66,6 +67,7 @@ def materialization_value(
         materialization_kind=row.materialization_kind,
         cloud_secret_set_id=row.cloud_secret_set_id,
         cloud_repo_config_id=row.cloud_repo_config_id,
+        repo_environment_id=row.repo_environment_id,
         sandbox_generation=row.sandbox_generation,
         applied_version=row.applied_version,
         applied_versions=_loads_versions(row.applied_versions_json),
@@ -98,13 +100,13 @@ async def load_workspace_secret_materialization(
     db: AsyncSession,
     *,
     managed_sandbox_id: UUID,
-    cloud_repo_config_id: UUID,
+    repo_environment_id: UUID,
     lock_row: bool = False,
 ) -> ManagedSandboxSecretMaterializationValue | None:
     stmt = select(ManagedSandboxSecretMaterialization).where(
         ManagedSandboxSecretMaterialization.managed_sandbox_id == managed_sandbox_id,
         ManagedSandboxSecretMaterialization.materialization_kind == "workspace",
-        ManagedSandboxSecretMaterialization.cloud_repo_config_id == cloud_repo_config_id,
+        ManagedSandboxSecretMaterialization.repo_environment_id == repo_environment_id,
     )
     if lock_row:
         stmt = stmt.with_for_update()
@@ -127,6 +129,7 @@ async def begin_global_secret_materialization(
                 materialization_kind="global",
                 cloud_secret_set_id=None,
                 cloud_repo_config_id=None,
+                repo_environment_id=None,
                 sandbox_generation=sandbox_generation,
                 applied_version=0,
                 applied_versions_json=None,
@@ -158,9 +161,10 @@ async def begin_workspace_secret_materialization(
     db: AsyncSession,
     *,
     managed_sandbox_id: UUID,
-    cloud_repo_config_id: UUID,
+    repo_environment_id: UUID,
     cloud_secret_set_id: UUID | None,
     sandbox_generation: int,
+    cloud_repo_config_id: UUID | None = None,
 ) -> ManagedSandboxSecretMaterializationValue:
     now = utcnow()
     row = (
@@ -171,6 +175,7 @@ async def begin_workspace_secret_materialization(
                 materialization_kind="workspace",
                 cloud_secret_set_id=cloud_secret_set_id,
                 cloud_repo_config_id=cloud_repo_config_id,
+                repo_environment_id=repo_environment_id,
                 sandbox_generation=sandbox_generation,
                 applied_version=0,
                 applied_versions_json=None,
@@ -184,12 +189,13 @@ async def begin_workspace_secret_materialization(
             .on_conflict_do_update(
                 index_elements=[
                     ManagedSandboxSecretMaterialization.managed_sandbox_id,
-                    ManagedSandboxSecretMaterialization.cloud_repo_config_id,
+                    ManagedSandboxSecretMaterialization.repo_environment_id,
                 ],
                 index_where=ManagedSandboxSecretMaterialization.materialization_kind
                 == "workspace",
                 set_={
                     "cloud_secret_set_id": cloud_secret_set_id,
+                    "cloud_repo_config_id": cloud_repo_config_id,
                     "sandbox_generation": sandbox_generation,
                     "status": "running",
                     "last_error": None,

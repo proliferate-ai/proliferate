@@ -5,40 +5,80 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudEnvironmentsSettingsSurface } from "./CloudEnvironmentsSettingsSurface";
 
 const cloudHooks = vi.hoisted(() => ({
-  useCloudRepoConfigs: vi.fn(),
+  useRepoConfigs: vi.fn(),
   useCloudRepoConfig: vi.fn(),
   useCloudRepoBranches: vi.fn(),
   useSaveCloudRepoConfig: vi.fn(),
   useCloudGitRepositories: vi.fn(),
   useValidateCloudRepoBranches: vi.fn(),
   useLoadCloudRepoConfig: vi.fn(),
+  useCloudSecrets: vi.fn(),
+  usePutCloudSecretEnvVar: vi.fn(),
+  useDeleteCloudSecretEnvVar: vi.fn(),
+  usePutCloudSecretFile: vi.fn(),
+  useDeleteCloudSecretFile: vi.fn(),
   saveMutateAsync: vi.fn(),
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudRepoConfigs: cloudHooks.useCloudRepoConfigs,
+  useRepoConfigs: cloudHooks.useRepoConfigs,
   useCloudRepoConfig: cloudHooks.useCloudRepoConfig,
   useCloudRepoBranches: cloudHooks.useCloudRepoBranches,
   useSaveCloudRepoConfig: cloudHooks.useSaveCloudRepoConfig,
   useCloudGitRepositories: cloudHooks.useCloudGitRepositories,
   useValidateCloudRepoBranches: cloudHooks.useValidateCloudRepoBranches,
   useLoadCloudRepoConfig: cloudHooks.useLoadCloudRepoConfig,
+  useCloudSecrets: cloudHooks.useCloudSecrets,
+  usePutCloudSecretEnvVar: cloudHooks.usePutCloudSecretEnvVar,
+  useDeleteCloudSecretEnvVar: cloudHooks.useDeleteCloudSecretEnvVar,
+  usePutCloudSecretFile: cloudHooks.usePutCloudSecretFile,
+  useDeleteCloudSecretFile: cloudHooks.useDeleteCloudSecretFile,
 }));
 
-const cloudConfigs = [
+const repoConfigs = [
   {
+    id: "repo-desktop-cloud",
+    ownerScope: "personal",
+    gitProvider: "github",
     gitOwner: "octo",
     gitRepoName: "desktop-cloud",
-    configured: true,
-    configuredAt: "2026-05-24T09:00:00.000Z",
-    filesVersion: 0,
+    environments: [{
+      id: "env-desktop-cloud",
+      repoConfigId: "repo-desktop-cloud",
+      kind: "cloud",
+      desktopInstallId: null,
+      localPath: null,
+      configured: true,
+      configuredAt: "2026-05-24T09:00:00.000Z",
+      defaultBranch: "main",
+      setupScript: "",
+      setupScriptVersion: 0,
+      runCommand: "",
+      configVersion: 1,
+      legacyCloudRepoConfigId: "repo-desktop-cloud",
+    }],
   },
   {
+    id: "repo-web-only",
+    ownerScope: "personal",
+    gitProvider: "github",
     gitOwner: "octo",
     gitRepoName: "web-only",
-    configured: false,
-    configuredAt: "2026-05-23T09:00:00.000Z",
-    filesVersion: 1,
+    environments: [{
+      id: "env-web-only",
+      repoConfigId: "repo-web-only",
+      kind: "cloud",
+      desktopInstallId: null,
+      localPath: null,
+      configured: false,
+      configuredAt: "2026-05-23T09:00:00.000Z",
+      defaultBranch: "main",
+      setupScript: "",
+      setupScriptVersion: 0,
+      runCommand: "",
+      configVersion: 1,
+      legacyCloudRepoConfigId: "repo-web-only",
+    }],
   },
 ];
 
@@ -58,8 +98,8 @@ function repoConfig(overrides: Record<string, unknown> = {}) {
 
 describe("CloudEnvironmentsSettingsSurface", () => {
   beforeEach(() => {
-    cloudHooks.useCloudRepoConfigs.mockReturnValue({
-      data: { configs: cloudConfigs },
+    cloudHooks.useRepoConfigs.mockReturnValue({
+      data: { repositories: repoConfigs },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
@@ -91,6 +131,41 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     });
     cloudHooks.useValidateCloudRepoBranches.mockReturnValue({ mutateAsync: vi.fn() });
     cloudHooks.useLoadCloudRepoConfig.mockReturnValue({ mutateAsync: vi.fn() });
+    cloudHooks.useCloudSecrets.mockReturnValue({
+      data: {
+        scopeKind: "workspace",
+        version: 0,
+        envVars: [],
+        files: [],
+        materialization: {
+          status: "pending",
+          lastError: null,
+          materializedAt: null,
+        },
+      },
+      isLoading: false,
+      error: null,
+    });
+    cloudHooks.usePutCloudSecretEnvVar.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
+    cloudHooks.useDeleteCloudSecretEnvVar.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
+    cloudHooks.usePutCloudSecretFile.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
+    cloudHooks.useDeleteCloudSecretFile.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+    });
   });
 
   afterEach(() => {
@@ -141,7 +216,7 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     expect(screen.queryByText("Cloud enabled")).not.toBeNull();
   });
 
-  it("saves cloud-only detail edits with the existing core request body", async () => {
+  it("saves cloud-only detail edits without legacy secret fields", async () => {
     render(
       <CloudEnvironmentsSettingsSurface
         mode="cloud-only"
@@ -165,7 +240,6 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       body: {
         configured: true,
         defaultBranch: "main",
-        envVars: { FEATURE_FLAG: "1" },
         setupScript: "npm ci",
         runCommand: "",
       },

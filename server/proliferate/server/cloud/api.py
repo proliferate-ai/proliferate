@@ -21,6 +21,7 @@ from proliferate.server.cloud.mcp_oauth.api import router as mcp_oauth_router
 from proliferate.server.cloud.mobility.api import router as mobility_router
 from proliferate.server.cloud.plugins.api import router as plugins_router
 from proliferate.server.cloud.repo_config.api import router as repo_config_router
+from proliferate.server.cloud.repositories.api import router as repositories_router
 from proliferate.server.cloud.repos.api import router as repos_router
 from proliferate.server.cloud.runtime_config.api import router as runtime_config_router
 from proliferate.server.cloud.runtime_config.api import (
@@ -45,6 +46,7 @@ from proliferate.server.cloud.worktree_policy.api import router as worktree_poli
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
 router.include_router(repos_router)
+router.include_router(repositories_router)
 router.include_router(repo_config_router)
 router.include_router(github_app_router)
 router.include_router(secrets_router)

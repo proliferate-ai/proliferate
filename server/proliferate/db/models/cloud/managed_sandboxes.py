@@ -121,9 +121,14 @@ class ManagedSandboxRepoMaterialization(Base):
         ForeignKey("cloud_repo_config.id", ondelete="CASCADE"),
         index=True,
     )
+    repo_environment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("repo_environment.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     sandbox_generation: Mapped[int] = mapped_column(Integer, default=0)
 
-    status: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(32))
     repo_path: Mapped[str] = mapped_column(Text)
     anyharness_repo_root_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_workspace_id: Mapped[str | None] = mapped_column(Text, nullable=True)

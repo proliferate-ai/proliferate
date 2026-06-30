@@ -43,7 +43,6 @@ async def ensure_fresh_github_app_authorization(
     authorization = await github_app_store.get_github_app_authorization_for_user(
         db,
         user_id=user_id,
-        lock_row=True,
     )
     if authorization is None:
         raise CloudApiError(
@@ -64,47 +63,10 @@ async def ensure_fresh_github_app_authorization(
             status_code=409,
         )
 
-    now = utcnow()
-    if (
-        authorization.token_expires_at is None
-        or authorization.access_token is None
-        or authorization.token_expires_at <= now + timedelta(minutes=10)
-    ):
-        if authorization.refresh_token is None:
-            await github_app_store.mark_github_app_authorization_needs_reauth(
-                db,
-                authorization.id,
-            )
-            raise CloudApiError(
-                "github_app_authorization_expired",
-                "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
-                status_code=409,
-            )
-        try:
-            refreshed = await refresh_github_app_user_authorization(
-                refresh_token=authorization.refresh_token,
-            )
-        except GitHubAppInvalidGrant as exc:
-            await github_app_store.mark_github_app_authorization_needs_reauth(
-                db,
-                authorization.id,
-            )
-            raise CloudApiError(
-                "github_app_authorization_expired",
-                "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
-                status_code=409,
-            ) from exc
-        except GitHubIntegrationError as exc:
-            raise CloudApiError(
-                "github_app_refresh_failed",
-                "Could not refresh GitHub App authorization.",
-                status_code=502,
-            ) from exc
-        authorization = await github_app_store.upsert_github_app_authorization(
-            db,
-            user_id=user_id,
-            authorization=refreshed,
-        )
+    if _github_app_authorization_is_current(authorization):
+        return authorization
+
+    authorization = await _refresh_github_app_authorization(db, user_id=user_id)
 
     if authorization.access_token is None:
         raise CloudApiError(
@@ -113,6 +75,83 @@ async def ensure_fresh_github_app_authorization(
             status_code=409,
         )
     return authorization
+
+
+def _github_app_authorization_is_current(
+    authorization: github_app_store.GitHubAppAuthorizationValue,
+) -> bool:
+    return bool(
+        authorization.access_token is not None
+        and authorization.token_expires_at is not None
+        and authorization.token_expires_at > utcnow() + timedelta(minutes=10)
+    )
+
+
+async def _refresh_github_app_authorization(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> github_app_store.GitHubAppAuthorizationValue:
+    authorization = await github_app_store.get_github_app_authorization_for_user(
+        db,
+        user_id=user_id,
+        lock_row=True,
+    )
+    if authorization is None:
+        raise CloudApiError(
+            "github_app_authorization_required",
+            "Connect the Proliferate GitHub App before using GitHub Cloud repos.",
+            status_code=409,
+        )
+    if authorization.status == "needs_reauth":
+        raise CloudApiError(
+            "github_app_authorization_expired",
+            "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
+            status_code=409,
+        )
+    if authorization.status != "ready":
+        raise CloudApiError(
+            "github_app_authorization_required",
+            "Connect the Proliferate GitHub App before using GitHub Cloud repos.",
+            status_code=409,
+        )
+    if _github_app_authorization_is_current(authorization):
+        return authorization
+    if authorization.refresh_token is None:
+        await github_app_store.mark_github_app_authorization_needs_reauth(
+            db,
+            authorization.id,
+        )
+        raise CloudApiError(
+            "github_app_authorization_expired",
+            "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
+            status_code=409,
+        )
+    try:
+        refreshed = await refresh_github_app_user_authorization(
+            refresh_token=authorization.refresh_token,
+        )
+    except GitHubAppInvalidGrant as exc:
+        await github_app_store.mark_github_app_authorization_needs_reauth(
+            db,
+            authorization.id,
+        )
+        raise CloudApiError(
+            "github_app_authorization_expired",
+            "Reconnect the Proliferate GitHub App before using GitHub Cloud repos.",
+            status_code=409,
+        ) from exc
+    except GitHubIntegrationError as exc:
+        raise CloudApiError(
+            "github_app_refresh_failed",
+            "Could not refresh GitHub App authorization.",
+            status_code=502,
+        ) from exc
+    return await github_app_store.upsert_github_app_authorization(
+        db,
+        user_id=user_id,
+        authorization=refreshed,
+    )
 
 
 async def require_github_cloud_repo_authority(

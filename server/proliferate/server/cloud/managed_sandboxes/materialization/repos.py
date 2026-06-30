@@ -21,6 +21,7 @@ from proliferate.db.store.managed_sandbox_repo_materializations import (
     mark_repo_materialization_ready,
 )
 from proliferate.db.store.managed_sandboxes import ManagedSandboxValue
+from proliferate.db.store.repositories import sync_cloud_environment_from_legacy_cloud_repo_config
 from proliferate.integrations.anyharness import (
     resolve_runtime_workspace,
     start_remote_workspace_setup,
@@ -73,7 +74,7 @@ async def _managed_materialization_paths(
 ) -> tuple[str, ...]:
     workspace_secret_paths = await workspace_secret_relative_paths(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=repo_config.id,
     )
     return tuple(
         sorted(
@@ -146,6 +147,11 @@ async def ensure_repo_materialized(
     run_setup: bool,
     target: MaterializationTarget | None = None,
 ) -> ManagedSandboxRepoMaterializationValue:
+    repo_environment = await sync_cloud_environment_from_legacy_cloud_repo_config(
+        db,
+        cloud_repo_config_id=repo_config.id,
+    )
+    repo_environment_id = repo_environment.id if repo_environment is not None else repo_config.id
     existing = await load_repo_materialization(
         db,
         managed_sandbox_id=sandbox.id,
@@ -164,6 +170,7 @@ async def ensure_repo_materialized(
         db,
         managed_sandbox_id=sandbox.id,
         cloud_repo_config_id=repo_config.id,
+        repo_environment_id=repo_environment_id,
         sandbox_generation=sandbox.runtime_generation,
         repo_path=repo_path(repo_config),
     )
@@ -198,6 +205,7 @@ async def ensure_repo_materialized(
             db,
             sandbox=sandbox,
             repo_config=repo_config,
+            repo_environment_id=repo_environment_id,
             repo_path=materialization.repo_path,
             target=target,
             base_env=repo_config.env_vars,

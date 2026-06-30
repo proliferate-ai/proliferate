@@ -21,6 +21,9 @@ from proliferate.db.store.cloud_repo_config import (
 )
 from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_routing_profile_store
 from proliferate.db.store.managed_sandboxes import load_personal_managed_sandbox
+from proliferate.db.store.repositories import (
+    sync_cloud_environment_from_legacy_cloud_repo_config,
+)
 from proliferate.server.billing.snapshots import (
     get_billing_snapshot,
     get_billing_snapshot_for_request,
@@ -226,6 +229,10 @@ async def save_repo_config(
         git_repo_name=git_repo_name,
         configured=value.configured,
     )
+    await sync_cloud_environment_from_legacy_cloud_repo_config(
+        db,
+        cloud_repo_config_id=value.id,
+    )
     return value
 
 
@@ -282,6 +289,10 @@ async def save_organization_repo_config(
             display_name=f"{value.git_owner}/{value.git_repo_name}",
             description=None,
         )
+    await sync_cloud_environment_from_legacy_cloud_repo_config(
+        db,
+        cloud_repo_config_id=value.id,
+    )
     return value
 
 
@@ -309,6 +320,10 @@ async def save_repo_file(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         configured=value.configured,
+    )
+    await sync_cloud_environment_from_legacy_cloud_repo_config(
+        db,
+        cloud_repo_config_id=value.id,
     )
     return value
 
@@ -367,6 +382,10 @@ async def bootstrap_repo_config(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         configured=value.configured,
+    )
+    await sync_cloud_environment_from_legacy_cloud_repo_config(
+        db,
+        cloud_repo_config_id=value.id,
     )
     return value
 

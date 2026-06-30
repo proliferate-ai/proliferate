@@ -24,6 +24,7 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspace_runtime import (
     attach_anyharness_workspace_id,
     attach_anyharness_workspace_id_to_managed_repo_workspaces,
+    mark_workspace_error_by_id,
 )
 from proliferate.db.store.managed_sandboxes import (
     ManagedSandboxValue,
@@ -35,11 +36,15 @@ from proliferate.db.store.managed_sandboxes import (
     record_managed_sandbox_provider_sandbox,
     update_managed_sandbox_status,
 )
+from proliferate.db.store.managed_sandbox_repo_materializations import load_repo_materialization
 from proliferate.integrations.anyharness import (
+    CloudRuntimeReconnectError,
     apply_agent_auth_config,
     create_remote_worktree_workspace,
     get_agent_auth_config_status,
     get_runtime_config_status,
+    list_runtime_workspaces,
+    resolve_runtime_workspace,
 )
 from proliferate.integrations.sandbox import (
     SandboxProvider,
@@ -131,6 +136,7 @@ class _ManagedWorkspaceRow(Protocol):
     git_base_branch: str | None
     origin: str
     status: str
+    runtime_generation: int
     anyharness_workspace_id: str | None
     worktree_path: str | None
 
@@ -809,6 +815,14 @@ async def ensure_managed_sandbox_workspace_record_runtime_connection(
             status_code=409,
         )
 
+    known_connection = await _known_workspace_runtime_connection_if_current(
+        db,
+        user=user,
+        workspace=workspace,
+    )
+    if known_connection is not None:
+        return known_connection
+
     repo_connection = await ensure_managed_sandbox_repo_runtime_connection(
         db,
         user,
@@ -832,6 +846,9 @@ async def ensure_managed_sandbox_workspace_record_runtime_connection(
 
     base_branch = workspace.git_base_branch.strip() if workspace.git_base_branch else None
     is_repo_root_workspace = base_branch is None or branch == base_branch
+    sandbox: ManagedSandboxValue | None = None
+    runtime_url: str | None = None
+    access_token: str | None = None
     if (
         workspace.anyharness_workspace_id
         and workspace.status == "ready"
@@ -840,11 +857,18 @@ async def ensure_managed_sandbox_workspace_record_runtime_connection(
             or workspace.anyharness_workspace_id != repo_connection.anyharness_workspace_id
         )
     ):
-        return ManagedSandboxWorkspaceRuntimeConnection(
-            anyharness_workspace_id=workspace.anyharness_workspace_id,
-            anyharness_repo_root_id=repo_connection.anyharness_repo_root_id,
-            runtime_generation=repo_connection.runtime_generation,
-        )
+        sandbox = await ensure_managed_sandbox_ready(db, user)
+        runtime_url, access_token, _data_key = await load_managed_sandbox_runtime_access(sandbox)
+        if await _runtime_workspace_exists(
+            runtime_url,
+            access_token,
+            workspace.anyharness_workspace_id,
+        ):
+            return ManagedSandboxWorkspaceRuntimeConnection(
+                anyharness_workspace_id=workspace.anyharness_workspace_id,
+                anyharness_repo_root_id=repo_connection.anyharness_repo_root_id,
+                runtime_generation=repo_connection.runtime_generation,
+            )
 
     if is_repo_root_workspace:
         await attach_anyharness_workspace_id(
@@ -859,19 +883,63 @@ async def ensure_managed_sandbox_workspace_record_runtime_connection(
             runtime_generation=repo_connection.runtime_generation,
         )
 
-    sandbox = await ensure_managed_sandbox_ready(db, user)
-    runtime_url, access_token, _data_key = await load_managed_sandbox_runtime_access(sandbox)
+    if sandbox is None:
+        sandbox = await ensure_managed_sandbox_ready(db, user)
+    if runtime_url is None or access_token is None:
+        runtime_url, access_token, _data_key = await load_managed_sandbox_runtime_access(sandbox)
     worktree_path = workspace.worktree_path or _managed_cloud_worktree_path(workspace)
-    materialized = await create_remote_worktree_workspace(
-        runtime_url,
-        access_token,
-        repo_root_id=repo_connection.anyharness_repo_root_id,
-        target_path=worktree_path,
-        new_branch_name=branch,
-        base_branch=base_branch,
-        origin=_workspace_origin_context(workspace),
-        creator_context={"kind": "human", "label": "Cloud workspace"},
-    )
+    if workspace.anyharness_workspace_id and workspace.worktree_path:
+        try:
+            resolved = await resolve_runtime_workspace(
+                runtime_url,
+                access_token,
+                runtime_workdir=worktree_path,
+            )
+        except CloudRuntimeReconnectError:
+            pass
+        else:
+            await attach_anyharness_workspace_id(
+                db,
+                workspace_id=workspace.id,
+                anyharness_workspace_id=resolved.workspace_id,
+                worktree_path=worktree_path,
+                runtime_generation=sandbox.runtime_generation,
+            )
+            return ManagedSandboxWorkspaceRuntimeConnection(
+                anyharness_workspace_id=resolved.workspace_id,
+                anyharness_repo_root_id=resolved.repo_root_id,
+                runtime_generation=sandbox.runtime_generation,
+            )
+
+    try:
+        materialized = await create_remote_worktree_workspace(
+            runtime_url,
+            access_token,
+            repo_root_id=repo_connection.anyharness_repo_root_id,
+            target_path=worktree_path,
+            new_branch_name=branch,
+            base_branch=base_branch,
+            origin=_workspace_origin_context(workspace),
+            creator_context={"kind": "human", "label": "Cloud workspace"},
+        )
+    except CloudRuntimeReconnectError as exc:
+        message = format_exception_message(exc) or (
+            "Managed cloud workspace materialization failed."
+        )
+        await mark_workspace_error_by_id(
+            db,
+            workspace.id,
+            message,
+            status_detail="Cloud workspace materialization failed",
+            clear_runtime_metadata=True,
+            clear_active_sandbox=False,
+        )
+        await commit_managed_sandbox_session(db)
+        raise CloudApiError(
+            "managed_cloud_workspace_materialization_failed",
+            message,
+            status_code=502,
+        ) from exc
     await attach_anyharness_workspace_id(
         db,
         workspace_id=workspace.id,
@@ -884,6 +952,57 @@ async def ensure_managed_sandbox_workspace_record_runtime_connection(
         anyharness_repo_root_id=materialized.repo_root_id,
         runtime_generation=sandbox.runtime_generation,
     )
+
+
+async def _known_workspace_runtime_connection_if_current(
+    db: AsyncSession,
+    *,
+    user: _UserWithId,
+    workspace: _ManagedWorkspaceRow,
+) -> ManagedSandboxWorkspaceRuntimeConnection | None:
+    if workspace.status != "ready" or not workspace.anyharness_workspace_id:
+        return None
+
+    sandbox = await load_personal_managed_sandbox(db, user.id)
+    if (
+        sandbox is None
+        or sandbox.status != "ready"
+        or not _runtime_access_ready(sandbox)
+        or workspace.runtime_generation != sandbox.runtime_generation
+    ):
+        return None
+
+    repo_config = await get_cloud_repo_config(
+        db,
+        user_id=user.id,
+        git_owner=workspace.git_owner,
+        git_repo_name=workspace.git_repo_name,
+    )
+    materialization = (
+        await load_repo_materialization(
+            db,
+            managed_sandbox_id=sandbox.id,
+            cloud_repo_config_id=repo_config.id,
+        )
+        if repo_config is not None
+        else None
+    )
+    return ManagedSandboxWorkspaceRuntimeConnection(
+        anyharness_workspace_id=workspace.anyharness_workspace_id,
+        anyharness_repo_root_id=(
+            materialization.anyharness_repo_root_id if materialization is not None else None
+        ),
+        runtime_generation=sandbox.runtime_generation,
+    )
+
+
+async def _runtime_workspace_exists(
+    runtime_url: str,
+    access_token: str,
+    anyharness_workspace_id: str,
+) -> bool:
+    workspaces = await list_runtime_workspaces(runtime_url, access_token)
+    return any(item.workspace_id == anyharness_workspace_id for item in workspaces)
 
 
 async def _materialize_synced_agent_auth_files(

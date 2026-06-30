@@ -18,6 +18,11 @@ from proliferate.db.store.managed_sandbox_secrets import (
 )
 from proliferate.db.store.managed_sandboxes import load_personal_managed_sandbox
 from proliferate.db.store.organization_records import MembershipRecord
+from proliferate.db.store.repositories import (
+    RepoEnvironmentValue,
+    get_cloud_repo_environment,
+    sync_cloud_environment_from_legacy_cloud_repo_config,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.managed_sandboxes.materialization.service import (
     schedule_global_secret_materialization_for_organization,
@@ -46,7 +51,7 @@ async def _load_workspace_materialization(
     db: AsyncSession,
     *,
     user_id: UUID,
-    cloud_repo_config_id: UUID,
+    repo_environment_id: UUID,
 ) -> ManagedSandboxSecretMaterializationValue | None:
     sandbox = await load_personal_managed_sandbox(db, user_id)
     if sandbox is None:
@@ -54,7 +59,7 @@ async def _load_workspace_materialization(
     return await load_workspace_secret_materialization(
         db,
         managed_sandbox_id=sandbox.id,
-        cloud_repo_config_id=cloud_repo_config_id,
+        repo_environment_id=repo_environment_id,
     )
 
 
@@ -63,8 +68,8 @@ def _secret_set_materialization_key(value: CloudSecretSetValue) -> str:
         return f"personal:{value.user_id}"
     if value.scope_kind == "organization" and value.organization_id is not None:
         return f"organization:{value.organization_id}"
-    if value.scope_kind == "workspace" and value.cloud_repo_config_id is not None:
-        return f"workspace:{value.cloud_repo_config_id}"
+    if value.scope_kind == "workspace" and value.repo_environment_id is not None:
+        return f"workspace:{value.repo_environment_id}"
     return f"{value.scope_kind}:{value.id}"
 
 
@@ -138,13 +143,13 @@ async def _require_organization_admin(
         )
 
 
-async def _load_workspace_repo_config(
+async def _load_workspace_repo_scope(
     db: AsyncSession,
     *,
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
-) -> CloudRepoConfigValue:
+) -> tuple[CloudRepoConfigValue, RepoEnvironmentValue]:
     repo_config = await get_cloud_repo_config(
         db,
         user_id=user_id,
@@ -157,7 +162,24 @@ async def _load_workspace_repo_config(
             "Configure this GitHub repo for cloud before managing workspace secrets.",
             status_code=404,
         )
-    return repo_config
+    environment = await get_cloud_repo_environment(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    if environment is None:
+        environment = await sync_cloud_environment_from_legacy_cloud_repo_config(
+            db,
+            cloud_repo_config_id=repo_config.id,
+        )
+    if environment is None or not environment.configured:
+        raise CloudApiError(
+            "cloud_repo_environment_not_configured",
+            "Configure this GitHub repo for cloud before managing workspace secrets.",
+            status_code=404,
+        )
+    return repo_config, environment
 
 
 async def get_personal_secrets(
@@ -384,7 +406,7 @@ async def get_workspace_secrets(
     git_owner: str,
     git_repo_name: str,
 ) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
-    repo_config = await _load_workspace_repo_config(
+    repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -392,13 +414,13 @@ async def get_workspace_secrets(
     )
     value = await secret_store.get_or_create_workspace_secret_set(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
         actor_user_id=user_id,
     )
     materialization = await _load_workspace_materialization(
         db,
         user_id=user_id,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
     )
     if _should_repair_stale_materialization(value, materialization):
         schedule_workspace_secret_materialization_for_repo(
@@ -419,7 +441,7 @@ async def set_workspace_secret_env_var(
     name: str,
     value: str,
 ) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
-    repo_config = await _load_workspace_repo_config(
+    repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -427,7 +449,7 @@ async def set_workspace_secret_env_var(
     )
     secret_set = await secret_store.get_or_create_workspace_secret_set(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
         actor_user_id=user_id,
     )
     updated = await secret_store.upsert_secret_env_var(
@@ -446,7 +468,7 @@ async def set_workspace_secret_env_var(
     return updated, await _load_workspace_materialization(
         db,
         user_id=user_id,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
     )
 
 
@@ -458,7 +480,7 @@ async def delete_workspace_secret_env_var(
     git_repo_name: str,
     name: str,
 ) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
-    repo_config = await _load_workspace_repo_config(
+    repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -466,7 +488,7 @@ async def delete_workspace_secret_env_var(
     )
     secret_set = await secret_store.get_or_create_workspace_secret_set(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
         actor_user_id=user_id,
     )
     updated = await secret_store.delete_secret_env_var(
@@ -484,7 +506,7 @@ async def delete_workspace_secret_env_var(
     return updated, await _load_workspace_materialization(
         db,
         user_id=user_id,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
     )
 
 
@@ -497,7 +519,7 @@ async def set_workspace_secret_file(
     path: str,
     content: str,
 ) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
-    repo_config = await _load_workspace_repo_config(
+    repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -505,7 +527,7 @@ async def set_workspace_secret_file(
     )
     secret_set = await secret_store.get_or_create_workspace_secret_set(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
         actor_user_id=user_id,
     )
     updated = await secret_store.upsert_secret_file(
@@ -524,7 +546,7 @@ async def set_workspace_secret_file(
     return updated, await _load_workspace_materialization(
         db,
         user_id=user_id,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
     )
 
 
@@ -536,7 +558,7 @@ async def delete_workspace_secret_file(
     git_repo_name: str,
     path: str,
 ) -> tuple[CloudSecretSetValue, ManagedSandboxSecretMaterializationValue | None]:
-    repo_config = await _load_workspace_repo_config(
+    repo_config, environment = await _load_workspace_repo_scope(
         db,
         user_id=user_id,
         git_owner=git_owner,
@@ -544,7 +566,7 @@ async def delete_workspace_secret_file(
     )
     secret_set = await secret_store.get_or_create_workspace_secret_set(
         db,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
         actor_user_id=user_id,
     )
     updated = await secret_store.delete_secret_file(
@@ -562,5 +584,5 @@ async def delete_workspace_secret_file(
     return updated, await _load_workspace_materialization(
         db,
         user_id=user_id,
-        cloud_repo_config_id=repo_config.id,
+        repo_environment_id=environment.id,
     )

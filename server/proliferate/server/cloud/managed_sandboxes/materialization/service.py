@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from pathlib import PurePosixPath
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -158,7 +159,13 @@ def schedule_workspace_secret_materialization_for_repo(
             fresh_db,
             sandbox=sandbox,
             repo_config=repo_config,
+            repo_environment_id=repo_config.id,
             repo_path=materialization.repo_path,
+            base_env=repo_config.env_vars,
+            base_files={
+                str(PurePosixPath(materialization.repo_path) / item.relative_path): item.content
+                for item in repo_config.tracked_files
+            },
         )
 
     async def _run() -> None:

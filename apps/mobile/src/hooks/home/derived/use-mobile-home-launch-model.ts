@@ -3,7 +3,7 @@ import {
   useCloudAgentCatalog,
   useCloudCapabilities,
   useCloudRepoBranches,
-  useCloudRepoConfigs,
+  useRepoConfigs,
   useCloudTargets,
   useAgentAuthCredentials,
   useTargetLive,
@@ -36,16 +36,32 @@ export function useMobileHomeLaunchModel() {
     modeId: null,
     controlValues: {},
   });
-  const repoConfigs = useCloudRepoConfigs();
+  const repoConfigs = useRepoConfigs();
   const targets = useCloudTargets();
   const agentAuthCredentials = useAgentAuthCredentials();
   const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
   const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
+  const configuredCloudRepos = useMemo(
+    () => (repoConfigs.data?.repositories ?? []).flatMap((repo) => {
+      const cloudEnvironment = repo.environments.find((environment) =>
+        environment.kind === "cloud"
+      );
+      if (!cloudEnvironment) {
+        return [];
+      }
+      return [{
+        gitOwner: repo.gitOwner,
+        gitRepoName: repo.gitRepoName,
+        configured: cloudEnvironment.configured,
+      }];
+    }),
+    [repoConfigs.data?.repositories],
+  );
   const repoOptions = useMemo(
-    () => buildMobileRepoOptions(repoConfigs.data?.configs ?? []),
-    [repoConfigs.data?.configs],
+    () => buildMobileRepoOptions(configuredCloudRepos),
+    [configuredCloudRepos],
   );
   const liveTargets = useMemo(() => {
     const liveTarget = targetLive.snapshot?.target;

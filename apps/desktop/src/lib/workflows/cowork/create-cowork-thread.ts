@@ -57,7 +57,11 @@ export interface CreateCoworkThreadWorkflowDeps {
     launchControlValues?: Record<string, string>;
   }): Promise<Session>;
   upsertLocalWorkspace(workspace: CreateCoworkThreadResponse["workspace"]): void;
-  upsertWorkspaceSessionRecord(workspaceId: string, session: Session): void;
+  upsertWorkspaceSessionRecord(
+    workspaceId: string,
+    session: Session,
+    options?: { runtimeUrl?: string },
+  ): void;
   recordCreatedSession(input: {
     projectedSessionId: string | null;
     launchedSession: Session;
@@ -190,7 +194,9 @@ export async function createCoworkThreadWorkflow(
     }
 
     deps.upsertLocalWorkspace(result.workspace);
-    deps.upsertWorkspaceSessionRecord(result.workspace.id, launchedSession);
+    deps.upsertWorkspaceSessionRecord(result.workspace.id, launchedSession, {
+      runtimeUrl: input.runtimeUrl,
+    });
     const activeSessionId = projectedSessionId ?? launchedSession.id;
     deps.recordCreatedSession({
       projectedSessionId,

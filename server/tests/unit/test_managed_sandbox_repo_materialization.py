@@ -91,6 +91,7 @@ def _materialization(
         id=uuid.uuid4(),
         managed_sandbox_id=uuid.uuid4(),
         cloud_repo_config_id=uuid.uuid4(),
+        repo_environment_id=uuid.uuid4(),
         sandbox_generation=sandbox_generation,
         repo_path="/home/user/workspace/repos/acme/rocket",
         status="ready",

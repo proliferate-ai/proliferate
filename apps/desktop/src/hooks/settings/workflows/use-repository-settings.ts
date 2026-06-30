@@ -3,6 +3,7 @@ import type { GitBranchRef } from "@anyharness/sdk";
 import {
   useRepoRootGitBranchesQuery,
 } from "@anyharness/sdk-react";
+import { useRepoConfigs, useSaveLocalRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import {
   buildLocalEnvironmentSavePatch,
   isLocalEnvironmentDraftDirty,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/domain/settings/environment-draft";
 import { resolveAutoDetectedBranch } from "@/lib/domain/settings/branch-selection";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 
 const EMPTY_BRANCHES: GitBranchRef[] = [];
@@ -23,6 +25,9 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     sourceRoot ? state.repoConfigs[sourceRoot] : undefined,
   );
   const setRepoConfig = useRepoPreferencesStore((state) => state.setRepoConfig);
+  const saveLocalEnvironment = useSaveLocalRepoEnvironment();
+  const repoConfigs = useRepoConfigs(Boolean(repository?.gitOwner && repository.gitRepoName));
+  const [desktopInstallId, setDesktopInstallId] = useState<string | null>(null);
   const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({
     repoRootId: repository?.repoRootId ?? null,
     enabled: !!repository,
@@ -40,9 +45,56 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     [branchRefs],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    void loadAnonymousTelemetryBootstrap()
+      .then(({ installId }) => {
+        if (!cancelled) {
+          setDesktopInstallId(installId);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDesktopInstallId(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const persistedCloudLocalDraft = useMemo(() => {
+    if (!repository?.gitOwner || !repository.gitRepoName || !sourceRoot || !desktopInstallId) {
+      return null;
+    }
+    const gitProvider = repository.gitProvider ?? "github";
+    const repo = repoConfigs.data?.repositories.find((item) =>
+      item.gitProvider === gitProvider
+      && item.gitOwner === repository.gitOwner
+      && item.gitRepoName === repository.gitRepoName,
+    );
+    const environment = repo?.environments.find((item) =>
+      item.kind === "local"
+      && item.desktopInstallId === desktopInstallId
+      && item.localPath === sourceRoot,
+    );
+    return environment
+      ? normalizeLocalEnvironmentDraft({
+          defaultBranch: environment.defaultBranch,
+          setupScript: environment.setupScript,
+          runCommand: environment.runCommand,
+        })
+      : null;
+  }, [
+    desktopInstallId,
+    repoConfigs.data?.repositories,
+    repository,
+    sourceRoot,
+  ]);
+
   const persistedDraft = useMemo(
-    () => normalizeLocalEnvironmentDraft(repoConfig),
-    [repoConfig],
+    () => normalizeLocalEnvironmentDraft(repoConfig ?? persistedCloudLocalDraft),
+    [persistedCloudLocalDraft, repoConfig],
   );
   const [state, setState] = useState<{
     sourceRoot: string | null;
@@ -90,12 +142,40 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     }
     const nextConfig = buildLocalEnvironmentSavePatch(state.draft);
     setRepoConfig(sourceRoot, nextConfig);
+    if (repository?.gitOwner && repository.gitRepoName) {
+      const { gitOwner, gitRepoName, gitProvider } = repository;
+      void (async () => {
+        const installId = desktopInstallId
+          ?? (await loadAnonymousTelemetryBootstrap()).installId;
+        await saveLocalEnvironment.mutateAsync({
+          gitOwner,
+          gitRepoName,
+          body: {
+            gitProvider: gitProvider ?? "github",
+            desktopInstallId: installId,
+            localPath: sourceRoot,
+            defaultBranch: nextConfig.defaultBranch,
+            setupScript: nextConfig.setupScript,
+            runCommand: nextConfig.runCommand,
+          },
+        });
+      })().catch(() => {
+        // Local preferences remain authoritative when Cloud is unavailable.
+      });
+    }
     setState((current) => ({
       ...current,
       baseline: nextConfig,
       draft: nextConfig,
     }));
-  }, [setRepoConfig, sourceRoot, state.draft]);
+  }, [
+    desktopInstallId,
+    repository,
+    saveLocalEnvironment,
+    setRepoConfig,
+    sourceRoot,
+    state.draft,
+  ]);
 
   const revert = useCallback(() => {
     setState((current) => ({

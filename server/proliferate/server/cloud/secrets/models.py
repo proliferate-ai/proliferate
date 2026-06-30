@@ -87,8 +87,8 @@ def _secret_set_materialization_key(value: CloudSecretSetValue) -> str:
         return f"personal:{value.user_id}"
     if value.scope_kind == "organization" and value.organization_id is not None:
         return f"organization:{value.organization_id}"
-    if value.scope_kind == "workspace" and value.cloud_repo_config_id is not None:
-        return f"workspace:{value.cloud_repo_config_id}"
+    if value.scope_kind == "workspace" and value.repo_environment_id is not None:
+        return f"workspace:{value.repo_environment_id}"
     return f"{value.scope_kind}:{value.id}"
 
 

@@ -110,7 +110,9 @@ export function useSessionRestoreActions() {
         targetSessionId: restored.id,
       });
 
-      upsertWorkspaceSessionRecord(workspaceId, restored);
+      upsertWorkspaceSessionRecord(workspaceId, restored, {
+        runtimeUrl: target.baseUrl,
+      });
       logLatency("session.restore.cache_upserted", {
         workspaceId,
         sessionId: restored.id,

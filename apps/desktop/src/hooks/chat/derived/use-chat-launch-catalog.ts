@@ -11,7 +11,10 @@ import type {
   ModelSelectorGroup,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
-import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
+import {
+  resolveAvailableLaunchSelection,
+  resolveEffectiveLaunchSelection,
+} from "@/lib/domain/chat/models/launch-selection-defaults";
 import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch/launch-intent";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
@@ -20,8 +23,8 @@ import {
 } from "@/lib/domain/agents/cloud-launch-catalog";
 import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
+import { useWorkspaceAgentLaunchOptionsQuery } from "@/hooks/access/anyharness/agents/use-workspace-agent-launch-options";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 
@@ -44,20 +47,22 @@ export function useChatLaunchCatalog({
   const query = useCloudAgentCatalog(true);
   const agentCatalog = useAgentCatalog();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const runtimeLaunchOptions = useAgentLaunchOptionsQuery({
+  const runtimeLaunchOptions = useWorkspaceAgentLaunchOptionsQuery({
     workspaceId: selectedWorkspaceId,
+    cloudConnectionInfo: selectedCloudRuntime.connectionInfo,
   });
   const hasCloudTargetReadiness = Boolean(selectedCloudRuntime.connectionInfo);
   const catalogData = query.data ?? null;
   const catalogLoading = query.isLoading
-    || (!hasCloudTargetReadiness && (agentCatalog.isLoading || runtimeLaunchOptions.isLoading));
+    || runtimeLaunchOptions.isLoading
+    || (!hasCloudTargetReadiness && agentCatalog.isLoading);
   const cloudCatalogError = query.error ?? null;
-  const targetReadinessError = hasCloudTargetReadiness
-    ? null
-    : agentCatalog.isError
-      ? agentCatalog.error
-      : runtimeLaunchOptions.isError
-        ? runtimeLaunchOptions.error
+  const targetReadinessError = runtimeLaunchOptions.isError
+    ? runtimeLaunchOptions.error
+    : hasCloudTargetReadiness
+      ? null
+      : agentCatalog.isError
+        ? agentCatalog.error
         : null;
   const launchCatalogError = cloudCatalogError ?? targetReadinessError;
 
@@ -65,12 +70,11 @@ export function useChatLaunchCatalog({
     () => orderLaunchAgents(
       mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
         catalogData?.agents ?? EMPTY_AGENTS,
-        selectedCloudRuntime.connectionInfo
-          ? null
-          : runtimeLaunchOptions.data?.agents ?? null,
+        runtimeLaunchOptions.data?.agents ?? null,
       ),
       agentCatalog.agentsByKind,
       selectedCloudRuntime.connectionInfo?.readyAgentKinds ?? null,
+      Boolean(selectedCloudRuntime.connectionInfo && runtimeLaunchOptions.data?.agents.length),
     ),
     [
       agentCatalog.agentsByKind,
@@ -105,7 +109,14 @@ export function useChatLaunchCatalog({
     [launchAgents, preferences],
   );
 
-  const selectedLaunchSelection = activeSelection ?? defaultLaunchSelection;
+  const selectedLaunchSelection = useMemo(
+    () => resolveAvailableLaunchSelection(
+      launchAgents,
+      activeSelection,
+      defaultLaunchSelection,
+    ),
+    [activeSelection, defaultLaunchSelection, launchAgents],
+  );
 
   const groups = useMemo<ModelSelectorGroup[]>(
     () => buildModelSelectorGroups(
@@ -145,8 +156,11 @@ function orderLaunchAgents(
   agents: readonly DesktopAgentLaunchAgent[],
   agentsByKind: ReadonlyMap<string, { readiness: string }>,
   cloudReadyAgentKinds: readonly string[] | null,
+  runtimeOptionsAreAuthoritative = false,
 ): DesktopAgentLaunchAgent[] {
-  const targetReadyAgents = cloudReadyAgentKinds
+  const targetReadyAgents = runtimeOptionsAreAuthoritative
+    ? agents.filter((agent) => agent.models.length > 0)
+    : cloudReadyAgentKinds
     ? filterCloudReadyLaunchAgents(agents, cloudReadyAgentKinds)
     : filterTargetReadyLaunchAgents(agents, agentsByKind);
 
