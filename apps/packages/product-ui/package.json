@@ -207,6 +207,10 @@
       "types": "./dist/settings/OrganizationSsoSettingsSurface.d.ts",
       "import": "./dist/settings/OrganizationSsoSettingsSurface.js"
     },
+    "./secrets/SecretManagementPanel": {
+      "types": "./dist/secrets/SecretManagementPanel.d.ts",
+      "import": "./dist/secrets/SecretManagementPanel.js"
+    },
     "./sidebar/ProductSidebar": {
       "types": "./dist/sidebar/ProductSidebar.d.ts",
       "import": "./dist/sidebar/ProductSidebar.js"

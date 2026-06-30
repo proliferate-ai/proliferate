@@ -20,7 +20,7 @@ pub async fn run_command(
     let args = &request.command[1..];
 
     let mut command = tokio::process::Command::new(program);
-    command.args(args).current_dir(&cwd);
+    command.args(args).current_dir(&cwd).envs(request.env);
     remove_runtime_private_env(&mut command);
 
     let result = tokio::time::timeout(Duration::from_millis(timeout_ms), command.output()).await;
@@ -99,7 +99,8 @@ fn truncate_output(output: &[u8], max_output_bytes: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_cwd;
+    use super::{resolve_cwd, run_command};
+    use crate::adapters::processes::types::RunProcessRequest;
     use std::path::PathBuf;
 
     fn make_temp_workspace() -> PathBuf {
@@ -133,6 +134,31 @@ mod tests {
                 .canonicalize()
                 .expect("canonical nested")
         );
+        let _ = std::fs::remove_dir_all(workspace);
+    }
+
+    #[tokio::test]
+    async fn applies_request_environment_to_command() {
+        let workspace = make_temp_workspace();
+
+        let result = run_command(
+            &workspace,
+            RunProcessRequest {
+                command: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "printf '%s' \"$PROCESS_ENV_TEST\"".to_string(),
+                ],
+                cwd: None,
+                env: vec![("PROCESS_ENV_TEST".to_string(), "from-env".to_string())],
+                timeout_ms: Some(5_000),
+                max_output_bytes: None,
+            },
+        )
+        .await
+        .expect("run command");
+
+        assert_eq!(result.stdout, "from-env");
         let _ = std::fs::remove_dir_all(workspace);
     }
 }

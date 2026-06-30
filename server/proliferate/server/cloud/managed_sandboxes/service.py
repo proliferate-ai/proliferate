@@ -67,9 +67,14 @@ from proliferate.server.cloud.managed_sandboxes.transactions import (
     commit_managed_sandbox_session,
 )
 from proliferate.server.cloud.runtime.bootstrap import (
+    build_detached_supervisor_launch_command,
     build_runtime_env,
-    build_runtime_launch_script,
+    build_supervisor_config,
     build_supervised_runtime_stop_command,
+    build_worker_config,
+    local_anyharness_base_url,
+    supervisor_config_path,
+    worker_config_path,
 )
 from proliferate.server.cloud.runtime.bundle import (
     check_runtime_bundle_preinstalled,
@@ -87,10 +92,10 @@ from proliferate.server.cloud.runtime.liveness.health import (
 from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
-    build_detached_runtime_launch_command,
     run_sandbox_command_logged,
-    runtime_launcher_path,
 )
+from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
+from proliferate.server.cloud.runtime.worker_base_url import cloud_worker_base_url
 from proliferate.server.cloud.runtime_config.service import (
     refresh_profile_runtime_config,
     runtime_config_apply_request_for_revision,
@@ -1295,6 +1300,104 @@ async def _reuse_ready_runtime_if_possible(
         return None
 
 
+async def _launch_supervised_managed_runtime(
+    provider: SandboxProvider,
+    provider_sandbox: object,
+    *,
+    sandbox: ManagedSandboxValue,
+    runtime_context: SandboxRuntimeContext,
+    runtime_profile: _ManagedSandboxRuntimeProfile,
+    runtime_env: dict[str, str],
+    runtime_token: str,
+) -> None:
+    owner_user_id = runtime_profile.profile.owner_user_id
+    if owner_user_id is None:
+        raise CloudApiError(
+            "managed_sandbox_owner_required",
+            "Managed sandbox runtime enrollment requires a personal sandbox owner.",
+            status_code=500,
+        )
+    enrollment = await ensure_runtime_target_enrollment(
+        user_id=owner_user_id,
+        sandbox_profile_id=runtime_profile.profile.id,
+        target_id=runtime_profile.target.id,
+    )
+    if enrollment is None:
+        raise CloudApiError(
+            "managed_sandbox_target_enrollment_failed",
+            "Managed sandbox worker enrollment could not be prepared.",
+            status_code=500,
+        )
+
+    config_path = worker_config_path(runtime_context)
+    supervisor_path = supervisor_config_path(runtime_context)
+    config_dirs = (
+        str(PurePosixPath(config_path).parent),
+        str(PurePosixPath(supervisor_path).parent),
+    )
+    assert_command_succeeded(
+        await run_sandbox_command_logged(
+            provider,
+            provider_sandbox,
+            workspace_id=sandbox.id,
+            label="managed_runtime_prepare_supervisor_configs",
+            command=(
+                "mkdir -p "
+                f"{shlex.quote(config_dirs[0])} {shlex.quote(config_dirs[1])} "
+                "&& chmod 700 "
+                f"{shlex.quote(config_dirs[0])} {shlex.quote(config_dirs[1])}"
+            ),
+            runtime_context=runtime_context,
+            timeout_seconds=30,
+            log_output_on_success=True,
+        ),
+        "Managed sandbox runtime config directory prepare failed",
+    )
+    await provider.write_file(
+        provider_sandbox,
+        config_path,
+        build_worker_config(
+            cloud_base_url=cloud_worker_base_url(),
+            enrollment_token=enrollment.enrollment_token,
+            anyharness_base_url=local_anyharness_base_url(provider),
+            anyharness_bearer_token=runtime_token,
+            runtime_context=runtime_context,
+        ),
+    )
+    await provider.write_file(
+        provider_sandbox,
+        supervisor_path,
+        build_supervisor_config(provider, runtime_context, runtime_env),
+    )
+    assert_command_succeeded(
+        await run_sandbox_command_logged(
+            provider,
+            provider_sandbox,
+            workspace_id=sandbox.id,
+            label="managed_runtime_chmod_supervisor_configs",
+            command=f"chmod 600 {shlex.quote(config_path)} {shlex.quote(supervisor_path)}",
+            runtime_context=runtime_context,
+            timeout_seconds=30,
+            log_output_on_success=True,
+        ),
+        "Managed sandbox runtime config chmod failed",
+    )
+    assert_command_succeeded(
+        await run_sandbox_command_logged(
+            provider,
+            provider_sandbox,
+            workspace_id=sandbox.id,
+            label="managed_runtime_launch_supervisor",
+            command=build_detached_supervisor_launch_command(runtime_context),
+            runtime_context=runtime_context,
+            cwd=runtime_context.runtime_workdir,
+            timeout_seconds=30,
+            log_output_on_success=True,
+        ),
+        "Managed sandbox supervised runtime launch failed",
+    )
+
+
 async def _create_or_launch_runtime(
     db: AsyncSession,
     provider: SandboxProvider,
@@ -1412,27 +1515,14 @@ async def _create_or_launch_runtime(
         ),
         "Managed sandbox runtime workdir prepare failed",
     )
-    await provider.write_file(
+    await _launch_supervised_managed_runtime(
+        provider,
         provider_sandbox,
-        runtime_launcher_path(runtime_context),
-        build_runtime_launch_script(provider, runtime_context, runtime_env),
-    )
-    assert_command_succeeded(
-        await run_sandbox_command_logged(
-            provider,
-            provider_sandbox,
-            workspace_id=sandbox.id,
-            label="managed_runtime_launch",
-            command=(
-                f"chmod 700 {runtime_launcher_path(runtime_context)} && "
-                f"{build_detached_runtime_launch_command(runtime_context)}"
-            ),
-            runtime_context=runtime_context,
-            cwd=runtime_context.runtime_workdir,
-            timeout_seconds=30,
-            log_output_on_success=True,
-        ),
-        "Managed sandbox runtime launch failed",
+        sandbox=sandbox,
+        runtime_context=runtime_context,
+        runtime_profile=runtime_profile,
+        runtime_env=runtime_env,
+        runtime_token=runtime_token,
     )
     await wait_for_runtime_health(
         endpoint.runtime_url,
@@ -1481,15 +1571,14 @@ async def _best_effort_reconcile_repos(
 ) -> None:
     if user_id is None:
         return
-    from proliferate.server.cloud.managed_sandboxes.repo_materialization import (
-        reconcile_configured_repos_for_sandbox,
+    from proliferate.server.cloud.managed_sandboxes.materialization.service import (
+        reconcile_after_sandbox_ready,
     )
 
     try:
-        await reconcile_configured_repos_for_sandbox(
+        await reconcile_after_sandbox_ready(
             db,
             sandbox=sandbox,
-            run_setup=False,
         )
         await commit_managed_sandbox_session(db)
     except Exception as exc:

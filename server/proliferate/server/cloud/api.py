@@ -27,6 +27,7 @@ from proliferate.server.cloud.runtime_config.api import (
     worker_router as runtime_config_worker_router,
 )
 from proliferate.server.cloud.sandbox_profiles.api import router as sandbox_profiles_router
+from proliferate.server.cloud.secrets.api import router as secrets_router
 from proliferate.server.cloud.skills.api import router as skills_router
 from proliferate.server.cloud.target_config.api import router as target_config_router
 from proliferate.server.cloud.target_config.api import worker_router as target_config_worker_router
@@ -46,6 +47,7 @@ router = APIRouter(prefix="/cloud", tags=["cloud"])
 router.include_router(repos_router)
 router.include_router(repo_config_router)
 router.include_router(github_app_router)
+router.include_router(secrets_router)
 router.include_router(managed_sandboxes_router)
 router.include_router(workspaces_router)
 router.include_router(worktree_policy_router)

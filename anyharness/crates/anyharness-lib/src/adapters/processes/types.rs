@@ -2,6 +2,7 @@
 pub struct RunProcessRequest {
     pub command: Vec<String>,
     pub cwd: Option<String>,
+    pub env: Vec<(String, String)>,
     pub timeout_ms: Option<u64>,
     pub max_output_bytes: Option<usize>,
 }

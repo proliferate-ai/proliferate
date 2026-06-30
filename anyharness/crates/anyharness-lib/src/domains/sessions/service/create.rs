@@ -14,7 +14,7 @@ use crate::domains::agents::model::{AgentDescriptor, ResolvedAgentStatus};
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-use crate::domains::workspaces::env::read_materialized_session_env;
+use crate::domains::workspaces::env::read_materialized_launch_env;
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::origin::OriginContext;
 
@@ -81,8 +81,9 @@ impl SessionService {
             "[workspace-latency] session.create.agent_descriptor_found"
         );
 
-        let workspace_env = read_materialized_session_env(Path::new(&workspace.path))
-            .map_err(CreateSessionError::Internal)?;
+        let workspace_env =
+            read_materialized_launch_env(&self.runtime_home, Path::new(&workspace.path))
+                .map_err(CreateSessionError::Internal)?;
         let agent_auth_overlay = self
             .agent_auth_service
             .launch_overlay(

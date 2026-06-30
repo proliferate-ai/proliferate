@@ -28,7 +28,7 @@ export interface CloudEnvironmentEditorProps {
   branchError?: string | null;
   setupScript: string;
   runCommand: string;
-  envVarRows: readonly CloudEnvironmentEnvVarRowView[];
+  envVarRows?: readonly CloudEnvironmentEnvVarRowView[];
   saving?: boolean;
   saveDisabled?: boolean;
   revertDisabled?: boolean;
@@ -36,15 +36,16 @@ export interface CloudEnvironmentEditorProps {
   error?: string | null;
   trackedFileCount?: number;
   trackedFilesReadOnly?: boolean;
+  secretsSlot?: ReactNode;
   onDefaultBranchChange: (value: string | null) => void;
   onSetupScriptChange: (value: string) => void;
   onRunCommandChange: (value: string) => void;
-  onAddEnvVar: () => void;
-  onUpdateEnvVar: (
+  onAddEnvVar?: () => void;
+  onUpdateEnvVar?: (
     rowId: string,
     patch: Partial<Pick<CloudEnvironmentEnvVarRowView, "key" | "value">>,
   ) => void;
-  onRemoveEnvVar: (rowId: string) => void;
+  onRemoveEnvVar?: (rowId: string) => void;
   onSave: () => void;
   onRevert: () => void;
   onDisable?: () => void;
@@ -63,7 +64,7 @@ export function CloudEnvironmentEditor({
   branchError = null,
   setupScript,
   runCommand,
-  envVarRows,
+  envVarRows = [],
   saving = false,
   saveDisabled = false,
   revertDisabled = false,
@@ -71,6 +72,7 @@ export function CloudEnvironmentEditor({
   error = null,
   trackedFileCount = 0,
   trackedFilesReadOnly = false,
+  secretsSlot = null,
   onDefaultBranchChange,
   onSetupScriptChange,
   onRunCommandChange,
@@ -173,7 +175,8 @@ export function CloudEnvironmentEditor({
         </SettingsCardRow>
       </SettingsCard>
 
-      <SettingsCard>
+      {secretsSlot ?? (
+        <SettingsCard>
         <SettingsCardRow
           label="Environment variables"
           description="Injected into new cloud workspaces for this environment."
@@ -191,21 +194,21 @@ export function CloudEnvironmentEditor({
                       value={row.key}
                       placeholder="API_BASE_URL"
                       onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                        onUpdateEnvVar(row.id, { key: event.currentTarget.value })}
+                        onUpdateEnvVar?.(row.id, { key: event.currentTarget.value })}
                     />
                     <Input
                       aria-label="Environment variable value"
                       value={row.value}
                       placeholder="https://example.internal"
                       onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                        onUpdateEnvVar(row.id, { value: event.currentTarget.value })}
+                        onUpdateEnvVar?.(row.id, { value: event.currentTarget.value })}
                     />
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
                       aria-label="Remove environment variable"
-                      onClick={() => onRemoveEnvVar(row.id)}
+                      onClick={() => onRemoveEnvVar?.(row.id)}
                     >
                       <Trash size={14} />
                     </Button>
@@ -226,7 +229,8 @@ export function CloudEnvironmentEditor({
             description={`${trackedFileCount} tracked file${trackedFileCount === 1 ? "" : "s"} ${trackedFileCount === 1 ? "is" : "are"} saved for this environment. Cloud-only edits preserve them; local file sync requires a local checkout.`}
           />
         ) : null}
-      </SettingsCard>
+        </SettingsCard>
+      )}
 
       <div className="flex justify-end gap-2">
         {onDisable ? (

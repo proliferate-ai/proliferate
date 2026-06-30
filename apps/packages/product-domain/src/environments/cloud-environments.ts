@@ -57,7 +57,6 @@ export interface CloudRepositoryAccessInput {
 export interface CoreCloudEnvironmentDraftInput {
   configured?: boolean;
   defaultBranch: string | null;
-  envVars: Record<string, string>;
   setupScript: string;
   runCommand: string;
 }
@@ -127,7 +126,6 @@ export function buildMinimalCloudEnvironmentConfigRequest(
   return {
     configured: true,
     defaultBranch,
-    envVars: {},
     setupScript: "",
     runCommand: "",
   };
@@ -140,7 +138,6 @@ export function buildReenableCloudEnvironmentConfigRequest(
   return {
     configured: true,
     defaultBranch: config.defaultBranch ?? defaultBranch,
-    envVars: config.envVars ?? {},
     setupScript: config.setupScript ?? "",
     runCommand: config.runCommand ?? "",
   };
@@ -153,7 +150,6 @@ export function buildCoreCloudEnvironmentSaveRequest(
     return {
       configured: false,
       defaultBranch: null,
-      envVars: {},
       setupScript: "",
       runCommand: "",
     };
@@ -162,7 +158,6 @@ export function buildCoreCloudEnvironmentSaveRequest(
   return {
     configured: true,
     defaultBranch: draft.defaultBranch,
-    envVars: normalizeEnvVars(draft.envVars),
     setupScript: draft.setupScript,
     runCommand: draft.runCommand,
   };
@@ -252,13 +247,4 @@ function cloudEnvironmentLocationRank(locationState: CloudEnvironmentLocationSta
     case "cloud_only":
       return 2;
   }
-}
-
-function normalizeEnvVars(envVars: Record<string, string>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(envVars)
-      .map(([key, value]) => [key.trim(), value] as const)
-      .filter(([key]) => key.length > 0)
-      .sort(([left], [right]) => left.localeCompare(right)),
-  );
 }

@@ -150,6 +150,22 @@ export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }
 
+export function cloudSecretsRootKey() {
+  return [...cloudRootKey(), "secrets"] as const;
+}
+
+export function personalCloudSecretsKey() {
+  return [...cloudSecretsRootKey(), "personal"] as const;
+}
+
+export function organizationCloudSecretsKey(organizationId: string | null) {
+  return [...cloudSecretsRootKey(), "organizations", organizationId] as const;
+}
+
+export function workspaceCloudSecretsKey(gitOwner: string, gitRepoName: string) {
+  return [...cloudSecretsRootKey(), "repos", gitOwner, gitRepoName] as const;
+}
+
 export function managedSandboxKey() {
   return [...cloudRootKey(), "managed-sandbox"] as const;
 }

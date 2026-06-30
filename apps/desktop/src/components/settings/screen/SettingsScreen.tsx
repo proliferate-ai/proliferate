@@ -18,7 +18,9 @@ import { OrganizationIntegrationsPane } from "@/components/settings/panes/Organi
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
+import { OrganizationSecretsPane } from "@/components/settings/panes/OrganizationSecretsPane";
 import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
+import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 // SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
 // import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
@@ -80,6 +82,21 @@ function renderSettingsSection(
   if (activeSection === "account") {
     return <AccountPane />;
   }
+  if (activeSection === "personal-secrets") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <PersonalSecretsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
   if (activeSection === "billing") {
     return <BillingPane />;
   }
@@ -88,6 +105,21 @@ function renderSettingsSection(
   }
   if (activeSection === "organization-members") {
     return <OrganizationMembersPane />;
+  }
+  if (activeSection === "organization-secrets") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <OrganizationSecretsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
   if (activeSection === "organization-integrations") {
     if (!cloudEnabled) {
@@ -256,8 +288,10 @@ export function SettingsScreen({
         disabledSections={{
           "agent-authentication": !cloudEnabled,
           "organization-integrations": !cloudEnabled,
+          "organization-secrets": !cloudEnabled,
           "organization-sso": !cloudEnabled,
           compute: !cloudEnabled,
+          "personal-secrets": !cloudEnabled,
           // SLACK BOT PARKED: section is not registered while the flow is disabled.
           // "slack-bot": !cloudEnabled,
         }}

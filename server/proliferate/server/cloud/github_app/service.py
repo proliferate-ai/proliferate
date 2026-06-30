@@ -26,6 +26,9 @@ from proliferate.server.cloud.github_app.models import (
     GitHubAppConnectResponse,
     GitHubAppStatusResponse,
 )
+from proliferate.server.cloud.managed_sandboxes.materialization.service import (
+    schedule_github_app_authorized_sandbox_bootstrap,
+)
 from proliferate.utils.time import utcnow
 
 _STATE_AUDIENCE = "github-app-connect"
@@ -189,7 +192,25 @@ async def complete_github_app_callback(
         authorization=authorization,
     )
     await refresh_github_app_installation_cache(db)
+    schedule_github_app_authorized_sandbox_bootstrap(db, user_id=user_id)
     return return_to or _redirect_after_callback()
+
+
+async def complete_github_app_installation_callback(
+    db: AsyncSession,
+    *,
+    installation_id: str | None,
+    setup_action: str | None,
+) -> str:
+    del setup_action
+    if installation_id is None or not installation_id.strip():
+        raise CloudApiError(
+            "github_app_installation_id_required",
+            "GitHub App installation callback is missing the installation id.",
+            status_code=400,
+        )
+    await refresh_github_app_installation_cache(db)
+    return _redirect_after_callback()
 
 
 async def refresh_github_app_installation_cache(db: AsyncSession) -> None:

@@ -41,12 +41,16 @@ pub async fn run_command(
                 "WORKSPACE_NOT_FOUND",
             )
         })?;
+    let env_vars = state
+        .workspace_runtime
+        .build_workspace_env(&ws, None)
+        .map_err(|e| ApiError::internal(e.to_string()))?;
 
     let result = state
         .process_service
         .run_command(
             std::path::Path::new(&ws.path),
-            run_command_request_to_internal(request),
+            run_command_request_to_internal(request, env_vars),
         )
         .await
         .map_err(map_process_error)?;
@@ -54,10 +58,14 @@ pub async fn run_command(
     Ok(Json(run_command_response_to_contract(result)))
 }
 
-fn run_command_request_to_internal(request: RunCommandRequest) -> RunProcessRequest {
+fn run_command_request_to_internal(
+    request: RunCommandRequest,
+    env: Vec<(String, String)>,
+) -> RunProcessRequest {
     RunProcessRequest {
         command: request.command,
         cwd: request.cwd,
+        env,
         timeout_ms: request.timeout_ms,
         max_output_bytes: request.max_output_bytes,
     }

@@ -8,6 +8,7 @@ import {
   CircleUser,
   CreditCard,
   FolderList,
+  KeyRound,
   Keyboard,
   LifeBuoy,
   Link2,
@@ -95,7 +96,9 @@ const SETTINGS_NAV_ICONS = {
   "organization-limits": SlidersHorizontal,
   "organization-members": UsersRound,
   "organization-model-policy": Brain,
+  "organization-secrets": KeyRound,
   "organization-sso": Link2,
+  "personal-secrets": KeyRound,
   support: LifeBuoy,
   worktrees: Tree,
 } satisfies Record<SettingsNavIconId, typeof Settings>;

@@ -310,7 +310,6 @@ describe("workspace UI state migration", () => {
         headerOrder: [
           "tool:scratch",
           "tool:git",
-          "tool:settings",
           "terminal:t1",
           "terminal:t2",
         ],
@@ -350,7 +349,6 @@ describe("workspace UI state migration", () => {
         "terminal:terminal-b",
         "terminal:terminal-a",
         "tool:scratch",
-        "tool:settings",
       ],
       browserTabsById: {},
     });
@@ -388,7 +386,6 @@ describe("workspace UI state migration", () => {
         "terminal:t1",
         "tool:git",
         "tool:scratch",
-        "tool:settings",
       ],
       browserTabsById: {},
     });

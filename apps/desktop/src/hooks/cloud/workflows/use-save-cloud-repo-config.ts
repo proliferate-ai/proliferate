@@ -14,8 +14,8 @@ import { emitRuntimeInputSyncEvent } from "../lifecycle/runtime-input-sync-event
 interface SaveCloudRepoConfigInput {
   configured?: boolean;
   defaultBranch: string | null;
-  envVars: Record<string, string>;
-  trackedFilePaths: string[];
+  envVars?: Record<string, string>;
+  trackedFilePaths?: string[];
   setupScript: string;
   runCommand: string;
 }
@@ -59,7 +59,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       configured = true,
       defaultBranch,
       envVars,
-      trackedFilePaths,
+      trackedFilePaths = [],
       setupScript,
       runCommand,
     }) => {
@@ -78,10 +78,10 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       return await saveCloudRepoConfig(repository.gitOwner, repository.gitRepoName, {
         configured,
         defaultBranch,
-        envVars,
+        ...(envVars ? { envVars } : {}),
         setupScript,
         runCommand,
-        files,
+        ...(files ? { files } : {}),
       });
     },
     onSuccess: async (response, variables) => {
@@ -92,11 +92,8 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       await invalidateCloudRepoConfigs(repository);
 
       trackProductEvent("cloud_repo_config_saved", {
-        env_var_count: Object.keys(variables.envVars).length,
-        tracked_file_count: response.trackedFiles.length,
-        ...(variables.trackedFilePaths.length > 0
-          ? { tracked_file_source: repository.localWorkspaceId ? "workspace" : "repo_root" }
-          : {}),
+        env_var_count: variables.envVars ? Object.keys(variables.envVars).length : 0,
+        tracked_file_count: variables.trackedFilePaths?.length ?? 0,
         has_setup_script: response.setupScript.trim().length > 0,
         has_run_command: response.runCommand.trim().length > 0,
       });
@@ -122,8 +119,8 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
           domain: "cloud_repo_config",
         },
         extras: {
-          envVarCount: Object.keys(variables.envVars).length,
-          trackedFileCount: variables.trackedFilePaths.length,
+          envVarCount: variables.envVars ? Object.keys(variables.envVars).length : 0,
+          trackedFileCount: variables.trackedFilePaths?.length ?? 0,
           hasSetupScript: variables.setupScript.trim().length > 0,
           hasRunCommand: variables.runCommand.trim().length > 0,
         },
