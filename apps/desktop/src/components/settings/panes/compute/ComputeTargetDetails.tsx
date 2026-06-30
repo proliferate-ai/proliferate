@@ -285,12 +285,12 @@ export function ComputeTargetDetails({
         />
 
         {reconnect.phaseState && (
-          <div className="rounded-md border border-border/60 bg-foreground/5 p-3 text-xs text-muted-foreground">
+          <div className="rounded-md border border-border/60 bg-foreground/5 p-3 text-sm text-muted-foreground">
             <span className="font-medium text-foreground">{reconnect.phaseState.label}</span>
           </div>
         )}
 
-        {feedback && <p className="text-xs text-muted-foreground">{feedback}</p>}
+        {feedback && <p className="text-sm text-muted-foreground">{feedback}</p>}
 
         {reconnect.phaseState?.phase === "failed" && reconnect.enrollment && !reconnect.isCreating && (
           <EnrollmentCommandBlock command={reconnect.enrollment.installCommand} />

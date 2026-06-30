@@ -17,7 +17,10 @@ export function providerRequiresGitHubGate(provider: AuthProvider): boolean {
 }
 
 export function authMethodRequiresGitHubGate(method: AuthMethod): boolean {
-  return method === "password" || providerRequiresGitHubGate(method);
+  if (method === "password" || method === "sso") {
+    return true;
+  }
+  return providerRequiresGitHubGate(method);
 }
 
 export function isProductViewer(viewer: ProductViewer): boolean {

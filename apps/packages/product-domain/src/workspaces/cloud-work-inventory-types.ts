@@ -213,7 +213,7 @@ export const CLOUD_WORK_SOURCE_ORDER: readonly CloudWorkSource[] = [
 export const SOURCE_LABELS: Record<CloudWorkSource, string> = {
   chats: "Chats",
   slack: "Slack",
-  automation: "Automations",
+  automation: "Workflows",
   api: "API",
 };
 

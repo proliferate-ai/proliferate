@@ -2,9 +2,13 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useEffect } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost";
+
+vi.mock("@/hooks/organizations/lifecycle/use-organization-selection-lifecycle", () => ({
+  useOrganizationSelectionLifecycle: vi.fn(),
+}));
 
 let mainMounts = 0;
 

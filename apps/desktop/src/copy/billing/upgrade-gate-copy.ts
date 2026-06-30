@@ -15,8 +15,8 @@ export const TEAM_UPGRADE_GATE_COPY: UpgradeGateCopy = {
   benefitsTitle: "Team includes",
   benefits: [
     "Members, invitations, and admin roles",
-    "Shared cloud workspaces, Slack sessions, and automations",
-    "Shared plugins, MCPs, skills, and synced agent auth",
+    "Organization cloud work, Slack sessions, and workflows",
+    "Organization integrations, MCPs, skills, and synced agent auth",
     "20 managed-cloud hours per user each month",
   ],
   footnote: "You will review seats and payment details in Stripe before anything is charged.",

@@ -99,6 +99,7 @@ export function useCreateCloudWorkspace() {
   const { getWorkspaceCollections } = useWorkspaceCollectionsCache({
     runtimeUrl,
     cloudActive: true,
+    authUserId: authUser?.id ?? null,
   });
   const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
 

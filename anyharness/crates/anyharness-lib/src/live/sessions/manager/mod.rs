@@ -84,6 +84,7 @@ impl LiveSessionManager {
     pub async fn remove_session(&self, session_id: &str) {
         let mut sessions = self.live_sessions.write().await;
         sessions.remove(session_id);
+        self.pending_startups.write().await.remove(session_id);
     }
 
     /// Synchronous variant for mobility install/export code that runs inside a

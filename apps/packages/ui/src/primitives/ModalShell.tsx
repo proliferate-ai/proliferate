@@ -13,6 +13,7 @@ export interface ModalShellProps {
   footer?: ReactNode;
   children: ReactNode;
   sizeClassName?: string;
+  headerClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
   overlayClassName?: string;
@@ -31,6 +32,7 @@ export function ModalShell({
   footer,
   children,
   sizeClassName = "max-w-md",
+  headerClassName,
   bodyClassName = "px-5 pb-5 pt-4",
   footerClassName = "flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3",
   overlayClassName = "bg-black/70 backdrop-blur-sm",
@@ -106,12 +108,12 @@ export function ModalShell({
                   {description}
                 </p>
               )}
-              <div className={`shrink-0 px-5 py-3 ${showCloseButton ? "pr-12" : ""}`}>
+              <div className={headerClassName ?? `shrink-0 px-5 py-3 ${showCloseButton ? "pr-12" : ""}`}>
                 {headerContent}
               </div>
             </>
           ) : (
-            <div className={`shrink-0 px-5 pb-3 pt-5 ${showCloseButton ? "pr-10" : ""}`}>
+            <div className={headerClassName ?? `shrink-0 px-5 pb-3 pt-5 ${showCloseButton ? "pr-10" : ""}`}>
               <h2 id={titleId} className="text-lg font-medium tracking-tight text-foreground">
                 {title}
               </h2>

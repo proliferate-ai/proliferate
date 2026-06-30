@@ -37,8 +37,6 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
-from proliferate.db.models.cloud.agent_auth import SandboxProfile
-from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import (
@@ -498,7 +496,6 @@ class TestBillingApi:
 
         organizations = await client.get("/v1/organizations", headers=headers)
         assert organizations.status_code == 200
-        assert organizations.json() == {"organizations": []}
 
         intent = await db_session.get(OrganizationCheckoutIntent, uuid.UUID(body["intentId"]))
         assert intent is not None
@@ -511,7 +508,8 @@ class TestBillingApi:
         membership = (
             await db_session.execute(
                 select(OrganizationMembership).where(
-                    OrganizationMembership.user_id == uuid.UUID(session["user_id"])
+                    OrganizationMembership.organization_id == intent.organization_id,
+                    OrganizationMembership.user_id == uuid.UUID(session["user_id"]),
                 )
             )
         ).scalar_one_or_none()
@@ -542,7 +540,7 @@ class TestBillingApi:
         assert intent.stripe_checkout_session_id == "cs_team_checkout_2"
 
     @pytest.mark.asyncio
-    async def test_team_checkout_activation_creates_team_and_shared_sandbox(
+    async def test_team_checkout_activation_creates_team_and_sends_invites(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -684,18 +682,6 @@ class TestBillingApi:
             )
         ).scalar_one()
         assert subscription.billing_subject_id == billing_subject_id
-        profile = (
-            await db_session.execute(
-                select(SandboxProfile).where(SandboxProfile.organization_id == organization.id)
-            )
-        ).scalar_one()
-        target = (
-            await db_session.execute(
-                select(CloudTarget).where(CloudTarget.sandbox_profile_id == profile.id)
-            )
-        ).scalar_one()
-        assert target.display_name == "Shared cloud sandbox"
-        assert target.profile_target_role == "primary"
         invitation = (
             await db_session.execute(
                 select(OrganizationInvitation).where(
@@ -711,10 +697,8 @@ class TestBillingApi:
         assert sent_invites[0]["to_email"] == "new.member@example.com"
         assert sent_invites[0]["organization_name"] == "Activation Team"
         assert sent_invites[0]["inviter_email"] == "billing-team-activation@example.com"
-        invite_base_url = (settings.api_base_url or settings.frontend_base_url).rstrip("/")
-        assert sent_invites[0]["invite_url"].startswith(
-            f"{invite_base_url}/v1/organizations/invitations/landing?token="
-        )
+        invite_base_url = (settings.frontend_base_url or settings.api_base_url).rstrip("/")
+        assert sent_invites[0]["invite_url"] == f"{invite_base_url}/join/{organization.id}"
 
         organizations = await client.get("/v1/organizations", headers=headers)
         assert organizations.status_code == 200

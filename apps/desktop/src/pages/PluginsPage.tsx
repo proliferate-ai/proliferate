@@ -9,6 +9,7 @@ import type { PluginSettings } from "@proliferate/product-domain/plugins/cloud-p
 import type { PluginIconRenderer } from "@proliferate/product-ui/plugins/PluginsSurface";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
+import { APP_ROUTES } from "@/config/app-routes";
 import {
   cancelPendingLocalOAuthConnectorConnect,
   useDeleteConnectorMutation,
@@ -75,7 +76,7 @@ export function PluginsPage() {
         localOAuthAdapter={localOAuthAdapter}
         renderIcon={renderDesktopPluginIcon}
         onCompletionHandled={() => {
-          navigate("/plugins", { replace: true });
+          navigate(APP_ROUTES.integrations, { replace: true });
         }}
         onOpenUrl={openExternal}
       />

@@ -24,6 +24,7 @@ import {
   writeStoredAuthToken,
 } from "../lib/access/cloud/auth-token-store";
 import { isApiUnreachableError } from "../lib/access/cloud/session-bootstrap-failure";
+import { webBetaAuthErrorCode } from "../lib/domain/auth/web-auth-errors";
 
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 5_000;
 
@@ -32,9 +33,10 @@ interface AuthTokenContextValue {
   user: AuthUser | null;
   bootstrapping: boolean;
   bootstrapUnreachable: boolean;
+  authRejectionCode: string | null;
   setToken: (token: string) => void;
   setSession: (session: AuthSessionResponse) => void;
-  clearToken: () => Promise<void>;
+  clearToken: (options?: { authRejectionCode?: string | null }) => Promise<void>;
 }
 
 const AuthTokenContext = createContext<AuthTokenContextValue | null>(null);
@@ -49,6 +51,7 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<AuthUser | null>(null);
   const [bootstrapping, setBootstrapping] = useState(initialTokenRef.current === null);
   const [bootstrapUnreachable, setBootstrapUnreachable] = useState(false);
+  const [authRejectionCode, setAuthRejectionCode] = useState<string | null>(null);
   const authEpochRef = useRef(0);
   const client = useMemo(() => createWebCloudClient(webEnv.apiBaseUrl, token), [token]);
 
@@ -73,13 +76,18 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
           queryClient.clear();
           setTokenState(session.accessToken);
           setUserState(session.user);
+          setAuthRejectionCode(null);
         }
       })
       .catch((error: unknown) => {
         if (!cancelled && authEpochRef.current === bootstrapEpoch) {
+          const rejectionCode = webBetaAuthErrorCode(error);
           setTokenState(null);
           setUserState(null);
-          setBootstrapUnreachable(import.meta.env.DEV && isApiUnreachableError(error));
+          setAuthRejectionCode(rejectionCode);
+          setBootstrapUnreachable(
+            !rejectionCode && import.meta.env.DEV && isApiUnreachableError(error),
+          );
         }
       })
       .finally(() => {
@@ -102,12 +110,14 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
       user,
       bootstrapping,
       bootstrapUnreachable,
+      authRejectionCode,
       setToken(nextToken) {
         authEpochRef.current += 1;
         queryClient.clear();
         writeStoredAuthToken(nextToken);
         setBootstrapping(false);
         setBootstrapUnreachable(false);
+        setAuthRejectionCode(null);
         setTokenState(nextToken);
         setUserState(null);
       },
@@ -117,10 +127,11 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         clearStoredAuthToken();
         setBootstrapping(false);
         setBootstrapUnreachable(false);
+        setAuthRejectionCode(null);
         setTokenState(session.accessToken);
         setUserState(session.user);
       },
-      async clearToken() {
+      async clearToken(options) {
         authEpochRef.current += 1;
         const csrfToken = readCookie("proliferate_web_csrf");
         if (csrfToken) {
@@ -134,11 +145,13 @@ export function WebCloudProvider({ children }: { children: ReactNode }) {
         queryClient.clear();
         clearStoredAuthToken();
         setBootstrapping(false);
+        setBootstrapUnreachable(false);
+        setAuthRejectionCode(options?.authRejectionCode ?? null);
         setTokenState(null);
         setUserState(null);
       },
     }),
-    [bootstrapping, bootstrapUnreachable, token, user],
+    [authRejectionCode, bootstrapping, bootstrapUnreachable, token, user],
   );
 
   return (

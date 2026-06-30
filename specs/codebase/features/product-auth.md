@@ -18,14 +18,35 @@ Scope:
 Proliferate has two related but distinct auth concepts:
 
 - **Sign-in methods** let a person authenticate to the Proliferate account.
-  Current methods are GitHub, Apple, Google, and email/password.
+  Current methods are GitHub, Apple, Google, SSO, and email/password.
 - **Linked providers** are external OAuth identities and grants attached to the
-  account. GitHub, Google, and Apple are linked providers. Email/password is not
-  a linked provider.
+  account. GitHub, Google, Apple, and SSO identities are linked providers.
+  Email/password is not a linked provider.
 
 GitHub remains the product-readiness provider. A password-only user is signed in
 but limited until the existing GitHub readiness check succeeds. Do not add a
 hidden bypass for normal users.
+
+## Web Beta Access
+
+Hosted web access is beta-gated. The server enforces the gate when issuing or
+refreshing a web session; Desktop and Mobile OAuth/token flows are not blocked
+by this web-only policy.
+
+Beta membership is configured with:
+
+- `WEB_BETA_ALLOWED_EMAILS` for exact email addresses
+- `WEB_BETA_ALLOWED_DOMAINS` for all emails at an exact domain
+
+Both lists are comma-separated and normalized case-insensitively. A user is
+eligible when their account email matches either an exact email or the domain
+after `@`. Existing users do not bypass the web beta gate. If the beta allowlist
+is not configured, the server does not apply the web beta restriction for local
+and unconfigured deployments.
+
+Denied web sessions return a stable `403` error code. OAuth callback denials
+redirect back to the web auth error route with the same stable code so the web
+app can render beta-specific copy and point the user to Desktop.
 
 ## Email/Password
 
@@ -85,11 +106,13 @@ CIDRs listed in `PASSWORD_AUTH_TRUSTED_PROXY_HOSTS`.
 
 Web signed out:
 
-- Shows email/password as a default sign-in option.
-- Keeps `Continue with GitHub` as the primary provider action because GitHub is
-  still required for full product readiness.
-- On password success, adopts the web session through `setSession`.
+- Shows `Continue with GitHub` as the primary provider action.
+- Shows `Continue with Google` as the secondary visible provider action.
+- Shows web beta copy before sign-in.
+- Does not currently show Apple or email/password sign-in on the web auth page.
 - If readiness is missing, the existing Connect GitHub gate is shown.
+- If web beta access is denied, shows a beta-only rejection state with Desktop
+  app handoff and alternate-account actions.
 
 Mobile signed out:
 
@@ -103,11 +126,16 @@ Desktop:
 - Keeps GitHub as the primary sign-in path.
 - Account settings expose `Set password` / `Change password` for authenticated
   users.
+- Organization join deep links may arrive before Desktop is authenticated.
+  Desktop should start the normal sign-in path and preserve the join target so
+  the organization invitation flow resumes after authentication.
 
 Account settings:
 
 - Show email/password separately from connected providers.
 - Do not render email/password as a provider row.
+- Show connected SSO identities by provider display name, protocol-backed
+  account email, and SSO icon.
 - GitHub readiness remains its own status.
 
 ## Reviewer Accounts

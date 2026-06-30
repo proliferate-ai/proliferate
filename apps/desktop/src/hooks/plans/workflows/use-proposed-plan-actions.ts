@@ -14,7 +14,6 @@ import {
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
-import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
@@ -78,18 +77,14 @@ interface ExecutePlanImplementationInput {
 export function useProposedPlanActions() {
   const decisionActions = useProposedPlanDecisionActions();
   const implementationActions = usePlanImplementationActions();
-  const reviewActions = useReviewActions();
 
   return {
     approvePlan: decisionActions.approvePlan,
     rejectPlan: decisionActions.rejectPlan,
     implementPlanHere: implementationActions.implementPlanHere,
-    reviewPlan: reviewActions.startPlanReview,
-    configurePlanReview: reviewActions.configurePlanReview,
     isApprovingPlan: decisionActions.isApprovingPlan,
     isRejectingPlan: decisionActions.isRejectingPlan,
     isImplementingPlan: implementationActions.isImplementingPlan,
-    isStartingReview: reviewActions.isStartingReview,
   };
 }
 

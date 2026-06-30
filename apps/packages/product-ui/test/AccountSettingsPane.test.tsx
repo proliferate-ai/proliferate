@@ -62,6 +62,8 @@ describe("AccountSettingsPane", () => {
 
     fireEvent.click(screen.getByText("Connect GitHub"));
     expect(connectGitHub).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Primary")).toBeNull();
+    expect(screen.getByText("Not connected")).toBeTruthy();
   });
 
   it("renders multiple linked providers", () => {
@@ -72,6 +74,12 @@ describe("AccountSettingsPane", () => {
         profileSummary="Ready."
         githubLabel="@pablo"
         providers={[
+          {
+            provider: "sso",
+            label: "Auth0",
+            accountLabel: "pablo@proliferate.com",
+            connected: true,
+          },
           {
             provider: "github",
             label: "GitHub",
@@ -96,9 +104,35 @@ describe("AccountSettingsPane", () => {
       />,
     );
 
+    expect(screen.getByText("Auth0")).toBeTruthy();
+    expect(screen.getByText("pablo@proliferate.com")).toBeTruthy();
     expect(screen.getByText("pablo@gmail.com")).toBeTruthy();
     expect(screen.getByText("Apple")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
+  });
+
+  it("uses SSO brand labels for icons without changing the visible provider label", () => {
+    const { container } = render(
+      <AccountSettingsPane
+        displayName="Pablo"
+        email="pablo@example.com"
+        profileSummary="Ready."
+        githubLabel="@pablo"
+        providers={[
+          {
+            provider: "sso",
+            label: "SSO",
+            brandLabel: "Google SSO",
+            accountLabel: "pablo@proliferate.com",
+            connected: true,
+          },
+        ]}
+        actions={{}}
+      />,
+    );
+
+    expect(screen.getByText("SSO")).toBeTruthy();
+    expect(container.querySelector('[data-auth-provider-brand="google-sso"]')).toBeTruthy();
   });
 
   it("keeps email password separate from linked providers", async () => {

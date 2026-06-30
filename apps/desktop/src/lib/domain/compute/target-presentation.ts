@@ -81,7 +81,7 @@ export function groupComputeTargetsByOwnerScope(
     groups.push({
       id: "organization",
       label: "Organization targets",
-      description: "Available to shared cloud work for your organization.",
+      description: "Available to organization cloud work.",
       targets: organization,
     });
   }

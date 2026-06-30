@@ -166,6 +166,8 @@ export type OrganizationInvitationResponse =
   components["schemas"]["OrganizationInvitationResponse"];
 export type OrganizationInvitationsResponse =
   components["schemas"]["OrganizationInvitationsResponse"];
+export type OrganizationJoinLinkResponse =
+  components["schemas"]["OrganizationJoinLinkResponse"];
 export type OrganizationInvitationAcceptResponse =
   components["schemas"]["OrganizationInvitationAcceptResponse"];
 export interface TeamCheckoutRequest {
@@ -406,6 +408,12 @@ export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogRes
 export type CloudMcpCatalogEntry = components["schemas"]["ConnectorCatalogEntryModel"];
 export type CloudPluginPackage = components["schemas"]["PluginPackageModel"];
 export type CloudPluginPackageSkill = components["schemas"]["PluginPackageSkillModel"];
+export type CloudOrganizationIntegrationPolicyItem =
+  components["schemas"]["CloudOrganizationIntegrationPolicyItem"];
+export type CloudOrganizationIntegrationPolicyResponse =
+  components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
+export type PatchCloudOrganizationIntegrationPolicyRequest =
+  components["schemas"]["PatchCloudOrganizationIntegrationPolicyRequest"];
 export type CloudMcpConnection = components["schemas"]["CloudMcpConnectionResponse"];
 export type CloudMcpConnectionsResponse = components["schemas"]["CloudMcpConnectionsResponse"];
 export type CreateCloudMcpConnectionRequest =

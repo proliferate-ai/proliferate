@@ -15,6 +15,17 @@ pub fn apply_macos_window_chrome(window: tauri::Window) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+pub fn set_webview_zoom(window: tauri::WebviewWindow, scale_factor: f64) -> Result<(), String> {
+    if !scale_factor.is_finite() {
+        return Err("webview zoom scale must be finite".to_string());
+    }
+
+    window
+        .set_zoom(scale_factor.clamp(0.8, 1.2))
+        .map_err(|error| error.to_string())
+}
+
 #[cfg(target_os = "macos")]
 fn apply_traffic_light_position(
     window: &tauri::Window,

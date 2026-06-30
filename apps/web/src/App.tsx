@@ -7,17 +7,17 @@ import { ConnectGitHubScreen } from "./components/auth/screen/ConnectGitHubScree
 import { routes } from "./config/routes";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthErrorPage } from "./pages/AuthErrorPage";
-import { AutomationsPage } from "./pages/AutomationsPage";
 import { BillingReturnHandoffPage } from "./pages/BillingReturnHandoffPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DesktopHandoffPage } from "./pages/DesktopHandoffPage";
 import { HomePage } from "./pages/HomePage";
+import { IntegrationsPage } from "./pages/IntegrationsPage";
+import { OrganizationJoinPage } from "./pages/OrganizationJoinPage";
 import { PluginConnectCompletePage } from "./pages/PluginConnectCompletePage";
-import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettingsModalPage } from "./pages/SettingsModalPage";
 import { SupportPage } from "./pages/SupportPage";
-import { WorkspacesPage } from "./pages/WorkspacesPage";
+import { WorkflowsPage } from "./pages/WorkflowsPage";
 import { InstrumentedRoutes } from "./lib/integrations/telemetry/sentry";
 
 export function App() {
@@ -35,6 +35,7 @@ export function App() {
         <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
         <Route path="auth/error" element={<AuthErrorPage />} />
         <Route path="connect-github" element={<ConnectGitHubScreen />} />
+        <Route path="join/:organizationId" element={<OrganizationJoinPage />} />
         <Route path="settings/cloud" element={<BillingReturnHandoffPage />} />
         <Route path="plugins/connect/complete" element={<PluginConnectCompletePage />} />
         <Route
@@ -45,10 +46,13 @@ export function App() {
           }
         >
           <Route index element={<HomePage />} />
-          <Route path="workspaces" element={<WorkspacesPage />} />
-          <Route path="automations" element={<AutomationsPage />} />
-          <Route path="automations/:automationId" element={<AutomationsPage />} />
-          <Route path="plugins" element={<PluginsPage />} />
+          <Route path="workspaces" element={<Navigate to={routes.home} replace />} />
+          <Route path="integrations" element={<IntegrationsPage />} />
+          <Route path="workflows" element={<WorkflowsPage />} />
+          <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
+          <Route path="automations" element={<LegacyRouteRedirect to={routes.workflows} />} />
+          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} extractLastSegment />} />
+          <Route path="plugins" element={<LegacyRouteRedirect to={routes.integrations} />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/:sectionId" element={<SettingsPage />} />
@@ -85,4 +89,19 @@ export function App() {
 
 function isSettingsPath(pathname: string): boolean {
   return pathname === routes.settings || pathname.startsWith(`${routes.settings}/`);
+}
+
+function LegacyRouteRedirect({
+  to,
+  extractLastSegment = false,
+}: {
+  to: string;
+  extractLastSegment?: boolean;
+}) {
+  const location = useLocation();
+  const match = extractLastSegment
+    ? location.pathname.split("/").filter(Boolean).at(-1)
+    : null;
+  const suffix = match ? `/${encodeURIComponent(decodeURIComponent(match))}` : "";
+  return <Navigate to={`${to}${suffix}${location.search}${location.hash}`} replace />;
 }

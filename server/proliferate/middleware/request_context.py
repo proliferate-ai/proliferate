@@ -9,6 +9,8 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
+from proliferate.rls_context import with_cleared_rls_context
+
 _request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 _user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
 _organization_id_var: ContextVar[str | None] = ContextVar("organization_id", default=None)
@@ -112,7 +114,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
 
         try:
-            response = await call_next(request)
+            with with_cleared_rls_context():
+                response = await call_next(request)
         finally:
             for context_var, token in reversed(tokens):
                 context_var.reset(token)

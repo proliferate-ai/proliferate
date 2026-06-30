@@ -53,10 +53,10 @@ describe("resolvePlanImplementationReadiness", () => {
       plan: planTarget(),
       harnessState: state(),
       isChatDisabled: true,
-      chatDisabledReason: "Review automation is running.",
+      chatDisabledReason: "Session is busy.",
     })).toEqual({
       status: "blocked",
-      message: "Review automation is running.",
+      message: "Session is busy.",
     });
   });
 

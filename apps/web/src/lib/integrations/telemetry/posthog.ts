@@ -26,11 +26,11 @@ export type WebTelemetryRoute =
   | "auth_error"
   | "desktop_handoff"
   | "connect_github"
+  | "organization_join"
   | "home"
-  | "workspaces"
+  | "integrations"
+  | "workflows"
   | "chat"
-  | "automations"
-  | "plugins"
   | "support"
   | "settings"
   | "unknown";
@@ -115,11 +115,13 @@ export function webTelemetryRouteForPathname(pathname: string): WebTelemetryRout
   if (normalized === "/auth/error") return "auth_error";
   if (normalized === "/auth/desktop/handoff") return "desktop_handoff";
   if (normalized === "/connect-github") return "connect_github";
+  if (/^\/join\/[^/]+$/u.test(normalized)) return "organization_join";
   if (normalized === "/") return "home";
-  if (normalized === "/workspaces") return "workspaces";
+  if (normalized === "/integrations") return "integrations";
+  if (normalized === "/workflows") return "workflows";
   if (/^\/workspaces\/[^/]+\/chats\/[^/]+$/u.test(normalized)) return "chat";
-  if (normalized === "/automations") return "automations";
-  if (normalized === "/plugins") return "plugins";
+  if (normalized === "/automations") return "workflows";
+  if (normalized === "/plugins") return "integrations";
   if (normalized === "/support") return "support";
   if (normalized === "/settings") return "settings";
 

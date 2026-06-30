@@ -50,6 +50,37 @@ impl SessionRuntime {
             .ok_or_else(|| SessionLifecycleError::SessionNotFound(session_id.to_string()))
     }
 
+    pub async fn force_retire_workspace_live_sessions_for_purge(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<usize> {
+        let sessions = self
+            .session_service
+            .store()
+            .list_by_workspace(workspace_id)?;
+        let mut retired_count = 0usize;
+
+        for session in sessions {
+            let Some(handle) = self.acp_manager.get_handle(&session.id).await else {
+                self.acp_manager.remove_session(&session.id).await;
+                continue;
+            };
+
+            if let Err(error) = handle.dismiss().await {
+                tracing::warn!(
+                    session_id = %session.id,
+                    workspace_id = %workspace_id,
+                    error = %error,
+                    "failed to dismiss live session during workspace purge"
+                );
+            }
+            self.acp_manager.remove_session(&session.id).await;
+            retired_count += 1;
+        }
+
+        Ok(retired_count)
+    }
+
     async fn close_session_actor_and_mark_closed(
         &self,
         session_id: &str,

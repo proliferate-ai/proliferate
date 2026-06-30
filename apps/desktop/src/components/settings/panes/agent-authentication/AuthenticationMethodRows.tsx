@@ -14,7 +14,6 @@ import {
   agentAuthCredentialAvailability,
   agentAuthCredentialKindLabel,
   agentAuthCredentialOwnerLabel,
-  agentAuthCredentialShareLabel,
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   credentialSummaryDetails,
@@ -50,14 +49,14 @@ export function ManagedFreeCreditsMethodRow({
         <div className="truncate text-sm font-medium text-foreground">
           Proliferate Default Free credits
         </div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+        <div className="mt-0.5 truncate text-sm text-muted-foreground">
           Managed gateway credit
         </div>
       </div>
-      <div className="min-w-0 text-xs text-muted-foreground">
+      <div className="min-w-0 text-sm text-muted-foreground">
         {harnessLabel}
       </div>
-      <div className="min-w-0 truncate text-xs text-muted-foreground">
+      <div className="min-w-0 truncate text-sm text-muted-foreground">
         {agentAuthManagedCreditsCapabilityLabel(capabilities, "personal")}
       </div>
       <div className="flex items-center justify-end gap-2">
@@ -99,10 +98,10 @@ export function LocalMethodRow({
   return (
     <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] items-center gap-3 border-b border-border-light px-4 py-3">
       <div className="min-w-0 text-sm font-medium text-foreground">Local credential</div>
-      <div className="min-w-0 text-xs text-muted-foreground">
+      <div className="min-w-0 text-sm text-muted-foreground">
         {agentAuthSlotLabel(slot)}
       </div>
-      <div className="min-w-0 truncate text-xs text-muted-foreground">
+      <div className="min-w-0 truncate text-sm text-muted-foreground">
         {provider
           ? detected
             ? `${localSource.authMode} credential detected`
@@ -145,27 +144,15 @@ export function CredentialMethodRow({
   credential,
   currentUserId,
   revoking,
-  revokingShare,
-  sharing,
   onRequestRevoke,
-  onRevokeShare,
-  onShareCredential,
 }: {
   capabilities: AgentGatewayCapabilities | null;
   credential: AgentAuthCredential;
   currentUserId: string | null;
   revoking: boolean;
-  revokingShare: boolean;
-  sharing: boolean;
   onRequestRevoke: (credential: AgentAuthCredential) => void;
-  onRevokeShare: (credential: AgentAuthCredential) => void;
-  onShareCredential: (credential: AgentAuthCredential) => void;
 }) {
   const availability = agentAuthCredentialAvailability(credential, capabilities);
-  const shareLabel = agentAuthCredentialShareLabel(credential, currentUserId);
-  const canManageShare = shareLabel !== null
-    && credential.ownerScope === "personal"
-    && credential.ownerUserId === currentUserId;
   const canRevokeCredential = credential.ownerScope === "personal"
     && credential.ownerUserId === currentUserId
     && !isProliferateManagedCreditsCredential(credential);
@@ -175,14 +162,14 @@ export function CredentialMethodRow({
         <div className="truncate text-sm font-medium text-foreground">
           {credential.displayName}
         </div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+        <div className="mt-0.5 truncate text-sm text-muted-foreground">
           {agentAuthCredentialKindLabel(credential)}
         </div>
       </div>
-      <div className="min-w-0 text-xs text-muted-foreground">
+      <div className="min-w-0 text-sm text-muted-foreground">
         {agentAuthCredentialProviderLabel(credential.credentialProviderId)}
       </div>
-      <div className="min-w-0 truncate text-xs text-muted-foreground">
+      <div className="min-w-0 truncate text-sm text-muted-foreground">
         {methodSourceLabel(credential)}
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -194,23 +181,6 @@ export function CredentialMethodRow({
             ? agentAuthCredentialStatusLabel(credential.status)
             : availability.label}
         </Badge>
-        {canManageShare && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            loading={credential.activeCredentialShareId ? revokingShare : sharing}
-            onClick={() => {
-              if (credential.activeCredentialShareId) {
-                onRevokeShare(credential);
-                return;
-              }
-              onShareCredential(credential);
-            }}
-          >
-            {credential.activeCredentialShareId ? "Unshare" : "Share"}
-          </Button>
-        )}
         {canRevokeCredential && (
           <Button
             type="button"

@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
+import proliferate.db.models.auth  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
@@ -18,6 +19,7 @@ from proliferate.auth.api import router as auth_viewer_router
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.identity.api import router as identity_auth_router
 from proliferate.auth.profile_api import router as user_profile_router
+from proliferate.auth.sso.api import router as sso_auth_router
 from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
@@ -54,8 +56,11 @@ from proliferate.server.cloud.runtime.setup_monitor import (
     start_cloud_setup_monitor,
     stop_cloud_setup_monitor,
 )
+from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
+from proliferate.server.organizations.join_api import router as organization_join_router
+from proliferate.server.organizations.sso.api import router as organization_sso_router
 from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
 
@@ -204,11 +209,16 @@ def create_app() -> FastAPI:
 
     # ── Auth: Desktop PKCE flow ──
     app.include_router(desktop_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+    # SSO routes use literal `sso`/`oidc` path segments and must be registered before
+    # the generic identity `/{surface}/{provider}/start` and `/{provider}/callback`
+    # routes, which would otherwise shadow them (capturing `sso`/`oidc` as `{provider}`).
+    app.include_router(sso_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(identity_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(auth_viewer_router, prefix=f"{api_prefix}/v1", tags=["auth"])
 
     # ── Domain routes ──
     app.include_router(health_router, prefix=api_prefix, tags=["health"])
+    app.include_router(organization_join_router, prefix=api_prefix, tags=["organizations"])
     app.include_router(artifact_runtime_router, prefix=api_prefix, tags=["artifact_runtime"])
     app.include_router(
         anonymous_telemetry_router,
@@ -222,7 +232,13 @@ def create_app() -> FastAPI:
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
+    app.include_router(
+        organization_sso_router,
+        prefix=f"{api_prefix}/v1",
+        tags=["organizations"],
+    )
     app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
+    app.include_router(devtools_router, prefix=f"{api_prefix}/v1", tags=["devtools"])
 
     return app
 

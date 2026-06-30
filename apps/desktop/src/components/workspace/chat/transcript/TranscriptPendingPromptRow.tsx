@@ -5,7 +5,6 @@ import {
 } from "react";
 import type { PendingPromptEntry } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 import { UserMessage } from "./UserMessage";
 import {
@@ -14,7 +13,6 @@ import {
 } from "./TranscriptTurnChrome";
 import {
   isSubagentWakeProvenance,
-  resolveReviewFeedbackPromptReference,
 } from "@proliferate/product-domain/chats/subagents/provenance";
 import {
   resolveOptimisticPromptActionTime,
@@ -87,10 +85,6 @@ function PendingPromptBody({
   activeSessionId: string;
   prompt: PendingPromptEntry;
 }) {
-  const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
-    prompt.promptProvenance,
-    prompt.text,
-  );
   if (isSubagentWakeProvenance(prompt.promptProvenance)) {
     return (
       <div className="flex justify-end">
@@ -98,15 +92,6 @@ function PendingPromptBody({
           label={prompt.promptProvenance.label ?? null}
         />
       </div>
-    );
-  }
-  if (reviewFeedbackReference) {
-    return (
-      <ReviewFeedbackSummary
-        reference={reviewFeedbackReference}
-        sessionId={activeSessionId}
-        state="queued"
-      />
     );
   }
   return (

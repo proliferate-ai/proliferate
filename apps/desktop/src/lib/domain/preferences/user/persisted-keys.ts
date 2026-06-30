@@ -5,6 +5,7 @@ const USER_PREFERENCE_KEYS = [
   "colorMode",
   "uiFontSizeId",
   "readableCodeFontSizeId",
+  "windowZoomId",
   "defaultChatAgentKind",
   "defaultChatModelIdByAgentKind",
   "chatModelVisibilityOverridesByAgentKind",

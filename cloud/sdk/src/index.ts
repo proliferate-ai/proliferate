@@ -1,5 +1,6 @@
 export * from "./client/core.js";
 export * from "./client/auth.js";
+export * from "./client/sso.js";
 export * from "./client/viewer.js";
 export * from "./client/agent-auth.js";
 export * from "./client/agent-run-configs.js";
@@ -12,6 +13,7 @@ export * from "./client/commands.js";
 export * from "./client/compute.js";
 export * from "./client/config.js";
 export * from "./client/events.js";
+export * from "./client/integration_policy.js";
 export * from "./client/deep-links.js";
 export * from "./client/live.js";
 export * from "./client/mcp_catalog.js";

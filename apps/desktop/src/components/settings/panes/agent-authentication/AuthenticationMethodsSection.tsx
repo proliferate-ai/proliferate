@@ -4,10 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Plus } from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import {
-  CloudAgentAuthCredentialForm,
-  type CloudAgentAuthCredentialFormProps,
-} from "@/components/settings/panes/agent-authentication/CloudAgentAuthCredentialForm";
+import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/agent-authentication/CloudAgentAuthCredentialForm";
 import {
   CredentialMethodRow,
   LocalMethodRow,
@@ -26,17 +23,10 @@ export function AuthenticationMethodsSection({
   personalCredentials,
   rescanning,
   revokingCredentialId,
-  revokingShareId,
-  sharingCredentialId,
   ensuringFreeCredits,
   syncingLocalProvider,
-  organizations,
-  selectedOrganizationId,
-  onSelectedOrganizationChange,
   onRescan,
   onRevokeCredential,
-  onRevokeShare,
-  onShareCredential,
   onEnsureFreeCredits,
   onSyncLocalCredential,
 }: {
@@ -46,17 +36,10 @@ export function AuthenticationMethodsSection({
   personalCredentials: AgentAuthCredential[];
   rescanning: boolean;
   revokingCredentialId: string | null;
-  revokingShareId: string | null;
-  sharingCredentialId: string | null;
   ensuringFreeCredits: boolean;
   syncingLocalProvider: AgentAuthProvider | null;
-  organizations: CloudAgentAuthCredentialFormProps["organizations"];
-  selectedOrganizationId: string | null;
-  onSelectedOrganizationChange: (organizationId: string | null) => void;
   onRescan: () => void;
   onRevokeCredential: (credential: AgentAuthCredential) => void;
-  onRevokeShare: (credential: AgentAuthCredential) => void;
-  onShareCredential: (credential: AgentAuthCredential) => void;
   onEnsureFreeCredits: () => void;
   onSyncLocalCredential: (provider: AgentAuthProvider) => void;
 }) {
@@ -73,13 +56,13 @@ export function AuthenticationMethodsSection({
     <section className="space-y-3">
       <div className="space-y-1">
         <h2 className="text-sm font-medium text-foreground">Authentication methods</h2>
-        <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
+        <p className="max-w-2xl text-sm leading-5 text-muted-foreground">
           Detected local credentials, synced credentials, cloud API keys, BYOK,
           and managed credits available to your personal sandboxes.
         </p>
       </div>
       <SettingsCard>
-        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] gap-3 border-b border-border-light bg-foreground/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] gap-3 border-b border-border-light bg-foreground/5 px-4 py-2 text-base font-semibold uppercase tracking-wide text-muted-foreground">
           <span>Method</span>
           <span>Provider</span>
           <span>Source</span>
@@ -108,7 +91,7 @@ export function AuthenticationMethodsSection({
           onEnsureFreeCredits={onEnsureFreeCredits}
         />
         {userManagedCredentials.length === 0 ? (
-          <div className="border-t border-border-light px-4 py-3 text-xs text-muted-foreground">
+          <div className="border-t border-border-light px-4 py-3 text-sm text-muted-foreground">
             No synced or BYOK credentials have been saved yet.
           </div>
         ) : userManagedCredentials.map((credential) => (
@@ -118,11 +101,7 @@ export function AuthenticationMethodsSection({
             credential={credential}
             currentUserId={currentUserId}
             revoking={revokingCredentialId === credential.id}
-            revokingShare={credential.activeCredentialShareId === revokingShareId}
-            sharing={sharingCredentialId === credential.id}
             onRequestRevoke={setCredentialToRevoke}
-            onRevokeShare={onRevokeShare}
-            onShareCredential={onShareCredential}
           />
         ))}
         <Button
@@ -137,7 +116,7 @@ export function AuthenticationMethodsSection({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-medium text-foreground">Add credential</span>
-            <span className="block text-xs leading-4 text-muted-foreground">
+            <span className="block text-sm leading-5 text-muted-foreground">
               Add Anthropic, OpenAI, Gemini, or Bedrock credentials for a harness.
             </span>
           </span>
@@ -148,11 +127,7 @@ export function AuthenticationMethodsSection({
       </SettingsCard>
       {addingCredential && (
         <CloudAgentAuthCredentialForm
-          organizations={organizations}
-          selectedOrganizationId={selectedOrganizationId}
-          onSelectedOrganizationChange={onSelectedOrganizationChange}
           agentGatewayCapabilities={capabilities}
-          allowedOwnerScopes={["personal"]}
         />
       )}
       <ConfirmationDialog

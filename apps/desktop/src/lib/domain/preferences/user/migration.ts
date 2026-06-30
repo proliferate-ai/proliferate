@@ -1,4 +1,7 @@
-import { resolveAppearanceSizeId } from "@/lib/domain/preferences/appearance";
+import {
+  resolveAppearanceSizeId,
+  resolveWindowZoomId,
+} from "@/lib/domain/preferences/appearance";
 import {
   sanitizeReviewDefaultsByKind,
   sanitizeReviewPersonalitiesByKind,
@@ -142,6 +145,12 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
   const readableCodeFontSizeId = resolveAppearanceSizeId(next.readableCodeFontSizeId);
   if (readableCodeFontSizeId !== next.readableCodeFontSizeId) {
     next.readableCodeFontSizeId = readableCodeFontSizeId;
+    changed = true;
+  }
+
+  const windowZoomId = resolveWindowZoomId(next.windowZoomId);
+  if (windowZoomId !== next.windowZoomId) {
+    next.windowZoomId = windowZoomId;
     changed = true;
   }
 

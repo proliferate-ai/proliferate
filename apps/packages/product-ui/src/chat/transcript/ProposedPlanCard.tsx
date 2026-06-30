@@ -3,8 +3,6 @@ import {
   Check,
   FileText,
   ArrowRight,
-  Shield,
-  Settings,
   X,
 } from "@proliferate/ui/icons";
 import { CollapsiblePlanCard } from "./CollapsiblePlanCard";
@@ -13,15 +11,6 @@ import type {
   MarkdownInlineCodeRenderer,
   MarkdownLinkRenderer,
 } from "./MarkdownBody";
-
-export interface ReviewSetupAnchorRect {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-  width: number;
-  height: number;
-}
 
 type ProposedPlanDecisionState =
   | "pending"
@@ -49,12 +38,9 @@ interface ProposedPlanCardProps {
   onReject?: () => void;
   onImplementHere?: () => void;
   onHandOffToNewSession?: () => void;
-  onReview?: () => void;
-  onConfigureReview?: (anchorRect?: ReviewSetupAnchorRect | null) => void;
   isApproving?: boolean;
   isRejecting?: boolean;
   isImplementingHere?: boolean;
-  isStartingReview?: boolean;
   renderLink?: MarkdownLinkRenderer;
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
@@ -73,12 +59,9 @@ export function ProposedPlanCard({
   onReject,
   onImplementHere,
   onHandOffToNewSession,
-  onReview,
-  onConfigureReview,
   isApproving = false,
   isRejecting = false,
   isImplementingHere = false,
-  isStartingReview = false,
   renderLink,
   renderInlineCode,
   renderCodeBlock,
@@ -94,9 +77,6 @@ export function ProposedPlanCard({
     && decisionVersion !== null
     && onApprove
     && onReject;
-  const canReview =
-    (!!onReview || !!onConfigureReview)
-    && (decisionState === null || decisionState === "pending" || decisionState === "approved");
   const status = decisionState
     ? resolveDecisionStatus(
       decisionState,
@@ -112,7 +92,6 @@ export function ProposedPlanCard({
   const hasFooterActions = Boolean(
     canDecide
       || canRetryNativeApproval
-      || canReview
       || onHandOffToNewSession
       || showImplementHere,
   );
@@ -141,21 +120,6 @@ export function ProposedPlanCard({
           data-chat-transcript-ignore
           className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3.5 py-2.5"
         >
-          {canReview && onConfigureReview && (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              onClick={(event) => onConfigureReview(
-                rectToReviewAnchor(event.currentTarget.getBoundingClientRect()),
-              )}
-              title="Configure review agents."
-              aria-label="Configure review agents"
-              className="size-8 rounded-md text-muted-foreground"
-            >
-              <Settings className="size-3.5" />
-            </Button>
-          )}
           {canDecide && decisionState && (
             <Button
               type="button"
@@ -171,20 +135,6 @@ export function ProposedPlanCard({
             </Button>
           )}
           <span className="min-w-2 flex-1" />
-          {canReview && onReview && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onReview}
-              loading={isStartingReview}
-              title="Start review agents for this plan."
-              className="rounded-md px-2.5 text-sm"
-            >
-              <Shield className="size-3.5" />
-              Review
-            </Button>
-          )}
           {onHandOffToNewSession && (
             <Button
               type="button"
@@ -229,17 +179,6 @@ export function ProposedPlanCard({
       ) : undefined}
     />
   );
-}
-
-function rectToReviewAnchor(rect: DOMRect): ReviewSetupAnchorRect {
-  return {
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.bottom,
-    left: rect.left,
-    width: rect.width,
-    height: rect.height,
-  };
 }
 
 interface DecisionStatus {

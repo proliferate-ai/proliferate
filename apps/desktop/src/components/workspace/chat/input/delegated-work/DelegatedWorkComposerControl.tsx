@@ -3,7 +3,6 @@ import { Robot } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/facade/use-delegated-work-composer";
-import { AgentsPopoverReviewSection } from "./AgentsPopoverReviewSection";
 import { AgentsPopoverSubagentSection } from "./AgentsPopoverSubagentSection";
 
 export function DelegatedWorkComposerControl({
@@ -11,12 +10,6 @@ export function DelegatedWorkComposerControl({
 }: {
   viewModel: DelegatedWorkComposerViewModel;
 }) {
-  const sectionCount = [
-    viewModel.review,
-    viewModel.subagents,
-  ].filter(Boolean).length;
-  const singleSection = sectionCount === 1;
-  const singleSectionDetail = singleSection ? viewModel.summary.label : null;
   const singleAgent = viewModel.singleAgent;
 
   return (
@@ -46,17 +39,10 @@ export function DelegatedWorkComposerControl({
           data-telemetry-mask
         >
           <div className="max-h-[min(22rem,calc(100vh-10rem))] space-y-1 overflow-y-auto">
-            {viewModel.review && (
-              <AgentsPopoverReviewSection
-                review={viewModel.review}
-                detail={singleSectionDetail}
-                onClose={close}
-              />
-            )}
             {viewModel.subagents && (
               <AgentsPopoverSubagentSection
                 subagents={viewModel.subagents}
-                detail={singleSectionDetail}
+                detail={viewModel.summary.label}
                 onClose={close}
               />
             )}

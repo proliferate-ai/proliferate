@@ -117,13 +117,26 @@ async def list_organizations_for_user(
     return await _list_organizations_for_user(db, user_id)
 
 
+async def get_organization(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> OrganizationRecord | None:
+    organization = (
+        await db.execute(
+            select(Organization).where(
+                Organization.id == organization_id,
+                Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
+            )
+        )
+    ).scalar_one_or_none()
+    return organization_record(organization) if organization is not None else None
+
+
 async def get_current_membership_for_user(
     db: AsyncSession,
     user_id: UUID,
 ) -> OrganizationWithMembershipRecord | None:
     records = await _list_organizations_for_user(db, user_id)
-    if len(records) > 1:
-        raise RuntimeError(f"User {user_id} has multiple active organization memberships.")
     return records[0] if records else None
 
 
@@ -140,7 +153,7 @@ async def ensure_default_organization_for_user(
         {"lock_key": f"default-organization:{user_id}"},
     )
     records = await _list_organizations_for_user(db, user_id)
-    if records:
+    if any(record.membership.role == ORGANIZATION_ROLE_OWNER for record in records):
         return records
 
     organization = Organization(
@@ -164,12 +177,7 @@ async def ensure_default_organization_for_user(
     )
     db.add(membership)
     await db.flush()
-    return [
-        OrganizationWithMembershipRecord(
-            organization=organization_record(organization),
-            membership=membership_record(membership),
-        )
-    ]
+    return await _list_organizations_for_user(db, user_id)
 
 
 async def get_organization_with_membership(
@@ -498,7 +506,10 @@ async def list_organization_members(
         await db.execute(
             select(OrganizationMembership, User)
             .join(User, User.id == OrganizationMembership.user_id)
-            .where(OrganizationMembership.organization_id == organization_id)
+            .where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
             .order_by(
                 OrganizationMembership.status.asc(),
                 OrganizationMembership.role.asc(),
@@ -555,9 +566,6 @@ async def update_organization_membership(
     if status is not None:
         if status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE:
             await acquire_membership_activation_lock(db, membership.user_id)
-            current = await get_current_membership_for_user(db, membership.user_id)
-            if current is not None and current.organization.id != organization_id:
-                return None, "already_in_organization"
         membership.status = status
         membership.removed_at = now if status == ORGANIZATION_MEMBERSHIP_STATUS_REMOVED else None
         if status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE and membership.joined_at is None:

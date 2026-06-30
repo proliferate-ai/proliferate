@@ -51,7 +51,7 @@ export function AuthStartPanel({
           {provider.label}
         </AuthProviderButton>
       ))}
-      {note ? <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">{note}</p> : null}
+      {note ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{note}</p> : null}
       {error ? (
         <div
           className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-5 text-destructive"

@@ -25,7 +25,6 @@ from proliferate.db.store.organizations import (
     bind_team_checkout_session,
     cancel_team_checkout_intent,
     create_pending_team_checkout_intent,
-    get_current_membership_for_user,
     get_current_team_checkout_intent,
 )
 from proliferate.integrations import stripe as stripe_billing
@@ -242,13 +241,6 @@ async def create_team_checkout_session(
 
     async with db.begin():
         await acquire_membership_activation_lock(db, user.id)
-        current = await get_current_membership_for_user(db, user.id)
-        if current is not None:
-            raise BillingServiceError(
-                "already_in_organization",
-                "You already belong to a team.",
-                status_code=409,
-            )
         existing = await get_current_team_checkout_intent(db, user.id)
         if existing is not None:
             intent_record = existing

@@ -54,7 +54,7 @@ export const chatMessages: Record<string, ChatMessage[]> = {
     {
       id: "m1",
       role: "system",
-      body: "Slack thread opened a shared cloud session in proliferate-ai/proliferate.",
+      body: "Slack thread opened an organization cloud session in proliferate-ai/proliferate.",
     },
     {
       id: "m2",
@@ -71,7 +71,7 @@ export const chatMessages: Record<string, ChatMessage[]> = {
     {
       id: "m1",
       role: "system",
-      body: "Candidate Screening #12 is running in the shared sandbox.",
+      body: "Candidate Screening #12 is running in organization cloud.",
     },
     {
       id: "m2",
@@ -97,7 +97,7 @@ export const automations: AutomationSummary[] = [
     name: "Candidate Screening",
     owner: "team",
     scheduleLabel: "Every weekday at 8:00 AM",
-    targetLabel: "Shared cloud - proliferate-ai/proliferate",
+    targetLabel: "Organization cloud - proliferate-ai/proliferate",
     status: "enabled",
     lastRunLabel: "42 minutes ago",
   },
@@ -106,7 +106,7 @@ export const automations: AutomationSummary[] = [
     name: "Dependency Bump",
     owner: "team",
     scheduleLabel: "Nightly",
-    targetLabel: "Shared cloud - proliferate-ai/proliferate",
+    targetLabel: "Organization cloud - proliferate-ai/proliferate",
     status: "enabled",
     lastRunLabel: "5 hours ago",
   },

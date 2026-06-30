@@ -157,9 +157,6 @@ def upgrade() -> None:
             sa.Column("email", sa.String(length=320), nullable=False),
             sa.Column("role", sa.String(length=32), nullable=False),
             sa.Column("status", sa.String(length=32), nullable=False),
-            sa.Column("token_hash", sa.String(length=64), nullable=False),
-            sa.Column("handoff_token_hash", sa.String(length=64), nullable=True),
-            sa.Column("handoff_expires_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("delivery_status", sa.String(length=32), nullable=False),
             sa.Column("delivery_error", sa.Text(), nullable=True),
             sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True),
@@ -204,19 +201,6 @@ def upgrade() -> None:
         ["organization_id", "email"],
         unique=True,
         postgresql_where=sa.text("status = 'pending'"),
-    )
-    _create_index_once(
-        "ix_organization_invitation_token_hash",
-        "organization_invitation",
-        ["token_hash"],
-        unique=True,
-    )
-    _create_index_once(
-        "ix_organization_invitation_handoff_token_hash",
-        "organization_invitation",
-        ["handoff_token_hash"],
-        unique=True,
-        postgresql_where=sa.text("handoff_token_hash IS NOT NULL"),
     )
     _create_check_once(
         "organization_invitation",
@@ -388,8 +372,6 @@ def downgrade() -> None:
     ):
         _drop_check_once("organization_invitation", constraint_name)
     for index_name in (
-        "ix_organization_invitation_handoff_token_hash",
-        "ix_organization_invitation_token_hash",
         "uq_organization_invitation_pending_email",
         "ix_organization_invitation_expires_at",
         "ix_organization_invitation_accepted_by_user_id",

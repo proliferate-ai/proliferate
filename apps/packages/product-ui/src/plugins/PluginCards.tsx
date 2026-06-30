@@ -1,132 +1,156 @@
-
 import type { ReactNode } from "react";
 import type { PluginInventoryItem } from "@proliferate/product-domain/plugins/cloud-plugin-inventory";
-import { Plus } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Switch } from "@proliferate/ui/primitives/Switch";
 import { PluginGlyph } from "./PluginGlyph";
 import { badgeTone } from "./plugin-presentation";
 import type { PluginIconRenderer } from "./plugin-types";
 
-export function PluginSection({
-  title,
+export function PluginList({
   children,
 }: {
-  title: string;
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <div className="border-b border-border/60 pb-2">
-        <h2 className="text-xs font-medium uppercase text-muted-foreground">{title}</h2>
-      </div>
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {children}
-      </div>
-    </section>
+    <div className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated">
+      {children}
+    </div>
   );
 }
 
-export function PluginCard({
+export function PluginRow({
   item,
   pending,
   renderIcon,
   onOpen,
-  onToggle,
-  onConfigure,
+  onConnect,
+  onDisconnect,
   onOpenDesktop,
 }: {
   item: PluginInventoryItem;
   pending: boolean;
   renderIcon?: PluginIconRenderer;
   onOpen: () => void;
-  onToggle: (enabled: boolean) => void;
-  onConfigure: () => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
   onOpenDesktop: () => void;
 }) {
   const disabledOnSurface = Boolean(item.unavailableReason);
   const statusTone = badgeTone(item.statusTone);
-  const icon = renderIcon?.(item, "sm") ?? <PluginGlyph item={item} size="sm" />;
+  const icon = renderIcon?.(item, "md") ?? <PluginGlyph item={item} size="md" />;
+  const showStatus = item.state === "installed" && (item.broken || !item.enabled);
 
   return (
-    <article className="group/plugin flex min-h-[96px] flex-col gap-2 rounded-lg border border-border/60 bg-foreground/5 p-3 transition-colors hover:bg-foreground/[0.075]">
-      <div className="flex min-w-0 items-start gap-3">
+    <article className="grid min-h-[5.5rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-border-light px-4 py-4 last:border-b-0 sm:px-6">
+      <div className="flex min-w-0 items-center gap-4">
         <Button
           type="button"
           variant="unstyled"
           size="unstyled"
           onClick={onOpen}
-          className="flex min-w-0 flex-1 items-start gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 items-center justify-start gap-4 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {icon}
-          <span className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium text-foreground">{item.entry.name}</span>
-              <Badge tone={statusTone} className="shrink-0">
-                {item.statusLabel}
-              </Badge>
+          <span className="min-w-0 space-y-1">
+            <span className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="min-w-0 text-sm font-medium leading-5 text-foreground">
+                {item.entry.name}
+              </span>
+              {showStatus ? (
+                <Badge tone={statusTone} className="shrink-0">
+                  {item.statusLabel}
+                </Badge>
+              ) : null}
             </span>
-            <span className="line-clamp-1 text-xs leading-5 text-muted-foreground">
+            <span className="line-clamp-2 max-w-3xl text-sm leading-5 text-muted-foreground">
               {item.entry.oneLiner}
             </span>
           </span>
         </Button>
       </div>
 
-      <div className="flex min-w-0 items-center gap-2 pl-11">
-        <div className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground/80">
-          {item.capabilitySummary}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {item.state === "installed" ? (
-            item.statusActionLabel ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                loading={pending}
-                onClick={onConfigure}
-                className="h-7 px-2 text-[11px]"
-              >
-                {item.statusActionLabel}
-              </Button>
-            ) : (
-              <Switch
-                checked={item.enabled}
-                disabled={pending}
-                onChange={onToggle}
-                size="compact"
-                aria-label={`${item.enabled ? "Disable" : "Enable"} ${item.entry.name}`}
-              />
-            )
-          ) : disabledOnSurface ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onOpenDesktop}
-              className="h-7 px-2 text-[11px]"
-            >
-              Open Desktop
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              loading={pending}
-              onClick={onConfigure}
-              className="size-7 shrink-0 rounded-md"
-              aria-label={`Install ${item.entry.name}`}
-              title={`Install ${item.entry.name}`}
-            >
-              <Plus className="size-3.5" />
-            </Button>
-          )}
-        </div>
-      </div>
+      <PluginRowAction
+        item={item}
+        pending={pending}
+        disabledOnSurface={disabledOnSurface}
+        onConnect={onConnect}
+        onDisconnect={onDisconnect}
+        onOpenDesktop={onOpenDesktop}
+      />
     </article>
+  );
+}
+
+function PluginRowAction({
+  item,
+  pending,
+  disabledOnSurface,
+  onConnect,
+  onDisconnect,
+  onOpenDesktop,
+}: {
+  item: PluginInventoryItem;
+  pending: boolean;
+  disabledOnSurface: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onOpenDesktop: () => void;
+}) {
+  if (item.state === "installed" && item.statusActionLabel) {
+    return (
+      <Button
+        type="button"
+        variant="inverted"
+        size="sm"
+        loading={pending}
+        onClick={onConnect}
+        className="h-9 min-w-24 rounded-md px-4 text-sm"
+      >
+        {item.statusActionLabel}
+      </Button>
+    );
+  }
+
+  if (item.state === "installed") {
+    return (
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        loading={pending}
+        onClick={onDisconnect}
+        className="h-9 min-w-24 rounded-md px-4 text-sm"
+      >
+        Disconnect
+      </Button>
+    );
+  }
+
+  if (disabledOnSurface) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onOpenDesktop}
+        className="h-9 min-w-24 rounded-md px-4 text-sm"
+      >
+        Open Desktop
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="inverted"
+      size="sm"
+      loading={pending}
+      onClick={onConnect}
+      className="h-9 min-w-24 rounded-md px-4 text-sm"
+    >
+      Connect
+    </Button>
   );
 }
 

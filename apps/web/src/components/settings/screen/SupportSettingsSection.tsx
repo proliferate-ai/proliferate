@@ -8,7 +8,7 @@ export function SupportSettingsSection({ onOpenSupport }: { onOpenSupport: () =>
     <section className="space-y-6">
       <SettingsPageHeader
         title="Support"
-        description="Open the dedicated support page for cloud sessions, automations, billing, and Desktop handoff."
+        description="Open the dedicated support page for cloud sessions, workflows, billing, and Desktop handoff."
       />
       <SettingsCard>
         <SettingsCardRow

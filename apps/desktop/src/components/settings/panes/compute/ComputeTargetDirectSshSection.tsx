@@ -36,7 +36,7 @@ export function ComputeTargetDirectSshSection({
     <section className="space-y-3">
       <div>
         <div className="text-sm font-medium text-foreground">Direct SSH access</div>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {targetKind === "ssh"
             ? COMPUTE_COPY.directSshHelp
             : COMPUTE_COPY.directSshUnavailable}
@@ -110,7 +110,7 @@ export function ComputeTargetDirectSshSection({
           </div>
         </div>
       ) : (
-        <div className="rounded-md border border-border/50 bg-foreground/5 p-3 text-xs text-muted-foreground">
+        <div className="rounded-md border border-border/50 bg-foreground/5 p-3 text-sm text-muted-foreground">
           {COMPUTE_COPY.directSshNotSshTarget}
         </div>
       )}

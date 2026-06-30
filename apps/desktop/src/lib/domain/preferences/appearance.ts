@@ -13,6 +13,16 @@ export type AppearanceSizeId = (typeof APPEARANCE_SIZE_IDS)[number];
 export type UiFontSizeId = AppearanceSizeId;
 export type ReadableCodeFontSizeId = AppearanceSizeId;
 
+export const WINDOW_ZOOM_IDS = [
+  "zoom80",
+  "zoom90",
+  "default",
+  "zoom110",
+  "zoom120",
+] as const;
+
+export type WindowZoomId = (typeof WINDOW_ZOOM_IDS)[number];
+
 export interface TextTokenScale {
   fontSize: string;
   lineHeight: string;
@@ -51,7 +61,13 @@ export interface ReadableCodeFontScale {
   codeLineHeight: string;
 }
 
+export interface WindowZoomScale {
+  factor: number;
+  cssValue: string;
+}
+
 export const DEFAULT_APPEARANCE_SIZE_ID: AppearanceSizeId = "default";
+export const DEFAULT_WINDOW_ZOOM_ID: WindowZoomId = "default";
 export const CHAT_LINE_HEIGHTS: Record<UiFontSizeId, string> = {
   xxsmall: "17.5px",
   xsmall: "18px",
@@ -197,12 +213,28 @@ export const READABLE_CODE_FONT_SCALES: Record<ReadableCodeFontSizeId, ReadableC
   },
 };
 
+export const WINDOW_ZOOM_SCALES: Record<WindowZoomId, WindowZoomScale> = {
+  zoom80: { factor: 0.8, cssValue: "0.8" },
+  zoom90: { factor: 0.9, cssValue: "0.9" },
+  default: { factor: 1, cssValue: "1" },
+  zoom110: { factor: 1.1, cssValue: "1.1" },
+  zoom120: { factor: 1.2, cssValue: "1.2" },
+};
+
 export function isAppearanceSizeId(value: unknown): value is AppearanceSizeId {
   return typeof value === "string" && APPEARANCE_SIZE_IDS.includes(value as AppearanceSizeId);
 }
 
 export function resolveAppearanceSizeId(value: unknown): AppearanceSizeId {
   return isAppearanceSizeId(value) ? value : DEFAULT_APPEARANCE_SIZE_ID;
+}
+
+export function isWindowZoomId(value: unknown): value is WindowZoomId {
+  return typeof value === "string" && WINDOW_ZOOM_IDS.includes(value as WindowZoomId);
+}
+
+export function resolveWindowZoomId(value: unknown): WindowZoomId {
+  return isWindowZoomId(value) ? value : DEFAULT_WINDOW_ZOOM_ID;
 }
 
 export function resolveUiFontScale(value: unknown): UiFontScale {
@@ -234,6 +266,10 @@ export function resolveReadableCodeFontScale(value: unknown): ReadableCodeFontSc
   return READABLE_CODE_FONT_SCALES[resolveAppearanceSizeId(value)];
 }
 
+export function resolveWindowZoomScale(value: unknown): WindowZoomScale {
+  return WINDOW_ZOOM_SCALES[resolveWindowZoomId(value)];
+}
+
 export function stepAppearanceSizeId(
   value: unknown,
   delta: -1 | 1,
@@ -245,6 +281,19 @@ export function stepAppearanceSizeId(
     Math.min(APPEARANCE_SIZE_IDS.length - 1, index + delta),
   );
   return APPEARANCE_SIZE_IDS[nextIndex] ?? DEFAULT_APPEARANCE_SIZE_ID;
+}
+
+export function stepWindowZoomId(
+  value: unknown,
+  delta: -1 | 1,
+): WindowZoomId {
+  const current = resolveWindowZoomId(value);
+  const index = WINDOW_ZOOM_IDS.indexOf(current);
+  const nextIndex = Math.max(
+    0,
+    Math.min(WINDOW_ZOOM_IDS.length - 1, index + delta),
+  );
+  return WINDOW_ZOOM_IDS[nextIndex] ?? DEFAULT_WINDOW_ZOOM_ID;
 }
 
 export function stepAppearanceFontSizes(

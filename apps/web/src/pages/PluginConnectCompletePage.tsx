@@ -25,8 +25,8 @@ function completionParams(search: string): URLSearchParams {
   return output;
 }
 
-function desktopPluginsDeepLink(search: string): string {
-  const url = new URL(`${desktopDeepLinkScheme()}://plugins`);
+function desktopIntegrationsDeepLink(search: string): string {
+  const url = new URL(`${desktopDeepLinkScheme()}://integrations`);
   const params = completionParams(search);
   for (const [key, value] of params.entries()) {
     url.searchParams.set(key, value);
@@ -34,9 +34,9 @@ function desktopPluginsDeepLink(search: string): string {
   return url.toString();
 }
 
-function webPluginsPath(search: string): string {
+function webIntegrationsPath(search: string): string {
   const query = completionParams(search).toString();
-  return query ? `${routes.plugins}?${query}` : routes.plugins;
+  return query ? `${routes.integrations}?${query}` : routes.integrations;
 }
 
 export function PluginConnectCompletePage() {
@@ -45,7 +45,7 @@ export function PluginConnectCompletePage() {
   const finalSurface = params.get("finalSurface");
   const shouldReturnToDesktop = finalSurface === "desktop";
   const desktopDeepLink = useMemo(
-    () => desktopPluginsDeepLink(location.search),
+    () => desktopIntegrationsDeepLink(location.search),
     [location.search],
   );
 
@@ -56,14 +56,14 @@ export function PluginConnectCompletePage() {
   }, [desktopDeepLink, shouldReturnToDesktop]);
 
   if (!shouldReturnToDesktop) {
-    return <Navigate to={webPluginsPath(location.search)} replace />;
+    return <Navigate to={webIntegrationsPath(location.search)} replace />;
   }
 
   return (
     <RedirectCallbackScreen
-      title="Plugin connected"
+      title="Integration connected"
       description="Opening Proliferate Desktop..."
-      statusLabel="Plugin redirect"
+      statusLabel="Integration redirect"
       variant="handoff"
       primaryAction={{
         label: "Click here if not redirected",

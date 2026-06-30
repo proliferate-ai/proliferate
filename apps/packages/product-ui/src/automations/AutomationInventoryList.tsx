@@ -32,7 +32,7 @@ export function AutomationInventoryList({
   onRunNow,
 }: AutomationInventoryListProps) {
   return (
-    <div className="w-full min-w-0 overflow-visible pb-10" role="region" aria-label="Automations">
+    <div className="w-full min-w-0 overflow-visible pb-10" role="region" aria-label="Workflows">
       {groups.map((group) => (
         <section key={group.id} aria-label={group.label}>
           <div className="mt-3 flex h-9 w-full items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3">
@@ -128,7 +128,7 @@ function AutomationInventoryRow({
         <span className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           {onRunNow ? (
             <RowIconButton
-              label="Run automation now"
+              label="Run workflow now"
               busy={busy === "run"}
               disabled={actionsDisabled || (busy !== null && busy !== "run") || !item.enabled}
               disabledReason={runNowReason}
@@ -202,7 +202,7 @@ function AutomationActionMenu({
   return (
     <span ref={rootRef} className="relative inline-flex">
       <RowIconButton
-        label="Automation actions"
+        label="Workflow actions"
         expanded={open}
         disabled={actionsDisabled || busy !== null}
         onClick={() => setOpen((current) => !current)}

@@ -52,6 +52,7 @@ describe("auth rules", () => {
 
   it("models password as a sign-in method rather than a linked provider", () => {
     expect(authMethodRequiresGitHubGate("password")).toBe(true);
+    expect(authMethodRequiresGitHubGate("sso")).toBe(true);
     expect(authMethodRequiresGitHubGate("github")).toBe(false);
   });
 });

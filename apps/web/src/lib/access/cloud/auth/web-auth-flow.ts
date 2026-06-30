@@ -1,5 +1,7 @@
 import {
+  discoverSso,
   exchangeWebAuthCode,
+  startSsoAuth,
   startAuthProvider,
   type AuthProviderName,
   type AuthPurpose,
@@ -8,15 +10,25 @@ import {
 
 import { routes } from "../../../../config/routes";
 import { webEnv } from "../../../../config/env";
-import { createOAuthState, createPkcePair } from "../../../infra/auth/pkce";
+import { createOAuthState, createPkcePair, hashOAuthSecret } from "../../../infra/auth/pkce";
 import { createWebCloudClient } from "../client";
 
 const PENDING_WEB_AUTH_KEY = "proliferate.web.pendingAuth";
 
+export class WebAuthFlowError extends Error {
+  code: string | null;
+
+  constructor(message: string, code: string | null) {
+    super(message);
+    this.name = "WebAuthFlowError";
+    this.code = code;
+  }
+}
+
 interface PendingWebAuth {
-  provider: AuthProviderName;
+  provider: AuthProviderName | "sso";
   purpose: AuthPurpose;
-  state: string;
+  stateHash: string;
   codeVerifier: string;
   createdAt: number;
 }
@@ -51,7 +63,62 @@ export async function startWebAuthFlow(input: {
   writePendingWebAuth({
     provider: input.provider,
     purpose,
-    state: clientState,
+    stateHash: await hashOAuthSecret(clientState),
+    codeVerifier: pkce.verifier,
+    createdAt: Date.now(),
+  });
+  window.location.assign(response.authorizationUrl);
+}
+
+export async function startWebSsoFlow(input: {
+  email?: string | null;
+  organizationId?: string | null;
+  connectionId?: string | null;
+} = {}): Promise<void> {
+  const email = input.email?.trim() ?? "";
+  const organizationId = input.organizationId ?? null;
+  const connectionId = input.connectionId ?? null;
+  const hasConnectionHint = Boolean(organizationId || connectionId);
+  const client = createWebCloudClient(webEnv.apiBaseUrl, null);
+  const discovery = await discoverSso(
+    {
+      email: email || undefined,
+      organizationId,
+      connectionId,
+    },
+    client,
+  );
+  if (!discovery.enabled) {
+    throw new Error(
+      email
+        ? "SSO is not configured for this email domain."
+        : "SSO is not configured for this deployment.",
+    );
+  }
+  if (!email && discovery.scope !== "deployment" && !hasConnectionHint) {
+    throw new Error("Enter your work email to continue with SSO.");
+  }
+  const pkce = await createPkcePair();
+  const clientState = createOAuthState();
+  const redirectUri = new URL(routes.authCallback, window.location.origin).toString();
+  const response = await startSsoAuth(
+    "web",
+    {
+      clientState,
+      codeChallenge: pkce.challenge,
+      codeChallengeMethod: "S256",
+      redirectUri,
+      email: email || undefined,
+      organizationId: organizationId ?? discovery.organizationId ?? undefined,
+      connectionId: connectionId ?? discovery.connectionId ?? undefined,
+      prompt: "select_account",
+    },
+    client,
+  );
+  writePendingWebAuth({
+    provider: "sso",
+    purpose: "login",
+    stateHash: await hashOAuthSecret(clientState),
     codeVerifier: pkce.verifier,
     createdAt: Date.now(),
   });
@@ -63,7 +130,7 @@ export async function completeWebAuthFlow(
 ): Promise<AuthSessionResponse> {
   const error = searchParams.get("error");
   if (error) {
-    throw new Error(error);
+    throw new WebAuthFlowError(authCallbackErrorMessage(error), error);
   }
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -72,7 +139,7 @@ export async function completeWebAuthFlow(
   }
   const pending = readPendingWebAuth();
   clearPendingWebAuth();
-  if (!pending || pending.state !== state) {
+  if (!pending || pending.stateHash !== await hashOAuthSecret(state)) {
     throw new Error("The auth callback state did not match this browser session.");
   }
   const client = createWebCloudClient(webEnv.apiBaseUrl, null);
@@ -84,6 +151,34 @@ export async function completeWebAuthFlow(
     },
     client,
   );
+}
+
+export function webAuthFlowErrorCode(error: unknown): string | null {
+  if (error instanceof WebAuthFlowError) {
+    return error.code;
+  }
+  if (
+    error
+    && typeof error === "object"
+    && "code" in error
+    && typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+  return null;
+}
+
+function authCallbackErrorMessage(code: string): string {
+  switch (code) {
+    case "web_beta_email_missing":
+    case "web_beta_email_not_allowed":
+      return "Hosted web access is currently limited to beta users.";
+    case "sso_connection_not_found":
+    case "not_configured":
+      return "SSO is not configured for this account.";
+    default:
+      return code;
+  }
 }
 
 function writePendingWebAuth(pending: PendingWebAuth): void {

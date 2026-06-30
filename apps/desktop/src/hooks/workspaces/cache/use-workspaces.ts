@@ -8,6 +8,7 @@ import {
 import { listCloudWorkspaces } from "@proliferate/cloud-sdk/client/workspaces";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
+import { useAuthStore } from "@/stores/auth/auth-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   elapsedMs,
@@ -93,6 +94,7 @@ async function preservePreviousOnNonAbort<T>(
 
 export function useWorkspaces(options?: UseWorkspacesOptions) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const authUserId = useAuthStore((state) => state.user?.id ?? null);
   const { cloudActive } = useCloudAvailabilityState();
   const canQuery = (options?.enabled ?? true) && (
     runtimeUrl.trim().length > 0 || cloudActive
@@ -100,7 +102,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
   const {
     getWorkspaceCollectionsCacheState,
     queryKey,
-  } = useWorkspaceCollectionsCache({ cloudActive, runtimeUrl });
+  } = useWorkspaceCollectionsCache({ authUserId, cloudActive, runtimeUrl });
 
   return useQuery<WorkspaceCollections>({
     queryKey,

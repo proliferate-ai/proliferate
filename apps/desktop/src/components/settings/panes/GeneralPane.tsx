@@ -50,6 +50,7 @@ const TURN_END_SOUND_OPTIONS: { id: TurnEndSoundId; label: string }[] = [
   { id: "ding", label: "Ding" },
   { id: "gong", label: "Gong" },
 ];
+const SETTINGS_CONTROL_WIDTH_CLASS = "w-[240px]";
 
 export function GeneralPane() {
   const navigate = useNavigate();
@@ -102,8 +103,8 @@ export function GeneralPane() {
             <SettingsMenu
               label={currentTargetLabel}
               leading={<OpenTargetIcon iconId={currentTarget?.iconId} className="size-4 rounded-sm" />}
-              className="w-44"
-              menuClassName="w-52"
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName="w-60"
               groups={[{
                 id: "targets",
                 options: targets.map((target) => ({
@@ -123,8 +124,8 @@ export function GeneralPane() {
           >
             <SettingsMenu
               label={currentBranchPrefixLabel}
-              className="w-44"
-              menuClassName="w-48"
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName="w-60"
               groups={[{
                 id: "branch-prefix",
                 options: BRANCH_PREFIX_OPTIONS.map((option) => ({
@@ -143,8 +144,8 @@ export function GeneralPane() {
           >
             <SettingsMenu
               label={currentNewWorkspaceModeLabel}
-              className="w-44"
-              menuClassName="w-44"
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName="w-60"
               groups={[{
                 id: "new-workspace-mode",
                 options: NEW_WORKSPACE_MODE_OPTIONS.map((option) => ({
@@ -189,8 +190,8 @@ export function GeneralPane() {
                   </Button>
                   <SettingsMenu
                     label={SOUND_LABELS[preferences.turnEndSoundId]}
-                    className="w-32"
-                    menuClassName="w-48"
+                    className={SETTINGS_CONTROL_WIDTH_CLASS}
+                    menuClassName="w-60"
                     groups={[{
                       id: "turn-end-sounds",
                       options: TURN_END_SOUND_OPTIONS
@@ -217,15 +218,15 @@ export function GeneralPane() {
       <GeneralSection title="Session policy">
         <SettingsCard>
           <SettingsCardRow
-            label="Plugins setup"
+            label="Integrations setup"
             description="Configure cloud connectors and plugin packages."
           >
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate(APP_ROUTES.plugins)}
+              onClick={() => navigate(APP_ROUTES.integrations)}
             >
-              Open Plugins
+              Open Integrations
             </Button>
           </SettingsCardRow>
           <SettingsCardRow
@@ -264,7 +265,7 @@ function GeneralSection({
   return (
     <div className="space-y-2">
       <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">{title}</h2>
+        <h2 className="text-base font-medium text-foreground">{title}</h2>
         {description ? (
           <p className="text-sm text-muted-foreground">{description}</p>
         ) : null}

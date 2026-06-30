@@ -66,7 +66,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
               Contact support
             </div>
             <p className="mt-1 max-w-2xl text-xs leading-4 text-muted-foreground">
-              Share what happened, what you expected, and the workspace, automation, or billing flow involved.
+              Share what happened, what you expected, and the workspace, workflow, or billing flow involved.
             </p>
           </div>
 
@@ -131,7 +131,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
       <section className="grid gap-3 sm:grid-cols-2">
         <InfoCard
           title="Product help"
-          description="Cloud sessions, Desktop handoff, billing, automations, workspace dispatch, and account issues."
+          description="Cloud sessions, Desktop handoff, billing, workflows, workspace dispatch, and account issues."
         />
         <InfoCard
           title="Account context"

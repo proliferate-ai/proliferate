@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # App
     debug: bool = False
+    proliferate_dev: bool = Field(default=False, validation_alias="PROLIFERATE_DEV")
     api_base_url: str = ""
     api_path_prefix: str = ""
     telemetry_mode: str = Field(
@@ -61,6 +62,110 @@ class Settings(BaseSettings):
     jwt_secret: str = "CHANGE-ME-IN-PRODUCTION"
     password_auth_enabled: bool = True
     password_auth_trusted_proxy_hosts: str = ""
+    web_beta_allowed_emails: str = ""
+    web_beta_allowed_domains: str = ""
+
+    # Deployment SSO (self-hosted / single-tenant)
+    sso_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PROLIFERATE_SSO_ENABLED", "SSO_ENABLED"),
+    )
+    sso_protocol: str = Field(
+        default="oidc",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_PROTOCOL", "SSO_PROTOCOL"),
+    )
+    sso_display_name: str = Field(
+        default="Company SSO",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_DISPLAY_NAME", "SSO_DISPLAY_NAME"),
+    )
+    sso_login_policy: str = Field(
+        default="optional",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_LOGIN_POLICY", "SSO_LOGIN_POLICY"),
+    )
+    sso_jit_policy: str = Field(
+        default="disabled",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_JIT_POLICY", "SSO_JIT_POLICY"),
+    )
+    sso_default_role: str = Field(
+        default="member",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_DEFAULT_ROLE", "SSO_DEFAULT_ROLE"),
+    )
+    sso_allowed_domains: str = Field(
+        default="",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_ALLOWED_DOMAINS", "SSO_ALLOWED_DOMAINS"),
+    )
+    sso_oidc_issuer_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_OIDC_ISSUER_URL", "SSO_OIDC_ISSUER_URL"),
+    )
+    sso_oidc_discovery_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_DISCOVERY_URL",
+            "SSO_OIDC_DISCOVERY_URL",
+        ),
+    )
+    sso_oidc_authorization_endpoint: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_AUTHORIZATION_ENDPOINT",
+            "SSO_OIDC_AUTHORIZATION_ENDPOINT",
+        ),
+    )
+    sso_oidc_token_endpoint: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT",
+            "SSO_OIDC_TOKEN_ENDPOINT",
+        ),
+    )
+    sso_oidc_jwks_uri: str = Field(
+        default="",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_OIDC_JWKS_URI", "SSO_OIDC_JWKS_URI"),
+    )
+    sso_oidc_userinfo_endpoint: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_USERINFO_ENDPOINT",
+            "SSO_OIDC_USERINFO_ENDPOINT",
+        ),
+    )
+    sso_oidc_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_OIDC_CLIENT_ID", "SSO_OIDC_CLIENT_ID"),
+    )
+    sso_oidc_client_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_CLIENT_SECRET",
+            "SSO_OIDC_CLIENT_SECRET",
+        ),
+    )
+    sso_oidc_scopes: str = Field(
+        default="openid email profile",
+        validation_alias=AliasChoices("PROLIFERATE_SSO_OIDC_SCOPES", "SSO_OIDC_SCOPES"),
+    )
+    sso_oidc_token_endpoint_auth_method: str = Field(
+        default="client_secret_basic",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD",
+            "SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD",
+        ),
+    )
+    sso_oidc_callback_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_CALLBACK_BASE_URL",
+            "SSO_OIDC_CALLBACK_BASE_URL",
+        ),
+    )
+    sso_oidc_allow_private_provider_urls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS",
+            "SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS",
+        ),
+    )
 
     # GitHub OAuth
     github_oauth_client_id: str = ""

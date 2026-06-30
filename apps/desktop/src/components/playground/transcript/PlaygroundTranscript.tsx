@@ -3,7 +3,6 @@ import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-rep
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { PlaygroundRecordingTranscript } from "@/components/playground/transcript/PlaygroundRecordingTranscript";
 import { renderPlaygroundPlanTranscript } from "@/components/playground/transcript/PlaygroundPlanTranscript";
-import { renderPlaygroundReviewTranscript } from "@/components/playground/transcript/PlaygroundReviewTranscript";
 import { renderPlaygroundStatusTranscript } from "@/components/playground/transcript/PlaygroundStatusTranscript";
 import { renderPlaygroundToolTranscript } from "@/components/playground/transcript/PlaygroundToolTranscript";
 import { PlaygroundLoadingStates } from "@/components/playground/loading/PlaygroundLoadingStates";
@@ -53,11 +52,6 @@ export function PlaygroundTranscript({
   );
   if (toolTranscript) {
     return toolTranscript;
-  }
-
-  const reviewTranscript = renderPlaygroundReviewTranscript(scenario);
-  if (reviewTranscript) {
-    return reviewTranscript;
   }
 
   return (

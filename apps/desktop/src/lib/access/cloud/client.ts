@@ -9,6 +9,7 @@ import {
   type ProliferateStreamRequestInput,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
+import { applySelectedOrganizationHeaders } from "@/lib/access/cloud/owner-context-headers";
 import {
   clearStoredAuthSession,
   getStoredAuthSession,
@@ -124,6 +125,7 @@ async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
     request.headers.set("accept", "application/json");
   }
   request.headers.set("authorization", `Bearer ${session.access_token}`);
+  applySelectedOrganizationHeaders(request.headers);
   if (request.body && !request.headers.has("content-type")) {
     request.headers.set("content-type", "application/json");
   }

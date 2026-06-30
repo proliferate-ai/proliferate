@@ -11,10 +11,6 @@ export type ScenarioKey =
   | "pending-prompts-multi"
   | "pending-prompts-editing"
   | "pending-prompts-with-approval"
-  | "pending-review-feedback-ready"
-  | "pending-review-complete"
-  | "review-feedback-message"
-  | "review-complete-message"
   | "composer-long-input"
   | "slash-command-search"
   | "slash-command-empty"
@@ -68,15 +64,8 @@ export type ScenarioKey =
   | "subagents-composer-single"
   | "subagents-composer-few"
   | "subagents-composer-many"
-  | "subagents-review-starting-plan"
-  | "subagents-review-starting-code"
-  | "subagents-reviewing-plan"
-  | "subagents-reviewing-code"
-  | "subagents-review-feedback-ready"
-  | "subagents-review-complete"
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
-  | "subagents-coding-review-with-approval"
   | "subagent-wake-card"
   | "mobility-local-actionable"
   | "mobility-local-blocked"
@@ -105,10 +94,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
   "pending-prompts-with-approval": { label: "Queue + approval" },
-  "pending-review-feedback-ready": { label: "Queue review feedback" },
-  "pending-review-complete": { label: "Queue review complete" },
-  "review-feedback-message": { label: "Review feedback message" },
-  "review-complete-message": { label: "Review complete message" },
   "composer-long-input": { label: "Composer long input" },
   "slash-command-search": { label: "Slash commands" },
   "slash-command-empty": { label: "Slash commands empty" },
@@ -162,15 +147,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-composer-single": { label: "Agents single" },
   "subagents-composer-few": { label: "Agents subagents (3)" },
   "subagents-composer-many": { label: "Agents subagents (10)" },
-  "subagents-review-starting-plan": { label: "Review starting (plan)" },
-  "subagents-review-starting-code": { label: "Review starting (code)" },
-  "subagents-reviewing-plan": { label: "Reviewing plan" },
-  "subagents-reviewing-code": { label: "Reviewing code" },
-  "subagents-review-feedback-ready": { label: "Review feedback ready" },
-  "subagents-review-complete": { label: "Review complete" },
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
-  "subagents-coding-review-with-approval": { label: "Agents mixed + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
   "mobility-local-actionable": { label: "Mobility (actionable)" },
   "mobility-local-blocked": { label: "Mobility (blocked)" },

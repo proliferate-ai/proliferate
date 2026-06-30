@@ -95,7 +95,6 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
       return null;
     case "pending-prompts-with-approval":
     case "subagents-queued-wake-with-approval":
-    case "subagents-coding-review-with-approval":
       return (
         <ApprovalCard
           title="wc -l /Users/pablo/proliferate/server/proliferate/**/*.py | tail -1"

@@ -14,12 +14,7 @@ import {
 import {
   buildCloudRepoEnvVarRows,
   buildCloudRepoEnvVarsFromRows,
-  buildCloudRepoSharedEnvFilePayloads,
-  buildCloudRepoSharedEnvFiles,
-  buildEmptyCloudRepoSharedEnvFile,
-  cloudRepoSharedEnvFilesEqual,
   type CloudRepoEnvVarRow,
-  type CloudRepoSharedEnvFile,
 } from "@/lib/domain/settings/cloud-repo-config-draft";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 
@@ -38,8 +33,6 @@ interface CloudRepoDraftViewState {
   draftState: CloudEnvironmentDraftState;
   activeSourceKey: string;
   envVarRows: CloudRepoEnvVarRow[];
-  sharedEnvFiles: CloudRepoSharedEnvFile[];
-  revertSharedEnvFiles: CloudRepoSharedEnvFile[];
 }
 
 export function useCloudRepoConfigDraft({
@@ -60,8 +53,6 @@ export function useCloudRepoConfigDraft({
     draftState: initialDraftState,
     activeSourceKey: sourceKey,
     envVarRows: buildCloudRepoEnvVarRows(initialDraftState.draft.envVars, createRowId),
-    sharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
-    revertSharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
   }));
 
   const envVars = useMemo(
@@ -75,12 +66,7 @@ export function useCloudRepoConfigDraft({
     }),
     [state.draftState.draft, envVars],
   );
-  const sharedEnvFilesDirty = !cloudRepoSharedEnvFilesEqual(
-    state.sharedEnvFiles,
-    state.revertSharedEnvFiles,
-  );
-  const dirty = isCloudEnvironmentDraftDirty(currentDraft, state.draftState.revertDraft)
-    || sharedEnvFilesDirty;
+  const dirty = isCloudEnvironmentDraftDirty(currentDraft, state.draftState.revertDraft);
   const configurable = isCloudEnvironmentDraftConfigurable(currentDraft, state.draftState.baseline);
   const savePayload = useMemo(
     () => buildCloudEnvironmentSavePayload(currentDraft),
@@ -97,10 +83,8 @@ export function useCloudRepoConfigDraft({
       draftState: initialDraftState,
       activeSourceKey: sourceKey,
       envVarRows: buildCloudRepoEnvVarRows(initialDraftState.draft.envVars, createRowId),
-      sharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
-      revertSharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
     });
-  }, [dirty, initialDraftState, savedConfig, sourceKey, state.activeSourceKey]);
+  }, [dirty, initialDraftState, sourceKey, state.activeSourceKey]);
 
   const updateDraft = useCallback((patch: Partial<CloudEnvironmentDraft>) => {
     setState((current) => ({
@@ -152,99 +136,6 @@ export function useCloudRepoConfigDraft({
     }));
   }, []);
 
-  const addSharedEnvFile = useCallback(() => {
-    setState((current) => ({
-      ...current,
-      draftState: {
-        ...current.draftState,
-        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
-      },
-      sharedEnvFiles: [
-        ...current.sharedEnvFiles,
-        buildEmptyCloudRepoSharedEnvFile({
-          files: current.sharedEnvFiles,
-          createId: createRowId,
-        }),
-      ],
-    }));
-  }, []);
-
-  const updateSharedEnvFilePath = useCallback((fileId: string, relativePath: string) => {
-    setState((current) => ({
-      ...current,
-      draftState: {
-        ...current.draftState,
-        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
-      },
-      sharedEnvFiles: current.sharedEnvFiles.map((file) =>
-        file.id === fileId ? { ...file, relativePath } : file),
-    }));
-  }, []);
-
-  const addSharedEnvFileRow = useCallback((fileId: string) => {
-    setState((current) => ({
-      ...current,
-      draftState: {
-        ...current.draftState,
-        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
-      },
-      sharedEnvFiles: current.sharedEnvFiles.map((file) => (
-        file.id === fileId
-          ? { ...file, rows: [...file.rows, { id: createRowId(), key: "", value: "" }] }
-          : file
-      )),
-    }));
-  }, []);
-
-  const updateSharedEnvFileRow = useCallback((
-    fileId: string,
-    rowId: string,
-    patch: Partial<Pick<CloudRepoEnvVarRow, "key" | "value">>,
-  ) => {
-    setState((current) => ({
-      ...current,
-      draftState: {
-        ...current.draftState,
-        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
-      },
-      sharedEnvFiles: current.sharedEnvFiles.map((file) => (
-        file.id === fileId
-          ? {
-              ...file,
-              rows: file.rows.map((row) =>
-                row.id === rowId ? { ...row, ...patch } : row),
-            }
-          : file
-      )),
-    }));
-  }, []);
-
-  const removeSharedEnvFileRow = useCallback((fileId: string, rowId: string) => {
-    setState((current) => ({
-      ...current,
-      draftState: {
-        ...current.draftState,
-        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
-      },
-      sharedEnvFiles: current.sharedEnvFiles.map((file) => (
-        file.id === fileId
-          ? { ...file, rows: file.rows.filter((row) => row.id !== rowId) }
-          : file
-      )),
-    }));
-  }, []);
-
-  const removeSharedEnvFile = useCallback((fileId: string) => {
-    setState((current) => ({
-      ...current,
-      draftState: {
-        ...current.draftState,
-        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
-      },
-      sharedEnvFiles: current.sharedEnvFiles.filter((file) => file.id !== fileId),
-    }));
-  }, []);
-
   const addTrackedFile = useCallback((relativePath: string) => {
     const normalizedPath = relativePath.trim();
     if (!normalizedPath) {
@@ -292,7 +183,6 @@ export function useCloudRepoConfigDraft({
         draft: current.draftState.revertDraft,
       },
       envVarRows: buildCloudRepoEnvVarRows(current.draftState.revertDraft.envVars, createRowId),
-      sharedEnvFiles: current.revertSharedEnvFiles,
     }));
   }, []);
 
@@ -304,7 +194,6 @@ export function useCloudRepoConfigDraft({
         draft: buildDisabledCloudEnvironmentDraft(),
       },
       envVarRows: [],
-      sharedEnvFiles: [],
     }));
   }, []);
 
@@ -314,8 +203,6 @@ export function useCloudRepoConfigDraft({
       ...current,
       draftState: nextState,
       envVarRows: buildCloudRepoEnvVarRows(nextState.draft.envVars, createRowId),
-      sharedEnvFiles: buildCloudRepoSharedEnvFiles(nextSavedConfig, createRowId),
-      revertSharedEnvFiles: buildCloudRepoSharedEnvFiles(nextSavedConfig, createRowId),
     }));
   }, []);
 
@@ -325,9 +212,6 @@ export function useCloudRepoConfigDraft({
     setDefaultBranch: (defaultBranch: string | null) => updateDraft({ defaultBranch }),
     envVarRows: state.envVarRows,
     envVars,
-    sharedEnvFiles: state.sharedEnvFiles,
-    sharedEnvFilesDirty,
-    sharedEnvFilePayloads: buildCloudRepoSharedEnvFilePayloads(state.sharedEnvFiles),
     trackedFilePaths: currentDraft.trackedFilePaths,
     setupScript: currentDraft.setupScript,
     setSetupScript: (setupScript: string) => updateDraft({ setupScript }),
@@ -340,12 +224,6 @@ export function useCloudRepoConfigDraft({
     addEnvVarRow,
     updateEnvVarRow,
     removeEnvVarRow,
-    addSharedEnvFile,
-    updateSharedEnvFilePath,
-    addSharedEnvFileRow,
-    updateSharedEnvFileRow,
-    removeSharedEnvFileRow,
-    removeSharedEnvFile,
     addTrackedFile,
     removeTrackedFile,
     revert,

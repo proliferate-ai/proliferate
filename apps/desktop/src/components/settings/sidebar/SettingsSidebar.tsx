@@ -1,14 +1,16 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import {
   Archive,
   ArrowLeft,
+  Blocks,
   Building2,
+  Brain,
   CircleUser,
-  ClipboardList,
   CreditCard,
   FolderList,
   Keyboard,
   LifeBuoy,
+  Link2,
   Palette,
   RefreshCw,
   Server,
@@ -19,14 +21,17 @@ import {
   UsersRound,
 } from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
+import { AppSidebarFooter } from "@/components/app/sidebar/AppSidebarFooter";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   SETTINGS_SHORTCUT_SECTION_ORDER,
+  TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
 } from "@/config/settings";
 import {
   SETTINGS_NAV_GROUPS,
+  isSettingsAdminOnlySection,
   type SettingsNavIconId,
   type SettingsNavItem,
 } from "@/lib/domain/settings/navigation-presentation";
@@ -57,19 +62,19 @@ interface SettingsSidebarProps {
 }
 
 const SETTINGS_SIDEBAR_ROOT_CLASS =
-  "flex h-full w-[280px] shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar";
-const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-2.5 pb-4";
+  "flex h-full w-[280px] shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground";
+const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-3 pb-5";
 const SETTINGS_GROUPS_CLASS = "flex flex-col";
-const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
-const SETTINGS_GROUP_SPACING_CLASS = "mt-4";
+const SETTINGS_GROUP_CLASS = "flex flex-col gap-1";
+const SETTINGS_GROUP_SPACING_CLASS = "mt-5";
 const SETTINGS_GROUP_HEADING_CLASS =
-  "px-2 pb-1 pt-1.5 text-[11px] font-medium leading-4 tracking-normal text-sidebar-muted-foreground";
+  "px-2.5 pb-1 pt-1.5 text-base font-medium tracking-normal text-sidebar-muted-foreground";
 const SETTINGS_ROW_INACTIVE_CLASS =
   "!text-sidebar-foreground hover:!text-sidebar-foreground";
 const SETTINGS_BACK_ROW_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-foreground";
 const SETTINGS_ROW_ACTIVE_CLASS =
-  "!font-medium !text-sidebar-foreground";
+  "!text-sidebar-foreground";
 const SETTINGS_ROW_DISABLED_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-muted-foreground";
 
@@ -86,8 +91,11 @@ const SETTINGS_NAV_ICONS = {
   general: Settings,
   keyboard: Keyboard,
   organization: Building2,
-  review: ClipboardList,
-  "shared-environments": UsersRound,
+  "organization-integrations": Blocks,
+  "organization-limits": SlidersHorizontal,
+  "organization-members": UsersRound,
+  "organization-model-policy": Brain,
+  "organization-sso": Link2,
   support: LifeBuoy,
   worktrees: Tree,
 } satisfies Record<SettingsNavIconId, typeof Settings>;
@@ -107,11 +115,9 @@ function isSettingsItemDisabled(
   item: SettingsNavItem,
   disabledSections: Partial<Record<SettingsSection, boolean>> | undefined,
   updateActionState: SettingsSidebarProps["updateActionState"],
-  adminAccess: SettingsSidebarProps["adminAccess"],
 ) {
   return (
     (item.kind === "section" && !!disabledSections?.[item.id])
-    || (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true)
     || (item.kind === "action"
       && item.id === "checkForUpdates"
       && !updateActionState.updatesSupported)
@@ -122,39 +128,40 @@ function settingsItemStatus(
   item: SettingsNavItem,
   updateActionState: SettingsSidebarProps["updateActionState"],
 ) {
-  if (item.kind === "section" && item.adminOnly === true) {
-    return <AdminPill />;
-  }
-  if (item.kind !== "action" || item.id !== "checkForUpdates") {
-    return null;
+  const statusItems: ReactNode[] = [];
+  if (item.tbr === true) {
+    statusItems.push(<TbrPill key="tbr" />);
   }
 
-  if (!updateActionState.updatesSupported) {
-    return "Packaged only";
+  if (item.kind === "action" && item.id === "checkForUpdates") {
+    if (!updateActionState.updatesSupported) {
+      statusItems.push(<span key="updates">Packaged only</span>);
+    } else if (updateActionState.isChecking) {
+      statusItems.push(<span key="updates">Checking...</span>);
+    } else if (updateActionState.phase === "downloading") {
+      statusItems.push(<span key="updates">Downloading</span>);
+    } else if (updateActionState.hasAvailableUpdate) {
+      statusItems.push(<span key="updates">Available</span>);
+    }
   }
-  if (updateActionState.isChecking) {
-    return "Checking...";
+
+  return renderStatusItems(statusItems);
+}
+
+function renderStatusItems(items: ReactNode[]) {
+  if (items.length === 0) {
+    return null;
   }
-  if (updateActionState.phase === "downloading") {
-    return "Downloading";
-  }
-  if (updateActionState.hasAvailableUpdate) {
-    return "Available";
-  }
-  return null;
+  return <span className="flex items-center gap-1">{items}</span>;
 }
 
 function settingsItemDisabledReason(
   item: SettingsNavItem,
   disabled: boolean,
   updateActionState: SettingsSidebarProps["updateActionState"],
-  adminAccess: SettingsSidebarProps["adminAccess"],
 ) {
   if (!disabled) {
     return undefined;
-  }
-  if (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true) {
-    return adminAccess?.isLoading ? "Checking admin access" : "Admin access required";
   }
   if (item.kind === "action" && item.id === "checkForUpdates" && !updateActionState.updatesSupported) {
     return "Desktop updates are available in packaged builds.";
@@ -162,10 +169,14 @@ function settingsItemDisabledReason(
   return undefined;
 }
 
-function AdminPill() {
+function TbrPill() {
   return (
-    <span className="rounded-sm border border-sidebar-border px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-sidebar-muted-foreground">
-      Admin
+    <span
+      aria-hidden="true"
+      title="To be removed"
+      className="rounded-md border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 text-sm font-semibold leading-none tracking-normal text-sidebar-muted-foreground"
+    >
+      tbr
     </span>
   );
 }
@@ -182,23 +193,36 @@ export function SettingsSidebar({
   const appVersion = useAppVersion().data?.trim();
   const handleOpenSupport = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
+  const visibleNavGroups = useMemo(() =>
+    SETTINGS_NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        item.kind !== "section"
+        || !isSettingsAdminOnlySection(item.id)
+        || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+        || adminAccess?.isAdmin === true
+      ),
+    })).filter((group) => group.items.length > 0),
+  [adminAccess?.isAdmin]);
+  const visibleShortcutSections = useMemo(() => {
+    const visibleSections = new Set(
+      visibleNavGroups.flatMap((group) =>
+        group.items.flatMap((item) => item.kind === "section" ? [item.id] : [])
+      ),
+    );
+    return SETTINGS_SHORTCUT_SECTION_ORDER.filter((section) =>
+      visibleSections.has(section)
+    );
+  }, [visibleNavGroups]);
   const effectiveDisabledSections = useMemo(() => {
-    const next: Partial<Record<SettingsSection, boolean>> = { ...disabledSections };
-    for (const group of SETTINGS_NAV_GROUPS) {
-      for (const item of group.items) {
-        if (item.kind === "section" && item.adminOnly === true && adminAccess?.isAdmin !== true) {
-          next[item.id] = true;
-        }
-      }
-    }
-    return next;
-  }, [adminAccess?.isAdmin, disabledSections]);
+    return { ...disabledSections };
+  }, [disabledSections]);
   const shortcutTargets = useMemo(
     () => buildSettingsShortcutSectionTargets(
-      SETTINGS_SHORTCUT_SECTION_ORDER,
+      visibleShortcutSections,
       effectiveDisabledSections,
     ),
-    [effectiveDisabledSections],
+    [effectiveDisabledSections, visibleShortcutSections],
   );
   const shortcutLabelBySection = useMemo(
     () => buildShortcutRangeLabelById(
@@ -212,7 +236,7 @@ export function SettingsSidebar({
     onSelectSection,
   });
   function handleItemClick(item: SettingsNavItem) {
-    if (isSettingsItemDisabled(item, effectiveDisabledSections, updateActionState, adminAccess)) {
+    if (isSettingsItemDisabled(item, effectiveDisabledSections, updateActionState)) {
       return;
     }
 
@@ -238,7 +262,7 @@ export function SettingsSidebar({
     <div className={SETTINGS_SIDEBAR_ROOT_CLASS}>
       <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
 
-      <div className="mb-4 px-2.5">
+      <div className="mb-5 px-3">
         <SidebarNavRow
           icon={<ArrowLeft className="size-4" />}
           label={SETTINGS_COPY.back}
@@ -249,7 +273,7 @@ export function SettingsSidebar({
 
       <nav className={SETTINGS_NAV_CLASS} aria-label="Settings">
         <div className={SETTINGS_GROUPS_CLASS}>
-          {SETTINGS_NAV_GROUPS.map((group, index) => (
+          {visibleNavGroups.map((group, index) => (
             <div
               key={group.id}
               className={`${SETTINGS_GROUP_CLASS} ${index > 0 ? SETTINGS_GROUP_SPACING_CLASS : ""}`}
@@ -265,7 +289,6 @@ export function SettingsSidebar({
                   item,
                   effectiveDisabledSections,
                   updateActionState,
-                  adminAccess,
                 );
                 const Icon = SETTINGS_NAV_ICONS[item.iconId];
                 return (
@@ -283,7 +306,6 @@ export function SettingsSidebar({
                         item,
                         disabled,
                         updateActionState,
-                        adminAccess,
                       )}
                       onPress={() => handleItemClick(item)}
                       active={active}
@@ -295,15 +317,16 @@ export function SettingsSidebar({
                   </Fragment>
                 );
               })}
+              {group.id === "help" && appVersion ? (
+                <div className="px-2.5 py-2 text-base leading-5 text-sidebar-muted-foreground">
+                  Proliferate v{appVersion}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
       </nav>
-      {appVersion ? (
-        <div className="shrink-0 border-t border-sidebar-border px-3 py-2 text-xs text-sidebar-muted-foreground">
-          Proliferate v{appVersion}
-        </div>
-      ) : null}
+      <AppSidebarFooter />
     </div>
   );
 }

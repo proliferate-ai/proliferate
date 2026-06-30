@@ -3,7 +3,7 @@ import { useAutomationMutations } from "@/hooks/access/cloud/automations/use-aut
 import { useToastStore } from "@/stores/toast/toast-store";
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Automation action failed.";
+  return error instanceof Error ? error.message : "Workflow action failed.";
 }
 
 // Owns user-facing automation action callbacks and toast behavior.
@@ -22,7 +22,7 @@ export function useAutomationActions() {
     try {
       await pauseMutation.mutateAsync(automationId);
     } catch (error) {
-      showToast(`Failed to pause automation: ${errorMessage(error)}`);
+      showToast(`Failed to pause workflow: ${errorMessage(error)}`);
     }
   }, [pauseMutation, showToast]);
 
@@ -30,7 +30,7 @@ export function useAutomationActions() {
     try {
       await resumeMutation.mutateAsync(automationId);
     } catch (error) {
-      showToast(`Failed to resume automation: ${errorMessage(error)}`);
+      showToast(`Failed to resume workflow: ${errorMessage(error)}`);
     }
   }, [resumeMutation, showToast]);
 
@@ -38,7 +38,7 @@ export function useAutomationActions() {
     try {
       await runNowMutation.mutateAsync(automationId);
     } catch (error) {
-      showToast(`Failed to queue automation run: ${errorMessage(error)}`);
+      showToast(`Failed to queue workflow run: ${errorMessage(error)}`);
     }
   }, [runNowMutation, showToast]);
 

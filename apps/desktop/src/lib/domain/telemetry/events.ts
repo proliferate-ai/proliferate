@@ -1,10 +1,11 @@
 import type { TelemetryFailureKind } from "./failures";
 
 export type DesktopTelemetryRoute =
-  | "automations"
+  | "integrations"
   | "login"
   | "main"
   | "settings"
+  | "workflows"
   | "unknown";
 export type DesktopWorkspaceKind = "cloud" | "local";
 export type SupportReportScopeKind =
@@ -32,7 +33,7 @@ export type RuntimeInputSyncTelemetryFailureKind =
   | "too_large"
   | "runtime_unavailable"
   | "request_failed";
-export type AuthTelemetryProvider = "apple" | "dev_bypass" | "github" | "google";
+export type AuthTelemetryProvider = "apple" | "dev_bypass" | "github" | "google" | "sso";
 export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_poll";
 export type WorkspaceCreationKind = "repo" | "worktree" | "local";
 export type WorkspaceOpenSource = "filesystem";

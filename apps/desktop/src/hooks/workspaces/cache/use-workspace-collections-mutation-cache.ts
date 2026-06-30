@@ -18,6 +18,7 @@ import {
   workspaceCollectionsKey,
   workspaceCollectionsScopeKey,
 } from "@/hooks/workspaces/cache/query-keys";
+import { useAuthStore } from "@/stores/auth/auth-store";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
   previousLocalCount: number;
@@ -70,20 +71,22 @@ export function upsertCloudWorkspaceForRuntime(
   queryClient: QueryClient,
   runtimeUrl: string,
   workspace: CloudWorkspaceDetail,
+  authUserId: string | null = null,
 ): void {
   const nextCollections = upsertCloudWorkspaceCollections(
-    getWorkspaceCollectionsFromCache(queryClient, runtimeUrl),
+    getWorkspaceCollectionsFromCache(queryClient, runtimeUrl, authUserId),
     workspace,
   ) ?? buildWorkspaceCollections([], [], [workspace]);
 
   queryClient.setQueryData(
-    workspaceCollectionsKey(runtimeUrl, true),
+    workspaceCollectionsKey(runtimeUrl, true, authUserId),
     nextCollections,
   );
 }
 
 export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   const queryClient = useQueryClient();
+  const authUserId = useAuthStore((state) => state.user?.id ?? null);
 
   const upsertLocalWorkspace = useCallback(
     (
@@ -99,7 +102,7 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   }, [queryClient, runtimeUrl]);
 
   const upsertCloudWorkspace = useCallback((workspace: CloudWorkspaceDetail) => {
-    upsertCloudWorkspaceForRuntime(queryClient, runtimeUrl, workspace);
+    upsertCloudWorkspaceForRuntime(queryClient, runtimeUrl, workspace, authUserId);
     queryClient.setQueryData<CloudMobilityWorkspaceSummary[] | undefined>(
       cloudMobilityWorkspacesKey(),
       (workspaces) => workspaces?.map((candidate) => (
@@ -116,7 +119,7 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
           : candidate
       )),
     );
-  }, [queryClient, runtimeUrl]);
+  }, [authUserId, queryClient, runtimeUrl]);
 
   return {
     upsertCloudWorkspace,

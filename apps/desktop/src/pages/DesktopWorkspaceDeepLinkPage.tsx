@@ -16,7 +16,7 @@ export function DesktopWorkspaceDeepLinkPage() {
 
   useEffect(() => {
     if (!workspaceId) {
-      navigate(APP_ROUTES.workspaces, { replace: true });
+      navigate(APP_ROUTES.home, { replace: true });
       return;
     }
 
@@ -37,7 +37,7 @@ export function DesktopWorkspaceDeepLinkPage() {
         }
         const message = error instanceof Error ? error.message : "Failed to open workspace.";
         showToast(message);
-        navigate(APP_ROUTES.workspaces, { replace: true });
+        navigate(APP_ROUTES.home, { replace: true });
       });
 
     return () => {

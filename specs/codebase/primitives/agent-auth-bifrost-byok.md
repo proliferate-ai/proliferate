@@ -78,8 +78,9 @@ Out of scope:
 - Proliferate hot-path LLM request forwarding.
 - Real-time penny-perfect billing enforcement.
 - Replacing Bifrost with a custom router.
-- Multi-organization membership changes except where billing ownership needs a
-  single active organization.
+- Additional self-serve organization creation beyond the user's default
+  organization. Users may still belong to multiple organizations through
+  invitations.
 - Organization billing UI in full; this spec only defines the auth/usage
   surfaces it must consume.
 - Long-term HA topology for Bifrost. V1 requires an operator-run hosted
@@ -98,7 +99,7 @@ agent-auth, sandbox profile, and Bifrost-materialization records.
 | Model | Owns | Important notes |
 | --- | --- | --- |
 | `Organization` | Team shell and status | Team checkout creates a `pending_checkout` organization first, then Stripe activation marks it `active`. |
-| `OrganizationMembership` | Active team membership and role | One active membership per user is enforced, so team creation must fail clearly if the creator already belongs to a team. |
+| `OrganizationMembership` | Active team membership and role | Users may hold active memberships in multiple organizations. Product creation paths still avoid creating extra organizations beyond the user's default organization. |
 | `OrganizationCheckoutIntent` | In-progress Team upgrade checkout | Stores pending organization, creator, Stripe ids, checkout URL, activation state, expiry, invite emails, and idempotency key. |
 | `BillingSubject` and billing grant rows | Cloud and managed-credit budget ownership | Personal account credits and organization/team budgets stay separate. Free LLM credits must not require creating a team. |
 | `SandboxProfile` | Personal or organization sandbox config | Holds owner scope, billing subject, desired agent-auth revision, and lifecycle status for the sandbox profile. |
@@ -164,10 +165,11 @@ Fields: `id`, `organization_id`, `created_by_user_id`, `billing_subject_id`,
 
 #### `organization_invitation`
 
-Row: staged or delivered invite into the newly activated Team.
+Row: staged or delivered invite into the newly activated Team. Invite links are
+organization-scoped join URLs; the invitation row is accepted by matching the
+authenticated user's email to a pending invitation for that organization.
 
-Fields: `id`, `organization_id`, `email`, `role`, `status`, `token_hash`,
-`handoff_token_hash`, `handoff_expires_at`, `delivery_status`,
+Fields: `id`, `organization_id`, `email`, `role`, `status`, `delivery_status`,
 `delivery_error`, `delivered_at`, `invited_by_user_id`, `accepted_by_user_id`,
 `expires_at`, `accepted_at`, `revoked_at`, `expired_at`, `created_at`,
 `updated_at`.

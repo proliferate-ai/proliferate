@@ -28,6 +28,7 @@ export const scratchHighlightStyle = HighlightStyle.define([
   // Heading scale/spacing lives on the line (see scratchEditorTheme) so it
   // survives the caret revealing the raw "#"; here we only carry weight/colour.
   { tag: tags.heading, color: "var(--color-foreground)", fontWeight: "600" },
+  { tag: tags.processingInstruction, color: "var(--color-sidebar-muted-foreground)" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "600" },
   { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--color-muted-foreground)" },
@@ -94,10 +95,6 @@ export const scratchEditorTheme = EditorView.theme({
   ".cm-cursor": {
     borderLeftColor: "var(--color-foreground)",
     borderLeftWidth: "1px",
-    // Match the caret to the text's own height (ascender→baseline), centred in
-    // the line box, instead of the full line-height. Scales with headings.
-    height: "1em !important",
-    marginTop: "0.33em",
   },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--color-foreground) 18%, transparent)",
@@ -121,16 +118,23 @@ export const scratchEditorTheme = EditorView.theme({
   },
   ".scratch-list-marker": {
     display: "inline-flex",
-    width: "var(--scratch-list-marker-width)",
-    justifyContent: "center",
+    boxSizing: "border-box",
+    paddingLeft: "var(--scratch-list-marker-leading-space)",
+    justifyContent: "flex-start",
     color: "var(--color-sidebar-muted-foreground)",
   },
+  ".scratch-list-marker--ordered": {
+    width: "auto",
+    fontVariantNumeric: "tabular-nums",
+  },
   ".scratch-task-checkbox": {
-    display: "inline-block",
-    width: "var(--scratch-list-marker-width)",
+    display: "inline-flex",
     height: "1em",
-    margin: "0 0.1em 0 0",
+    margin: "0",
+    paddingLeft: "var(--scratch-list-marker-leading-space)",
     boxSizing: "border-box",
+    alignItems: "center",
+    justifyContent: "flex-start",
     lineHeight: "1",
     position: "relative",
     verticalAlign: "-0.1em",
@@ -140,14 +144,11 @@ export const scratchEditorTheme = EditorView.theme({
     width: "var(--scratch-task-box-size)",
     height: "var(--scratch-task-box-size)",
     boxSizing: "border-box",
-    position: "absolute",
-    left: "50%",
-    top: "50%",
+    position: "relative",
     border: "1px solid color-mix(in oklab, var(--color-sidebar-muted-foreground) 72%, transparent)",
     borderRadius: "0.18em",
     background: "transparent",
     color: "transparent",
-    transform: "translate(-50%, -50%)",
   },
   ".scratch-task-checkbox[data-checked=\"true\"] .scratch-task-box": {
     borderColor: "color-mix(in oklab, var(--color-foreground) 68%, transparent)",
@@ -202,13 +203,8 @@ function buildScratchListDecorations(view: EditorView) {
       const prefix = parseScratchMarkdownListPrefix(line.text);
       if (prefix) {
         const markerFrom = line.from + prefix.indent.length;
-        const markerTo = line.from + prefix.prefixLength;
-        const widget = prefix.kind === "task"
-          ? new ScratchTaskWidget({
-            checked: prefix.checked,
-            checkboxPosition: line.from + (prefix.checkboxOffset ?? 0),
-          })
-          : new ScratchBulletWidget();
+        const markerTo = line.from + prefix.indent.length + markerReplacementLength(prefix);
+        const widget = listMarkerWidget(prefix, line.from);
         decorations.push(Decoration.replace({
           widget,
           inclusive: false,
@@ -223,6 +219,29 @@ function buildScratchListDecorations(view: EditorView) {
   return Decoration.set(decorations, true);
 }
 
+function markerReplacementLength(prefix: NonNullable<ReturnType<typeof parseScratchMarkdownListPrefix>>) {
+  if (prefix.kind === "task") {
+    return prefix.marker.length + 1 + 3;
+  }
+  return prefix.marker.length;
+}
+
+function listMarkerWidget(
+  prefix: NonNullable<ReturnType<typeof parseScratchMarkdownListPrefix>>,
+  lineFrom: number,
+) {
+  if (prefix.kind === "task") {
+    return new ScratchTaskWidget({
+      checked: prefix.checked,
+      checkboxPosition: lineFrom + (prefix.checkboxOffset ?? 0),
+    });
+  }
+  if (prefix.kind === "ordered") {
+    return new ScratchOrderedListWidget(prefix.marker);
+  }
+  return new ScratchBulletWidget();
+}
+
 class ScratchBulletWidget extends WidgetType {
   eq() {
     return true;
@@ -232,6 +251,23 @@ class ScratchBulletWidget extends WidgetType {
     const marker = document.createElement("span");
     marker.className = "scratch-list-marker";
     marker.textContent = "•";
+    return marker;
+  }
+}
+
+class ScratchOrderedListWidget extends WidgetType {
+  constructor(private readonly markerText: string) {
+    super();
+  }
+
+  eq(other: ScratchOrderedListWidget) {
+    return this.markerText === other.markerText;
+  }
+
+  toDOM() {
+    const marker = document.createElement("span");
+    marker.className = "scratch-list-marker scratch-list-marker--ordered";
+    marker.textContent = this.markerText;
     return marker;
   }
 }

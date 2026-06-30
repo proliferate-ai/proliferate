@@ -4,7 +4,8 @@ export type AuthLinkedProvider = components["schemas"]["AuthLinkedProvider"];
 export type AuthProviderAvailability =
   components["schemas"]["AuthProviderAvailability"];
 export type AuthPasswordCredential = components["schemas"]["AuthPasswordCredential"];
-export type AuthProviderName = AuthLinkedProvider["provider"];
+export type AuthProviderName = AuthProviderAvailability["provider"];
+export type AuthLinkedProviderName = AuthLinkedProvider["provider"];
 export type AuthViewerResponse = components["schemas"]["AuthViewerResponse"];
 export type AuthOnboardingState = AuthViewerResponse["onboardingState"];
 export type AuthSurface = "web" | "mobile" | "desktop";

@@ -158,6 +158,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/sso/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover Sso Endpoint */
+        get: operations["discover_sso_endpoint_auth_sso_discover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/{surface}/sso/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Sso Endpoint */
+        post: operations["start_sso_endpoint_auth__surface__sso_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sso/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oidc Sso Callback */
+        get: operations["oidc_sso_callback_auth_sso_oidc_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/github/link/start": {
         parameters: {
             query?: never;
@@ -1593,6 +1644,24 @@ export interface paths {
         head?: never;
         /** Update Agent Run Config Endpoint */
         patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/integration-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Organization Integration Policy Endpoint */
+        get: operations["get_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Organization Integration Policy Endpoint */
+        patch: operations["patch_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_patch"];
         trace?: never;
     };
     "/v1/cloud/mcp/catalog": {
@@ -3079,6 +3148,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/invitations/current/{invitation_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Current User Organization Invitation Endpoint */
+        post: operations["accept_current_user_organization_invitation_endpoint_v1_organizations_invitations_current__invitation_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/organizations": {
         parameters: {
             query?: never;
@@ -3167,6 +3253,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/{organization_id}/join-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Organization Join Link Endpoint */
+        get: operations["get_organization_join_link_endpoint_v1_organizations__organization_id__join_link_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/organizations/{organization_id}/invitations/{invitation_id}/resend": {
         parameters: {
             query?: never;
@@ -3196,6 +3299,93 @@ export interface paths {
         post?: never;
         /** Revoke Organization Invitation Endpoint */
         delete: operations["revoke_organization_invitation_endpoint_v1_organizations__organization_id__invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/sso/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Organization Sso Connections Endpoint */
+        get: operations["list_organization_sso_connections_endpoint_v1_organizations__organization_id__sso_connections_get"];
+        put?: never;
+        /** Create Organization Sso Connection Endpoint */
+        post: operations["create_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/sso/connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Organization Sso Connection Endpoint */
+        delete: operations["delete_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Organization Sso Connection Endpoint */
+        patch: operations["update_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__patch"];
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/sso/connections/{connection_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Organization Sso Connection Endpoint */
+        post: operations["test_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/sso/connections/{connection_id}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Organization Sso Connection Endpoint */
+        post: operations["enable_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/sso/connections/{connection_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Organization Sso Connection Endpoint */
+        post: operations["disable_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__disable_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3469,6 +3659,58 @@ export interface paths {
         get: operations["list_automation_runs_endpoint_v1_automations__automation_id__runs_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/dev/desktop-handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Take Dev Desktop Handoff Endpoint */
+        get: operations["take_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff_get"];
+        put?: never;
+        /** Enqueue Dev Desktop Handoff Endpoint */
+        post: operations["enqueue_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/dev/desktop-handoff/{handoff_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dev Desktop Handoff Endpoint */
+        get: operations["get_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff__handoff_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/dev/desktop-handoff/{handoff_id}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Dev Desktop Handoff Opened Endpoint */
+        post: operations["mark_dev_desktop_handoff_opened_endpoint_v1_dev_desktop_handoff__handoff_id__opened_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4265,13 +4507,17 @@ export interface components {
              * Provider
              * @enum {string}
              */
-            provider: "github" | "google" | "apple";
+            provider: "github" | "google" | "apple" | "sso";
             /** Connected */
             connected: boolean;
             /** Accountemail */
             accountEmail?: string | null;
             /** Accountid */
             accountId?: string | null;
+            /** Displayname */
+            displayName?: string | null;
+            /** Brandlabel */
+            brandLabel?: string | null;
         };
         /** AuthPasswordCredential */
         AuthPasswordCredential: {
@@ -4862,6 +5108,24 @@ export interface components {
             callbackSurface: string;
             /** Finalsurface */
             finalSurface: string;
+        };
+        /** CloudOrganizationIntegrationPolicyItem */
+        CloudOrganizationIntegrationPolicyItem: {
+            /** Catalogentryid */
+            catalogEntryId: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Updatedbyuserid */
+            updatedByUserId?: string | null;
+        };
+        /** CloudOrganizationIntegrationPolicyResponse */
+        CloudOrganizationIntegrationPolicyResponse: {
+            /** Organizationid */
+            organizationId: string;
+            /** Entries */
+            entries: components["schemas"]["CloudOrganizationIntegrationPolicyItem"][];
         };
         /** CloudPendingInteractionResponse */
         CloudPendingInteractionResponse: {
@@ -5788,6 +6052,26 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** DevDesktopHandoffPollResponse */
+        DevDesktopHandoffPollResponse: {
+            handoff: components["schemas"]["DevDesktopHandoffRecordResponse"] | null;
+        };
+        /** DevDesktopHandoffRecordResponse */
+        DevDesktopHandoffRecordResponse: {
+            /** Id */
+            id: string;
+            /** Url */
+            url: string;
+            /** Createdat */
+            createdAt: string;
+            /** Openedat */
+            openedAt?: string | null;
+        };
+        /** DevDesktopHandoffRequest */
+        DevDesktopHandoffRequest: {
+            /** Url */
+            url: string;
+        };
         /** DirectAccessTokenRequest */
         DirectAccessTokenRequest: {
             /** Targetanyharnessworkspaceid */
@@ -6357,8 +6641,11 @@ export interface components {
         };
         /** OrganizationInvitationAcceptRequest */
         OrganizationInvitationAcceptRequest: {
-            /** Invitehandoff */
-            inviteHandoff: string;
+            /**
+             * Organizationid
+             * Format: uuid
+             */
+            organizationId: string;
         };
         /** OrganizationInvitationAcceptResponse */
         OrganizationInvitationAcceptResponse: {
@@ -6370,6 +6657,8 @@ export interface components {
             id: string;
             /** Organizationid */
             organizationId: string;
+            /** Organizationname */
+            organizationName?: string | null;
             /** Email */
             email: string;
             /**
@@ -6423,10 +6712,24 @@ export interface components {
              */
             role: "owner" | "admin" | "member";
         };
+        /** OrganizationJoinLinkResponse */
+        OrganizationJoinLinkResponse: {
+            /** Url */
+            url: string;
+        };
         /** OrganizationListResponse */
         OrganizationListResponse: {
             /** Organizations */
             organizations: components["schemas"]["OrganizationResponse"][];
+        };
+        /** OrganizationMemberAuthMethodResponse */
+        OrganizationMemberAuthMethodResponse: {
+            /** Provider */
+            provider: string;
+            /** Label */
+            label: string;
+            /** Brandlabel */
+            brandLabel?: string | null;
         };
         /** OrganizationMemberResponse */
         OrganizationMemberResponse: {
@@ -6454,6 +6757,8 @@ export interface components {
             joinedAt: string;
             /** Removedat */
             removedAt?: string | null;
+            /** Authmethods */
+            authMethods?: components["schemas"]["OrganizationMemberAuthMethodResponse"][];
         };
         /** OrganizationMembersResponse */
         OrganizationMembersResponse: {
@@ -6507,6 +6812,224 @@ export interface components {
             /** Logoimage */
             logoImage?: string | null;
             membership?: components["schemas"]["OrganizationMembershipResponse"] | null;
+        };
+        /** OrganizationSsoConnectionRequest */
+        OrganizationSsoConnectionRequest: {
+            /**
+             * Protocol
+             * @default oidc
+             * @enum {string}
+             */
+            protocol: "oidc" | "saml";
+            /**
+             * Displayname
+             * @default Company SSO
+             */
+            displayName: string;
+            /**
+             * Loginpolicy
+             * @default optional
+             * @enum {string}
+             */
+            loginPolicy: "optional" | "required";
+            /**
+             * Jitpolicy
+             * @default disabled
+             * @enum {string}
+             */
+            jitPolicy: "disabled" | "existing_user" | "create_member";
+            /**
+             * Defaultrole
+             * @default member
+             * @enum {string}
+             */
+            defaultRole: "owner" | "admin" | "member";
+            /** Alloweddomains */
+            allowedDomains?: string[];
+            /** Oidcissuerurl */
+            oidcIssuerUrl?: string | null;
+            /** Oidcdiscoveryurl */
+            oidcDiscoveryUrl?: string | null;
+            /** Oidcauthorizationendpoint */
+            oidcAuthorizationEndpoint?: string | null;
+            /** Oidctokenendpoint */
+            oidcTokenEndpoint?: string | null;
+            /** Oidcjwksuri */
+            oidcJwksUri?: string | null;
+            /** Oidcuserinfoendpoint */
+            oidcUserinfoEndpoint?: string | null;
+            /** Oidcclientid */
+            oidcClientId?: string | null;
+            /** Oidcclientsecret */
+            oidcClientSecret?: string | null;
+            /** Oidcscopes */
+            oidcScopes?: string[];
+            /**
+             * Oidctokenendpointauthmethod
+             * @default client_secret_basic
+             * @enum {string}
+             */
+            oidcTokenEndpointAuthMethod: "client_secret_basic" | "client_secret_post" | "none";
+            /** Samlidpmetadataurl */
+            samlIdpMetadataUrl?: string | null;
+            /** Samlidpmetadataxml */
+            samlIdpMetadataXml?: string | null;
+            /** Samlidpentityid */
+            samlIdpEntityId?: string | null;
+            /** Samlssourl */
+            samlSsoUrl?: string | null;
+            /** Samlx509Cert */
+            samlX509Cert?: string | null;
+            /** Samlemailattribute */
+            samlEmailAttribute?: string | null;
+        };
+        /** OrganizationSsoConnectionResponse */
+        OrganizationSsoConnectionResponse: {
+            /** Id */
+            id: string;
+            /** Organizationid */
+            organizationId: string;
+            /**
+             * Scope
+             * @constant
+             */
+            scope: "organization";
+            /**
+             * Protocol
+             * @enum {string}
+             */
+            protocol: "oidc" | "saml";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "enabled" | "disabled";
+            /** Displayname */
+            displayName: string;
+            /**
+             * Loginpolicy
+             * @enum {string}
+             */
+            loginPolicy: "optional" | "required";
+            /**
+             * Jitpolicy
+             * @enum {string}
+             */
+            jitPolicy: "disabled" | "existing_user" | "create_member";
+            /**
+             * Defaultrole
+             * @enum {string}
+             */
+            defaultRole: "owner" | "admin" | "member";
+            /** Alloweddomains */
+            allowedDomains: string[];
+            /** Oidcissuerurl */
+            oidcIssuerUrl?: string | null;
+            /** Oidcdiscoveryurl */
+            oidcDiscoveryUrl?: string | null;
+            /** Oidcauthorizationendpoint */
+            oidcAuthorizationEndpoint?: string | null;
+            /** Oidctokenendpoint */
+            oidcTokenEndpoint?: string | null;
+            /** Oidcjwksuri */
+            oidcJwksUri?: string | null;
+            /** Oidcuserinfoendpoint */
+            oidcUserinfoEndpoint?: string | null;
+            /** Oidcclientid */
+            oidcClientId?: string | null;
+            /** Oidcclientsecretconfigured */
+            oidcClientSecretConfigured: boolean;
+            /** Oidcscopes */
+            oidcScopes: string[];
+            /**
+             * Oidctokenendpointauthmethod
+             * @enum {string}
+             */
+            oidcTokenEndpointAuthMethod: "client_secret_basic" | "client_secret_post" | "none";
+            /** Oidcredirecturi */
+            oidcRedirectUri: string;
+            /** Samlidpmetadataurl */
+            samlIdpMetadataUrl?: string | null;
+            /** Samlidpmetadataxmlconfigured */
+            samlIdpMetadataXmlConfigured: boolean;
+            /** Samlidpentityid */
+            samlIdpEntityId?: string | null;
+            /** Samlssourl */
+            samlSsoUrl?: string | null;
+            /** Samlx509Certconfigured */
+            samlX509CertConfigured: boolean;
+            /** Samlemailattribute */
+            samlEmailAttribute?: string | null;
+            /** Samlacsurl */
+            samlAcsUrl: string;
+            /** Samlentityid */
+            samlEntityId: string;
+            /** Samlmetadataurl */
+            samlMetadataUrl: string;
+            /** Testedat */
+            testedAt?: string | null;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** OrganizationSsoConnectionTestResponse */
+        OrganizationSsoConnectionTestResponse: {
+            /** Ok */
+            ok: boolean;
+            connection: components["schemas"]["OrganizationSsoConnectionResponse"];
+        };
+        /** OrganizationSsoConnectionUpdateRequest */
+        OrganizationSsoConnectionUpdateRequest: {
+            /** Displayname */
+            displayName?: string | null;
+            /** Loginpolicy */
+            loginPolicy?: ("optional" | "required") | null;
+            /** Jitpolicy */
+            jitPolicy?: ("disabled" | "existing_user" | "create_member") | null;
+            /** Defaultrole */
+            defaultRole?: ("owner" | "admin" | "member") | null;
+            /** Alloweddomains */
+            allowedDomains?: string[] | null;
+            /** Oidcissuerurl */
+            oidcIssuerUrl?: string | null;
+            /** Oidcdiscoveryurl */
+            oidcDiscoveryUrl?: string | null;
+            /** Oidcauthorizationendpoint */
+            oidcAuthorizationEndpoint?: string | null;
+            /** Oidctokenendpoint */
+            oidcTokenEndpoint?: string | null;
+            /** Oidcjwksuri */
+            oidcJwksUri?: string | null;
+            /** Oidcuserinfoendpoint */
+            oidcUserinfoEndpoint?: string | null;
+            /** Oidcclientid */
+            oidcClientId?: string | null;
+            /** Oidcclientsecret */
+            oidcClientSecret?: string | null;
+            /** Oidcscopes */
+            oidcScopes?: string[] | null;
+            /** Oidctokenendpointauthmethod */
+            oidcTokenEndpointAuthMethod?: ("client_secret_basic" | "client_secret_post" | "none") | null;
+            /** Samlidpmetadataurl */
+            samlIdpMetadataUrl?: string | null;
+            /** Samlidpmetadataxml */
+            samlIdpMetadataXml?: string | null;
+            /** Samlidpentityid */
+            samlIdpEntityId?: string | null;
+            /** Samlssourl */
+            samlSsoUrl?: string | null;
+            /** Samlx509Cert */
+            samlX509Cert?: string | null;
+            /** Samlemailattribute */
+            samlEmailAttribute?: string | null;
+        };
+        /** OrganizationSsoConnectionsResponse */
+        OrganizationSsoConnectionsResponse: {
+            /** Connections */
+            connections: components["schemas"]["OrganizationSsoConnectionResponse"][];
         };
         /** OrganizationUpdateRequest */
         OrganizationUpdateRequest: {
@@ -6586,6 +7109,13 @@ export interface components {
             publicToOrg?: boolean | null;
             /** Publicorganizationid */
             publicOrganizationId?: string | null;
+        };
+        /** PatchCloudOrganizationIntegrationPolicyRequest */
+        PatchCloudOrganizationIntegrationPolicyRequest: {
+            /** Catalogentryid */
+            catalogEntryId: string;
+            /** Enabled */
+            enabled: boolean;
         };
         /** PatchPluginConfiguredItemRequest */
         PatchPluginConfiguredItemRequest: {
@@ -7289,6 +7819,23 @@ export interface components {
             /** Skills */
             skills: components["schemas"]["SkillConfiguredItemResponse"][];
         };
+        /** SsoDiscoveryResponse */
+        SsoDiscoveryResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Scope */
+            scope?: ("deployment" | "organization") | null;
+            /** Connectionid */
+            connectionId?: string | null;
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Protocol */
+            protocol?: ("oidc" | "saml") | null;
+            /** Displayname */
+            displayName?: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
         /** StartAuthRequest */
         StartAuthRequest: {
             /**
@@ -7355,6 +7902,62 @@ export interface components {
             status: "active" | "exchanging" | "completed" | "expired" | "cancelled" | "failed";
             /** Expiresat */
             expiresAt: string;
+        };
+        /** StartSsoAuthRequest */
+        StartSsoAuthRequest: {
+            /** Clientstate */
+            clientState: string;
+            /** Codechallenge */
+            codeChallenge: string;
+            /**
+             * Codechallengemethod
+             * @default S256
+             */
+            codeChallengeMethod: string;
+            /** Redirecturi */
+            redirectUri: string;
+            /** Email */
+            email?: string | null;
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Connectionid */
+            connectionId?: string | null;
+            /** Prompt */
+            prompt?: "select_account" | null;
+        };
+        /** StartSsoAuthResponse */
+        StartSsoAuthResponse: {
+            /**
+             * Provider
+             * @default sso
+             * @constant
+             */
+            provider: "sso";
+            /** Authorizationurl */
+            authorizationUrl: string;
+            /** State */
+            state: string;
+            /** Nonce */
+            nonce: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "deployment" | "organization";
+            /**
+             * Protocol
+             * @enum {string}
+             */
+            protocol: "oidc" | "saml";
+            /** Connectionid */
+            connectionId?: string | null;
+            /** Organizationid */
+            organizationId?: string | null;
         };
         /** StartWorkspaceMobilityHandoffRequest */
         StartWorkspaceMobilityHandoffRequest: {
@@ -9569,6 +10172,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_sso_endpoint_auth_sso_discover_get: {
+        parameters: {
+            query?: {
+                email?: string | null;
+                organizationId?: string | null;
+                connectionId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SsoDiscoveryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_sso_endpoint_auth__surface__sso_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                surface: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSsoAuthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartSsoAuthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oidc_sso_callback_auth_sso_oidc_callback_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -12575,6 +13279,72 @@ export interface operations {
             };
         };
     };
+    get_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_organization_integration_policy_endpoint_v1_cloud_organizations__organization_id__integration_policy_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchCloudOrganizationIntegrationPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudOrganizationIntegrationPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_cloud_mcp_catalog_endpoint_v1_cloud_mcp_catalog_get: {
         parameters: {
             query?: never;
@@ -15298,12 +16068,17 @@ export interface operations {
     get_cloud_plan_endpoint_v1_billing_cloud_plan_get: {
         parameters: {
             query?: {
-                ownerScope?: "personal" | "organization";
+                ownerScope?: ("personal" | "organization") | null;
                 organizationId?: string | null;
             };
-            header?: never;
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -15330,12 +16105,17 @@ export interface operations {
     get_overview_v1_billing_overview_get: {
         parameters: {
             query?: {
-                ownerScope?: "personal" | "organization";
+                ownerScope?: ("personal" | "organization") | null;
                 organizationId?: string | null;
             };
-            header?: never;
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -15575,6 +16355,37 @@ export interface operations {
             };
         };
     };
+    accept_current_user_organization_invitation_endpoint_v1_organizations_invitations_current__invitation_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationInvitationAcceptResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_organizations_endpoint_v1_organizations_get: {
         parameters: {
             query?: never;
@@ -15697,8 +16508,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 membership_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -15729,8 +16540,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 membership_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -15826,13 +16637,44 @@ export interface operations {
             };
         };
     };
-    resend_organization_invitation_endpoint_v1_organizations__organization_id__invitations__invitation_id__resend_post: {
+    get_organization_join_link_endpoint_v1_organizations__organization_id__join_link_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationJoinLinkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_organization_invitation_endpoint_v1_organizations__organization_id__invitations__invitation_id__resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
                 invitation_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -15863,8 +16705,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                organization_id: string;
                 invitation_id: string;
+                organization_id: string;
             };
             cookie?: never;
         };
@@ -15877,6 +16719,236 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationInvitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_organization_sso_connections_endpoint_v1_organizations__organization_id__sso_connections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSsoConnectionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationSsoConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationSsoConnectionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSsoConnectionTestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -16482,6 +17554,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationRunListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevDesktopHandoffPollResponse"];
+                };
+            };
+        };
+    };
+    enqueue_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevDesktopHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevDesktopHandoffRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dev_desktop_handoff_endpoint_v1_dev_desktop_handoff__handoff_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handoff_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevDesktopHandoffRecordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_dev_desktop_handoff_opened_endpoint_v1_dev_desktop_handoff__handoff_id__opened_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handoff_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevDesktopHandoffRecordResponse"];
                 };
             };
             /** @description Validation Error */

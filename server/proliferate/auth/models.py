@@ -25,16 +25,19 @@ class UserCreate(schemas.BaseUserCreate):
 
 
 AuthProviderName = Literal["github", "google", "apple"]
+AuthLinkedProviderName = Literal["github", "google", "apple", "sso"]
 AuthOnboardingState = Literal["needs_github", "active"]
 
 
 class AuthLinkedProvider(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    provider: AuthProviderName
+    provider: AuthLinkedProviderName
     connected: bool
     account_email: str | None = Field(default=None, serialization_alias="accountEmail")
     account_id: str | None = Field(default=None, serialization_alias="accountId")
+    display_name: str | None = Field(default=None, serialization_alias="displayName")
+    brand_label: str | None = Field(default=None, serialization_alias="brandLabel")
 
 
 class AuthProviderAvailability(BaseModel):

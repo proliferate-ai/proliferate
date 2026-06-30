@@ -2,24 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
-import secrets
 from datetime import timedelta
-from urllib.parse import urlencode
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.constants.organizations import (
     ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BILLING_STATE,
     ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
     ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING,
     ORGANIZATION_INVITE_EXPIRES_DAYS,
-    ORGANIZATION_INVITE_TOKEN_DOMAIN,
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_STATUS_PENDING_CHECKOUT,
 )
@@ -31,7 +25,6 @@ from proliferate.db.store import users as user_store
 from proliferate.db.store.organizations import (
     acquire_membership_activation_lock,
     complete_team_checkout_activation,
-    get_current_membership_for_user,
     load_team_checkout_intent_for_update,
     mark_team_checkout_activating,
     mark_team_checkout_failed,
@@ -54,30 +47,13 @@ from proliferate.server.billing.domain.webhooks import (
 )
 from proliferate.server.billing.models import BillingServiceError, coerce_utc, utcnow
 from proliferate.server.billing.pricing import billing_price_ids_from_settings
-from proliferate.server.cloud.sandbox_profiles.service import ensure_organization_for_activation
+from proliferate.server.organizations.join_links import organization_join_url
 
 logger = logging.getLogger("proliferate.billing.team_checkout.activation")
 
 
 def _map_stripe_error(error: stripe_billing.StripeBillingError) -> BillingServiceError:
     return BillingServiceError(error.code, error.message, status_code=error.status_code)
-
-
-def _organization_invite_token_hash(raw_token: str) -> str:
-    return hmac.new(
-        settings.cloud_secret_key.encode("utf-8"),
-        f"{ORGANIZATION_INVITE_TOKEN_DOMAIN}:{raw_token}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def _organization_invitation_landing_url(token: str) -> str:
-    path = "/v1/organizations/invitations/landing"
-    query = urlencode({"token": token})
-    base_url = (settings.api_base_url or settings.frontend_base_url).rstrip("/")
-    if not base_url:
-        return f"{path}?{query}"
-    return f"{base_url}{path}?{query}"
 
 
 async def _send_staged_team_checkout_invitation(
@@ -88,14 +64,12 @@ async def _send_staged_team_checkout_invitation(
     inviter_email: str,
     email: str,
 ) -> None:
-    token = secrets.token_urlsafe(32)
     async with db_session.open_async_transaction() as db:
         record = await invitation_store.create_or_rotate_organization_invitation(
             db,
             organization_id=organization_id,
             email=email,
             role=ORGANIZATION_ROLE_MEMBER,
-            token_hash=_organization_invite_token_hash(token),
             invited_by_user_id=invited_by_user_id,
             expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
         )
@@ -110,7 +84,7 @@ async def _send_staged_team_checkout_invitation(
             to_email=record.invitation.email,
             organization_name=organization_name,
             inviter_email=inviter_email,
-            invite_url=_organization_invitation_landing_url(token),
+            invite_url=organization_join_url(organization_id),
         )
     except resend.ResendEmailError as error:
         async with db_session.open_async_transaction() as db:
@@ -356,17 +330,6 @@ async def activate_team_checkout_from_stripe_session(
             )
             return
         await acquire_membership_activation_lock(db, created_by_user_id)
-        current = await get_current_membership_for_user(db, created_by_user_id)
-        if current is not None:
-            await mark_team_checkout_failed(
-                db,
-                intent,
-                activation_status=ORGANIZATION_CHECKOUT_ACTIVATION_FAILED_BUSINESS_STATE,
-                error_code="creator_already_in_organization",
-                error_message="Checkout creator already belongs to a team.",
-                webhook_event_id=webhook_event_id,
-            )
-            return
         await mark_team_checkout_activating(db, intent, stripe_subscription_id=subscription_id)
         await _upsert_team_subscription_from_stripe(
             db,
@@ -380,11 +343,6 @@ async def activate_team_checkout_from_stripe_session(
             stripe_subscription_id=subscription_id,
             stripe_customer_id=customer_id,
             webhook_event_id=webhook_event_id,
-        )
-        await ensure_organization_for_activation(
-            db,
-            organization_id=activated.organization.id,
-            created_by_user_id=created_by_user_id,
         )
         staged_invites = (
             activated.organization.id,

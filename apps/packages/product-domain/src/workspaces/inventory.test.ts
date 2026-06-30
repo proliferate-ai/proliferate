@@ -49,7 +49,7 @@ describe("workspace inventory model", () => {
     });
     expect(items[1]).toMatchObject({
       sourceKind: "personal_automation",
-      sourceLabel: "Personal automation",
+      sourceLabel: "Personal workflow",
       statusKind: "review",
       statusLabel: "Ready for review",
       sessionLabel: "Rebuild skills",

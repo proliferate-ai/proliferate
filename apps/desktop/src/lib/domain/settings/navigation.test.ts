@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildCloudRepoSettingsHref,
   buildCloudSettingsHref,
-  buildSharedCloudRepoSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
@@ -32,7 +31,7 @@ describe("settings navigation", () => {
       activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -44,7 +43,7 @@ describe("settings navigation", () => {
       activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
 
     expect(resolveSettingsSelection({
@@ -54,7 +53,7 @@ describe("settings navigation", () => {
       activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -66,7 +65,7 @@ describe("settings navigation", () => {
       activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -78,20 +77,50 @@ describe("settings navigation", () => {
       activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
-  it("resolves the review settings section", () => {
+  it("falls parked budget settings links back to general", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "organization-limits",
+      repositories: [],
+    })).toEqual({
+      activeSection: "general",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
+  it("falls removed review settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "review",
       repositories: [],
     })).toEqual({
-      activeSection: "review",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
+  });
+
+  it("resolves the Admin settings sections", () => {
+    for (const section of [
+      "organization-integrations",
+      "organization-members",
+      "organization-model-policy",
+    ]) {
+      expect(resolveSettingsSelection({
+        rawSection: section,
+        repositories: [],
+      })).toEqual({
+        activeSection: section,
+        activeRepoSourceRoot: null,
+        focus: {},
+        joinOrganizationId: null,
+      });
+    }
   });
 
   it("preserves checkout return focus on billing settings", () => {
@@ -103,7 +132,7 @@ describe("settings navigation", () => {
       activeSection: "billing",
       activeRepoSourceRoot: null,
       focus: { checkout: "success" },
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -116,7 +145,7 @@ describe("settings navigation", () => {
       activeSection: "environments",
       activeRepoSourceRoot: "/repo-a",
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -128,7 +157,7 @@ describe("settings navigation", () => {
       activeSection: "environments",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -141,7 +170,7 @@ describe("settings navigation", () => {
       activeSection: "environments",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -158,7 +187,7 @@ describe("settings navigation", () => {
         cloudRepoOwner: "owner",
         cloudRepoName: "name",
       },
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -175,7 +204,7 @@ describe("settings navigation", () => {
         cloudRepoOwner: "owner",
         cloudRepoName: "name",
       },
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -193,7 +222,7 @@ describe("settings navigation", () => {
         cloudRepoOwner: "owner",
         cloudRepoName: "name",
       },
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -213,7 +242,7 @@ describe("settings navigation", () => {
         cloudRepoOwner: "owner",
         cloudRepoName: "name",
       },
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -225,7 +254,7 @@ describe("settings navigation", () => {
       activeSection: "agent-authentication",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
 
     expect(resolveSettingsSelection({
@@ -236,7 +265,7 @@ describe("settings navigation", () => {
       activeSection: "compute",
       activeRepoSourceRoot: null,
       focus: { target: "target-1" },
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
 
     expect(resolveSettingsSelection({
@@ -248,7 +277,7 @@ describe("settings navigation", () => {
       activeSection: "agent-authentication",
       activeRepoSourceRoot: null,
       focus: { credential: "credential-1", kind: "claude" },
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -260,7 +289,7 @@ describe("settings navigation", () => {
       activeSection: "worktrees",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
@@ -272,51 +301,48 @@ describe("settings navigation", () => {
       activeSection: "archived-chats",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
-  it("preserves organization invite handoff only on the organization section", () => {
+  it("preserves organization join target only on the members section", () => {
     expect(resolveSettingsSelection({
-      rawSection: "organization",
-      rawInviteHandoff: "handoff-token",
+      rawSection: "organization-members",
+      rawJoinOrganizationId: "org-1",
       repositories: [],
     })).toEqual({
-      activeSection: "organization",
+      activeSection: "organization-members",
       activeRepoSourceRoot: null,
-      focus: {},
-      inviteHandoff: "handoff-token",
+      focus: { joinOrganizationId: "org-1" },
+      joinOrganizationId: "org-1",
     });
 
     expect(resolveSettingsSelection({
       rawSection: "general",
-      rawInviteHandoff: "handoff-token",
+      rawJoinOrganizationId: "org-1",
       repositories: [],
     })).toEqual({
       activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
-      inviteHandoff: null,
+      joinOrganizationId: null,
     });
   });
 
-  it("builds flat organization settings links with optional invite handoff", () => {
+  it("builds flat organization settings and members join links", () => {
     expect(buildSettingsHref({ section: "organization" })).toBe(
       "/settings?section=organization",
     );
     expect(buildSettingsHref({
-      section: "organization",
-      inviteHandoff: "handoff-token",
-    })).toBe("/settings?section=organization&inviteHandoff=handoff-token");
+      section: "organization-members",
+      joinOrganizationId: "org-1",
+    })).toBe("/settings?section=organization-members&joinOrganizationId=org-1");
   });
 
   it("builds new settings links for cloud and cloud repo helpers", () => {
     expect(buildCloudSettingsHref()).toBe("/settings?section=agent-authentication");
     expect(buildCloudRepoSettingsHref("owner", "name")).toBe(
       "/settings?section=environments&cloudRepoOwner=owner&cloudRepoName=name",
-    );
-    expect(buildSharedCloudRepoSettingsHref("owner", "name")).toBe(
-      "/settings?section=shared-environments&cloudRepoOwner=owner&cloudRepoName=name",
     );
   });
 

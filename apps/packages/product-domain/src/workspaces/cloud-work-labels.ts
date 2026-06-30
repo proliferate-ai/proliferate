@@ -23,9 +23,9 @@ export function recentWorkSourceLabel(source: RecentWorkSourceKind): string {
     case "mobile":
       return "Mobile";
     case "personal_automation":
-      return "Personal automation";
+      return "Personal workflow";
     case "team_automation":
-      return "Team automation";
+      return "Team workflow";
     case "slack":
       return "Slack";
     case "api":

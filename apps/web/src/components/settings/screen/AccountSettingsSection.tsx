@@ -17,7 +17,7 @@ export function AccountSettingsSection() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Account & providers"
-        description="Manage the product identity Web uses for cloud sessions, automations, and provider linking."
+        description="Manage the product identity Web uses for cloud sessions, workflows, and provider linking."
       />
       <AccountSettingsPane
         {...buildAccountSettingsProps({
@@ -70,8 +70,8 @@ function buildAccountSettingsProps({
     email: user?.email ?? "Signed in",
     avatarUrl: user?.avatar_url ?? null,
     profileSummary: viewer?.githubConnected
-      ? "Ready for cloud workspaces and automations."
-      : "GitHub is required before cloud workspaces and automations can run end to end.",
+      ? "Ready for cloud workspaces and workflows."
+      : "GitHub is required before cloud workspaces and workflows can run end to end.",
     githubLabel,
     providers: buildProviderViews(linkedProviders, providerAvailability, Boolean(viewer?.githubConnected)),
     passwordCredential: {
@@ -122,14 +122,23 @@ function buildProviderViews(
   providerAvailability: NonNullable<AccountViewer>["providerAvailability"],
   githubConnected: boolean,
 ): AccountProviderView[] {
-  const providers: AccountProviderView[] = [];
+  const ssoProviders = linkedProviders.filter((provider) => (
+    provider.provider === "sso" && provider.connected
+  ));
+  const providers: AccountProviderView[] = ssoProviders.map((provider) => ({
+    provider: "sso",
+    label: provider.displayName ?? "SSO",
+    brandLabel: provider.brandLabel ?? provider.displayName ?? null,
+    accountLabel: provider.accountEmail ?? provider.accountId ?? "Connected",
+    connected: true,
+  }));
   const github = linkedProviders.find((provider) => provider.provider === "github");
   providers.push({
     provider: "github",
     label: "GitHub",
     accountLabel: github?.accountEmail ?? github?.accountId ?? (githubConnected ? "Connected" : "Required"),
     connected: githubConnected,
-    primary: true,
+    primary: githubConnected,
   });
 
   const googleProviders = linkedProviders.filter((provider) => provider.provider === "google");

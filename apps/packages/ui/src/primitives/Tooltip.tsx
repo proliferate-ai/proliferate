@@ -112,16 +112,43 @@ export function Tooltip({
         <div
           ref={tooltipRef}
           role="tooltip"
-          style={{ top: position.top, left: position.left }}
-          className={`pointer-events-none fixed z-[70] -translate-x-1/2 -translate-y-full rounded-full border border-border/60 bg-popover/96 px-2.5 py-1 text-[11px] font-medium leading-tight text-popover-foreground shadow-floating backdrop-blur-lg ${
+          style={{
+            top: position.top,
+            left: position.left,
+            ...(singleLine
+              ? {}
+              : {
+                boxSizing: "border-box",
+                maxWidth: "min(22rem, calc(100vw - 1.5rem))",
+                overflowWrap: "anywhere",
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+              }),
+          }}
+          className={`pointer-events-none fixed z-[70] -translate-x-1/2 -translate-y-full border border-border/60 bg-popover/96 px-2.5 py-1 text-[11px] font-medium leading-tight text-popover-foreground shadow-floating backdrop-blur-lg ${
             singleLine
-              ? "max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden text-ellipsis whitespace-nowrap"
-              : "max-w-[18rem]"
+              ? "max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden text-ellipsis whitespace-nowrap rounded-full"
+              : "overflow-hidden rounded-lg text-left"
           } ${
             measured ? "opacity-100" : "opacity-0"
           }`}
         >
-          {content}
+          {singleLine
+            ? content
+            : content.split("\n").map((line, index) => (
+              <span
+                key={`${index}-${line}`}
+                style={{
+                  display: "block",
+                  maxWidth: "100%",
+                  overflowWrap: "anywhere",
+                  whiteSpace: "normal",
+                  wordBreak: "break-word",
+                }}
+              >
+                {line}
+              </span>
+            ))}
         </div>,
         document.body,
       )}

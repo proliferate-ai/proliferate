@@ -29,7 +29,7 @@ describe("WorkspaceInventory", () => {
                 sourceKind: "slack",
                 sourceLabel: "Slack",
                 locationKind: "managed_shared",
-                locationLabel: "Shared cloud",
+                locationLabel: "Organization cloud",
                 statusKind: "blocked",
                 statusLabel: "Blocked",
                 ownerLabel: "Unclaimed",
@@ -59,7 +59,7 @@ describe("WorkspaceInventory", () => {
         groups={[
           {
             id: "automation",
-            label: "Automations",
+            label: "Workflows",
             count: 1,
             collapsed: false,
             items: [
@@ -69,7 +69,7 @@ describe("WorkspaceInventory", () => {
                 repoLabel: "proliferate-ai/proliferate",
                 branchLabel: "main",
                 sourceKind: "personal_automation",
-                sourceLabel: "Personal automation",
+                sourceLabel: "Personal workflow",
                 locationKind: "managed_personal",
                 locationLabel: "Personal cloud",
                 statusKind: "working",
@@ -86,7 +86,7 @@ describe("WorkspaceInventory", () => {
       />,
     );
 
-    const groupButton = screen.getByRole("button", { name: /Automations/u });
+    const groupButton = screen.getByRole("button", { name: /Workflows/u });
     const contentId = groupButton.getAttribute("aria-controls");
     const content = contentId ? document.getElementById(contentId) : null;
 

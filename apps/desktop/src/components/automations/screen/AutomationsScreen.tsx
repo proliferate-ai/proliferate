@@ -11,10 +11,7 @@ import {
 } from "@/hooks/access/cloud/automations/use-automations";
 import { useAgentRunConfig } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import {
-  buildCloudRepoSettingsHref,
-  buildSharedCloudRepoSettingsHref,
-} from "@/lib/domain/settings/navigation";
+import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import type {
   AutomationRecord,
   AutomationRunRecord,
@@ -92,7 +89,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const automationLoadError = personalAutomationsError || (teamAutomationsEnabled && teamAutomationsError);
   const hasAutomationLoadError = automationLoadError && automations.length === 0;
   const partialAutomationLoadError = automationLoadError && automations.length > 0
-    ? "Some automations could not load. The list may be incomplete."
+    ? "Some workflows could not load. The list may be incomplete."
     : null;
   const isDetailView = selectedAutomationId !== null;
   const selectedId = isDetailView ? selectedAutomationId : null;
@@ -189,14 +186,12 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     ownerScope: AutomationOwnerScope;
   }) => {
     setEditorOpen(false);
-    navigate(target.ownerScope === "organization"
-      ? buildSharedCloudRepoSettingsHref(target.gitOwner, target.gitRepoName)
-      : buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
+    navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
   };
 
   const handleCreate = async (body: CreateAutomationInput) => {
     const created = await actions.createAutomation(body);
-    navigate(`/automations/${created.id}`);
+    navigate(`/workflows/${created.id}`);
   };
 
   const handleUpdate = async (automationId: string, body: UpdateAutomationInput) => {
@@ -244,7 +239,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
             loadingRuns={selectedDetailLoading || runsLoading}
             notFound={selectedDetailError}
             busy={busy}
-            onBack={() => navigate("/automations")}
+            onBack={() => navigate("/workflows")}
             onRunNow={(automationId) => {
               void actions.runAutomationNow(automationId);
             }}
@@ -283,7 +278,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
                 void refetchTeamAutomations();
               }
             }}
-            onAutomationSelect={(automationId) => navigate(`/automations/${automationId}`)}
+            onAutomationSelect={(automationId) => navigate(`/workflows/${automationId}`)}
             onEdit={handleEditAutomation}
             onPause={(automationId) => {
               void performAutomationListAction(

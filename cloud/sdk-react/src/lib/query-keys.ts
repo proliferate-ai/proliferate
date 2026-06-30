@@ -34,6 +34,20 @@ export function cloudMcpCatalogKey() {
   return [...cloudPluginInventoryRootKey(), "mcp-catalog", "v1"] as const;
 }
 
+export function cloudOrganizationIntegrationPolicyKey(
+  organizationId: string | null,
+) {
+  return [
+    ...cloudPluginInventoryRootKey(),
+    "organization-integration-policy",
+    organizationId,
+  ] as const;
+}
+
+export function organizationSsoConnectionsKey(organizationId: string | null) {
+  return [...cloudRootKey(), "organizations", organizationId, "sso-connections"] as const;
+}
+
 export function cloudMcpConnectionsKey() {
   return [...cloudPluginInventoryRootKey(), "mcp-connections"] as const;
 }
@@ -322,6 +336,10 @@ export function organizationMembersKey(organizationId: string | null) {
 
 export function organizationInvitationsKey(organizationId: string | null) {
   return [...organizationsRootKey(), organizationId, "invitations"] as const;
+}
+
+export function organizationJoinLinkKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "join-link"] as const;
 }
 
 export function currentUserOrganizationInvitationsKey() {

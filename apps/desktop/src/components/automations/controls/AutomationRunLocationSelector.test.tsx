@@ -48,8 +48,8 @@ const teamGroups: AutomationTargetGroup[] = [{
     id: "cloud",
     repoKey: "proliferate-ai/proliferate",
     repoLabel: "Proliferate",
-    label: "Shared cloud",
-    description: "Run in shared cloud.",
+    label: "Organization cloud",
+    description: "Run in organization cloud.",
     target: cloudTarget,
     disabledReason: null,
     selected: false,
@@ -95,7 +95,7 @@ describe("AutomationRunLocationSelector", () => {
     expect(screen.queryByLabelText("Filter run locations")).toBeNull();
   });
 
-  it("selects team through the shared workspace option", () => {
+  it("selects team through the organization cloud option", () => {
     const onSelectOwner = vi.fn();
     const onSelectTarget = vi.fn();
     render(
@@ -145,11 +145,11 @@ describe("AutomationRunLocationSelector", () => {
     );
 
     fireEvent.click(screen.getByRole("button", {
-      name: "Run location: Team Shared workspace",
+      name: "Run location: Team Organization cloud",
     }));
-    expect(screen.getByText("Team workspace")).toBeTruthy();
+    expect(screen.getByText("Organization cloud")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Shared cloud/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Organization cloud/ }));
     expect(onSelectOwner).toHaveBeenCalledWith("organization");
     expect(onSelectTarget).toHaveBeenCalledWith(cloudTarget);
   });

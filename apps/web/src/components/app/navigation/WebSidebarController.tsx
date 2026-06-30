@@ -67,8 +67,8 @@ export function WebSidebarController({
   const activeWorkspaceSessions =
     activeWorkspaceSnapshot.data?.sessions ?? EMPTY_ACTIVE_WORKSPACE_SESSIONS;
   const navItems = useMemo(
-    () => buildNavItems(location.pathname, routeState),
-    [location.pathname, routeState],
+    () => buildNavItems(location.pathname),
+    [location.pathname],
   );
   const workspaceSectionLoading = (workspaces.isLoading || activeWorkspaceSnapshot.isLoading) &&
     cloudWorkspaces.length === 0;
@@ -144,10 +144,6 @@ export function WebSidebarController({
         setSourceFilter("all");
         setRuntimeFilter("all");
       }}
-      onOpenAll={() => {
-        setRecentFilterOpen(false);
-        navigate(routes.workspaces);
-      }}
     />
   );
 
@@ -156,14 +152,11 @@ export function WebSidebarController({
       case "home":
         navigate(routes.home);
         return;
-      case "workspaces":
-        navigate(routes.workspaces);
+      case "integrations":
+        navigate(routes.integrations);
         return;
-      case "automations":
-        navigate(routes.automations);
-        return;
-      case "plugins":
-        navigate(routes.plugins);
+      case "workflows":
+        navigate(routes.workflows);
         return;
       case "support":
         navigate(routes.support);

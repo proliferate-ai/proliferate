@@ -4,6 +4,7 @@ import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerModelConfigSelector } from "./ComposerModelConfigSelector";
 import type { ModelSelector } from "./ModelSelector";
 import type { SessionConfigControls } from "./SessionConfigControls";
+import { RuntimePressureIndicator } from "./RuntimePressureIndicator";
 import { SessionModeControl } from "./SessionModeControl";
 import {
   buildComposerSessionControlGroups,
@@ -23,14 +24,8 @@ export interface ChatInputControlRowProps {
   activeSessionId: string | null;
   workspaceUiKey: string | null;
   sdkWorkspaceId: string | null;
-  suppressActiveSessionState: boolean;
-  canStartCodeReview: boolean;
-  hasBlockingReview: boolean;
-  startingReview: boolean;
   hasUnresolvedPlans: boolean;
   onAttachFile: () => void;
-  onStartReview: () => void;
-  onConfigureReview: () => void;
   isRunning: boolean;
   isEmpty: boolean;
   onSubmit: () => void;
@@ -50,14 +45,8 @@ export function ChatInputControlRow({
   activeSessionId,
   workspaceUiKey,
   sdkWorkspaceId,
-  suppressActiveSessionState,
-  canStartCodeReview,
-  hasBlockingReview,
-  startingReview,
   hasUnresolvedPlans,
   onAttachFile,
-  onStartReview,
-  onConfigureReview,
   isRunning,
   isEmpty,
   onSubmit,
@@ -70,11 +59,6 @@ export function ChatInputControlRow({
   // Plan references resolve to markdown text in the runtime, so they do not
   // depend on file/image attachment capabilities.
   const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!sdkWorkspaceId;
-  const canStartReview = canUseUtilityActions
-    && !suppressActiveSessionState
-    && canStartCodeReview
-    && !hasBlockingReview
-    && !startingReview;
   const attachFileDetail = canAttachFile
     ? "Upload image or text context."
     : !supportsAttachments
@@ -87,13 +71,6 @@ export function ChatInputControlRow({
     : workspaceUiKey
       ? "Chat is unavailable right now"
       : "Select a workspace before attaching a plan";
-  const reviewDetail = canStartReview
-    ? "Start review agents for the current implementation."
-    : hasBlockingReview || startingReview
-      ? "A review is already active for this session"
-      : !activeSessionId
-        ? "Review is available after a session starts"
-        : "Review agents are unavailable right now";
 
   return (
     <ChatComposerControlRowFrame
@@ -105,13 +82,9 @@ export function ChatInputControlRow({
             attachFileDetail={attachFileDetail}
             canAttachPlan={canAttachPlan}
             attachPlanDetail={attachPlanDetail}
-            canStartReview={canStartReview}
-            reviewDetail={reviewDetail}
             workspaceUiKey={workspaceUiKey}
             sdkWorkspaceId={sdkWorkspaceId}
             onAttachFile={onAttachFile}
-            onStartReview={onStartReview}
-            onConfigureReview={onConfigureReview}
           />
         )}
         {controlGroups.modeControl && (
@@ -131,17 +104,18 @@ export function ChatInputControlRow({
       )}
       trailing={(
         <>
-        <div
-          className={`flex min-w-0 items-center gap-[5px] ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerModelConfigSelector
-            modelSelectorProps={modelSelectorProps}
-            agentKind={agentKind}
-            controls={controlGroups.modelConfigControls}
-          />
-        </div>
+          <RuntimePressureIndicator />
+          <div
+            className={`flex min-w-0 items-center gap-[5px] ${
+              runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+            }`}
+          >
+            <ComposerModelConfigSelector
+              modelSelectorProps={modelSelectorProps}
+              agentKind={agentKind}
+              controls={controlGroups.modelConfigControls}
+            />
+          </div>
         </>
       )}
       action={(

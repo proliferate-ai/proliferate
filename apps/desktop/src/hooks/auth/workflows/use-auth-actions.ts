@@ -6,11 +6,17 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import {
+  cancelActiveAuthFlow,
   linkDesktopProvider,
   signInWithGitHub,
+  signInWithSso,
   signOut,
 } from "@/lib/integrations/auth/orchestration-provider-flow";
-import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
+import {
+  isAbortError,
+  type GitHubDesktopSignInOptions,
+} from "@/lib/integrations/auth/proliferate-auth";
+import type { DesktopSsoSignInOptions } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
 
 // Owns user-triggered auth actions and their telemetry. Does not own auth bootstrap.
@@ -27,6 +33,9 @@ export function useAuthActions() {
         });
         return result;
       } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
         if (!isTelemetryHandled(error)) {
           captureTelemetryException(error, {
             tags: {
@@ -39,6 +48,34 @@ export function useAuthActions() {
         trackProductEvent("auth_sign_in_failed", {
           failure_kind: classifyTelemetryFailure(error),
           provider: "github",
+        });
+        throw error;
+      }
+    }, [authEffects]),
+    signInWithSso: useCallback(async (options?: DesktopSsoSignInOptions) => {
+      try {
+        const result = await signInWithSso(options, authEffects);
+        trackProductEvent("auth_signed_in", {
+          provider: result.provider,
+          source: result.source,
+        });
+        return result;
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+        if (!isTelemetryHandled(error)) {
+          captureTelemetryException(error, {
+            tags: {
+              action: "sign_in",
+              domain: "auth",
+              provider: "sso",
+            },
+          });
+        }
+        trackProductEvent("auth_sign_in_failed", {
+          failure_kind: classifyTelemetryFailure(error),
+          provider: "sso",
         });
         throw error;
       }
@@ -60,6 +97,9 @@ export function useAuthActions() {
         throw error;
       }
     }, [authEffects]),
+    cancelAuthFlow: useCallback(async (message?: string) => {
+      await cancelActiveAuthFlow(message);
+    }, []),
     linkGoogle: useCallback(async () => {
       try {
         const result = await linkDesktopProvider("google", authEffects);

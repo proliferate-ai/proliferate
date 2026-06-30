@@ -47,7 +47,7 @@ export function ComputeTargetDetailsHeader({
             <h3 className="truncate text-sm font-medium text-foreground">
               {appearance.displayName}
             </h3>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">
               {computeTargetKindLabel(target.kind)}
               {" · "}
               {computeTargetStatusLabel(target.status).toLowerCase()}

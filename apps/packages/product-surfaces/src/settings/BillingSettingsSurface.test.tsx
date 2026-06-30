@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BillingSettingsSurface } from "./BillingSettingsSurface";
 
@@ -61,7 +61,7 @@ describe("BillingSettingsSurface", () => {
     cloudHooks.updateOverageEnabled.mockResolvedValue({});
     cloudHooks.useCloudBilling.mockImplementation((owner: { ownerScope?: string } | undefined) => ({
       data: owner?.ownerScope === "organization"
-        ? billingPlan({ plan: "team", isPaidCloud: true, repoEnvironmentLimit: 20 })
+        ? billingPlan({ plan: "pro", isPaidCloud: true, repoEnvironmentLimit: 20 })
         : billingPlan(),
       isLoading: false,
       isError: false,
@@ -84,7 +84,7 @@ describe("BillingSettingsSurface", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the no-team state and delegates organization navigation", () => {
+  it("renders the no-organization state and delegates organization navigation", () => {
     const onOpenOrganizationSettings = vi.fn();
 
     render(
@@ -95,8 +95,8 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    expect(screen.queryByText("Team billing")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open Organization" }));
+    expect(screen.queryByText("Organization billing")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
 
     expect(onOpenOrganizationSettings).toHaveBeenCalledTimes(1);
   });
@@ -117,12 +117,30 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Manage Team billing" })[0]);
+    expect(screen.getAllByRole("heading", { name: "Billing" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Plan" })).toBeTruthy();
+    expect(screen.getByText(/tracked, budgeted, and topped up separately/)).toBeTruthy();
+    expect(screen.getByText("360 PCUs")).toBeTruthy();
+    expect(screen.getByText("12,000 LLM credits")).toBeTruthy();
+    expect(screen.queryByText("Loading")).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add compute units" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add LLM credits" }).disabled).toBe(true);
+    expect(screen.getAllByText("Credit pack checkout for organizations is coming soon.")).toHaveLength(2);
+    expect(screen.getByLabelText("Auto top-up")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    const dialog = screen.getByRole("dialog", { name: "Choose your plan" });
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByRole("heading", { name: "Core" })).toBeTruthy();
+    expect(within(dialog).getByText("20 PCUs / month")).toBeTruthy();
+    expect(within(dialog).getByText("2,500 LLM credits / month")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Billing portal" }));
 
     await waitFor(() => {
       expect(onOpenUrl).toHaveBeenCalledWith("https://billing.example/portal");
     });
     expect(cloudHooks.createBillingPortal).toHaveBeenCalledTimes(1);
+    expect(cloudHooks.createRefillCheckout).not.toHaveBeenCalled();
   });
 
   it("passes the selected return surface to billing actions", () => {
@@ -142,10 +160,6 @@ describe("BillingSettingsSurface", () => {
 
     expect(cloudHooks.useCloudBillingActions).toHaveBeenCalledWith(
       { ownerScope: "organization", organizationId: "org_1" },
-      { returnSurface: "desktop" },
-    );
-    expect(cloudHooks.useCloudBillingActions).toHaveBeenCalledWith(
-      undefined,
       { returnSurface: "desktop" },
     );
   });
@@ -172,10 +186,14 @@ describe("BillingSettingsSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Upgrade Team" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    const dialog = screen.getByRole("dialog", { name: "Choose your plan" });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Upgrade to Core" }),
+    );
 
     await waitFor(() => {
-      expect(screen.queryByText("checkout offline")).not.toBeNull();
+      expect(within(dialog).queryByText("checkout offline")).not.toBeNull();
     });
   });
 });

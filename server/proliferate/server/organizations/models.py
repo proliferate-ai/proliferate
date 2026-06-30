@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -47,7 +48,11 @@ class OrganizationMembershipUpdateRequest(OrganizationBaseModel):
 
 
 class OrganizationInvitationAcceptRequest(OrganizationBaseModel):
-    invite_handoff: str = Field(alias="inviteHandoff")
+    organization_id: UUID = Field(alias="organizationId")
+
+
+class OrganizationJoinLinkResponse(OrganizationBaseModel):
+    url: str
 
 
 class OrganizationMembershipResponse(OrganizationBaseModel):
@@ -69,6 +74,12 @@ class OrganizationResponse(OrganizationBaseModel):
     membership: OrganizationMembershipResponse | None = None
 
 
+class OrganizationMemberAuthMethodResponse(OrganizationBaseModel):
+    provider: str
+    label: str
+    brand_label: str | None = Field(default=None, alias="brandLabel")
+
+
 class OrganizationMemberResponse(OrganizationBaseModel):
     membership_id: str = Field(alias="membershipId")
     user_id: str = Field(alias="userId")
@@ -79,11 +90,16 @@ class OrganizationMemberResponse(OrganizationBaseModel):
     status: OrganizationMembershipStatus
     joined_at: str = Field(alias="joinedAt")
     removed_at: str | None = Field(default=None, alias="removedAt")
+    auth_methods: list[OrganizationMemberAuthMethodResponse] = Field(
+        default_factory=list,
+        alias="authMethods",
+    )
 
 
 class OrganizationInvitationResponse(OrganizationBaseModel):
     id: str
     organization_id: str = Field(alias="organizationId")
+    organization_name: str | None = Field(default=None, alias="organizationName")
     email: str
     role: OrganizationRole
     status: OrganizationInvitationStatus
@@ -162,6 +178,14 @@ def member_response(record: MemberRecord) -> OrganizationMemberResponse:
         status=membership.status,  # type: ignore[arg-type]
         joined_at=_iso(membership.joined_at) or "",
         removed_at=_iso(membership.removed_at),
+        auth_methods=[
+            OrganizationMemberAuthMethodResponse(
+                provider=method.provider,
+                label=method.label,
+                brand_label=method.brand_label,
+            )
+            for method in record.auth_methods
+        ],
     )
 
 
@@ -169,6 +193,7 @@ def invitation_response(record: InvitationRecord) -> OrganizationInvitationRespo
     return OrganizationInvitationResponse(
         id=str(record.id),
         organization_id=str(record.organization_id),
+        organization_name=record.organization_name,
         email=record.email,
         role=record.role,  # type: ignore[arg-type]
         status=record.status,  # type: ignore[arg-type]

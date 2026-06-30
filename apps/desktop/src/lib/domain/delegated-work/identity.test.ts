@@ -16,6 +16,32 @@ describe("delegatedWorkVisualIdentity", () => {
     expect(first.colorClassName).not.toContain("emerald");
     expect(first.colorClassName).not.toContain("lime");
   });
+
+  it("derives color independently of the generated name", () => {
+    // If color and name shared one index (the old bug), every occurrence of a
+    // given name would always carry the same color. With independent derivations,
+    // at least one name must appear with more than one color across many seeds.
+    const colorsByName = new Map<string, Set<string>>();
+    for (let index = 0; index < 300; index += 1) {
+      const identity = delegatedWorkVisualIdentity(`agent-seed-${index}`);
+      const colors = colorsByName.get(identity.generatedName) ?? new Set<string>();
+      colors.add(identity.colorToken);
+      colorsByName.set(identity.generatedName, colors);
+    }
+
+    const someNameHasMultipleColors = [...colorsByName.values()].some(
+      (colors) => colors.size > 1,
+    );
+    expect(someNameHasMultipleColors).toBe(true);
+  });
+
+  it("draws from an expanded name pool, not the original eight", () => {
+    const names = new Set<string>();
+    for (let index = 0; index < 300; index += 1) {
+      names.add(delegatedWorkVisualIdentity(`pool-seed-${index}`).generatedName);
+    }
+    expect(names.size).toBeGreaterThan(8);
+  });
 });
 
 describe("buildDelegatedAgentIdentity", () => {

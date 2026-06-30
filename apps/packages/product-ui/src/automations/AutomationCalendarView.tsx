@@ -136,7 +136,7 @@ function CalendarDaySection({
           ))}
         </div>
       ) : (
-        <p className="text-xs leading-5 text-muted-foreground">No automations scheduled</p>
+        <p className="text-xs leading-5 text-muted-foreground">No workflows scheduled</p>
       )}
     </section>
   );

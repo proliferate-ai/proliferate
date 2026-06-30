@@ -54,7 +54,7 @@ export function WorkspacesSurface({
   backgroundRefreshFailed = false,
   isRefreshing = false,
   emptyTitle = "No cloud-visible workspaces",
-  emptyDescription = "Workspaces from Desktop, Web, Slack, or automations appear here.",
+  emptyDescription = "Workspaces from Desktop, Web, Slack, or workflows appear here.",
   maxWidthClassName = "max-w-none",
   externalOpenWorkspaceIds,
   onFilterChange,

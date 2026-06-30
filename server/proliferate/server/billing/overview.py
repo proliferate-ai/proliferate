@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.authorization import AuthenticatedUser, OwnerSelection
+from proliferate.auth.authorization import AuthenticatedUser, OwnerContext, OwnerSelection
 from proliferate.server.billing import snapshots as billing_snapshots
 from proliferate.server.billing.checkout import resolve_billing_owner_context
 from proliferate.server.billing.models import (
@@ -30,6 +30,13 @@ async def get_billing_overview_for_owner(
     owner_selection: OwnerSelection,
 ) -> BillingOverview:
     context = await resolve_billing_owner_context(db, user, owner_selection)
+    return await get_billing_overview_for_context(db, context)
+
+
+async def get_billing_overview_for_context(
+    db: AsyncSession,
+    context: OwnerContext,
+) -> BillingOverview:
     snapshot = await billing_snapshots.get_billing_snapshot_for_subject_in_session(
         db,
         context.billing_subject_id,
@@ -57,6 +64,13 @@ async def get_cloud_plan_for_owner(
     owner_selection: OwnerSelection,
 ) -> CloudPlanInfo:
     context = await resolve_billing_owner_context(db, user, owner_selection)
+    return await get_cloud_plan_for_context(db, context)
+
+
+async def get_cloud_plan_for_context(
+    db: AsyncSession,
+    context: OwnerContext,
+) -> CloudPlanInfo:
     snapshot = await billing_snapshots.get_billing_snapshot_for_subject_in_session(
         db,
         context.billing_subject_id,

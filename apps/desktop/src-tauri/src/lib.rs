@@ -257,6 +257,7 @@ pub fn run() {
             support::stage_support_report_attachment,
             support::submit_support_report_job,
             window_chrome::apply_macos_window_chrome,
+            window_chrome::set_webview_zoom,
             process::command_exists,
             ssh_tunnel::install_ssh_target_runtime,
             ssh_tunnel::probe_ssh_target_connection,

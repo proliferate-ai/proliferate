@@ -1,6 +1,10 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { type SettingsSection } from "@/config/settings";
+import {
+  SETTINGS_DEFAULT_SECTION,
+  TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
+  type SettingsSection,
+} from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
 import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
@@ -9,8 +13,13 @@ import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
+import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
+// BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
+// import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
+import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
-import { ReviewSettingsPane } from "@/components/settings/panes/ReviewSettingsPane";
+import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
+import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 // SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
 // import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
@@ -19,17 +28,18 @@ import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignIn
 import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
 import { ComputePane } from "@/components/settings/panes/ComputePane";
 import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
-import { SharedEnvironmentsPane } from "@/components/settings/panes/SharedEnvironmentsPane";
 import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
 import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { type SettingsFocus } from "@/lib/domain/settings/navigation";
+import { isSettingsAdminOnlySection } from "@/lib/domain/settings/navigation-presentation";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { isSettingsScaffoldPageId } from "@/copy/settings/settings-scaffold-copy";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;
@@ -50,8 +60,6 @@ function renderSettingsSection(
   cloudActive: boolean,
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
-  adminAccess: { isAdmin: boolean; isLoading: boolean; role: string | null },
-  activeOrganizationId: string | null,
   focus: SettingsFocus,
   onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
@@ -62,9 +70,6 @@ function renderSettingsSection(
   }
   if (activeSection === "general") {
     return <GeneralPane />;
-  }
-  if (activeSection === "review") {
-    return <ReviewSettingsPane />;
   }
   if (activeSection === "appearance") {
     return <AppearancePane />;
@@ -81,13 +86,16 @@ function renderSettingsSection(
   if (activeSection === "organization") {
     return <OrganizationPane />;
   }
-  if (activeSection === "agent-authentication") {
+  if (activeSection === "organization-members") {
+    return <OrganizationMembersPane />;
+  }
+  if (activeSection === "organization-integrations") {
     if (!cloudEnabled) {
       return <CloudUnavailablePane />;
     }
 
     if (cloudActive) {
-      return <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />;
+      return <OrganizationIntegrationsPane />;
     }
 
     if (cloudSignInChecking) {
@@ -96,23 +104,35 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  if (activeSection === "shared-environments") {
+  // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
+  // if (activeSection === "organization-limits") {
+  //   return <OrganizationBudgetsPane />;
+  // }
+  if (activeSection === "organization-sso") {
     if (!cloudEnabled) {
       return <CloudUnavailablePane />;
     }
 
     if (cloudActive) {
-      return (
-        <SharedEnvironmentsPane
-          isAdmin={adminAccess.isAdmin}
-          isCheckingAdmin={adminAccess.isLoading}
-          role={adminAccess.role}
-          activeOrganizationId={activeOrganizationId}
-          repositories={repositories}
-          focus={focus}
-          onOpenSettingsSection={onSelectSection}
-        />
-      );
+      return <OrganizationSsoPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
+  if (isSettingsScaffoldPageId(activeSection)) {
+    return <SettingsScaffoldPane pageId={activeSection} />;
+  }
+  if (activeSection === "agent-authentication") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />;
     }
 
     if (cloudSignInChecking) {
@@ -185,7 +205,7 @@ export function SettingsScreen({
   onSelectCloudEnvironment,
 }: SettingsScreenProps) {
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
-  const { activeOrganizationId } = useActiveOrganization();
+  const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
   const {
     phase,
@@ -195,11 +215,38 @@ export function SettingsScreen({
   const activeRepository = repositories.find(
     (repository) => repository.sourceRoot === activeRepoSourceRoot,
   ) ?? null;
+  const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
+  const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
+  const shouldRedirectAdminSection =
+    activeSectionIsAdminOnly
+    && !TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+    && !adminAccessLoading
+    && admin.isAdmin !== true;
+  const effectiveActiveSection =
+    activeSectionIsAdminOnly
+    && !TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+    && !adminAccessLoading
+    && admin.isAdmin !== true
+      ? SETTINGS_DEFAULT_SECTION
+      : activeSection;
+  const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);
+
+  useEffect(() => {
+    if (!shouldRedirectAdminSection) {
+      redirectedAdminSectionRef.current = null;
+      return;
+    }
+    if (redirectedAdminSectionRef.current === activeSection) {
+      return;
+    }
+    redirectedAdminSectionRef.current = activeSection;
+    onSelectSection(SETTINGS_DEFAULT_SECTION);
+  }, [activeSection, onSelectSection, shouldRedirectAdminSection]);
 
   return (
     <div className="flex h-screen bg-surface-under text-foreground" data-telemetry-block>
       <SettingsSidebar
-        activeSection={activeSection}
+        activeSection={effectiveActiveSection}
         adminAccess={{
           isAdmin: admin.isAdmin,
           isLoading: admin.isLoading,
@@ -208,7 +255,8 @@ export function SettingsScreen({
         onSelectSection={onSelectSection}
         disabledSections={{
           "agent-authentication": !cloudEnabled,
-          "shared-environments": !cloudEnabled,
+          "organization-integrations": !cloudEnabled,
+          "organization-sso": !cloudEnabled,
           compute: !cloudEnabled,
           // SLACK BOT PARKED: section is not registered while the flow is disabled.
           // "slack-bot": !cloudEnabled,
@@ -222,30 +270,26 @@ export function SettingsScreen({
         }}
       />
 
-      <div className="relative flex-1 bg-background">
+      <div className="relative min-w-0 flex-1 bg-background">
         <div className="absolute left-0 right-0 top-0 h-10" data-tauri-drag-region="true" />
-        <AutoHideScrollArea className="h-full" viewportClassName="px-8 pt-12">
-          <div className="flex justify-center pb-16">
+        <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-14">
+          <div className="flex justify-center pb-8">
             <div
-              className={`w-full space-y-7 ${
-                activeSection === "billing" ? "max-w-[72rem]" : "max-w-[46rem]"
+              className={`w-full space-y-6 ${
+                effectiveActiveSection === "worktrees"
+                  ? "max-w-[58rem]"
+                  : "max-w-[50rem]"
               }`}
             >
-              <SettingsContentBoundary section={activeSection}>
+              <SettingsContentBoundary section={effectiveActiveSection}>
                 {renderSettingsSection(
-                  activeSection,
+                  effectiveActiveSection,
                   activeRepository,
                   repositories,
                   cloudEnabled,
                   cloudActive,
                   cloudSignInChecking,
                   cloudSignInAvailable,
-                  {
-                    isAdmin: admin.isAdmin,
-                    isLoading: admin.isLoading,
-                    role: admin.role,
-                  },
-                  activeOrganizationId,
                   focus,
                   onSelectSection,
                   onSelectRepo,

@@ -39,6 +39,21 @@ The implemented V1 slice covers the first end-to-end storage-management path:
   back to Cloud.
 - Cloud stores the report, preserves the workspace record/history, and removes
   inactive worker exposure from active sync after successful dehydration.
+- Desktop exposes an environment pressure indicator in the chat composer:
+  local runtimes compare materialized managed worktree count against the ideal
+  per-repo limit, while cloud sandboxes compare CPU/RAM pressure against the
+  runtime ideal maximum. The indicator opens the runtime worktree inventory and
+  cleanup surface.
+- Automatic AnyHarness retention passes are disabled by default. Cleanup runs
+  from explicit user actions unless an operator opts into automatic worktree
+  retention for a runtime.
+- AnyHarness worktree inventory rows include lightweight git status and
+  approximate storage estimates for the checkout plus runtime SQLite history.
+  These estimates are advisory UI inputs, not billing-grade accounting.
+- Explicit workspace deletion from the pruning inventory is a purge operation:
+  it removes the checkout, workspace record, sessions, raw runtime events,
+  normalized events, and local agent artifacts. This path must stay distinct
+  from safe checkout pruning.
 
 Full active lazy rehydration and cache cleanup depend on the AnyHarness
 materialization contract described below: either identity-preserving

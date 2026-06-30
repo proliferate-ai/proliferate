@@ -21,6 +21,14 @@ export function createOAuthState(): string {
   return randomPkceString(48);
 }
 
+export async function hashOAuthSecret(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
 function randomPkceString(length: number): string {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);

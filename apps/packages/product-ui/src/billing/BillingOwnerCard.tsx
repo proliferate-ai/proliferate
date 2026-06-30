@@ -10,6 +10,7 @@ import {
   formatLimit,
   overageSummary,
   planStatus,
+  proliferateCreditBalance,
   repoLimit,
   runtimeUsage,
   startBlockDescription,
@@ -49,6 +50,7 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
   }
 
   const usage = runtimeUsage(plan);
+  const creditBalance = proliferateCreditBalance(plan);
   const status = planStatus(plan);
   const overage = overageSummary(plan);
   const Icon = view.iconKind === "organization" ? Building2 : CreditCard;
@@ -99,11 +101,26 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
         <div className="space-y-3 border-t border-border-light pt-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <Metric
-              icon={<Gauge className="size-4" />}
-              label={usage.label}
-              value={usage.primary}
-              detail={usage.detail}
+              icon={<CreditCard className="size-4" />}
+              label="Purchased"
+              value={creditBalance.purchased}
+              detail="Current period and top ups"
             />
+            <Metric
+              icon={<Gauge className="size-4" />}
+              label="Available"
+              value={creditBalance.available}
+              detail="Ready for cloud work"
+            />
+            <Metric
+              icon={<Cloud className="size-4" />}
+              label="Used"
+              value={creditBalance.used}
+              detail="Consumed this period"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
             <Metric
               icon={<Server className="size-4" />}
               label="Active sandboxes"
@@ -120,6 +137,10 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
 
           {usage.percent !== null ? (
             <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>{usage.label}</span>
+                <span>{usage.detail}</span>
+              </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
                 <div
                   className="h-full rounded-full bg-foreground"

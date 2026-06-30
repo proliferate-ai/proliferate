@@ -23,8 +23,8 @@ export const SHORTCUT_GROUPS = [
       "openSupport",
       "showKeyboardShortcuts",
       "settingsSectionByIndex",
-      "increaseTextSize",
-      "decreaseTextSize",
+      "increaseWindowZoom",
+      "decreaseWindowZoom",
     ],
   },
   {

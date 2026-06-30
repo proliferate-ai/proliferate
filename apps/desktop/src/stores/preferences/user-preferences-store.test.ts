@@ -79,6 +79,7 @@ describe("user preference migration", () => {
     expect(preferences.colorMode).toBe("dark");
     expect(preferences.uiFontSizeId).toBe("default");
     expect(preferences.readableCodeFontSizeId).toBe("default");
+    expect(preferences.windowZoomId).toBe("default");
     expect(preferences.defaultChatAgentKind).toBe("claude");
     expect(preferences.transparentChromeEnabled).toBe(false);
     expect(preferences.pasteAttachmentsEnabled).toBe(true);
@@ -390,11 +391,13 @@ describe("user preference migration", () => {
     expect(USER_PREFERENCE_DEFAULTS.pasteAttachmentsEnabled).toBe(true);
   });
 
-  it("defaults appearance font preferences to default", () => {
+  it("defaults appearance preferences to default", () => {
     expect(USER_PREFERENCE_DEFAULTS.uiFontSizeId).toBe("default");
     expect(USER_PREFERENCE_DEFAULTS.readableCodeFontSizeId).toBe("default");
+    expect(USER_PREFERENCE_DEFAULTS.windowZoomId).toBe("default");
     expect(PERSISTED_RECORD_BACKFILL.uiFontSizeId).toBe("default");
     expect(PERSISTED_RECORD_BACKFILL.readableCodeFontSizeId).toBe("default");
+    expect(PERSISTED_RECORD_BACKFILL.windowZoomId).toBe("default");
   });
 
   it("migrates missing runtime input sync preference to false", () => {
@@ -433,11 +436,12 @@ describe("user preference migration", () => {
     expect(result.preferences.transparentChromeEnabled).toBe(true);
   });
 
-  it("migrates missing appearance font preferences to default", () => {
+  it("migrates missing appearance preferences to default", () => {
     const legacy = {
       ...USER_PREFERENCE_DEFAULTS,
       uiFontSizeId: undefined,
       readableCodeFontSizeId: undefined,
+      windowZoomId: undefined,
     } as unknown as UserPreferences;
 
     const result = migrateUserPreferences(legacy);
@@ -445,30 +449,35 @@ describe("user preference migration", () => {
     expect(result.changed).toBe(true);
     expect(result.preferences.uiFontSizeId).toBe("default");
     expect(result.preferences.readableCodeFontSizeId).toBe("default");
+    expect(result.preferences.windowZoomId).toBe("default");
   });
 
-  it("sanitizes invalid appearance font preferences", () => {
+  it("sanitizes invalid appearance preferences", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
       uiFontSizeId: "giant" as unknown as UserPreferences["uiFontSizeId"],
       readableCodeFontSizeId: "tiny" as unknown as UserPreferences["readableCodeFontSizeId"],
+      windowZoomId: "125" as unknown as UserPreferences["windowZoomId"],
     });
 
     expect(result.changed).toBe(true);
     expect(result.preferences.uiFontSizeId).toBe("default");
     expect(result.preferences.readableCodeFontSizeId).toBe("default");
+    expect(result.preferences.windowZoomId).toBe("default");
   });
 
-  it("preserves explicit valid appearance font preferences", () => {
+  it("preserves explicit valid appearance preferences", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
       uiFontSizeId: "xxsmall",
       readableCodeFontSizeId: "xxxlarge",
+      windowZoomId: "zoom90",
     });
 
     expect(result.changed).toBe(false);
     expect(result.preferences.uiFontSizeId).toBe("xxsmall");
     expect(result.preferences.readableCodeFontSizeId).toBe("xxxlarge");
+    expect(result.preferences.windowZoomId).toBe("zoom90");
   });
 
   it("sanitizes partially present review defaults", () => {

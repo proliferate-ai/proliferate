@@ -5,19 +5,28 @@ export function workspaceCollectionsScopeKey(runtimeUrl: string) {
   return ["workspaces", runtimeUrl] as const;
 }
 
+function workspaceCollectionsUserScopeKey(
+  runtimeUrl: string,
+  authUserId: string | null,
+) {
+  return [...workspaceCollectionsScopeKey(runtimeUrl), authUserId] as const;
+}
+
 export function workspaceCollectionsKey(
   runtimeUrl: string,
   cloudAccessible: boolean,
+  authUserId: string | null = null,
 ) {
-  return [...workspaceCollectionsScopeKey(runtimeUrl), cloudAccessible] as const;
+  return [...workspaceCollectionsUserScopeKey(runtimeUrl, authUserId), cloudAccessible] as const;
 }
 
 export function getWorkspaceCollectionsFromCache(
   queryClient: QueryClient,
   runtimeUrl: string,
+  authUserId: string | null = null,
 ): WorkspaceCollections | undefined {
   const matchingQueries = queryClient.getQueryCache().findAll({
-    queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+    queryKey: workspaceCollectionsUserScopeKey(runtimeUrl, authUserId),
   });
 
   return matchingQueries

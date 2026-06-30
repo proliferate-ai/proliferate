@@ -58,7 +58,7 @@ export function useInstalledConnectorActions() {
       showToast(
         error instanceof Error
           ? error.message
-          : `Couldn't update shared cloud access for ${record.catalogEntry.name}. Try again.`,
+          : `Couldn't update organization cloud access for ${record.catalogEntry.name}. Try again.`,
       );
     } finally {
       setPending(record.metadata.connectionId, false);

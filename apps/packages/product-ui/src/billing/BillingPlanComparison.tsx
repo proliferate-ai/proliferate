@@ -16,9 +16,11 @@ import { BillingButton, Notice } from "./BillingUiParts";
 
 export function PlanComparisonCard({
   action,
+  enterpriseAction,
   currentPlanKey,
 }: {
   action?: BillingActionView;
+  enterpriseAction?: BillingActionView;
   currentPlanKey: BillingPlanColumn["key"] | null;
 }) {
   return (
@@ -27,8 +29,8 @@ export function PlanComparisonCard({
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-foreground">Plans</h2>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Start free for personal work. Upgrade when your team needs shared cloud,
-            Slack-driven sessions, pooled runtime, and organization controls.
+            Start free with 5 PCUs. Move to Core for organization cloud billing,
+            top up, shared workflows, and role-based controls.
           </p>
         </div>
         {action ? (
@@ -41,7 +43,11 @@ export function PlanComparisonCard({
           <PlanSummaryCard
             key={plan.key}
             plan={plan}
-            action={plan.key === "team" ? action : undefined}
+            action={plan.key === "core"
+              ? action
+              : plan.key === "enterprise"
+                ? enterpriseAction
+                : undefined}
             current={currentPlanKey === plan.key}
           />
         ))}
@@ -155,7 +161,7 @@ export function CheckoutReturnNotice({ state }: { state: "success" | "cancel" })
     <Notice
       tone="warning"
       title="Stripe checkout canceled"
-      description="No plan change was made. You can restart checkout from the Team plan card."
+      description="No plan change was made. You can restart checkout from the Core plan card."
     />
   );
 }

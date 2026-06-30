@@ -236,7 +236,7 @@ function PluginManageSettings({
         <div className="min-w-0">
           <div className="text-sm font-medium text-foreground">Enabled for new sessions</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            MCP tools and default plugin skills can be picked up by new cloud sessions.
+            MCP tools and default skills can be picked up by new cloud sessions.
           </p>
         </div>
         <Switch
@@ -248,11 +248,11 @@ function PluginManageSettings({
       </div>
       <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
         <div className="min-w-0">
-          <div className="text-sm font-medium text-foreground">Share with team cloud</div>
+          <div className="text-sm font-medium text-foreground">Share with organization cloud</div>
           <p className="mt-1 text-xs text-muted-foreground">
             {shareOrganizationName
-              ? `Make this available to ${shareOrganizationName} automations, Slack, and shared cloud work.`
-              : "Create or join a team before sharing plugin access."}
+              ? `Make this available to ${shareOrganizationName} workflows, Slack, and organization cloud work.`
+              : "Create or join a team before sharing integration access."}
           </p>
         </div>
         <Switch

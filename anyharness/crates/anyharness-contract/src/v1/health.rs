@@ -10,6 +10,8 @@ pub struct HealthResponse {
     pub version: String,
     pub runtime_home: String,
     pub capabilities: RuntimeCapabilities,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource_pressure: Option<RuntimeResourcePressure>,
     pub agent_seed: AgentSeedHealth,
     pub agent_reconcile: AgentReconcileSummary,
 }
@@ -18,6 +20,47 @@ pub struct HealthResponse {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeCapabilities {
     pub replay: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimePressureLevel {
+    Unknown,
+    Nominal,
+    Elevated,
+    Critical,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeCpuPressure {
+    pub load_average_1m: f64,
+    pub normalized_percent: f64,
+    pub ideal_max_percent: f64,
+    pub logical_core_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeMemoryPressure {
+    pub used_bytes: u64,
+    pub total_bytes: u64,
+    pub available_bytes: u64,
+    pub percent: f64,
+    pub ideal_max_percent: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeResourcePressure {
+    pub level: RuntimePressureLevel,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu: Option<RuntimeCpuPressure>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory: Option<RuntimeMemoryPressure>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pressure_percent: Option<f64>,
+    pub collected_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

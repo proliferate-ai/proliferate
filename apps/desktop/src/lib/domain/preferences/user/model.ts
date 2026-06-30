@@ -1,5 +1,9 @@
 import type { ColorMode, ThemePreset } from "@/config/theme";
-import type { ReadableCodeFontSizeId, UiFontSizeId } from "@/lib/domain/preferences/appearance";
+import type {
+  ReadableCodeFontSizeId,
+  UiFontSizeId,
+  WindowZoomId,
+} from "@/lib/domain/preferences/appearance";
 import type {
   ChatModelVisibilityOverridesByAgentKind,
   DefaultLiveSessionControlValuesByAgentKind,
@@ -20,6 +24,7 @@ export interface UserPreferences {
   colorMode: ColorMode;
   uiFontSizeId: UiFontSizeId;
   readableCodeFontSizeId: ReadableCodeFontSizeId;
+  windowZoomId: WindowZoomId;
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
   chatModelVisibilityOverridesByAgentKind: ChatModelVisibilityOverridesByAgentKind;
@@ -45,6 +50,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   colorMode: "dark",
   uiFontSizeId: "default",
   readableCodeFontSizeId: "default",
+  windowZoomId: "default",
   defaultChatAgentKind: "claude",
   defaultChatModelIdByAgentKind: {},
   chatModelVisibilityOverridesByAgentKind: {},
@@ -70,6 +76,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   colorMode: "dark",
   uiFontSizeId: "default",
   readableCodeFontSizeId: "default",
+  windowZoomId: "default",
   defaultChatAgentKind: "",
   defaultChatModelIdByAgentKind: {},
   chatModelVisibilityOverridesByAgentKind: {},

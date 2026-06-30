@@ -41,7 +41,7 @@ Move running sessions between your machine and the cloud. Works solo or across a
 
 <br />
 
-Proliferate is a desktop and web app for running coding agents in parallel, locally or in cloud sandboxes. Each agent runs through its own native harness.
+Proliferate is a desktop and web app for running coding agents in parallel, locally or in cloud sandboxes.
 
 - **Run any mix of agents in parallel**, each in its own isolated worktree or sandbox, with native tools, auth, and config intact
 - **Let your agents manage each other**, like having Codex hand design work to Claude Code
@@ -95,7 +95,7 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Open Source
 
-Proliferate is AGPL-3.0. The desktop and web apps are fully open today.
+Proliferate is AGPL-3.0. The desktop and web apps are open today.
 Self-hosting the full cloud control plane is in beta — see
 [Self-hosting](#self-hosting) below.
 
@@ -135,14 +135,15 @@ Requirements:
 - `uv`
 - Docker, for the local control plane database
 
-Use named dev profiles for full-stack development, especially when multiple
-worktrees run at the same time.
+Use named dev profiles for full-stack development when multiple worktrees run at
+the same time.
 
 ```bash
 make server-install
-make dev-init PROFILE=main
+make setup PROFILE=main
+make build # first clean worktree, or after generated/Rust/frontend artifacts change
 make dev-list
-make dev PROFILE=main
+make run PROFILE=main
 ```
 
 See [dev profiles](./specs/developing/local/dev-profiles.md) for profile state, ports,
@@ -167,8 +168,7 @@ on the way.
   documents every required and optional setting
 
 Point the desktop app at your control plane by setting `apiBaseUrl` in
-`~/.proliferate/config.json`. Since this is beta, expect rough edges — please
-[open an issue](../../issues/new/choose) or ask in
+`~/.proliferate/config.json`. Expect rough edges — [open an issue](../../issues/new/choose) or ask in
 [Discord](https://discord.gg/wCEgUnEuF) if you hit problems, and see
 [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
@@ -177,8 +177,8 @@ Point the desktop app at your control plane by setting `apiBaseUrl` in
 ## Proliferate Cloud (Beta)
 
 > Proliferate Cloud is in beta and rolling out in waves - request access at
-> [proliferate.com](https://proliferate.com). Everything local above is fully
-> open and available today.
+> [proliferate.com](https://proliferate.com). Everything local above is open
+> today.
 
 - ☁️ **Cloud sandboxes** - isolated cloud environments that keep working after you close your laptop
 - 🔁 **Workspace mobility** - move a running workspace between your machine and the cloud, mid-task, with changes and history intact
@@ -193,16 +193,15 @@ Point the desktop app at your control plane by setting `apiBaseUrl` in
 - 🏗️ **Self-hosted Proliferate Cloud** - beta: run the full cloud control plane yourself ([docs](#self-hosting))
 
 Proliferate Cloud is open source (AGPL-3.0) and self-hostable today in beta; the
-self-host experience will be fully polished as Cloud moves toward GA.
+self-host experience will be polished as Cloud moves toward GA.
 
 ## Community
 
-Join our open source community on [Discord](https://discord.gg/wCEgUnEuF)!
+Join our community on [Discord](https://discord.gg/wCEgUnEuF)!
 
 ## Contributing
 
-Looking to contribute? Please check out the [Contribution Guide](./CONTRIBUTING.md)
-for more details.
+Contributing? See the [Contribution Guide](./CONTRIBUTING.md).
 
 ## License
 

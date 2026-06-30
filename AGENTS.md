@@ -32,18 +32,20 @@ uv run pytest -q
 
 ## Local Full-Stack Profiles
 
-Use `make dev PROFILE=<name>` for full-stack local development, especially when
-multiple worktrees need to run at the same time. Do not use the default-port
+Use `make setup PROFILE=<name>` and `make run PROFILE=<name>` for full-stack
+local development, especially when multiple worktrees need to run at the same
+time. Do not use the default-port
 `make dev-runtime`, `make dev-server`, or `make dev-desktop` shortcuts for
 multi-worktree testing.
 
 Useful commands:
 
 ```bash
-make dev-init PROFILE=<name>
+make setup PROFILE=<name>
+make build # first clean worktree, or after generated/Rust/frontend artifacts change
 make dev-list
-make dev PROFILE=<name>
-make dev PROFILE=<name> STRIPE=1
+make run PROFILE=<name>
+make run PROFILE=<name> STRIPE=1
 ```
 
 Profile state lives under

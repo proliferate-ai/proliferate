@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-from dataclasses import dataclass
-from pathlib import Path
 import re
 import sys
-from typing import Iterable
+from collections import Counter
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+MAX_LINES_ALLOWLIST_PATH = REPO_ROOT / "scripts" / "max_lines_allowlist.txt"
 
 FRONTEND_ROOTS = [
     REPO_ROOT / "apps" / "desktop" / "src",
@@ -59,9 +60,7 @@ COMPONENT_DEFINITION_RES = [
     re.compile(r"\b(?:export\s+)?const\s+([A-Z][A-Za-z0-9_]*)\s*="),
     re.compile(r"\b(?:export\s+)?class\s+([A-Z][A-Za-z0-9_]*)\b"),
 ]
-TYPE_DEFINITION_RE = re.compile(
-    r"^\s*(?:export\s+)?(?:interface|type)\s+([A-Za-z0-9_]+)\b"
-)
+TYPE_DEFINITION_RE = re.compile(r"^\s*(?:export\s+)?(?:interface|type)\s+([A-Za-z0-9_]+)\b")
 
 PRIMITIVE_EXACT_NAMES = {
     "Button",
@@ -222,6 +221,20 @@ def count_lines(path: Path) -> int:
     return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
+def load_max_lines_allowlist_paths() -> set[str]:
+    paths: set[str] = set()
+    if not MAX_LINES_ALLOWLIST_PATH.exists():
+        return paths
+    for raw_line in MAX_LINES_ALLOWLIST_PATH.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(maxsplit=2)
+        if len(parts) == 3:
+            paths.add(parts[0])
+    return paths
+
+
 def line_is_comment(line: str) -> bool:
     stripped = line.strip()
     return stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*")
@@ -282,7 +295,7 @@ def native_dom_type_names(lines: list[str]) -> set[str]:
         match = TYPE_DEFINITION_RE.match(line)
         if not match:
             continue
-        context = "\n".join(lines[index:index + PRIMITIVE_DEFINITION_CONTEXT_LINES + 1])
+        context = "\n".join(lines[index : index + PRIMITIVE_DEFINITION_CONTEXT_LINES + 1])
         if NATIVE_DOM_CONTRACT_RE.search(context):
             names.add(match.group(1))
     return names
@@ -308,15 +321,16 @@ def has_native_dom_contract_for(
     if NATIVE_DOM_CONTRACT_RE.search(context):
         return True
     return any(
-        re.search(rf"\b{re.escape(type_name)}\b", context)
-        for type_name in native_type_names
+        re.search(rf"\b{re.escape(type_name)}\b", context) for type_name in native_type_names
     )
 
 
 def find_raw_dom_controls(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in files:
-        if path.suffix != ".tsx" or not any(is_under(path, root) for root in DOM_APP_AND_PACKAGE_ROOTS):
+        if path.suffix != ".tsx" or not any(
+            is_under(path, root) for root in DOM_APP_AND_PACKAGE_ROOTS
+        ):
             continue
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             if line_is_comment(line):
@@ -338,7 +352,9 @@ def find_raw_dom_controls(files: Iterable[Path]) -> list[Violation]:
 def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
     for path in files:
-        if path.suffix != ".tsx" or not any(is_under(path, root) for root in DOM_APP_AND_PACKAGE_ROOTS):
+        if path.suffix != ".tsx" or not any(
+            is_under(path, root) for root in DOM_APP_AND_PACKAGE_ROOTS
+        ):
             continue
         text = path.read_text()
         lines = text.splitlines()
@@ -357,9 +373,8 @@ def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
                 context = component_definition_context(lines, index)
                 # Keep this category narrow: product components that merely render controls
                 # are reported by RAW_DOM_CONTROL instead of being labeled primitives.
-                if (
-                    is_primitive_like_name(name)
-                    and has_native_dom_contract_for(name, context, native_type_names)
+                if is_primitive_like_name(name) and has_native_dom_contract_for(
+                    name, context, native_type_names
                 ):
                     reported_names.add(name)
                     violations.append(
@@ -367,7 +382,10 @@ def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
                             "PRIMITIVE_DEFINITION_OUTSIDE_UI",
                             path,
                             index + 1,
-                            f"{name} looks like a DOM primitive definition outside apps/packages/ui/**",
+                            (
+                                f"{name} looks like a DOM primitive definition "
+                                "outside apps/packages/ui/**"
+                            ),
                         )
                     )
                 break
@@ -409,7 +427,10 @@ def find_hook_shape_violations() -> list[Violation]:
                             "PRODUCT_HOOK_DIRECT_FILE",
                             child,
                             1,
-                            "hook files should live under a responsibility folder such as derived, workflows, lifecycle, ui, cache, or facade",
+                            (
+                                "hook files should live under a responsibility folder "
+                                "such as derived, workflows, lifecycle, ui, cache, or facade"
+                            ),
                         )
                     )
                 elif child.is_dir() and child.name not in CANONICAL_PRODUCT_HOOK_FOLDERS:
@@ -418,7 +439,10 @@ def find_hook_shape_violations() -> list[Violation]:
                             "NONSTANDARD_HOOK_FOLDER",
                             child,
                             1,
-                            f"hooks/{domain}/{child.name}/ is not one of the documented product hook responsibility folders",
+                            (
+                                f"hooks/{domain}/{child.name}/ is not one of the "
+                                "documented product hook responsibility folders"
+                            ),
                         )
                     )
     return violations
@@ -441,7 +465,11 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
 
     if source.startswith("@/"):
         return "shared packages must not import app-root aliases"
-    if source.startswith("apps/desktop/") or source.startswith("apps/web/") or source.startswith("apps/mobile/"):
+    if (
+        source.startswith("apps/desktop/")
+        or source.startswith("apps/web/")
+        or source.startswith("apps/mobile/")
+    ):
         return "shared packages must not import app internals"
     if source.startswith("@tauri-apps/"):
         return "shared packages in this layer must not import Tauri APIs"
@@ -471,9 +499,15 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
     if package_name == "product-domain":
         if source in {"react", "react-dom"} or source.startswith("react-dom/"):
             return "product-domain must stay pure and must not import React or DOM components"
-        if source.startswith("@proliferate/ui") or source.startswith("@proliferate/product-ui") or source.startswith("@proliferate/product-surfaces"):
+        if (
+            source.startswith("@proliferate/ui")
+            or source.startswith("@proliferate/product-ui")
+            or source.startswith("@proliferate/product-surfaces")
+        ):
             return "product-domain must not import UI packages"
-        if source.startswith("@proliferate/cloud-sdk-react") or source.startswith("@anyharness/sdk-react"):
+        if source.startswith("@proliferate/cloud-sdk-react") or source.startswith(
+            "@anyharness/sdk-react"
+        ):
             return "product-domain must not import SDK React hooks"
         if source == "@tanstack/react-query":
             return "product-domain must not import query clients"
@@ -494,9 +528,19 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
         if source.startswith("@anyharness/sdk"):
             return "product-surfaces must not import local AnyHarness runtime wiring"
         if source == "@tanstack/react-query":
-            return "product-surfaces should use shared Cloud SDK React hooks instead of direct query clients"
-        if source.startswith("@proliferate/cloud-sdk") and source != "@proliferate/cloud-sdk-react" and not type_only:
-            return "product-surfaces may use Cloud SDK React hooks and Cloud SDK contract types, not raw value clients"
+            return (
+                "product-surfaces should use shared Cloud SDK React hooks "
+                "instead of direct query clients"
+            )
+        if (
+            source.startswith("@proliferate/cloud-sdk")
+            and source != "@proliferate/cloud-sdk-react"
+            and not type_only
+        ):
+            return (
+                "product-surfaces may use Cloud SDK React hooks and Cloud SDK "
+                "contract types, not raw value clients"
+            )
         return None
 
     return None
@@ -515,8 +559,13 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
         text = path.read_text()
         for statement in collect_imports(path, text):
             reason = forbidden_import_reason(package_name, statement)
-            if reason is None and resolved_relative_import_leaves_package(path, package_root, statement.source):
-                reason = "shared packages must not reach outside their package src/ tree with relative imports"
+            if reason is None and resolved_relative_import_leaves_package(
+                path, package_root, statement.source
+            ):
+                reason = (
+                    "shared packages must not reach outside their package src/ tree "
+                    "with relative imports"
+                )
             if reason is None:
                 continue
             violations.append(
@@ -524,7 +573,10 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
                     "FORBIDDEN_SHARED_PACKAGE_IMPORT",
                     path,
                     statement.lineno,
-                    f"{package_name} import {statement.source!r} violates package dependency rules: {reason}",
+                    (
+                        f"{package_name} import {statement.source!r} violates "
+                        f"package dependency rules: {reason}"
+                    ),
                 )
             )
     return violations
@@ -532,17 +584,22 @@ def find_forbidden_shared_package_imports(files: Iterable[Path]) -> list[Violati
 
 def find_large_frontend_files(files: Iterable[Path]) -> list[Violation]:
     violations: list[Violation] = []
+    documented_large_files = load_max_lines_allowlist_paths()
     for path in files:
+        if relative(path) in documented_large_files:
+            continue
         line_count = count_lines(path)
         if line_count <= LINE_SOFT_THRESHOLD:
             continue
         if line_count >= LINE_STRONG_REASON_THRESHOLD:
             threshold_note = (
-                f"{line_count} lines; files at {LINE_STRONG_REASON_THRESHOLD}+ lines need a strong reason to stay whole"
+                f"{line_count} lines; files at {LINE_STRONG_REASON_THRESHOLD}+ lines "
+                "need a strong reason to stay whole"
             )
         else:
             threshold_note = (
-                f"{line_count} lines; frontend docs prefer splitting before roughly {LINE_SOFT_THRESHOLD} lines"
+                f"{line_count} lines; frontend docs prefer splitting before roughly "
+                f"{LINE_SOFT_THRESHOLD} lines"
             )
         violations.append(
             Violation(

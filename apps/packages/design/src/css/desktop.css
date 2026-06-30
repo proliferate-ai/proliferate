@@ -325,7 +325,7 @@
   --scratch-code-font-family: var(--font-mono);
   --scratch-font-size: var(--text-chat, 12px);
   --scratch-line-height: var(--text-chat--line-height, 20px);
-  --scratch-list-marker-width: 1.35em;
+  --scratch-list-marker-leading-space: 0.48em;
   --scratch-task-box-size: 0.82em;
   --readable-code-font-size: 0.6875rem;
   --readable-code-line-height: 1.625;
@@ -2308,7 +2308,7 @@ body {
   --right-panel-tab-surface: transparent;
   /* Matches the surface painted behind the header (workspace shell bg-sidebar)
      so the sticky new-tab trigger masks tabs scrolling underneath it. */
-  --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-sidebar) 88%, transparent);
+  --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-sidebar-background) 88%, transparent);
   --right-panel-tab-hover-bg: color-mix(
     in srgb,
     var(--color-sidebar-foreground) 4%,
@@ -2478,32 +2478,24 @@ body {
 }
 
 .right-panel-tab-system .ui-tab-system-tabs__edge--end {
-  right: var(--tab-bar-mask-size);
+  right: 0;
 }
 
 .right-panel-tab-system .ui-tab-system-tabs__edge--end::after {
   right: 0;
+  /* Right-edge overflow fade for the scrollable tab strip. */
+  width: 14px;
+  background: linear-gradient(to left, var(--right-panel-tab-sticky-surface), transparent);
 }
 
 .right-panel-tab-system .ui-tab-system-new-tab-sticky {
-  position: sticky;
-  right: 0;
   z-index: 10;
   display: flex;
   align-items: center;
   height: 100%;
   flex-shrink: 0;
-  background-color: var(--right-panel-tab-sticky-surface);
-}
-
-.right-panel-tab-system .ui-tab-system-new-tab-sticky::before {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  right: 100%;
-  width: 14px;
-  pointer-events: none;
-  background: linear-gradient(to left, var(--right-panel-tab-sticky-surface), transparent);
+  padding-left: 4px;
+  background-color: var(--right-panel-tab-surface);
 }
 
 .right-panel-tab-system .right-panel-header-entry-shell {
