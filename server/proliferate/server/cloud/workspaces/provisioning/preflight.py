@@ -9,6 +9,7 @@ from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_repo_config import (
+    CloudRepoConfigValue,
     get_cloud_repo_config,
     get_organization_cloud_repo_config,
 )
@@ -19,6 +20,7 @@ from proliferate.db.store.cloud_workspaces import (
     list_active_managed_cloud_workspace_branches_for_profile_repo,
     load_any_cloud_workspace_for_repo,
 )
+from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.billing.authorization import (
     authorize_sandbox_start,
@@ -32,15 +34,15 @@ from proliferate.server.billing.snapshots import (
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
+from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
     load_repo_config_value,
 )
+from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import (
     get_linked_github_account,
-)
-from proliferate.server.cloud.repos.service import (
-    get_repo_branches_for_user as get_github_repo_branches,
+    get_repo_branches_for_credentials,
 )
 from proliferate.server.cloud.runtime.credentials.auth_status import (
     selected_agent_auth_agent_kinds,
@@ -91,17 +93,45 @@ async def load_personal_agent_auth_agent_kinds(user_id: UUID) -> tuple[str, ...]
 
 async def load_repo_config_value_tx(
     user_id: UUID, git_owner: str, git_repo_name: str
-) -> object | None:
+) -> CloudRepoConfigValue | None:
     async with db_session.open_async_session() as db:
         return await load_repo_config_value(
             db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
         )
 
 
-async def bootstrap_repo_config_tx(user_id: UUID, git_owner: str, git_repo_name: str) -> object:
+async def bootstrap_repo_config_tx(
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+) -> CloudRepoConfigValue:
     async with db_session.open_async_transaction() as db:
         return await bootstrap_repo_config(
             db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
+        )
+
+
+async def load_github_app_repo_branches_tx(
+    user_id: UUID,
+    *,
+    git_owner: str,
+    git_repo_name: str,
+    missing_access_message: str,
+    repo_access_required_message: str,
+) -> GitHubRepoBranches:
+    async with db_session.open_async_transaction() as db:
+        authority = await require_github_cloud_repo_authority(
+            db,
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+        return await get_repo_branches_for_credentials(
+            CloudRepoGitHubCredentials(user_id=user_id, access_token=authority.access_token),
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            missing_access_message=missing_access_message,
+            repo_access_required_message=repo_access_required_message,
         )
 
 
@@ -162,13 +192,16 @@ async def resolve_new_cloud_workspace_create(
             repo=f"{git_owner}/{git_repo_name}",
         )
 
-    repo_branches = await get_github_repo_branches(
-        user,
+    repo_branches = await load_github_app_repo_branches_tx(
+        user.id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
-        missing_access_message="Connect a GitHub account before creating a cloud workspace.",
+        missing_access_message=(
+            "Connect the Proliferate GitHub App before creating a cloud workspace."
+        ),
         repo_access_required_message=(
-            "Reconnect GitHub and grant repository access before creating a cloud workspace."
+            "Reconnect the Proliferate GitHub App and grant repository access before "
+            "creating a cloud workspace."
         ),
     )
 
@@ -387,13 +420,16 @@ async def resolve_new_managed_cloud_workspace_create(
         saved_default_branch = (repo_config.default_branch or "").strip() or None
         profile_owner_scope = profile.owner_scope
 
-    repo_branches = await get_github_repo_branches(
-        user,
+    repo_branches = await load_github_app_repo_branches_tx(
+        user.id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
-        missing_access_message="Connect a GitHub account before creating a cloud workspace.",
+        missing_access_message=(
+            "Connect the Proliferate GitHub App before creating a cloud workspace."
+        ),
         repo_access_required_message=(
-            "Reconnect GitHub and grant repository access before creating a cloud workspace."
+            "Reconnect the Proliferate GitHub App and grant repository access before "
+            "creating a cloud workspace."
         ),
     )
 

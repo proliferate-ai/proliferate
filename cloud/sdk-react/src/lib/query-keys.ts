@@ -154,6 +154,19 @@ export function managedSandboxKey() {
   return [...cloudRootKey(), "managed-sandbox"] as const;
 }
 
+export function githubAppStatusRootKey(apiBaseUrl: string) {
+  return [...cloudRootKey(), "github-app", "status", apiBaseUrl] as const;
+}
+
+export function githubAppStatusKey(
+  apiBaseUrl: string,
+  authCacheScope = "default",
+  gitOwner: string | null = null,
+  gitRepoName: string | null = null,
+) {
+  return [...githubAppStatusRootKey(apiBaseUrl), authCacheScope, gitOwner, gitRepoName] as const;
+}
+
 export function organizationCloudRepoConfigsKey(organizationId: string | null) {
   return [...cloudRootKey(), "organizations", organizationId, "repo-configs"] as const;
 }

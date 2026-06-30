@@ -7,7 +7,7 @@ use crate::{
     config::WorkerConfig,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
-    lifecycle::{catalog_sync, self_update},
+    lifecycle::{catalog_sync, github_credentials, self_update},
     store::WorkerStore,
     versions,
 };
@@ -64,6 +64,9 @@ pub async fn send_once(
         catalog_sync::converge_once(config, cloud, store, response.catalog_version.as_deref()).await
     {
         warn!(?error, "agent catalog convergence failed");
+    }
+    if let Err(error) = github_credentials::converge_once(config, cloud, identity).await {
+        warn!(?error, "github credential convergence failed");
     }
     Ok(())
 }
