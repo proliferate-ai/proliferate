@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
-import { useRepositories, useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
+import {
+  useGitHubRepoAuthority,
+  useRepositories,
+  useSaveRepoEnvironment,
+} from "@proliferate/cloud-sdk-react";
 import { buildCoreCloudEnvironmentSaveRequest } from "@proliferate/product-domain/environments/cloud-environments";
 import { CloudEnvironmentEditor } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
 import { CloudIcon } from "@proliferate/ui/icons";
@@ -150,6 +154,13 @@ export function CloudRepoSection({
   const cloudRepository = isCloudRepository(repository) ? repository : null;
   const cloudQueryEnabled = cloudActive && Boolean(cloudRepository);
   const repoConfigs = useRepositories(cloudQueryEnabled);
+  const repoAuthority = useGitHubRepoAuthority(
+    {
+      gitOwner: cloudRepository?.gitOwner,
+      gitRepoName: cloudRepository?.gitRepoName,
+    },
+    cloudQueryEnabled,
+  );
   const cloudEnvironment = useMemo(() => {
     if (!cloudRepository) {
       return null;
@@ -188,6 +199,26 @@ export function CloudRepoSection({
     );
   }
 
+  if (repoAuthority.isLoading) {
+    return (
+      <CloudEnvironmentNotice description="Checking GitHub App access for this repository..." />
+    );
+  }
+
+  if (repoAuthority.isError) {
+    return (
+      <CloudEnvironmentNotice description="GitHub App access for this repository could not be checked." />
+    );
+  }
+
+  if (repoAuthority.data && !repoAuthority.data.authorized) {
+    return (
+      <CloudEnvironmentNotice
+        description={repoAuthority.data.message ?? repoAuthorityNotice(repoAuthority.data.status)}
+      />
+    );
+  }
+
   return (
     <CloudRepoSettingsEditor
       key={`${repository.sourceRoot}:${repository.repoRootId}`}
@@ -199,6 +230,23 @@ export function CloudRepoSection({
       cloudActive={cloudActive}
     />
   );
+}
+
+function repoAuthorityNotice(status: string): string {
+  switch (status) {
+    case "missing_user_authorization":
+      return "Authorize the Proliferate GitHub App in Account settings before configuring this cloud environment.";
+    case "expired_user_authorization":
+      return "Reauthorize the Proliferate GitHub App in Account settings before configuring this cloud environment.";
+    case "missing_installation":
+      return "An organization admin needs to install the Proliferate GitHub App for this repository.";
+    case "repo_not_covered":
+      return "Update the Proliferate GitHub App installation so it has access to this repository.";
+    case "missing_user_repo_access":
+      return "Your GitHub user does not have access to this repository.";
+    default:
+      return "GitHub App repository access is not ready for this cloud environment.";
+  }
 }
 
 function useCloudEnvironmentDraft({

@@ -35,11 +35,20 @@ export interface AddCloudEnvironmentRepositoryView {
   disabledReason?: string | null;
 }
 
+export interface AddCloudEnvironmentBlockerView {
+  title: string;
+  description: string;
+  actionLabel?: string | null;
+  actionLoading?: boolean;
+  onAction?: (() => void) | null;
+}
+
 interface AddCloudEnvironmentDialogProps {
   open: boolean;
   query: string;
   manualValue: string;
   repositories: readonly AddCloudEnvironmentRepositoryView[];
+  blocker?: AddCloudEnvironmentBlockerView | null;
   loading?: boolean;
   loadingMore?: boolean;
   addingRepoId?: string | null;
@@ -59,6 +68,7 @@ export function AddCloudEnvironmentDialog({
   query,
   manualValue,
   repositories,
+  blocker = null,
   loading = false,
   loadingMore = false,
   addingRepoId = null,
@@ -131,87 +141,122 @@ export function AddCloudEnvironmentDialog({
           </Button>
         </header>
 
-        <div className="grid gap-3 border-b border-border-light px-4 py-3">
-          <form className="flex min-w-0 gap-2" onSubmit={handleManualSubmit}>
-            <div className="relative min-w-0 flex-1">
-              <GitBranch className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="GitHub repository"
-                value={manualValue}
-                placeholder="owner/repo or GitHub URL"
-                className="pl-8"
-                onChange={(event) => onManualValueChange(event.currentTarget.value)}
-              />
-            </div>
-            <Button type="submit" variant="primary" disabled={manualValue.trim().length === 0}>
-              <Plus size={14} />
-              Add
-            </Button>
-          </form>
+        {blocker ? (
+          <AddCloudEnvironmentBlocker blocker={blocker} />
+        ) : (
+          <>
+            <div className="grid gap-3 border-b border-border-light px-4 py-3">
+              <form className="flex min-w-0 gap-2" onSubmit={handleManualSubmit}>
+                <div className="relative min-w-0 flex-1">
+                  <GitBranch className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label="GitHub repository"
+                    value={manualValue}
+                    placeholder="owner/repo or GitHub URL"
+                    className="pl-8"
+                    onChange={(event) => onManualValueChange(event.currentTarget.value)}
+                  />
+                </div>
+                <Button type="submit" variant="primary" disabled={manualValue.trim().length === 0}>
+                  <Plus size={14} />
+                  Add
+                </Button>
+              </form>
 
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              aria-label="Search GitHub repositories"
-              value={query}
-              placeholder="Search repositories your GitHub account can access"
-              className="pl-8"
-              onChange={(event) => onQueryChange(event.currentTarget.value)}
-            />
-          </div>
-        </div>
-
-        {error ? (
-          <div className="flex items-start gap-2 border-b border-destructive/20 bg-destructive-subtle px-4 py-3 text-sm text-destructive">
-            <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-            <div className="min-w-0 flex-1">{error}</div>
-            {onRetry ? (
-              <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
-                <RotateCw size={13} />
-                Retry
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
-          {loading && repositories.length === 0 ? (
-            <LoadingRepositoryRows />
-          ) : repositories.length === 0 ? (
-            <EmptyRepositoryState query={query} />
-          ) : (
-            <div className="divide-y divide-border-light">
-              {repositories.map((repo) => (
-                <RepositoryRow
-                  key={repo.id}
-                  repo={repo}
-                  adding={addingRepoId === repo.id}
-                  onAdd={onAddRepository}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="Search GitHub repositories"
+                  value={query}
+                  placeholder="Search repositories your GitHub account can access"
+                  className="pl-8"
+                  onChange={(event) => onQueryChange(event.currentTarget.value)}
                 />
-              ))}
+              </div>
             </div>
-          )}
-        </div>
 
-        {nextCursor ? (
-          <div className="border-t border-border-light px-4 py-3">
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              loading={loadingMore}
-              onClick={onLoadMore}
-            >
-              <ChevronDown size={14} />
-              Load more
-            </Button>
-          </div>
-        ) : null}
+            {error ? (
+              <div className="flex items-start gap-2 border-b border-destructive/20 bg-destructive-subtle px-4 py-3 text-sm text-destructive">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                <div className="min-w-0 flex-1">{error}</div>
+                {onRetry ? (
+                  <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
+                    <RotateCw size={13} />
+                    Retry
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
+              {loading && repositories.length === 0 ? (
+                <LoadingRepositoryRows />
+              ) : repositories.length === 0 ? (
+                <EmptyRepositoryState query={query} />
+              ) : (
+                <div className="divide-y divide-border-light">
+                  {repositories.map((repo) => (
+                    <RepositoryRow
+                      key={repo.id}
+                      repo={repo}
+                      adding={addingRepoId === repo.id}
+                      onAdd={onAddRepository}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {nextCursor ? (
+              <div className="border-t border-border-light px-4 py-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  loading={loadingMore}
+                  onClick={onLoadMore}
+                >
+                  <ChevronDown size={14} />
+                  Load more
+                </Button>
+              </div>
+            ) : null}
+          </>
+        )}
       </section>
     </div>
   );
 }
 
+function AddCloudEnvironmentBlocker({
+  blocker,
+}: {
+  blocker: AddCloudEnvironmentBlockerView;
+}) {
+  return (
+    <div className="flex min-h-80 items-center justify-center px-6 py-10">
+      <div className="max-w-md text-center">
+        <div className="mx-auto flex size-10 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+          <ShieldAlert className="size-4" aria-hidden />
+        </div>
+        <h3 className="mt-3 text-sm font-medium text-foreground">{blocker.title}</h3>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{blocker.description}</p>
+        {blocker.actionLabel && blocker.onAction ? (
+          <Button
+            type="button"
+            variant="primary"
+            className="mt-4"
+            loading={blocker.actionLoading}
+            disabled={blocker.actionLoading}
+            onClick={blocker.onAction}
+          >
+            {blocker.actionLabel}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 function LoadingRepositoryRows() {
   return (
     <div

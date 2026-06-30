@@ -25,6 +25,11 @@ export interface CloudEnvironmentsSettingsSurfaceProps {
   mode: "cloud-only" | "hybrid";
   localCheckouts?: readonly LocalCheckoutView[];
   selectedCloudRepo?: CloudEnvironmentRepoSelection | null;
+  organizationId?: string | null;
+  canManageGitHubAppInstallation?: boolean;
+  userAuthorizationReturnTo?: string | null;
+  installationReturnTo?: string | null;
+  onOpenExternalUrl?: (url: string) => void | Promise<void>;
   enabled?: boolean;
   cloudUnavailableReason?: string | null;
   onSelectCloudEnvironment: (repo: CloudEnvironmentRepoSelection) => void;
@@ -36,6 +41,11 @@ export function CloudEnvironmentsSettingsSurface({
   mode,
   localCheckouts = [],
   selectedCloudRepo = null,
+  organizationId = null,
+  canManageGitHubAppInstallation = false,
+  userAuthorizationReturnTo = null,
+  installationReturnTo = null,
+  onOpenExternalUrl,
   enabled = true,
   cloudUnavailableReason = null,
   onSelectCloudEnvironment,
@@ -129,6 +139,11 @@ export function CloudEnvironmentsSettingsSurface({
       />
       <AddCloudEnvironmentDialogController
         open={addOpen}
+        organizationId={organizationId}
+        canManageGitHubAppInstallation={canManageGitHubAppInstallation}
+        userAuthorizationReturnTo={userAuthorizationReturnTo}
+        installationReturnTo={installationReturnTo}
+        onOpenExternalUrl={onOpenExternalUrl}
         onClose={() => setAddOpen(false)}
         onEnvironmentAdded={(repoId) => {
           const parsed = parseGitRepoId(repoId);

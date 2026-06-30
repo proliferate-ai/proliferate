@@ -43,6 +43,8 @@ class GitHubAppAuthorizationValue:
 @dataclass(frozen=True)
 class GitHubAppInstallationValue:
     id: UUID
+    organization_id: UUID | None
+    installed_by_user_id: UUID | None
     github_installation_id: str
     account_login: str
     account_type: str
@@ -124,6 +126,8 @@ def _authorization_value(row: GitHubAppAuthorization) -> GitHubAppAuthorizationV
 def _installation_value(row: GitHubAppInstallation) -> GitHubAppInstallationValue:
     return GitHubAppInstallationValue(
         id=row.id,
+        organization_id=row.organization_id,
+        installed_by_user_id=row.installed_by_user_id,
         github_installation_id=row.github_installation_id,
         account_login=row.account_login,
         account_type=row.account_type,
@@ -225,11 +229,22 @@ async def upsert_github_app_installation(
     db: AsyncSession,
     *,
     installation: GitHubAppInstallationPayload,
+    organization_id: UUID | None = None,
+    installed_by_user_id: UUID | None = None,
 ) -> GitHubAppInstallationValue:
     now = utcnow()
-    await db.execute(
-        pg_insert(GitHubAppInstallation)
-        .values(
+    row = (
+        await db.execute(
+            select(GitHubAppInstallation)
+            .where(
+                GitHubAppInstallation.github_installation_id
+                == installation.github_installation_id
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        row = GitHubAppInstallation(
             github_installation_id=installation.github_installation_id,
             account_login=installation.account_login,
             account_type=installation.account_type,
@@ -240,27 +255,36 @@ async def upsert_github_app_installation(
             created_at=now,
             updated_at=now,
         )
-        .on_conflict_do_update(
-            index_elements=[GitHubAppInstallation.github_installation_id],
-            set_={
-                "account_login": installation.account_login,
-                "account_type": installation.account_type,
-                "repository_selection": installation.repository_selection,
-                "permissions_json": json.dumps(installation.permissions, separators=(",", ":")),
-                "suspended_at": installation.suspended_at,
-                "deleted_at": None,
-                "updated_at": now,
-            },
-        )
-    )
+        db.add(row)
+    row.account_login = installation.account_login
+    row.account_type = installation.account_type
+    row.repository_selection = installation.repository_selection
+    row.permissions_json = json.dumps(installation.permissions, separators=(",", ":"))
+    row.suspended_at = installation.suspended_at
+    row.deleted_at = None
+    if organization_id is not None:
+        row.organization_id = organization_id
+    if installed_by_user_id is not None:
+        row.installed_by_user_id = installed_by_user_id
+    row.updated_at = now
+    await db.flush()
+    return _installation_value(row)
+
+
+async def get_github_app_installation_for_organization(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+) -> GitHubAppInstallationValue | None:
     row = (
         await db.execute(
-            select(GitHubAppInstallation).where(
-                GitHubAppInstallation.github_installation_id == installation.github_installation_id
-            )
+            select(GitHubAppInstallation)
+            .where(GitHubAppInstallation.organization_id == organization_id)
+            .where(GitHubAppInstallation.deleted_at.is_(None))
+            .order_by(GitHubAppInstallation.updated_at.desc())
         )
-    ).scalar_one()
-    return _installation_value(row)
+    ).scalars().first()
+    return _installation_value(row) if row is not None else None
 
 
 async def mark_github_app_installation_deleted(

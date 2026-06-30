@@ -171,6 +171,7 @@ class Settings(BaseSettings):
 
     # GitHub App for managed-cloud repository authority.
     github_app_id: str = ""
+    github_app_slug: str = ""
     github_app_client_id: str = ""
     github_app_client_secret: str = ""
     github_app_webhook_secret: str = ""

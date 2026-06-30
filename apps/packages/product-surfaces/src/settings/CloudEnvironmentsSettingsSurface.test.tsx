@@ -8,7 +8,12 @@ const cloudHooks = vi.hoisted(() => ({
   useRepositories: vi.fn(),
   useCloudRepoBranches: vi.fn(),
   useSaveRepoEnvironment: vi.fn(),
-  useCloudGitRepositories: vi.fn(),
+  useGitHubAppUserAuthorizationStatus: vi.fn(),
+  useStartGitHubAppUserAuthorization: vi.fn(),
+  useGitHubAppInstallationStatus: vi.fn(),
+  useStartGitHubAppInstallation: vi.fn(),
+  useGitHubAppAccessibleRepos: vi.fn(),
+  useValidateGitHubRepoAuthority: vi.fn(),
   useValidateCloudRepoBranches: vi.fn(),
   useCloudSecrets: vi.fn(),
   usePutCloudSecretEnvVar: vi.fn(),
@@ -16,13 +21,20 @@ const cloudHooks = vi.hoisted(() => ({
   usePutCloudSecretFile: vi.fn(),
   useDeleteCloudSecretFile: vi.fn(),
   saveMutateAsync: vi.fn(),
+  startUserAuthorizationMutateAsync: vi.fn(),
+  startInstallationMutateAsync: vi.fn(),
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useRepositories: cloudHooks.useRepositories,
   useCloudRepoBranches: cloudHooks.useCloudRepoBranches,
   useSaveRepoEnvironment: cloudHooks.useSaveRepoEnvironment,
-  useCloudGitRepositories: cloudHooks.useCloudGitRepositories,
+  useGitHubAppUserAuthorizationStatus: cloudHooks.useGitHubAppUserAuthorizationStatus,
+  useStartGitHubAppUserAuthorization: cloudHooks.useStartGitHubAppUserAuthorization,
+  useGitHubAppInstallationStatus: cloudHooks.useGitHubAppInstallationStatus,
+  useStartGitHubAppInstallation: cloudHooks.useStartGitHubAppInstallation,
+  useGitHubAppAccessibleRepos: cloudHooks.useGitHubAppAccessibleRepos,
+  useValidateGitHubRepoAuthority: cloudHooks.useValidateGitHubRepoAuthority,
   useValidateCloudRepoBranches: cloudHooks.useValidateCloudRepoBranches,
   useCloudSecrets: cloudHooks.useCloudSecrets,
   usePutCloudSecretEnvVar: cloudHooks.usePutCloudSecretEnvVar,
@@ -90,13 +102,30 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       isPending: false,
       error: null,
     });
-    cloudHooks.useCloudGitRepositories.mockReturnValue({
+    cloudHooks.useGitHubAppUserAuthorizationStatus.mockReturnValue({
+      data: { connected: true },
+      isLoading: false,
+    });
+    cloudHooks.useStartGitHubAppUserAuthorization.mockReturnValue({
+      mutateAsync: cloudHooks.startUserAuthorizationMutateAsync,
+      isPending: false,
+    });
+    cloudHooks.useGitHubAppInstallationStatus.mockReturnValue({
+      data: { installed: true },
+      isLoading: false,
+    });
+    cloudHooks.useStartGitHubAppInstallation.mockReturnValue({
+      mutateAsync: cloudHooks.startInstallationMutateAsync,
+      isPending: false,
+    });
+    cloudHooks.useGitHubAppAccessibleRepos.mockReturnValue({
       data: { repositories: [], nextCursor: null },
       isLoading: false,
       isFetching: false,
       error: null,
       refetch: vi.fn(),
     });
+    cloudHooks.useValidateGitHubRepoAuthority.mockReturnValue({ mutateAsync: vi.fn() });
     cloudHooks.useValidateCloudRepoBranches.mockReturnValue({ mutateAsync: vi.fn() });
     cloudHooks.useCloudSecrets.mockReturnValue({
       data: {
@@ -132,6 +161,12 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       mutate: vi.fn(),
       isPending: false,
       error: null,
+    });
+    cloudHooks.startUserAuthorizationMutateAsync.mockResolvedValue({
+      authorizationUrl: "https://github.test/authorize",
+    });
+    cloudHooks.startInstallationMutateAsync.mockResolvedValue({
+      installationUrl: "https://github.test/install",
     });
   });
 
@@ -215,5 +250,75 @@ describe("CloudEnvironmentsSettingsSurface", () => {
         runCommand: "",
       },
     });
+  });
+
+  it("blocks adding cloud environments until the user authorizes the GitHub App", async () => {
+    const onOpenExternalUrl = vi.fn();
+    cloudHooks.useGitHubAppUserAuthorizationStatus.mockReturnValue({
+      data: { connected: false, action: "connect" },
+      isLoading: false,
+    });
+
+    render(
+      <CloudEnvironmentsSettingsSurface
+        mode="cloud-only"
+        organizationId="org-1"
+        userAuthorizationReturnTo="proliferate://settings/environments"
+        onOpenExternalUrl={onOpenExternalUrl}
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add GitHub repo" }));
+
+    expect(screen.queryByRole("heading", { name: "Authorize GitHub App" })).not.toBeNull();
+    expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Authorize GitHub App" }));
+
+    await waitFor(() => {
+      expect(cloudHooks.startUserAuthorizationMutateAsync).toHaveBeenCalledWith({
+        returnTo: "proliferate://settings/environments",
+      });
+    });
+    expect(onOpenExternalUrl).toHaveBeenCalledWith("https://github.test/authorize");
+  });
+
+  it("blocks adding cloud environments until an admin installs the GitHub App", async () => {
+    const onOpenExternalUrl = vi.fn();
+    cloudHooks.useGitHubAppInstallationStatus.mockReturnValue({
+      data: { installed: false },
+      isLoading: false,
+    });
+
+    render(
+      <CloudEnvironmentsSettingsSurface
+        mode="cloud-only"
+        organizationId="org-1"
+        canManageGitHubAppInstallation
+        installationReturnTo="proliferate://settings/environments"
+        onOpenExternalUrl={onOpenExternalUrl}
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add GitHub repo" }));
+
+    expect(screen.queryByRole("heading", { name: "Install GitHub App" })).not.toBeNull();
+    expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Install GitHub App" }));
+
+    await waitFor(() => {
+      expect(cloudHooks.startInstallationMutateAsync).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        options: {
+          returnTo: "proliferate://settings/environments",
+        },
+      });
+    });
+    expect(onOpenExternalUrl).toHaveBeenCalledWith("https://github.test/install");
   });
 });

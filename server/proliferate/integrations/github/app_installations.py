@@ -146,6 +146,29 @@ async def list_github_app_installations() -> tuple[GitHubAppInstallationInfo, ..
     return tuple(installations)
 
 
+async def get_github_app_installation(
+    *,
+    installation_id: str,
+) -> GitHubAppInstallationInfo:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"https://api.github.com/app/installations/{installation_id}",
+                headers=_app_headers(),
+            )
+    except httpx.HTTPError as exc:
+        raise GitHubIntegrationError("Could not load GitHub App installation.") from exc
+    if response.status_code >= 300:
+        raise GitHubIntegrationError("Could not load GitHub App installation.")
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise GitHubIntegrationError("Could not load GitHub App installation.")
+    installation = _installation_from_payload(payload)
+    if installation is None:
+        raise GitHubIntegrationError("Could not load GitHub App installation.")
+    return installation
+
+
 async def fetch_installation_repo_coverage_from_github(
     *,
     user_access_token: str,

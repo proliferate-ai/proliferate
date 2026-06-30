@@ -1,11 +1,11 @@
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import type { AccountConnectedServiceView } from "@proliferate/product-ui/account/AccountSettingsPane";
 
-export function buildGitHubAppConnectedServiceView({
+export function buildGitHubAppUserAuthorizationServiceView({
   status,
   loading,
-  connecting,
-  onConnect,
+  authorizing,
+  onAuthorize,
   onManage,
 }: {
   status: {
@@ -15,8 +15,8 @@ export function buildGitHubAppConnectedServiceView({
     action?: string | null;
   } | undefined;
   loading: boolean;
-  connecting: boolean;
-  onConnect: () => void;
+  authorizing: boolean;
+  onAuthorize: () => void;
   onManage: () => void;
 }): AccountConnectedServiceView {
   const connected = status?.connected === true;
@@ -24,33 +24,33 @@ export function buildGitHubAppConnectedServiceView({
     || status?.status === "needs_reauth"
     || status?.action === "reauthorize";
   return {
-    id: "github-app",
-    label: "Proliferate GitHub App",
-    description: "Required for Proliferate Cloud repositories.",
+    id: "github-app-user-authorization",
+    label: "GitHub App user authorization",
+    description: "Authorizes Proliferate Cloud to use your GitHub identity in managed sandboxes.",
     accountLabel: status?.githubLogin ? `@${status.githubLogin}` : null,
     statusLabel: loading
       ? "Checking"
       : connected
-        ? "Connected"
+        ? "Authorized"
         : needsReconnect
-          ? "Reconnect"
-          : "Not connected",
+          ? "Reauthorize"
+          : "Not authorized",
     tone: connected ? "success" : needsReconnect ? "warning" : "neutral",
     action: connected
       ? {
-          label: "Manage GitHub App",
+          label: "Manage in GitHub",
           onClick: () => { void onManage(); },
         }
       : {
-          label: connecting
+          label: authorizing
             ? "Opening GitHub..."
             : needsReconnect
-              ? "Reconnect GitHub App"
-              : "Connect GitHub App",
+              ? "Reauthorize GitHub App"
+              : "Authorize GitHub App",
           icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
-          loading: connecting,
-          disabled: connecting,
-          onClick: () => { void onConnect(); },
+          loading: authorizing,
+          disabled: authorizing,
+          onClick: () => { void onAuthorize(); },
         },
   };
 }

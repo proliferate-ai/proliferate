@@ -58,9 +58,24 @@ class GitHubAppInstallation(Base):
     __table_args__ = (
         Index("ux_github_app_installations_external", "github_installation_id", unique=True),
         Index("ix_github_app_installations_account", "account_login", "account_type"),
+        Index(
+            "ix_github_app_installations_organization",
+            "organization_id",
+            "deleted_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    installed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     github_installation_id: Mapped[str] = mapped_column(String(64), index=True)
     account_login: Mapped[str] = mapped_column(String(255), index=True)
     account_type: Mapped[str] = mapped_column(String(32))

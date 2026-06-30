@@ -17,6 +17,9 @@ from proliferate.server.cloud.capabilities.api import router as capabilities_rou
 # from proliferate.server.cloud.compute.api import router as compute_router
 # EVENTS PARKED: old cloud event sync tables were removed in the model cleanup.
 # from proliferate.server.cloud.events.api import router as events_router
+from proliferate.server.cloud.github_app.api import (
+    organization_router as github_app_organization_router,
+)
 from proliferate.server.cloud.github_app.api import router as github_app_router
 from proliferate.server.cloud.integration_policy.api import router as integration_policy_router
 # LIVE TARGETS PARKED: old target sync tables were removed in the model cleanup.
@@ -69,6 +72,7 @@ router.include_router(repositories_router)
 # REPO CONFIG PARKED: /v1/cloud/repos/*/config is intentionally disabled.
 # router.include_router(repo_config_router)
 router.include_router(github_app_router)
+router.include_router(github_app_organization_router)
 # SECRETS PARKED: /v1/cloud/secrets/* is intentionally disabled.
 # router.include_router(secrets_router)
 router.include_router(cloud_sandboxes_router)
