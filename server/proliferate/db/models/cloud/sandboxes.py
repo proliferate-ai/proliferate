@@ -3,77 +3,79 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from proliferate.constants.cloud import CloudSandboxStatus, CloudSandboxType
 from proliferate.db.models.base import Base, utcnow
+
+_SANDBOX_TYPE_ENUM = Enum(
+    CloudSandboxType,
+    name="cloud_sandbox_type",
+    native_enum=False,
+    values_callable=lambda values: [value.value for value in values],
+    validate_strings=True,
+)
+_SANDBOX_STATUS_ENUM = Enum(
+    CloudSandboxStatus,
+    name="cloud_sandbox_status",
+    native_enum=False,
+    values_callable=lambda values: [value.value for value in values],
+    validate_strings=True,
+)
 
 
 class CloudSandbox(Base):
     __tablename__ = "cloud_sandbox"
     __table_args__ = (
         CheckConstraint(
-            "lifecycle_on_timeout IN ('pause', 'kill')",
-            name="ck_cloud_sandbox_lifecycle_on_timeout",
+            "status IN ("
+            "'creating', 'ready', 'paused', 'error', 'destroyed'"
+            ")",
+            name="ck_cloud_sandbox_status",
         ),
         CheckConstraint(
-            "(sandbox_profile_id IS NULL AND target_id IS NULL AND billing_subject_id IS NULL) OR "
-            "(sandbox_profile_id IS NOT NULL AND target_id IS NOT NULL "
-            "AND billing_subject_id IS NOT NULL)",
-            name="ck_cloud_sandbox_managed_target_identity",
+            "sandbox_type IN ('e2b')",
+            name="ck_cloud_sandbox_type",
         ),
         Index(
-            "ux_cloud_sandbox_active_per_target",
-            "target_id",
+            "ux_cloud_sandbox_personal_active",
+            "owner_user_id",
             unique=True,
-            postgresql_where=text(
-                "status IN ('creating','provisioning','running','paused','blocked') "
-                "AND target_id IS NOT NULL"
-            ),
+            postgresql_where=text("destroyed_at IS NULL"),
         ),
+        Index(
+            "ux_cloud_sandbox_provider_sandbox_id",
+            "provider_sandbox_id",
+            unique=True,
+            postgresql_where=text("provider_sandbox_id IS NOT NULL"),
+        ),
+        Index("ix_cloud_sandbox_owner_user_status", "owner_user_id", "status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
-        nullable=True,
     )
-    target_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_targets.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
+    sandbox_type: Mapped[CloudSandboxType] = mapped_column(
+        _SANDBOX_TYPE_ENUM,
+        default=CloudSandboxType.e2b,
     )
-    billing_subject_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("billing_subject.id", ondelete="RESTRICT"),
-        index=True,
-        nullable=True,
-    )
-
-    provider: Mapped[str] = mapped_column(String(32))
-    external_sandbox_id: Mapped[str | None] = mapped_column(
+    provider_sandbox_id: Mapped[str | None] = mapped_column(
         String(255),
-        unique=True,
         nullable=True,
     )
-    status: Mapped[str] = mapped_column(String(32))
-    template_version: Mapped[str] = mapped_column(String(64))
-    last_provider_event_at: Mapped[datetime | None] = mapped_column(
+    status: Mapped[CloudSandboxStatus] = mapped_column(_SANDBOX_STATUS_ENUM)
+    anyharness_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_health_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    last_provider_event_kind: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    lifecycle_on_timeout: Mapped[str] = mapped_column(String(32), default="pause")
-    lifecycle_auto_resume: Mapped[bool] = mapped_column(default=True)
-    provider_timeout_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    blocked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    destroyed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

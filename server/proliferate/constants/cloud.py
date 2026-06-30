@@ -318,6 +318,45 @@ GEMINI_ALLOWED_AUTH_FILES: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 
+class RepoEnvironmentKind(StrEnum):
+    local = "local"
+    cloud = "cloud"
+
+
+class GitProvider(StrEnum):
+    github = "github"
+
+
+class CloudSecretScopeKind(StrEnum):
+    personal = "personal"
+    organization = "organization"
+    workspace = "workspace"
+
+
+class CloudSandboxSecretMaterializationKind(StrEnum):
+    global_ = "global"
+    workspace = "workspace"
+
+
+class CloudSandboxSecretMaterializationStatus(StrEnum):
+    pending = "pending"
+    running = "running"
+    ready = "ready"
+    error = "error"
+
+
+class CloudSandboxType(StrEnum):
+    e2b = "e2b"
+
+
+class CloudSandboxStatus(StrEnum):
+    creating = "creating"
+    ready = "ready"
+    paused = "paused"
+    error = "error"
+    destroyed = "destroyed"
+
+
 class CloudRuntimeEnvironmentStatus(StrEnum):
     pending = "pending"
     provisioning = "provisioning"

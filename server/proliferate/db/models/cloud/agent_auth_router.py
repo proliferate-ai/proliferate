@@ -44,7 +44,7 @@ class AgentGatewayRouterMaterialization(Base):
             "router_object_kind",
             "object_scope",
             "selection_id",
-            "target_id",
+            "cloud_sandbox_id",
             unique=True,
             postgresql_where=text("object_scope = 'runtime_selection' AND status != 'revoked'"),
         ),
@@ -98,13 +98,8 @@ class AgentGatewayRouterMaterialization(Base):
         index=True,
         nullable=True,
     )
-    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    target_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_targets.id", ondelete="CASCADE"),
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
     )
@@ -247,13 +242,8 @@ class AgentAuthAuditEvent(Base):
         index=True,
         nullable=True,
     )
-    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("sandbox_profile.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    target_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
         index=True,
         nullable=True,
     )

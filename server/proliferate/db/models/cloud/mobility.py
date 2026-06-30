@@ -120,9 +120,7 @@ class CloudWorkspaceMoveCleanupItem(Base):
     __tablename__ = "cloud_workspace_move_cleanup_item"
     __table_args__ = (
         CheckConstraint(
-            "item_kind IN ('anyharness_workspace', 'cloud_workspace', "
-            "'cloud_exposure', 'cloud_session_projection', "
-            "'cloud_transcript_projection', 'worker_projection_cursor')",
+            "item_kind IN ('anyharness_workspace', 'cloud_workspace')",
             name="ck_cloud_workspace_move_cleanup_item_kind",
         ),
         CheckConstraint(
@@ -148,8 +146,8 @@ class CloudWorkspaceMoveCleanupItem(Base):
     )
 
     item_kind: Mapped[str] = mapped_column(String(64))
-    target_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

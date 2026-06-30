@@ -52,7 +52,7 @@ class Automation(Base):
         Index("ix_automation_owner_user_id", "owner_user_id"),
         Index("ix_automation_organization_id", "organization_id"),
         Index("ix_automation_created_by_user_id", "created_by_user_id"),
-        Index("ix_automation_cloud_repo_config_id", "cloud_repo_config_id"),
+        Index("ix_automation_repo_environment_id", "repo_environment_id"),
         Index("ix_automation_cloud_agent_run_config_id", "cloud_agent_run_config_id"),
         Index(
             "ix_automation_scheduler_due",
@@ -74,9 +74,9 @@ class Automation(Base):
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
     )
-    cloud_repo_config_id: Mapped[uuid.UUID] = mapped_column(
-        # Repo-config deletes must reject or explicitly clean up automations before deletion.
-        ForeignKey("cloud_repo_config.id", ondelete="RESTRICT"),
+    repo_environment_id: Mapped[uuid.UUID] = mapped_column(
+        # Environment deletes must reject or explicitly clean up automations first.
+        ForeignKey("repo_environment.id", ondelete="RESTRICT"),
         index=False,
     )
     title: Mapped[str] = mapped_column(String(255))
@@ -231,9 +231,7 @@ class AutomationRun(Base):
             postgresql_where=text("status = 'dispatching' AND claim_expires_at IS NOT NULL"),
         ),
         Index("ix_automation_run_cloud_workspace_id", "cloud_workspace_id"),
-        Index("ix_automation_run_cloud_target_id_snapshot", "cloud_target_id_snapshot"),
-        Index("ix_automation_run_sandbox_profile_id", "sandbox_profile_id"),
-        Index("ix_automation_run_cloud_workspace_exposure_id", "cloud_workspace_exposure_id"),
+        Index("ix_automation_run_repo_environment_id_snapshot", "repo_environment_id_snapshot"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -261,21 +259,8 @@ class AutomationRun(Base):
     git_provider_snapshot: Mapped[str] = mapped_column(String(32))
     git_owner_snapshot: Mapped[str] = mapped_column(String(255))
     git_repo_name_snapshot: Mapped[str] = mapped_column(String(255))
-    cloud_repo_config_id_snapshot: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="RESTRICT"),
-    )
-    cloud_target_id_snapshot: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    cloud_target_kind_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("sandbox_profile.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    cloud_workspace_exposure_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_workspace_exposure.id", ondelete="SET NULL"),
-        nullable=True,
+    repo_environment_id_snapshot: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("repo_environment.id", ondelete="RESTRICT"),
     )
     agent_run_config_snapshot_json: Mapped[dict[str, object] | None] = mapped_column(
         JSONB,

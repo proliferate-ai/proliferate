@@ -12,11 +12,6 @@ from proliferate.db.models.cloud.agent_auth_gateway import (
     AgentGatewayProviderCredential,
     AgentGatewayRuntimeGrant,
 )
-from proliferate.db.models.cloud.agent_auth_profiles import (
-    SandboxProfile,
-    SandboxProfileAgentAuthRevision,
-    SandboxProfileTargetState,
-)
 from proliferate.db.models.cloud.agent_auth_router import (
     AgentAuthAuditEvent,
     AgentGatewayLlmUsageEvent,
@@ -37,7 +32,4 @@ __all__ = [
     "AgentGatewayRuntimeGrant",
     "AgentGatewayUsageImportCursor",
     "SandboxAgentAuthSelection",
-    "SandboxProfile",
-    "SandboxProfileAgentAuthRevision",
-    "SandboxProfileTargetState",
 ]
