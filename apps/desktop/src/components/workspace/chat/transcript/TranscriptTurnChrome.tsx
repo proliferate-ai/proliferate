@@ -87,9 +87,12 @@ export function resolveTurnTrailingStatus(
   sessionViewState: SessionViewState,
   transientStatusText: string | null,
 ): ReactNode {
+  // Every variant renders inside the same fixed-height row as the reserved
+  // assistant action slot, so swapping between "Thinking…", a transient status,
+  // and the copy-button slot never shifts the content above it.
   if (sessionViewState === "working" && transientStatusText) {
     return (
-      <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+      <div className={`flex items-center gap-2 text-xs text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
         <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate">{transientStatusText}</span>
       </div>
@@ -97,12 +100,16 @@ export function resolveTurnTrailingStatus(
   }
 
   if (sessionViewState === "working") {
-    return <StreamingIndicator startedAt={startedAt} />;
+    return (
+      <div className={`flex items-center ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
+        <StreamingIndicator startedAt={startedAt} />
+      </div>
+    );
   }
 
   if (sessionViewState === "needs_input") {
     return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className={`flex items-center gap-2 text-xs text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
         <CircleQuestion className="size-3.5 shrink-0 text-muted-foreground" />
         <span>Waiting for your input</span>
       </div>

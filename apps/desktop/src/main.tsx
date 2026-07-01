@@ -23,6 +23,7 @@ import {
   recordBootDiagnostic,
 } from "./lib/infra/measurement/boot-stall-diagnostics";
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
+import { startLayoutShiftObserver } from "./lib/infra/measurement/debug-layout-shift";
 import { logRendererEvent } from "./lib/access/tauri/diagnostics";
 import { useAppearancePreferenceLifecycle } from "./hooks/preferences/lifecycle/use-appearance-preference-lifecycle";
 import { useUserPreferencesLifecycle } from "./hooks/preferences/lifecycle/use-user-preferences-lifecycle";
@@ -44,6 +45,7 @@ const rendererStartupStartedAt = startStartupTimer();
 installWebKitPerformanceMeasureDetailGuard();
 installBootStallDiagnostics();
 installDebugMeasurement();
+startLayoutShiftObserver();
 
 function recordRendererStartupEvent(message: string): void {
   recordBootDiagnostic(`renderer_startup.${message}`);
