@@ -17,7 +17,6 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.store import billing_subjects as billing_subject_store
-from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspace_creation import (
@@ -30,6 +29,7 @@ from proliferate.db.store.cloud_workspaces import (
     get_existing_cloud_workspace,
     list_active_cloud_workspace_branches_for_user_repo,
 )
+from proliferate.db.store.repositories import get_cloud_repo_environment
 from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
@@ -403,13 +403,13 @@ async def _resolve_new_direct_target_workspace_create(
             status_code=400,
         )
 
-    repo_config = await get_cloud_repo_config(
+    repo_environment = await get_cloud_repo_environment(
         db,
         user_id=user.id,
         git_owner=body.git_owner,
         git_repo_name=body.git_repo_name,
     )
-    if repo_config is None or not repo_config.configured:
+    if repo_environment is None:
         raise CloudApiError(
             "cloud_repo_not_configured",
             "Configure cloud settings for this repo before launching desktop dispatch.",
@@ -426,7 +426,7 @@ async def _resolve_new_direct_target_workspace_create(
         ),
     )
     cleaned_base_branch = body.base_branch.strip() if body.base_branch else ""
-    resolved_base_branch = cleaned_base_branch or (repo_config.default_branch or "").strip()
+    resolved_base_branch = cleaned_base_branch or (repo_environment.default_branch or "").strip()
     if not resolved_base_branch:
         resolved_base_branch = repo_branches.default_branch.strip()
     if resolved_base_branch not in repo_branches.branches:

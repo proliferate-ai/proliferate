@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import {
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
@@ -18,6 +19,23 @@ const gitlabRepository = {
   gitRepoName: "elsewhere",
 };
 
+const configuredRepoConfig: RepoConfigResponse = {
+  id: "repo-proliferate",
+  gitProvider: "github",
+  gitOwner: "proliferate-ai",
+  gitRepoName: "proliferate",
+  environments: [{
+    id: "env-proliferate-cloud",
+    repoConfigId: "repo-proliferate",
+    kind: "cloud",
+    desktopInstallId: null,
+    localPath: null,
+    defaultBranch: "main",
+    setupScript: "",
+    runCommand: "",
+  }],
+};
+
 function buildCards(overrides: Partial<Parameters<typeof buildHomeOnboardingCards>[0]> = {}) {
   return buildHomeOnboardingCards({
     repositories: [githubRepository],
@@ -25,14 +43,7 @@ function buildCards(overrides: Partial<Parameters<typeof buildHomeOnboardingCard
     readyAgentCount: 1,
     agentsLoading: false,
     defaultChatAgentKind: "codex",
-    cloudRepoConfigs: [{
-      gitOwner: "proliferate-ai",
-      gitRepoName: "proliferate",
-      configured: true,
-      configuredAt: "2026-05-01T00:00:00.000Z",
-      defaultBranch: "main",
-      filesVersion: 1,
-    }],
+    repoConfigs: [configuredRepoConfig],
     cloudRepoConfigsLoading: false,
     ...overrides,
   });
@@ -42,7 +53,7 @@ describe("buildHomeOnboardingCards", () => {
   it("shows the GitHub repo card when no GitHub repositories are present", () => {
     expect(buildCards({
       repositories: [gitlabRepository],
-      cloudRepoConfigs: [],
+      repoConfigs: [],
     })).toEqual([
       expect.objectContaining({
         id: "add-repository",
@@ -72,7 +83,7 @@ describe("buildHomeOnboardingCards", () => {
 
   it("shows the repository configuration card for an unconfigured GitHub repo", () => {
     expect(buildCards({
-      cloudRepoConfigs: [],
+      repoConfigs: [],
     })).toEqual([
       expect.objectContaining({
         id: "repository-settings",
@@ -85,7 +96,7 @@ describe("buildHomeOnboardingCards", () => {
     expect(buildCards({
       repositories: [],
       repositoriesLoading: true,
-      cloudRepoConfigs: [],
+      repoConfigs: [],
     })).toEqual([]);
 
     expect(buildCards({
@@ -94,7 +105,7 @@ describe("buildHomeOnboardingCards", () => {
     })).toEqual([]);
 
     expect(buildCards({
-      cloudRepoConfigs: [],
+      repoConfigs: [],
       cloudRepoConfigsLoading: true,
     })).toEqual([]);
   });
@@ -104,21 +115,14 @@ describe("findHomeUnconfiguredGitHubRepository", () => {
   it("returns the first GitHub repository without a saved cloud config", () => {
     expect(findHomeUnconfiguredGitHubRepository({
       repositories: [gitlabRepository, githubRepository],
-      cloudRepoConfigs: [],
+      repoConfigs: [],
     })).toBe(githubRepository);
   });
 
   it("returns null when the GitHub repository has a configured cloud config", () => {
     expect(findHomeUnconfiguredGitHubRepository({
       repositories: [githubRepository],
-      cloudRepoConfigs: [{
-        gitOwner: "proliferate-ai",
-        gitRepoName: "proliferate",
-        configured: true,
-        configuredAt: "2026-05-01T00:00:00.000Z",
-        defaultBranch: "main",
-        filesVersion: 1,
-      }],
+      repoConfigs: [configuredRepoConfig],
     })).toBeNull();
   });
 });

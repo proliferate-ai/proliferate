@@ -5,6 +5,9 @@ import { CloudEnvironmentsSettingsSurface } from "@proliferate/product-surfaces/
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import type { SettingsFocus } from "@/lib/domain/settings/navigation";
+import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { LocalRepoSection } from "./repo/LocalRepoSection";
 import { CloudRepoSection } from "./repo/CloudRepoSection";
 
@@ -33,6 +36,8 @@ export function EnvironmentsPane({
   onSelectCloudEnvironment,
   onBackToList,
 }: EnvironmentsPaneProps) {
+  const { activeOrganization, activeOrganizationId } = useActiveOrganization();
+  const { openExternal } = useTauriShellActions();
   const selectedCloudRepo = focus.cloudRepoOwner && focus.cloudRepoName
     ? {
       gitOwner: focus.cloudRepoOwner,
@@ -61,6 +66,13 @@ export function EnvironmentsPane({
             gitRepoName: repository.gitRepoName,
           }))}
         selectedCloudRepo={selectedCloudRepo}
+        organizationId={activeOrganizationId}
+        canManageGitHubAppInstallation={isSettingsAdminRole(
+          activeOrganization?.membership?.role,
+        )}
+        userAuthorizationReturnTo="proliferate://settings/environments?source=github_app_callback"
+        installationReturnTo="proliferate://settings/environments?source=github_app_installation_callback"
+        onOpenExternalUrl={openExternal}
         onSelectLocalCheckout={onSelectRepository}
         onSelectCloudEnvironment={(repo) => {
           onSelectCloudEnvironment(repo.gitOwner, repo.gitRepoName);

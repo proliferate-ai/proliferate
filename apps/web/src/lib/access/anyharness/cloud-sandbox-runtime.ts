@@ -1,8 +1,9 @@
 import { AnyHarnessClient } from "@anyharness/sdk";
-import type { CloudWorkspaceDetail, ProliferateCloudClient } from "@proliferate/cloud-sdk";
 import {
-  ensureCloudSandboxWorkspaceRuntimeConnection,
-} from "@proliferate/cloud-sdk/client/cloud-sandboxes";
+  ProliferateClientError,
+  type CloudWorkspaceDetail,
+  type ProliferateCloudClient,
+} from "@proliferate/cloud-sdk";
 
 export interface WebCloudSandboxRuntimeConnection {
   runtimeUrl: string;
@@ -28,16 +29,21 @@ export async function resolveWebCloudSandboxWorkspaceConnection(input: {
   if (!input.productToken) {
     throw new Error("Cloud runtime unavailable. Sign in again and retry.");
   }
-  const runtime = await ensureCloudSandboxWorkspaceRuntimeConnection(
-    input.workspace.id,
-    input.client,
-  );
+  const anyharnessWorkspaceId = input.workspace.anyharnessWorkspaceId;
+  if (!anyharnessWorkspaceId) {
+    throw new ProliferateClientError(
+      "Cloud workspace runtime is not ready yet.",
+      409,
+      "workspace_not_ready",
+    );
+  }
+
   return {
-    runtimeUrl: runtime.gatewayAnyHarnessBaseUrl,
+    runtimeUrl: input.client.buildUrl("/v1/gateway/cloud-sandbox/anyharness"),
     authToken: input.productToken,
-    anyharnessWorkspaceId: runtime.anyharnessWorkspaceId,
-    anyharnessRepoRootId: runtime.anyharnessRepoRootId,
-    runtimeGeneration: runtime.runtimeGeneration,
+    anyharnessWorkspaceId,
+    anyharnessRepoRootId: null,
+    runtimeGeneration: input.workspace.runtime?.generation ?? 0,
     runtimeAccessKind: "proliferate-gateway",
     webSocketAuthTransport: "protocol",
   };

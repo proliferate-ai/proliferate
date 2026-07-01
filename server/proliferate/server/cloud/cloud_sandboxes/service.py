@@ -8,33 +8,20 @@ ORM stack.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
-from proliferate.db.store import repositories as repo_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.cloud_sandboxes.repo_runtime_connections import (
-    CloudSandboxRepoRuntimeConnection,
-)
 from proliferate.utils.crypto import decrypt_text
 
 
 class _UserWithId(Protocol):
     id: UUID
-
-
-@dataclass(frozen=True)
-class CloudSandboxWorkspaceRuntimeConnection:
-    anyharness_workspace_id: str
-    anyharness_repo_root_id: str | None
-    runtime_generation: int
 
 
 async def get_cloud_sandbox_detail(
@@ -48,17 +35,25 @@ async def ensure_cloud_sandbox_ready(
     db: AsyncSession,
     user: _UserWithId,
 ) -> CloudSandboxValue:
+    return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
+
+
+async def ensure_personal_cloud_sandbox_exists(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> CloudSandboxValue:
     await sandbox_store.acquire_cloud_sandbox_owner_lock(
         db,
         owner_scope="personal",
-        owner_user_id=user.id,
+        owner_user_id=user_id,
         organization_id=None,
     )
-    billing_subject = await billing_subjects.ensure_personal_billing_subject(db, user.id)
+    billing_subject = await billing_subjects.ensure_personal_billing_subject(db, user_id)
     sandbox = await sandbox_store.ensure_personal_cloud_sandbox(
         db,
-        user_id=user.id,
-        created_by_user_id=user.id,
+        user_id=user_id,
+        created_by_user_id=user_id,
         billing_subject_id=billing_subject.id,
         e2b_template_ref="e2b",
     )
@@ -96,69 +91,4 @@ async def load_cloud_sandbox_runtime_access(
         sandbox.anyharness_base_url,
         decrypt_text(sandbox.anyharness_bearer_token_ciphertext),
         decrypt_text(sandbox.anyharness_data_key_ciphertext),
-    )
-
-
-async def ensure_cloud_sandbox_repo_runtime_connection(
-    db: AsyncSession,
-    user: _UserWithId,
-    *,
-    git_owner: str,
-    git_repo_name: str,
-) -> CloudSandboxRepoRuntimeConnection:
-    repo_environment = await repo_store.get_cloud_repo_environment(
-        db,
-        user_id=user.id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
-    if repo_environment is None:
-        raise CloudApiError(
-            "cloud_repo_environment_not_found",
-            "Cloud repo environment not found.",
-            status_code=404,
-        )
-
-    del repo_environment
-    raise CloudApiError(
-        "cloud_repo_materialization_not_available",
-        "Cloud repo materialization is not available in this model-cleanup build.",
-        status_code=501,
-    )
-
-
-async def ensure_cloud_sandbox_workspace_runtime_connection(
-    db: AsyncSession,
-    user: _UserWithId,
-    *,
-    workspace_id: UUID,
-) -> CloudSandboxWorkspaceRuntimeConnection:
-    workspace = await db.get(CloudWorkspace, workspace_id)
-    if (
-        workspace is None
-        or workspace.owner_user_id != user.id
-        or workspace.archived_at is not None
-    ):
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    repo_environment = await repo_store.get_repo_environment_by_id(
-        db,
-        workspace.repo_environment_id,
-    )
-    if repo_environment is None:
-        raise CloudApiError(
-            "cloud_repo_environment_not_found",
-            "Cloud repo environment not found.",
-            status_code=404,
-        )
-    repo_connection = await ensure_cloud_sandbox_repo_runtime_connection(
-        db,
-        user,
-        git_owner=repo_environment.git_owner,
-        git_repo_name=repo_environment.git_repo_name,
-    )
-    return CloudSandboxWorkspaceRuntimeConnection(
-        anyharness_workspace_id=workspace.anyharness_workspace_id
-        or repo_connection.anyharness_workspace_id,
-        anyharness_repo_root_id=repo_connection.anyharness_repo_root_id,
-        runtime_generation=repo_connection.runtime_generation,
     )

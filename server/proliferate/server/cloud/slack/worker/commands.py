@@ -15,7 +15,6 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
 from proliferate.db.store import users as users_store
 from proliferate.db.store.cloud_sync import command_records
@@ -29,6 +28,7 @@ from proliferate.db.store.cloud_workspace_creation import (
 from proliferate.db.store.cloud_workspaces import (
     list_active_managed_cloud_workspace_branches_for_profile_repo,
 )
+from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.sandbox import get_configured_sandbox_provider
 from proliferate.lib.product.workspace_naming import (
     pick_generated_workspace_name,
@@ -61,7 +61,6 @@ from proliferate.server.cloud.live.service import publish_worker_control_after_c
 from proliferate.server.cloud.repos.service import (
     get_repo_branches_for_user as get_github_repo_branches,
 )
-from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 
 SYSTEM_SLACK_USER_UUID = UUID("00000000-0000-0000-0000-000000000007")
@@ -74,7 +73,7 @@ async def create_and_materialize_workspace(
     *,
     organization_id: UUID,
     created_by_user_id: UUID,
-    repo: repo_store.CloudRepoConfigValue,
+    repo: RepoEnvironmentValue,
     prompt: str,
     agent_kind: object,
     job_id: UUID,
@@ -153,7 +152,7 @@ async def create_and_materialize_workspace(
                     sort_keys=True,
                 ),
                 template_version=get_configured_sandbox_provider().template_version,
-                repo_env_vars_ciphertext=encrypt_json(repo.env_vars) if repo.env_vars else None,
+                repo_env_vars_ciphertext=None,
             )
             break
         except CloudWorkspaceUniqueConflictError as error:
@@ -477,7 +476,7 @@ def _should_retry_slack_workspace_create(attempt: int) -> bool:
 
 def _workspace_paths(
     *,
-    repo: repo_store.CloudRepoConfigValue,
+    repo: RepoEnvironmentValue,
     branch_name: str,
     workspace_root: str | None,
 ) -> tuple[str, str]:

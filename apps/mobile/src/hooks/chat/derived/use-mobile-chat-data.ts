@@ -1,15 +1,21 @@
+import type {
+  PendingInteraction,
+  Session,
+  SessionEventEnvelope,
+  SessionExecutionSummary,
+} from "@anyharness/sdk";
+import { reduceEvents } from "@anyharness/sdk";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type {
   CloudPendingInteraction,
   CloudSessionEvent,
+  CloudSessionProjection,
   CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
 import {
-  useCloudSessionEvents,
-  useCloudTranscriptSnapshot,
-  useCloudWorkspaceSnapshot,
-  useSessionLive,
-  useWorkspaceLive,
+  useCloudClient,
+  useCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudTranscriptView,
@@ -33,13 +39,16 @@ import {
   effectiveWorkspaceStatus,
   sessionProjectionFromChat,
 } from "../../../lib/domain/chat/mobile-chat-presentation";
+import {
+  getMobileCloudSandboxAnyHarnessClient,
+} from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
-const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
 
 export function useMobileChatData({
   chat,
+  productToken,
   selectedSessionId,
   newSessionMode,
   pendingPrompt,
@@ -48,6 +57,7 @@ export function useMobileChatData({
   optimisticPrompts,
 }: {
   chat: MobileCloudChat;
+  productToken: string | null;
   selectedSessionId: string | null;
   newSessionMode: boolean;
   pendingPrompt: MobilePendingPrompt | null;
@@ -55,12 +65,37 @@ export function useMobileChatData({
   pendingPromptStatus: string | null;
   optimisticPrompts: readonly OptimisticPrompt[];
 }) {
-  const workspaceQuery = useCloudWorkspaceSnapshot(chat.workspaceId, true);
-  const workspaceLive = useWorkspaceLive(chat.workspaceId, { enabled: true });
-  const workspace = workspaceQuery.data?.workspace ?? workspaceLive.snapshot?.workspace ?? null;
+  const client = useCloudClient();
+  const workspaceQuery = useCloudWorkspace(chat.workspaceId, true);
+  const workspace = workspaceQuery.data ?? null;
+  const sessionsQuery = useQuery({
+    queryKey: [
+      "mobile-cloud-anyharness-sessions",
+      workspace?.id ?? null,
+      workspace?.anyharnessWorkspaceId ?? null,
+    ],
+    enabled: Boolean(workspace?.anyharnessWorkspaceId) && Boolean(productToken),
+    refetchInterval: pendingPrompt || optimisticPrompts.length > 0 ? 1500 : 5000,
+    queryFn: async () => {
+      if (!workspace) {
+        return [];
+      }
+      const { connection, anyharness } = await getMobileCloudSandboxAnyHarnessClient({
+        workspace,
+        productToken,
+        client,
+      });
+      const sessions = await anyharness.sessions.list(connection.anyharnessWorkspaceId);
+      return sessions.map((session) => cloudSessionProjectionFromAnyHarness(
+        session,
+        workspace.id,
+        connection.anyharnessWorkspaceId,
+      ));
+    },
+  });
   const sessions = useMemo(
-    () => [...(workspaceLive.snapshot?.sessions ?? workspaceQuery.data?.sessions ?? [])].sort(compareSessions),
-    [workspaceLive.snapshot?.sessions, workspaceQuery.data?.sessions],
+    () => [...(sessionsQuery.data ?? [])].sort(compareSessions),
+    [sessionsQuery.data],
   );
   const fallbackSession = useMemo(() => sessionProjectionFromChat(chat), [chat]);
   const singleInferredSession = !chat.sessionId && sessions.length === 1 ? sessions[0] ?? null : null;
@@ -77,28 +112,73 @@ export function useMobileChatData({
   const activeSessionId = session?.sessionId ?? selectedSessionId;
   const targetId = session?.targetId ?? workspace?.targetId ?? chat.targetId;
   const workspaceStatus = workspace ? effectiveWorkspaceStatus(workspace) : chat.status;
-  const sessionLive = useSessionLive(session?.sessionId ?? null, {
-    targetId,
-    enabled: Boolean(session && targetId),
+  const sessionLive = {
+    lastPatchAt: sessionsQuery.dataUpdatedAt ? new Date(sessionsQuery.dataUpdatedAt) : null,
+    isConnected: false,
+  };
+  const transcriptQuery = {
+    data: undefined as { transcriptItems: CloudTranscriptItem[]; pendingInteractions: CloudPendingInteraction[] } | undefined,
+    isLoading: sessionsQuery.isLoading,
+    refetch: sessionsQuery.refetch,
+  };
+  const sessionEventsQuery = useQuery({
+    queryKey: [
+      "mobile-cloud-anyharness-session-events",
+      workspace?.id ?? null,
+      workspace?.anyharnessWorkspaceId ?? null,
+      session?.sessionId ?? null,
+    ],
+    enabled: Boolean(workspace?.anyharnessWorkspaceId) && Boolean(session?.sessionId) && Boolean(productToken),
+    refetchInterval: pendingPrompt || optimisticPrompts.length > 0 ? 1500 : 5000,
+    queryFn: async () => {
+      if (!workspace || !session) {
+        return { events: EMPTY_SESSION_EVENTS };
+      }
+      const { anyharness } = await getMobileCloudSandboxAnyHarnessClient({
+        workspace,
+        productToken,
+        client,
+      });
+      const envelopes = await anyharness.sessions.listEvents(session.sessionId, {
+        limit: 500,
+      });
+      return {
+        events: envelopes.map((envelope) =>
+          cloudSessionEventFromAnyHarness(envelope, workspace.id, session.sessionId)
+        ),
+      };
+    },
   });
-  const transcriptQuery = useCloudTranscriptSnapshot(
-    targetId,
-    session?.sessionId ?? null,
-    Boolean(session && targetId),
-  );
-  const sessionEventsQuery = useCloudSessionEvents(
-    targetId,
-    session?.sessionId ?? null,
-    Boolean(session && targetId),
-  );
   const transcriptItems =
-    sessionLive.snapshot?.transcriptItems
-    ?? transcriptQuery.data?.transcriptItems
+    transcriptQuery.data?.transcriptItems
     ?? EMPTY_TRANSCRIPT_ITEMS;
-  const pendingInteractions =
-    sessionLive.snapshot?.pendingInteractions
-    ?? transcriptQuery.data?.pendingInteractions
-    ?? EMPTY_PENDING_INTERACTIONS;
+  const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
+  const pendingInteractions = useMemo(
+    () => {
+      if (session?.sessionId && sessionEventsQuery.isFetched) {
+        const eventEnvelopes = sessionEvents
+          .map((event) => event.envelope)
+          .filter((envelope): envelope is SessionEventEnvelope =>
+            Boolean(envelope && typeof envelope === "object" && "event" in envelope)
+          );
+        const transcript = reduceEvents(eventEnvelopes, session.sessionId);
+        return cloudPendingInteractionsFromReducer(
+          transcript.pendingInteractions,
+          session.sessionId,
+        );
+      }
+      return cloudPendingInteractionsFromExecutionSummary(
+        session?.executionSummary as SessionExecutionSummary | null | undefined,
+        session?.sessionId ?? null,
+      );
+    },
+    [
+      session?.executionSummary,
+      session?.sessionId,
+      sessionEvents,
+      sessionEventsQuery.isFetched,
+    ],
+  );
   const pendingPermissionByRequestId = useMemo(
     () => new Map(
       pendingInteractions
@@ -114,7 +194,6 @@ export function useMobileChatData({
     () => latestPendingPromptCommandId(pendingInteractions),
     [pendingInteractions],
   );
-  const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
   const transcriptView = useMemo(
     () => buildCloudTranscriptView({
       sessionId: session?.sessionId ?? null,
@@ -216,5 +295,115 @@ export function useMobileChatData({
     pendingPromptTranscriptState,
     pendingPromptDurable,
     visibleTranscriptRows,
+  };
+}
+
+function cloudSessionProjectionFromAnyHarness(
+  session: Session,
+  cloudWorkspaceId: string,
+  anyharnessWorkspaceId: string,
+): CloudSessionProjection {
+  return {
+    cloudWorkspaceId,
+    targetId: cloudWorkspaceId,
+    workspaceId: session.workspaceId ?? anyharnessWorkspaceId,
+    sessionId: session.id,
+    nativeSessionId: session.id,
+    sourceAgentKind: session.agentKind ?? null,
+    title: session.title ?? null,
+    status: session.status,
+    phase: session.executionSummary?.phase ?? session.status ?? null,
+    pendingInteractionCount: session.executionSummary?.pendingInteractions?.length ?? 0,
+    executionSummary: session.executionSummary ?? null,
+    liveConfig: session.liveConfig ?? null,
+    lastEventSeq: 0,
+    lastEventAt: session.updatedAt ?? session.lastPromptAt ?? session.createdAt ?? null,
+    startedAt: session.createdAt ?? null,
+    endedAt: null,
+  };
+}
+
+function cloudPendingInteractionsFromExecutionSummary(
+  executionSummary: SessionExecutionSummary | null | undefined,
+  sessionId: string | null,
+): CloudPendingInteraction[] {
+  return (executionSummary?.pendingInteractions ?? []).map((interaction) => ({
+    requestId: interaction.requestId,
+    sessionId,
+    status: "pending",
+    kind: interaction.kind,
+    title: interaction.title,
+    description: interaction.description ?? null,
+    toolCallId: interaction.source.toolCallId ?? null,
+    toolKind: interaction.source.toolKind ?? null,
+    toolStatus: interaction.source.toolStatus ?? null,
+    linkedPlanId: interaction.source.linkedPlanId ?? null,
+    ...(interaction.payload.type === "permission"
+      ? {
+        options: interaction.payload.options ?? [],
+        context: interaction.payload.context ?? null,
+      }
+      : {}),
+    ...(interaction.payload.type === "user_input"
+      ? { questions: interaction.payload.questions ?? [] }
+      : {}),
+    ...(interaction.payload.type === "mcp_elicitation"
+      ? {
+        mcpElicitation: {
+          serverName: interaction.payload.serverName,
+          mode: interaction.payload.mode,
+        },
+      }
+      : {}),
+  }));
+}
+
+function cloudPendingInteractionsFromReducer(
+  pendingInteractions: readonly PendingInteraction[],
+  sessionId: string,
+): CloudPendingInteraction[] {
+  return pendingInteractions.map((interaction) => ({
+    requestId: interaction.requestId,
+    sessionId,
+    status: "pending",
+    kind: interaction.kind,
+    title: interaction.title,
+    description: interaction.description ?? null,
+    toolCallId: interaction.toolCallId ?? null,
+    toolKind: interaction.toolKind ?? null,
+    toolStatus: interaction.toolStatus ?? null,
+    linkedPlanId: interaction.linkedPlanId ?? null,
+    ...(interaction.kind === "permission"
+      ? {
+        options: interaction.options ?? [],
+        context: interaction.context ?? null,
+      }
+      : {}),
+    ...(interaction.kind === "user_input"
+      ? { questions: interaction.questions ?? [] }
+      : {}),
+    ...(interaction.kind === "mcp_elicitation"
+      ? { mcpElicitation: interaction.mcpElicitation }
+      : {}),
+  }));
+}
+
+function cloudSessionEventFromAnyHarness(
+  envelope: SessionEventEnvelope,
+  cloudWorkspaceId: string,
+  sessionId: string,
+): CloudSessionEvent {
+  return {
+    targetId: cloudWorkspaceId,
+    sessionId,
+    cloudWorkspaceId,
+    seq: envelope.seq,
+    eventType: envelope.event.type,
+    sourceKind: "anyharness",
+    turnId: null,
+    itemId: null,
+    occurredAt: envelope.timestamp ?? new Date().toISOString(),
+    payload: envelope.event as unknown as Record<string, unknown>,
+    envelope: envelope as unknown as Record<string, unknown>,
   };
 }

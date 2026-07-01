@@ -15,13 +15,10 @@ from proliferate.constants.cloud import (
     CloudCommandStatus,
 )
 from proliferate.db.store import organizations as organizations_store
-from proliferate.db.store.cloud_repo_config import (
-    get_cloud_repo_config,
-    get_organization_cloud_repo_config,
-)
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.repositories import get_cloud_repo_environment
 from proliferate.server.cloud.commands.models import (
     CreateCloudCommandRequest,
     command_response_payload,
@@ -241,12 +238,7 @@ async def materialize_target_config(
                 "Target does not belong to the requested organization.",
                 status_code=403,
             )
-        repo_config = await get_organization_cloud_repo_config(
-            db,
-            organization_id=body.organization_id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        )
+        repo_environment = None
     elif body.organization_id is not None:
         raise CloudApiError(
             "invalid_owner_scope",
@@ -254,26 +246,18 @@ async def materialize_target_config(
             status_code=400,
         )
     else:
-        repo_config = await get_cloud_repo_config(
+        repo_environment = await get_cloud_repo_environment(
             db,
             user_id=user.id,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
         )
-    env_vars = repo_config.env_vars if repo_config is not None and repo_config.configured else {}
-    tracked_files = [
-        TargetConfigTrackedFileModel(
-            relative_path=item.relative_path,
-            content=item.content,
-            content_sha256=item.content_sha256,
-            byte_size=item.byte_size,
-        )
-        for item in (repo_config.tracked_files if repo_config is not None else ())
-    ]
-    setup_script = repo_config.setup_script if repo_config is not None else ""
-    run_command = repo_config.run_command if repo_config is not None else ""
-    env_vars_version = repo_config.env_vars_version if repo_config is not None else 0
-    files_version = repo_config.files_version if repo_config is not None else 0
+    env_vars: dict[str, str] = {}
+    tracked_files: list[TargetConfigTrackedFileModel] = []
+    setup_script = repo_environment.setup_script if repo_environment is not None else ""
+    run_command = repo_environment.run_command if repo_environment is not None else ""
+    env_vars_version = 0
+    files_version = 0
 
     git_credential: TargetConfigGitCredentialModel | None = None
     if body.include_git_credentials:

@@ -3,8 +3,8 @@ import { useState } from "react";
 import { setPasswordCredential, type AuthProviderName } from "@proliferate/cloud-sdk";
 import {
   useAuthViewer,
-  useCreateGitHubAppConnectUrl,
-  useGitHubAppStatus,
+  useGitHubAppUserAuthorizationStatus,
+  useStartGitHubAppUserAuthorization,
 } from "@proliferate/cloud-sdk-react";
 import type { AccountPasswordCredentialSubmit } from "@proliferate/product-ui/account/AccountSettingsPane";
 
@@ -13,12 +13,11 @@ import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 export function useWebAccountSettingsActions() {
   const viewer = useAuthViewer();
-  const githubAppStatus = useGitHubAppStatus(
-    {},
+  const githubAppUserAuthorization = useGitHubAppUserAuthorizationStatus(
     Boolean(viewer.data),
     viewer.data?.user?.id ? `web-account:${viewer.data.user.id}` : "web-account:anonymous",
   );
-  const githubAppConnect = useCreateGitHubAppConnectUrl();
+  const githubAppUserAuthorizationStart = useStartGitHubAppUserAuthorization();
   const { token, clearToken } = useAuthToken();
   const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | "sign-out" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,17 +63,17 @@ export function useWebAccountSettingsActions() {
     await viewer.refetch();
   }
 
-  async function connectGitHubApp() {
+  async function authorizeGitHubAppUser() {
     if (!token) {
       return;
     }
     setError(null);
     try {
-      const response = await githubAppConnect.mutateAsync();
+      const response = await githubAppUserAuthorizationStart.mutateAsync();
       window.location.assign(response.authorizationUrl);
     } catch (authError) {
       setError(
-        authError instanceof Error ? authError.message : "GitHub App connection could not start.",
+        authError instanceof Error ? authError.message : "GitHub App authorization could not start.",
       );
     }
   }
@@ -85,13 +84,13 @@ export function useWebAccountSettingsActions() {
 
   return {
     viewer: viewer.data,
-    githubAppStatus: githubAppStatus.data,
-    githubAppStatusLoading: githubAppStatus.isLoading,
-    githubAppConnecting: githubAppConnect.isPending,
+    githubAppUserAuthorization: githubAppUserAuthorization.data,
+    githubAppUserAuthorizationLoading: githubAppUserAuthorization.isLoading,
+    githubAppUserAuthorizing: githubAppUserAuthorizationStart.isPending,
     loadingProvider,
     error,
     connectGitHub: () => void startProvider("github", "required_github_link"),
-    connectGitHubApp: () => void connectGitHubApp(),
+    authorizeGitHubAppUser: () => void authorizeGitHubAppUser(),
     manageGitHubApp,
     connectGoogle: () => void startProvider("google"),
     connectApple: () => void startProvider("apple"),

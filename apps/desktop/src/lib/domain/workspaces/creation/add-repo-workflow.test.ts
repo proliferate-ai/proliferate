@@ -24,6 +24,7 @@ describe("runAddRepoWorkflow", () => {
     const resolveRepoRootFromPath = vi.fn().mockResolvedValue(makeRepoRoot());
     const upsertRepoRootInWorkspaceCollections = vi.fn();
     const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
+    const saveLocalRepoEnvironment = vi.fn();
     const unhideRepoRoot = vi.fn();
     const openRepoSetupModal = vi.fn();
 
@@ -33,6 +34,7 @@ describe("runAddRepoWorkflow", () => {
       resolveRepoRootFromPath,
       upsertRepoRootInWorkspaceCollections,
       invalidateWorkspaceCollections,
+      saveLocalRepoEnvironment,
       unhideRepoRoot,
       openRepoSetupModal,
     });
@@ -45,6 +47,9 @@ describe("runAddRepoWorkflow", () => {
       }),
     );
     expect(invalidateWorkspaceCollections).toHaveBeenCalledWith("http://localhost:7007");
+    expect(saveLocalRepoEnvironment).toHaveBeenCalledWith(expect.objectContaining({
+      id: "repo-root-1",
+    }));
     expect(unhideRepoRoot).toHaveBeenCalledWith("repo-root-1");
     expect(openRepoSetupModal).toHaveBeenCalledWith({
       sourceRoot: "/tmp/proliferate",

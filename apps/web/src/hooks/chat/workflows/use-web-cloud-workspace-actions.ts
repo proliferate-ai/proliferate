@@ -1,36 +1,6 @@
-import type { Dispatch, SetStateAction } from "react";
-import type { CloudWorkspaceDetail } from "@proliferate/cloud-sdk";
-
-export function useWebCloudWorkspaceActions(input: {
-  workspace: CloudWorkspaceDetail | null;
-  setPendingHomePromptStatus: Dispatch<SetStateAction<string | null>>;
-  workspaceRefetch: () => Promise<unknown> | unknown;
-  claimWorkspace: {
-    isPending: boolean;
-    mutateAsync: (input: { workspaceId: string }) => Promise<unknown>;
-  };
-}) {
-  const {
-    workspace,
-    setPendingHomePromptStatus,
-    workspaceRefetch,
-    claimWorkspace,
-  } = input;
-
+export function useWebCloudWorkspaceActions() {
   async function claimCurrentWorkspace() {
-    if (!workspace || claimWorkspace.isPending) {
-      return;
-    }
-    setPendingHomePromptStatus("Claiming workspace.");
-    try {
-      await claimWorkspace.mutateAsync({ workspaceId: workspace.id });
-      await workspaceRefetch();
-      setPendingHomePromptStatus("Workspace claimed.");
-    } catch (error) {
-      setPendingHomePromptStatus(
-        error instanceof Error ? error.message : "Workspace could not be claimed.",
-      );
-    }
+    return;
   }
 
   async function copyComposerFooterValue(value: string, label: string): Promise<boolean> {

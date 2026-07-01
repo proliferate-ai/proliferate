@@ -11,9 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.background.celery_app import celery_app
 from proliferate.background.config import (
-    AUTOMATIONS_EXECUTE_RUN_TASK,
     HEALTH_NOOP_TASK,
-    RUNTIME_WAKE_TARGET_TASK,
 )
 from proliferate.db.store.background_outbox import (
     BackgroundOutboxTaskValue,
@@ -24,9 +22,7 @@ from proliferate.db.store.background_outbox import (
 
 SUPPORTED_OUTBOX_TASKS = frozenset(
     {
-        AUTOMATIONS_EXECUTE_RUN_TASK,
         HEALTH_NOOP_TASK,
-        RUNTIME_WAKE_TARGET_TASK,
     }
 )
 DEFAULT_RELAY_BATCH_SIZE = 50

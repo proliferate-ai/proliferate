@@ -1,4 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
+import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
@@ -88,6 +89,44 @@ export function makeRepoRoot(args: {
     remoteUrl: null,
     createdAt: updatedAt,
     updatedAt,
+  };
+}
+
+export function makeRepoConfig(args: {
+  id?: string;
+  repoName?: string;
+  owner?: string;
+  environments?: RepoEnvironmentResponse[];
+} = {}): RepoConfigResponse {
+  const {
+    id = "repo-config-1",
+    repoName = "proliferate",
+    owner = "proliferate-ai",
+    environments = [makeRepoEnvironment({ repoConfigId: id })],
+  } = args;
+
+  return {
+    id,
+    gitProvider: "github",
+    gitOwner: owner,
+    gitRepoName: repoName,
+    environments,
+  };
+}
+
+export function makeRepoEnvironment(
+  overrides: Partial<RepoEnvironmentResponse> = {},
+): RepoEnvironmentResponse {
+  return {
+    id: "repo-environment-1",
+    repoConfigId: "repo-config-1",
+    kind: "cloud",
+    desktopInstallId: null,
+    localPath: null,
+    defaultBranch: "main",
+    setupScript: "",
+    runCommand: "",
+    ...overrides,
   };
 }
 
@@ -274,6 +313,7 @@ export function makeCloudLogicalWorkspace(args: {
 export function buildGroups(args: {
   logicalWorkspaces: LogicalWorkspace[];
   repoRoots?: RepoRoot[];
+  repoConfigs?: readonly RepoConfigResponse[];
   workspaceTypes?: SidebarWorkspaceVariant[];
   showArchived?: boolean;
   archivedIds?: string[];
@@ -292,6 +332,7 @@ export function buildGroups(args: {
 }) {
   return buildSidebarGroupStates({
     repoRoots: args.repoRoots ?? [],
+    repoConfigs: args.repoConfigs ?? [],
     logicalWorkspaces: args.logicalWorkspaces,
     showArchived: args.showArchived ?? false,
     workspaceTypes: args.workspaceTypes ?? DEFAULT_SIDEBAR_WORKSPACE_TYPES,

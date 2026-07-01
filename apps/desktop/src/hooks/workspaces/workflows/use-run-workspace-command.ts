@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
-import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
@@ -70,14 +70,18 @@ export function useRunWorkspaceCommand({
   const localRunCommand = useRepoPreferencesStore((state) =>
     localSourceRoot ? state.repoConfigs[localSourceRoot]?.runCommand ?? "" : "",
   );
-  const cloudConfigQuery = useCloudRepoConfig(
-    gitOwner,
-    gitRepoName,
-    isCloudWorkspace && selectedCloudWorkspace !== undefined,
-  );
+  const repoConfigsQuery = useRepositories(isCloudWorkspace && selectedCloudWorkspace !== undefined);
+  const cloudEnvironment = useMemo(() => {
+    const repo = repoConfigsQuery.data?.repositories.find((candidate) =>
+      candidate.gitProvider === "github"
+      && candidate.gitOwner === gitOwner
+      && candidate.gitRepoName === gitRepoName
+    );
+    return repo?.environments.find((environment) => environment.kind === "cloud") ?? null;
+  }, [gitOwner, gitRepoName, repoConfigsQuery.data?.repositories]);
 
   const runCommand = isCloudWorkspace
-    ? cloudConfigQuery.data?.runCommand ?? ""
+    ? cloudEnvironment?.runCommand ?? ""
     : localRunCommand;
   const runtimeBlockedReason = workspaceId
     ? getWorkspaceRuntimeBlockReason(workspaceId)
@@ -118,12 +122,12 @@ export function useRunWorkspaceCommand({
       return;
     }
 
-    if (isCloudWorkspace && cloudConfigQuery.isLoading) {
+    if (isCloudWorkspace && repoConfigsQuery.isLoading) {
       showToast("Cloud run command is still loading.");
       return;
     }
 
-    if (isCloudWorkspace && cloudConfigQuery.error) {
+    if (isCloudWorkspace && repoConfigsQuery.error) {
       showToast("Failed to load the cloud run command.");
       return;
     }
@@ -147,8 +151,6 @@ export function useRunWorkspaceCommand({
       setIsLaunching(false);
     }
   }, [
-    cloudConfigQuery.error,
-    cloudConfigQuery.isLoading,
     configureHref,
     createRunTab,
     getWorkspaceRuntimeBlockReason,
@@ -156,6 +158,8 @@ export function useRunWorkspaceCommand({
     isRuntimeReady,
     navigate,
     openTerminalPanel,
+    repoConfigsQuery.error,
+    repoConfigsQuery.isLoading,
     runCommand,
     selectedCloudWorkspace,
     showToast,
@@ -180,10 +184,10 @@ export function useRunWorkspaceCommand({
     if (isCloudWorkspace && !selectedCloudWorkspace) {
       return "Cloud workspace metadata is still loading.";
     }
-    if (isCloudWorkspace && cloudConfigQuery.isLoading) {
+    if (isCloudWorkspace && repoConfigsQuery.isLoading) {
       return "Cloud run command is still loading.";
     }
-    if (isCloudWorkspace && cloudConfigQuery.error) {
+    if (isCloudWorkspace && repoConfigsQuery.error) {
       return "Failed to load the cloud run command.";
     }
     return null;

@@ -6,7 +6,6 @@ import type {
 import {
   useCloudClient,
   useCreateCloudWorkspace,
-  useLaunchCloudWorkspaceOnTarget,
 } from "@proliferate/cloud-sdk-react";
 import type { CloudLaunchComposerSelection } from "@proliferate/product-domain/chats/cloud/composer-controls";
 
@@ -37,7 +36,6 @@ export function useMobileHomeLaunchActions(input: {
   const [error, setError] = useState<string | null>(null);
   const client = useCloudClient();
   const createWorkspace = useCreateCloudWorkspace();
-  const launchOnTarget = useLaunchCloudWorkspaceOnTarget();
 
   async function submit(text: string): Promise<void> {
     const prompt = text.trim();
@@ -46,10 +44,6 @@ export function useMobileHomeLaunchActions(input: {
     }
     if (!input.ownerUserId) {
       setError("Account is still loading. Try again in a moment.");
-      return;
-    }
-    if (input.selectedRuntime.kind === "target" && !input.selectedRuntime.online) {
-      setError(`${input.selectedRuntime.label} is offline.`);
       return;
     }
 
@@ -65,42 +59,6 @@ export function useMobileHomeLaunchActions(input: {
     });
 
     try {
-      if (input.selectedRuntime.kind === "target") {
-        setStatus("Dispatching to target.");
-        const result = await launchOnTarget.mutateAsync({
-          targetId: input.selectedRuntime.targetId,
-          gitProvider: "github",
-          gitOwner: input.selectedRepo.gitOwner,
-          gitRepoName: input.selectedRepo.gitRepoName,
-          baseBranch: input.selectedBaseBranch,
-          branchName: buildBranchName(prompt),
-          generatedName: true,
-          displayName: buildWorkspaceDisplayName(prompt),
-          prompt,
-          promptId: pendingPrompt.id,
-          agentKind: input.selection.agentKind,
-          modelId: input.selection.modelId,
-          modeId: input.selection.modeId,
-          sessionConfigUpdates: pendingPrompt.sessionConfigUpdates,
-          source: "mobile",
-        });
-        input.onSubmitted?.();
-        input.onOpenChat({
-          workspaceId: result.workspace.id,
-          workspaceName: result.workspace.displayName ?? result.workspace.repo.name,
-          repoLabel: `${result.workspace.repo.owner}/${result.workspace.repo.name}`,
-          branchLabel: result.workspace.repo.branch ?? result.workspace.repo.baseBranch ?? "main",
-          targetId: result.workspace.targetId ?? input.selectedRuntime.targetId,
-          workspaceRuntimeId: result.workspace.anyharnessWorkspaceId ?? null,
-          sessionId: result.sessionId,
-          title: result.workspace.displayName ?? result.workspace.repo.name,
-          status: result.workspace.workspaceStatus ?? result.workspace.status,
-          visibility: result.workspace.visibility,
-        });
-        setStatus(null);
-        return;
-      }
-
       setStatus("Creating cloud workspace.");
       await ensurePersonalAgentAuthLaunchReady({
         client,
@@ -117,8 +75,6 @@ export function useMobileHomeLaunchActions(input: {
         branchName: buildBranchName(prompt),
         generatedName: true,
         displayName: buildWorkspaceDisplayName(prompt),
-        ownerScope: "personal",
-        requiredAgentKind: input.selection.agentKind,
         source: "mobile",
       });
       await savePendingMobilePrompt(workspace.id, input.ownerUserId, pendingPrompt)
@@ -150,10 +106,7 @@ export function useMobileHomeLaunchActions(input: {
     error,
     status,
     submit,
-    submitting:
-      createWorkspace.isPending ||
-      launchOnTarget.isPending ||
-      submitInFlightRef.current,
+    submitting: createWorkspace.isPending || submitInFlightRef.current,
   };
 }
 

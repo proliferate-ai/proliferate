@@ -453,21 +453,63 @@ target OAuth identity scopes:
   user:email
 ```
 
-## GitHub App Authorization Flow
+## GitHub App Authorization And Installation Flow
 
-Add a product-authenticated GitHub App connect endpoint.
+GitHub App cloud access has two distinct product concepts:
 
 ```text
-GET /v1/cloud/github-app/connect
+User authorization
+  A Proliferate user authorizes the GitHub App and gives Cloud a refreshable
+  GitHub App user token authority.
+
+Installation
+  A Proliferate organization admin installs/grants the GitHub App on a GitHub
+  account and gives Cloud repo coverage.
+```
+
+These must remain separate in the backend API. User authorization is user
+state. Installation is organization-admin state. Repo authority composes both
+and never returns raw tokens to clients.
+
+```text
+GET /v1/cloud/github-app/user-authorization/start
   current_product_user
   creates signed state
   redirects to GitHub App user authorization URL
 
-GET /auth/github-app/callback?code=...&state=...
+GET /auth/github-app/user-authorization/callback?code=...&state=...
   validates state
   exchanges code for GitHub App user access token + refresh token
   stores encrypted authorization
   redirects back to product settings
+
+GET /v1/cloud/github-app/user-authorization
+  current_product_user
+  returns whether this user has ready GitHub App authorization
+
+GET /v1/cloud/organizations/{organization_id}/github-app/installation/start
+  current_path_org_admin
+  creates signed install state
+  returns the GitHub App installation URL
+
+GET /auth/github-app/installation/callback?installation_id=...&setup_action=...&state=...
+  validates install state
+  fetches/verifies the installation from GitHub
+  stores installation facts linked to the Proliferate organization
+  redirects back to product settings
+
+GET /v1/cloud/organizations/{organization_id}/github-app/installation
+  current_path_org_member
+  returns whether the org has an active linked installation
+
+GET /v1/cloud/github-app/repos/{owner}/{repo}/authority
+  current_product_user
+  returns product-actionable repo authority status
+  never returns GitHub access tokens
+
+GET /v1/cloud/github-app/accessible-repos
+  current_product_user
+  lists repos visible to the GitHub App user token
 ```
 
 Server files:
@@ -476,79 +518,30 @@ Server files:
 server/proliferate/server/cloud/github_app/api.py
 server/proliferate/server/cloud/github_app/models.py
 server/proliferate/server/cloud/github_app/service.py
+server/proliferate/server/cloud/github_app/repo_authority.py
 server/proliferate/integrations/github/app_user_tokens.py
-```
-
-API:
-
-```python
-router = APIRouter(prefix="/github-app", tags=["github-app"])
-
-
-@router.get("/connect", response_model=GitHubAppConnectResponse)
-async def github_app_connect_endpoint(
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> GitHubAppConnectResponse:
-    return await create_github_app_connect_url(db, user=user)
-
-
-@router.get("/status", response_model=GitHubAppStatusResponse)
-async def github_app_status_endpoint(
-    git_owner: str | None = Query(default=None, alias="gitOwner"),
-    git_repo_name: str | None = Query(default=None, alias="gitRepoName"),
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> GitHubAppStatusResponse:
-    return await get_github_app_status(
-        db,
-        user=user,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
-
-
-@auth_router.get("/github-app/callback")
-async def github_app_callback_endpoint(
-    code: str,
-    state: str,
-    db: AsyncSession = Depends(get_async_session),
-) -> RedirectResponse:
-    redirect_url = await complete_github_app_callback(db, code=code, state=state)
-    return RedirectResponse(redirect_url, status_code=302)
-```
-
-Models:
-
-```python
-class GitHubAppConnectResponse(BaseModel):
-    authorization_url: str = Field(serialization_alias="authorizationUrl")
-
-
-class GitHubAppStatusResponse(BaseModel):
-    connected: bool
-    github_login: str | None = Field(default=None, serialization_alias="githubLogin")
-    status: str | None = None
-    token_expires_at: datetime | None = Field(default=None, serialization_alias="tokenExpiresAt")
-    installation_state: str | None = Field(default=None, serialization_alias="installationState")
-    repo_covered: bool | None = Field(default=None, serialization_alias="repoCovered")
-    action: str | None = None
+server/proliferate/integrations/github/app_installations.py
 ```
 
 Status behavior:
 
 ```text
-GET /v1/cloud/github-app/status
-  no repo query:
-    connected=false, status=null, action="connect"
-    connected=true, status="ready", action=null
-    connected=true, status="needs_reauth", action="reauthorize"
+GET /v1/cloud/github-app/user-authorization
+  connected=false, status=null, action="authorize"
+  connected=true, status="ready", action=null
+  connected=true, status="needs_reauth", action="reauthorize"
 
-GET /v1/cloud/github-app/status?gitOwner=<owner>&gitRepoName=<repo>
-  includes installation_state and repo_covered:
-    installationState="missing", repoCovered=false, action="install"
-    installationState="installed", repoCovered=false, action="grant_repo_access"
-    installationState="installed", repoCovered=true, action=null
+GET /v1/cloud/organizations/{organization_id}/github-app/installation
+  installed=false, action="install"
+  installed=true, action="manage"
+
+GET /v1/cloud/github-app/repos/{owner}/{repo}/authority
+  authorized=false, status="missing_user_authorization", action="authorize_user"
+  authorized=false, status="expired_user_authorization", action="reauthorize_user"
+  authorized=false, status="missing_installation", action="install_app"
+  authorized=false, status="repo_not_covered", action="grant_repo_access"
+  authorized=false, status="missing_user_repo_access", action="authorize_user"
+  authorized=true, status="ready", action=null
 ```
 
 ## Product UI
@@ -574,19 +567,25 @@ GitHub:
   copy: "Used to sign in to Proliferate."
 
 Proliferate GitHub App:
-  connected status from GET /v1/cloud/github-app/status
+  connected status from GET /v1/cloud/github-app/user-authorization
   primary action:
     Connect GitHub App
     Reconnect GitHub App
-    Manage GitHub App
   copy: "Required for Proliferate Cloud repositories."
+
+Organization Cloud GitHub App:
+  install status from GET /v1/cloud/organizations/{organization_id}/github-app/installation
+  primary action:
+    Install Proliferate GitHub App
+    Manage repository access
+  copy: "Admins install the app for repos this organization can use in Cloud."
 ```
 
 Add Cloud repo UI:
 
 ```text
 1. User picks/searches GitHub repo.
-2. Client calls GET /v1/cloud/github-app/status?gitOwner=...&gitRepoName=...
+2. Client calls GET /v1/cloud/github-app/repos/{owner}/{repo}/authority.
 3. If app authorization missing, show Connect GitHub App action.
 4. If installation missing, show Install Proliferate GitHub App action.
 5. If repo not covered, show Grant repository access action.

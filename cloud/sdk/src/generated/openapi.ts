@@ -209,15 +209,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/github-app/callback": {
+    "/auth/github-app/user-authorization/callback": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Github App Callback Endpoint */
-        get: operations["github_app_callback_endpoint_auth_github_app_callback_get"];
+        /** Github App User Authorization Callback Endpoint */
+        get: operations["github_app_user_authorization_callback_endpoint_auth_github_app_user_authorization_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/github-app/installation/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Installation Callback Endpoint */
+        get: operations["github_app_installation_callback_endpoint_auth_github_app_installation_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Setup Callback Endpoint */
+        get: operations["github_app_setup_callback_endpoint_integrations_github_callback_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -549,6 +583,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Repositories Endpoint */
+        get: operations["list_cloud_repositories_endpoint_v1_cloud_repos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repos/{git_owner}/{git_repo_name}/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Repo Branches Endpoint */
+        get: operations["get_cloud_repo_branches_endpoint_v1_cloud_repos__git_owner___git_repo_name__branches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repositories/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Repository Catalog Endpoint */
+        get: operations["list_repository_catalog_endpoint_v1_cloud_repositories_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repositories": {
         parameters: {
             query?: never;
@@ -566,49 +651,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/local": {
+    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/branches": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Save Local Repo Environment Endpoint */
-        put: operations["save_local_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_local_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/cloud": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Save Cloud Repo Environment Endpoint */
-        put: operations["save_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_cloud_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/github-app/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Github App Connect Endpoint */
-        get: operations["github_app_connect_endpoint_v1_cloud_github_app_connect_get"];
+        /** Get Repository Branches Endpoint */
+        get: operations["get_repository_branches_endpoint_v1_cloud_repositories__git_owner___git_repo_name__branches_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -617,15 +668,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/github-app/status": {
+    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environment": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Github App Status Endpoint */
-        get: operations["github_app_status_endpoint_v1_cloud_github_app_status_get"];
+        get?: never;
+        /** Save Repo Environment Endpoint */
+        put: operations["save_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/github-app/user-authorization/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start Github App User Authorization Endpoint */
+        get: operations["start_github_app_user_authorization_endpoint_v1_cloud_github_app_user_authorization_start_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/github-app/user-authorization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App User Authorization Status Endpoint */
+        get: operations["github_app_user_authorization_status_endpoint_v1_cloud_github_app_user_authorization_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/github-app/accessible-repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Github App Accessible Repositories Endpoint */
+        get: operations["list_github_app_accessible_repositories_endpoint_v1_cloud_github_app_accessible_repos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/github-app/repos/{git_owner}/{git_repo_name}/authority": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Repo Authority Endpoint */
+        get: operations["github_app_repo_authority_endpoint_v1_cloud_github_app_repos__git_owner___git_repo_name__authority_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/github-app/installation/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start Github App Installation Endpoint */
+        get: operations["start_github_app_installation_endpoint_v1_cloud_organizations__organization_id__github_app_installation_start_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/github-app/installation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Installation Status Endpoint */
+        get: operations["github_app_installation_status_endpoint_v1_cloud_organizations__organization_id__github_app_installation_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -851,11 +1004,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Managed Sandbox Endpoint */
+        /** Get Cloud Sandbox Endpoint */
         get: operations["get_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_get"];
         put?: never;
         post?: never;
-        /** Destroy Managed Sandbox Endpoint */
+        /** Destroy Cloud Sandbox Endpoint */
         delete: operations["destroy_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_delete"];
         options?: never;
         head?: never;
@@ -871,7 +1024,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ensure Managed Sandbox Endpoint */
+        /** Ensure Cloud Sandbox Endpoint */
         post: operations["ensure_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_ensure_post"];
         delete?: never;
         options?: never;
@@ -888,7 +1041,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Wake Managed Sandbox Endpoint */
+        /** Wake Cloud Sandbox Endpoint */
         post: operations["wake_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_wake_post"];
         delete?: never;
         options?: never;
@@ -896,24 +1049,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/cloud-sandbox/repos/{git_owner}/{git_repo_name}/runtime-connection": {
+    "/v1/cloud/workspaces": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Cloud Workspaces Endpoint */
+        get: operations["list_cloud_workspaces_endpoint_v1_cloud_workspaces_get"];
         put?: never;
-        /** Ensure Managed Sandbox Repo Runtime Connection Endpoint */
-        post: operations["ensure_cloud_sandbox_repo_runtime_connection_endpoint_v1_cloud_cloud_sandbox_repos__git_owner___git_repo_name__runtime_connection_post"];
+        /** Create Cloud Workspace Endpoint */
+        post: operations["create_cloud_workspace_endpoint_v1_cloud_workspaces_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/cloud-sandbox/workspaces/{workspace_id}/runtime-connection": {
+    "/v1/cloud/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Workspace Endpoint */
+        get: operations["get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Cloud Workspace Endpoint */
+        delete: operations["delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/runtime-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Workspace Runtime Status Endpoint */
+        get: operations["get_cloud_workspace_runtime_status_endpoint_v1_cloud_workspaces__workspace_id__runtime_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/display-name": {
         parameters: {
             query?: never;
             header?: never;
@@ -922,8 +1111,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ensure Managed Sandbox Workspace Runtime Connection Endpoint */
-        post: operations["ensure_cloud_sandbox_workspace_runtime_connection_endpoint_v1_cloud_cloud_sandbox_workspaces__workspace_id__runtime_connection_post"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Cloud Workspace Display Name Endpoint */
+        patch: operations["update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch"];
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Cloud Workspace Endpoint */
+        post: operations["archive_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Cloud Workspace Endpoint */
+        post: operations["restore_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1580,280 +1803,6 @@ export interface paths {
         put?: never;
         /** Disable Organization Sso Connection Endpoint */
         post: operations["disable_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__disable_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Automations Endpoint */
-        get: operations["list_automations_endpoint_v1_automations_get"];
-        put?: never;
-        /** Create Automation Endpoint */
-        post: operations["create_automation_endpoint_v1_automations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/claims": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Claim Local Runs Endpoint */
-        post: operations["claim_local_runs_endpoint_v1_automations_executor_local_claims_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/heartbeat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Heartbeat Local Run Endpoint */
-        post: operations["heartbeat_local_run_endpoint_v1_automations_executor_local_runs__run_id__heartbeat_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/creating-workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Creating Workspace Endpoint */
-        post: operations["mark_local_run_creating_workspace_endpoint_v1_automations_executor_local_runs__run_id__creating_workspace_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/attach-workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Attach Local Run Workspace Endpoint */
-        post: operations["attach_local_run_workspace_endpoint_v1_automations_executor_local_runs__run_id__attach_workspace_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/provisioning-workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Provisioning Workspace Endpoint */
-        post: operations["mark_local_run_provisioning_workspace_endpoint_v1_automations_executor_local_runs__run_id__provisioning_workspace_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/creating-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Creating Session Endpoint */
-        post: operations["mark_local_run_creating_session_endpoint_v1_automations_executor_local_runs__run_id__creating_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/attach-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Attach Local Run Session Endpoint */
-        post: operations["attach_local_run_session_endpoint_v1_automations_executor_local_runs__run_id__attach_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/dispatching": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Dispatching Endpoint */
-        post: operations["mark_local_run_dispatching_endpoint_v1_automations_executor_local_runs__run_id__dispatching_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/dispatched": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Dispatched Endpoint */
-        post: operations["mark_local_run_dispatched_endpoint_v1_automations_executor_local_runs__run_id__dispatched_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/failed": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Failed Endpoint */
-        post: operations["mark_local_run_failed_endpoint_v1_automations_executor_local_runs__run_id__failed_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Automation Endpoint */
-        get: operations["get_automation_endpoint_v1_automations__automation_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Automation Endpoint */
-        patch: operations["update_automation_endpoint_v1_automations__automation_id__patch"];
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Pause Automation Endpoint */
-        post: operations["pause_automation_endpoint_v1_automations__automation_id__pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resume Automation Endpoint */
-        post: operations["resume_automation_endpoint_v1_automations__automation_id__resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/run-now": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run Automation Now Endpoint */
-        post: operations["run_automation_now_endpoint_v1_automations__automation_id__run_now_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Automation Runs Endpoint */
-        get: operations["list_automation_runs_endpoint_v1_automations__automation_id__runs_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2589,157 +2538,6 @@ export interface components {
             /** Prompt */
             prompt?: "select_account" | null;
         };
-        /** AutomationListResponse */
-        AutomationListResponse: {
-            /** Automations */
-            automations: components["schemas"]["AutomationResponse"][];
-        };
-        /** AutomationResponse */
-        AutomationResponse: {
-            /** Id */
-            id: string;
-            /**
-             * Ownerscope
-             * @enum {string}
-             */
-            ownerScope: "personal" | "organization";
-            /** Owneruserid */
-            ownerUserId: string | null;
-            /** Organizationid */
-            organizationId: string | null;
-            /** Createdbyuserid */
-            createdByUserId: string;
-            /** Gitowner */
-            gitOwner: string;
-            /** Gitreponame */
-            gitRepoName: string;
-            /** Title */
-            title: string;
-            /** Prompt */
-            prompt: string;
-            schedule: components["schemas"]["AutomationScheduleResponse"];
-            /**
-             * Targetmode
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /** Cloudagentrunconfigid */
-            cloudAgentRunConfigId: string;
-            /** Enabled */
-            enabled: boolean;
-            /** Pausedat */
-            pausedAt: string | null;
-            /** Lastscheduledat */
-            lastScheduledAt: string | null;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** AutomationRunListResponse */
-        AutomationRunListResponse: {
-            /** Runs */
-            runs: components["schemas"]["AutomationRunResponse"][];
-        };
-        /** AutomationRunResponse */
-        AutomationRunResponse: {
-            /** Id */
-            id: string;
-            /** Automationid */
-            automationId: string;
-            /**
-             * Ownerscope
-             * @enum {string}
-             */
-            ownerScope: "personal" | "organization";
-            /** Owneruserid */
-            ownerUserId: string | null;
-            /** Organizationid */
-            organizationId: string | null;
-            /** Createdbyuserid */
-            createdByUserId: string;
-            /**
-             * Triggerkind
-             * @enum {string}
-             */
-            triggerKind: "scheduled" | "manual";
-            /** Scheduledfor */
-            scheduledFor: string | null;
-            /**
-             * Targetmode
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
-            /** Titlesnapshot */
-            titleSnapshot: string;
-            /** Promptsnapshot */
-            promptSnapshot: string;
-            /** Gitprovidersnapshot */
-            gitProviderSnapshot: string;
-            /** Gitownersnapshot */
-            gitOwnerSnapshot: string;
-            /** Gitreponamesnapshot */
-            gitRepoNameSnapshot: string;
-            /** Repoenvironmentidsnapshot */
-            repoEnvironmentIdSnapshot: string;
-            /** Agentrunconfigsnapshot */
-            agentRunConfigSnapshot: {
-                [key: string]: unknown;
-            } | null;
-            /** Cascadeattempt */
-            cascadeAttempt: number;
-            /** Lastcascadecommandid */
-            lastCascadeCommandId: string | null;
-            /** Lastcascadereason */
-            lastCascadeReason: string | null;
-            /** Claimexpiresat */
-            claimExpiresAt: string | null;
-            /** Dispatchstartedat */
-            dispatchStartedAt: string | null;
-            /** Dispatchedat */
-            dispatchedAt: string | null;
-            /** Failedat */
-            failedAt: string | null;
-            /** Cloudworkspaceid */
-            cloudWorkspaceId: string | null;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string | null;
-            /** Anyharnesssessionid */
-            anyharnessSessionId: string | null;
-            /** Cancelledat */
-            cancelledAt: string | null;
-            /** Lasterrorcode */
-            lastErrorCode: string | null;
-            /** Lasterrormessage */
-            lastErrorMessage: string | null;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** AutomationScheduleRequest */
-        AutomationScheduleRequest: {
-            /** Rrule */
-            rrule: string;
-            /** Timezone */
-            timezone: string;
-        };
-        /** AutomationScheduleResponse */
-        AutomationScheduleResponse: {
-            /** Rrule */
-            rrule: string;
-            /** Timezone */
-            timezone: string;
-            /** Summary */
-            summary: string;
-            /** Nextrunat */
-            nextRunAt: string | null;
-        };
         /** BillingOverview */
         BillingOverview: {
             /**
@@ -2884,6 +2682,63 @@ export interface components {
         CloudCapabilitiesResponse: {
             agentGateway: components["schemas"]["AgentGatewayCapabilities"];
         };
+        /** CloudGitRepositoriesResponse */
+        CloudGitRepositoriesResponse: {
+            /** Repositories */
+            repositories: components["schemas"]["CloudGitRepositorySummary"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** CloudGitRepositorySummary */
+        CloudGitRepositorySummary: {
+            /**
+             * Provider
+             * @default github
+             * @constant
+             */
+            provider: "github";
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Fullname */
+            fullName: string;
+            /** Defaultbranch */
+            defaultBranch: string | null;
+            /** Private */
+            private: boolean;
+            /** Fork */
+            fork: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Disabled */
+            disabled: boolean;
+            /** Htmlurl */
+            htmlUrl: string | null;
+            /** Owneravatarurl */
+            ownerAvatarUrl: string | null;
+            /** Pushedat */
+            pushedAt: string | null;
+            /** Updatedat */
+            updatedAt: string | null;
+            /** Permission */
+            permission?: string | null;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /**
+             * Repoconfigstate
+             * @enum {string}
+             */
+            repoConfigState: "missing" | "disabled" | "configured";
+        };
+        /**
+         * CloudMaterializationStatus
+         * @enum {string}
+         */
+        CloudMaterializationStatus: "pending" | "running" | "ready" | "error";
         /** CloudOrganizationIntegrationPolicyItem */
         CloudOrganizationIntegrationPolicyItem: {
             /** Catalogentryid */
@@ -2974,6 +2829,35 @@ export interface components {
             /** Grantallocations */
             grantAllocations?: components["schemas"]["GrantAllocationInfo"][];
         };
+        /** CloudSandboxResponse */
+        CloudSandboxResponse: {
+            /** Id */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Status */
+            status: string;
+            /** Lasterror */
+            lastError: string | null;
+            /** E2Btemplateref */
+            e2bTemplateRef: string;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Readyat */
+            readyAt: string | null;
+            /** Lasthealthat */
+            lastHealthAt: string | null;
+            /** Destroyedat */
+            destroyedAt: string | null;
+        };
         /** CloudSecretEnvVarMetadata */
         CloudSecretEnvVarMetadata: {
             /** Id */
@@ -3022,6 +2906,28 @@ export interface components {
             /** Files */
             files: components["schemas"]["CloudSecretFileMetadata"][];
             materialization?: components["schemas"]["CloudSecretsMaterializationResponse"] | null;
+        };
+        /** CloudWorkspaceRuntimeStatusResponse */
+        CloudWorkspaceRuntimeStatusResponse: {
+            /**
+             * Workspaceid
+             * Format: uuid
+             */
+            workspaceId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            /**
+             * Runtimestatus
+             * @enum {string}
+             */
+            runtimeStatus: "pending" | "running" | "paused" | "error" | "disabled";
+            /** Sandboxstatus */
+            sandboxStatus?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
         };
         /** CloudWorktreeRetentionPolicyRequest */
         CloudWorktreeRetentionPolicyRequest: {
@@ -3218,36 +3124,28 @@ export interface components {
              */
             kind: "workspace_path";
         };
-        /** CreateAutomationRequest */
-        CreateAutomationRequest: {
-            /** Title */
-            title: string;
-            /** Prompt */
-            prompt: string;
+        /** CreateCloudWorkspaceRequest */
+        CreateCloudWorkspaceRequest: {
             /**
-             * Ownerscope
-             * @default personal
-             * @enum {string}
+             * Gitprovider
+             * @default github
+             * @constant
              */
-            ownerScope: "personal" | "organization";
-            /** Organizationid */
-            organizationId?: string | null;
+            gitProvider: "github";
             /** Gitowner */
             gitOwner: string;
             /** Gitreponame */
             gitRepoName: string;
-            schedule: components["schemas"]["AutomationScheduleRequest"];
-            /**
-             * Targetmode
-             * @default personal_cloud
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /**
-             * Cloudagentrunconfigid
-             * Format: uuid
-             */
-            cloudAgentRunConfigId: string;
+            /** Basebranch */
+            baseBranch?: string | null;
+            /** Branchname */
+            branchName: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Generatedname */
+            generatedName?: boolean | null;
+            /** Source */
+            source?: ("desktop" | "web" | "mobile") | null;
         };
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
@@ -3298,13 +3196,35 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** GitHubAppConnectResponse */
-        GitHubAppConnectResponse: {
+        /** GitHubAppInstallationStartResponse */
+        GitHubAppInstallationStartResponse: {
+            /** Installationurl */
+            installationUrl: string;
+        };
+        /** GitHubAppInstallationStatusResponse */
+        GitHubAppInstallationStatusResponse: {
+            /** Installed */
+            installed: boolean;
+            /** Installationid */
+            installationId?: string | null;
+            /** Accountlogin */
+            accountLogin?: string | null;
+            /** Accounttype */
+            accountType?: string | null;
+            /** Repositoryselection */
+            repositorySelection?: string | null;
+            /** Suspendedat */
+            suspendedAt?: string | null;
+            /** Action */
+            action?: ("install" | "manage") | null;
+        };
+        /** GitHubAppUserAuthorizationStartResponse */
+        GitHubAppUserAuthorizationStartResponse: {
             /** Authorizationurl */
             authorizationUrl: string;
         };
-        /** GitHubAppStatusResponse */
-        GitHubAppStatusResponse: {
+        /** GitHubAppUserAuthorizationStatusResponse */
+        GitHubAppUserAuthorizationStatusResponse: {
             /** Connected */
             connected: boolean;
             /** Githublogin */
@@ -3313,13 +3233,28 @@ export interface components {
             status?: ("ready" | "expired" | "revoked" | "needs_reauth") | null;
             /** Tokenexpiresat */
             tokenExpiresAt?: string | null;
-            /** Installationstate */
-            installationState?: ("missing" | "installed") | null;
-            /** Repocovered */
-            repoCovered?: boolean | null;
             /** Action */
-            action?: ("connect" | "reauthorize" | "install" | "grant_repo_access") | null;
+            action?: ("authorize" | "reauthorize") | null;
         };
+        /** GitHubRepoAuthorityResponse */
+        GitHubRepoAuthorityResponse: {
+            /** Authorized */
+            authorized: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "missing_user_authorization" | "expired_user_authorization" | "missing_installation" | "repo_not_covered" | "missing_user_repo_access" | "error";
+            /** Action */
+            action?: ("authorize_user" | "reauthorize_user" | "install_app" | "grant_repo_access") | null;
+            /** Message */
+            message?: string | null;
+        };
+        /**
+         * GitProvider
+         * @enum {string}
+         */
+        GitProvider: "github";
         /** GrantAllocationInfo */
         GrantAllocationInfo: {
             /** Granttype */
@@ -3350,181 +3285,6 @@ export interface components {
              * @default 0.1.0
              */
             version: string;
-        };
-        /** LocalAutomationAttachSessionRequest */
-        LocalAutomationAttachSessionRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-            /** Anyharnesssessionid */
-            anyharnessSessionId: string;
-        };
-        /** LocalAutomationAttachWorkspaceRequest */
-        LocalAutomationAttachWorkspaceRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-        };
-        /** LocalAutomationClaimActionRequest */
-        LocalAutomationClaimActionRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-        };
-        /** LocalAutomationClaimListResponse */
-        LocalAutomationClaimListResponse: {
-            /** Runs */
-            runs: components["schemas"]["LocalAutomationRunClaimResponse"][];
-        };
-        /** LocalAutomationClaimRequest */
-        LocalAutomationClaimRequest: {
-            /** Executorid */
-            executorId: string;
-            /** Availablerepositories */
-            availableRepositories: components["schemas"]["LocalExecutorRepositoryIdentity"][];
-            /**
-             * Limit
-             * @default 1
-             */
-            limit: number;
-        };
-        /** LocalAutomationFailRequest */
-        LocalAutomationFailRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-            /** Errorcode */
-            errorCode: string;
-        };
-        /** LocalAutomationMutationResponse */
-        LocalAutomationMutationResponse: {
-            run?: components["schemas"]["LocalAutomationRunClaimResponse"] | null;
-            /**
-             * Accepted
-             * @default true
-             */
-            accepted: boolean;
-        };
-        /** LocalAutomationRunClaimResponse */
-        LocalAutomationRunClaimResponse: {
-            /** Id */
-            id: string;
-            /** Automationid */
-            automationId: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
-            /**
-             * Targetmode
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /** Titlesnapshot */
-            titleSnapshot: string;
-            /** Promptsnapshot */
-            promptSnapshot: string;
-            /** Gitprovidersnapshot */
-            gitProviderSnapshot: string;
-            /** Gitownersnapshot */
-            gitOwnerSnapshot: string;
-            /** Gitreponamesnapshot */
-            gitRepoNameSnapshot: string;
-            /** Cloudagentrunconfigidsnapshot */
-            cloudAgentRunConfigIdSnapshot: string | null;
-            /** Agentkindsnapshot */
-            agentKindSnapshot: string | null;
-            /** Modelidsnapshot */
-            modelIdSnapshot: string | null;
-            /** Modeidsnapshot */
-            modeIdSnapshot: string | null;
-            /** Reasoningeffortsnapshot */
-            reasoningEffortSnapshot: string | null;
-            /** Claimid */
-            claimId: string;
-            /** Claimexpiresat */
-            claimExpiresAt: string;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string | null;
-            /** Anyharnesssessionid */
-            anyharnessSessionId: string | null;
-        };
-        /** LocalExecutorRepositoryIdentity */
-        LocalExecutorRepositoryIdentity: {
-            /** Provider */
-            provider: string;
-            /** Owner */
-            owner: string;
-            /** Name */
-            name: string;
-        };
-        /** CloudSandboxRepoRuntimeConnectionResponse */
-        CloudSandboxRepoRuntimeConnectionResponse: {
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-            /** Anyharnessreporootid */
-            anyharnessRepoRootId: string | null;
-            /** Runtimegeneration */
-            runtimeGeneration: number;
-        };
-        /** CloudSandboxResponse */
-        CloudSandboxResponse: {
-            /** Id */
-            id: string;
-            /** Ownerscope */
-            ownerScope: string;
-            /** Owneruserid */
-            ownerUserId: string | null;
-            /** Organizationid */
-            organizationId: string | null;
-            /** Status */
-            status: string;
-            /** Lasterror */
-            lastError: string | null;
-            /** E2Btemplateref */
-            e2bTemplateRef: string;
-            /** Runtimegeneration */
-            runtimeGeneration: number;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-            /** Readyat */
-            readyAt: string | null;
-            /** Lasthealthat */
-            lastHealthAt: string | null;
-            /** Destroyedat */
-            destroyedAt: string | null;
-        };
-        /** CloudSandboxWorkspaceRuntimeConnectionResponse */
-        CloudSandboxWorkspaceRuntimeConnectionResponse: {
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-            /** Anyharnessreporootid */
-            anyharnessRepoRootId: string | null;
-            /** Runtimegeneration */
-            runtimeGeneration: number;
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -4112,6 +3872,23 @@ export interface components {
              */
             grant_type: string;
         };
+        /** RepoBranchesResponse */
+        RepoBranchesResponse: {
+            /** Defaultbranch */
+            defaultBranch: string;
+            /** Branches */
+            branches: string[];
+            /** Permission */
+            permission?: string | null;
+            /** Private */
+            private?: boolean | null;
+            /** Fork */
+            fork?: boolean | null;
+            /** Archived */
+            archived?: boolean | null;
+            /** Disabled */
+            disabled?: boolean | null;
+        };
         /** RepoConfigResponse */
         RepoConfigResponse: {
             /**
@@ -4119,8 +3896,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Gitprovider */
-            gitProvider: string;
+            gitProvider: components["schemas"]["GitProvider"];
             /** Gitowner */
             gitOwner: string;
             /** Gitreponame */
@@ -4132,6 +3908,19 @@ export interface components {
         RepoConfigsListResponse: {
             /** Repositories */
             repositories: components["schemas"]["RepoConfigResponse"][];
+        };
+        /**
+         * RepoEnvironmentKind
+         * @enum {string}
+         */
+        RepoEnvironmentKind: "local" | "cloud";
+        /** RepoEnvironmentMaterializationResponse */
+        RepoEnvironmentMaterializationResponse: {
+            status: components["schemas"]["CloudMaterializationStatus"];
+            /** Lasterror */
+            lastError?: string | null;
+            /** Materializedat */
+            materializedAt?: string | null;
         };
         /** RepoEnvironmentResponse */
         RepoEnvironmentResponse: {
@@ -4145,8 +3934,7 @@ export interface components {
              * Format: uuid
              */
             repoConfigId: string;
-            /** Kind */
-            kind: string;
+            kind: components["schemas"]["RepoEnvironmentKind"];
             /** Desktopinstallid */
             desktopInstallId: string | null;
             /** Localpath */
@@ -4157,33 +3945,30 @@ export interface components {
             setupScript: string;
             /** Runcommand */
             runCommand: string;
+            materialization?: components["schemas"]["RepoEnvironmentMaterializationResponse"] | null;
         };
-        /** SaveCloudRepoEnvironmentRequest */
-        SaveCloudRepoEnvironmentRequest: {
-            /** Defaultbranch */
-            defaultBranch?: string | null;
-            /**
-             * Setupscript
-             * @default
-             */
-            setupScript: string;
-            /**
-             * Runcommand
-             * @default
-             */
-            runCommand: string;
+        /** RepoRef */
+        RepoRef: {
+            /** Provider */
+            provider: string;
+            /** Owner */
+            owner: string;
+            /** Name */
+            name: string;
+            /** Branch */
+            branch: string;
+            /** Basebranch */
+            baseBranch: string;
         };
-        /** SaveLocalRepoEnvironmentRequest */
-        SaveLocalRepoEnvironmentRequest: {
-            /**
-             * Gitprovider
-             * @default github
-             */
-            gitProvider: string;
+        /** SaveRepoEnvironmentRequest */
+        SaveRepoEnvironmentRequest: {
+            kind: components["schemas"]["RepoEnvironmentKind"];
+            /** @default github */
+            gitProvider: components["schemas"]["GitProvider"];
             /** Desktopinstallid */
-            desktopInstallId: string;
+            desktopInstallId?: string | null;
             /** Localpath */
-            localPath: string;
+            localPath?: string | null;
             /** Defaultbranch */
             defaultBranch?: string | null;
             /**
@@ -4409,21 +4194,10 @@ export interface components {
             /** Avatar Url */
             avatar_url?: string | null;
         };
-        /** UpdateAutomationRequest */
-        UpdateAutomationRequest: {
-            /** Title */
-            title?: string | null;
-            /** Prompt */
-            prompt?: string | null;
-            /** Gitowner */
-            gitOwner?: string | null;
-            /** Gitreponame */
-            gitRepoName?: string | null;
-            schedule?: components["schemas"]["AutomationScheduleRequest"] | null;
-            /** Targetmode */
-            targetMode?: ("local" | "personal_cloud" | "shared_cloud") | null;
-            /** Cloudagentrunconfigid */
-            cloudAgentRunConfigId?: string | null;
+        /** UpdateCloudWorkspaceDisplayNameRequest */
+        UpdateCloudWorkspaceDisplayNameRequest: {
+            /** Displayname */
+            displayName?: string | null;
         };
         /** UserRead */
         UserRead: {
@@ -4478,6 +4252,281 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorkspaceCloudAccessSummary */
+        WorkspaceCloudAccessSummary: {
+            /**
+             * State
+             * @default enabled
+             * @constant
+             */
+            state: "enabled";
+            /** Exposureid */
+            exposureId?: string | null;
+            /** Exposurerevision */
+            exposureRevision?: number | null;
+            /**
+             * Projectionstate
+             * @default untracked
+             * @constant
+             */
+            projectionState: "untracked";
+            /**
+             * Commandable
+             * @default true
+             */
+            commandable: boolean;
+        };
+        /** WorkspaceDetail */
+        WorkspaceDetail: {
+            /** Id */
+            id: string;
+            /** Targetid */
+            targetId?: string | null;
+            /** Repoenvironmentid */
+            repoEnvironmentId: string;
+            /** Displayname */
+            displayName: string;
+            repo: components["schemas"]["RepoRef"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            /**
+             * Workspacestatus
+             * @enum {string}
+             */
+            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            /**
+             * Productlifecycle
+             * @enum {string}
+             */
+            productLifecycle: "active" | "archived";
+            runtime: components["schemas"]["WorkspaceRuntimeSummary"];
+            executionTarget?: components["schemas"]["WorkspaceExecutionTargetSummary"];
+            /** Selectedmaterializationid */
+            selectedMaterializationId?: string | null;
+            /** Primarymaterialization */
+            primaryMaterialization?: null;
+            cloudAccess?: components["schemas"]["WorkspaceCloudAccessSummary"];
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Templateversion */
+            templateVersion?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Readyat */
+            readyAt?: string | null;
+            /** Actionblockkind */
+            actionBlockKind?: string | null;
+            /** Actionblockreason */
+            actionBlockReason?: string | null;
+            /**
+             * Postreadyphase
+             * @default idle
+             * @constant
+             */
+            postReadyPhase: "idle";
+            /**
+             * Postreadyfilestotal
+             * @default 0
+             */
+            postReadyFilesTotal: number;
+            /**
+             * Postreadyfilesapplied
+             * @default 0
+             */
+            postReadyFilesApplied: number;
+            /** Postreadystartedat */
+            postReadyStartedAt?: string | null;
+            /** Postreadycompletedat */
+            postReadyCompletedAt?: string | null;
+            /**
+             * Visibility
+             * @default private
+             * @enum {string}
+             */
+            visibility: "private" | "archived";
+            /**
+             * Exposurestate
+             * @default untracked
+             * @constant
+             */
+            exposureState: "untracked";
+            /**
+             * Sandboxtype
+             * @default managed_personal
+             * @constant
+             */
+            sandboxType: "managed_personal";
+            /** Lastactivityat */
+            lastActivityAt?: string | null;
+            /** Allowedagentkinds */
+            allowedAgentKinds?: string[];
+            /** Readyagentkinds */
+            readyAgentKinds?: string[];
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+        };
+        /** WorkspaceExecutionTargetSummary */
+        WorkspaceExecutionTargetSummary: {
+            /**
+             * Kind
+             * @default managed_cloud
+             * @constant
+             */
+            kind: "managed_cloud";
+            /** Targetid */
+            targetId?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Online */
+            online?: boolean | null;
+        };
+        /** WorkspaceRuntimeAuthState */
+        WorkspaceRuntimeAuthState: {
+            /**
+             * Status
+             * @default current
+             * @constant
+             */
+            status: "current";
+            /**
+             * Configcurrent
+             * @default true
+             */
+            configCurrent: boolean;
+            /**
+             * Targetcurrent
+             * @default true
+             */
+            targetCurrent: boolean;
+            /**
+             * Requiresrestart
+             * @default false
+             */
+            requiresRestart: boolean;
+        };
+        /** WorkspaceRuntimeSummary */
+        WorkspaceRuntimeSummary: {
+            /** Environmentid */
+            environmentId?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "paused" | "error" | "disabled";
+            /**
+             * Generation
+             * @default 0
+             */
+            generation: number;
+            runtimeAuth?: components["schemas"]["WorkspaceRuntimeAuthState"];
+            /** Actionblockkind */
+            actionBlockKind?: string | null;
+            /** Actionblockreason */
+            actionBlockReason?: string | null;
+        };
+        /** WorkspaceSummary */
+        WorkspaceSummary: {
+            /** Id */
+            id: string;
+            /** Targetid */
+            targetId?: string | null;
+            /** Repoenvironmentid */
+            repoEnvironmentId: string;
+            /** Displayname */
+            displayName: string;
+            repo: components["schemas"]["RepoRef"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "materializing" | "ready" | "archived" | "error";
+            /**
+             * Workspacestatus
+             * @enum {string}
+             */
+            workspaceStatus: "pending" | "materializing" | "ready" | "archived" | "error";
+            /**
+             * Productlifecycle
+             * @enum {string}
+             */
+            productLifecycle: "active" | "archived";
+            runtime: components["schemas"]["WorkspaceRuntimeSummary"];
+            executionTarget?: components["schemas"]["WorkspaceExecutionTargetSummary"];
+            /** Selectedmaterializationid */
+            selectedMaterializationId?: string | null;
+            /** Primarymaterialization */
+            primaryMaterialization?: null;
+            cloudAccess?: components["schemas"]["WorkspaceCloudAccessSummary"];
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Templateversion */
+            templateVersion?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Readyat */
+            readyAt?: string | null;
+            /** Actionblockkind */
+            actionBlockKind?: string | null;
+            /** Actionblockreason */
+            actionBlockReason?: string | null;
+            /**
+             * Postreadyphase
+             * @default idle
+             * @constant
+             */
+            postReadyPhase: "idle";
+            /**
+             * Postreadyfilestotal
+             * @default 0
+             */
+            postReadyFilesTotal: number;
+            /**
+             * Postreadyfilesapplied
+             * @default 0
+             */
+            postReadyFilesApplied: number;
+            /** Postreadystartedat */
+            postReadyStartedAt?: string | null;
+            /** Postreadycompletedat */
+            postReadyCompletedAt?: string | null;
+            /**
+             * Visibility
+             * @default private
+             * @enum {string}
+             */
+            visibility: "private" | "archived";
+            /**
+             * Exposurestate
+             * @default untracked
+             * @constant
+             */
+            exposureState: "untracked";
+            /**
+             * Sandboxtype
+             * @default managed_personal
+             * @constant
+             */
+            sandboxType: "managed_personal";
+            /** Lastactivityat */
+            lastActivityAt?: string | null;
+            /** Allowedagentkinds */
+            allowedAgentKinds?: string[];
+            /** Readyagentkinds */
+            readyAgentKinds?: string[];
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
         };
     };
     responses: never;
@@ -4850,13 +4899,77 @@ export interface operations {
             };
         };
     };
-    github_app_callback_endpoint_auth_github_app_callback_get: {
+    github_app_user_authorization_callback_endpoint_auth_github_app_user_authorization_callback_get: {
         parameters: {
-            query?: {
-                code?: string | null;
-                state?: string | null;
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_installation_callback_endpoint_auth_github_app_installation_callback_get: {
+        parameters: {
+            query: {
                 installation_id?: string | null;
                 setup_action?: string | null;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_setup_callback_endpoint_integrations_github_callback_get: {
+        parameters: {
+            query: {
+                installation_id?: string | null;
+                setup_action?: string | null;
+                state: string;
             };
             header?: never;
             path?: never;
@@ -5494,6 +5607,108 @@ export interface operations {
             };
         };
     };
+    list_cloud_repositories_endpoint_v1_cloud_repos_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                affiliation?: string;
+                visibility?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudGitRepositoriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_repo_branches_endpoint_v1_cloud_repos__git_owner___git_repo_name__branches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoBranchesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_repository_catalog_endpoint_v1_cloud_repositories_catalog_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                affiliation?: string;
+                visibility?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudGitRepositoriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_repositories_endpoint_v1_cloud_repositories_get: {
         parameters: {
             query?: never;
@@ -5514,7 +5729,39 @@ export interface operations {
             };
         };
     };
-    save_local_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_local_put: {
+    get_repository_branches_endpoint_v1_cloud_repositories__git_owner___git_repo_name__branches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoBranchesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5526,7 +5773,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SaveLocalRepoEnvironmentRequest"];
+                "application/json": components["schemas"]["SaveRepoEnvironmentRequest"];
             };
         };
         responses: {
@@ -5550,43 +5797,7 @@ export interface operations {
             };
         };
     };
-    save_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_cloud_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                git_owner: string;
-                git_repo_name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SaveCloudRepoEnvironmentRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RepoEnvironmentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    github_app_connect_endpoint_v1_cloud_github_app_connect_get: {
+    start_github_app_user_authorization_endpoint_v1_cloud_github_app_user_authorization_start_get: {
         parameters: {
             query?: {
                 returnTo?: string | null;
@@ -5603,7 +5814,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GitHubAppConnectResponse"];
+                    "application/json": components["schemas"]["GitHubAppUserAuthorizationStartResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5617,11 +5828,34 @@ export interface operations {
             };
         };
     };
-    github_app_status_endpoint_v1_cloud_github_app_status_get: {
+    github_app_user_authorization_status_endpoint_v1_cloud_github_app_user_authorization_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubAppUserAuthorizationStatusResponse"];
+                };
+            };
+        };
+    };
+    list_github_app_accessible_repositories_endpoint_v1_cloud_github_app_accessible_repos_get: {
         parameters: {
             query?: {
-                gitOwner?: string | null;
-                gitRepoName?: string | null;
+                query?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                affiliation?: string;
+                visibility?: string;
             };
             header?: never;
             path?: never;
@@ -5635,7 +5869,103 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GitHubAppStatusResponse"];
+                    "application/json": components["schemas"]["CloudGitRepositoriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_repo_authority_endpoint_v1_cloud_github_app_repos__git_owner___git_repo_name__authority_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubRepoAuthorityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_github_app_installation_endpoint_v1_cloud_organizations__organization_id__github_app_installation_start_get: {
+        parameters: {
+            query?: {
+                returnTo?: string | null;
+            };
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubAppInstallationStartResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_installation_status_endpoint_v1_cloud_organizations__organization_id__github_app_installation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubAppInstallationStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6328,14 +6658,13 @@ export interface operations {
             };
         };
     };
-    ensure_cloud_sandbox_repo_runtime_connection_endpoint_v1_cloud_cloud_sandbox_repos__git_owner___git_repo_name__runtime_connection_post: {
+    list_cloud_workspaces_endpoint_v1_cloud_workspaces_get: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                git_owner: string;
-                git_repo_name: string;
+            query?: {
+                lifecycle?: "active" | "archived" | "all";
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -6346,7 +6675,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudSandboxRepoRuntimeConnectionResponse"];
+                    "application/json": components["schemas"]["WorkspaceSummary"][];
                 };
             };
             /** @description Validation Error */
@@ -6360,7 +6689,40 @@ export interface operations {
             };
         };
     };
-    ensure_cloud_sandbox_workspace_runtime_connection_endpoint_v1_cloud_cloud_sandbox_workspaces__workspace_id__runtime_connection_post: {
+    create_cloud_workspace_endpoint_v1_cloud_workspaces_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCloudWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6377,7 +6739,164 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudSandboxWorkspaceRuntimeConnectionResponse"];
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_workspace_runtime_status_endpoint_v1_cloud_workspaces__workspace_id__runtime_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudWorkspaceRuntimeStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_cloud_workspace_display_name_endpoint_v1_cloud_workspaces__workspace_id__display_name_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCloudWorkspaceDisplayNameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
                 };
             };
             /** @description Validation Error */
@@ -7886,611 +8405,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_automations_endpoint_v1_automations_get: {
-        parameters: {
-            query?: {
-                ownerScope?: string;
-                organizationId?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_automation_endpoint_v1_automations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateAutomationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    claim_local_runs_endpoint_v1_automations_executor_local_claims_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationClaimListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    heartbeat_local_run_endpoint_v1_automations_executor_local_runs__run_id__heartbeat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_creating_workspace_endpoint_v1_automations_executor_local_runs__run_id__creating_workspace_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    attach_local_run_workspace_endpoint_v1_automations_executor_local_runs__run_id__attach_workspace_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_provisioning_workspace_endpoint_v1_automations_executor_local_runs__run_id__provisioning_workspace_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_creating_session_endpoint_v1_automations_executor_local_runs__run_id__creating_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    attach_local_run_session_endpoint_v1_automations_executor_local_runs__run_id__attach_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachSessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_dispatching_endpoint_v1_automations_executor_local_runs__run_id__dispatching_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_dispatched_endpoint_v1_automations_executor_local_runs__run_id__dispatched_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachSessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_failed_endpoint_v1_automations_executor_local_runs__run_id__failed_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationFailRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_automation_endpoint_v1_automations__automation_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_automation_endpoint_v1_automations__automation_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateAutomationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pause_automation_endpoint_v1_automations__automation_id__pause_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    resume_automation_endpoint_v1_automations__automation_id__resume_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_automation_now_endpoint_v1_automations__automation_id__run_now_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationRunResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_automation_runs_endpoint_v1_automations__automation_id__runs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationRunListResponse"];
                 };
             };
             /** @description Validation Error */

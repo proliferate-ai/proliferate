@@ -29,7 +29,7 @@ SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/transactions.py 
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/live/service.py 4 remaining live service-owned session/deferred boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/worker/transactions.py 2 Lane 7 explicit worker API pre-response commit boundary debt
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/lifecycle/service.py 12 lifecycle extraction preserves existing workspace lifecycle transaction/session boundary debt through session_ops
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/provisioning/preflight.py 7 provisioning preflight extraction preserves existing repo/config validation transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/provisioning/preflight.py 5 provisioning preflight extraction preserves existing repo/config validation transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/provisioning/service.py 12 managed sandbox finalization preserves existing workspace provisioning transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/remote_access/service.py 4 remote-access connection flow preserves existing explicit session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/target_launch/service.py 7 target-launch orchestration preserves existing explicit command/session boundary debt through session_ops

@@ -366,7 +366,6 @@ describe("buildMobilityFooterContext", () => {
           baseBranch: "main",
           branchName: "pablo/workspace-cloud",
           generatedName: false,
-          ownerScope: "personal",
         },
       },
     }));

@@ -5,6 +5,7 @@ import type {
 } from "@proliferate/product-ui/new-chat/NewChatSurface";
 import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
 import { AddCloudEnvironmentDialogController } from "@proliferate/product-surfaces/settings/cloud-environments/AddCloudEnvironmentDialogController";
+import { useCurrentTeam } from "@proliferate/cloud-sdk-react";
 
 import { useWebHomeScreen } from "../../../hooks/home/facade/use-web-home-screen";
 import type { RepoOption } from "../../../lib/domain/home/cloud-home-launch-model";
@@ -13,6 +14,11 @@ const HOME_PLACEHOLDER = "Describe a quick remote task...";
 
 export function HomeScreen() {
   const home = useWebHomeScreen();
+  const currentTeam = useCurrentTeam();
+  const team = currentTeam.data ?? null;
+  const teamRole = team?.membership?.role ?? null;
+  const canManageGitHubAppInstallation = team?.membership?.status === "active"
+    && (teamRole === "owner" || teamRole === "admin");
 
   return (
     <div className="h-full" data-telemetry-block>
@@ -46,6 +52,13 @@ export function HomeScreen() {
       />
       <AddCloudEnvironmentDialogController
         open={home.addRepoOpen}
+        organizationId={team?.id ?? null}
+        canManageGitHubAppInstallation={canManageGitHubAppInstallation}
+        userAuthorizationReturnTo={`${window.location.origin}/?source=github_app_callback`}
+        installationReturnTo={`${window.location.origin}/?source=github_app_installation_callback`}
+        onOpenExternalUrl={(url) => {
+          window.location.assign(url);
+        }}
         onClose={() => home.setAddRepoOpen(false)}
         onEnvironmentAdded={home.handleRepoSelected}
       />

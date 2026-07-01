@@ -345,6 +345,13 @@ class CloudSandboxSecretMaterializationStatus(StrEnum):
     error = "error"
 
 
+class CloudMaterializationStatus(StrEnum):
+    pending = "pending"
+    running = "running"
+    ready = "ready"
+    error = "error"
+
+
 class CloudSandboxType(StrEnum):
     e2b = "e2b"
 

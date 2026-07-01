@@ -1,5 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
+import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 
 export type RepositoryAvailability = "local" | "local_cloud" | "cloud";
 
@@ -37,7 +37,7 @@ function resolveRepoName(repoRoot: RepoRoot, sourceRoot: string): string {
 export function buildSettingsRepositoryEntries(
   workspaces: Workspace[],
   repoRoots: RepoRoot[] = [],
-  cloudRepoConfigs: CloudRepoConfigSummary[] = [],
+  repoConfigs: RepoConfigResponse[] = [],
 ): SettingsRepositoryEntry[] {
   const workspacesByRepoRootId = new Map<string, Workspace[]>();
   for (const workspace of workspaces) {
@@ -53,9 +53,12 @@ export function buildSettingsRepositoryEntries(
     }
   }
 
-  const configuredCloudRepos = cloudRepoConfigs.filter((config) => config.configured);
+  const cloudRepos = repoConfigs.flatMap((repo) => {
+    const cloudEnvironment = findCloudEnvironment(repo);
+    return cloudEnvironment ? [{ repo, cloudEnvironment }] : [];
+  });
   const configuredCloudKeys = new Set(
-    configuredCloudRepos.map((config) => cloudRepositoryKey(config.gitOwner, config.gitRepoName)),
+    cloudRepos.map(({ repo }) => cloudRepositoryKey(repo.gitOwner, repo.gitRepoName)),
   );
   const localCloudKeys = new Set<string>();
 
@@ -89,22 +92,22 @@ export function buildSettingsRepositoryEntries(
     } satisfies SettingsRepositoryEntry;
   });
 
-  const cloudOnlyRepos = configuredCloudRepos.flatMap((config) => {
-    const key = cloudRepositoryKey(config.gitOwner, config.gitRepoName);
+  const cloudOnlyRepos = cloudRepos.flatMap(({ repo, cloudEnvironment }) => {
+    const key = cloudRepositoryKey(repo.gitOwner, repo.gitRepoName);
     if (localCloudKeys.has(key)) {
       return [];
     }
     return [{
-      sourceRoot: `cloud:${config.gitOwner}/${config.gitRepoName}`,
-      name: config.gitRepoName,
-      secondaryLabel: config.gitOwner,
+      sourceRoot: `cloud:${repo.gitOwner}/${repo.gitRepoName}`,
+      name: repo.gitRepoName,
+      secondaryLabel: repo.gitOwner,
       workspaceCount: 0,
       repoRootId: "",
       localWorkspaceId: null,
-      gitProvider: "github",
-      gitOwner: config.gitOwner,
-      gitRepoName: config.gitRepoName,
-      defaultBranch: config.defaultBranch?.trim() || null,
+      gitProvider: repo.gitProvider,
+      gitOwner: repo.gitOwner,
+      gitRepoName: repo.gitRepoName,
+      defaultBranch: cloudEnvironment.defaultBranch?.trim() || null,
       cloudConfigured: true,
       availability: "cloud",
     } satisfies SettingsRepositoryEntry];
@@ -134,4 +137,8 @@ export function isCloudRepository(
 
 export function cloudRepositoryKey(gitOwner: string, gitRepoName: string): string {
   return `${gitOwner}::${gitRepoName}`;
+}
+
+function findCloudEnvironment(repo: RepoConfigResponse): RepoEnvironmentResponse | null {
+  return repo.environments.find((environment) => environment.kind === "cloud") ?? null;
 }

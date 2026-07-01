@@ -49,9 +49,7 @@ class Settings(BaseSettings):
 
     # Background jobs
     celery_broker_url: str = "amqp://guest:guest@127.0.0.1:5672//"
-    celery_worker_queues: str = (
-        "periodic.default,default,notifications,runtime.wake,automations.execution"
-    )
+    celery_worker_queues: str = "periodic.default,default,notifications"
     celery_task_always_eager: bool = False
     celery_task_time_limit_seconds: int = 3600
     celery_task_soft_time_limit_seconds: int = 3300
@@ -173,6 +171,7 @@ class Settings(BaseSettings):
 
     # GitHub App for managed-cloud repository authority.
     github_app_id: str = ""
+    github_app_slug: str = ""
     github_app_client_id: str = ""
     github_app_client_secret: str = ""
     github_app_webhook_secret: str = ""

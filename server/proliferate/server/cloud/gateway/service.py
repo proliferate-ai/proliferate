@@ -94,9 +94,7 @@ async def _resolve_cloud_sandbox_gateway_access(
     user: _UserWithId,
 ) -> CloudSandboxGatewayAccess:
     sandbox = await ensure_cloud_sandbox_ready(db, user)
-    upstream_base_url, upstream_token, _data_key = await load_cloud_sandbox_runtime_access(
-        sandbox
-    )
+    upstream_base_url, upstream_token, _data_key = await load_cloud_sandbox_runtime_access(sandbox)
     return CloudSandboxGatewayAccess(
         upstream_base_url=upstream_base_url,
         upstream_token=upstream_token,

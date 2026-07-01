@@ -1,4 +1,4 @@
-import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
+import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import { HOME_SCREEN_LABELS } from "@/copy/home/home-screen-copy";
 import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
 
@@ -35,12 +35,12 @@ function isGitHubRepository(repository: HomeRepositoryIdentity): boolean {
 }
 
 function configuredCloudRepositoryKeys(
-  configs: readonly CloudRepoConfigSummary[] | null | undefined,
+  repoConfigs: readonly RepoConfigResponse[] | null | undefined,
 ): Set<string> {
   return new Set(
-    (configs ?? [])
-      .filter((config) => config.configured)
-      .map((config) => cloudRepositoryKey(config.gitOwner, config.gitRepoName)),
+    (repoConfigs ?? [])
+      .filter((repo) => repo.environments.some((environment) => environment.kind === "cloud"))
+      .map((repo) => cloudRepositoryKey(repo.gitOwner, repo.gitRepoName)),
   );
 }
 
@@ -54,9 +54,9 @@ function homeRepositoryKey(repository: HomeRepositoryIdentity): string | null {
 
 export function findHomeUnconfiguredGitHubRepository(args: {
   repositories: readonly HomeRepositoryIdentity[];
-  cloudRepoConfigs: readonly CloudRepoConfigSummary[] | null | undefined;
+  repoConfigs: readonly RepoConfigResponse[] | null | undefined;
 }): HomeRepositoryIdentity | null {
-  const configuredKeys = configuredCloudRepositoryKeys(args.cloudRepoConfigs);
+  const configuredKeys = configuredCloudRepositoryKeys(args.repoConfigs);
   return args.repositories.find((repository) => {
     if (!isGitHubRepository(repository)) {
       return false;
@@ -72,7 +72,7 @@ export function buildHomeOnboardingCards(args: {
   readyAgentCount: number;
   agentsLoading: boolean;
   defaultChatAgentKind: string;
-  cloudRepoConfigs: readonly CloudRepoConfigSummary[] | null | undefined;
+  repoConfigs: readonly RepoConfigResponse[] | null | undefined;
   cloudRepoConfigsLoading: boolean;
 }): HomeOnboardingCardModel[] {
   const cards: HomeOnboardingCardModel[] = [];
@@ -86,7 +86,7 @@ export function buildHomeOnboardingCards(args: {
     && !args.cloudRepoConfigsLoading
     && findHomeUnconfiguredGitHubRepository({
       repositories: args.repositories,
-      cloudRepoConfigs: args.cloudRepoConfigs,
+      repoConfigs: args.repoConfigs,
     }) !== null;
 
   if (!args.repositoriesLoading && !hasGitHubRepository) {

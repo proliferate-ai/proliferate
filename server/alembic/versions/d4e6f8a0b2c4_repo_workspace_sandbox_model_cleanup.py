@@ -430,6 +430,29 @@ def _upgrade_cloud_sandbox() -> None:
         "cloud_sandbox",
         sa.Column("destroyed_at", sa.DateTime(timezone=True), nullable=True),
     )
+    # Existing profile DBs may already have the older cloud_sandbox table shape
+    # with NOT NULL columns that are not part of the simplified model. The
+    # backfill below intentionally writes only the new columns, and these old
+    # columns are dropped after data has been migrated.
+    for legacy_column in (
+        "sandbox_profile_id",
+        "target_id",
+        "billing_subject_id",
+        "provider",
+        "external_sandbox_id",
+        "template_version",
+        "last_provider_event_at",
+        "last_provider_event_kind",
+        "started_at",
+        "stopped_at",
+        "last_heartbeat_at",
+        "lifecycle_on_timeout",
+        "lifecycle_auto_resume",
+        "provider_timeout_seconds",
+        "blocked_reason",
+        "last_error",
+    ):
+        _alter_nullable("cloud_sandbox", legacy_column, nullable=True)
     if _has_table("managed_sandbox") and _has_column("managed_sandbox", "owner_user_id"):
         provider_expr = _column_expr(
             "managed_sandbox",
@@ -1533,6 +1556,14 @@ def _upgrade_cloud_workspace() -> None:
         "cloud_workspace",
         sa.Column("repo_environment_id", sa.Uuid(), nullable=True),
     )
+    _add_column_once(
+        "cloud_workspace",
+        sa.Column("git_branch", sa.String(length=255), nullable=True),
+    )
+    _add_column_once(
+        "cloud_workspace",
+        sa.Column("git_base_branch", sa.String(length=255), nullable=True),
+    )
     if _has_column("cloud_workspace", "user_id"):
         op.execute(
             """
@@ -1566,7 +1597,6 @@ def _upgrade_cloud_workspace() -> None:
         DELETE FROM cloud_workspace AS workspace
         WHERE workspace.owner_user_id IS NULL
            OR workspace.repo_environment_id IS NULL
-           OR workspace.anyharness_workspace_id IS NULL
            OR NOT EXISTS (
                 SELECT 1 FROM "user" AS owner_user
                 WHERE owner_user.id = workspace.owner_user_id
@@ -1575,6 +1605,18 @@ def _upgrade_cloud_workspace() -> None:
                 SELECT 1 FROM repo_environment AS environment
                 WHERE environment.id = workspace.repo_environment_id
            )
+        """
+    )
+    op.execute(
+        """
+        UPDATE cloud_workspace
+        SET git_branch = COALESCE(
+          NULLIF(git_branch, ''),
+          NULLIF(display_name, ''),
+          'workspace-' || substring(id::text from 1 for 8)
+        )
+        WHERE git_branch IS NULL
+           OR git_branch = ''
         """
     )
     op.execute(
@@ -1609,7 +1651,7 @@ def _upgrade_cloud_workspace() -> None:
     _alter_nullable("cloud_workspace", "owner_user_id", nullable=False)
     _alter_nullable("cloud_workspace", "repo_environment_id", nullable=False)
     _alter_nullable("cloud_workspace", "display_name", nullable=False)
-    _alter_nullable("cloud_workspace", "anyharness_workspace_id", nullable=False)
+    _alter_nullable("cloud_workspace", "git_branch", nullable=False)
     _create_index_once(
         "ix_cloud_workspace_owner_user_id",
         "cloud_workspace",
@@ -1632,6 +1674,14 @@ def _upgrade_cloud_workspace() -> None:
         ["owner_user_id", "anyharness_workspace_id"],
         unique=True,
         postgresql_where=sa.text("archived_at IS NULL AND anyharness_workspace_id IS NOT NULL"),
+    )
+    _drop_index_once("ux_cloud_workspace_active_repo_environment_branch", "cloud_workspace")
+    _create_index_once(
+        "ux_cloud_workspace_active_repo_environment_branch",
+        "cloud_workspace",
+        ["owner_user_id", "repo_environment_id", "git_branch"],
+        unique=True,
+        postgresql_where=sa.text("archived_at IS NULL"),
     )
     _drop_constraint_once(
         "cloud_workspace_user_id_fkey",
@@ -1692,8 +1742,6 @@ def _upgrade_cloud_workspace() -> None:
     _drop_column_once("cloud_workspace", "git_provider")
     _drop_column_once("cloud_workspace", "git_owner")
     _drop_column_once("cloud_workspace", "git_repo_name")
-    _drop_column_once("cloud_workspace", "git_branch")
-    _drop_column_once("cloud_workspace", "git_base_branch")
     _drop_column_once("cloud_workspace", "base_ref")
     _drop_column_once("cloud_workspace", "base_sha")
     _drop_column_once("cloud_workspace", "status")
@@ -1758,6 +1806,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    _drop_index_once("ux_cloud_workspace_active_repo_environment_branch", "cloud_workspace")
     _drop_index_once("ux_cloud_workspace_anyharness_workspace", "cloud_workspace")
     _drop_index_once("ix_cloud_workspace_repo_environment_id", "cloud_workspace")
     _drop_constraint_once(

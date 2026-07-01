@@ -18,6 +18,7 @@ export interface RunAddRepoWorkflowArgs {
   resolveRepoRootFromPath: (path: string) => Promise<RepoRoot>;
   upsertRepoRootInWorkspaceCollections: (runtimeUrl: string, repoRoot: RepoRoot) => void;
   invalidateWorkspaceCollections: (runtimeUrl: string) => Promise<unknown>;
+  saveLocalRepoEnvironment?: (repoRoot: RepoRoot) => void;
   unhideRepoRoot: (repoRootId: string) => void;
   openRepoSetupModal: (state: {
     sourceRoot: string;
@@ -31,6 +32,7 @@ export async function runAddRepoWorkflow({
   resolveRepoRootFromPath,
   upsertRepoRootInWorkspaceCollections,
   invalidateWorkspaceCollections,
+  saveLocalRepoEnvironment,
   unhideRepoRoot,
   openRepoSetupModal,
 }: RunAddRepoWorkflowArgs): Promise<void> {
@@ -46,6 +48,7 @@ export async function runAddRepoWorkflow({
   });
 
   unhideRepoRoot(repoRoot.id);
+  saveLocalRepoEnvironment?.(repoRoot);
   const invalidateStartedAt = startLatencyTimer();
   await invalidateWorkspaceCollections(runtimeUrl);
   logLatency("workspace.collections.invalidate.success", {

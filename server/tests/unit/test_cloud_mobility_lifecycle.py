@@ -12,7 +12,9 @@ from proliferate.db.models.cloud.mobility import (
     CloudWorkspaceHandoffOp,
     CloudWorkspaceMobility,
 )
+from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.cloud_mobility.handoffs import (
     complete_cloud_workspace_handoff_cleanup,
     create_cloud_workspace_handoff_op,
@@ -48,6 +50,22 @@ async def mobility_session_factory(monkeypatch: pytest.MonkeyPatch, test_engine)
     db_engine.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
     yield
     db_engine.async_session_factory = original_session_factory
+
+
+async def _ensure_user(db_session: AsyncSession, user_id: UUID) -> None:
+    if await db_session.get(User, user_id) is not None:
+        return
+    db_session.add(
+        User(
+            id=user_id,
+            email=f"mobility-test-{user_id}@example.com",
+            hashed_password="!",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+        )
+    )
+    await db_session.flush()
 
 
 def _mobility_record(
@@ -254,16 +272,23 @@ async def test_finalize_flips_owner_before_cleanup_clears_active_handoff(
     mobility_record = await db_session.get(CloudWorkspaceMobility, mobility.id)
     assert handoff_record is not None
     assert mobility_record is not None
-    destination_workspace = CloudWorkspace(
+    await _ensure_user(db_session, user_id)
+    repo_environment = await repositories_store.upsert_cloud_repo_environment(
+        db_session,
         user_id=user_id,
-        billing_subject_id=uuid4(),
-        display_name="Rocket",
-        git_provider=mobility.git_provider,
+        git_provider="github",
         git_owner=mobility.git_owner,
         git_repo_name=mobility.git_repo_name,
+        default_branch="main",
+        setup_script="",
+        run_command="",
+    )
+    destination_workspace = CloudWorkspace(
+        owner_user_id=user_id,
+        repo_environment_id=repo_environment.id,
+        display_name="Rocket",
         git_branch=mobility.git_branch,
-        status="ready",
-        template_version="test",
+        git_base_branch="main",
     )
     db_session.add(destination_workspace)
     await db_session.flush()

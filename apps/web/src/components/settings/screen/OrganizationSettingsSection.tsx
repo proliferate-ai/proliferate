@@ -74,16 +74,54 @@ export function OrganizationSettingsSection() {
             </Button>
           </SettingsCardRow>
         ) : organization.currentTeam ? (
-          <SettingsCardRow
-            label={organization.currentTeam.name}
-            description={organization.currentTeam.membership
-              ? `${membershipRoleLabel(organization.currentTeam.membership.role)} - ${membershipStatusLabel(organization.currentTeam.membership.status)}`
-              : "Current team"}
-          >
-            <Badge tone={organization.currentTeam.status === "active" ? "success" : "warning"}>
-              {organization.currentTeam.status === "suspended" ? "Billing repair" : "Active"}
-            </Badge>
-          </SettingsCardRow>
+          <>
+            <SettingsCardRow
+              label={organization.currentTeam.name}
+              description={organization.currentTeam.membership
+                ? `${membershipRoleLabel(organization.currentTeam.membership.role)} - ${membershipStatusLabel(organization.currentTeam.membership.status)}`
+                : "Current team"}
+            >
+              <Badge tone={organization.currentTeam.status === "active" ? "success" : "warning"}>
+                {organization.currentTeam.status === "suspended" ? "Billing repair" : "Active"}
+              </Badge>
+            </SettingsCardRow>
+            <SettingsCardRow
+              label="GitHub App"
+              description={githubAppInstallationDescription({
+                installed: organization.githubAppInstallation?.installed === true,
+                accountLogin: organization.githubAppInstallation?.accountLogin ?? null,
+                repositorySelection: organization.githubAppInstallation?.repositorySelection ?? null,
+                canManage: organization.canManageGitHubAppInstallation,
+              })}
+            >
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge tone={organization.githubAppInstallation?.installed ? "success" : "warning"}>
+                  {organization.githubAppInstallationLoading
+                    ? "Checking"
+                    : organization.githubAppInstallation?.installed
+                      ? "Installed"
+                      : "Not installed"}
+                </Badge>
+                {organization.canManageGitHubAppInstallation ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={organization.githubAppInstalling}
+                    onClick={organization.githubAppInstallation?.installed
+                      ? organization.manageGitHubApp
+                      : organization.installGitHubApp}
+                  >
+                    {organization.githubAppInstallation?.installed
+                      ? "Manage in GitHub"
+                      : organization.githubAppInstalling
+                        ? "Opening GitHub..."
+                        : "Install GitHub App"}
+                  </Button>
+                ) : null}
+              </div>
+            </SettingsCardRow>
+          </>
         ) : (
           <div className="space-y-4 p-4">
             <div className="space-y-1">
@@ -118,6 +156,30 @@ export function OrganizationSettingsSection() {
       </SettingsCard>
     </section>
   );
+}
+
+function githubAppInstallationDescription({
+  installed,
+  accountLogin,
+  repositorySelection,
+  canManage,
+}: {
+  installed: boolean;
+  accountLogin: string | null;
+  repositorySelection: string | null;
+  canManage: boolean;
+}): string {
+  if (installed) {
+    const repos = repositorySelection === "all"
+      ? "all repositories"
+      : repositorySelection === "selected"
+        ? "selected repositories"
+        : "configured repositories";
+    return `Installed on ${accountLogin ? `@${accountLogin}` : "this GitHub account"} with ${repos}.`;
+  }
+  return canManage
+    ? "Install the Proliferate GitHub App before this organization can enable cloud repositories."
+    : "Ask an organization admin to install the Proliferate GitHub App before you enable cloud repositories.";
 }
 
 function membershipRoleLabel(role: string): string {

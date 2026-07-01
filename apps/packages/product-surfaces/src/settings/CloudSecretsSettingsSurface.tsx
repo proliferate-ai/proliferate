@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   useCloudSecrets,
   useDeleteCloudSecretEnvVar,
@@ -22,25 +23,38 @@ export function CloudSecretsSettingsSurface({
   const deleteEnvVar = useDeleteCloudSecretEnvVar();
   const putFile = usePutCloudSecretFile();
   const deleteFile = useDeleteCloudSecretFile();
+  const { reset: resetPutEnvVar } = putEnvVar;
+  const { reset: resetDeleteEnvVar } = deleteEnvVar;
+  const { reset: resetPutFile } = putFile;
+  const { reset: resetDeleteFile } = deleteFile;
   const meta = scopeMetadata(scope);
+  const scopeKey = cloudSecretsScopeKey(scope);
   const mutationError = putEnvVar.error
     ?? deleteEnvVar.error
     ?? putFile.error
     ?? deleteFile.error;
+  const queryError = enabled && secrets.error instanceof Error ? secrets.error.message : null;
   const saving = putEnvVar.isPending
     || deleteEnvVar.isPending
     || putFile.isPending
     || deleteFile.isPending;
+
+  useEffect(() => {
+    resetPutEnvVar();
+    resetDeleteEnvVar();
+    resetPutFile();
+    resetDeleteFile();
+  }, [enabled, resetDeleteEnvVar, resetDeleteFile, resetPutEnvVar, resetPutFile, scopeKey]);
 
   return (
     <SecretManagementPanel
       title={meta.title}
       description={meta.description}
       filePathMode={meta.filePathMode}
-      canManage={meta.canManage}
+      canManage={meta.canManage && enabled && !secrets.isError}
       loading={secrets.isLoading}
       saving={saving}
-      error={mutationError?.message ?? (secrets.error instanceof Error ? secrets.error.message : null)}
+      error={mutationError?.message ?? queryError}
       envVars={(secrets.data?.envVars ?? []).map((item) => ({
         id: item.id,
         name: item.name,
@@ -72,6 +86,17 @@ export function CloudSecretsSettingsSurface({
       }}
     />
   );
+}
+
+function cloudSecretsScopeKey(scope: CloudSecretsScope): string {
+  switch (scope.kind) {
+    case "personal":
+      return "personal";
+    case "organization":
+      return `organization:${scope.organizationId}`;
+    case "workspace":
+      return `workspace:${scope.gitOwner}/${scope.gitRepoName}`;
+  }
 }
 
 function scopeMetadata(scope: CloudSecretsScope): {

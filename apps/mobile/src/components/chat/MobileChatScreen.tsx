@@ -45,6 +45,7 @@ import { MobileChatTranscript } from "./screen/MobileChatTranscript";
 interface MobileChatScreenProps {
   chat: MobileCloudChat;
   ownerUserId: string | null;
+  productToken: string | null;
   onBack: () => void;
   onInitialPendingPromptConsumed?: () => void;
   onSessionSelected?: (sessionId: string) => void;
@@ -53,6 +54,7 @@ interface MobileChatScreenProps {
 export function MobileChatScreen({
   chat,
   ownerUserId,
+  productToken,
   onBack,
   onInitialPendingPromptConsumed,
   onSessionSelected,
@@ -76,8 +78,6 @@ export function MobileChatScreen({
   >({});
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [actionSheetInitialExpandedId, setActionSheetInitialExpandedId] = useState<string | null>(null);
-  const [claimedLocally, setClaimedLocally] = useState(false);
-
   const {
     workspaceQuery,
     workspace,
@@ -93,13 +93,13 @@ export function MobileChatScreen({
     transcriptItems,
     pendingInteractions,
     pendingPermissionByRequestId,
-    pendingPromptCommandId,
     transcriptView,
     hasActiveOptimisticPrompt,
     pendingPromptDurable,
     visibleTranscriptRows,
   } = useMobileChatData({
     chat,
+    productToken,
     selectedSessionId,
     newSessionMode,
     pendingPrompt,
@@ -131,14 +131,7 @@ export function MobileChatScreen({
     composerControlSummary,
     client,
     invalidateWorkspaceLists,
-    commandStatus,
-    configCommandStatus,
     pendingDispatchRunRef,
-    enqueueStartSession,
-    enqueueConfig,
-    enqueuePrompt,
-    setLatestCommandId,
-    setLatestConfigCommandId,
     claimPending,
     promptSubmitting,
     submitPrompt,
@@ -148,10 +141,9 @@ export function MobileChatScreen({
     selectSession,
   } = useMobileChatActions({
     ownerUserId,
+    productToken,
     workspace,
-    workspaceStatus,
     session,
-    targetId,
     draft,
     pendingPrompt,
     pendingPromptFailed,
@@ -160,8 +152,7 @@ export function MobileChatScreen({
     runtimeLabel: runtimeContext.label,
     transcriptItems,
     transcriptRows: transcriptView.rows,
-    isUnclaimed: workspace?.visibility === "shared_unclaimed" && !claimedLocally,
-    pendingPromptCommandId,
+    isUnclaimed: false,
     pendingConfigChanges,
     setDraft,
     setLaunchSelection,
@@ -172,7 +163,6 @@ export function MobileChatScreen({
     setPendingConfigChanges,
     setSelectedSessionId,
     setNewSessionMode,
-    setClaimedLocally,
     setPermissionResolveError,
     setResolvingPermissionKey,
     setToolDetailRow,
@@ -188,6 +178,7 @@ export function MobileChatScreen({
     onInitialPendingPromptConsumed,
     onSessionSelected,
     client,
+    productToken,
     invalidateWorkspaceLists,
     workspace,
     workspaceStatus,
@@ -206,25 +197,16 @@ export function MobileChatScreen({
     hasActiveOptimisticPrompt,
     optimisticPrompts,
     liveConfig,
-    configCommand: configCommandStatus.data,
-    promptCommand: commandStatus.data,
-    pendingPromptCommandId,
     pendingConfigChanges,
     pendingDispatchRunRef,
-    enqueueStartSession: enqueueStartSession.mutateAsync,
-    enqueueConfig: enqueueConfig.mutateAsync,
-    enqueuePrompt: enqueuePrompt.mutateAsync,
     setDraft,
     setSelectedSessionId,
     setNewSessionMode,
-    setLatestCommandId,
-    setLatestConfigCommandId,
     setPendingPrompt,
     setPendingPromptStatus,
     setPendingPromptFailed,
     setOptimisticPrompts,
     setPendingConfigChanges,
-    setClaimedLocally,
     resetPermissionSheet,
   });
   function openWorkspaceActionSheet(expandedId: string | null = null) {
@@ -237,11 +219,10 @@ export function MobileChatScreen({
     setActionSheetInitialExpandedId(null);
   }
 
-  const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
+  const isUnclaimed = false;
   const commandReadiness = workspace ? cloudCommandReadiness(workspace) : null;
   const workspaceCommandReady =
     workspaceStatus === "ready"
-    && Boolean(workspace?.targetId)
     && Boolean(workspace?.anyharnessWorkspaceId)
     && commandReadiness?.commandable === true;
   const canSubmit = Boolean(
@@ -261,8 +242,6 @@ export function MobileChatScreen({
   const branchLabel = workspace?.repo.branch ?? workspace?.repo.baseBranch ?? chat.branchLabel;
   const commandMessage =
     pendingPromptStatus ??
-    commandStatus.data?.errorMessage ??
-    (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null) ??
     (!session && !canStartNewSession ? workspaceHarnessAvailability.message : null) ??
     (!workspaceCommandReady && workspaceStatus === "ready" ? commandReadiness?.message ?? null : null);
   const commandMessageShownInTranscript = visibleTranscriptRows.some((row) =>

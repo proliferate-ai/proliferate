@@ -25,11 +25,11 @@ export function AccountSettingsSection() {
           loadingProvider: account.loadingProvider,
           error: account.error,
           connectGitHub: account.connectGitHub,
-          connectGitHubApp: account.connectGitHubApp,
+          authorizeGitHubAppUser: account.authorizeGitHubAppUser,
           manageGitHubApp: account.manageGitHubApp,
-          githubAppStatus: account.githubAppStatus,
-          githubAppStatusLoading: account.githubAppStatusLoading,
-          githubAppConnecting: account.githubAppConnecting,
+          githubAppUserAuthorization: account.githubAppUserAuthorization,
+          githubAppUserAuthorizationLoading: account.githubAppUserAuthorizationLoading,
+          githubAppUserAuthorizing: account.githubAppUserAuthorizing,
           connectGoogle: account.connectGoogle,
           connectApple: account.connectApple,
           setPassword: account.setPassword,
@@ -47,11 +47,11 @@ function buildAccountSettingsProps({
   loadingProvider,
   error,
   connectGitHub,
-  connectGitHubApp,
+  authorizeGitHubAppUser,
   manageGitHubApp,
-  githubAppStatus,
-  githubAppStatusLoading,
-  githubAppConnecting,
+  githubAppUserAuthorization,
+  githubAppUserAuthorizationLoading,
+  githubAppUserAuthorizing,
   connectGoogle,
   connectApple,
   setPassword,
@@ -61,16 +61,16 @@ function buildAccountSettingsProps({
   loadingProvider: AuthProviderName | "sign-out" | null;
   error: string | null;
   connectGitHub: () => void;
-  connectGitHubApp: () => void;
+  authorizeGitHubAppUser: () => void;
   manageGitHubApp: () => void;
-  githubAppStatus: {
+  githubAppUserAuthorization: {
     connected: boolean;
     githubLogin?: string | null;
     status?: string | null;
     action?: string | null;
   } | undefined;
-  githubAppStatusLoading: boolean;
-  githubAppConnecting: boolean;
+  githubAppUserAuthorizationLoading: boolean;
+  githubAppUserAuthorizing: boolean;
   connectGoogle: () => void;
   connectApple: () => void;
   setPassword: (input: AccountPasswordCredentialSubmit) => void | Promise<void>;
@@ -96,10 +96,10 @@ function buildAccountSettingsProps({
     providers: buildProviderViews(linkedProviders, providerAvailability, Boolean(viewer?.githubConnected)),
     connectedServices: viewer
       ? [buildGitHubAppServiceView({
-          status: githubAppStatus,
-          loading: githubAppStatusLoading,
-          connecting: githubAppConnecting,
-          onConnect: connectGitHubApp,
+          status: githubAppUserAuthorization,
+          loading: githubAppUserAuthorizationLoading,
+          authorizing: githubAppUserAuthorizing,
+          onAuthorize: authorizeGitHubAppUser,
           onManage: manageGitHubApp,
         })]
       : [],
@@ -149,8 +149,8 @@ function buildAccountSettingsProps({
 function buildGitHubAppServiceView({
   status,
   loading,
-  connecting,
-  onConnect,
+  authorizing,
+  onAuthorize,
   onManage,
 }: {
   status: {
@@ -160,8 +160,8 @@ function buildGitHubAppServiceView({
     action?: string | null;
   } | undefined;
   loading: boolean;
-  connecting: boolean;
-  onConnect: () => void;
+  authorizing: boolean;
+  onAuthorize: () => void;
   onManage: () => void;
 }) {
   const connected = status?.connected === true;
@@ -169,33 +169,33 @@ function buildGitHubAppServiceView({
     || status?.status === "needs_reauth"
     || status?.action === "reauthorize";
   return {
-    id: "github-app",
-    label: "Proliferate GitHub App",
-    description: "Required for Proliferate Cloud repositories.",
+    id: "github-app-user-authorization",
+    label: "GitHub App user authorization",
+    description: "Authorizes Proliferate Cloud to use your GitHub identity in managed sandboxes.",
     accountLabel: status?.githubLogin ? `@${status.githubLogin}` : null,
     statusLabel: loading
       ? "Checking"
       : connected
-        ? "Connected"
+        ? "Authorized"
         : needsReconnect
-          ? "Reconnect"
-          : "Not connected",
+          ? "Reauthorize"
+          : "Not authorized",
     tone: connected ? "success" as const : needsReconnect ? "warning" as const : "neutral" as const,
     action: connected
       ? {
-          label: "Manage GitHub App",
+          label: "Manage in GitHub",
           onClick: onManage,
         }
       : {
-          label: connecting
+          label: authorizing
             ? "Opening GitHub..."
             : needsReconnect
-              ? "Reconnect GitHub App"
-              : "Connect GitHub App",
+              ? "Reauthorize GitHub App"
+              : "Authorize GitHub App",
           icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
-          loading: connecting,
-          disabled: connecting,
-          onClick: onConnect,
+          loading: authorizing,
+          disabled: authorizing,
+          onClick: onAuthorize,
         },
   };
 }

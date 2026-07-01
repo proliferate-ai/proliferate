@@ -4,11 +4,11 @@ import {
   type CloudMeasurementOptions,
 } from "./timing.js";
 import type {
-  CloudConnectionInfo,
   CloudWorkspaceDetail,
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
   CreateCloudWorkspaceRequest,
+  CloudWorkspaceRuntimeStatusResponse,
 } from "../types/index.js";
 import type { CloudOwnerSelection } from "./billing.js";
 
@@ -19,61 +19,10 @@ export type CloudWorkspaceListScope =
   | "org-all"
   | "exposed";
 export type CloudWorkspaceLifecycleFilter = "active" | "archived" | "all";
-export type CloudWorkspaceListSelection = CloudOwnerSelection & {
+export type CloudWorkspaceListSelection = {
   scope?: CloudWorkspaceListScope;
   lifecycle?: CloudWorkspaceLifecycleFilter;
 };
-
-export interface BootstrapCloudWorkspaceRemoteAccessRequest {
-  targetId: string;
-  anyharnessWorkspaceId: string;
-  anyharnessSessionId?: string | null;
-  displayName?: string | null;
-  repo?: {
-    provider: string;
-    owner: string;
-    name: string;
-    branch: string;
-    baseBranch?: string | null;
-  } | null;
-}
-
-export interface LaunchCloudWorkspaceOnTargetRequest {
-  targetId: string;
-  gitProvider: "github";
-  gitOwner: string;
-  gitRepoName: string;
-  baseBranch?: string | null;
-  branchName: string;
-  generatedName?: boolean;
-  displayName?: string | null;
-  prompt: string;
-  promptId?: string | null;
-  agentKind: string;
-  modelId?: string | null;
-  modeId?: string | null;
-  sessionConfigUpdates?: Array<{
-    configId: string;
-    value: string;
-  }>;
-  source?: "mobile" | "web" | "api";
-}
-
-export interface WorkspaceTargetLaunchCommandIds {
-  ensureRepoCheckout: string;
-  materializeRoot: string;
-  materializeWorktree: string;
-  startSession: string;
-  sendPrompt: string;
-  updateSessionConfig: string[];
-}
-
-export interface WorkspaceTargetLaunchResponse {
-  workspace: CloudWorkspaceDetail;
-  sessionId: string;
-  sendCommandId: string;
-  commandIds: WorkspaceTargetLaunchCommandIds;
-}
 
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
@@ -143,9 +92,6 @@ export async function listCloudWorkspaces(
         method: "GET",
         path: "/v1/cloud/workspaces",
         query: {
-          ownerScope: owner?.ownerScope ?? "personal",
-          organizationId: owner?.organizationId ?? undefined,
-          scope: owner?.scope,
           lifecycle: owner?.lifecycle,
         },
         signal: options?.signal,
@@ -172,54 +118,11 @@ export async function createCloudWorkspace(
   owner?: CloudOwnerSelection,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudWorkspaceDetail> {
+  void owner;
   const data = await client.requestJson<CloudWorkspaceTransport>({
     method: "POST",
     path: "/v1/cloud/workspaces",
-    body: {
-      ...input,
-      ownerScope: owner?.ownerScope ?? input.ownerScope ?? "personal",
-      organizationId: owner?.organizationId ?? input.organizationId ?? null,
-    },
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function bootstrapCloudWorkspaceRemoteAccess(
-  input: BootstrapCloudWorkspaceRemoteAccessRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "POST",
-    path: "/v1/cloud/workspaces/remote-access",
     body: input,
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function launchCloudWorkspaceOnTarget(
-  input: LaunchCloudWorkspaceOnTargetRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<WorkspaceTargetLaunchResponse> {
-  const data = await client.requestJson<WorkspaceTargetLaunchResponse>({
-    method: "POST",
-    path: "/v1/cloud/workspaces/target-launch",
-    body: input,
-  });
-  return {
-    ...data,
-    workspace: normalizeCloudWorkspace(
-      data.workspace as unknown as CloudWorkspaceTransport,
-    ) as CloudWorkspaceDetail,
-  };
-}
-
-export async function startCloudWorkspace(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "POST",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/start`,
   });
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
@@ -242,51 +145,6 @@ export async function restoreCloudWorkspace(
   const data = await client.requestJson<CloudWorkspaceTransport>({
     method: "POST",
     path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/restore`,
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function purgeCloudWorkspace(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<void> {
-  await client.requestJson({
-    method: "POST",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/purge`,
-  });
-}
-
-export async function enableCloudWorkspaceRemoteAccess(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "POST",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/remote-access/enable`,
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function disableCloudWorkspaceRemoteAccess(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "POST",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/remote-access/disable`,
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function updateCloudWorkspaceBranch(
-  workspaceId: string,
-  branchName: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "PATCH",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/branch`,
-    body: { branchName },
   });
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
@@ -321,12 +179,12 @@ export async function deleteCloudWorkspace(
   });
 }
 
-export async function getCloudWorkspaceConnection(
+export async function getCloudWorkspaceRuntimeStatus(
   workspaceId: string,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudConnectionInfo> {
-  return client.requestJson<CloudConnectionInfo>({
+): Promise<CloudWorkspaceRuntimeStatusResponse> {
+  return client.requestJson<CloudWorkspaceRuntimeStatusResponse>({
     method: "GET",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/connection`,
+    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/runtime-status`,
   });
 }

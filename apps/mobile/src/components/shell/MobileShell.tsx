@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useCloudWorkspaceSnapshot } from "@proliferate/cloud-sdk-react";
+import { useCloudWorkspace } from "@proliferate/cloud-sdk-react";
 
 import { MobileAuthScreen } from "../auth/MobileAuthScreen";
 import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
@@ -61,7 +61,7 @@ export function MobileShell() {
   const [initialLinkChecked, setInitialLinkChecked] = useState(false);
   const [navigationRestored, setNavigationRestored] = useState(false);
   const initialLinkAppliedRef = useRef(false);
-  const linkedWorkspace = useCloudWorkspaceSnapshot(
+  const linkedWorkspace = useCloudWorkspace(
     linkedWorkspaceId,
     authState === "active" && linkedWorkspaceId !== null,
   );
@@ -166,11 +166,7 @@ export function MobileShell() {
     if (!linkedWorkspaceId || !linkedWorkspace.data) {
       return;
     }
-    const chat = mobileLinkedChatForWorkspace(
-      linkedWorkspace.data.workspace,
-      linkedWorkspace.data.sessions,
-      linkedWorkspaceSessionId,
-    );
+    const chat = mobileLinkedChatForWorkspace(linkedWorkspace.data, [], linkedWorkspaceSessionId);
     if (chat) {
       setSelectedChat(chat);
     } else {
@@ -303,6 +299,7 @@ export function MobileShell() {
           <MobileChatScreen
             chat={selectedChat}
             ownerUserId={ownerUserId}
+            productToken={accessToken}
             onBack={() => setSelectedChat(null)}
             onInitialPendingPromptConsumed={clearSelectedChatInitialPendingPrompt}
             onSessionSelected={markSelectedChatSession}

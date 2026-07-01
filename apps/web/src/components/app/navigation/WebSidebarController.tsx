@@ -8,7 +8,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
-  useCloudWorkspaceSnapshot,
+  useCloudWorkspace,
   useVisibleCloudWorkspaces,
 } from "@proliferate/cloud-sdk-react";
 import {
@@ -52,25 +52,24 @@ export function WebSidebarController({
     () => parseCloudSidebarRoute(location.pathname),
     [location.pathname],
   );
-  const workspaces = useVisibleCloudWorkspaces();
-  const activeWorkspaceSnapshot = useCloudWorkspaceSnapshot(
+  const workspaces = useVisibleCloudWorkspaces(false);
+  const activeWorkspace = useCloudWorkspace(
     routeState.workspaceId,
     Boolean(routeState.workspaceId),
   );
   const cloudWorkspaces = useMemo(
     () => mergeCloudSidebarWorkspaces(
       workspaces.data ?? [],
-      activeWorkspaceSnapshot.data?.workspace ?? null,
+      activeWorkspace.data ?? null,
     ),
-    [activeWorkspaceSnapshot.data?.workspace, workspaces.data],
+    [activeWorkspace.data, workspaces.data],
   );
-  const activeWorkspaceSessions =
-    activeWorkspaceSnapshot.data?.sessions ?? EMPTY_ACTIVE_WORKSPACE_SESSIONS;
+  const activeWorkspaceSessions = EMPTY_ACTIVE_WORKSPACE_SESSIONS;
   const navItems = useMemo(
     () => buildNavItems(location.pathname),
     [location.pathname],
   );
-  const workspaceSectionLoading = (workspaces.isLoading || activeWorkspaceSnapshot.isLoading) &&
+  const workspaceSectionLoading = (workspaces.isLoading || activeWorkspace.isLoading) &&
     cloudWorkspaces.length === 0;
   const workspaceSectionMessage = useMemo(
     () => buildWorkspaceSectionMessage({

@@ -36,15 +36,18 @@ from proliferate.server.anonymous_telemetry.worker import (
     stop_server_anonymous_telemetry_sender,
 )
 from proliferate.server.artifact_runtime.api import router as artifact_runtime_router
+
 # AUTOMATIONS PARKED: retarget to RepoEnvironment in a later PR before remounting.
 # from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router
+
 # BILLING RECONCILER PARKED: retarget runtime usage to CloudSandbox before remounting.
 # from proliferate.server.billing.reconciler import (
 #     start_billing_reconciler,
 #     stop_billing_reconciler,
 # )
 from proliferate.server.catalogs.api import router as catalogs_router
+
 # AGENT AUTH PARKED: retarget away from sandbox_profile/cloud_targets before remounting.
 # from proliferate.server.cloud.agent_auth.reconciler import (
 #     start_agent_gateway_reconciler,
@@ -53,6 +56,10 @@ from proliferate.server.catalogs.api import router as catalogs_router
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.cloud.github_app.api import callback_router as github_app_callback_router
+from proliferate.server.cloud.github_app.api import (
+    setup_callback_router as github_app_setup_callback_router,
+)
+
 # MOBILITY PARKED: old exposure/handoff cleanup imports deleted models.
 # from proliferate.server.cloud.mobility.reconciler import (
 #     start_mobility_cleanup_reconciler,
@@ -68,6 +75,7 @@ from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
 from proliferate.server.organizations.sso.api import router as organization_sso_router
+
 # SUPPORT PARKED: diagnostics imports deleted target runtime access models.
 # from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
@@ -220,6 +228,7 @@ def create_app() -> FastAPI:
     # routes, which would otherwise shadow them (capturing `sso`/`oidc` as `{provider}`).
     app.include_router(sso_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(github_app_callback_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+    app.include_router(github_app_setup_callback_router, prefix=api_prefix, tags=["auth"])
     app.include_router(identity_auth_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(auth_viewer_router, prefix=f"{api_prefix}/v1", tags=["auth"])
 

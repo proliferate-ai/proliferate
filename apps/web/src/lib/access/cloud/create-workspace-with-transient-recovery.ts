@@ -43,7 +43,7 @@ async function recoverCreatedWorkspaceByBranch(args: {
 }): Promise<Pick<CloudWorkspaceDetail, "id"> | null> {
   const workspaces = await listCloudWorkspaces(
     undefined,
-    { ownerScope: args.request.ownerScope ?? "personal", scope: "my" },
+    { scope: "my" },
     args.client,
   );
   return workspaces.find((workspace) => cloudWorkspaceMatchesCreatedBranch(
@@ -53,7 +53,7 @@ async function recoverCreatedWorkspaceByBranch(args: {
 }
 
 export function cloudWorkspaceMatchesCreatedBranch(
-  workspace: Pick<CloudWorkspaceDetail, "repo">,
+  workspace: Pick<CloudWorkspaceDetail, "displayName" | "repo">,
   request: CreateCloudWorkspaceRequest,
 ): boolean {
   if (
@@ -61,6 +61,9 @@ export function cloudWorkspaceMatchesCreatedBranch(
     || workspace.repo.name !== request.gitRepoName
   ) {
     return false;
+  }
+  if (request.displayName && workspace.displayName === request.displayName) {
+    return true;
   }
   if (workspace.repo.branch === request.branchName) {
     return true;

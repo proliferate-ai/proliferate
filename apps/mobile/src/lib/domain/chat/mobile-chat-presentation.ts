@@ -51,7 +51,7 @@ export function sessionProjectionFromChat(
   return {
     targetId: chat.targetId,
     cloudWorkspaceId: chat.workspaceId,
-    workspaceId: chat.workspaceRuntimeId,
+    workspaceId: chat.workspaceRuntimeId ?? chat.workspaceId,
     sessionId: chat.sessionId,
     nativeSessionId: null,
     sourceAgentKind: null,
@@ -84,11 +84,11 @@ export function sessionDisplayTitle(session: CloudSessionProjection, index: numb
 }
 
 export function sessionDisplaySubtitle(session: CloudSessionProjection): string {
-  return `${session.status} · ${shortSessionLabel(session.sessionId)}`;
+  return `${session.status ?? "idle"} · ${shortSessionLabel(session.sessionId)}`;
 }
 
-export function shortSessionLabel(sessionId: string): string {
-  return sessionId.slice(0, 8);
+export function shortSessionLabel(sessionId: string | null | undefined): string {
+  return sessionId?.slice(0, 8) ?? "pending";
 }
 
 export function summarizeRuntimeContext(

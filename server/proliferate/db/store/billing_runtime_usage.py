@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.billing import BILLING_RECONCILER_LOCK_KEY
 from proliferate.db.models.billing import BillingDecisionEvent, UsageSegment, WebhookEventReceipt
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.utils.time import utcnow
 
 T = TypeVar("T")
@@ -58,7 +59,8 @@ async def _get_workspace_billing_subject(
     workspace = await db.get(CloudWorkspace, workspace_id)
     if workspace is None:
         raise RuntimeError("Cloud workspace not found while opening usage segment.")
-    return workspace.billing_subject_id, workspace.user_id
+    subject = await ensure_personal_billing_subject(db, workspace.owner_user_id)
+    return subject.id, workspace.owner_user_id
 
 
 async def _get_runtime_environment_billing_subject(
@@ -384,8 +386,12 @@ async def ensure_sandbox_usage_started(
         )
     elif workspace_id is not None:
         billing_subject_id, owner_user_id = await _get_workspace_billing_subject(db, workspace_id)
+    elif actor_user_id is not None:
+        subject = await ensure_personal_billing_subject(db, actor_user_id)
+        billing_subject_id = subject.id
+        owner_user_id = actor_user_id
     else:
-        raise RuntimeError("Usage segment requires a runtime environment or workspace.")
+        raise RuntimeError("Usage segment requires a runtime environment, workspace, or user.")
     return await create_usage_segment(
         db,
         user_id=actor_user_id or owner_user_id,

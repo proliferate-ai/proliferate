@@ -40,7 +40,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   const persistedStatus = resolveCloudWorkspaceStatus(selectedCloudWorkspace) as CloudWorkspaceStatus | null;
   const usesCloudRuntime = cloudWorkspaceUsesCloudRuntime(selectedCloudWorkspace);
   const usesDirectAttach = selectedCloudWorkspace ? !usesCloudRuntime : false;
-  const needsClaim = selectedCloudWorkspace?.visibility === "shared_unclaimed";
+  const needsClaim = false;
   const isWarm = selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
   const connectionQueryEnabled = persistedStatus === "ready" && !usesDirectAttach && !needsClaim;
   const connectionQuery = useCloudWorkspaceConnection(
@@ -78,10 +78,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   ]);
   const canUseConnection = persistedStatus === "ready" && !usesDirectAttach && !needsClaim;
   const runtimeActions = useSelectedCloudRuntimeActions({
-    cloudWorkspaceId: selectedCloudWorkspace?.id ?? null,
     canUseConnection,
-    connectionFailed: connectionState === "failed",
-    needsClaim,
     refetchConnection: connectionQuery.refetch,
   });
 

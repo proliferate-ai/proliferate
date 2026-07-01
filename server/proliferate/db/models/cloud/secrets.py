@@ -19,9 +19,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
-    CloudSecretScopeKind,
     CloudSandboxSecretMaterializationKind,
     CloudSandboxSecretMaterializationStatus,
+    CloudSecretScopeKind,
 )
 from proliferate.db.models.base import Base, utcnow
 

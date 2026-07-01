@@ -51,6 +51,20 @@ export interface CloudSessionEventEnvelope {
   [key: string]: any;
 }
 
+export interface CloudSessionEvent {
+  targetId: string;
+  sessionId: string;
+  seq: number;
+  eventType: string;
+  sourceKind?: string | null;
+  turnId?: string | null;
+  itemId?: string | null;
+  occurredAt?: string | null;
+  payload?: unknown;
+  envelope?: CloudSessionEventEnvelope | null;
+  [key: string]: any;
+}
+
 export interface CloudSessionSnapshot {
   session: CloudSessionProjection;
   transcriptItems: CloudTranscriptItem[];

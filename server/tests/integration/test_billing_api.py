@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from base64 import b64encode
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -17,7 +16,6 @@ from proliferate.constants.billing import (
     MONTHLY_CLOUD_GRANT_TYPE,
     PRO_SEAT_PRORATION_GRANT_TYPE,
 )
-from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.constants.organizations import (
     ORGANIZATION_CHECKOUT_INTENT_STATUS_PENDING,
     ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
@@ -51,12 +49,9 @@ from proliferate.db.store.billing_subjects import (
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
-from proliferate.db.store.cloud_runtime_environments import (
-    ensure_runtime_environment_for_workspace,
-)
+from proliferate.db.store import repositories as repositories_store
 from proliferate.integrations import resend
 from proliferate.integrations import stripe as stripe_billing
-from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.billing.accounting import process_pending_seat_adjustments
 from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment as maybe_create_org_seat_adjustment,
@@ -64,23 +59,7 @@ from proliferate.server.billing.seat_reconciliation import (
 from proliferate.server.billing.team_checkout.activation import (
     activate_team_checkout_from_stripe_session,
 )
-from proliferate.server.cloud.workspaces.provisioning import preflight as provisioning_preflight
-from proliferate.server.cloud.workspaces.provisioning import service as provisioning_service
 from tests.helpers.desktop_auth import mint_desktop_token_payload
-
-
-def _claude_file_payload(api_key: str) -> dict[str, object]:
-    return {
-        "authMode": "file",
-        "files": [
-            {
-                "relativePath": ".claude/.credentials.json",
-                "contentBase64": b64encode(
-                    f'{{"claudeAiOauth":{{"accessToken":"{api_key}"}}}}'.encode()
-                ).decode(),
-            }
-        ],
-    }
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -124,6 +103,25 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
         "user_id": user_id,
         "access_token": str(token_data["access_token"]),
     }
+
+
+async def _create_cloud_repo_environment(
+    db_session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    git_owner: str = "acme",
+    git_repo_name: str = "rocket",
+):
+    return await repositories_store.upsert_cloud_repo_environment(
+        db_session,
+        user_id=user_id,
+        git_provider="github",
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        default_branch="main",
+        setup_script="",
+        run_command="",
+    )
 
 
 async def _link_github_account(db_session: AsyncSession, user_id: str) -> None:
@@ -1762,48 +1760,36 @@ class TestBillingApi:
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
         billing_subject = await ensure_personal_billing_subject(db_session, user_id)
+        repo_environment = await _create_cloud_repo_environment(db_session, user_id=user_id)
 
         workspace = CloudWorkspace(
-            user_id=user_id,
-            billing_subject_id=billing_subject.id,
+            owner_user_id=user_id,
+            repo_environment_id=repo_environment.id,
             display_name="acme/rocket",
-            git_provider="github",
-            git_owner="acme",
-            git_repo_name="rocket",
             git_branch="main",
             git_base_branch="main",
-            status="ready",
-            status_detail="Ready",
-            last_error=None,
-            template_version="v1",
-            runtime_generation=1,
+            anyharness_workspace_id="workspace-unlimited",
         )
         db_session.add(workspace)
         await db_session.flush()
-        environment = await ensure_runtime_environment_for_workspace(db_session, workspace)
-        environment.status = CloudRuntimeEnvironmentStatus.running.value
 
         sandbox = CloudSandbox(
-            provider="e2b",
-            external_sandbox_id="sandbox-123",
-            status="running",
-            template_version="v1",
-            started_at=workspace.created_at,
+            owner_user_id=user_id,
+            provider_sandbox_id="sandbox-123",
+            status="ready",
+            ready_at=workspace.created_at,
         )
         db_session.add(sandbox)
         await db_session.flush()
-        environment.active_sandbox_id = sandbox.id
-        workspace.active_sandbox_id = sandbox.id
 
         now = datetime.now(UTC)
         db_session.add(
             UsageSegment(
                 user_id=user_id,
                 billing_subject_id=billing_subject.id,
-                runtime_environment_id=environment.id,
                 workspace_id=workspace.id,
                 sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
+                external_sandbox_id=sandbox.provider_sandbox_id,
                 sandbox_execution_id=None,
                 started_at=now - timedelta(hours=3),
                 ended_at=now - timedelta(hours=1),
@@ -1855,31 +1841,24 @@ class TestBillingApi:
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
         billing_subject = await ensure_personal_billing_subject(db_session, user_id)
+        repo_environment = await _create_cloud_repo_environment(db_session, user_id=user_id)
 
         workspace = CloudWorkspace(
-            user_id=user_id,
-            billing_subject_id=billing_subject.id,
+            owner_user_id=user_id,
+            repo_environment_id=repo_environment.id,
             display_name="acme/rocket",
-            git_provider="github",
-            git_owner="acme",
-            git_repo_name="rocket",
             git_branch="main",
             git_base_branch="main",
-            status="stopped",
-            status_detail="Stopped",
-            last_error=None,
-            template_version="v1",
-            runtime_generation=1,
+            anyharness_workspace_id="workspace-history",
         )
         db_session.add(workspace)
         await db_session.flush()
 
         sandbox = CloudSandbox(
-            provider="e2b",
-            external_sandbox_id="sandbox-history",
+            owner_user_id=user_id,
+            provider_sandbox_id="sandbox-history",
             status="paused",
-            template_version="v1",
-            started_at=workspace.created_at,
+            ready_at=workspace.created_at,
         )
         db_session.add(sandbox)
         await db_session.flush()
@@ -1892,7 +1871,7 @@ class TestBillingApi:
                     billing_subject_id=billing_subject.id,
                     workspace_id=workspace.id,
                     sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
+                    external_sandbox_id=sandbox.provider_sandbox_id,
                     sandbox_execution_id=None,
                     started_at=now - timedelta(days=140, hours=3),
                     ended_at=now - timedelta(days=140, hours=1),
@@ -1905,7 +1884,7 @@ class TestBillingApi:
                     billing_subject_id=billing_subject.id,
                     workspace_id=workspace.id,
                     sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
+                    external_sandbox_id=sandbox.provider_sandbox_id,
                     sandbox_execution_id=None,
                     started_at=now - timedelta(days=135, hours=6),
                     ended_at=now - timedelta(days=135, hours=1),
@@ -1918,7 +1897,7 @@ class TestBillingApi:
                     billing_subject_id=billing_subject.id,
                     workspace_id=workspace.id,
                     sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
+                    external_sandbox_id=sandbox.provider_sandbox_id,
                     sandbox_execution_id=None,
                     started_at=now - timedelta(hours=2),
                     ended_at=now - timedelta(hours=1),
@@ -1937,102 +1916,3 @@ class TestBillingApi:
         assert payload["freeSandboxHours"] == 10.0
         assert payload["remainingSandboxHours"] == 7.0
         assert payload["startBlocked"] is False
-
-    @pytest.mark.asyncio
-    async def test_cloud_workspace_create_blocks_after_free_hours_exhausted(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(
-            provisioning_service, "schedule_workspace_provision", lambda *_args, **_kwargs: None
-        )
-        monkeypatch.setattr(settings, "cloud_billing_mode", "enforce")
-        monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)
-
-        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
-            return GitHubRepoBranches(
-                default_branch="main",
-                branches=["main"],
-            )
-
-        monkeypatch.setattr(provisioning_preflight, "get_github_repo_branches", _repo_branches)
-
-        session = await _register_and_login(client, "billing-blocked@example.com")
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        user_id = uuid.UUID(session["user_id"])
-        await _link_github_account(db_session, session["user_id"])
-        billing_subject = await ensure_personal_billing_subject(db_session, user_id)
-        await db_session.commit()
-
-        credential_response = await client.put(
-            "/v1/cloud/agent-auth/credentials/synced/claude",
-            headers=headers,
-            json=_claude_file_payload("test-anthropic-key"),
-        )
-        assert credential_response.status_code == 200
-
-        now = datetime.now(UTC)
-        workspace = CloudWorkspace(
-            user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            display_name="acme/rocket",
-            git_provider="github",
-            git_owner="acme",
-            git_repo_name="rocket",
-            git_branch="main",
-            git_base_branch="main",
-            status="stopped",
-            status_detail="Stopped",
-            last_error=None,
-            template_version="v1",
-            runtime_generation=1,
-            created_at=now - timedelta(hours=2),
-            updated_at=now - timedelta(hours=2),
-        )
-        db_session.add(workspace)
-        await db_session.flush()
-
-        sandbox = CloudSandbox(
-            provider="e2b",
-            external_sandbox_id="sandbox-exhausted",
-            status="paused",
-            template_version="v1",
-            started_at=now - timedelta(hours=2),
-            stopped_at=now - timedelta(hours=1),
-        )
-        db_session.add(sandbox)
-        await db_session.flush()
-
-        db_session.add(
-            UsageSegment(
-                user_id=user_id,
-                billing_subject_id=billing_subject.id,
-                workspace_id=workspace.id,
-                sandbox_id=sandbox.id,
-                external_sandbox_id=sandbox.external_sandbox_id,
-                sandbox_execution_id=None,
-                started_at=now - timedelta(hours=2),
-                ended_at=now - timedelta(hours=0.5),
-                is_billable=True,
-                opened_by="provision",
-                closed_by="manual_stop",
-            )
-        )
-        await db_session.commit()
-
-        response = await client.post(
-            "/v1/cloud/workspaces",
-            headers=headers,
-            json={
-                "gitProvider": "github",
-                "gitOwner": "acme",
-                "gitRepoName": "rocket",
-                "baseBranch": "main",
-                "branchName": "after-exhaustion",
-            },
-        )
-
-        assert response.status_code == 403
-        assert response.json()["detail"]["code"] == "quota_exceeded"

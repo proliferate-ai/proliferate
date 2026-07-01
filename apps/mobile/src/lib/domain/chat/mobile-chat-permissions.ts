@@ -12,10 +12,10 @@ export function permissionInteractionOptions(
   const payload = interaction.payload;
   const event = isRecord(payload?.event) ? payload.event : null;
   const eventPayload = event && isRecord(event.payload) ? event.payload : null;
-  const rawOptions = Array.isArray(eventPayload?.options) ? eventPayload.options : [];
+  const rawOptions: unknown[] = Array.isArray(eventPayload?.options) ? eventPayload.options : [];
   const options = rawOptions
     .filter(isRecord)
-    .map((option) => {
+    .map((option: Record<string, unknown>) => {
       const optionId = readNonEmptyString(option.optionId);
       const label = readNonEmptyString(option.label);
       const kind = readNonEmptyString(option.kind);

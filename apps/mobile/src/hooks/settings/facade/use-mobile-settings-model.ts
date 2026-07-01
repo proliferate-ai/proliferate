@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import {
   useAuthViewer,
   useCloudBilling,
-  useRepoConfigs,
+  useRepositories,
   useOrganizations,
 } from "@proliferate/cloud-sdk-react";
 
@@ -12,7 +12,7 @@ export function useMobileSettingsModel(account: MobileSettingsAccountSummary) {
   const viewer = useAuthViewer();
   const organizations = useOrganizations();
   const billing = useCloudBilling({ ownerScope: "personal" });
-  const repoConfigs = useRepoConfigs();
+  const repoConfigs = useRepositories();
 
   const displayName =
     viewer.data?.user.display_name?.trim()
@@ -47,13 +47,12 @@ export function useMobileSettingsModel(account: MobileSettingsAccountSummary) {
       const cloudEnvironment = repo.environments.find((environment) =>
         environment.kind === "cloud"
       );
-      if (!cloudEnvironment?.configured) {
+      if (!cloudEnvironment) {
         return [];
       }
       return [{
         gitOwner: repo.gitOwner,
         gitRepoName: repo.gitRepoName,
-        configured: true,
       }];
     }),
     [repoConfigs.data?.repositories],

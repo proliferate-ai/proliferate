@@ -1,13 +1,14 @@
-import {
-  ensureCloudSandboxRepoRuntimeConnection,
-  ensureCloudSandboxWorkspaceRuntimeConnection,
-} from "@proliferate/cloud-sdk/client/cloud-sandboxes";
 import type {
   CloudConnectionInfo,
   CloudRuntimeAuthState,
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
-import { getDesktopCloudAccessToken, isCloudAgentKind } from "@/lib/access/cloud/client";
+import {
+  getDesktopCloudAccessToken,
+  getProliferateClient,
+  isCloudAgentKind,
+  ProliferateClientError,
+} from "@/lib/access/cloud/client";
 
 const CURRENT_RUNTIME_AUTH: CloudRuntimeAuthState = {
   status: "current",
@@ -43,61 +44,43 @@ export async function withFreshCloudSandboxGatewayAccessToken<
   };
 }
 
-export async function resolveCloudSandboxGatewayConnectionForRepo(input: {
-  gitOwner: string;
-  gitRepoName: string;
-  allowedAgentKinds?: string[];
-  readyAgentKinds?: string[];
-  runtimeAuth?: CloudRuntimeAuthState | null;
-}): Promise<CloudSandboxGatewayConnectionInfo> {
-  const productToken = await getDesktopCloudAccessToken();
-  const runtime = await ensureCloudSandboxRepoRuntimeConnection(
-    input.gitOwner,
-    input.gitRepoName,
-  );
-  return {
-    runtimeUrl: runtime.gatewayAnyHarnessBaseUrl,
-    accessToken: productToken,
-    anyharnessWorkspaceId: runtime.anyharnessWorkspaceId,
-    runtimeGeneration: runtime.runtimeGeneration,
-    allowedAgentKinds: (input.allowedAgentKinds ?? []).filter(isCloudAgentKind),
-    readyAgentKinds: input.readyAgentKinds ?? [],
-    runtimeAuth: input.runtimeAuth ?? CURRENT_RUNTIME_AUTH,
-    runtimeAccessKind: "proliferate-gateway",
-    webSocketAuthTransport: "protocol",
-    anyharnessRepoRootId: runtime.anyharnessRepoRootId,
-  };
-}
-
 export function resolveCloudSandboxGatewayConnectionForWorkspace(
   workspace: CloudWorkspaceDetail,
 ): Promise<CloudSandboxGatewayConnectionInfo> {
   return resolveCloudSandboxGatewayConnectionForCloudWorkspace({
-    workspaceId: workspace.id,
+    anyharnessWorkspaceId: workspace.anyharnessWorkspaceId ?? null,
     allowedAgentKinds: workspace.allowedAgentKinds,
     readyAgentKinds: workspace.readyAgentKinds,
     runtimeAuth: workspace.runtime?.runtimeAuth ?? null,
+    runtimeGeneration: workspace.runtime?.generation ?? 0,
   });
 }
 
 export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(input: {
-  workspaceId: string;
+  anyharnessWorkspaceId: string | null;
   allowedAgentKinds?: string[];
   readyAgentKinds?: string[];
   runtimeAuth?: CloudRuntimeAuthState | null;
+  runtimeGeneration?: number;
 }): Promise<CloudSandboxGatewayConnectionInfo> {
+  if (!input.anyharnessWorkspaceId) {
+    throw new ProliferateClientError(
+      "Cloud workspace is missing its AnyHarness workspace id.",
+      409,
+      "workspace_not_ready",
+    );
+  }
   const productToken = await getDesktopCloudAccessToken();
-  const runtime = await ensureCloudSandboxWorkspaceRuntimeConnection(input.workspaceId);
   return {
-    runtimeUrl: runtime.gatewayAnyHarnessBaseUrl,
+    runtimeUrl: getProliferateClient().buildUrl("/v1/gateway/cloud-sandbox/anyharness"),
     accessToken: productToken,
-    anyharnessWorkspaceId: runtime.anyharnessWorkspaceId,
-    runtimeGeneration: runtime.runtimeGeneration,
+    anyharnessWorkspaceId: input.anyharnessWorkspaceId,
+    runtimeGeneration: input.runtimeGeneration ?? 0,
     allowedAgentKinds: (input.allowedAgentKinds ?? []).filter(isCloudAgentKind),
     readyAgentKinds: input.readyAgentKinds ?? [],
     runtimeAuth: input.runtimeAuth ?? CURRENT_RUNTIME_AUTH,
     runtimeAccessKind: "proliferate-gateway",
     webSocketAuthTransport: "protocol",
-    anyharnessRepoRootId: runtime.anyharnessRepoRootId,
+    anyharnessRepoRootId: null,
   };
 }

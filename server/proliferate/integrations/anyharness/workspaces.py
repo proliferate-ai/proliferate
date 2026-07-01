@@ -162,6 +162,7 @@ async def create_remote_worktree_workspace(
     target_path: str,
     new_branch_name: str,
     base_branch: str | None,
+    setup_script: str | None = None,
     origin: dict[str, object] | None = None,
     creator_context: dict[str, object] | None = None,
 ) -> ResolvedRemoteWorkspace:
@@ -174,6 +175,8 @@ async def create_remote_worktree_workspace(
     }
     if base_branch:
         body["baseBranch"] = base_branch
+    if setup_script:
+        body["setupScript"] = setup_script
     if origin is not None:
         body["origin"] = origin
     if creator_context is not None:

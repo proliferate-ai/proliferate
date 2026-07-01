@@ -1,8 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import type {
-  CloudCommandEnvelope,
-  CloudCommandResponse,
   CloudSessionProjection,
   CloudTranscriptItem,
   CloudWorkspaceDetail,
@@ -17,27 +15,11 @@ import {
   latestCloudTranscriptSeq,
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-domain/chats/cloud/transcript-view";
-import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 import type { Session } from "@anyharness/sdk";
 
 import { routes } from "../../../config/routes";
-import {
-  commandStatusFailureMessage,
-  isRejectedCommandStatus,
-  isWorkspacePreparationStatus,
-  promptCommandFailureMessage,
-} from "../../../lib/domain/chat/cloud-chat-command-presentation";
+import { isWorkspacePreparationStatus } from "../../../lib/domain/chat/cloud-chat-command-presentation";
 import { removeRetryReplacedFailedPrompts } from "../../../lib/domain/chat/cloud-chat-prompt-projection";
-import {
-  dispatchPendingHomePrompt,
-} from "../../../lib/access/cloud/pending-home-prompt-dispatch";
-import { enqueuePromptCommandWithRetry } from "../../../lib/access/cloud/pending-home-prompt-send";
-import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
-import type {
-  SendPromptPayload,
-  StartSessionPayload,
-  UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/cloud-command-payloads";
 import {
   clearPendingHomePrompt,
   savePendingHomePrompt,
@@ -54,10 +36,6 @@ import {
   getWebCloudSandboxAnyHarnessClient,
   isWebCloudSandboxWorkspace,
 } from "../../../lib/access/anyharness/cloud-sandbox-runtime";
-
-type EnqueueCommand<TPayload> = (
-  command: CloudCommandEnvelope<TPayload>,
-) => Promise<CloudCommandResponse>;
 
 export function useWebCloudPromptActions(input: {
   client: ProliferateCloudClient;
@@ -81,12 +59,7 @@ export function useWebCloudPromptActions(input: {
   agentCatalog: Parameters<typeof resolveCloudLaunchSelection>[0]["catalog"];
   workspaceLaunchableAgentKinds: readonly string[];
   resolvedLaunchSelection: CloudLaunchComposerSelection;
-  sessionModelId: string | null;
   mountedRef: { current: boolean };
-  setLatestCommandId: Dispatch<SetStateAction<string | null>>;
-  enqueuePrompt: EnqueueCommand<SendPromptPayload>;
-  enqueueStartSession: EnqueueCommand<StartSessionPayload>;
-  enqueueConfig: EnqueueCommand<UpdateSessionConfigPayload>;
   workspaceRefetch: () => Promise<unknown> | unknown;
   transcriptRefetch: () => Promise<unknown> | unknown;
   sessionEventsRefetch: () => Promise<unknown> | unknown;
@@ -116,12 +89,7 @@ export function useWebCloudPromptActions(input: {
     agentCatalog,
     workspaceLaunchableAgentKinds,
     resolvedLaunchSelection,
-    sessionModelId,
     mountedRef,
-    setLatestCommandId,
-    enqueuePrompt,
-    enqueueStartSession,
-    enqueueConfig,
     workspaceRefetch,
     transcriptRefetch,
     sessionEventsRefetch,
@@ -140,11 +108,8 @@ export function useWebCloudPromptActions(input: {
       return;
     }
     if (!isWebCloudSandboxWorkspace(workspace)) {
-      const readiness = cloudCommandReadiness(workspace);
-      if (!readiness.commandable) {
-        setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
-        return;
-      }
+      setPendingHomePromptStatus("Cloud workspace runtime is unavailable.");
+      return;
     }
     if (!session) {
       await submitPromptToNewSession(text);
@@ -210,28 +175,15 @@ export function useWebCloudPromptActions(input: {
     };
     savePendingHomePrompt(workspace.id, pendingPrompt);
     try {
-      const result = isWebCloudSandboxWorkspace(workspace)
-        ? await dispatchCloudSandboxPendingHomePrompt({
-          client,
-          productToken,
-          workspace,
-          pendingPrompt,
-          fallbackAgentKind: promptSelection.agentKind,
-          onStatus: setPendingHomePromptStatus,
-          shouldContinue: () => mountedRef.current,
-        })
-        : await dispatchPendingHomePrompt({
-          client,
-          workspace,
-          pendingPrompt,
-          modelId: pendingPrompt.modelId,
-          enqueueStartSession,
-          enqueueConfig,
-          enqueuePrompt,
-          setLatestCommandId,
-          onStatus: setPendingHomePromptStatus,
-          shouldContinue: () => mountedRef.current,
-        });
+      const result = await dispatchCloudSandboxPendingHomePrompt({
+        client,
+        productToken,
+        workspace,
+        pendingPrompt,
+        fallbackAgentKind: promptSelection.agentKind,
+        onStatus: setPendingHomePromptStatus,
+        shouldContinue: () => mountedRef.current,
+      });
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
           prompt.id === optimisticPrompt.id
@@ -305,58 +257,15 @@ export function useWebCloudPromptActions(input: {
           blocks: [{ type: "text", text }],
           promptId: optimisticPrompt.id,
         });
-        if (!mountedRef.current) {
-          return;
-        }
-        setOptimisticPrompts((current) =>
-          current.map((prompt) =>
-            prompt.id === optimisticPrompt.id ? { ...prompt, status: "queued" } : prompt
-          )
-        );
-        setPendingHomePromptStatus(null);
-        void transcriptRefetch();
-        void sessionEventsRefetch();
-        return;
+      } else {
+        throw new Error("Cloud workspace runtime is unavailable.");
       }
-      const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
-        client,
-        workspace,
-        agentKind: activeSession.sourceAgentKind ?? resolvedLaunchSelection.agentKind,
-        modelId: sessionModelId,
-        idempotencyKey: `${optimisticPrompt.id}:target-config`,
-        setLatestCommandId,
-        onStatus: setPendingHomePromptStatus,
-        shouldContinue: () => mountedRef.current,
-      });
-      const command = await enqueuePromptCommandWithRetry({
-        envelope: {
-          idempotencyKey: optimisticPrompt.id,
-          targetId: activeSession.targetId,
-          workspaceId: activeSession.workspaceId,
-          cloudWorkspaceId: commandWorkspace.id,
-          sessionId: activeSession.sessionId,
-          kind: "send_prompt",
-          source: "web",
-          payload: { text, promptId: optimisticPrompt.id },
-        },
-        enqueuePrompt,
-        shouldContinue: () => mountedRef.current,
-      });
       if (!mountedRef.current) {
         return;
       }
-      setLatestCommandId(command.commandId);
-      if (isRejectedCommandStatus(command.status)) {
-        throw new Error(
-          commandStatusFailureMessage(command, promptCommandFailureMessage(command.status))
-            ?? promptCommandFailureMessage(command.status),
-        );
-      }
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
-          prompt.id === optimisticPrompt.id
-            ? { ...prompt, commandId: command.commandId, status: "queued" }
-            : prompt
+          prompt.id === optimisticPrompt.id ? { ...prompt, status: "queued" } : prompt
         )
       );
       setPendingHomePromptStatus(null);

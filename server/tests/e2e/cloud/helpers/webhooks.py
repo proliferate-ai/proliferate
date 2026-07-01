@@ -10,14 +10,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
+from proliferate.constants.cloud import (
+    CloudSandboxStatus,
+    CloudSandboxType,
+    GitProvider,
+    RepoEnvironmentKind,
+)
 from proliferate.db.models.billing import SandboxEventReceipt, UsageSegment
+from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
-from proliferate.db.store.cloud_runtime_environments import (
-    ensure_runtime_environment_for_workspace,
-)
 from proliferate.server.billing.models import utcnow
 from tests.e2e.cloud.helpers.shared import (
     DEFAULT_GITHUB_BASE_BRANCH,
@@ -66,64 +69,61 @@ async def create_seeded_workspace_and_sandbox(
     from proliferate.utils.crypto import encrypt_text
 
     user_uuid = uuid.UUID(user_id)
-    billing_subject = await ensure_personal_billing_subject(db_session, user_uuid)
-    workspace = CloudWorkspace(
+    await ensure_personal_billing_subject(db_session, user_uuid)
+    repo_config = RepoConfig(
         user_id=user_uuid,
-        billing_subject_id=billing_subject.id,
-        display_name="proliferate-ai/proliferate",
-        git_provider="github",
+        git_provider=GitProvider.github,
         git_owner=DEFAULT_GITHUB_OWNER,
         git_repo_name=DEFAULT_GITHUB_REPO,
+    )
+    db_session.add(repo_config)
+    await db_session.flush()
+    repo_environment = RepoEnvironment(
+        repo_config_id=repo_config.id,
+        environment_kind=RepoEnvironmentKind.cloud,
+        desktop_install_id=None,
+        local_path=None,
+        default_branch=DEFAULT_GITHUB_BASE_BRANCH,
+        setup_script="",
+        run_command="",
+    )
+    db_session.add(repo_environment)
+    await db_session.flush()
+
+    workspace = CloudWorkspace(
+        owner_user_id=user_uuid,
+        repo_environment_id=repo_environment.id,
+        display_name="proliferate-ai/proliferate",
         git_branch=unique_branch_name("webhook"),
         git_base_branch=DEFAULT_GITHUB_BASE_BRANCH,
-        status=workspace_status,
-        status_detail=workspace_status.title(),
-        last_error=None,
-        template_version="v1",
-        runtime_generation=1 if with_runtime_metadata else 0,
-        runtime_url=runtime_url,
-        runtime_token_ciphertext=encrypt_text(runtime_token) if runtime_token else None,
         anyharness_workspace_id=anyharness_workspace_id,
     )
     db_session.add(workspace)
-    await db_session.commit()
-    await db_session.refresh(workspace)
-
-    environment = await ensure_runtime_environment_for_workspace(db_session, workspace)
-    environment.status = (
-        CloudRuntimeEnvironmentStatus.running.value
-        if sandbox_status == "running"
-        else CloudRuntimeEnvironmentStatus.paused.value
-        if sandbox_status == "paused"
-        else CloudRuntimeEnvironmentStatus.provisioning.value
-        if sandbox_status == "provisioning"
-        else CloudRuntimeEnvironmentStatus.error.value
-    )
-    environment.runtime_generation = 1 if with_runtime_metadata else 0
-    environment.runtime_url = runtime_url
-    environment.runtime_token_ciphertext = encrypt_text(runtime_token) if runtime_token else None
-    environment.root_anyharness_workspace_id = (
-        "root-workspace-123" if with_runtime_metadata else None
-    )
-    environment.root_anyharness_repo_root_id = "repo-root-123" if with_runtime_metadata else None
-    await db_session.commit()
-    await db_session.refresh(environment)
+    await db_session.flush()
 
     sandbox = CloudSandbox(
-        provider=provider,
-        external_sandbox_id=f"{provider}-sandbox-{uuid.uuid4()}",
-        status=sandbox_status,
-        template_version="v1",
-        started_at=utcnow(),
+        owner_user_id=user_uuid,
+        sandbox_type=CloudSandboxType.e2b,
+        provider_sandbox_id=f"{provider}-sandbox-{uuid.uuid4()}",
+        status=(
+            CloudSandboxStatus.ready
+            if sandbox_status == "running"
+            else CloudSandboxStatus.paused
+            if sandbox_status == "paused"
+            else CloudSandboxStatus.creating
+            if sandbox_status == "provisioning"
+            else CloudSandboxStatus.error
+        ),
+        anyharness_base_url=runtime_url,
+        runtime_token_ciphertext=encrypt_text(runtime_token) if runtime_token else None,
+        anyharness_data_key_ciphertext=None,
+        ready_at=utcnow() if sandbox_status == "running" else None,
+        last_health_at=utcnow() if sandbox_status == "running" else None,
     )
     db_session.add(sandbox)
     await db_session.commit()
-    await db_session.refresh(sandbox)
-
-    workspace.active_sandbox_id = sandbox.id
-    environment.active_sandbox_id = sandbox.id
-    await db_session.commit()
     await db_session.refresh(workspace)
+    await db_session.refresh(sandbox)
     return workspace, sandbox
 
 

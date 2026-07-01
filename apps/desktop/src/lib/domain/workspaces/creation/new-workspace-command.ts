@@ -148,6 +148,7 @@ export function buildRepositoryNewWorkspaceCommandScope(
   }
 
   const normalizedBaseBranch = trimToNull(baseBranch);
+  const hasLocalEnvironment = repository.availability !== "cloud";
   const gitOwner = trimToNull(repository.gitOwner);
   const gitRepoName = trimToNull(repository.gitRepoName);
   const cloudRepoTarget = gitOwner && gitRepoName
@@ -158,9 +159,9 @@ export function buildRepositoryNewWorkspaceCommandScope(
     id: `${source}:${sourceRoot}`,
     source,
     repoGroupKeyToExpand: sourceRoot,
-    localSourceRoot: sourceRoot,
-    repoRootId: trimToNull(repository.repoRootId),
-    sourceWorkspaceId: trimToNull(repository.localWorkspaceId),
+    localSourceRoot: hasLocalEnvironment ? sourceRoot : null,
+    repoRootId: hasLocalEnvironment ? trimToNull(repository.repoRootId) : null,
+    sourceWorkspaceId: hasLocalEnvironment ? trimToNull(repository.localWorkspaceId) : null,
     cloudRepoTarget,
     baseBranch: normalizedBaseBranch,
     defaultBranch: trimToNull(defaultBranch),

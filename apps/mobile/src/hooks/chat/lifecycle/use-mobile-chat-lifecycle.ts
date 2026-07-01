@@ -1,8 +1,5 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type {
-  CloudCommandEnvelope,
-  CloudCommandResponse,
-  CloudCommandStatus,
   CloudPendingInteraction,
   CloudSessionProjection,
   CloudTranscriptItem,
@@ -26,35 +23,14 @@ import {
   clearPendingMobilePrompt,
   savePendingMobilePrompt,
 } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import type {
-  SendPromptPayload,
-  StartSessionPayload,
-  UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-types";
 import {
   failedPendingInteractionForPendingPrompt,
   failedPendingInteractionMessage,
   markPendingPromptFailed,
   type OptimisticPrompt,
 } from "../../../lib/domain/chat/mobile-chat-transcript";
-import {
-  isRejectedCommandStatus,
-  isTerminalCommandStatus,
-  sessionConfigCommandFailureMessage,
-  promptCommandFailureMessage,
-} from "../../../lib/domain/chat/mobile-chat-presentation";
 import { useMobilePendingPromptDispatcher } from "./use-mobile-pending-prompt-dispatcher";
 import { useMobilePendingPromptRestore } from "./use-mobile-pending-prompt-restore";
-
-type EnqueueCloudCommand<TPayload> = (
-  command: CloudCommandEnvelope<TPayload>,
-) => Promise<CloudCommandResponse>;
-
-type CommandStatusView = {
-  commandId: string;
-  status: CloudCommandStatus;
-  errorMessage?: string | null;
-} | null | undefined;
 
 export function useMobileChatLifecycle({
   chat,
@@ -62,6 +38,7 @@ export function useMobileChatLifecycle({
   onInitialPendingPromptConsumed,
   onSessionSelected,
   client,
+  productToken,
   invalidateWorkspaceLists,
   workspace,
   workspaceStatus,
@@ -80,25 +57,16 @@ export function useMobileChatLifecycle({
   hasActiveOptimisticPrompt,
   optimisticPrompts,
   liveConfig,
-  configCommand,
-  promptCommand,
-  pendingPromptCommandId,
   pendingConfigChanges,
   pendingDispatchRunRef,
-  enqueueStartSession,
-  enqueueConfig,
-  enqueuePrompt,
   setDraft,
   setSelectedSessionId,
   setNewSessionMode,
-  setLatestCommandId,
-  setLatestConfigCommandId,
   setPendingPrompt,
   setPendingPromptStatus,
   setPendingPromptFailed,
   setOptimisticPrompts,
   setPendingConfigChanges,
-  setClaimedLocally,
   resetPermissionSheet,
 }: {
   chat: MobileCloudChat;
@@ -106,6 +74,7 @@ export function useMobileChatLifecycle({
   onInitialPendingPromptConsumed?: () => void;
   onSessionSelected?: (sessionId: string) => void;
   client: ProliferateCloudClient;
+  productToken: string | null;
   invalidateWorkspaceLists: () => void;
   workspace: CloudWorkspaceDetail | null;
   workspaceStatus: string;
@@ -124,20 +93,12 @@ export function useMobileChatLifecycle({
   hasActiveOptimisticPrompt: boolean;
   optimisticPrompts: readonly OptimisticPrompt[];
   liveConfig: Parameters<typeof getLiveConfigControlValue>[0] | null;
-  configCommand: CommandStatusView;
-  promptCommand: CommandStatusView;
-  pendingPromptCommandId: string | null;
   pendingConfigChanges: Record<string, PendingConfigChange>;
   pendingDispatchRunRef: MutableRefObject<{ key: string; active: boolean } | null>;
-  enqueueStartSession: EnqueueCloudCommand<StartSessionPayload>;
-  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
-  enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
   setDraft: Dispatch<SetStateAction<string>>; setSelectedSessionId: Dispatch<SetStateAction<string | null>>;
-  setNewSessionMode: Dispatch<SetStateAction<boolean>>; setLatestCommandId: Dispatch<SetStateAction<string | null>>;
-  setLatestConfigCommandId: Dispatch<SetStateAction<string | null>>; setPendingPrompt: Dispatch<SetStateAction<MobilePendingPrompt | null>>;
+  setNewSessionMode: Dispatch<SetStateAction<boolean>>; setPendingPrompt: Dispatch<SetStateAction<MobilePendingPrompt | null>>;
   setPendingPromptStatus: Dispatch<SetStateAction<string | null>>; setPendingPromptFailed: Dispatch<SetStateAction<boolean>>;
   setOptimisticPrompts: Dispatch<SetStateAction<OptimisticPrompt[]>>; setPendingConfigChanges: Dispatch<SetStateAction<Record<string, PendingConfigChange>>>;
-  setClaimedLocally: Dispatch<SetStateAction<boolean>>;
   resetPermissionSheet: () => void;
 }) {
   useEffect(() => {
@@ -148,8 +109,6 @@ export function useMobileChatLifecycle({
     setPendingPromptFailed(false);
     setOptimisticPrompts([]);
     setPendingConfigChanges({});
-    setLatestConfigCommandId(null);
-    setClaimedLocally(false);
     resetPermissionSheet();
   }, [chat.workspaceId, chat.sessionId]);
 
@@ -239,48 +198,6 @@ export function useMobileChatLifecycle({
   }, [liveConfig, session?.sessionId, setPendingConfigChanges]);
 
   useEffect(() => {
-    const command = configCommand;
-    if (!command || !isRejectedCommandStatus(command.status)) {
-      return;
-    }
-    if (
-      !Object.values(pendingConfigChanges).some((change) =>
-        change.commandId === command.commandId
-      )
-    ) {
-      return;
-    }
-    setPendingConfigChanges((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([_key, change]) =>
-          change.commandId !== command.commandId
-        ),
-      )
-    );
-    setPendingPromptStatus(command.errorMessage || sessionConfigCommandFailureMessage(command.status));
-  }, [configCommand?.commandId, configCommand?.errorMessage, configCommand?.status, pendingConfigChanges, setPendingConfigChanges, setPendingPromptStatus]);
-
-  useEffect(() => {
-    const command = promptCommand;
-    if (!command || !isRejectedCommandStatus(command.status)) {
-      return;
-    }
-    if (!optimisticPrompts.some((prompt) =>
-      prompt.commandId === command.commandId && prompt.status !== "failed"
-    )) {
-      return;
-    }
-    setOptimisticPrompts((current) =>
-      current.map((prompt) =>
-        prompt.commandId === command.commandId && prompt.status !== "failed"
-          ? { ...prompt, status: "failed" }
-          : prompt
-      ),
-    );
-    setPendingPromptStatus(command.errorMessage || promptCommandFailureMessage(command.status));
-  }, [promptCommand?.commandId, promptCommand?.errorMessage, promptCommand?.status, optimisticPrompts, setOptimisticPrompts, setPendingPromptStatus]);
-
-  useEffect(() => {
     if (!pendingPrompt || pendingPromptFailed || pendingPrompt.failedAt) {
       return;
     }
@@ -310,29 +227,9 @@ export function useMobileChatLifecycle({
     workspace?.id,
   ]);
 
-  useEffect(() => {
-    const command = promptCommand;
-    if (!command || command.commandId !== pendingPromptCommandId) {
-      return;
-    }
-    if (!isTerminalCommandStatus(command.status)) {
-      return;
-    }
-    void transcriptRefetch();
-    void sessionEventsRefetch();
-  }, [
-    promptCommand?.commandId,
-    promptCommand?.status,
-    pendingPromptCommandId,
-    sessionEventsRefetch,
-    transcriptRefetch,
-  ]);
-
   useMobilePendingPromptDispatcher({
     client,
-    enqueueStartSession,
-    enqueueConfig,
-    enqueuePrompt,
+    productToken,
     ownerUserId,
     pendingPrompt,
     pendingPromptDurable,
@@ -343,7 +240,6 @@ export function useMobileChatLifecycle({
     workspaceRefetch,
     pendingDispatchRunRef,
     onSessionSelected,
-    setLatestCommandId,
     setNewSessionMode,
     setSelectedSessionId,
     setPendingPrompt,

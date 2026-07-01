@@ -106,6 +106,9 @@ export function MobileWorkspaceActionSessionRow({
   selected: boolean;
   onPress: () => void;
 }) {
+  const status = session.status ?? "idle";
+  const sessionLabel = session.sessionId?.slice(0, 8) ?? "pending";
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -117,7 +120,7 @@ export function MobileWorkspaceActionSessionRow({
         pressed && styles.pressed,
       ]}
     >
-      <View style={[styles.sessionDot, { backgroundColor: sessionStatusColor(session.status) }]} />
+      <View style={[styles.sessionDot, { backgroundColor: sessionStatusColor(status) }]} />
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={1}>
           {mobileWorkspaceSessionDisplayTitle(session, index)}
@@ -125,12 +128,12 @@ export function MobileWorkspaceActionSessionRow({
         <Text
           style={[
             styles.rowSubtitle,
-            isMobileWorkspaceActionSessionErrorStatus(session.status) && styles.rowSubtitleError,
+            isMobileWorkspaceActionSessionErrorStatus(status) && styles.rowSubtitleError,
           ]}
           numberOfLines={1}
         >
           {selected ? "Current · " : ""}
-          {formatMobileWorkspaceActionSessionStatus(session.status)} · {session.sessionId.slice(0, 8)}
+          {formatMobileWorkspaceActionSessionStatus(status)} · {sessionLabel}
         </Text>
       </View>
       {selected ? <MobileIcon name="check" size={15} color={colors.fg} /> : null}

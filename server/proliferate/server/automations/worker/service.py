@@ -24,7 +24,6 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     dispatch_uncertain_failure,
 )
 from proliferate.server.automations.domain.schedule import due_and_next_occurrences
-from proliferate.server.automations.execution import enqueue_cloud_run_execution_outbox
 from proliferate.server.cloud.agent_run_config.service import (
     snapshot_json as agent_run_config_snapshot_json,
 )
@@ -97,8 +96,12 @@ async def _create_due_scheduled_runs_batch(
             schedule_advance_resolver=_resolve_due_schedule,
             agent_run_config_snapshot_builder=_scheduled_agent_run_config_snapshot_json,
         )
-        for run_id in result.cloud_run_ids:
-            await enqueue_cloud_run_execution_outbox(db, run_id=run_id)
+        if result.cloud_run_ids:
+            logger.warning(
+                "skipping %s scheduled cloud automation run(s); "
+                "cloud automation execution is not migrated to repo environments yet",
+                len(result.cloud_run_ids),
+            )
         return result.created_runs
 
 

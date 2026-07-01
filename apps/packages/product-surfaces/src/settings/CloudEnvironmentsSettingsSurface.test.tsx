@@ -5,29 +5,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudEnvironmentsSettingsSurface } from "./CloudEnvironmentsSettingsSurface";
 
 const cloudHooks = vi.hoisted(() => ({
-  useRepoConfigs: vi.fn(),
-  useCloudRepoConfig: vi.fn(),
+  useRepositories: vi.fn(),
   useCloudRepoBranches: vi.fn(),
-  useSaveCloudRepoConfig: vi.fn(),
-  useCloudGitRepositories: vi.fn(),
+  useSaveRepoEnvironment: vi.fn(),
+  useGitHubAppUserAuthorizationStatus: vi.fn(),
+  useStartGitHubAppUserAuthorization: vi.fn(),
+  useGitHubAppInstallationStatus: vi.fn(),
+  useStartGitHubAppInstallation: vi.fn(),
+  useGitHubAppAccessibleRepos: vi.fn(),
+  useValidateGitHubRepoAuthority: vi.fn(),
   useValidateCloudRepoBranches: vi.fn(),
-  useLoadCloudRepoConfig: vi.fn(),
   useCloudSecrets: vi.fn(),
   usePutCloudSecretEnvVar: vi.fn(),
   useDeleteCloudSecretEnvVar: vi.fn(),
   usePutCloudSecretFile: vi.fn(),
   useDeleteCloudSecretFile: vi.fn(),
   saveMutateAsync: vi.fn(),
+  startUserAuthorizationMutateAsync: vi.fn(),
+  startInstallationMutateAsync: vi.fn(),
 }));
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useRepoConfigs: cloudHooks.useRepoConfigs,
-  useCloudRepoConfig: cloudHooks.useCloudRepoConfig,
+  useRepositories: cloudHooks.useRepositories,
   useCloudRepoBranches: cloudHooks.useCloudRepoBranches,
-  useSaveCloudRepoConfig: cloudHooks.useSaveCloudRepoConfig,
-  useCloudGitRepositories: cloudHooks.useCloudGitRepositories,
+  useSaveRepoEnvironment: cloudHooks.useSaveRepoEnvironment,
+  useGitHubAppUserAuthorizationStatus: cloudHooks.useGitHubAppUserAuthorizationStatus,
+  useStartGitHubAppUserAuthorization: cloudHooks.useStartGitHubAppUserAuthorization,
+  useGitHubAppInstallationStatus: cloudHooks.useGitHubAppInstallationStatus,
+  useStartGitHubAppInstallation: cloudHooks.useStartGitHubAppInstallation,
+  useGitHubAppAccessibleRepos: cloudHooks.useGitHubAppAccessibleRepos,
+  useValidateGitHubRepoAuthority: cloudHooks.useValidateGitHubRepoAuthority,
   useValidateCloudRepoBranches: cloudHooks.useValidateCloudRepoBranches,
-  useLoadCloudRepoConfig: cloudHooks.useLoadCloudRepoConfig,
   useCloudSecrets: cloudHooks.useCloudSecrets,
   usePutCloudSecretEnvVar: cloudHooks.usePutCloudSecretEnvVar,
   useDeleteCloudSecretEnvVar: cloudHooks.useDeleteCloudSecretEnvVar,
@@ -48,14 +56,9 @@ const repoConfigs = [
       kind: "cloud",
       desktopInstallId: null,
       localPath: null,
-      configured: true,
-      configuredAt: "2026-05-24T09:00:00.000Z",
       defaultBranch: "main",
       setupScript: "",
-      setupScriptVersion: 0,
       runCommand: "",
-      configVersion: 1,
-      legacyCloudRepoConfigId: "repo-desktop-cloud",
     }],
   },
   {
@@ -70,43 +73,20 @@ const repoConfigs = [
       kind: "cloud",
       desktopInstallId: null,
       localPath: null,
-      configured: false,
-      configuredAt: "2026-05-23T09:00:00.000Z",
       defaultBranch: "main",
-      setupScript: "",
-      setupScriptVersion: 0,
+      setupScript: "npm ci",
       runCommand: "",
-      configVersion: 1,
-      legacyCloudRepoConfigId: "repo-web-only",
     }],
   },
 ];
 
-function repoConfig(overrides: Record<string, unknown> = {}) {
-  return {
-    configured: false,
-    configuredAt: "2026-05-23T09:00:00.000Z",
-    defaultBranch: "main",
-    envVars: { FEATURE_FLAG: "1" },
-    setupScript: "npm ci",
-    runCommand: "",
-    filesVersion: 1,
-    trackedFiles: [],
-    ...overrides,
-  };
-}
-
 describe("CloudEnvironmentsSettingsSurface", () => {
   beforeEach(() => {
-    cloudHooks.useRepoConfigs.mockReturnValue({
+    cloudHooks.useRepositories.mockReturnValue({
       data: { repositories: repoConfigs },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
-    });
-    cloudHooks.useCloudRepoConfig.mockReturnValue({
-      data: repoConfig(),
-      isLoading: false,
     });
     cloudHooks.useCloudRepoBranches.mockReturnValue({
       data: {
@@ -116,21 +96,37 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       isLoading: false,
       error: null,
     });
-    cloudHooks.saveMutateAsync.mockResolvedValue(repoConfig({ configured: true }));
-    cloudHooks.useSaveCloudRepoConfig.mockReturnValue({
+    cloudHooks.saveMutateAsync.mockResolvedValue(repoConfigs[1].environments[0]);
+    cloudHooks.useSaveRepoEnvironment.mockReturnValue({
       mutateAsync: cloudHooks.saveMutateAsync,
       isPending: false,
       error: null,
     });
-    cloudHooks.useCloudGitRepositories.mockReturnValue({
+    cloudHooks.useGitHubAppUserAuthorizationStatus.mockReturnValue({
+      data: { connected: true },
+      isLoading: false,
+    });
+    cloudHooks.useStartGitHubAppUserAuthorization.mockReturnValue({
+      mutateAsync: cloudHooks.startUserAuthorizationMutateAsync,
+      isPending: false,
+    });
+    cloudHooks.useGitHubAppInstallationStatus.mockReturnValue({
+      data: { installed: true },
+      isLoading: false,
+    });
+    cloudHooks.useStartGitHubAppInstallation.mockReturnValue({
+      mutateAsync: cloudHooks.startInstallationMutateAsync,
+      isPending: false,
+    });
+    cloudHooks.useGitHubAppAccessibleRepos.mockReturnValue({
       data: { repositories: [], nextCursor: null },
       isLoading: false,
       isFetching: false,
       error: null,
       refetch: vi.fn(),
     });
+    cloudHooks.useValidateGitHubRepoAuthority.mockReturnValue({ mutateAsync: vi.fn() });
     cloudHooks.useValidateCloudRepoBranches.mockReturnValue({ mutateAsync: vi.fn() });
-    cloudHooks.useLoadCloudRepoConfig.mockReturnValue({ mutateAsync: vi.fn() });
     cloudHooks.useCloudSecrets.mockReturnValue({
       data: {
         scopeKind: "workspace",
@@ -148,23 +144,33 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     });
     cloudHooks.usePutCloudSecretEnvVar.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
     });
     cloudHooks.useDeleteCloudSecretEnvVar.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
     });
     cloudHooks.usePutCloudSecretFile.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
     });
     cloudHooks.useDeleteCloudSecretFile.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
+    });
+    cloudHooks.startUserAuthorizationMutateAsync.mockResolvedValue({
+      authorizationUrl: "https://github.test/authorize",
+    });
+    cloudHooks.startInstallationMutateAsync.mockResolvedValue({
+      installationUrl: "https://github.test/install",
     });
   });
 
@@ -213,7 +219,7 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     expect(screen.queryByText("Repositories")).not.toBeNull();
     expect(screen.queryByText("octo/desktop-cloud")).not.toBeNull();
     expect(screen.queryByText("Local")).not.toBeNull();
-    expect(screen.queryByText("Cloud enabled")).not.toBeNull();
+    expect(screen.queryAllByText("Cloud enabled")).toHaveLength(2);
   });
 
   it("saves cloud-only detail edits without legacy secret fields", async () => {
@@ -229,6 +235,9 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Cloud setup script"), {
+      target: { value: "npm test" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -238,11 +247,82 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       gitOwner: "octo",
       gitRepoName: "web-only",
       body: {
-        configured: true,
+        kind: "cloud",
+        gitProvider: "github",
         defaultBranch: "main",
-        setupScript: "npm ci",
+        setupScript: "npm test",
         runCommand: "",
       },
     });
+  });
+
+  it("blocks adding cloud environments until the user authorizes the GitHub App", async () => {
+    const onOpenExternalUrl = vi.fn();
+    cloudHooks.useGitHubAppUserAuthorizationStatus.mockReturnValue({
+      data: { connected: false, action: "connect" },
+      isLoading: false,
+    });
+
+    render(
+      <CloudEnvironmentsSettingsSurface
+        mode="cloud-only"
+        organizationId="org-1"
+        userAuthorizationReturnTo="proliferate://settings/environments"
+        onOpenExternalUrl={onOpenExternalUrl}
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add GitHub repo" }));
+
+    expect(screen.queryByRole("heading", { name: "Authorize GitHub App" })).not.toBeNull();
+    expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Authorize GitHub App" }));
+
+    await waitFor(() => {
+      expect(cloudHooks.startUserAuthorizationMutateAsync).toHaveBeenCalledWith({
+        returnTo: "proliferate://settings/environments",
+      });
+    });
+    expect(onOpenExternalUrl).toHaveBeenCalledWith("https://github.test/authorize");
+  });
+
+  it("blocks adding cloud environments until an admin installs the GitHub App", async () => {
+    const onOpenExternalUrl = vi.fn();
+    cloudHooks.useGitHubAppInstallationStatus.mockReturnValue({
+      data: { installed: false },
+      isLoading: false,
+    });
+
+    render(
+      <CloudEnvironmentsSettingsSurface
+        mode="cloud-only"
+        organizationId="org-1"
+        canManageGitHubAppInstallation
+        installationReturnTo="proliferate://settings/environments"
+        onOpenExternalUrl={onOpenExternalUrl}
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add GitHub repo" }));
+
+    expect(screen.queryByRole("heading", { name: "Install GitHub App" })).not.toBeNull();
+    expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Install GitHub App" }));
+
+    await waitFor(() => {
+      expect(cloudHooks.startInstallationMutateAsync).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        options: {
+          returnTo: "proliferate://settings/environments",
+        },
+      });
+    });
+    expect(onOpenExternalUrl).toHaveBeenCalledWith("https://github.test/install");
   });
 });

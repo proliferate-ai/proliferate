@@ -6,7 +6,6 @@ import logging
 import time
 from uuid import UUID
 
-from proliferate.config import settings
 from proliferate.constants.billing import USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE
 from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.constants.cloud import WorkspaceStatus as LegacyWorkspaceStatus

@@ -3,10 +3,8 @@ import {
   useCloudAgentCatalog,
   useCloudCapabilities,
   useCloudRepoBranches,
-  useRepoConfigs,
-  useCloudTargets,
+  useRepositories,
   useAgentAuthCredentials,
-  useTargetLive,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudLaunchComposerControls,
@@ -36,11 +34,8 @@ export function useMobileHomeLaunchModel() {
     modeId: null,
     controlValues: {},
   });
-  const repoConfigs = useRepoConfigs();
-  const targets = useCloudTargets();
+  const repoConfigs = useRepositories();
   const agentAuthCredentials = useAgentAuthCredentials();
-  const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
-  const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
   const configuredCloudRepos = useMemo(
@@ -54,7 +49,6 @@ export function useMobileHomeLaunchModel() {
       return [{
         gitOwner: repo.gitOwner,
         gitRepoName: repo.gitRepoName,
-        configured: cloudEnvironment.configured,
       }];
     }),
     [repoConfigs.data?.repositories],
@@ -63,22 +57,9 @@ export function useMobileHomeLaunchModel() {
     () => buildMobileRepoOptions(configuredCloudRepos),
     [configuredCloudRepos],
   );
-  const liveTargets = useMemo(() => {
-    const liveTarget = targetLive.snapshot?.target;
-    if (!liveTarget) {
-      return targets.data;
-    }
-    const baseTargets = targets.data ?? [];
-    if (!baseTargets.some((target) => target.id === liveTarget.id)) {
-      return [...baseTargets, liveTarget];
-    }
-    return baseTargets.map((target) =>
-      target.id === liveTarget.id ? { ...target, ...liveTarget } : target
-    );
-  }, [targetLive.snapshot?.target, targets.data]);
   const runtimeOptions = useMemo(
-    () => buildMobileRuntimeOptions(liveTargets),
-    [liveTargets],
+    () => buildMobileRuntimeOptions(),
+    [],
   );
   const selectedRepo = repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null;
   const repoBranches = useCloudRepoBranches(
@@ -118,11 +99,9 @@ export function useMobileHomeLaunchModel() {
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
-    readyAgentKinds: selectedRuntime?.kind === "target"
-      ? agentCatalog.data?.agents.map((agent) => agent.kind)
-      : readyAgentKinds,
-    agentGateway: selectedRuntime?.kind === "target" ? null : agentGateway,
-    assumeFallbackAgentKindsLaunchable: selectedRuntime?.kind === "target",
+    readyAgentKinds,
+    agentGateway,
+    assumeFallbackAgentKindsLaunchable: false,
   }), [
     agentCatalog.data,
     readyAgentKindsKey,
@@ -133,7 +112,6 @@ export function useMobileHomeLaunchModel() {
     agentGatewayAuthSlotsKey,
     agentGatewayManagedCreditKindsKey,
     catalogAgentKindsKey,
-    selectedRuntime?.kind,
   ]);
   const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
   const resolvedLaunchSelection = useMemo(
@@ -216,6 +194,5 @@ export function useMobileHomeLaunchModel() {
     },
     setRepoId,
     setRuntimeId,
-    targetLive,
   };
 }

@@ -10,11 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
+from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_workspace_lifecycle import (
-    delete_cloud_workspace_records_for_workspace,
-)
 from proliferate.integrations.sandbox import get_sandbox_provider
 from tests.e2e.cloud.helpers.auth import (
     create_user_and_login,
@@ -43,21 +41,22 @@ async def create_cloud_workspace(
     *,
     branch_name: str,
 ) -> dict[str, object]:
-    repo_config_response = await client.put(
-        f"/v1/cloud/repos/{config.github_owner}/{config.github_repo}/config",
+    repo_environment_response = await client.put(
+        f"/v1/cloud/repositories/{config.github_owner}/{config.github_repo}/environment",
         headers=auth.headers,
         json={
-            "configured": True,
+            "kind": "cloud",
+            "gitProvider": "github",
             "defaultBranch": config.github_base_branch,
-            "envVars": {},
             "setupScript": "",
-            "files": [],
+            "runCommand": "",
         },
     )
-    if repo_config_response.status_code >= 400:
-        detail = repo_config_response.text.strip() or "<empty response body>"
+    if repo_environment_response.status_code >= 400:
+        detail = repo_environment_response.text.strip() or "<empty response body>"
         raise CloudE2ETestError(
-            f"Cloud repo config failed ({repo_config_response.status_code}): {detail}"
+            "Cloud repo environment save failed "
+            f"({repo_environment_response.status_code}): {detail}"
         )
 
     response = await client.post(
@@ -199,40 +198,7 @@ async def delete_cloud_workspace_quietly(
             f"/v1/cloud/workspaces/{workspace_id}",
             headers=auth.headers,
         )
-    if response.status_code == 409:
-        try:
-            workspace = await get_cloud_workspace(client, auth, workspace_id)
-            if workspace_status(workspace) in {"archived", "stopped"}:
-                start = await client.post(
-                    f"/v1/cloud/workspaces/{workspace_id}/start",
-                    headers=auth.headers,
-                )
-                if start.status_code == 401:
-                    auth = await refresh_auth_session(client, auth=auth)
-                    start = await client.post(
-                        f"/v1/cloud/workspaces/{workspace_id}/start",
-                        headers=auth.headers,
-                    )
-                start.raise_for_status()
-                start_payload = start.json()
-                if start_payload.get("status") != "ready":
-                    await wait_for_cloud_workspace_status(
-                        client,
-                        auth,
-                        workspace_id,
-                        target_status="ready",
-                    )
-                auth = await refresh_auth_session(client, auth=auth)
-                response = await client.delete(
-                    f"/v1/cloud/workspaces/{workspace_id}",
-                    headers=auth.headers,
-                )
-        except Exception:
-            if db_session is None:
-                raise
-            await force_delete_cloud_workspace_records(db_session, workspace_id)
-            return
-    if response.status_code not in {200, 404}:
+    if response.status_code not in {200, 204, 404}:
         if db_session is not None:
             await force_delete_cloud_workspace_records(db_session, workspace_id)
             return
@@ -247,14 +213,6 @@ async def force_delete_cloud_workspace_records(
     workspace = await db_session.get(CloudWorkspace, workspace_record_id)
     if workspace is None:
         return
-    await db_session.refresh(workspace)
-    if workspace.active_sandbox_id is not None:
-        sandbox = await db_session.get(CloudSandbox, workspace.active_sandbox_id)
-        if sandbox is not None and sandbox.external_sandbox_id:
-            await db_session.refresh(sandbox)
-            provider = get_sandbox_provider(sandbox.provider)
-            with suppress(Exception):
-                await provider.destroy_sandbox(sandbox.external_sandbox_id)
     await _delete_cloud_workspace_records_in_transaction(workspace_record_id)
 
 
@@ -262,7 +220,7 @@ async def _delete_cloud_workspace_records_in_transaction(workspace_id: UUID) -> 
     async with db_engine.async_session_factory() as delete_db, delete_db.begin():
         workspace = await delete_db.get(CloudWorkspace, workspace_id)
         if workspace is not None:
-            await delete_cloud_workspace_records_for_workspace(delete_db, workspace)
+            await delete_db.delete(workspace)
 
 
 async def cleanup_stale_provider_test_workspaces(
@@ -272,24 +230,27 @@ async def cleanup_stale_provider_test_workspaces(
     github_owner: str,
     github_repo: str,
 ) -> None:
-    provider = get_sandbox_provider(provider_kind)
     result = await db_session.execute(
-        select(CloudWorkspace).where(
-            CloudWorkspace.git_owner == github_owner,
-            CloudWorkspace.git_repo_name == github_repo,
+        select(CloudWorkspace, CloudSandbox)
+        .join(RepoEnvironment, CloudWorkspace.repo_environment_id == RepoEnvironment.id)
+        .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
+        .outerjoin(CloudSandbox, CloudSandbox.owner_user_id == CloudWorkspace.owner_user_id)
+        .where(
+            RepoConfig.git_owner == github_owner,
+            RepoConfig.git_repo_name == github_repo,
         )
     )
-    workspaces = list(result.scalars())
-    for workspace in workspaces:
-        if workspace.active_sandbox_id is not None:
-            sandbox = await db_session.get(CloudSandbox, workspace.active_sandbox_id)
-            if (
-                sandbox is not None
-                and sandbox.provider == provider_kind
-                and sandbox.external_sandbox_id
-            ):
-                with suppress(Exception):
-                    await provider.destroy_sandbox(sandbox.external_sandbox_id)
+    provider = get_sandbox_provider(provider_kind)
+    destroyed_sandboxes: set[str] = set()
+    for workspace, sandbox in result.all():
+        if (
+            sandbox is not None
+            and sandbox.provider_sandbox_id
+            and sandbox.provider_sandbox_id not in destroyed_sandboxes
+        ):
+            with suppress(Exception):
+                await provider.destroy_sandbox(sandbox.provider_sandbox_id)
+            destroyed_sandboxes.add(sandbox.provider_sandbox_id)
         await _delete_cloud_workspace_records_in_transaction(workspace.id)
 
 

@@ -1,4 +1,5 @@
 import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
+import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
@@ -72,6 +73,7 @@ export function resolveSidebarEmptyState(
 
 export function buildSidebarGroupStates(args: {
   repoRoots: RepoRoot[];
+  repoConfigs?: readonly RepoConfigResponse[];
   logicalWorkspaces: LogicalWorkspace[];
   showArchived: boolean;
   workspaceTypes: ReturnType<typeof resolveSidebarWorkspaceTypes>;
@@ -97,6 +99,13 @@ export function buildSidebarGroupStates(args: {
     args.repoRoots.map((repoRoot) => [repoRootGroupKey(repoRoot), repoRoot]),
   );
   const repoRootsById = new Map(args.repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
+  const cloudRepoConfigsByKey = new Map(
+    (args.repoConfigs ?? [])
+      .filter((repoConfig) =>
+        repoConfig.environments.some((environment) => environment.kind === "cloud")
+      )
+      .map((repoConfig) => [repoConfigGroupKey(repoConfig), repoConfig]),
+  );
   const groups = new Map<string, LogicalWorkspace[]>();
   for (const workspace of args.logicalWorkspaces) {
     const entries = groups.get(workspace.repoKey);
@@ -121,6 +130,7 @@ export function buildSidebarGroupStates(args: {
     ...repoRootsByKey.keys(),
     ...groups.keys(),
     ...(pendingProjection ? [pendingProjection.repoKey] : []),
+    ...cloudRepoConfigsByKey.keys(),
   ]);
 
   return Array.from(groupKeys)
@@ -141,6 +151,7 @@ export function buildSidebarGroupStates(args: {
         : rawGroupWorkspaces;
       const representative = groupWorkspaces[0] ?? null;
       const repoRoot = representative?.repoRoot ?? repoRootsByKey.get(repoKey) ?? null;
+      const cloudRepoConfig = cloudRepoConfigsByKey.get(repoKey) ?? null;
       if (repoRoot && args.hiddenRepoRootIds.has(repoRoot.id)) {
         return null;
       }
@@ -208,19 +219,24 @@ export function buildSidebarGroupStates(args: {
         displayAt: null,
       };
 
+      const cloudSourceRoot = cloudRepoConfig
+        ? `cloud:${cloudRepoConfig.gitOwner}/${cloudRepoConfig.gitRepoName}`
+        : null;
       const sourceRoot = pendingProjection?.repoKey === repoKey && !repoRoot
         ? pendingProjection.sourceRoot
         : repoRoot?.path
         ?? representative?.sourceRoot
+        ?? cloudSourceRoot
         ?? repoKey;
       const name = repoRoot?.displayName?.trim()
         || repoRoot?.remoteRepoName?.trim()
         || (pendingProjection?.repoKey === repoKey ? pendingProjection.name : null)
+        || cloudRepoConfig?.gitRepoName
         || (representative ? logicalGroupName(representative) : sourceRoot.split("/").filter(Boolean).pop())
         || sourceRoot;
-      const provider = repoRoot?.remoteProvider ?? representative?.provider ?? null;
-      const owner = repoRoot?.remoteOwner ?? representative?.owner ?? null;
-      const repoName = repoRoot?.remoteRepoName ?? representative?.repoName ?? null;
+      const provider = repoRoot?.remoteProvider ?? representative?.provider ?? cloudRepoConfig?.gitProvider ?? null;
+      const owner = repoRoot?.remoteOwner ?? representative?.owner ?? cloudRepoConfig?.gitOwner ?? null;
+      const repoName = repoRoot?.remoteRepoName ?? representative?.repoName ?? cloudRepoConfig?.gitRepoName ?? null;
 
       return {
         sortRecency,
@@ -261,6 +277,13 @@ export function buildSidebarGroupStates(args: {
       entry !== null)
     .sort((a, b) => compareResolvedLogicalWorkspaceRecency(a.sortRecency, b.sortRecency))
     .map((entry) => entry.group);
+}
+
+function repoConfigGroupKey(repoConfig: Pick<
+  RepoConfigResponse,
+  "gitProvider" | "gitOwner" | "gitRepoName"
+>): string {
+  return `${repoConfig.gitProvider}:${repoConfig.gitOwner}:${repoConfig.gitRepoName}`;
 }
 
 function latestVisibleWorkspaceRecency(

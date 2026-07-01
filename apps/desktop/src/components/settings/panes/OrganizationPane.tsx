@@ -6,6 +6,12 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
+import {
+  useGitHubAppInstallationStatus,
+  useStartGitHubAppInstallation,
+} from "@proliferate/cloud-sdk-react";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
@@ -51,6 +57,14 @@ export function OrganizationPane() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const teamCheckoutQuery = useCurrentTeamCheckout(authStatus === "authenticated");
   const teamCheckoutActions = useTeamCheckoutActions();
+  const githubAppInstallation = useGitHubAppInstallationStatus(
+    activeOrganizationId,
+    authStatus === "authenticated" && activeOrganizationId !== null,
+  );
+  const githubAppInstallationStart = useStartGitHubAppInstallation();
+  const canManageGitHubAppInstallation = isOrganizationAdminRole(
+    activeOrganization?.membership?.role,
+  );
 
   useEffect(() => {
     setSettingsName(activeOrganization?.name ?? "");
@@ -110,6 +124,30 @@ export function OrganizationPane() {
 
   async function handleContinueTeamCheckout(url: string) {
     await openExternal(url);
+  }
+
+  async function handleInstallGitHubApp() {
+    if (!activeOrganizationId) {
+      return;
+    }
+    setStatusMessage(null);
+    try {
+      const response = await githubAppInstallationStart.mutateAsync({
+        organizationId: activeOrganizationId,
+        options: {
+          returnTo: "proliferate://settings/organization?source=github_app_installation_callback",
+        },
+      });
+      await openExternal(response.installationUrl);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "GitHub App installation could not start.",
+      );
+    }
+  }
+
+  async function handleManageGitHubAppInstallation() {
+    await openExternal("https://github.com/settings/installations");
   }
 
   const shouldShowSignInState = authStatus !== "authenticated";
@@ -264,11 +302,97 @@ export function OrganizationPane() {
             onSubmit={handleUpdateOrganization}
           />
 
+          <GitHubAppInstallationSection
+            loading={githubAppInstallation.isLoading}
+            installing={githubAppInstallationStart.isPending}
+            canManage={canManageGitHubAppInstallation}
+            status={githubAppInstallation.data}
+            onInstall={handleInstallGitHubApp}
+            onManage={handleManageGitHubAppInstallation}
+          />
+
           <OrganizationBillingLinkSection />
         </>
       ) : null}
     </section>
   );
+}
+
+function GitHubAppInstallationSection({
+  loading,
+  installing,
+  canManage,
+  status,
+  onInstall,
+  onManage,
+}: {
+  loading: boolean;
+  installing: boolean;
+  canManage: boolean;
+  status: {
+    installed: boolean;
+    accountLogin?: string | null;
+    repositorySelection?: string | null;
+    suspendedAt?: string | null;
+  } | undefined;
+  onInstall: () => void | Promise<void>;
+  onManage: () => void | Promise<void>;
+}) {
+  const installed = status?.installed === true;
+  const repositorySelection = formatRepositorySelection(status?.repositorySelection ?? null);
+  const statusLabel = loading
+    ? "Checking"
+    : installed
+      ? "Installed"
+      : "Not installed";
+  const description = installed
+    ? `Installed on ${status?.accountLogin ? `@${status.accountLogin}` : "this GitHub account"}${repositorySelection ? ` with ${repositorySelection}` : ""}.`
+    : canManage
+      ? "Install the Proliferate GitHub App for this organization before members can enable cloud repositories."
+      : "Ask an organization admin to install the Proliferate GitHub App before you enable cloud repositories.";
+
+  return (
+    <OrganizationSection title="GitHub App" description="Repository access for organization cloud environments.">
+      <SettingsCard>
+        <SettingsCardRow
+          label="Organization installation"
+          description={description}
+        >
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge tone={installed ? "success" : "warning"}>{statusLabel}</Badge>
+            {canManage ? (
+              <Button
+                type="button"
+                variant="secondary"
+                loading={installing}
+                disabled={installing}
+                onClick={() => {
+                  void (installed ? onManage() : onInstall());
+                }}
+              >
+                {!installing ? <ProviderBrandIcon provider="github" className="size-[13px]" /> : null}
+                {installed ? "Manage in GitHub" : "Install GitHub App"}
+              </Button>
+            ) : null}
+          </div>
+        </SettingsCardRow>
+      </SettingsCard>
+    </OrganizationSection>
+  );
+}
+
+function isOrganizationAdminRole(role: string | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+function formatRepositorySelection(repositorySelection: string | null): string | null {
+  if (repositorySelection === "all") {
+    return "all repositories";
+  }
+  if (repositorySelection === "selected") {
+    return "selected repositories";
+  }
+  return null;
 }
 
 function OrganizationNotice({ children }: { children: ReactNode }) {

@@ -3,7 +3,7 @@ import {
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
+import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "@/lib/domain/preferences/user/model";
 import { generateWorkspaceSlug } from "@/lib/domain/workspaces/creation/workspace-slug";
@@ -35,12 +35,12 @@ interface CloudRepoActionRepository {
 }
 
 export function buildConfiguredCloudRepoKeys(
-  configs: readonly CloudRepoConfigSummary[] | null | undefined,
+  repoConfigs: readonly RepoConfigResponse[] | null | undefined,
 ): Set<string> {
   return new Set(
-    (configs ?? [])
-      .filter((config) => config.configured)
-      .map((config) => cloudRepositoryKey(config.gitOwner, config.gitRepoName)),
+    (repoConfigs ?? [])
+      .filter((repo) => repo.environments.some((environment) => environment.kind === "cloud"))
+      .map((repo) => cloudRepositoryKey(repo.gitOwner, repo.gitRepoName)),
   );
 }
 
@@ -187,7 +187,6 @@ export function buildNextCloudWorkspaceAttempt(args: {
       branchName,
       displayName: null,
       generatedName: true,
-      ownerScope: "personal",
     },
     triedBranchNames: nextTriedBranchNames,
   };

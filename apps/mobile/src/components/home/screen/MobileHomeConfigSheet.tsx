@@ -86,23 +86,20 @@ export function MobileHomeConfigSheet({
                 ))}
               </MobileHomeConfigSheetSection>
               <MobileHomeConfigSheetSection title="Runtime">
-                {runtimeOptions.map((runtime) => {
-                  const offline = runtime.kind === "target" && !runtime.online;
-                  return (
-                    <MobileHomeConfigSheetRow
-                      key={runtime.id}
-                      icon={runtime.icon}
-                      title={runtime.label}
-                      subtitle={offline ? `${runtime.description} · Offline` : runtime.description}
-                      selected={runtime.id === selectedRuntimeId}
-                      disabled={offline}
-                      chevron={false}
-                      onPress={() => {
-                        onRuntimeSelect(runtime.id);
-                      }}
-                    />
-                  );
-                })}
+                {runtimeOptions.map((runtime) => (
+                  <MobileHomeConfigSheetRow
+                    key={runtime.id}
+                    icon={runtime.icon}
+                    title={runtime.label}
+                    subtitle={runtime.description}
+                    selected={runtime.id === selectedRuntimeId}
+                    disabled={false}
+                    chevron={false}
+                    onPress={() => {
+                      onRuntimeSelect(runtime.id);
+                    }}
+                  />
+                ))}
               </MobileHomeConfigSheetSection>
             </ScrollView>
           )}

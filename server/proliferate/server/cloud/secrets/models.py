@@ -7,13 +7,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from proliferate.db.store.cloud_sandbox_secrets import (
+    CloudSandboxSecretMaterializationValue,
+)
 from proliferate.db.store.cloud_secrets import (
     CloudSecretEnvVarValue,
     CloudSecretFileValue,
     CloudSecretSetValue,
-)
-from proliferate.db.store.cloud_sandbox_secrets import (
-    CloudSandboxSecretMaterializationValue,
 )
 
 

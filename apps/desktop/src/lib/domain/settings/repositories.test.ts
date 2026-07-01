@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
+import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {
   return {
@@ -24,6 +25,33 @@ function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
     path: "/tmp/repo",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeRepoConfig(overrides: Partial<RepoConfigResponse> = {}): RepoConfigResponse {
+  return {
+    id: "repo-config-1",
+    gitProvider: "github",
+    gitOwner: "proliferate-ai",
+    gitRepoName: "proliferate",
+    environments: [makeRepoEnvironment()],
+    ...overrides,
+  };
+}
+
+function makeRepoEnvironment(
+  overrides: Partial<RepoEnvironmentResponse> = {},
+): RepoEnvironmentResponse {
+  return {
+    id: "repo-environment-1",
+    repoConfigId: "repo-config-1",
+    kind: "cloud",
+    desktopInstallId: null,
+    localPath: null,
+    defaultBranch: "main",
+    setupScript: "",
+    runCommand: "",
     ...overrides,
   };
 }
@@ -95,14 +123,7 @@ describe("buildSettingsRepositoryEntries", () => {
         remoteRepoName: "proliferate",
         remoteProvider: "github",
       }),
-    ], [{
-      gitOwner: "proliferate-ai",
-      gitRepoName: "proliferate",
-      configured: true,
-      configuredAt: "2026-06-24T00:00:00.000Z",
-      defaultBranch: "main",
-      filesVersion: 1,
-    }]);
+    ], [makeRepoConfig()]);
 
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
@@ -114,14 +135,9 @@ describe("buildSettingsRepositoryEntries", () => {
   });
 
   it("includes configured cloud repos without a local checkout", () => {
-    const entries = buildSettingsRepositoryEntries([], [], [{
-      gitOwner: "proliferate-ai",
+    const entries = buildSettingsRepositoryEntries([], [], [makeRepoConfig({
       gitRepoName: "cloud-only",
-      configured: true,
-      configuredAt: "2026-06-24T00:00:00.000Z",
-      defaultBranch: "main",
-      filesVersion: 3,
-    }]);
+    })]);
 
     expect(entries).toEqual([expect.objectContaining({
       sourceRoot: "cloud:proliferate-ai/cloud-only",

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudEnvironmentListItems,
 } from "@proliferate/product-domain/environments/cloud-environments";
@@ -25,6 +25,11 @@ export interface CloudEnvironmentsSettingsSurfaceProps {
   mode: "cloud-only" | "hybrid";
   localCheckouts?: readonly LocalCheckoutView[];
   selectedCloudRepo?: CloudEnvironmentRepoSelection | null;
+  organizationId?: string | null;
+  canManageGitHubAppInstallation?: boolean;
+  userAuthorizationReturnTo?: string | null;
+  installationReturnTo?: string | null;
+  onOpenExternalUrl?: (url: string) => void | Promise<void>;
   enabled?: boolean;
   cloudUnavailableReason?: string | null;
   onSelectCloudEnvironment: (repo: CloudEnvironmentRepoSelection) => void;
@@ -36,6 +41,11 @@ export function CloudEnvironmentsSettingsSurface({
   mode,
   localCheckouts = [],
   selectedCloudRepo = null,
+  organizationId = null,
+  canManageGitHubAppInstallation = false,
+  userAuthorizationReturnTo = null,
+  installationReturnTo = null,
+  onOpenExternalUrl,
   enabled = true,
   cloudUnavailableReason = null,
   onSelectCloudEnvironment,
@@ -43,7 +53,7 @@ export function CloudEnvironmentsSettingsSurface({
   onBackToList,
 }: CloudEnvironmentsSettingsSurfaceProps) {
   const [addOpen, setAddOpen] = useState(false);
-  const repoConfigs = useRepoConfigs(enabled);
+  const repoConfigs = useRepositories(enabled);
   const localCheckoutsForDomain = useMemo(
     () => localCheckouts
       .map((checkout) => ({
@@ -129,6 +139,11 @@ export function CloudEnvironmentsSettingsSurface({
       />
       <AddCloudEnvironmentDialogController
         open={addOpen}
+        organizationId={organizationId}
+        canManageGitHubAppInstallation={canManageGitHubAppInstallation}
+        userAuthorizationReturnTo={userAuthorizationReturnTo}
+        installationReturnTo={installationReturnTo}
+        onOpenExternalUrl={onOpenExternalUrl}
         onClose={() => setAddOpen(false)}
         onEnvironmentAdded={(repoId) => {
           const parsed = parseGitRepoId(repoId);

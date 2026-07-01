@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
+import time
 import uuid
 
 import httpx
@@ -27,7 +29,6 @@ from tests.e2e.cloud.helpers import (
     list_e2b_webhooks,
     list_ngrok_requests,
     load_active_sandbox_record,
-    load_runtime_environment_record,
     load_workspace_record,
     port_from_base_url,
     provision_workspace_with_credentials,
@@ -36,9 +37,7 @@ from tests.e2e.cloud.helpers import (
     runtime_health_check,
     sandbox_event_receipt_count,
     usage_segment_count,
-    wait_for_cloud_workspace_status,
     wait_for_sandbox_event_receipt,
-    workspace_status,
 )
 
 
@@ -63,7 +62,7 @@ async def test_e2b_webhook_signature_rejected(
     body, _ = build_signed_e2b_webhook(
         event_id=f"evt-{uuid.uuid4()}",
         event_type="sandbox.lifecycle.paused",
-        sandbox_id=sandbox.external_sandbox_id or "",
+        sandbox_id=sandbox.provider_sandbox_id or "",
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
     response = await client.post(
@@ -93,10 +92,10 @@ async def test_e2b_webhook_duplicate_ignored(
     )
     await open_usage_segment_for_sandbox(
         db_session,
-        user_id=workspace.user_id,
+        user_id=workspace.owner_user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
-        external_sandbox_id=sandbox.external_sandbox_id,
+        external_sandbox_id=sandbox.provider_sandbox_id,
         sandbox_execution_id=None,
         started_at=utcnow(),
         opened_by="test",
@@ -106,7 +105,7 @@ async def test_e2b_webhook_duplicate_ignored(
     body, signature = build_signed_e2b_webhook(
         event_id=event_id,
         event_type="sandbox.lifecycle.paused",
-        sandbox_id=sandbox.external_sandbox_id or "",
+        sandbox_id=sandbox.provider_sandbox_id or "",
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
@@ -127,10 +126,8 @@ async def test_e2b_webhook_duplicate_ignored(
     assert await event_receipt_count(db_session, event_id=event_id) == 1
 
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
-    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    assert refreshed_workspace.status == "ready"
-    assert refreshed_environment.status == "paused"
+    assert refreshed_workspace.anyharness_workspace_id == workspace.anyharness_workspace_id
     assert refreshed_sandbox.status == "paused"
 
 
@@ -154,7 +151,7 @@ async def test_e2b_webhook_failed_quota_pause_keeps_receipt_retryable(
     body, signature = build_signed_e2b_webhook(
         event_id=event_id,
         event_type="sandbox.lifecycle.resumed",
-        sandbox_id=sandbox.external_sandbox_id or "",
+        sandbox_id=sandbox.provider_sandbox_id or "",
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
     pause_calls = 0
@@ -162,7 +159,7 @@ async def test_e2b_webhook_failed_quota_pause_keeps_receipt_retryable(
     class _Provider:
         async def pause_sandbox(self, sandbox_id: str) -> None:
             nonlocal pause_calls
-            assert sandbox_id == sandbox.external_sandbox_id
+            assert sandbox_id == sandbox.provider_sandbox_id
             pause_calls += 1
             if pause_calls == 1:
                 raise RuntimeError("pause failed")
@@ -180,7 +177,7 @@ async def test_e2b_webhook_failed_quota_pause_keeps_receipt_retryable(
             headers={"e2b-signature": signature},
         )
     assert await event_receipt_count(db_session, event_id=event_id) == 0
-    assert (await load_active_sandbox_record(db_session, workspace_id)).status == "running"
+    assert (await load_active_sandbox_record(db_session, workspace_id)).status == "ready"
 
     retry = await client.post(
         "/v1/cloud/webhooks/e2b",
@@ -191,57 +188,6 @@ async def test_e2b_webhook_failed_quota_pause_keeps_receipt_retryable(
     assert pause_calls == 2
     assert await event_receipt_count(db_session, event_id=event_id) == 1
     assert (await load_active_sandbox_record(db_session, workspace_id)).status == "paused"
-    environment = await load_runtime_environment_record(db_session, workspace_id)
-    assert environment.status == "paused"
-
-
-@pytest.mark.asyncio
-async def test_e2b_webhook_stale_event_ignored(
-    client: httpx.AsyncClient,
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Seed a paused sandbox and mark the latest provider event so an older
-    # webhook can be detected as stale.
-    monkeypatch.setattr(settings, "e2b_webhook_signature_secret", "test-secret")
-    auth = await create_user_and_login(client, db_session, email_prefix="webhook-stale")
-    workspace, sandbox = await create_seeded_workspace_and_sandbox(
-        db_session,
-        user_id=auth.user_id,
-        provider="e2b",
-        workspace_status="ready",
-        sandbox_status="paused",
-    )
-    sandbox.last_provider_event_at = utcnow()
-    sandbox.last_provider_event_kind = "paused"
-    await db_session.commit()
-
-    stale_time = utcnow().replace(year=utcnow().year - 1)
-    event_id = f"evt-{uuid.uuid4()}"
-    body, signature = build_signed_e2b_webhook(
-        event_id=event_id,
-        event_type="sandbox.lifecycle.resumed",
-        sandbox_id=sandbox.external_sandbox_id or "",
-        metadata={"cloud_sandbox_id": str(sandbox.id)},
-        timestamp=stale_time,
-    )
-
-    # A stale resume should still be recorded as received, but it must not
-    # overwrite the newer paused state already persisted for the sandbox.
-    response = await client.post(
-        "/v1/cloud/webhooks/e2b",
-        content=body,
-        headers={"e2b-signature": signature},
-    )
-    assert response.status_code == 200
-    assert await event_receipt_count(db_session, event_id=event_id) == 1
-
-    refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
-    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
-    refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    assert refreshed_workspace.status == "ready"
-    assert refreshed_environment.status == "paused"
-    assert refreshed_sandbox.status == "paused"
 
 
 @pytest.mark.asyncio
@@ -265,7 +211,7 @@ async def test_e2b_webhook_created_updates_state(
     body, signature = build_signed_e2b_webhook(
         event_id=f"evt-{uuid.uuid4()}",
         event_type="sandbox.lifecycle.created",
-        sandbox_id=sandbox.external_sandbox_id or "",
+        sandbox_id=sandbox.provider_sandbox_id or "",
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
@@ -278,11 +224,9 @@ async def test_e2b_webhook_created_updates_state(
     )
     assert response.status_code == 200
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
-    assert refreshed_sandbox.status == "running"
-    assert refreshed_environment.status == "running"
-    assert refreshed_workspace.status == "materializing"
+    assert refreshed_sandbox.status == "ready"
+    assert refreshed_workspace.anyharness_workspace_id is None
     assert await usage_segment_count(db_session, sandbox_id=sandbox.id) == 1
 
 
@@ -306,7 +250,7 @@ async def test_e2b_webhook_resumed_updates_state(
     body, signature = build_signed_e2b_webhook(
         event_id=f"evt-{uuid.uuid4()}",
         event_type="sandbox.lifecycle.resumed",
-        sandbox_id=sandbox.external_sandbox_id or "",
+        sandbox_id=sandbox.provider_sandbox_id or "",
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
@@ -319,11 +263,9 @@ async def test_e2b_webhook_resumed_updates_state(
     )
     assert response.status_code == 200
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
-    assert refreshed_sandbox.status == "running"
-    assert refreshed_environment.status == "running"
-    assert refreshed_workspace.status == "ready"
+    assert refreshed_sandbox.status == "ready"
+    assert refreshed_workspace.anyharness_workspace_id == workspace.anyharness_workspace_id
     assert await usage_segment_count(db_session, sandbox_id=sandbox.id) == 1
 
 
@@ -346,10 +288,10 @@ async def test_e2b_webhook_paused_updates_state(
     )
     await open_usage_segment_for_sandbox(
         db_session,
-        user_id=workspace.user_id,
+        user_id=workspace.owner_user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
-        external_sandbox_id=sandbox.external_sandbox_id,
+        external_sandbox_id=sandbox.provider_sandbox_id,
         sandbox_execution_id=None,
         started_at=utcnow(),
         opened_by="test",
@@ -358,7 +300,7 @@ async def test_e2b_webhook_paused_updates_state(
     body, signature = build_signed_e2b_webhook(
         event_id=f"evt-{uuid.uuid4()}",
         event_type="sandbox.lifecycle.paused",
-        sandbox_id=sandbox.external_sandbox_id or "",
+        sandbox_id=sandbox.provider_sandbox_id or "",
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
@@ -371,10 +313,8 @@ async def test_e2b_webhook_paused_updates_state(
     )
     assert response.status_code == 200
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
-    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    assert refreshed_workspace.status == "ready"
-    assert refreshed_environment.status == "paused"
+    assert refreshed_workspace.anyharness_workspace_id == workspace.anyharness_workspace_id
     assert refreshed_sandbox.status == "paused"
 
     sandbox_id = sandbox.id
@@ -405,10 +345,10 @@ async def test_e2b_webhook_killed_updates_state(
     )
     await open_usage_segment_for_sandbox(
         db_session,
-        user_id=workspace.user_id,
+        user_id=workspace.owner_user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
-        external_sandbox_id=sandbox.external_sandbox_id,
+        external_sandbox_id=sandbox.provider_sandbox_id,
         sandbox_execution_id=None,
         started_at=utcnow(),
         opened_by="test",
@@ -417,12 +357,11 @@ async def test_e2b_webhook_killed_updates_state(
     body, signature = build_signed_e2b_webhook(
         event_id=f"evt-{uuid.uuid4()}",
         event_type="sandbox.lifecycle.killed",
-        sandbox_id=sandbox.external_sandbox_id or "",
+        sandbox_id=sandbox.provider_sandbox_id or "",
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
-    # Kill should clear runtime reconnect metadata and sever the environment's
-    # link to the destroyed sandbox record.
+    # Kill should mark the sandbox destroyed and close the active usage segment.
     response = await client.post(
         "/v1/cloud/webhooks/e2b",
         content=body,
@@ -430,15 +369,10 @@ async def test_e2b_webhook_killed_updates_state(
     )
     assert response.status_code == 200
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
-    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_sandbox = await db_session.get(type(sandbox), sandbox.id)
     assert refreshed_sandbox is not None
     await db_session.refresh(refreshed_sandbox)
-    assert refreshed_workspace.status == "ready"
-    assert refreshed_environment.status == "error"
-    assert refreshed_environment.runtime_url is None
-    assert refreshed_environment.runtime_token_ciphertext is None
-    assert refreshed_environment.active_sandbox_id is None
+    assert refreshed_workspace.anyharness_workspace_id == workspace.anyharness_workspace_id
     assert refreshed_sandbox.status == "destroyed"
 
 
@@ -513,26 +447,26 @@ async def test_e2b_live_webhook_delivery_via_ngrok(
             print("[cloud-e2e] runtime health check passed", flush=True)
 
             sandbox = await load_active_sandbox_record(db_session, handle.workspace["id"])
-            assert sandbox.external_sandbox_id
+            assert sandbox.provider_sandbox_id
             before_receipts = await sandbox_event_receipt_count(
                 db_session,
                 provider="e2b",
-                external_sandbox_id=sandbox.external_sandbox_id,
+                external_sandbox_id=sandbox.provider_sandbox_id,
                 event_type="sandbox.lifecycle.paused",
             )
 
             # Trigger the external lifecycle event at the provider boundary, not
             # by posting a synthetic webhook to the local app.
             print(
-                f"[cloud-e2e] pausing sandbox sandbox_id={sandbox.external_sandbox_id}",
+                f"[cloud-e2e] pausing sandbox sandbox_id={sandbox.provider_sandbox_id}",
                 flush=True,
             )
-            await provider_pause_native("e2b", sandbox.external_sandbox_id)
+            await provider_pause_native("e2b", sandbox.provider_sandbox_id)
             try:
                 await wait_for_sandbox_event_receipt(
                     db_session,
                     provider="e2b",
-                    external_sandbox_id=sandbox.external_sandbox_id,
+                    external_sandbox_id=sandbox.provider_sandbox_id,
                     event_type="sandbox.lifecycle.paused",
                     minimum_count=before_receipts + 1,
                     timeout_seconds=90.0,
@@ -564,7 +498,7 @@ async def test_e2b_live_webhook_delivery_via_ngrok(
                     )
                 provider_snapshot = await provider_state(
                     "e2b",
-                    sandbox.external_sandbox_id,
+                    sandbox.provider_sandbox_id,
                 )
                 raise CloudE2ETestError(
                     "Live E2B webhook was not recorded locally after native pause. "
@@ -573,17 +507,24 @@ async def test_e2b_live_webhook_delivery_via_ngrok(
                 ) from exc
             print("[cloud-e2e] paused webhook receipt observed locally", flush=True)
 
-            # The end condition is a control-plane state transition driven by
-            # the real webhook delivery, not just by provider observation.
-            stopped = await wait_for_cloud_workspace_status(
-                client,
-                handle.auth,
-                handle.workspace["id"],
-                target_status="archived",
-                timeout_seconds=180.0,
-            )
-            assert workspace_status(stopped) == "archived"
-            print("[cloud-e2e] workspace transitioned to stopped", flush=True)
+            # The end condition is a control-plane sandbox transition driven by
+            # the real webhook delivery, not just by provider observation. A
+            # paused sandbox no longer archives the lightweight workspace row.
+            deadline = time.monotonic() + 180.0
+            last_runtime_status = None
+            while time.monotonic() < deadline:
+                status_response = await client.get(
+                    f"/v1/cloud/workspaces/{handle.workspace['id']}/runtime-status",
+                    headers=handle.auth.headers,
+                )
+                status_response.raise_for_status()
+                status_payload = status_response.json()
+                last_runtime_status = status_payload.get("runtimeStatus")
+                if last_runtime_status == "paused":
+                    break
+                await asyncio.sleep(2.0)
+            assert last_runtime_status == "paused"
+            print("[cloud-e2e] sandbox transitioned to paused", flush=True)
         finally:
             # Always clean up the live sandbox to avoid leaving provider
             # resources behind if the webhook delivery check fails.

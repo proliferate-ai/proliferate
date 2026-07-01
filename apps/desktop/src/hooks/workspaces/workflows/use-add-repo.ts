@@ -1,9 +1,11 @@
-import { AnyHarnessError } from "@anyharness/sdk";
+import { AnyHarnessError, type RepoRoot } from "@anyharness/sdk";
 import { useResolveRepoRootFromPathMutation } from "@anyharness/sdk-react";
+import { useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { runAddRepoWorkflow } from "@/lib/domain/workspaces/creation/add-repo-workflow";
 import { pickFolder } from "@/lib/access/tauri/shell";
+import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
 import { useWorkspaceCollectionsInvalidationActions } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -38,11 +40,43 @@ export function useAddRepo() {
   const { upsertRepoRootInWorkspaceCollections } = useWorkspaceCollectionsMutationCacheActions();
   const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const resolveRepoRootFromPath = useResolveRepoRootFromPathMutation().mutateAsync;
+  const saveEnvironment = useSaveRepoEnvironment();
   const unhideRepoRoot = useWorkspaceUiStore((state) => state.unhideRepoRoot);
   const openRepoSetupModal = useRepoSetupModalStore((state) => state.open);
   const showToast = useToastStore((state) => state.show);
   const [isAddingRepo, setIsAddingRepo] = useState(false);
   const canAddRepo = !isRepoEntryBlockedPath(location.pathname);
+  const saveLocalRepoEnvironment = useCallback((repoRoot: RepoRoot) => {
+    const gitOwner = repoRoot.remoteOwner?.trim();
+    const gitRepoName = repoRoot.remoteRepoName?.trim();
+    if (
+      repoRoot.remoteProvider !== "github"
+      || !gitOwner
+      || !gitRepoName
+      || !repoRoot.path.trim()
+    ) {
+      return;
+    }
+
+    void (async () => {
+      const { installId } = await loadAnonymousTelemetryBootstrap();
+      await saveEnvironment.mutateAsync({
+        gitOwner,
+        gitRepoName,
+        body: {
+          kind: "local",
+          gitProvider: "github",
+          desktopInstallId: installId,
+          localPath: repoRoot.path,
+          defaultBranch: repoRoot.defaultBranch?.trim() || null,
+          setupScript: "",
+          runCommand: "",
+        },
+      });
+    })().catch(() => {
+      // Local repo registration remains usable when Cloud is unavailable.
+    });
+  }, [saveEnvironment]);
 
   const addRepoFromPath = useCallback(async (path: string) => {
     if (!canAddRepo) {
@@ -57,6 +91,7 @@ export function useAddRepo() {
         resolveRepoRootFromPath: (repoPath) => resolveRepoRootFromPath(repoPath),
         upsertRepoRootInWorkspaceCollections,
         invalidateWorkspaceCollections: invalidateWorkspaceCollectionsForRuntime,
+        saveLocalRepoEnvironment,
         unhideRepoRoot,
         openRepoSetupModal,
       });
@@ -70,6 +105,7 @@ export function useAddRepo() {
     invalidateWorkspaceCollectionsForRuntime,
     openRepoSetupModal,
     resolveRepoRootFromPath,
+    saveLocalRepoEnvironment,
     showToast,
     unhideRepoRoot,
     upsertRepoRootInWorkspaceCollections,

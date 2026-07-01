@@ -12,20 +12,15 @@ from uuid import UUID, uuid4
 
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_repo_config import (
-    CloudRepoConfigValue,
-    load_cloud_repo_config_for_user,
-)
 from proliferate.db.store.cloud_workspace_runtime import (
     update_workspace_repo_apply_status_by_id,
     workspace_repo_apply_lock,
 )
 from proliferate.db.store.cloud_workspace_setup_runs import create_cloud_workspace_setup_run
+from proliferate.db.store.repositories import RepoEnvironmentValue, get_cloud_repo_environment
 from proliferate.integrations.anyharness import (
     CloudRuntimeOperationError,
-    read_remote_workspace_file_state,
     start_remote_workspace_setup,
-    write_remote_workspace_file,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
@@ -34,8 +29,6 @@ from proliferate.server.cloud.workspaces.domain.post_ready import (
     repo_config_apply_started,
     repo_config_completed,
     repo_config_empty_completed,
-    repo_config_file_failed,
-    repo_config_file_progress,
     repo_config_files_version_applied,
     repo_setup_start_failed,
     repo_setup_starting,
@@ -75,9 +68,9 @@ async def _workspace_apply_lock(workspace_id: UUID) -> AsyncIterator[None]:
         yield
 
 
-async def _load_workspace_repo_config(workspace: CloudWorkspace) -> CloudRepoConfigValue | None:
+async def _load_workspace_repo_config(workspace: CloudWorkspace) -> RepoEnvironmentValue | None:
     async with db_engine.async_session_factory() as db:
-        return await load_cloud_repo_config_for_user(
+        return await get_cloud_repo_environment(
             db,
             user_id=workspace.user_id,
             git_owner=workspace.git_owner,
@@ -124,7 +117,7 @@ async def _start_workspace_setup_monitor(
     workspace: CloudWorkspace,
     *,
     runtime: WorkspaceRuntimeAccess,
-    repo_config: CloudRepoConfigValue,
+    repo_config: RepoEnvironmentValue,
     setup_script: str,
 ) -> WorkspaceSetupStartResult:
     apply_token = uuid4().hex
@@ -154,7 +147,7 @@ async def _start_workspace_setup_monitor(
                 anyharness_workspace_id=runtime.anyharness_workspace_id,
                 terminal_id=started.terminal_id,
                 command_run_id=started.command_run_id,
-                setup_script_version=repo_config.files_version,
+                setup_script_version=0,
                 apply_token=apply_token,
                 deadline_at=utcnow() + timedelta(minutes=35),
                 status="running",
@@ -179,62 +172,10 @@ async def _apply_repo_files(
     workspace: CloudWorkspace,
     *,
     runtime: WorkspaceRuntimeAccess,
-    repo_config: CloudRepoConfigValue,
+    repo_config: RepoEnvironmentValue,
 ) -> None:
-    total_files = len(repo_config.tracked_files)
-    await _apply_post_ready_patch(workspace.id, repo_config_apply_started(total_files))
-
-    for index, tracked_file in enumerate(repo_config.tracked_files, start=1):
-        try:
-            read_started = time.perf_counter()
-            remote_state = await read_remote_workspace_file_state(
-                runtime.runtime_url,
-                runtime.access_token,
-                anyharness_workspace_id=runtime.anyharness_workspace_id,
-                relative_path=tracked_file.relative_path,
-            )
-            log_cloud_event(
-                "cloud runtime file state loaded",
-                workspace_id=workspace.id,
-                runtime_url=runtime.runtime_url,
-                remote_workspace_id=runtime.anyharness_workspace_id,
-                relative_path=tracked_file.relative_path,
-                elapsed_ms=duration_ms(read_started),
-            )
-            write_started = time.perf_counter()
-            await write_remote_workspace_file(
-                runtime.runtime_url,
-                runtime.access_token,
-                anyharness_workspace_id=runtime.anyharness_workspace_id,
-                relative_path=tracked_file.relative_path,
-                content=tracked_file.content,
-                expected_version_token=remote_state.version_token,
-            )
-            log_cloud_event(
-                "cloud runtime file written",
-                workspace_id=workspace.id,
-                runtime_url=runtime.runtime_url,
-                remote_workspace_id=runtime.anyharness_workspace_id,
-                relative_path=tracked_file.relative_path,
-                elapsed_ms=duration_ms(write_started),
-            )
-        except Exception as exc:
-            error_message = format_exception_message(exc)
-            await _apply_post_ready_patch(
-                workspace.id,
-                repo_config_file_failed(
-                    relative_path=tracked_file.relative_path,
-                    error=error_message,
-                ),
-            )
-            raise CloudRuntimeOperationError(error_message) from exc
-
-        await _apply_post_ready_patch(workspace.id, repo_config_file_progress(index))
-
-    await _apply_post_ready_patch(
-        workspace.id,
-        repo_config_files_version_applied(repo_config.files_version),
-    )
+    await _apply_post_ready_patch(workspace.id, repo_config_apply_started(0))
+    await _apply_post_ready_patch(workspace.id, repo_config_files_version_applied(0))
 
 
 async def apply_workspace_repo_config(
@@ -242,7 +183,7 @@ async def apply_workspace_repo_config(
     *,
     runtime: WorkspaceRuntimeAccess,
     run_setup: bool,
-) -> CloudRepoConfigValue | None:
+) -> RepoEnvironmentValue | None:
     async with _workspace_apply_lock(workspace.id):
         repo_config = await _load_workspace_repo_config(workspace)
         if repo_config is None:
@@ -264,8 +205,8 @@ async def apply_workspace_repo_config(
         await _apply_post_ready_patch(
             workspace.id,
             repo_config_completed(
-                files_total=len(repo_config.tracked_files),
-                files_version=repo_config.files_version,
+                files_total=0,
+                files_version=0,
                 clear_apply_token=True,
             ),
         )

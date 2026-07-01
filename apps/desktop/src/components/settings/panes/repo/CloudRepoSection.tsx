@@ -1,20 +1,20 @@
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { useEffect, useMemo, useState } from "react";
+import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
+import {
+  useGitHubRepoAuthority,
+  useRepositories,
+  useSaveRepoEnvironment,
+} from "@proliferate/cloud-sdk-react";
+import { buildCoreCloudEnvironmentSaveRequest } from "@proliferate/product-domain/environments/cloud-environments";
+import { CloudEnvironmentEditor } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
 import { CloudIcon } from "@proliferate/ui/icons";
-import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import {
   EnvironmentPanel,
   EnvironmentPanelRow,
   EnvironmentSection,
 } from "@proliferate/ui/layout/EnvironmentLayout";
-import { CloudDefaultBranchCard } from "@/components/cloud/repo-settings/CloudDefaultBranchCard";
-import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";
-import { RepoSetupScriptCard } from "@/components/cloud/repo-settings/RepoSetupScriptCard";
+import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 import { useCloudRepoBranches } from "@/hooks/access/cloud/use-cloud-repo-branches";
-import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
-import { useCloudRepoConfigDraft } from "@/hooks/cloud/ui/use-cloud-repo-config-draft";
-import { useSaveCloudRepoConfig } from "@/hooks/cloud/workflows/use-save-cloud-repo-config";
-import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 import {
   isCloudRepository,
   type CloudSettingsRepositoryEntry,
@@ -30,13 +30,10 @@ interface CloudRepoSectionProps {
   cloudSignInAvailable: boolean;
 }
 
-interface CloudRepoSettingsEditorProps {
-  repository: CloudSettingsRepositoryEntry;
-  savedConfig: CloudRepoConfig | null | undefined;
-  localSetupScript: string;
-  localRunCommand: string;
-  isLoadingConfig: boolean;
-  cloudActive: boolean;
+interface CloudEnvironmentDraftState {
+  defaultBranch: string | null;
+  setupScript: string;
+  runCommand: string;
 }
 
 function CloudEnvironmentNotice({
@@ -57,131 +54,87 @@ function CloudEnvironmentNotice({
 
 function CloudRepoSettingsEditor({
   repository,
-  savedConfig,
+  cloudEnvironment,
   localSetupScript,
   localRunCommand,
-  isLoadingConfig,
+  repoConfigsLoading,
   cloudActive,
-}: CloudRepoSettingsEditorProps) {
-  const draft = useCloudRepoConfigDraft({
-    savedConfig,
+}: {
+  repository: CloudSettingsRepositoryEntry;
+  cloudEnvironment: RepoEnvironmentResponse | null;
+  localSetupScript: string;
+  localRunCommand: string;
+  repoConfigsLoading: boolean;
+  cloudActive: boolean;
+}) {
+  const draft = useCloudEnvironmentDraft({
+    cloudEnvironment,
     localSetupScript,
     localRunCommand,
     sourceKey: `${repository.sourceRoot}:${repository.repoRootId}`,
   });
-  const saveMutation = useSaveCloudRepoConfig(repository);
+  const saveEnvironment = useSaveRepoEnvironment();
   const {
     data: branchInfo,
     isLoading: isLoadingBranches,
     error: branchError,
   } = useCloudRepoBranches(repository.gitOwner, repository.gitRepoName, cloudActive);
-  const configured = savedConfig?.configured ?? false;
+  const configured = cloudEnvironment !== null;
   const repoLabel = `${repository.gitOwner}/${repository.gitRepoName}`;
-  const errorMessage = saveMutation.error?.message ?? null;
-  const saveDisabled =
-    !cloudActive || isLoadingConfig || saveMutation.isPending || !draft.canSave;
-  const revertDisabled = saveMutation.isPending || !draft.dirty;
-  const statusLabel = !draft.configured && configured
-    ? "Will disable"
-    : configured
-      ? draft.dirty
-        ? "Unsaved changes"
-        : "Saved"
-      : draft.configured
-        ? "Not saved yet"
-        : "Disabled";
+  const statusLabel = configured
+    ? draft.dirty
+      ? "Unsaved changes"
+      : "Saved"
+    : "Ready to enable";
 
   async function handleSave() {
-    const {
-      configured,
-      defaultBranch,
-      setupScript,
-      runCommand,
-    } = draft.savePayload;
-    const response = await saveMutation.mutateAsync({
-      configured,
-      defaultBranch,
-      setupScript,
-      runCommand,
+    const response = await saveEnvironment.mutateAsync({
+      gitOwner: repository.gitOwner,
+      gitRepoName: repository.gitRepoName,
+      body: buildCoreCloudEnvironmentSaveRequest({
+        defaultBranch: draft.defaultBranch,
+        setupScript: draft.setupScript,
+        runCommand: draft.runCommand,
+      }),
     });
-    draft.resetFromSavedConfig(response);
+    draft.reset(response);
   }
 
   return (
-    <EnvironmentSection
+    <CloudEnvironmentEditor
       title="Cloud environment"
-      icon={CloudIcon}
-      separated
-      description={(
-        <>
-          Saved to Proliferate Cloud for {repoLabel}
-          {isLoadingConfig ? " · Loading saved config..." : ""}.
-        </>
+      description={`Saved to Proliferate Cloud for ${repoLabel}.`}
+      statusLabel={statusLabel}
+      statusTone={configured ? (draft.dirty ? "warning" : "success") : "warning"}
+      defaultBranch={draft.defaultBranch}
+      githubDefaultBranch={branchInfo?.defaultBranch ?? null}
+      branches={branchInfo?.branches ?? []}
+      branchesLoading={isLoadingBranches || repoConfigsLoading}
+      branchError={branchError instanceof Error ? branchError.message : null}
+      setupScript={draft.setupScript}
+      runCommand={draft.runCommand}
+      saving={saveEnvironment.isPending}
+      saveDisabled={!cloudActive || repoConfigsLoading || saveEnvironment.isPending || !draft.canSave}
+      revertDisabled={saveEnvironment.isPending || !draft.dirty}
+      error={saveEnvironment.error?.message ?? null}
+      secretsSlot={(
+        <CloudSecretsSettingsSurface
+          scope={{
+            kind: "workspace",
+            gitOwner: repository.gitOwner,
+            gitRepoName: repository.gitRepoName,
+          }}
+          enabled={cloudActive && configured}
+        />
       )}
-      action={(
-        <>
-          <Badge>{statusLabel}</Badge>
-          {configured && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!draft.configured || saveMutation.isPending}
-              onClick={draft.disable}
-            >
-              {draft.configured ? "Disable cloud environment" : "Disable pending"}
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={revertDisabled}
-            onClick={draft.revert}
-          >
-            Revert
-          </Button>
-          <Button
-            type="button"
-            loading={saveMutation.isPending}
-            disabled={saveDisabled}
-            onClick={() => { void handleSave(); }}
-          >
-            Save
-          </Button>
-        </>
-      )}
-    >
-      {errorMessage && (
-        <p className="text-sm text-destructive">{errorMessage}</p>
-      )}
-
-      <CloudDefaultBranchCard
-        value={draft.defaultBranch}
-        githubDefaultBranch={branchInfo?.defaultBranch ?? null}
-        branches={branchInfo?.branches ?? []}
-        isLoading={isLoadingBranches}
-        errorMessage={branchError instanceof Error ? branchError.message : null}
-        onChange={draft.setDefaultBranch}
-      />
-
-      <RepoRunCommandCard
-        runCommand={draft.runCommand}
-        onChange={draft.setRunCommand}
-      />
-
-      <RepoSetupScriptCard
-        setupScript={draft.setupScript}
-        onChange={draft.setSetupScript}
-      />
-
-      <CloudSecretsSettingsSurface
-        scope={{
-          kind: "workspace",
-          gitOwner: repository.gitOwner,
-          gitRepoName: repository.gitRepoName,
-        }}
-        enabled={cloudActive && configured}
-      />
-    </EnvironmentSection>
+      onDefaultBranchChange={draft.setDefaultBranch}
+      onSetupScriptChange={draft.setSetupScript}
+      onRunCommandChange={draft.setRunCommand}
+      onSave={() => {
+        void handleSave();
+      }}
+      onRevert={draft.revert}
+    />
   );
 }
 
@@ -200,14 +153,25 @@ export function CloudRepoSection({
   );
   const cloudRepository = isCloudRepository(repository) ? repository : null;
   const cloudQueryEnabled = cloudActive && Boolean(cloudRepository);
-  const {
-    data: savedConfig,
-    isLoading: isLoadingConfig,
-  } = useCloudRepoConfig(
-    cloudRepository?.gitOwner,
-    cloudRepository?.gitRepoName,
+  const repoConfigs = useRepositories(cloudQueryEnabled);
+  const repoAuthority = useGitHubRepoAuthority(
+    {
+      gitOwner: cloudRepository?.gitOwner,
+      gitRepoName: cloudRepository?.gitRepoName,
+    },
     cloudQueryEnabled,
   );
+  const cloudEnvironment = useMemo(() => {
+    if (!cloudRepository) {
+      return null;
+    }
+    const repo = repoConfigs.data?.repositories.find((candidate) =>
+      candidate.gitProvider === "github"
+      && candidate.gitOwner === cloudRepository.gitOwner
+      && candidate.gitRepoName === cloudRepository.gitRepoName
+    );
+    return repo?.environments.find((environment) => environment.kind === "cloud") ?? null;
+  }, [cloudRepository, repoConfigs.data?.repositories]);
 
   if (!cloudRepository) {
     return (
@@ -229,9 +193,29 @@ export function CloudRepoSection({
     );
   }
 
-  if (isLoadingConfig) {
+  if (repoConfigs.isLoading) {
     return (
       <CloudEnvironmentNotice description="Loading saved cloud environment..." />
+    );
+  }
+
+  if (repoAuthority.isLoading) {
+    return (
+      <CloudEnvironmentNotice description="Checking GitHub App access for this repository..." />
+    );
+  }
+
+  if (repoAuthority.isError) {
+    return (
+      <CloudEnvironmentNotice description="GitHub App access for this repository could not be checked." />
+    );
+  }
+
+  if (repoAuthority.data && !repoAuthority.data.authorized) {
+    return (
+      <CloudEnvironmentNotice
+        description={repoAuthority.data.message ?? repoAuthorityNotice(repoAuthority.data.status)}
+      />
     );
   }
 
@@ -239,11 +223,134 @@ export function CloudRepoSection({
     <CloudRepoSettingsEditor
       key={`${repository.sourceRoot}:${repository.repoRootId}`}
       repository={cloudRepository}
-      savedConfig={savedConfig}
+      cloudEnvironment={cloudEnvironment}
       localSetupScript={localSetupScript}
       localRunCommand={localRunCommand}
-      isLoadingConfig={isLoadingConfig}
+      repoConfigsLoading={repoConfigs.isLoading}
       cloudActive={cloudActive}
     />
   );
+}
+
+function repoAuthorityNotice(status: string): string {
+  switch (status) {
+    case "missing_user_authorization":
+      return "Authorize the Proliferate GitHub App in Account settings before configuring this cloud environment.";
+    case "expired_user_authorization":
+      return "Reauthorize the Proliferate GitHub App in Account settings before configuring this cloud environment.";
+    case "missing_installation":
+      return "An organization admin needs to install the Proliferate GitHub App for this repository.";
+    case "repo_not_covered":
+      return "Update the Proliferate GitHub App installation so it has access to this repository.";
+    case "missing_user_repo_access":
+      return "Your GitHub user does not have access to this repository.";
+    default:
+      return "GitHub App repository access is not ready for this cloud environment.";
+  }
+}
+
+function useCloudEnvironmentDraft({
+  cloudEnvironment,
+  localSetupScript,
+  localRunCommand,
+  sourceKey,
+}: {
+  cloudEnvironment: RepoEnvironmentResponse | null;
+  localSetupScript: string;
+  localRunCommand: string;
+  sourceKey: string;
+}) {
+  const initialDraftState = useMemo(
+    () => buildInitialDraftState({
+      cloudEnvironment,
+      localSetupScript,
+      localRunCommand,
+    }),
+    [cloudEnvironment, localRunCommand, localSetupScript],
+  );
+  const [state, setState] = useState(() => ({
+    activeSourceKey: sourceKey,
+    revertDraft: initialDraftState,
+    draft: initialDraftState,
+  }));
+
+  const dirty = isDraftDirty(state.draft, state.revertDraft);
+  const canSave = dirty || cloudEnvironment === null;
+
+  useEffect(() => {
+    const sourceChanged = state.activeSourceKey !== sourceKey;
+    if (!sourceChanged && dirty) {
+      return;
+    }
+
+    setState({
+      activeSourceKey: sourceKey,
+      revertDraft: initialDraftState,
+      draft: initialDraftState,
+    });
+  }, [dirty, initialDraftState, sourceKey, state.activeSourceKey]);
+
+  function patch(patch: Partial<CloudEnvironmentDraftState>) {
+    setState((current) => ({
+      ...current,
+      draft: {
+        ...current.draft,
+        ...patch,
+      },
+    }));
+  }
+
+  return {
+    defaultBranch: state.draft.defaultBranch,
+    setDefaultBranch: (defaultBranch: string | null) => patch({ defaultBranch }),
+    setupScript: state.draft.setupScript,
+    setSetupScript: (setupScript: string) => patch({ setupScript }),
+    runCommand: state.draft.runCommand,
+    setRunCommand: (runCommand: string) => patch({ runCommand }),
+    dirty,
+    canSave,
+    revert: () => {
+      setState((current) => ({
+        ...current,
+        draft: current.revertDraft,
+      }));
+    },
+    reset: (nextEnvironment: RepoEnvironmentResponse) => {
+      const nextState = buildInitialDraftState({
+        cloudEnvironment: nextEnvironment,
+        localSetupScript,
+        localRunCommand,
+      });
+      setState((current) => ({
+        ...current,
+        revertDraft: nextState,
+        draft: nextState,
+      }));
+    },
+  };
+}
+
+function buildInitialDraftState({
+  cloudEnvironment,
+  localSetupScript,
+  localRunCommand,
+}: {
+  cloudEnvironment: RepoEnvironmentResponse | null;
+  localSetupScript: string;
+  localRunCommand: string;
+}): CloudEnvironmentDraftState {
+  return {
+    defaultBranch: cloudEnvironment?.defaultBranch ?? null,
+    setupScript: cloudEnvironment?.setupScript ?? localSetupScript,
+    runCommand: cloudEnvironment?.runCommand ?? localRunCommand,
+  };
+}
+
+function isDraftDirty(
+  draft: CloudEnvironmentDraftState,
+  baseline: CloudEnvironmentDraftState,
+): boolean {
+  return draft.defaultBranch !== baseline.defaultBranch
+    || draft.setupScript !== baseline.setupScript
+    || draft.runCommand !== baseline.runCommand;
 }
