@@ -1,6 +1,4 @@
 import {
-  cloneElement,
-  isValidElement,
   useCallback,
   useEffect,
   useRef,
@@ -8,17 +6,17 @@ import {
   type ReactElement,
   type ReactNode,
   type Ref,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
-import { createPortal } from "react-dom";
-import { FixedPositionLayer } from "../layout/FixedPositionLayer";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { Slot } from "@radix-ui/react-slot";
+import { Popover, PopoverTrigger } from "../kit/Popover";
 import { useNativeOverlayRegistration } from "../overlays/overlay-presence";
 
 type PopoverAlign = "start" | "end";
 type PopoverSide = "bottom" | "top" | "right" | "left";
 type PopoverPlacementSide = PopoverSide | "auto";
 type PopoverTriggerMode = "click" | "doubleClick" | "contextMenu";
-
-const DEFAULT_AUTO_VERTICAL_SPACE = 320;
 
 export const POPOVER_FRAME_CLASS =
   "m-px rounded-xl bg-popover/90 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm";
@@ -65,8 +63,20 @@ export function PopoverButton({
   onOpenChange,
 }: PopoverButtonProps) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<Record<string, number>>({});
   const triggerRef = useRef<HTMLElement>(null);
+  // Cursor position captured by the contextMenu handler; when unset, the
+  // virtual anchor falls back to the trigger element's rect (doubleClick and
+  // externalOpen behave like the old trigger-rect positioning).
+  const pointRef = useRef<{ x: number; y: number } | null>(null);
+  const virtualAnchorRef = useRef({
+    getBoundingClientRect: (): DOMRect => {
+      const point = pointRef.current;
+      if (point) {
+        return new DOMRect(point.x, point.y, 0, 0);
+      }
+      return triggerRef.current?.getBoundingClientRect() ?? new DOMRect();
+    },
+  });
   useNativeOverlayRegistration(open);
 
   const setOpenAndNotify = useCallback((next: boolean) => {
@@ -76,25 +86,6 @@ export function PopoverButton({
 
   const close = useCallback(() => setOpenAndNotify(false), [setOpenAndNotify]);
 
-  const openFromTrigger = useCallback((cursorPos?: { x: number; y: number }) => {
-    if (cursorPos) {
-      setPos({ top: cursorPos.y, left: cursorPos.x });
-      setOpenAndNotify(true);
-    } else if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setPos(computePosition(rect, side, align, offset));
-      setOpenAndNotify(true);
-    }
-  }, [align, offset, side, setOpenAndNotify]);
-
-  const toggle = useCallback(() => {
-    if (open) {
-      setOpenAndNotify(false);
-      return;
-    }
-    openFromTrigger();
-  }, [open, openFromTrigger, setOpenAndNotify]);
-
   // Respond to external open/close requests.
   useEffect(() => {
     if (externalOpen === undefined) {
@@ -102,116 +93,81 @@ export function PopoverButton({
     }
 
     if (externalOpen && !open) {
-      openFromTrigger();
+      pointRef.current = null;
+      setOpenAndNotify(true);
     } else if (!externalOpen && open) {
       setOpen(false);
     }
-  }, [externalOpen, open, openFromTrigger]);
+  }, [externalOpen, open, setOpenAndNotify]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenAndNotify(false);
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open, setOpenAndNotify]);
+  const handleClick = (event: ReactMouseEvent) => {
+    if (stopPropagation) {
+      event.stopPropagation();
+    }
+  };
 
-  const triggerWithRef = isValidElement(trigger)
-    ? cloneElement(trigger, {
-        ...trigger.props,
-        ref: triggerRef,
-        "data-state": open ? "open" : "closed",
-        onClick: (...args: unknown[]) => {
-          if (stopPropagation && args[0] && typeof (args[0] as Event).stopPropagation === "function") {
-            (args[0] as Event).stopPropagation();
-          }
-          trigger.props.onClick?.(...args);
-          if (triggerMode === "click") {
-            toggle();
-          }
-        },
-        onDoubleClick: (...args: unknown[]) => {
-          if (stopPropagation && args[0] && typeof (args[0] as Event).stopPropagation === "function") {
-            (args[0] as Event).stopPropagation();
-          }
-          trigger.props.onDoubleClick?.(...args);
-          if (triggerMode === "doubleClick") {
-            toggle();
-          }
-        },
-        onContextMenu: (...args: unknown[]) => {
-          const event = args[0];
-          if (event && typeof (event as Event).preventDefault === "function") {
-            (event as Event).preventDefault();
-          }
-          if (stopPropagation && event && typeof (event as Event).stopPropagation === "function") {
-            (event as Event).stopPropagation();
-          }
-          trigger.props.onContextMenu?.(...args);
-          if (triggerMode === "contextMenu") {
-            const me = event as MouseEvent;
-            openFromTrigger(
-              typeof me.clientX === "number" && typeof me.clientY === "number"
-                ? { x: me.clientX, y: me.clientY }
-                : undefined,
-            );
-          }
-        },
-      } as Record<string, unknown>)
-    : trigger;
+  const handleDoubleClick = (event: ReactMouseEvent) => {
+    if (stopPropagation) {
+      event.stopPropagation();
+    }
+    if (triggerMode === "doubleClick") {
+      pointRef.current = null;
+      setOpenAndNotify(!open);
+    }
+  };
+
+  const handleContextMenu = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    if (stopPropagation) {
+      event.stopPropagation();
+    }
+    if (triggerMode === "contextMenu") {
+      pointRef.current =
+        typeof event.clientX === "number" && typeof event.clientY === "number"
+          ? { x: event.clientX, y: event.clientY }
+          : null;
+      setOpenAndNotify(true);
+    }
+  };
 
   return (
-    <>
-      {triggerWithRef}
-      {open && createPortal(
+    <Popover open={open} onOpenChange={setOpenAndNotify}>
+      {triggerMode === "click" ? (
+        <PopoverTrigger
+          asChild
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+          onContextMenu={handleContextMenu}
+        >
+          {trigger}
+        </PopoverTrigger>
+      ) : (
         <>
-          <div className="fixed inset-0 z-50" onClick={close} />
-          <FixedPositionLayer
-            data-state="open"
-            data-align={align}
-            className={`fixed z-50 ${className}`}
-            position={pos}
+          {/* Virtual anchor: positions the menu at the captured cursor point
+              (contextMenu) or at the trigger's rect (doubleClick/externalOpen). */}
+          <PopoverPrimitive.Anchor virtualRef={virtualAnchorRef} />
+          <Slot
+            ref={triggerRef}
+            data-state={open ? "open" : "closed"}
+            onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
+            onContextMenu={handleContextMenu}
           >
-            {children(close)}
-          </FixedPositionLayer>
-        </>,
-        document.body,
+            {trigger}
+          </Slot>
+        </>
       )}
-    </>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          data-slot="popover-content"
+          side={side === "auto" ? "bottom" : side}
+          align={align}
+          sideOffset={offset}
+          className={`z-50 outline-none ${className}`}
+        >
+          {children(close)}
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </Popover>
   );
-}
-
-function computePosition(
-  rect: DOMRect,
-  side: PopoverPlacementSide,
-  align: PopoverAlign,
-  offset: number,
-): Record<string, number> {
-  const resolvedSide = side === "auto"
-    ? resolveAutoSide(rect, offset)
-    : side;
-
-  switch (resolvedSide) {
-    case "bottom":
-      return align === "end"
-        ? { top: rect.bottom + offset, right: window.innerWidth - rect.right }
-        : { top: rect.bottom + offset, left: rect.left };
-    case "top":
-      return align === "end"
-        ? { bottom: window.innerHeight - rect.top + offset, right: window.innerWidth - rect.right }
-        : { bottom: window.innerHeight - rect.top + offset, left: rect.left };
-    case "right":
-      return { top: rect.top, left: rect.right + offset };
-    case "left":
-      return { top: rect.top, right: window.innerWidth - rect.left + offset };
-  }
-}
-
-function resolveAutoSide(rect: DOMRect, offset: number): PopoverSide {
-  const spaceBelow = window.innerHeight - rect.bottom - offset;
-  const spaceAbove = rect.top - offset;
-  return spaceBelow < DEFAULT_AUTO_VERTICAL_SPACE && spaceAbove > spaceBelow
-    ? "top"
-    : "bottom";
 }
