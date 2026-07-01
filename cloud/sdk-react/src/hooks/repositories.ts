@@ -11,6 +11,7 @@ import {
   repositoriesKey,
   githubAppRootKey,
   repoEnvironmentKey,
+  workspaceCloudSecretsKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
@@ -56,6 +57,11 @@ export function useSaveRepoEnvironment() {
       void queryClient.invalidateQueries({ queryKey: repositoriesKey() });
       void queryClient.invalidateQueries({ queryKey: cloudGitRepositoriesRootKey() });
       void queryClient.invalidateQueries({ queryKey: githubAppRootKey(client.baseUrl) });
+      if (response.kind === "cloud") {
+        void queryClient.invalidateQueries({
+          queryKey: workspaceCloudSecretsKey(gitOwner, gitRepoName),
+        });
+      }
     },
   });
 }
