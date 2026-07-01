@@ -73,7 +73,7 @@ export function OrganizationSection({
       <div className="space-y-1">
         <h2 className="text-sm font-medium text-foreground">{title}</h2>
         {description ? (
-          <p className="max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
+          <p className="max-w-xl text-xs leading-[1.45] text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {children}

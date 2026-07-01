@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@/components/settings/shared/SettingsSection";
+import { SettingsRow } from "@/components/settings/shared/SettingsRow";
 import type { SlackWorkspaceConnection } from "@proliferate/cloud-sdk";
 import { SlackConnectionStatusBadge } from "@/components/settings/panes/slack/SlackStatusBadge";
 
@@ -33,15 +33,11 @@ export function ConnectionSection({
   const installLabel = connection ? "Reconnect" : "Install Slack";
 
   return (
-    <section className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">Connection</h2>
-        <p className="text-sm text-muted-foreground">
-          Connect one Slack workspace to this organization.
-        </p>
-      </div>
-      <SettingsCard>
-        <SettingsCardRow
+    <SettingsSection
+      title="Connection"
+      description="Connect one Slack workspace to this organization."
+    >
+        <SettingsRow
           label={connection?.slackTeamName ?? "Slack workspace"}
           description={connection
             ? `Installed ${formatDate(connection.installedAt)}${installedBy ? ` by ${installedBy}` : ""}.`
@@ -61,9 +57,9 @@ export function ConnectionSection({
               {installLabel}
             </Button>
           </div>
-        </SettingsCardRow>
+        </SettingsRow>
         {connection ? (
-          <SettingsCardRow
+          <SettingsRow
             label="Disconnect"
             description="Disconnecting revokes this organization connection and stops new Slack-triggered work."
           >
@@ -76,9 +72,8 @@ export function ConnectionSection({
             >
               Disconnect
             </Button>
-          </SettingsCardRow>
+          </SettingsRow>
         ) : null}
-      </SettingsCard>
       <ConfirmationDialog
         open={confirmDisconnectOpen}
         title="Disconnect Slack?"
@@ -91,7 +86,7 @@ export function ConnectionSection({
           onDisconnect();
         }}
       />
-    </section>
+    </SettingsSection>
   );
 }
 

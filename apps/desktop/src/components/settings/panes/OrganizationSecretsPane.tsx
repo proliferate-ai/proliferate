@@ -1,6 +1,6 @@
 import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@/components/settings/shared/SettingsSection";
+import { SettingsRow } from "@/components/settings/shared/SettingsRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
@@ -22,18 +22,18 @@ export function OrganizationSecretsPane() {
       />
 
       {organizationsQuery.isLoading ? (
-        <SettingsCard>
-          <SettingsCardRow label="Organization secrets" description="Loading organization..." />
-        </SettingsCard>
+        <SettingsSection>
+          <SettingsRow label="Organization secrets" description="Loading organization..." />
+        </SettingsSection>
       ) : null}
 
       {!organizationsQuery.isLoading && !activeOrganization ? (
-        <SettingsCard>
-          <SettingsCardRow
+        <SettingsSection>
+          <SettingsRow
             label="No organization"
             description="Create or join an organization before configuring organization-wide secrets."
           />
-        </SettingsCard>
+        </SettingsSection>
       ) : null}
 
       {activeOrganization ? (

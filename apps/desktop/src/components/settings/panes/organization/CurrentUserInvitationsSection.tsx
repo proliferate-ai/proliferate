@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Check } from "@proliferate/ui/icons";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
 import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
 
@@ -46,11 +45,11 @@ export function CurrentUserInvitationsSection({
       title="Pending invitations"
       description="Join an organization that invited your signed-in email address."
     >
-      <SettingsCard>
+      <div>
         {invitations.map((invitation) => (
           <div
             key={invitation.id}
-            className="flex flex-col gap-3 border-b border-border-light px-4 py-3 last:border-b-0 sm:flex-row sm:items-center"
+            className="flex flex-col gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:flex-row sm:items-center"
           >
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">
@@ -73,7 +72,7 @@ export function CurrentUserInvitationsSection({
             </div>
           </div>
         ))}
-      </SettingsCard>
+      </div>
       <ConfirmationDialog
         open={acceptTarget !== null}
         title={acceptTarget ? `Join ${acceptTarget.organizationName ?? "organization"}?` : "Join organization?"}

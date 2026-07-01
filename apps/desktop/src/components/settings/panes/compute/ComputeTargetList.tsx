@@ -1,7 +1,6 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ChevronRight, Server } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import {
   computeTargetKindLabel,
   computeTargetOwnerLabel,
@@ -38,8 +37,8 @@ export function ComputeTargetList({
   const targetGroups = groupComputeTargetsByOwnerScope(targets);
 
   return (
-    <SettingsCard>
-      <div className="flex items-start justify-between gap-3 border-b border-border/40 p-4">
+    <div>
+      <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
         <div className="flex min-w-0 items-start gap-3">
           <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
             <Server className="size-4" aria-hidden="true" />
@@ -63,12 +62,12 @@ export function ComputeTargetList({
         ) : null}
       </div>
       {loading ? (
-        <div className="space-y-2 p-4">
+        <div className="space-y-2 pt-4">
           <TargetRowSkeleton />
           <TargetRowSkeleton />
         </div>
       ) : targets.length === 0 ? (
-        <div className="space-y-3 p-4">
+        <div className="space-y-3 pt-4">
           <div className="rounded-md border border-dashed border-border/70 bg-foreground/5 p-4">
             <div className="text-sm font-medium text-foreground">{COMPUTE_COPY.emptyTitle}</div>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
@@ -80,7 +79,7 @@ export function ComputeTargetList({
           </Button>
         </div>
       ) : (
-        <div className="space-y-4 p-3">
+        <div className="space-y-4 pt-4">
           {targetGroups.map((group) => (
             <TargetGroup
               key={group.id}
@@ -92,7 +91,7 @@ export function ComputeTargetList({
           ))}
         </div>
       )}
-    </SettingsCard>
+    </div>
   );
 }
 
@@ -110,7 +109,7 @@ function TargetGroup({
   return (
     <div className="space-y-2">
       <div className="space-y-0.5 px-1">
-        <h4 className="text-base font-medium uppercase tracking-normal text-muted-foreground/90">
+        <h4 className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
           {group.label}
         </h4>
         <p className="text-sm leading-5 text-muted-foreground">{group.description}</p>

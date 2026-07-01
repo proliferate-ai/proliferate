@@ -1,5 +1,4 @@
 import { Archive, CloudIcon, RefreshCw } from "@proliferate/ui/icons";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import {
   type ArchivedChatCleanupTone,
@@ -45,35 +44,35 @@ export function ArchivedChatsPane() {
         </div>
       ) : null}
 
-      <SettingsCard className="divide-y divide-border-light">
-        {isLoading ? (
-          <div className="px-5 py-5 text-sm text-muted-foreground" role="status">
-            Loading archived chats
-          </div>
-        ) : error && rows.length === 0 ? (
-          <div className="px-5 py-5 text-sm text-muted-foreground" role="alert">
-            Could not load archived chats.
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="px-5 py-8 text-center">
-            <Archive className="mx-auto mb-3 size-5 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">No archived chats</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Archive a chat from the sidebar to move it here.
-            </p>
-          </div>
-        ) : (
-          <div role="list" aria-label="Archived chats">
-            {rows.map((row) => (
-              <ArchivedChatRow
-                key={row.id}
-                row={row}
-                onUnarchive={() => unarchiveChat(row.id)}
-              />
-            ))}
-          </div>
-        )}
-      </SettingsCard>
+      {isLoading ? (
+        <div className="py-5 text-xs text-muted-foreground" role="status">
+          Loading archived chats
+        </div>
+      ) : error && rows.length === 0 ? (
+        <div className="py-5 text-xs text-muted-foreground" role="alert">
+          Could not load archived chats.
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+          <span className="text-muted-foreground [&>svg]:size-[22px]">
+            <Archive aria-hidden="true" />
+          </span>
+          <p className="text-sm font-medium text-foreground">No archived chats</p>
+          <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
+            Archive a chat from the sidebar to move it here.
+          </p>
+        </div>
+      ) : (
+        <div role="list" aria-label="Archived chats" className="divide-y divide-border">
+          {rows.map((row) => (
+            <ArchivedChatRow
+              key={row.id}
+              row={row}
+              onUnarchive={() => unarchiveChat(row.id)}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -88,7 +87,7 @@ function ArchivedChatRow({
   return (
     <div
       role="listitem"
-      className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-3"
+      className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-3"
     >
       <div className="flex min-w-0 items-start gap-3">
         <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
@@ -97,10 +96,10 @@ function ArchivedChatRow({
             : <Archive className="size-4" />}
         </span>
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium leading-5 text-foreground">
+          <div className="truncate text-[13px] font-medium leading-5 text-foreground">
             {row.title}
           </div>
-          <div className="mt-0.5 truncate text-sm leading-5 text-muted-foreground">
+          <div className="mt-0.5 truncate text-xs leading-5 text-muted-foreground">
             {row.metadata}
           </div>
           <div className={`mt-1 truncate text-xs leading-4 ${cleanupToneClass(row.cleanupTone)}`}>

@@ -4,15 +4,14 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import type { BudgetPerson } from "@/lib/domain/settings/organization-budgets-presentation";
 
 export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[] }) {
   return (
-    <SettingsCard>
-      <div className="border-b border-border-light px-5 py-4">
+    <div>
+      <div className="border-b border-border px-5 py-4">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold text-foreground">Monthly LLM budgets</div>
+          <div className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">Monthly LLM budgets</div>
           <Badge tone="info">Enterprise</Badge>
           <Badge tone="neutral">Mocked UI</Badge>
         </div>
@@ -21,7 +20,7 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
         </div>
       </div>
 
-      <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] gap-4 border-b border-border-light px-5 py-3 text-xs font-medium uppercase text-muted-foreground md:grid">
+      <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] gap-4 border-b border-border px-5 py-3 text-xs font-medium uppercase text-muted-foreground md:grid">
         <div>Member</div>
         <div>Current month</div>
         <div>Monthly max</div>
@@ -35,7 +34,7 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
         return (
           <div
             key={person.email}
-            className="grid gap-3 border-b border-border-light px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] md:items-center md:gap-4"
+            className="grid gap-3 border-b border-border px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] md:items-center md:gap-4"
           >
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-foreground">{person.name}</div>
@@ -97,7 +96,7 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
         );
       })}
 
-      <div className="flex flex-col gap-3 border-t border-border-light px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="max-w-2xl text-sm leading-6 text-muted-foreground">
           Enforcement will pause new LLM-backed work for a member once their monthly max is reached.
         </div>
@@ -105,7 +104,7 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
           Save budgets
         </Button>
       </div>
-    </SettingsCard>
+    </div>
   );
 }
 

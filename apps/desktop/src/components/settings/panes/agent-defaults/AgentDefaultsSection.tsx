@@ -12,7 +12,7 @@ export function AgentDefaultsSection({
   return (
     <div className="space-y-2.5">
       <div className="space-y-1">
-        <h2 className="text-base font-semibold leading-6 tracking-normal text-foreground">{title}</h2>
+        <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{title}</h2>
         {description ? (
           <p className="text-sm leading-5 text-muted-foreground">{description}</p>
         ) : null}

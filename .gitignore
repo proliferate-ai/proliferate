@@ -78,3 +78,4 @@ package-lock.json
 *.p8
 .probe-secrets.env
 .auth-env/.env.*
+design-system/

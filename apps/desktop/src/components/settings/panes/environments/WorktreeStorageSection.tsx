@@ -1,8 +1,8 @@
 import { useState, type KeyboardEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@/components/settings/shared/SettingsSection";
+import { SettingsRow } from "@/components/settings/shared/SettingsRow";
 import { RuntimePressureDetailsDialog } from "@/components/workspace/chat/input/RuntimePressureDetailsDialog";
 import { RuntimePressureRing } from "@/components/workspace/chat/input/RuntimePressureIndicator";
 import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";
@@ -37,38 +37,36 @@ export function WorktreeStorageSection() {
 
   return (
     <>
-      <section>
-        <SettingsCard className="w-full">
-          <WorktreePolicyRow
-            draftValue={cleanupPolicy.draftValue}
-            currentValue={cleanupPolicy.value}
-            onDraftValueChange={cleanupPolicy.setDraftValue}
-            canApply={cleanupPolicy.canApply && !cleanupPolicy.isApplying}
-            applyDisabledReason={cleanupPolicy.applyDisabledReason}
-            statusMessage={cleanupPolicy.statusMessage}
-            onApply={applyPolicy}
+      <SettingsSection className="w-full">
+        <WorktreePolicyRow
+          draftValue={cleanupPolicy.draftValue}
+          currentValue={cleanupPolicy.value}
+          onDraftValueChange={cleanupPolicy.setDraftValue}
+          canApply={cleanupPolicy.canApply && !cleanupPolicy.isApplying}
+          applyDisabledReason={cleanupPolicy.applyDisabledReason}
+          statusMessage={cleanupPolicy.statusMessage}
+          onApply={applyPolicy}
+        />
+        {pressure.isDiscovering && pressure.targets.length === 0 ? (
+          <SettingsRow
+            label="Runtime status"
+            description="Looking for runtimes..."
           />
-          {pressure.isDiscovering && pressure.targets.length === 0 ? (
-            <SettingsCardRow
-              label="Runtime status"
-              description="Looking for runtimes..."
+        ) : pressure.targets.length === 0 ? (
+          <SettingsRow
+            label="Runtime status"
+            description="No runtime roots found."
+          />
+        ) : (
+          pressure.targets.map((targetState) => (
+            <WorktreeRuntimeStatusRow
+              key={targetState.target.key}
+              targetState={targetState}
+              onOpenDetails={() => setSelectedTargetKey(targetState.target.key)}
             />
-          ) : pressure.targets.length === 0 ? (
-            <SettingsCardRow
-              label="Runtime status"
-              description="No runtime roots found."
-            />
-          ) : (
-            pressure.targets.map((targetState) => (
-              <WorktreeRuntimeStatusRow
-                key={targetState.target.key}
-                targetState={targetState}
-                onOpenDetails={() => setSelectedTargetKey(targetState.target.key)}
-              />
-            ))
-          )}
-        </SettingsCard>
-      </section>
+          ))
+        )}
+      </SettingsSection>
 
       {selectedTarget ? (
         <RuntimePressureDetailsDialog
@@ -113,7 +111,7 @@ function WorktreePolicyRow({
   };
 
   return (
-    <SettingsCardRow
+    <SettingsRow
       label="Ideal worktrees"
       description="Per-repo target for managed worktrees. Composer pressure warns above this count; cleanup skips dirty checkouts."
     >
@@ -139,7 +137,7 @@ function WorktreePolicyRow({
           </p>
         ) : null}
       </div>
-    </SettingsCardRow>
+    </SettingsRow>
   );
 }
 
@@ -151,7 +149,7 @@ function WorktreeRuntimeStatusRow({
   onOpenDetails: () => void;
 }) {
   return (
-    <SettingsCardRow
+    <SettingsRow
       label={targetState.target.label}
       description={runtimeStatusDescription(targetState)}
     >
@@ -173,7 +171,7 @@ function WorktreeRuntimeStatusRow({
           Details
         </Button>
       </div>
-    </SettingsCardRow>
+    </SettingsRow>
   );
 }
 

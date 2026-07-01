@@ -12,8 +12,7 @@ import {
   type AgentConfigurationIssueAction,
 } from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsRow } from "@/components/settings/shared/SettingsRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
@@ -187,7 +186,6 @@ export function AgentDefaultsPane() {
       />
 
       <AgentDefaultsSection title="Default harness">
-        <SettingsCard>
           {connectionState === "connecting" ? (
             <div className="p-3">
               <LoadingState
@@ -198,7 +196,7 @@ export function AgentDefaultsPane() {
           ) : connectionState === "failed" ? (
             <div className="space-y-1 p-3">
               <p className="text-sm font-medium text-foreground">Agent defaults are unavailable</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {runtimeError ?? "Reconnect the runtime to edit launch defaults."}
               </p>
             </div>
@@ -212,12 +210,12 @@ export function AgentDefaultsPane() {
           ) : agentDefaultRows.length === 0 ? (
             <div className="space-y-1 p-3">
               <p className="text-sm font-medium text-foreground">No agent defaults are available</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Install and configure a harness before editing launch defaults.
               </p>
             </div>
           ) : (
-            <SettingsCardRow
+            <SettingsRow
               label="Harness"
               description="Launch identity for new chats"
             >
@@ -242,9 +240,8 @@ export function AgentDefaultsPane() {
                   })),
                 }]}
               />
-            </SettingsCardRow>
+            </SettingsRow>
           )}
-        </SettingsCard>
       </AgentDefaultsSection>
 
       {connectionState !== "failed" && orderedAgentDefaultRows.map((row) => (

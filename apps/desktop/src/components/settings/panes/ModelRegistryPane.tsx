@@ -92,14 +92,14 @@ export function ModelRegistryPane({
           />
           <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
             {filteredModels.length === 0 ? (
-              <p className="px-2 py-3 text-sm text-muted-foreground">No models found</p>
+              <p className="px-2 py-3 text-xs text-muted-foreground">No models found</p>
             ) : filteredModels.map((model) => (
               <div
                 key={model.id}
                 className="flex min-h-9 items-center justify-between gap-3 rounded-md px-2 py-1 hover:bg-muted/50"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-foreground">{model.displayName}</p>
+                  <p className="truncate text-[13px] text-foreground">{model.displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {model.id}
                     {model.hasManualOverride ? " · manual" : model.catalogDefaultOptIn ? " · default" : ""}

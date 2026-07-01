@@ -2,8 +2,8 @@ import {
   SETTINGS_SCAFFOLD_COPY,
   type SettingsScaffoldPageId,
 } from "@/copy/settings/settings-scaffold-copy";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@/components/settings/shared/SettingsSection";
+import { SettingsRow } from "@/components/settings/shared/SettingsRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 
 interface SettingsScaffoldPaneProps {
@@ -17,15 +17,15 @@ export function SettingsScaffoldPane({ pageId }: SettingsScaffoldPaneProps) {
     <section className="space-y-6">
       <SettingsPageHeader title={copy.title} description={copy.description} />
 
-      <SettingsCard>
+      <SettingsSection>
         {copy.rows.map((row) => (
-          <SettingsCardRow
+          <SettingsRow
             key={row.label}
             label={row.label}
             description={row.description}
           />
         ))}
-      </SettingsCard>
+      </SettingsSection>
     </section>
   );
 }

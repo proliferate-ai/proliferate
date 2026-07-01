@@ -220,7 +220,7 @@ export function KeyboardShortcutsPane() {
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-8 text-center text-sm text-muted-foreground shadow-subtle">
+          <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-8 text-center text-xs text-muted-foreground shadow-subtle">
             No shortcuts found
           </div>
         )}

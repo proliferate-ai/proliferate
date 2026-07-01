@@ -1,5 +1,4 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 
 interface AdminOnlyPlaceholderProps {
   role?: string | null;
@@ -15,20 +14,18 @@ export function AdminOnlyPlaceholder({
     : "Your current role does not allow changes here.";
 
   return (
-    <SettingsCard>
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Admin access required</p>
-          <p className="text-sm text-muted-foreground">
-            Organization owners and admins can configure this page. {roleDescription}
-          </p>
-        </div>
-        {onOpenOrganization ? (
+    <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+      <div className="text-sm font-medium text-foreground">Admin access required</div>
+      <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
+        Organization owners and admins can configure this page. {roleDescription}
+      </p>
+      {onOpenOrganization ? (
+        <div className="mt-2">
           <Button type="button" variant="outline" size="sm" onClick={onOpenOrganization}>
             Open organization
           </Button>
-        ) : null}
-      </div>
-    </SettingsCard>
+        </div>
+      ) : null}
+    </div>
   );
 }

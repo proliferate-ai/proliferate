@@ -43,7 +43,7 @@ export function OrganizationMembersList({
   return (
     <div className="w-full overflow-hidden">
       <div className="w-full">
-        <div className={`${PEOPLE_GRID_CLASS} border-b border-border-light pb-3 text-sm font-medium text-foreground`}>
+        <div className={`${PEOPLE_GRID_CLASS} border-b border-border pb-3 text-sm font-medium text-foreground`}>
           <span>Name</span>
           <span>Date joined</span>
           <span>Role</span>
@@ -109,7 +109,7 @@ function MemberRow({
   const showStatusBadge = status.label !== "Active";
 
   return (
-    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border-light py-5 last:border-b-0`}>
+    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border py-5 last:border-b-0`}>
       <div className="flex min-w-0 items-center gap-3">
         <Avatar member={member} />
         <div className="min-w-0">
@@ -178,7 +178,7 @@ function InvitationRow({
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
   return (
-    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border-light py-5 last:border-b-0`}>
+    <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border py-5 last:border-b-0`}>
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-muted-foreground">
           <Mail className="size-4" />
@@ -228,7 +228,7 @@ function MemberMeta({ value }: { value: ReactNode }) {
 
 function EmptyPeopleRow({ label }: { label: string }) {
   return (
-    <div className="border-b border-border-light py-6 text-sm text-muted-foreground last:border-b-0">
+    <div className="border-b border-border py-6 text-sm text-muted-foreground last:border-b-0">
       {label}
     </div>
   );

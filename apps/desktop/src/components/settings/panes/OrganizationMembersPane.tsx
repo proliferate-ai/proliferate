@@ -4,7 +4,6 @@ import { CurrentUserInvitationsSection } from "@/components/settings/panes/organ
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
@@ -126,25 +125,25 @@ export function OrganizationMembersPane() {
 
       {shouldShowSignInState ? (
         <OrganizationSection title="Members" description="Organization access is tied to your signed-in account.">
-          <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+            <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
               Sign in to view organization members.
-            </div>
-          </SettingsCard>
+            </p>
+          </div>
         </OrganizationSection>
       ) : null}
 
       {shouldShowLoadingState ? (
-        <div className="text-sm text-muted-foreground">Loading members...</div>
+        <div className="text-xs text-muted-foreground">Loading members...</div>
       ) : null}
 
       {shouldShowErrorState ? (
         <OrganizationSection title="Members">
-          <SettingsCard>
-            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
-                Organization members could not be loaded.
-              </div>
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+            <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
+              Organization members could not be loaded.
+            </p>
+            <div className="mt-2">
               <Button
                 type="button"
                 variant="secondary"
@@ -155,7 +154,7 @@ export function OrganizationMembersPane() {
                 Retry
               </Button>
             </div>
-          </SettingsCard>
+          </div>
         </OrganizationSection>
       ) : null}
 
@@ -172,11 +171,11 @@ export function OrganizationMembersPane() {
 
       {shouldShowEmptyState ? (
         <OrganizationSection title="Members">
-          <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+            <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
               No organization yet.
-            </div>
-          </SettingsCard>
+            </p>
+          </div>
         </OrganizationSection>
       ) : null}
 
@@ -220,7 +219,7 @@ export function OrganizationMembersPane() {
 
 function OrganizationNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border-light bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
       {children}
     </div>
   );

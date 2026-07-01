@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Archive } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useComputeTargetEnrollment } from "@/hooks/settings/workflows/use-compute-target-enrollment";
@@ -125,14 +124,12 @@ export function ComputeTargetDetails({
 
   if (loading) {
     return (
-      <SettingsCard className="min-h-[320px]">
-        <div className="space-y-4 p-4">
-          <div className="h-4 w-48 rounded-full bg-foreground/10" />
-          <div className="h-24 rounded-md bg-foreground/5" />
-          <div className="h-24 rounded-md bg-foreground/5" />
-          <p className="text-sm text-muted-foreground">Loading target details...</p>
-        </div>
-      </SettingsCard>
+      <div className="min-h-[320px] space-y-4">
+        <div className="h-4 w-48 rounded-full bg-foreground/10" />
+        <div className="h-24 rounded-md bg-foreground/5" />
+        <div className="h-24 rounded-md bg-foreground/5" />
+        <p className="text-sm text-muted-foreground">Loading target details...</p>
+      </div>
     );
   }
   if (!target || !draftAppearance) {
@@ -224,7 +221,7 @@ export function ComputeTargetDetails({
   }
 
   return (
-    <SettingsCard>
+    <div>
       <ComputeTargetDetailsHeader
         target={target}
         appearance={draftAppearance}
@@ -317,7 +314,7 @@ export function ComputeTargetDetails({
           </>
         )}
       </div>
-    </SettingsCard>
+    </div>
   );
 }
 
@@ -326,5 +323,5 @@ function validPortOrDefault(value: number, fallback: number): number {
 }
 
 function Divider() {
-  return <div className="-mx-4 h-px bg-border/40" />;
+  return <div className="-mx-4 h-px bg-border" />;
 }

@@ -49,6 +49,7 @@
     "@xterm/xterm": "^6.0.0",
     "cmdk": "^1.1.1",
     "geist": "^1.7.2",
+    "lucide-react": "0.577.0",
     "openapi-fetch": "^0.17.0",
     "posthog-js": "^1.386.8",
     "react": "19.2.7",

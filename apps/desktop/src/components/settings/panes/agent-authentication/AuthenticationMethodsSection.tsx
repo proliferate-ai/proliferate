@@ -3,7 +3,6 @@ import type { AgentAuthCredential, AgentGatewayCapabilities } from "@proliferate
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Plus } from "@proliferate/ui/icons";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/agent-authentication/CloudAgentAuthCredentialForm";
 import {
   CredentialMethodRow,
@@ -61,8 +60,8 @@ export function AuthenticationMethodsSection({
           and managed credits available to your personal sandboxes.
         </p>
       </div>
-      <SettingsCard>
-        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] gap-3 border-b border-border-light bg-foreground/5 px-4 py-2 text-base font-semibold uppercase tracking-wide text-muted-foreground">
+      <div>
+        <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] gap-3 border-b border-border bg-foreground/5 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
           <span>Method</span>
           <span>Provider</span>
           <span>Source</span>
@@ -91,7 +90,7 @@ export function AuthenticationMethodsSection({
           onEnsureFreeCredits={onEnsureFreeCredits}
         />
         {userManagedCredentials.length === 0 ? (
-          <div className="border-t border-border-light px-4 py-3 text-sm text-muted-foreground">
+          <div className="border-t border-border px-4 py-3 text-sm text-muted-foreground">
             No synced or BYOK credentials have been saved yet.
           </div>
         ) : userManagedCredentials.map((credential) => (
@@ -111,7 +110,7 @@ export function AuthenticationMethodsSection({
           className="flex w-full items-center justify-start gap-3 whitespace-normal px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
           onClick={() => setAddingCredential((value) => !value)}
         >
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-light bg-foreground/5">
+          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5">
             <Plus className="size-3.5" />
           </span>
           <span className="min-w-0 flex-1">
@@ -124,7 +123,7 @@ export function AuthenticationMethodsSection({
             {addingCredential ? "Close" : "Add"}
           </span>
         </Button>
-      </SettingsCard>
+      </div>
       {addingCredential && (
         <CloudAgentAuthCredentialForm
           agentGatewayCapabilities={capabilities}

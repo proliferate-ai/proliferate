@@ -1,6 +1,6 @@
-import type { FC, ReactNode } from "react";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import type { FC } from "react";
+import { SettingsSection } from "@/components/settings/shared/SettingsSection";
+import { SettingsRow } from "@/components/settings/shared/SettingsRow";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -75,11 +75,10 @@ export function AppearancePane() {
     <section className="space-y-5">
       <SettingsPageHeader title="Appearance" />
 
-      <AppearanceSection title="Preferences">
-        <SettingsCard>
+      <SettingsSection title="Preferences">
           <AppearancePreview />
 
-          <SettingsCardRow
+          <SettingsRow
             label="Mode"
             description={
               modeLocked
@@ -110,9 +109,9 @@ export function AppearancePane() {
                 );
               })}
             </div>
-          </SettingsCardRow>
+          </SettingsRow>
 
-          <SettingsCardRow
+          <SettingsRow
             label="Theme"
             description="Choose the Proliferate visual preset"
           >
@@ -130,9 +129,9 @@ export function AppearancePane() {
                 })),
               }]}
             />
-          </SettingsCardRow>
+          </SettingsRow>
 
-          <SettingsCardRow
+          <SettingsRow
             label="Window zoom"
             description="Scale the app window without changing saved font sizes"
           >
@@ -165,9 +164,9 @@ export function AppearancePane() {
                 <Plus className="size-3.5" />
               </Button>
             </div>
-          </SettingsCardRow>
+          </SettingsRow>
 
-          <SettingsCardRow
+          <SettingsRow
             label="UI font size"
             description="Scale app and chat text"
           >
@@ -185,9 +184,9 @@ export function AppearancePane() {
                 })),
               }]}
             />
-          </SettingsCardRow>
+          </SettingsRow>
 
-          <SettingsCardRow
+          <SettingsRow
             label="Code font size"
             description="Scale editors, diffs, and code blocks"
           >
@@ -205,13 +204,11 @@ export function AppearancePane() {
                 })),
               }]}
             />
-          </SettingsCardRow>
-        </SettingsCard>
-      </AppearanceSection>
+          </SettingsRow>
+      </SettingsSection>
 
-      <AppearanceSection title="Advanced">
-        <SettingsCard>
-          <SettingsCardRow
+      <SettingsSection title="Advanced">
+          <SettingsRow
             label="Transparent chrome"
             description="Use glass treatment for workspace headers and tab bars"
           >
@@ -219,25 +216,9 @@ export function AppearancePane() {
               checked={transparentChromeEnabled}
               onChange={(value) => setPreference("transparentChromeEnabled", value)}
             />
-          </SettingsCardRow>
-        </SettingsCard>
-      </AppearanceSection>
+          </SettingsRow>
+      </SettingsSection>
     </section>
-  );
-}
-
-function AppearanceSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <h2 className="text-base font-medium text-foreground">{title}</h2>
-      {children}
-    </div>
   );
 }
 

@@ -35,8 +35,17 @@ import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { type SettingsFocus } from "@/lib/domain/settings/navigation";
-import { isSettingsAdminOnlySection } from "@/lib/domain/settings/navigation-presentation";
+import {
+  getFirstSectionForScope,
+  getSettingsScopeForSection,
+  isSettingsAdminOnlySection,
+} from "@/lib/domain/settings/navigation-presentation";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
+import { SettingsScopeTabs } from "@/components/settings/screen/SettingsScopeTabs";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowLeft } from "lucide-react";
+import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
@@ -239,6 +248,7 @@ export function SettingsScreen({
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
   const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
+  const { revealInFinder } = useTauriShellActions();
   const {
     phase,
     checkNow,
@@ -275,64 +285,110 @@ export function SettingsScreen({
     onSelectSection(SETTINGS_DEFAULT_SECTION);
   }, [activeSection, onSelectSection, shouldRedirectAdminSection]);
 
-  return (
-    <div className="flex h-screen bg-surface-under text-foreground" data-telemetry-block>
-      <SettingsSidebar
-        activeSection={effectiveActiveSection}
-        adminAccess={{
-          isAdmin: admin.isAdmin,
-          isLoading: admin.isLoading,
-        }}
-        onNavigateHome={onNavigateHome}
-        onSelectSection={onSelectSection}
-        disabledSections={{
-          "agent-authentication": !cloudEnabled,
-          "organization-integrations": !cloudEnabled,
-          "organization-secrets": !cloudEnabled,
-          "organization-sso": !cloudEnabled,
-          compute: !cloudEnabled,
-          "personal-secrets": !cloudEnabled,
-          // SLACK BOT PARKED: section is not registered while the flow is disabled.
-          // "slack-bot": !cloudEnabled,
-        }}
-        onCheckForUpdates={() => { void checkNow(); }}
-        updateActionState={{
-          isChecking: phase === "checking",
-          hasAvailableUpdate: phase === "available" || phase === "ready",
-          phase,
-          updatesSupported,
-        }}
-      />
+  const activeScope = getSettingsScopeForSection(effectiveActiveSection);
+  const handleScopeChange = (scope: typeof activeScope) => {
+    if (scope === activeScope) {
+      return;
+    }
+    onSelectSection(getFirstSectionForScope(scope));
+  };
+  const handleEditSettingsToml = async () => {
+    try {
+      const { appConfigDir } = await import("@tauri-apps/api/path");
+      await revealInFinder(await appConfigDir());
+    } catch {
+      // Best-effort: revealing the on-disk config is not available in this environment.
+    }
+  };
 
-      <div className="relative min-w-0 flex-1 bg-background">
-        <div className="absolute left-0 right-0 top-0 h-10" data-tauri-drag-region="true" />
-        <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-14">
-          <div className="flex justify-center pb-8">
-            <div
-              className={`w-full space-y-6 ${
-                effectiveActiveSection === "worktrees"
-                  ? "max-w-[58rem]"
-                  : "max-w-[50rem]"
-              }`}
+  return (
+    <div className="flex h-screen flex-col bg-background text-foreground" data-telemetry-block>
+      <header className="shrink-0 border-b border-border">
+        <div
+          className="flex h-10 items-center gap-2 pl-[82px] pr-3"
+          data-tauri-drag-region="true"
+        >
+          <button
+            type="button"
+            onClick={onNavigateHome}
+            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            {SETTINGS_COPY.back}
+          </button>
+        </div>
+        <div className="flex h-[46px] items-center gap-4 px-4">
+          <SettingsScopeTabs value={activeScope} onChange={handleScopeChange} />
+          <div className="ml-auto flex shrink-0 items-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleEditSettingsToml(); }}
             >
-              <SettingsContentBoundary section={effectiveActiveSection}>
-                {renderSettingsSection(
-                  effectiveActiveSection,
-                  activeRepository,
-                  repositories,
-                  cloudEnabled,
-                  cloudActive,
-                  cloudSignInChecking,
-                  cloudSignInAvailable,
-                  focus,
-                  onSelectSection,
-                  onSelectRepo,
-                  onSelectCloudEnvironment,
-                )}
-              </SettingsContentBoundary>
-            </div>
+              Edit settings.toml
+            </Button>
           </div>
-        </AutoHideScrollArea>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <SettingsSidebar
+          activeScope={activeScope}
+          activeSection={effectiveActiveSection}
+          adminAccess={{
+            isAdmin: admin.isAdmin,
+            isLoading: admin.isLoading,
+          }}
+          onSelectSection={onSelectSection}
+          disabledSections={{
+            "agent-authentication": !cloudEnabled,
+            "organization-integrations": !cloudEnabled,
+            "organization-secrets": !cloudEnabled,
+            "organization-sso": !cloudEnabled,
+            compute: !cloudEnabled,
+            "personal-secrets": !cloudEnabled,
+            // SLACK BOT PARKED: section is not registered while the flow is disabled.
+            // "slack-bot": !cloudEnabled,
+          }}
+          onCheckForUpdates={() => { void checkNow(); }}
+          updateActionState={{
+            isChecking: phase === "checking",
+            hasAvailableUpdate: phase === "available" || phase === "ready",
+            phase,
+            updatesSupported,
+          }}
+        />
+
+        <div className="relative min-w-0 flex-1 bg-background">
+          <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-10">
+            <div className="flex justify-center pb-8">
+              <div
+                className={`w-full space-y-6 ${
+                  effectiveActiveSection === "worktrees"
+                    ? "max-w-[58rem]"
+                    : "max-w-[50rem]"
+                }`}
+              >
+                <SettingsContentBoundary section={effectiveActiveSection}>
+                  {renderSettingsSection(
+                    effectiveActiveSection,
+                    activeRepository,
+                    repositories,
+                    cloudEnabled,
+                    cloudActive,
+                    cloudSignInChecking,
+                    cloudSignInAvailable,
+                    focus,
+                    onSelectSection,
+                    onSelectRepo,
+                    onSelectCloudEnvironment,
+                  )}
+                </SettingsContentBoundary>
+              </div>
+            </div>
+          </AutoHideScrollArea>
+        </div>
       </div>
     </div>
   );
