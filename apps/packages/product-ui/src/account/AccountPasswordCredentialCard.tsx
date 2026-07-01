@@ -79,7 +79,7 @@ export function AccountPasswordCredentialCard({
 
   return (
     <SettingsSection>
-      <div className="space-y-4 p-4">
+      <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">

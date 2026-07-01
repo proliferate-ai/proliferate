@@ -76,7 +76,7 @@ export function AutomationCreatePanel({
   return (
     <SettingsSection>
       <form onSubmit={handleSubmit}>
-        <div className="flex items-start justify-between gap-4 border-b border-border-light px-4 py-3">
+        <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
           <div className="min-w-0 space-y-1">
             <div className="text-sm font-medium text-foreground">New workflow</div>
             <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
@@ -96,12 +96,12 @@ export function AutomationCreatePanel({
         </div>
 
         {error ? (
-          <div className="border-b border-border-light px-4 py-3 text-sm text-destructive">
+          <div className="border-b border-border py-3 text-sm text-destructive">
             {error}
           </div>
         ) : null}
 
-        <div className="grid gap-4 px-4 py-4">
+        <div className="grid gap-4 py-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field title="Title">
               <Input

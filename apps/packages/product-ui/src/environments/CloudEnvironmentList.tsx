@@ -135,9 +135,11 @@ function SectionHeading({
 }) {
   return (
     <div className="flex items-end justify-between gap-3">
-      <div className="min-w-0 space-y-1">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
-        <p className="text-xs leading-4 text-muted-foreground">{description}</p>
+      <div className="min-w-0">
+        <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+          {title}
+        </h3>
+        <p className="mt-1 max-w-2xl text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

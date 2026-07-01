@@ -118,16 +118,10 @@ export function AccountSettingsPane({
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection>
-        <div className="space-y-3 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <div className="text-sm font-medium text-foreground">{providersTitle}</div>
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                {providersDescription}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <SettingsSection title={providersTitle} description={providersDescription}>
+        <div className="space-y-3">
+          {actions.connectGoogle || actions.connectApple ? (
+            <div className="flex flex-wrap items-center gap-2">
               {actions.connectGoogle ? (
                 <AccountAction action={actions.connectGoogle} variant="secondary" />
               ) : null}
@@ -135,9 +129,9 @@ export function AccountSettingsPane({
                 <AccountAction action={actions.connectApple} variant="secondary" />
               ) : null}
             </div>
-          </div>
+          ) : null}
 
-          <div className="overflow-hidden rounded-lg border border-border">
+          <div className="flex flex-col">
             {providers.map((provider) => (
               <ProviderRow key={`${provider.provider}-${provider.accountLabel ?? provider.label}`} provider={provider} />
             ))}
@@ -146,21 +140,11 @@ export function AccountSettingsPane({
       </SettingsSection>
 
       {connectedServices.length > 0 ? (
-        <SettingsSection>
-          <div className="space-y-3 p-4">
-            <div className="min-w-0 space-y-1">
-              <div className="text-sm font-medium text-foreground">
-                {connectedServicesTitle}
-              </div>
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                {connectedServicesDescription}
-              </p>
-            </div>
-            <div className="overflow-hidden rounded-lg border border-border">
-              {connectedServices.map((service) => (
-                <ConnectedServiceRow key={service.id} service={service} />
-              ))}
-            </div>
+        <SettingsSection title={connectedServicesTitle} description={connectedServicesDescription}>
+          <div className="flex flex-col">
+            {connectedServices.map((service) => (
+              <ConnectedServiceRow key={service.id} service={service} />
+            ))}
           </div>
         </SettingsSection>
       ) : null}
