@@ -6,8 +6,6 @@ import {
   useCloudCapabilities,
   useCloudRepoBranches,
   useCloudRepoConfigs,
-  useCloudTargets,
-  useTargetLive,
   useVisibleCloudWorkspaces,
 } from "@proliferate/cloud-sdk-react";
 import {
@@ -67,9 +65,6 @@ export function useWebHomeScreen() {
   const cloudCapabilities = useCloudCapabilities();
   const agentAuthCredentials = useAgentAuthCredentials();
   const visibleWorkspaces = useVisibleCloudWorkspaces();
-  const targets = useCloudTargets();
-  const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
-  const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
     [repoConfigs.data?.configs],
@@ -78,22 +73,9 @@ export function useWebHomeScreen() {
     () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
     [repoId, repoOptions],
   );
-  const liveTargets = useMemo(() => {
-    const liveTarget = targetLive.snapshot?.target;
-    if (!liveTarget) {
-      return targets.data;
-    }
-    const baseTargets = targets.data ?? [];
-    if (!baseTargets.some((target) => target.id === liveTarget.id)) {
-      return [...baseTargets, liveTarget];
-    }
-    return baseTargets.map((target) =>
-      target.id === liveTarget.id ? { ...target, ...liveTarget } : target
-    );
-  }, [targetLive.snapshot?.target, targets.data]);
   const runtimeOptions = useMemo(
-    () => buildRuntimeOptions(liveTargets),
-    [liveTargets],
+    () => buildRuntimeOptions(),
+    [],
   );
   const selectedRuntime = useMemo(
     () => runtimeOptions.find((runtime) => runtime.id === runtimeId) ?? runtimeOptions[0] ?? null,
@@ -134,11 +116,8 @@ export function useWebHomeScreen() {
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
-    readyAgentKinds: selectedRuntime?.kind === "target"
-      ? agentCatalog.data?.agents.map((agent) => agent.kind)
-      : readyAgentKinds,
-    agentGateway: selectedRuntime?.kind === "target" ? null : agentGateway,
-    assumeFallbackAgentKindsLaunchable: selectedRuntime?.kind === "target",
+    readyAgentKinds,
+    agentGateway,
   }), [
     agentCatalog.data,
     readyAgentKindsKey,
@@ -149,10 +128,9 @@ export function useWebHomeScreen() {
     agentGatewayAuthSlotsKey,
     agentGatewayManagedCreditKindsKey,
     catalogAgentKindsKey,
-    selectedRuntime?.kind,
   ]);
   const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
-  const selectedRuntimeReady = selectedRuntime?.kind !== "target" || selectedRuntime.online;
+  const selectedRuntimeReady = selectedRuntime?.online ?? false;
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
@@ -210,7 +188,7 @@ export function useWebHomeScreen() {
       }),
       buildRuntimeControl({
         runtimeOptions,
-        loading: targets.isLoading,
+        loading: false,
         selectedRuntime,
         onSelect: setRuntimeId,
       }),
@@ -224,7 +202,6 @@ export function useWebHomeScreen() {
       selectedBaseBranch,
       selectedRepo,
       selectedRuntime,
-      targets.isLoading,
     ],
   );
 
@@ -333,9 +310,7 @@ export function useWebHomeScreen() {
       && !submitWorkflow.submitting,
     submitting: submitWorkflow.submitting,
     commandMessage: pendingPrompt?.status === "creating"
-      ? selectedRuntime?.kind === "target"
-        ? "Dispatching to Desktop. The prompt will send as soon as the session is ready."
-        : "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
+      ? "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
       : null,
     setDraft,
     setAddRepoOpen,

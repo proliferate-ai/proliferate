@@ -1,6 +1,7 @@
 export type {
   SessionViewState,
   SidebarSessionActivityState,
+  StreamConnectionState,
 } from "./activity-types";
 export {
   isSessionEffectivelyStreaming,

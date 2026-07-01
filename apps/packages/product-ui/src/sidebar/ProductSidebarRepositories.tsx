@@ -34,11 +34,11 @@ export function ProductSidebarRepoGroupHeader({
     <SidebarRowSurface
       onPress={onToggleCollapsed}
       aria-expanded={!collapsed}
-      className={`group/folder-row h-[30px] justify-between overflow-x-hidden py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
+      className={`group/folder-row h-[30px] justify-between overflow-x-hidden px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
-        <span className="relative flex h-6 w-6 items-center justify-center text-sidebar-muted-foreground">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="relative flex size-[18px] items-center justify-center text-current">
           {visibleIcon ? (
             <span className="flex items-center justify-center group-hover/folder-row:opacity-0">
               {visibleIcon}
@@ -48,12 +48,12 @@ export function ProductSidebarRepoGroupHeader({
             {hoverIconNode}
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-base leading-5 text-current">
+        <span className="min-w-0 flex-1 truncate text-sm leading-4 text-current">
           {label}
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className={`absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
+          <span className={`absolute inset-0 flex items-center justify-center font-mono text-[11px] leading-3 text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
             }`}>
             {count}
           </span>
@@ -114,18 +114,18 @@ export function ProductSidebarWorkspaceRow({
         </div>
       ) : null}
       <div className="flex h-full w-full items-center text-sm leading-4">
-        <div className="flex w-4 shrink-0 items-center justify-center">
+        <div className="flex size-[18px] shrink-0 items-center justify-center text-current">
           {status}
         </div>
 
         {attentionStatus ? (
-          <div className="ml-1 flex w-3 shrink-0 items-center justify-center">
+          <div className="ml-1 flex size-3.5 shrink-0 items-center justify-center">
             {attentionStatus}
           </div>
         ) : null}
 
-        <div className={`${attentionStatus ? "ml-1" : "ml-1.5"} flex min-w-0 flex-1 items-center gap-2 pl-0.5`}>
-          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-base leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
+        <div className={`${attentionStatus ? "ml-1.5" : "ml-2"} flex min-w-0 flex-1 items-center gap-2`}>
+          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-sm leading-4 ${archived ? "text-sidebar-muted-foreground/60" : "text-current"
             }`}>
             <span
               className={`${hasSubtitle ? "max-w-full" : "min-w-0 flex-1"} truncate select-none`}
@@ -151,7 +151,7 @@ export function ProductSidebarWorkspaceRow({
             }`}>
 
             {trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-xs leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>

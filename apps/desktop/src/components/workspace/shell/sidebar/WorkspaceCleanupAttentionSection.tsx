@@ -22,19 +22,19 @@ export function WorkspaceCleanupAttentionSection({
 
   return (
     <div className="flex flex-col gap-px pb-2">
-      <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground opacity-75">
+      <div className="pl-2 pt-3 pb-1 text-xs font-medium leading-4 text-sidebar-muted-foreground">
         Cleanup
       </div>
       {workspaces.map((workspace) => (
         <SidebarRowSurface
           key={workspace.id}
-          className="min-h-[34px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
+          className="min-h-[34px] gap-2 px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px]"
         >
-          <div className="flex w-4 shrink-0 items-center justify-center">
+          <div className="flex size-[18px] shrink-0 items-center justify-center">
             <CircleAlert className="size-3 text-destructive" />
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-base leading-5 text-current">
+            <span className="truncate text-sm leading-4 text-current">
               {workspaceDisplayName(workspace)}
             </span>
             <span className="truncate text-xs leading-4 text-sidebar-muted-foreground">

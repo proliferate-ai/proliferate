@@ -34,13 +34,6 @@ export function buildHomeNotices(input: {
       text: input.harnessMessage,
     }
     : null;
-  const runtimeNotice: NoticeView | null = input.selectedRuntime?.kind === "target" && !input.selectedRuntime.online
-    ? {
-      id: "runtime-offline",
-      tone: "warning",
-      text: `${input.selectedRuntime.label} is offline.`,
-    }
-    : null;
   if (errorNotice && input.pendingPrompt?.status === "failed") {
     errorNotice.action = {
       label: "Retry",
@@ -49,7 +42,6 @@ export function buildHomeNotices(input: {
   }
   return [
     repoNotice,
-    runtimeNotice,
     harnessNotice,
     errorNotice,
   ].filter((notice): notice is NoticeView => Boolean(notice));
@@ -75,7 +67,7 @@ export function buildRuntimeControl(input: {
       label: runtime.label,
       description: runtime.description,
       selected: runtime.id === input.selectedRuntime?.id,
-      disabled: runtime.kind === "target" && !runtime.online,
+      disabled: false,
     }));
 
   return {

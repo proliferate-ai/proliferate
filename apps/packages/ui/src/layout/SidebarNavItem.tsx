@@ -30,7 +30,7 @@ export const SidebarNavItem = forwardRef<HTMLButtonElement, SidebarNavItemProps>
         {...props}
       >
         {icon && (
-          <span className="flex size-[1.125em] shrink-0 items-center justify-center text-sidebar-muted-foreground [&>svg]:size-full [&>svg]:shrink-0">
+          <span className="flex size-[18px] shrink-0 items-center justify-center text-current [&>svg]:size-4 [&>svg]:shrink-0">
             {icon}
           </span>
         )}

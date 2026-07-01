@@ -234,21 +234,21 @@ function RepoGroupEnvironmentIcon({
   const FolderIcon = expanded ? FolderFilled : FolderClosedFilled;
 
   if (kind === "cloud") {
-    return <CloudIcon className="size-3.5 shrink-0" />;
+    return <CloudIcon className="size-4 shrink-0" />;
   }
 
   if (kind === "local_cloud") {
     return (
       <span className="relative flex size-4 shrink-0 items-center justify-center">
-        <FolderIcon className="size-3.5 shrink-0" />
-        <span className="absolute -bottom-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-sidebar text-sidebar-muted-foreground">
+        <FolderIcon className="size-4 shrink-0" />
+        <span className="absolute -bottom-0.5 -right-0.5 flex size-2.5 items-center justify-center rounded-full bg-sidebar text-current">
           <Globe className="size-2" />
         </span>
       </span>
     );
   }
 
-  return <FolderIcon className="size-3.5 shrink-0" />;
+  return <FolderIcon className="size-4 shrink-0" />;
 }
 
 function RepoContextMenuContent({

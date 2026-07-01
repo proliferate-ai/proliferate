@@ -5,8 +5,6 @@ import {
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 
-import { isRecoverableCloudDispatchError } from "./cloud-command-status";
-
 export async function createCloudWorkspaceWithTransientRecovery(args: {
   client: ProliferateCloudClient;
   request: CreateCloudWorkspaceRequest;
@@ -25,7 +23,7 @@ export async function createCloudWorkspaceWithTransientRecovery(args: {
       if (recovered) {
         return recovered;
       }
-      if (!isRecoverableCloudDispatchError(error) && !isDuplicateBranchError(error)) {
+      if (!isRecoverableNetworkError(error) && !isDuplicateBranchError(error)) {
         throw error;
       }
     }
@@ -82,6 +80,12 @@ function escapeRegExp(value: string): string {
 function isDuplicateBranchError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /\bcloud_branch_already_exists\b|\bbranch\b.*\balready exists\b/i.test(message);
+}
+
+function isRecoverableNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /\b(failed to fetch|network|load failed|connection|aborted|timeout|timed out)\b/i
+    .test(message);
 }
 
 function sleep(delayMs: number): Promise<void> {

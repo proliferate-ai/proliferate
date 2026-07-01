@@ -88,7 +88,7 @@ function RecentSourceIndicator({ item }: { item: RecentWorkItemView }) {
   const icon = runtimeIcon(item.runtimeLocation, item.sourceKind);
   return (
     <span
-      className="flex size-4 items-center justify-center text-sidebar-muted-foreground"
+      className="flex size-4 items-center justify-center text-current"
       title={runtimeIndicatorLabel(item)}
       aria-label={runtimeIndicatorLabel(item)}
     >
