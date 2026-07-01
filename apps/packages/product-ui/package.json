@@ -263,6 +263,10 @@
       "types": "./dist/repos/AddCloudRepoDialog.d.ts",
       "import": "./dist/repos/AddCloudRepoDialog.js"
     },
+    "./repos/AddRepoFlow": {
+      "types": "./dist/repos/AddRepoFlow.d.ts",
+      "import": "./dist/repos/AddRepoFlow.js"
+    },
     "./environments/AddCloudEnvironmentDialog": {
       "types": "./dist/environments/AddCloudEnvironmentDialog.d.ts",
       "import": "./dist/environments/AddCloudEnvironmentDialog.js"

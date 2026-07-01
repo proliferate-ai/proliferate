@@ -78,11 +78,15 @@ export function useAddRepo() {
     });
   }, [saveEnvironment]);
 
-  const addRepoFromPath = useCallback(async (path: string) => {
+  const addRepoFromPath = useCallback(async (
+    path: string,
+    options?: { createCloudEnvironment?: boolean },
+  ): Promise<boolean> => {
     if (!canAddRepo) {
-      return;
+      return false;
     }
 
+    const createCloudEnvironment = options?.createCloudEnvironment ?? true;
     setIsAddingRepo(true);
     try {
       await runAddRepoWorkflow({
@@ -91,12 +95,16 @@ export function useAddRepo() {
         resolveRepoRootFromPath: (repoPath) => resolveRepoRootFromPath(repoPath),
         upsertRepoRootInWorkspaceCollections,
         invalidateWorkspaceCollections: invalidateWorkspaceCollectionsForRuntime,
-        saveLocalRepoEnvironment,
+        saveLocalRepoEnvironment: createCloudEnvironment
+          ? saveLocalRepoEnvironment
+          : undefined,
         unhideRepoRoot,
         openRepoSetupModal,
       });
+      return true;
     } catch (error) {
       showToast(describeAddRepoFailure(error));
+      return false;
     } finally {
       setIsAddingRepo(false);
     }

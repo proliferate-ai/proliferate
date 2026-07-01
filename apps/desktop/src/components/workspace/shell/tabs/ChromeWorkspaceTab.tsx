@@ -74,7 +74,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
       >
         <span
           aria-hidden="true"
-          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-[var(--workspace-shell-tab-radius,0.5rem)] border transition-[background-color,border-color] duration-150"
+          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-[var(--workspace-shell-tab-radius,0.5rem)]"
         />
         <div
           className={`absolute inset-0 flex items-center overflow-hidden rounded-[var(--workspace-shell-tab-radius,0.5rem)] py-1 ${

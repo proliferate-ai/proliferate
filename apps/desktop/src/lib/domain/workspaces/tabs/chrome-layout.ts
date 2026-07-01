@@ -1,7 +1,8 @@
 export const CHROME_TAB_MIN_WIDTH = 136;
 export const CHROME_TAB_COMPACT_WIDTH = 60;
 export const CHROME_TAB_SMALL_WIDTH = 84;
-export const CHROME_TAB_MAX_WIDTH = 200;
+// 156px = codex tab chrome max-width (UX_SPEC §7).
+export const CHROME_TAB_MAX_WIDTH = 156;
 export const CHROME_DELEGATED_TAB_MAX_WIDTH = CHROME_TAB_SMALL_WIDTH;
 export const CHROME_TAB_GAP = 3;
 export const CHROME_TAB_CONTENT_MARGIN = 0;

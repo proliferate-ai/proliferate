@@ -51,7 +51,7 @@ export function GitPanelHeader({
 
   return (
     <div
-      className="z-20 grid min-h-9 shrink-0 [container-name:review-header] [container-type:inline-size] grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
+      className="z-20 grid min-h-10 shrink-0 [container-name:review-header] [container-type:inline-size] grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
     >
       <div className="flex w-full min-w-0 flex-col overflow-hidden text-base">
         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
