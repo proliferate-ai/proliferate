@@ -8,7 +8,7 @@ import {
 } from "./transcript-trailing-status";
 
 describe("transcript trailing status", () => {
-  it("suppresses trailing status while assistant prose is the visible tail", () => {
+  it("suppresses trailing status only while assistant prose is actively streaming", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", true),
     ]);
@@ -23,16 +23,18 @@ describe("transcript trailing status", () => {
 
     transcript.itemsById.assistant = assistantItem("assistant", false);
 
+    // Prose finished but the turn is still in progress: the indicator must
+    // return so the turn never reads as "done" while the agent keeps working.
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
     expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(false);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
       isLatestTurnInProgress: true,
-    })).toBe(false);
+    })).toBe(true);
   });
 
-  it("ignores later transient thoughts when assistant prose is the visible tail", () => {
+  it("shows transient thought status after prose completes mid-turn", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", false),
       transientThoughtItem("status", "Checking the next action"),
@@ -44,7 +46,7 @@ describe("transcript trailing status", () => {
       turn,
       transcript,
       isLatestTurnInProgress: true,
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it("allows trailing status after transient thought when no prose is visible", () => {

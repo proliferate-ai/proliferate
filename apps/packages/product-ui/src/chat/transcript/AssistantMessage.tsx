@@ -21,9 +21,9 @@ export type {
   MarkdownLinkRenderer,
 } from "./MarkdownBody";
 
-const STREAM_FLUSH_MS = 32;
-const MIN_STREAM_STEP = 20;
-const MAX_STREAM_STEP = 120;
+const STREAM_FLUSH_MS = 16;
+const MIN_STREAM_STEP = 3;
+const MAX_STREAM_STEP = 96;
 
 export interface AssistantMessageProps {
   content: string;
@@ -153,6 +153,10 @@ function AssistantMessageContent({
     prevSplitRef.current = { stable: nextStable, live: nextLive };
 
     if (!el) return;
+    // While revealing, the live block's trailing edge stays inside a soft
+    // gradient mask, so each new word materializes out of the fade instead of
+    // popping in at full opacity.
+    el.classList.toggle("streaming-tail-mask", active);
     if (!active) {
       el.classList.remove("animate-streaming-fade");
       return;
@@ -205,15 +209,11 @@ function splitAssistantContent(content: string): {
     return { stableContent: "", liveContent: "", animateLiveContent: false };
   }
 
+  // Always split at the last safe paragraph boundary — including for plain
+  // prose. The live MarkdownBody re-parses on every reveal flush; without a
+  // split, a long prose message re-parses in its entirety at the flush rate,
+  // which starves the main thread and lags composer typing.
   const structuredTail = hasOpenCodeFence(content) || hasTrailingTable(content);
-  if (!needsStableStreamingSplit(content)) {
-    return {
-      stableContent: "",
-      liveContent: content,
-      animateLiveContent: true,
-    };
-  }
-
   const boundary = findStableBoundary(content);
   if (boundary < 0 || boundary + 2 >= content.length) {
     return {
@@ -259,10 +259,6 @@ function hasTrailingTable(content: string): boolean {
   return tableLikeLines.length >= 2;
 }
 
-function needsStableStreamingSplit(content: string): boolean {
-  return content.includes("```") || hasTrailingTable(content);
-}
-
 function selectVisibleTarget(content: string, currentLength: number): string {
   if (content.length <= currentLength) {
     return content;
@@ -290,10 +286,12 @@ function selectVisibleTarget(content: string, currentLength: number): string {
   return content.slice(0, nextLength);
 }
 
+// Small steps keep the reveal word-granular (Codex-like); the /6 backlog
+// factor still catches up quickly when a large delta lands at once.
 function resolveRevealStep(remainingLength: number): number {
   return Math.max(
     MIN_STREAM_STEP,
-    Math.min(MAX_STREAM_STEP, Math.ceil(remainingLength / 4)),
+    Math.min(MAX_STREAM_STEP, Math.ceil(remainingLength / 6)),
   );
 }
 
