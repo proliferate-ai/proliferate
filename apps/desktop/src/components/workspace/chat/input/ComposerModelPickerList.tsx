@@ -3,8 +3,8 @@ import type {
   ModelSelectorGroup,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
-import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import { Check } from "@proliferate/ui/icons";
 
 export function ComposerModelPickerContent({
@@ -24,20 +24,14 @@ export function ComposerModelPickerContent({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col space-y-1">
-      <div className="space-y-1">
-        <div className="px-1">
-          {/* Superset inset input (UX_SPEC §5): control bg + inset ring. */}
-          <div className="flex h-7 items-center rounded-lg bg-surface-control px-2.5 ring-1 ring-inset ring-input">
-            <Input
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder={CHAT_MODEL_SELECTOR_LABELS.searchPlaceholder}
-              autoFocus
-              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-            />
-          </div>
-        </div>
-      </div>
+      {/* Inline search (codex menu recipe) — same shared field as every other
+          picker popover; the Superset inset treatment stays on approvals only. */}
+      <PopoverSearchField
+        value={search}
+        onChange={onSearchChange}
+        placeholder={CHAT_MODEL_SELECTOR_LABELS.searchPlaceholder}
+        autoFocus
+      />
 
       <div className="min-h-0 max-h-[11rem] overflow-y-auto">
         {filteredGroups.map((group, index) => (
@@ -51,13 +45,13 @@ export function ComposerModelPickerContent({
         ))}
 
         {filteredGroups.length === 0 && groups.length > 0 && (
-          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+          <p className="px-3 py-4 text-center text-[13px] leading-[18px] text-muted-foreground">
             {CHAT_MODEL_SELECTOR_LABELS.noMatchPrefix} "{search}"
           </p>
         )}
 
         {groups.length === 0 && (
-          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+          <p className="px-3 py-4 text-center text-[13px] leading-[18px] text-muted-foreground">
             {CHAT_MODEL_SELECTOR_LABELS.noProviders}
           </p>
         )}
@@ -90,7 +84,7 @@ function ComposerModelGroup({
   return (
     <>
       {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
-      <div className="min-h-5 truncate px-2 py-0.5 text-sm font-[430] leading-4 text-muted-foreground/70">
+      <div className="min-h-5 truncate px-2.5 py-0.5 text-[12px] font-[430] leading-4 text-muted-foreground/70">
         {group.providerDisplayName}
       </div>
       {group.models.map((model) => (
@@ -103,7 +97,7 @@ function ComposerModelGroup({
                 && !model.isSelected
                 && !hasSelectedModel
                 && group.kind !== activeKind && (
-                <span className="text-xs text-muted-foreground/70">
+                <span className="text-[12px] leading-4 text-muted-foreground/70">
                   {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
                 </span>
               )}
