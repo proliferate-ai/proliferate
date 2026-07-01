@@ -21,6 +21,7 @@ import {
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
+import { useTypingActivityStore } from "@/lib/infra/interaction/typing-activity-store";
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import type {
   PendingPromptEntry,
@@ -46,14 +47,14 @@ import { TranscriptTurnRow } from "./TranscriptTurnRow";
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
-// INPUT-PRIORITY (the "typing must never be laggy" rule): the transcript view
-// renders from a DEFERRED copy of the view state. Stream batches land every
-// ~50-100ms while an agent is thinking/replying; rendering them at the same
-// priority as keystrokes made typing contend with transcript re-renders for
-// every frame. With useDeferredValue + memo, urgent updates (typing, clicks)
-// preempt the transcript render and consecutive stream batches coalesce into
-// one deferred pass — streaming visibly lags by a frame or two under load
-// instead of the composer lagging.
+// INPUT-PRIORITY (the "typing must never be laggy" rule): WHILE THE USER IS
+// TYPING, the transcript view renders from a DEFERRED copy of the view state,
+// so keystrokes preempt stream-driven transcript re-renders and consecutive
+// stream batches coalesce. When the user is NOT typing, the fresh copy renders
+// urgently — deferring unconditionally starved the transcript while an agent
+// streamed (each ~80-250ms batch restarted the in-flight deferred pass;
+// measured 6.6s from prompt submit to first transcript commit), which read as
+// "I sent a message and nothing happened".
 const DeferredChatTranscriptView = memo(ChatTranscriptView);
 
 interface MessageListProps {
@@ -131,6 +132,10 @@ export function MessageList({
     transcript,
   ]);
   const deferredTranscriptViewState = useDeferredValue(transcriptViewState);
+  const typingActive = useTypingActivityStore((state) => state.typingActive);
+  const effectiveTranscriptViewState = typingActive
+    ? deferredTranscriptViewState
+    : transcriptViewState;
 
   const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
     // Tag the scroll source: a persistent stream of `source.programmatic`
@@ -247,7 +252,7 @@ export function MessageList({
         >
           <DebugProfiler id="transcript-row-list-router">
             <DeferredChatTranscriptView
-              state={deferredTranscriptViewState}
+              state={effectiveTranscriptViewState}
               outboxActions={outboxActions}
               onScrollSample={handleTranscriptScroll}
               renderPendingPromptRow={renderPendingPromptRow}

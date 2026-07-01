@@ -35,6 +35,7 @@ import {
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import { recordTypingKeystrokeLatency } from "@/lib/infra/measurement/typing-latency-probe";
+import { markTypingActivity } from "@/lib/infra/interaction/typing-activity-store";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { ComposerSlashCommandSearch } from "./ComposerSlashCommandSearch";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
@@ -108,6 +109,9 @@ export function ComposerCommandEditor({
   }, [onDraftChange]);
 
   const handleChange = useCallback((value: string, eventTimeStampMs?: number) => {
+    // Flip the transcript into deferred (input-priority) rendering for the
+    // duration of this typing burst — see typing-activity-store.
+    markTypingActivity();
     const operationId = startMeasurementOperation({
       kind: "composer_typing",
       sampleKey: "composer",
