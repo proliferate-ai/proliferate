@@ -231,6 +231,28 @@ export function useWorkspaceEntryActions() {
     let projectedSessionId: string | null = null;
 
     try {
+      // INSTANT SHELL: enter the pending chat shell synchronously — BEFORE the
+      // resolve roundtrip — so a home-page send swaps straight into the chat
+      // view with the user's message + thinking. Labels are provisional (repo
+      // folder name, "New worktree") and are patched with resolved names right
+      // after the resolve; the pending UI key is attemptId-based, so patching
+      // display fields is safe.
+      entry = buildSubmittingPendingEntry({
+        attemptId,
+        selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
+        source: "worktree-created",
+        displayName: normalizedInput.workspaceName ?? "New worktree",
+        repoLabel: sourceRepoGroupKey ? sourceRepoGroupKey.split("/").pop() ?? null : null,
+        baseBranchName: normalizedInput.baseBranch ?? normalizedInput.defaultBranch ?? null,
+        request: { kind: "worktree", input: normalizedInput, retryInput: normalizedInput },
+      });
+      projectedSessionId = beginPendingWorkspace(entry, {
+        initialSession: options?.initialSession,
+      });
+      annotateLatencyFlow(options?.latencyFlowId, {
+        attemptId: entry.attemptId,
+      });
+
       const resolveStartedAt = startLatencyTimer();
       logLatency("workspace.worktree.resolve.start", {
         attemptId,
@@ -245,21 +267,18 @@ export function useWorkspaceEntryActions() {
         baseBranch: resolved.params.baseRef,
         targetPath: resolved.params.targetPath,
       };
-      entry = buildSubmittingPendingEntry({
-        attemptId,
-        selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
-        source: "worktree-created",
+      const resolvedEntry: PendingWorkspaceEntry = {
+        ...entry,
         displayName: resolved.params.workspaceName,
         repoLabel: resolved.repoName,
         baseBranchName: resolved.params.baseRef,
         request: { kind: "worktree", input: resolvedInput, retryInput: normalizedInput },
-      });
-      projectedSessionId = beginPendingWorkspace(entry, {
-        initialSession: options?.initialSession,
-      });
-      annotateLatencyFlow(options?.latencyFlowId, {
-        attemptId: entry.attemptId,
-      });
+      };
+      const pendingAtResolve = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+      if (pendingAtResolve?.attemptId === attemptId) {
+        useSessionSelectionStore.getState().setPendingWorkspaceEntry(resolvedEntry);
+      }
+      entry = resolvedEntry;
       logLatency("workspace.worktree.resolve.success", {
         attemptId: entry.attemptId,
         repoRootId: normalizedInput.repoRootId,

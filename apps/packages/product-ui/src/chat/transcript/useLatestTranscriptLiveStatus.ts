@@ -28,6 +28,10 @@ import {
 } from "./ChatTranscriptViewRules";
 
 const LIVE_STATUS_GRACE_MS = 150;
+// Quiet period before "Thinking…" RETURNS after yielding to tool/command work
+// — long enough that back-to-back commands never get a status flash between
+// them.
+const LIVE_STATUS_REAPPEAR_GRACE_MS = 500;
 
 export interface LatestTranscriptLiveStatus {
   latestLiveExplorationBlock: Extract<TurnDisplayBlock, { kind: "collapsed_actions" }> | null;
@@ -112,34 +116,38 @@ export function useLatestTranscriptLiveStatus({
     }
   }, [latestTurnId]);
 
+  // Visibility rules (asymmetric on purpose):
+  // - HIDE instantly when tool/command work starts (shouldShow -> false).
+  // - While eligible AND visible: STAY visible — no re-arming on stream-item
+  //   churn (that strobed the row).
+  // - FIRST appearance in a turn: short grace (snappy).
+  // - RE-appearance after yielding (e.g. between consecutive commands): a
+  //   longer quiet period, so "Thinking…" never flashes in the gaps of a
+  //   command sequence — it only returns once the agent has actually been
+  //   quiet for a while.
+  // Deps deliberately exclude item/text churn: the timers must run to
+  // completion while items stream.
   useEffect(() => {
     if (!shouldShowDelayedLatestLiveStatus) {
       setShowDelayedLatestLiveStatus(false);
       return;
     }
-
-    // FLICKER GUARD: once the status has been shown for a turn, every later
-    // re-show within that turn is IMMEDIATE — re-arming the grace timer on
-    // each stream item (itemOrder.length is a dep) or on each status⇄block
-    // handoff strobed the "Thinking…" row throughout active streams. The
-    // grace delay applies only to the FIRST appearance per turn.
-    if (shownForTurnIdRef.current === latestTurnId) {
-      setShowDelayedLatestLiveStatus(true);
+    if (showDelayedLatestLiveStatus) {
       return;
     }
 
-    setShowDelayedLatestLiveStatus(false);
+    const graceMs = shownForTurnIdRef.current === latestTurnId
+      ? LIVE_STATUS_REAPPEAR_GRACE_MS
+      : LIVE_STATUS_GRACE_MS;
     const timeout = window.setTimeout(() => {
       shownForTurnIdRef.current = latestTurnId;
       setShowDelayedLatestLiveStatus(true);
-    }, LIVE_STATUS_GRACE_MS);
+    }, graceMs);
     return () => window.clearTimeout(timeout);
   }, [
-    latestTransientText,
-    latestTurn?.itemOrder.length,
-    latestTurnTiming?.startedAt,
     latestTurnId,
     shouldShowDelayedLatestLiveStatus,
+    showDelayedLatestLiveStatus,
   ]);
 
   const latestLiveStatus = latestTurn
