@@ -59,29 +59,33 @@ function OnboardingCard({
           className="absolute inset-0 z-0 rounded-xl"
         />
       ) : null}
-      <span className="pointer-events-none z-10 flex items-center gap-1.5">
+      <span className={`pointer-events-none z-10 flex items-center gap-1.5 ${onDismiss ? "pr-5" : ""}`}>
         <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
           {icon}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {trailing}
         </span>
-        {onDismiss ? (
-          <Button
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            aria-label={`Dismiss: ${selectLabel}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDismiss();
-            }}
-            className="pointer-events-auto z-10 flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-          >
-            <X className="size-3.5" />
-          </Button>
-        ) : null}
       </span>
+      {onDismiss ? (
+        // Out of flow (absolute) so it fades in place, and transform-gpu +
+        // will-change keep it on a persistent compositing layer — otherwise
+        // WKWebView promotes/demotes the layer around the opacity transition
+        // and the glyph re-snaps to the pixel grid (subtle down-right drift).
+        <Button
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          aria-label={`Dismiss: ${selectLabel}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDismiss();
+          }}
+          className="absolute right-3 top-3 z-20 flex size-4 transform-gpu items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity duration-150 will-change-[opacity] hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <X className="size-3.5" />
+        </Button>
+      ) : null}
       <span className="pointer-events-none z-10 flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-[13px] font-medium leading-[18px] text-foreground">
           {title}
