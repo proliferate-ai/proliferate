@@ -1,6 +1,6 @@
 import type { AgentAuthAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
-import { resolveManagedSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/managed-sandbox-gateway";
+import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import {
   getCloudWorkspaceConnectionWithRetry,
   getCloudWorkspaceWithRetry,
@@ -8,7 +8,7 @@ import {
 import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
 import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { cloudWorkspaceUsesManagedSandboxGateway } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
+import { cloudWorkspaceUsesCloudSandboxGateway } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 
@@ -101,8 +101,8 @@ export async function resolveRuntimeTargetForWorkspace(
     };
   }
 
-  if (cloudWorkspaceUsesManagedSandboxGateway(cloudWorkspace)) {
-    const connection = await resolveManagedSandboxGatewayConnectionForWorkspace(cloudWorkspace);
+  if (cloudWorkspaceUsesCloudSandboxGateway(cloudWorkspace)) {
+    const connection = await resolveCloudSandboxGatewayConnectionForWorkspace(cloudWorkspace);
     return {
       location: "cloud",
       baseUrl: connection.runtimeUrl,

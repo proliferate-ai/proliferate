@@ -18,8 +18,8 @@ def _request(body: bytes = b"payload") -> Request:
         {
             "type": "http",
             "method": "POST",
-            "path": "/v1/gateway/managed-sandbox/anyharness/v1/sessions/ws%2Fencoded",
-            "raw_path": b"/v1/gateway/managed-sandbox/anyharness/v1/sessions/ws%2Fencoded",
+            "path": "/v1/gateway/cloud-sandbox/anyharness/v1/sessions/ws%2Fencoded",
+            "raw_path": b"/v1/gateway/cloud-sandbox/anyharness/v1/sessions/ws%2Fencoded",
             "query_string": b"cursor=abc&access_token=product-token&repeat=1&repeat=2",
             "headers": [
                 (b"authorization", b"Bearer product-token"),
@@ -141,8 +141,8 @@ async def test_http_proxy_returns_499_when_client_disconnects_before_forwarding(
         {
             "type": "http",
             "method": "POST",
-            "path": "/v1/gateway/managed-sandbox/anyharness/v1/sessions",
-            "raw_path": b"/v1/gateway/managed-sandbox/anyharness/v1/sessions",
+            "path": "/v1/gateway/cloud-sandbox/anyharness/v1/sessions",
+            "raw_path": b"/v1/gateway/cloud-sandbox/anyharness/v1/sessions",
             "query_string": b"",
             "headers": [],
         },
@@ -168,7 +168,7 @@ async def test_http_proxy_returns_499_when_client_disconnects_before_forwarding(
 def test_websocket_upstream_url_rewrites_access_token_and_preserves_after_seq() -> None:
     class _FakeWebSocket:
         scope = {
-            "raw_path": b"/v1/gateway/managed-sandbox/anyharness/v1/terminals/term%2F1/ws",
+            "raw_path": b"/v1/gateway/cloud-sandbox/anyharness/v1/terminals/term%2F1/ws",
         }
         query_params = QueryParams("access_token=product-token&after_seq=42&tail=true")
 

@@ -15,7 +15,6 @@ from proliferate.constants.cloud import (
     SUPPORTED_CLOUD_AGENTS,
     SUPPORTED_SANDBOX_AGENT_AUTH_MATERIALIZATION_MODES,
     SUPPORTED_SANDBOX_AGENT_AUTH_SELECTION_STATUSES,
-    SUPPORTED_SANDBOX_PROFILE_OWNER_SCOPES,
 )
 from proliferate.db.models.base import Base, utcnow
 
@@ -161,8 +160,15 @@ class SandboxAgentAuthSelection(Base):
     __tablename__ = "sandbox_agent_auth_selection"
     __table_args__ = (
         CheckConstraint(
-            f"owner_scope IN {SUPPORTED_SANDBOX_PROFILE_OWNER_SCOPES}",
+            f"owner_scope IN {SUPPORTED_AGENT_AUTH_OWNER_SCOPES}",
             name="ck_sandbox_agent_auth_selection_owner_scope",
+        ),
+        CheckConstraint(
+            "((owner_scope = 'personal' AND owner_user_id IS NOT NULL "
+            "AND organization_id IS NULL) OR "
+            "(owner_scope = 'organization' AND owner_user_id IS NULL "
+            "AND organization_id IS NOT NULL))",
+            name="ck_sandbox_agent_auth_selection_owner_fields",
         ),
         CheckConstraint(
             f"agent_kind IN {SUPPORTED_CLOUD_AGENTS}",
@@ -181,20 +187,35 @@ class SandboxAgentAuthSelection(Base):
             name="ck_sandbox_agent_auth_selection_revision_positive",
         ),
         Index(
-            "uq_sandbox_agent_auth_selection_profile_agent_slot",
-            "sandbox_profile_id",
+            "uq_sandbox_agent_auth_selection_personal_agent_slot",
+            "owner_user_id",
             "agent_kind",
             "auth_slot_id",
             unique=True,
+            postgresql_where=text("owner_scope = 'personal'"),
+        ),
+        Index(
+            "uq_sandbox_agent_auth_selection_org_agent_slot",
+            "organization_id",
+            "agent_kind",
+            "auth_slot_id",
+            unique=True,
+            postgresql_where=text("owner_scope = 'organization'"),
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    sandbox_profile_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
-        index=True,
-    )
     owner_scope: Mapped[str] = mapped_column(String(32), index=True)
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     agent_kind: Mapped[str] = mapped_column(String(32), index=True)
     auth_slot_id: Mapped[str] = mapped_column(String(64), index=True)
     credential_id: Mapped[uuid.UUID] = mapped_column(

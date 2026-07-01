@@ -1,4 +1,4 @@
-"""Transaction helpers for managed sandbox orchestration."""
+"""Transaction helpers for cloud sandbox orchestration."""
 
 from __future__ import annotations
 
@@ -24,5 +24,5 @@ def defer_after_commit(
     session_ops.defer_after_commit(db, callback)
 
 
-async def commit_managed_sandbox_session(db: AsyncSession) -> None:
+async def commit_cloud_sandbox_session(db: AsyncSession) -> None:
     await session_ops.commit_session(db)

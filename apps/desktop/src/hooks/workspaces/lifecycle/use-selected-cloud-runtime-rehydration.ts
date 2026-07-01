@@ -10,7 +10,7 @@ import {
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { withFreshManagedSandboxGatewayAccessToken } from "@/lib/access/cloud/managed-sandbox-gateway";
+import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 export function useSelectedCloudRuntimeRehydration(
@@ -89,7 +89,7 @@ export function useSelectedCloudRuntimeRehydration(
 
     let cancelled = false;
     void (async () => {
-      const freshConnectionInfo = await withFreshManagedSandboxGatewayAccessToken(connectionInfo);
+      const freshConnectionInfo = await withFreshCloudSandboxGatewayAccessToken(connectionInfo);
       if (!isBootstrapped) {
         await bootstrapWorkspace({
           workspaceId,

@@ -11,7 +11,7 @@ from proliferate.server.cloud.github_app import service
 
 
 @pytest.mark.asyncio
-async def test_complete_github_app_callback_schedules_managed_sandbox_bootstrap(
+async def test_complete_github_app_callback_records_authorization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
@@ -57,14 +57,6 @@ async def test_complete_github_app_callback_schedules_managed_sandbox_bootstrap(
         del db
         calls.append(("refresh", None))
 
-    def fake_schedule_github_app_authorized_sandbox_bootstrap(
-        db: object,
-        *,
-        user_id: uuid.UUID,
-    ) -> None:
-        del db
-        calls.append(("bootstrap", user_id))
-
     monkeypatch.setattr(service, "exchange_github_app_code", fake_exchange_github_app_code)
     monkeypatch.setattr(
         service.github_app_store,
@@ -76,12 +68,6 @@ async def test_complete_github_app_callback_schedules_managed_sandbox_bootstrap(
         "refresh_github_app_installation_cache",
         fake_refresh_github_app_installation_cache,
     )
-    monkeypatch.setattr(
-        service,
-        "schedule_github_app_authorized_sandbox_bootstrap",
-        fake_schedule_github_app_authorized_sandbox_bootstrap,
-    )
-
     redirect_url = await service.complete_github_app_callback(
         object(),
         code="code-test",
@@ -92,7 +78,6 @@ async def test_complete_github_app_callback_schedules_managed_sandbox_bootstrap(
     assert calls == [
         ("upsert", user_id),
         ("refresh", None),
-        ("bootstrap", user_id),
     ]
 
 

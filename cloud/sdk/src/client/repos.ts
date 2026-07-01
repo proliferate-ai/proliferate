@@ -1,4 +1,5 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import { legacyOpenApiClient } from "./legacy.js";
 import type {
   CloudGitRepositoriesResponse,
   CloudRepoBranchesResponse,
@@ -17,7 +18,7 @@ export async function listCloudGitRepositories(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudGitRepositoriesResponse> {
   return (
-    await client.GET("/v1/cloud/repos", {
+    await legacyOpenApiClient(client).GET("/v1/cloud/repos", {
       params: {
         query: {
           query: options.query,
@@ -37,7 +38,7 @@ export async function listCloudRepoBranches(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoBranchesResponse> {
   return (
-    await client.GET("/v1/cloud/repos/{git_owner}/{git_repo_name}/branches", {
+    await legacyOpenApiClient(client).GET("/v1/cloud/repos/{git_owner}/{git_repo_name}/branches", {
       params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
     })
   ).data!;

@@ -1,4 +1,4 @@
-import type { components } from "../generated/openapi.js";
+import type { Schema } from "./schema.js";
 
 export type CloudTargetKind =
   | "managed_cloud"
@@ -10,63 +10,81 @@ export type CloudTargetKind =
 export type CloudTargetStatus = "online" | "offline" | "degraded" | "enrolling" | "archived";
 export type CloudTargetUpdateChannel = "stable" | "beta" | "pinned";
 
-export type CloudTargetInventory = components["schemas"]["CloudTargetInventoryModel"];
+export type CloudTargetInventory = Schema<"CloudTargetInventoryModel">;
 
-export type CloudTargetStatusDetail = Omit<
-  components["schemas"]["CloudTargetStatusModel"],
-  "status"
-> & {
+export interface CloudTargetStatusDetail {
   status: CloudTargetStatus;
-};
+  statusDetail?: string | null;
+  lastSeenAt?: string | null;
+  lastHeartbeatAt?: string | null;
+  updatedAt?: string | null;
+  [key: string]: unknown;
+}
 
-export type CloudTargetSummary = Omit<
-  components["schemas"]["CloudTargetSummary"],
-  "kind" | "status" | "ownerScope" | "statusDetail"
-> & {
+export interface CloudTargetSummary {
+  id: string;
+  displayName: string;
   kind: CloudTargetKind;
   status: CloudTargetStatus;
   ownerScope: "personal" | "organization";
+  sandboxProfileId?: string | null;
+  profileTargetRole?: "primary" | "none" | string;
+  organizationId?: string | null;
+  defaultWorkspaceRoot?: string | null;
+  inventory?: CloudTargetInventory | null;
   statusDetail?: CloudTargetStatusDetail | null;
-};
+  update?: {
+    generation?: number | null;
+    channel?: string | null;
+    status?: string | null;
+    desiredVersions?: Record<string, unknown> | null;
+    reportedAt?: string | null;
+    currentVersions?: {
+      workerId?: string | null;
+      anyharnessVersion?: string | null;
+      workerVersion?: string | null;
+      supervisorVersion?: string | null;
+      reportedAt?: string | null;
+    } | null;
+  } | null;
+  archivedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
-export type CloudTargetDetail = Omit<
-  components["schemas"]["CloudTargetDetail"],
-  "kind" | "status" | "ownerScope" | "statusDetail"
-> & {
-  kind: CloudTargetKind;
-  status: CloudTargetStatus;
-  ownerScope: "personal" | "organization";
-  statusDetail?: CloudTargetStatusDetail | null;
-};
+export interface CloudTargetDetail extends CloudTargetSummary {
+  ownerUserId?: string | null;
+  createdByUserId: string;
+}
 
 export type CloudTargetEnrollmentRequest = Omit<
-  components["schemas"]["CloudTargetEnrollmentRequest"],
+  Schema<"CloudTargetEnrollmentRequest">,
   "kind"
 > & {
   kind: Exclude<CloudTargetKind, "local_direct" | "managed_cloud">;
 };
 
 export type CloudTargetEnrollmentResponse =
-  components["schemas"]["CloudTargetEnrollmentResponse"];
+  Schema<"CloudTargetEnrollmentResponse">;
 
 export type CloudTargetExistingEnrollmentRequest =
-  components["schemas"]["CloudTargetExistingEnrollmentRequest"];
+  Schema<"CloudTargetExistingEnrollmentRequest">;
 
 export type ArchiveCloudTargetResponse =
-  components["schemas"]["ArchiveCloudTargetResponse"];
+  Schema<"ArchiveCloudTargetResponse">;
 
 export type SetDesiredVersionsRequest = Omit<
-  components["schemas"]["SetDesiredVersionsRequest"],
+  Schema<"SetDesiredVersionsRequest">,
   "updateChannel"
 > & {
   updateChannel?: CloudTargetUpdateChannel | null;
 };
 
 export type SetDesiredVersionsResponse =
-  components["schemas"]["SetDesiredVersionsResponse"];
+  Schema<"SetDesiredVersionsResponse">;
 
 export type SafeStopCheckResponse =
-  components["schemas"]["SafeStopCheckResponse"];
+  Schema<"SafeStopCheckResponse">;
 
 export type RevokeWorkersResponse =
-  components["schemas"]["RevokeWorkersResponse"];
+  Schema<"RevokeWorkersResponse">;

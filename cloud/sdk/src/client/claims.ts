@@ -1,4 +1,5 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import { legacyOpenApiClient } from "./legacy.js";
 import type {
   ClaimWorkspaceRequest,
   ClaimWorkspaceResponse,
@@ -17,7 +18,7 @@ export async function claimCloudWorkspace(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<ClaimWorkspaceResponse> {
   return (
-    await client.POST("/v1/cloud/workspaces/{cloud_workspace_id}/claim", {
+    await legacyOpenApiClient(client).POST("/v1/cloud/workspaces/{cloud_workspace_id}/claim", {
       params: { path: { cloud_workspace_id: workspaceId } },
       body,
     })
@@ -31,7 +32,7 @@ export async function issueCloudWorkspaceDirectAccessToken(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<DirectAccessTokenResponse> {
   return (
-    await client.POST("/v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token", {
+    await legacyOpenApiClient(client).POST("/v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token", {
       params: {
         path: { cloud_workspace_id: workspaceId },
         header: { "X-Client-Kind": options?.clientKind ?? undefined },
@@ -48,7 +49,7 @@ export async function refreshCloudWorkspaceDirectAccessToken(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<DirectAccessTokenResponse> {
   return (
-    await client.POST(
+    await legacyOpenApiClient(client).POST(
       "/v1/cloud/workspaces/{cloud_workspace_id}/direct-access-token/refresh",
       {
         params: {
@@ -67,7 +68,7 @@ export async function revokeCloudWorkspaceDirectAccessToken(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<RevokeClaimTokenResponse> {
   return (
-    await client.DELETE(
+    await legacyOpenApiClient(client).DELETE(
       "/v1/cloud/workspaces/{cloud_workspace_id}/direct-access-tokens/{token_id}",
       {
         params: { path: { cloud_workspace_id: workspaceId, token_id: tokenId } },

@@ -23,8 +23,8 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
-from proliferate.db.models.cloud.repo_config import CloudRepoConfig
-from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.constants.cloud import RepoEnvironmentKind
+from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 
@@ -41,29 +41,15 @@ async def list_cloud_sandboxes_for_subject(
     db: AsyncSession,
     billing_subject_id: UUID,
 ) -> list[CloudSandbox]:
+    subject = await db.get(BillingSubject, billing_subject_id)
+    if subject is None or subject.user_id is None:
+        return []
     return list(
         (
             await db.execute(
-                select(CloudSandbox)
-                .outerjoin(
-                    CloudRuntimeEnvironment,
-                    CloudRuntimeEnvironment.active_sandbox_id == CloudSandbox.id,
-                )
-                .outerjoin(
-                    CloudWorkspace,
-                    CloudWorkspace.active_sandbox_id == CloudSandbox.id,
-                )
-                .where(
-                    or_(
-                        CloudSandbox.billing_subject_id == billing_subject_id,
-                        (
-                            CloudSandbox.billing_subject_id.is_(None)
-                            & or_(
-                                CloudRuntimeEnvironment.billing_subject_id == billing_subject_id,
-                                CloudWorkspace.billing_subject_id == billing_subject_id,
-                            )
-                        ),
-                    )
+                select(CloudSandbox).where(
+                    CloudSandbox.owner_user_id == subject.user_id,
+                    CloudSandbox.destroyed_at.is_(None),
                 )
             )
         )
@@ -76,60 +62,29 @@ async def count_active_cloud_repo_environments(
     db: AsyncSession,
     billing_subject_id: UUID,
 ) -> int:
+    subject = await db.get(BillingSubject, billing_subject_id)
+    if subject is None or subject.user_id is None:
+        return 0
+
     repo_keys = {
-        (
-            git_provider,
-            git_owner_norm,
-            git_repo_name_norm,
-        )
-        for git_provider, git_owner_norm, git_repo_name_norm in (
+        ("github", git_owner_norm, git_repo_name_norm)
+        for git_owner_norm, git_repo_name_norm in (
             await db.execute(
                 select(
-                    CloudWorkspace.git_provider,
-                    func.coalesce(
-                        CloudRuntimeEnvironment.git_owner_norm,
-                        func.lower(func.btrim(CloudWorkspace.git_owner)),
-                    ),
-                    func.coalesce(
-                        CloudRuntimeEnvironment.git_repo_name_norm,
-                        func.lower(func.btrim(CloudWorkspace.git_repo_name)),
-                    ),
+                    func.lower(func.btrim(RepoConfig.git_owner)),
+                    func.lower(func.btrim(RepoConfig.git_repo_name)),
                 )
-                .outerjoin(
-                    CloudRuntimeEnvironment,
-                    CloudWorkspace.runtime_environment_id == CloudRuntimeEnvironment.id,
-                )
+                .join(RepoEnvironment, RepoEnvironment.repo_config_id == RepoConfig.id)
                 .where(
-                    CloudWorkspace.billing_subject_id == billing_subject_id,
-                    CloudWorkspace.archived_at.is_(None),
+                    RepoConfig.user_id == subject.user_id,
+                    RepoConfig.deleted_at.is_(None),
+                    RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
+                    RepoEnvironment.deleted_at.is_(None),
                 )
                 .distinct()
             )
         ).all()
     }
-
-    subject = await db.get(BillingSubject, billing_subject_id)
-    if subject is not None and subject.user_id is not None:
-        repo_keys.update(
-            (
-                "github",
-                git_owner_norm,
-                git_repo_name_norm,
-            )
-            for git_owner_norm, git_repo_name_norm in (
-                await db.execute(
-                    select(
-                        func.lower(func.btrim(CloudRepoConfig.git_owner)),
-                        func.lower(func.btrim(CloudRepoConfig.git_repo_name)),
-                    )
-                    .where(
-                        CloudRepoConfig.user_id == subject.user_id,
-                        CloudRepoConfig.configured.is_(True),
-                    )
-                    .distinct()
-                )
-            ).all()
-        )
 
     return len(repo_keys)
 
@@ -144,47 +99,24 @@ async def cloud_repo_slot_exists(
 ) -> bool:
     git_owner_norm = git_owner.strip().lower()
     git_repo_name_norm = git_repo_name.strip().lower()
-    active_workspace_id = await db.scalar(
-        select(CloudWorkspace.id)
-        .outerjoin(
-            CloudRuntimeEnvironment,
-            CloudWorkspace.runtime_environment_id == CloudRuntimeEnvironment.id,
-        )
-        .where(
-            CloudWorkspace.billing_subject_id == billing_subject_id,
-            CloudWorkspace.git_provider == git_provider,
-            func.coalesce(
-                CloudRuntimeEnvironment.git_owner_norm,
-                func.lower(func.btrim(CloudWorkspace.git_owner)),
-            )
-            == git_owner_norm,
-            func.coalesce(
-                CloudRuntimeEnvironment.git_repo_name_norm,
-                func.lower(func.btrim(CloudWorkspace.git_repo_name)),
-            )
-            == git_repo_name_norm,
-            CloudWorkspace.archived_at.is_(None),
-        )
-        .limit(1)
-    )
-    if active_workspace_id is not None:
-        return True
-
     subject = await db.get(BillingSubject, billing_subject_id)
     if subject is None or subject.user_id is None or git_provider != "github":
         return False
 
-    configured_repo_id = await db.scalar(
-        select(CloudRepoConfig.id)
+    configured_repo_environment_id = await db.scalar(
+        select(RepoEnvironment.id)
+        .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
         .where(
-            CloudRepoConfig.user_id == subject.user_id,
-            func.lower(func.btrim(CloudRepoConfig.git_owner)) == git_owner_norm,
-            func.lower(func.btrim(CloudRepoConfig.git_repo_name)) == git_repo_name_norm,
-            CloudRepoConfig.configured.is_(True),
+            RepoConfig.user_id == subject.user_id,
+            RepoConfig.deleted_at.is_(None),
+            func.lower(func.btrim(RepoConfig.git_owner)) == git_owner_norm,
+            func.lower(func.btrim(RepoConfig.git_repo_name)) == git_repo_name_norm,
+            RepoEnvironment.environment_kind == RepoEnvironmentKind.cloud,
+            RepoEnvironment.deleted_at.is_(None),
         )
         .limit(1)
     )
-    return configured_repo_id is not None
+    return configured_repo_environment_id is not None
 
 
 async def acquire_billing_subject_repo_limit_lock(

@@ -36,34 +36,40 @@ from proliferate.server.anonymous_telemetry.worker import (
     stop_server_anonymous_telemetry_sender,
 )
 from proliferate.server.artifact_runtime.api import router as artifact_runtime_router
-from proliferate.server.automations.api import router as automations_router
+# AUTOMATIONS PARKED: retarget to RepoEnvironment in a later PR before remounting.
+# from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router
-from proliferate.server.billing.reconciler import (
-    start_billing_reconciler,
-    stop_billing_reconciler,
-)
+# BILLING RECONCILER PARKED: retarget runtime usage to CloudSandbox before remounting.
+# from proliferate.server.billing.reconciler import (
+#     start_billing_reconciler,
+#     stop_billing_reconciler,
+# )
 from proliferate.server.catalogs.api import router as catalogs_router
-from proliferate.server.cloud.agent_auth.reconciler import (
-    start_agent_gateway_reconciler,
-    stop_agent_gateway_reconciler,
-)
+# AGENT AUTH PARKED: retarget away from sandbox_profile/cloud_targets before remounting.
+# from proliferate.server.cloud.agent_auth.reconciler import (
+#     start_agent_gateway_reconciler,
+#     stop_agent_gateway_reconciler,
+# )
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.cloud.github_app.api import callback_router as github_app_callback_router
-from proliferate.server.cloud.mobility.reconciler import (
-    start_mobility_cleanup_reconciler,
-    stop_mobility_cleanup_reconciler,
-)
-from proliferate.server.cloud.runtime.setup_monitor import (
-    start_cloud_setup_monitor,
-    stop_cloud_setup_monitor,
-)
+# MOBILITY PARKED: old exposure/handoff cleanup imports deleted models.
+# from proliferate.server.cloud.mobility.reconciler import (
+#     start_mobility_cleanup_reconciler,
+#     stop_mobility_cleanup_reconciler,
+# )
+# SETUP MONITOR PARKED: old cloud_workspace_setup_run table was removed.
+# from proliferate.server.cloud.runtime.setup_monitor import (
+#     start_cloud_setup_monitor,
+#     stop_cloud_setup_monitor,
+# )
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
 from proliferate.server.organizations.sso.api import router as organization_sso_router
-from proliferate.server.support.api import router as support_router
+# SUPPORT PARKED: diagnostics imports deleted target runtime access models.
+# from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -157,19 +163,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "`make server-migrate` before starting the API."
         ) from exc
     if settings.cloud_billing_mode in {"observe", "enforce"}:
-        start_billing_reconciler()
-    start_agent_gateway_reconciler()
-    start_mobility_cleanup_reconciler()
-    start_cloud_setup_monitor()
+        # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
+        # start_billing_reconciler()
+        pass
+    # AGENT AUTH PARKED.
+    # start_agent_gateway_reconciler()
+    # MOBILITY PARKED.
+    # start_mobility_cleanup_reconciler()
+    # SETUP MONITOR PARKED.
+    # start_cloud_setup_monitor()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        await stop_cloud_setup_monitor()
-        await stop_mobility_cleanup_reconciler()
-        await stop_agent_gateway_reconciler()
-        await stop_billing_reconciler()
+        # SETUP MONITOR PARKED.
+        # await stop_cloud_setup_monitor()
+        # MOBILITY PARKED.
+        # await stop_mobility_cleanup_reconciler()
+        # AGENT AUTH PARKED.
+        # await stop_agent_gateway_reconciler()
+        # BILLING RECONCILER PARKED.
+        # await stop_billing_reconciler()
         flush_server_sentry()
 
 
@@ -222,7 +237,9 @@ def create_app() -> FastAPI:
     app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
-    app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
+    # SUPPORT PARKED: /v1/support/* is intentionally disabled until diagnostics
+    # stop depending on deleted cloud target runtime access tables.
+    # app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
     app.include_router(
@@ -230,7 +247,9 @@ def create_app() -> FastAPI:
         prefix=f"{api_prefix}/v1",
         tags=["organizations"],
     )
-    app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
+    # AUTOMATIONS PARKED: /v1/automations/* is intentionally disabled until the
+    # domain is retargeted from deleted cloud_repo_config rows to RepoEnvironment.
+    # app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
     app.include_router(devtools_router, prefix=f"{api_prefix}/v1", tags=["devtools"])
 
     return app

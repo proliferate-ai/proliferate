@@ -1,10 +1,25 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
-import type { components } from "../generated/openapi.js";
+import type { CloudSessionEventEnvelope } from "../types/sessions.js";
 
-export type CloudSessionEvent =
-  components["schemas"]["CloudSessionEventResponse"];
-export type CloudSessionEventsResponse =
-  components["schemas"]["CloudSessionEventsResponse"];
+export interface CloudSessionEvent {
+  targetId: string;
+  sessionId: string;
+  seq: number;
+  eventType: string;
+  sourceKind?: string | null;
+  turnId?: string | null;
+  itemId?: string | null;
+  occurredAt?: string | null;
+  payload?: unknown;
+  envelope?: CloudSessionEventEnvelope | null;
+  [key: string]: any;
+}
+
+export interface CloudSessionEventsResponse {
+  events: CloudSessionEvent[];
+  nextCursor: number;
+  [key: string]: any;
+}
 
 export interface ListSessionEventsInput {
   targetId: string;

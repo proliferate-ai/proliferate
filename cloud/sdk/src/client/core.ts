@@ -10,6 +10,7 @@ export interface ProliferateRequestJsonInput {
   path: string;
   pathParams?: Record<string, string | number | boolean>;
   query?: Record<string, string | number | boolean | null | undefined>;
+  headers?: Record<string, string | number | boolean | null | undefined>;
   body?: unknown;
   signal?: AbortSignal;
 }
@@ -141,6 +142,7 @@ export function createProliferateClient(
           query?: Record<string, string | number | boolean | null | undefined>;
         };
         body?: unknown;
+        headers?: Record<string, string | number | boolean | null | undefined>;
         signal?: AbortSignal;
       },
     ) => Promise<{ data?: unknown }>)(input.path, {
@@ -148,6 +150,7 @@ export function createProliferateClient(
         path: input.pathParams,
         query: input.query,
       },
+      headers: input.headers,
       body: input.body,
       signal: input.signal,
     });

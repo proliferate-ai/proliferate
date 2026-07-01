@@ -188,8 +188,8 @@ export function workspaceCloudSecretsKey(gitOwner: string, gitRepoName: string) 
   return [...cloudSecretsRootKey(), "repos", gitOwner, gitRepoName] as const;
 }
 
-export function managedSandboxKey() {
-  return [...cloudRootKey(), "managed-sandbox"] as const;
+export function cloudSandboxKey() {
+  return [...cloudRootKey(), "cloud-sandbox"] as const;
 }
 
 export function githubAppStatusRootKey(apiBaseUrl: string) {

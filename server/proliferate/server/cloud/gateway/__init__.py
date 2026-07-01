@@ -1,1 +1,1 @@
-"""Managed sandbox runtime gateway."""
+"""Cloud sandbox runtime gateway."""

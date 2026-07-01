@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runtimeTargetUsesCloudCommand } from "@/lib/access/anyharness/runtime-target";
 
 describe("runtimeTargetUsesCloudCommand", () => {
-  it("keeps managed sandbox gateway targets on direct AnyHarness access", () => {
+  it("keeps cloud sandbox gateway targets on direct AnyHarness access", () => {
     expect(runtimeTargetUsesCloudCommand({
       location: "cloud",
       runtimeAccessKind: "proliferate-gateway",

@@ -7,6 +7,7 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -17,7 +18,34 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from proliferate.constants.cloud import (
+    CloudSecretScopeKind,
+    CloudSandboxSecretMaterializationKind,
+    CloudSandboxSecretMaterializationStatus,
+)
 from proliferate.db.models.base import Base, utcnow
+
+_CLOUD_SECRET_SCOPE_ENUM = Enum(
+    CloudSecretScopeKind,
+    name="cloud_secret_scope_kind",
+    native_enum=False,
+    values_callable=lambda values: [value.value for value in values],
+    validate_strings=True,
+)
+_SECRET_MATERIALIZATION_KIND_ENUM = Enum(
+    CloudSandboxSecretMaterializationKind,
+    name="cloud_sandbox_secret_materialization_kind",
+    native_enum=False,
+    values_callable=lambda values: [value.value for value in values],
+    validate_strings=True,
+)
+_SECRET_MATERIALIZATION_STATUS_ENUM = Enum(
+    CloudSandboxSecretMaterializationStatus,
+    name="cloud_sandbox_secret_materialization_status",
+    native_enum=False,
+    values_callable=lambda values: [value.value for value in values],
+    validate_strings=True,
+)
 
 
 class CloudSecretSet(Base):
@@ -29,11 +57,9 @@ class CloudSecretSet(Base):
         ),
         CheckConstraint(
             "((scope_kind = 'personal' AND user_id IS NOT NULL "
-            "AND organization_id IS NULL AND cloud_repo_config_id IS NULL "
-            "AND repo_environment_id IS NULL) OR "
+            "AND organization_id IS NULL AND repo_environment_id IS NULL) OR "
             "(scope_kind = 'organization' AND organization_id IS NOT NULL "
-            "AND user_id IS NULL AND cloud_repo_config_id IS NULL "
-            "AND repo_environment_id IS NULL) OR "
+            "AND user_id IS NULL AND repo_environment_id IS NULL) OR "
             "(scope_kind = 'workspace' AND repo_environment_id IS NOT NULL "
             "AND user_id IS NULL AND organization_id IS NULL))",
             name="ck_cloud_secret_set_scope_fields",
@@ -59,7 +85,10 @@ class CloudSecretSet(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    scope_kind: Mapped[str] = mapped_column(String(32), index=True)
+    scope_kind: Mapped[CloudSecretScopeKind] = mapped_column(
+        _CLOUD_SECRET_SCOPE_ENUM,
+        index=True,
+    )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
@@ -67,11 +96,6 @@ class CloudSecretSet(Base):
     )
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    cloud_repo_config_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
     )
@@ -139,57 +163,54 @@ class CloudSecretFile(Base):
     )
 
 
-class ManagedSandboxSecretMaterialization(Base):
-    __tablename__ = "managed_sandbox_secret_materialization"
+class CloudSandboxSecretMaterialization(Base):
+    __tablename__ = "cloud_sandbox_secret_materialization"
     __table_args__ = (
         CheckConstraint(
             "materialization_kind IN ('global', 'workspace')",
-            name="ck_managed_sandbox_secret_materialization_kind",
+            name="ck_cloud_sandbox_secret_materialization_kind",
         ),
         CheckConstraint(
             "status IN ('pending', 'running', 'ready', 'error')",
-            name="ck_managed_sandbox_secret_materialization_status",
+            name="ck_cloud_sandbox_secret_materialization_status",
         ),
         CheckConstraint(
             "((materialization_kind = 'global' "
-            "AND cloud_repo_config_id IS NULL "
             "AND repo_environment_id IS NULL) OR "
             "(materialization_kind = 'workspace' AND repo_environment_id IS NOT NULL))",
-            name="ck_managed_sandbox_secret_materialization_scope",
+            name="ck_cloud_sandbox_secret_materialization_scope",
         ),
         Index(
-            "ux_managed_sandbox_secret_materialization_global",
-            "managed_sandbox_id",
+            "ux_cloud_sandbox_secret_materialization_global",
+            "cloud_sandbox_id",
             unique=True,
             postgresql_where=text("materialization_kind = 'global'"),
         ),
         Index(
-            "ux_managed_sandbox_secret_materialization_workspace_environment",
-            "managed_sandbox_id",
+            "ux_cloud_sandbox_secret_materialization_workspace_environment",
+            "cloud_sandbox_id",
             "repo_environment_id",
             unique=True,
             postgresql_where=text("materialization_kind = 'workspace'"),
         ),
         Index(
-            "ix_managed_sandbox_secret_materialization_status",
-            "managed_sandbox_id",
+            "ix_cloud_sandbox_secret_materialization_status",
+            "cloud_sandbox_id",
             "status",
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    managed_sandbox_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("managed_sandbox.id", ondelete="CASCADE"),
+    cloud_sandbox_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
         index=True,
     )
-    materialization_kind: Mapped[str] = mapped_column(String(32), index=True)
+    materialization_kind: Mapped[CloudSandboxSecretMaterializationKind] = mapped_column(
+        _SECRET_MATERIALIZATION_KIND_ENUM,
+        index=True,
+    )
     cloud_secret_set_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cloud_secret_set.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    cloud_repo_config_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_repo_config.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
     )
@@ -202,7 +223,9 @@ class ManagedSandboxSecretMaterialization(Base):
     applied_version: Mapped[int] = mapped_column(Integer, default=0)
     applied_versions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     applied_manifest_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(32))
+    status: Mapped[CloudSandboxSecretMaterializationStatus] = mapped_column(
+        _SECRET_MATERIALIZATION_STATUS_ENUM,
+    )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     materialized_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

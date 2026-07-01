@@ -20,9 +20,9 @@ import {
 } from "../../../lib/domain/chat/cloud-chat-plan-decision";
 import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
 import {
-  getWebManagedSandboxAnyHarnessClient,
-  isWebManagedSandboxWorkspace,
-} from "../../../lib/access/anyharness/managed-sandbox-runtime";
+  getWebCloudSandboxAnyHarnessClient,
+  isWebCloudSandboxWorkspace,
+} from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 
 type DecidePlanPayload = {
   workspaceId: string;
@@ -77,7 +77,7 @@ export function useWebCloudPlanDecisionActions(input: {
       setPendingHomePromptStatus("Claim this shared workspace before approving plans.");
       return;
     }
-    if (!isWebManagedSandboxWorkspace(workspace)) {
+    if (!isWebCloudSandboxWorkspace(workspace)) {
       const readiness = cloudCommandReadiness(workspace);
       if (!readiness.commandable) {
         setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
@@ -92,8 +92,8 @@ export function useWebCloudPlanDecisionActions(input: {
     });
     setPendingHomePromptStatus(planDecisionProgressMessage(decision));
     try {
-      if (isWebManagedSandboxWorkspace(workspace)) {
-        const { connection, anyharness } = await getWebManagedSandboxAnyHarnessClient({
+      if (isWebCloudSandboxWorkspace(workspace)) {
+        const { connection, anyharness } = await getWebCloudSandboxAnyHarnessClient({
           workspace,
           productToken,
           client,

@@ -297,16 +297,15 @@ class AgentGatewayRuntimeGrant(Base):
             "expires_at",
         ),
         Index(
-            "ix_agent_gateway_runtime_grant_target_profile_agent",
-            "target_id",
-            "sandbox_profile_id",
+            "ix_agent_gateway_runtime_grant_sandbox_agent",
+            "cloud_sandbox_id",
             "agent_kind",
             "auth_slot_id",
         ),
         Index(
             "ix_agent_gateway_runtime_grant_selection_revision",
             "selection_id",
-            "issued_profile_revision",
+            "issued_selection_revision",
         ),
     )
 
@@ -325,13 +324,9 @@ class AgentGatewayRuntimeGrant(Base):
         ForeignKey("sandbox_agent_auth_selection.id", ondelete="CASCADE"),
         index=True,
     )
-    issued_profile_revision: Mapped[int] = mapped_column(Integer)
-    target_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cloud_targets.id", ondelete="CASCADE"),
-        index=True,
-    )
-    sandbox_profile_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
+    issued_selection_revision: Mapped[int] = mapped_column(Integer)
+    cloud_sandbox_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
         index=True,
     )
     organization_id: Mapped[uuid.UUID | None] = mapped_column(

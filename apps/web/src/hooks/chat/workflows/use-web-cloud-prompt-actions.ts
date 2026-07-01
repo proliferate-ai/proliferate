@@ -51,9 +51,9 @@ import {
   type WebCloudSessionDraft,
 } from "../../../stores/cloud/web-cloud-session-draft-store";
 import {
-  getWebManagedSandboxAnyHarnessClient,
-  isWebManagedSandboxWorkspace,
-} from "../../../lib/access/anyharness/managed-sandbox-runtime";
+  getWebCloudSandboxAnyHarnessClient,
+  isWebCloudSandboxWorkspace,
+} from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 
 type EnqueueCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
@@ -139,7 +139,7 @@ export function useWebCloudPromptActions(input: {
       setPendingHomePromptStatus("Claim this shared workspace before sending prompts.");
       return;
     }
-    if (!isWebManagedSandboxWorkspace(workspace)) {
+    if (!isWebCloudSandboxWorkspace(workspace)) {
       const readiness = cloudCommandReadiness(workspace);
       if (!readiness.commandable) {
         setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
@@ -210,8 +210,8 @@ export function useWebCloudPromptActions(input: {
     };
     savePendingHomePrompt(workspace.id, pendingPrompt);
     try {
-      const result = isWebManagedSandboxWorkspace(workspace)
-        ? await dispatchManagedSandboxPendingHomePrompt({
+      const result = isWebCloudSandboxWorkspace(workspace)
+        ? await dispatchCloudSandboxPendingHomePrompt({
           client,
           productToken,
           workspace,
@@ -295,8 +295,8 @@ export function useWebCloudPromptActions(input: {
     setDraft("");
     setPendingHomePromptStatus(null);
     try {
-      if (isWebManagedSandboxWorkspace(workspace)) {
-        const { anyharness } = await getWebManagedSandboxAnyHarnessClient({
+      if (isWebCloudSandboxWorkspace(workspace)) {
+        const { anyharness } = await getWebCloudSandboxAnyHarnessClient({
           workspace,
           productToken,
           client,
@@ -381,7 +381,7 @@ export function useWebCloudPromptActions(input: {
   return { submitPrompt };
 }
 
-async function dispatchManagedSandboxPendingHomePrompt(args: {
+async function dispatchCloudSandboxPendingHomePrompt(args: {
   client: ProliferateCloudClient;
   productToken: string | null;
   workspace: CloudWorkspaceDetail;
@@ -390,8 +390,8 @@ async function dispatchManagedSandboxPendingHomePrompt(args: {
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
 }): Promise<{ sessionId: string; sendCommandId?: string }> {
-  args.onStatus("Preparing managed sandbox runtime.");
-  const { connection, anyharness } = await getWebManagedSandboxAnyHarnessClient({
+  args.onStatus("Preparing cloud sandbox runtime.");
+  const { connection, anyharness } = await getWebCloudSandboxAnyHarnessClient({
     workspace: args.workspace,
     productToken: args.productToken,
     client: args.client,
@@ -406,7 +406,7 @@ async function dispatchManagedSandboxPendingHomePrompt(args: {
     subagentsEnabled: false,
     origin: { kind: "system", entrypoint: "cloud" },
   });
-  await applyManagedSandboxSessionConfigUpdates(anyharness, session, args.pendingPrompt);
+  await applyCloudSandboxSessionConfigUpdates(anyharness, session, args.pendingPrompt);
   assertManagedWebActionCurrent(args.shouldContinue);
   args.onStatus("Sending prompt.");
   await anyharness.sessions.prompt(session.id, {
@@ -417,8 +417,8 @@ async function dispatchManagedSandboxPendingHomePrompt(args: {
   return { sessionId: session.id };
 }
 
-async function applyManagedSandboxSessionConfigUpdates(
-  anyharness: Awaited<ReturnType<typeof getWebManagedSandboxAnyHarnessClient>>["anyharness"],
+async function applyCloudSandboxSessionConfigUpdates(
+  anyharness: Awaited<ReturnType<typeof getWebCloudSandboxAnyHarnessClient>>["anyharness"],
   session: Session,
   pendingPrompt: PendingHomePrompt,
 ): Promise<void> {

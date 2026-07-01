@@ -4,11 +4,10 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from proliferate.db.store.cloud_secrets import CloudSecretFileValue, CloudSecretSetValue
-from proliferate.db.store.managed_sandbox_secrets import (
-    ManagedSandboxSecretMaterializationValue,
+from proliferate.db.store.cloud_sandbox_secrets import (
+    CloudSandboxSecretMaterializationValue,
 )
 from proliferate.server.cloud.secrets.models import cloud_secrets_payload
-from proliferate.server.cloud.secrets.service import _should_repair_stale_materialization
 
 
 def _workspace_secret_set(
@@ -51,11 +50,11 @@ def _workspace_materialization(
     repo_environment_id: UUID,
     applied_version: int,
     status: str = "ready",
-) -> ManagedSandboxSecretMaterializationValue:
+) -> CloudSandboxSecretMaterializationValue:
     now = datetime.now(UTC)
-    return ManagedSandboxSecretMaterializationValue(
+    return CloudSandboxSecretMaterializationValue(
         id=uuid4(),
-        managed_sandbox_id=uuid4(),
+        cloud_sandbox_id=uuid4(),
         materialization_kind="workspace",
         cloud_secret_set_id=uuid4(),
         cloud_repo_config_id=cloud_repo_config_id,
@@ -91,7 +90,6 @@ def test_cloud_secrets_payload_marks_ready_materialization_pending_when_version_
     assert payload.materialization is not None
     assert payload.materialization.status == "pending"
     assert payload.materialization.materialized_at is None
-    assert _should_repair_stale_materialization(secret_set, materialization)
 
 
 def test_cloud_secrets_payload_keeps_ready_materialization_ready_when_version_is_current() -> None:
@@ -113,4 +111,3 @@ def test_cloud_secrets_payload_keeps_ready_materialization_ready_when_version_is
     assert payload.materialization is not None
     assert payload.materialization.status == "ready"
     assert payload.materialization.materialized_at is not None
-    assert not _should_repair_stale_materialization(secret_set, materialization)

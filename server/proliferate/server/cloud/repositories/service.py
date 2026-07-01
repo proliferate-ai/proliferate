@@ -10,16 +10,17 @@ from proliferate.db.store.repositories import (
     RepoConfigValue,
     RepoEnvironmentValue,
     list_repo_configs_for_user,
-    sync_cloud_environment_from_legacy_cloud_repo_config,
+    upsert_cloud_repo_environment,
     upsert_local_repo_environment,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.repo_config.models import SaveCloudRepoConfigRequest
-from proliferate.server.cloud.repo_config.service import save_repo_config
+from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.repositories.models import (
     SaveCloudRepoEnvironmentRequest,
     SaveLocalRepoEnvironmentRequest,
 )
+from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
+from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 
 
 async def list_repositories(
@@ -67,22 +68,39 @@ async def save_cloud_environment(
     git_repo_name: str,
     body: SaveCloudRepoEnvironmentRequest,
 ) -> RepoEnvironmentValue:
-    legacy = await save_repo_config(
+    authority = await require_github_cloud_repo_authority(
         db,
-        user_id,
+        user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
-        body=SaveCloudRepoConfigRequest(
-            configured=body.configured,
-            defaultBranch=body.default_branch,
-            setupScript=body.setup_script,
-            runCommand=body.run_command,
-        ),
     )
-    environment = await sync_cloud_environment_from_legacy_cloud_repo_config(
+    default_branch = body.default_branch
+    if default_branch is not None and default_branch.strip():
+        repo_branches = await get_repo_branches_for_credentials(
+            CloudRepoGitHubCredentials(user_id=user_id, access_token=authority.access_token),
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            missing_access_message=(
+                "Connect the Proliferate GitHub App before setting a cloud default branch."
+            ),
+            repo_access_required_message=(
+                "Reconnect the Proliferate GitHub App and grant repository access before "
+                "setting a cloud default branch."
+            ),
+        )
+        if default_branch not in repo_branches.branches:
+            raise CloudApiError(
+                "github_branch_not_found",
+                f"The default branch '{default_branch}' was not found on GitHub.",
+                status_code=400,
+            )
+    return await upsert_cloud_repo_environment(
         db,
-        cloud_repo_config_id=legacy.id,
+        user_id=user_id,
+        git_provider="github",
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        default_branch=default_branch,
+        setup_script=body.setup_script,
+        run_command=body.run_command,
     )
-    if environment is None:
-        raise RuntimeError("Cloud repo environment disappeared after save.")
-    return environment

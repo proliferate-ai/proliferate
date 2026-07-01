@@ -1,4 +1,4 @@
-"""Persistence helpers for managed sandbox secret materialization."""
+"""Persistence helpers for cloud sandbox secret materialization."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.secrets import ManagedSandboxSecretMaterialization
+from proliferate.db.models.cloud.secrets import CloudSandboxSecretMaterialization
 from proliferate.utils.time import utcnow
 
 
 @dataclass(frozen=True)
-class ManagedSandboxSecretMaterializationValue:
+class CloudSandboxSecretMaterializationValue:
     id: UUID
-    managed_sandbox_id: UUID
+    cloud_sandbox_id: UUID
     materialization_kind: str
     cloud_secret_set_id: UUID | None
     cloud_repo_config_id: UUID | None
@@ -59,11 +59,11 @@ def _dumps_json(value: dict[str, object] | dict[str, int] | None) -> str | None:
 
 
 def materialization_value(
-    row: ManagedSandboxSecretMaterialization,
-) -> ManagedSandboxSecretMaterializationValue:
-    return ManagedSandboxSecretMaterializationValue(
+    row: CloudSandboxSecretMaterialization,
+) -> CloudSandboxSecretMaterializationValue:
+    return CloudSandboxSecretMaterializationValue(
         id=row.id,
-        managed_sandbox_id=row.managed_sandbox_id,
+        cloud_sandbox_id=row.cloud_sandbox_id,
         materialization_kind=row.materialization_kind,
         cloud_secret_set_id=row.cloud_secret_set_id,
         cloud_repo_config_id=row.cloud_repo_config_id,
@@ -83,12 +83,12 @@ def materialization_value(
 async def load_global_secret_materialization(
     db: AsyncSession,
     *,
-    managed_sandbox_id: UUID,
+    cloud_sandbox_id: UUID,
     lock_row: bool = False,
-) -> ManagedSandboxSecretMaterializationValue | None:
-    stmt = select(ManagedSandboxSecretMaterialization).where(
-        ManagedSandboxSecretMaterialization.managed_sandbox_id == managed_sandbox_id,
-        ManagedSandboxSecretMaterialization.materialization_kind == "global",
+) -> CloudSandboxSecretMaterializationValue | None:
+    stmt = select(CloudSandboxSecretMaterialization).where(
+        CloudSandboxSecretMaterialization.cloud_sandbox_id == cloud_sandbox_id,
+        CloudSandboxSecretMaterialization.materialization_kind == "global",
     )
     if lock_row:
         stmt = stmt.with_for_update()
@@ -99,14 +99,14 @@ async def load_global_secret_materialization(
 async def load_workspace_secret_materialization(
     db: AsyncSession,
     *,
-    managed_sandbox_id: UUID,
+    cloud_sandbox_id: UUID,
     repo_environment_id: UUID,
     lock_row: bool = False,
-) -> ManagedSandboxSecretMaterializationValue | None:
-    stmt = select(ManagedSandboxSecretMaterialization).where(
-        ManagedSandboxSecretMaterialization.managed_sandbox_id == managed_sandbox_id,
-        ManagedSandboxSecretMaterialization.materialization_kind == "workspace",
-        ManagedSandboxSecretMaterialization.repo_environment_id == repo_environment_id,
+) -> CloudSandboxSecretMaterializationValue | None:
+    stmt = select(CloudSandboxSecretMaterialization).where(
+        CloudSandboxSecretMaterialization.cloud_sandbox_id == cloud_sandbox_id,
+        CloudSandboxSecretMaterialization.materialization_kind == "workspace",
+        CloudSandboxSecretMaterialization.repo_environment_id == repo_environment_id,
     )
     if lock_row:
         stmt = stmt.with_for_update()
@@ -117,15 +117,15 @@ async def load_workspace_secret_materialization(
 async def begin_global_secret_materialization(
     db: AsyncSession,
     *,
-    managed_sandbox_id: UUID,
+    cloud_sandbox_id: UUID,
     sandbox_generation: int,
-) -> ManagedSandboxSecretMaterializationValue:
+) -> CloudSandboxSecretMaterializationValue:
     now = utcnow()
     row = (
         await db.execute(
-            pg_insert(ManagedSandboxSecretMaterialization)
+            pg_insert(CloudSandboxSecretMaterialization)
             .values(
-                managed_sandbox_id=managed_sandbox_id,
+                cloud_sandbox_id=cloud_sandbox_id,
                 materialization_kind="global",
                 cloud_secret_set_id=None,
                 cloud_repo_config_id=None,
@@ -141,8 +141,8 @@ async def begin_global_secret_materialization(
                 updated_at=now,
             )
             .on_conflict_do_update(
-                index_elements=[ManagedSandboxSecretMaterialization.managed_sandbox_id],
-                index_where=ManagedSandboxSecretMaterialization.materialization_kind == "global",
+                index_elements=[CloudSandboxSecretMaterialization.cloud_sandbox_id],
+                index_where=CloudSandboxSecretMaterialization.materialization_kind == "global",
                 set_={
                     "sandbox_generation": sandbox_generation,
                     "status": "running",
@@ -151,7 +151,7 @@ async def begin_global_secret_materialization(
                     "updated_at": now,
                 },
             )
-            .returning(ManagedSandboxSecretMaterialization)
+            .returning(CloudSandboxSecretMaterialization)
         )
     ).scalar_one()
     return materialization_value(row)
@@ -160,18 +160,18 @@ async def begin_global_secret_materialization(
 async def begin_workspace_secret_materialization(
     db: AsyncSession,
     *,
-    managed_sandbox_id: UUID,
+    cloud_sandbox_id: UUID,
     repo_environment_id: UUID,
     cloud_secret_set_id: UUID | None,
     sandbox_generation: int,
     cloud_repo_config_id: UUID | None = None,
-) -> ManagedSandboxSecretMaterializationValue:
+) -> CloudSandboxSecretMaterializationValue:
     now = utcnow()
     row = (
         await db.execute(
-            pg_insert(ManagedSandboxSecretMaterialization)
+            pg_insert(CloudSandboxSecretMaterialization)
             .values(
-                managed_sandbox_id=managed_sandbox_id,
+                cloud_sandbox_id=cloud_sandbox_id,
                 materialization_kind="workspace",
                 cloud_secret_set_id=cloud_secret_set_id,
                 cloud_repo_config_id=cloud_repo_config_id,
@@ -188,10 +188,10 @@ async def begin_workspace_secret_materialization(
             )
             .on_conflict_do_update(
                 index_elements=[
-                    ManagedSandboxSecretMaterialization.managed_sandbox_id,
-                    ManagedSandboxSecretMaterialization.repo_environment_id,
+                    CloudSandboxSecretMaterialization.cloud_sandbox_id,
+                    CloudSandboxSecretMaterialization.repo_environment_id,
                 ],
-                index_where=ManagedSandboxSecretMaterialization.materialization_kind
+                index_where=CloudSandboxSecretMaterialization.materialization_kind
                 == "workspace",
                 set_={
                     "cloud_secret_set_id": cloud_secret_set_id,
@@ -203,7 +203,7 @@ async def begin_workspace_secret_materialization(
                     "updated_at": now,
                 },
             )
-            .returning(ManagedSandboxSecretMaterialization)
+            .returning(CloudSandboxSecretMaterialization)
         )
     ).scalar_one()
     return materialization_value(row)
@@ -216,8 +216,8 @@ async def mark_secret_materialization_ready(
     applied_version: int,
     applied_versions: dict[str, int],
     applied_manifest: dict[str, object],
-) -> ManagedSandboxSecretMaterializationValue | None:
-    row = await db.get(ManagedSandboxSecretMaterialization, materialization_id)
+) -> CloudSandboxSecretMaterializationValue | None:
+    row = await db.get(CloudSandboxSecretMaterialization, materialization_id)
     if row is None:
         return None
     now = utcnow()
@@ -237,8 +237,8 @@ async def mark_secret_materialization_error(
     materialization_id: UUID,
     *,
     last_error: str,
-) -> ManagedSandboxSecretMaterializationValue | None:
-    row = await db.get(ManagedSandboxSecretMaterialization, materialization_id)
+) -> CloudSandboxSecretMaterializationValue | None:
+    row = await db.get(CloudSandboxSecretMaterialization, materialization_id)
     if row is None:
         return None
     row.status = "error"
