@@ -42,7 +42,18 @@ pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
             true,
         )
         .await?;
-        if outcome == ConfigApplyOutcome::NotApplied && !option_contains_desired {
+        let will_try_direct_setter =
+            outcome == ConfigApplyOutcome::NotApplied && !option_contains_desired;
+        tracing::info!(
+            native_session_id,
+            desired_model_id,
+            ?outcome,
+            option_contains_desired,
+            will_try_direct_setter,
+            has_direct_model_control = startup_state.has_direct_model_control(),
+            "[config-switch] model preference via config option"
+        );
+        if will_try_direct_setter {
             return apply_model_via_direct_setter(
                 conn,
                 native_session_id,
@@ -51,6 +62,10 @@ pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
             )
             .await;
         }
+        // NOTE(switch-diagnostics): when a model option exists but rejected a
+        // foreign (catalog) value, there is no direct-setter fallback here —
+        // candidate cause of "model doesn't stick" for adapters that expose a
+        // model config option (e.g. Claude).
         return Ok(outcome);
     }
 
@@ -207,6 +222,10 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
         )));
     }
 
+    // Captured before the &mut apply below to avoid holding `option`'s borrow.
+    let value_in_live_option = option
+        .map(|option| select_option_contains_value(option, desired_value))
+        .unwrap_or(false);
     let outcome = apply_config_option_if_possible_with_policy(
         conn,
         native_session_id,
@@ -221,6 +240,16 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
             "Failed to update config option '{config_id}' to '{desired_value}': {error}"
         ))
     })?;
+    tracing::info!(
+        native_session_id,
+        config_id,
+        desired_value,
+        is_model_request,
+        is_mode_request,
+        value_in_live_option,
+        ?outcome,
+        "[config-switch] apply_specific outcome"
+    );
     if outcome == ConfigApplyOutcome::NotApplied {
         if config_request_matches_current_state(startup_state, config_id, desired_value) {
             persist_requested_config_value_if_changed(

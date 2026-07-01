@@ -65,6 +65,27 @@ export async function logRendererEvent(payload: RendererEventPayload): Promise<v
   await invoke("log_renderer_event", { input: payload });
 }
 
+/**
+ * [config-switch] diagnostics: fire-and-forget a renderer event that persists to
+ * desktop-native.log (grep `[config-switch]`), so frontend model/mode-switch
+ * signals sit alongside the backend `[config-switch]` lines for correlation.
+ * `fields` are packed into the message as `k=v` pairs.
+ */
+export function logConfigSwitchEvent(
+  event: string,
+  fields?: Record<string, unknown>,
+): void {
+  const packed = fields
+    ? Object.entries(fields)
+      .map(([key, value]) => `${key}=${value ?? "null"}`)
+      .join(" ")
+    : "";
+  void logRendererEvent({
+    source: "config-switch",
+    message: packed ? `[config-switch] ${event} ${packed}` : `[config-switch] ${event}`,
+  }).catch(() => {});
+}
+
 export async function exportDebugBundle(): Promise<string | null> {
   if (!isTauriDesktop()) {
     return null;
