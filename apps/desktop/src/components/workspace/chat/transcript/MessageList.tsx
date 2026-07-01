@@ -1,5 +1,7 @@
 import {
+  memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -28,7 +30,9 @@ import type { SessionViewState } from "@proliferate/product-domain/sessions/acti
 import {
   ChatTranscriptView,
   type ChatTranscriptPendingPromptRenderInput,
+  type ChatTranscriptPendingStatusInput,
   type ChatTranscriptTurnRowRenderInput,
+  type ChatTranscriptTurnStatusInput,
 } from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
 import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
 import {
@@ -41,6 +45,16 @@ import { TranscriptTurnRow } from "./TranscriptTurnRow";
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
+
+// INPUT-PRIORITY (the "typing must never be laggy" rule): the transcript view
+// renders from a DEFERRED copy of the view state. Stream batches land every
+// ~50-100ms while an agent is thinking/replying; rendering them at the same
+// priority as keystrokes made typing contend with transcript re-renders for
+// every frame. With useDeferredValue + memo, urgent updates (typing, clicks)
+// preempt the transcript render and consecutive stream batches coalesce into
+// one deferred pass — streaming visibly lags by a frame or two under load
+// instead of the composer lagging.
+const DeferredChatTranscriptView = memo(ChatTranscriptView);
 
 interface MessageListProps {
   activeSessionId: string;
@@ -116,6 +130,7 @@ export function MessageList({
     sessionViewState,
     transcript,
   ]);
+  const deferredTranscriptViewState = useDeferredValue(transcriptViewState);
 
   const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
     // Tag the scroll source: a persistent stream of `source.programmatic`
@@ -201,6 +216,26 @@ export function MessageList({
     openFile,
     openGitReviewPane,
   ]);
+  // Stable renderer identities — required for DeferredChatTranscriptView's
+  // memo to bail out on urgent (typing) passes.
+  const renderPendingPromptTrailingStatusRow = useCallback(
+    (input: ChatTranscriptPendingStatusInput) =>
+      resolvePendingPromptTrailingStatus(
+        input.queuedAt,
+        input.sessionViewState,
+        input.forceWorking,
+      ),
+    [],
+  );
+  const renderTurnTrailingStatusRow = useCallback(
+    (input: ChatTranscriptTurnStatusInput) =>
+      resolveTurnTrailingStatus(
+        input.startedAt,
+        input.sessionViewState,
+        input.transientStatusText,
+      ),
+    [],
+  );
 
   return (
     <DebugProfiler id="transcript-list">
@@ -211,24 +246,14 @@ export function MessageList({
           canOpenSession={canOpenSession}
         >
           <DebugProfiler id="transcript-row-list-router">
-            <ChatTranscriptView
-              state={transcriptViewState}
+            <DeferredChatTranscriptView
+              state={deferredTranscriptViewState}
               outboxActions={outboxActions}
               onScrollSample={handleTranscriptScroll}
               renderPendingPromptRow={renderPendingPromptRow}
               renderTurnRow={renderTurnRow}
-              renderPendingPromptTrailingStatus={(input) =>
-                resolvePendingPromptTrailingStatus(
-                  input.queuedAt,
-                  input.sessionViewState,
-                  input.forceWorking,
-                )}
-              renderTurnTrailingStatus={(input) =>
-                resolveTurnTrailingStatus(
-                  input.startedAt,
-                  input.sessionViewState,
-                  input.transientStatusText,
-                )}
+              renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
+              renderTurnTrailingStatus={renderTurnTrailingStatusRow}
             />
           </DebugProfiler>
         </TranscriptContextProviders>
