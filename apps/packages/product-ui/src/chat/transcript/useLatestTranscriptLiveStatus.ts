@@ -102,19 +102,29 @@ export function useLatestTranscriptLiveStatus({
   const [showDelayedLatestLiveStatus, setShowDelayedLatestLiveStatus] = useState(false);
   const shownForTurnIdRef = useRef<string | null>(null);
 
+  // The grace ref resets ONLY when the turn changes — NOT when the status
+  // temporarily yields (e.g. to a live exploration/work block). Resetting on
+  // every hide re-applied the LIVE_STATUS_GRACE_MS delay at each
+  // status⇄block transition, blinking the "Thinking…" row mid-turn.
+  useEffect(() => {
+    if (shownForTurnIdRef.current !== null && shownForTurnIdRef.current !== latestTurnId) {
+      shownForTurnIdRef.current = null;
+    }
+  }, [latestTurnId]);
+
   useEffect(() => {
     if (!shouldShowDelayedLatestLiveStatus) {
-      shownForTurnIdRef.current = null;
       setShowDelayedLatestLiveStatus(false);
       return;
     }
 
-    // FLICKER GUARD: once the status is visible for a turn, keep it visible —
-    // re-arming the grace timer on every stream item (itemOrder.length is a
-    // dep) used to hide the "Thinking…" row for LIVE_STATUS_GRACE_MS on each
-    // new item, strobing it throughout active streams. The grace delay only
-    // applies to the FIRST appearance per turn.
+    // FLICKER GUARD: once the status has been shown for a turn, every later
+    // re-show within that turn is IMMEDIATE — re-arming the grace timer on
+    // each stream item (itemOrder.length is a dep) or on each status⇄block
+    // handoff strobed the "Thinking…" row throughout active streams. The
+    // grace delay applies only to the FIRST appearance per turn.
     if (shownForTurnIdRef.current === latestTurnId) {
+      setShowDelayedLatestLiveStatus(true);
       return;
     }
 

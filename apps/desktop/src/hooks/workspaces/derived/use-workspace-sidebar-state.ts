@@ -1,7 +1,8 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
 import type { Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
-import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   type SidebarSessionActivityState,
@@ -67,6 +68,33 @@ export function useWorkspaceSidebarState({
   const workspaceActivities = useWorkspaceSidebarActivityStatesWithErrorAttention(
     lastViewedSessionErrorAtBySession,
   );
+  // SPINNER STALENESS FIX: the sidebar 'iterating' spinner can be pinned by
+  // the server-side executionSummary, which lives in the cached workspace
+  // collections and refreshes only on collections sync — after a turn ended,
+  // nothing refetched it, so the spinner ran on stale 'running' data
+  // indefinitely (measured via sidebar_activity.summary_override
+  // diagnostics). Refetch the collections whenever any workspace's LIVE
+  // activity transitions to idle, so the summary self-corrects within one
+  // roundtrip.
+  const queryClient = useQueryClient();
+  const previousActivitiesRef = useRef<Record<string, SidebarSessionActivityState> | null>(null);
+  useEffect(() => {
+    const previous = previousActivitiesRef.current;
+    previousActivitiesRef.current = workspaceActivities;
+    if (!previous) {
+      return;
+    }
+    const anyWentIdle = Object.entries(workspaceActivities).some(([id, activity]) => {
+      const before = previous[id];
+      return (activity === "idle" || activity === "closed")
+        && before !== undefined
+        && before !== "idle"
+        && before !== "closed";
+    });
+    if (anyWentIdle) {
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    }
+  }, [queryClient, workspaceActivities]);
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const activeSessionTitle = useSessionDirectoryStore((state) => {
     const entry = activeSessionId ? state.entriesById[activeSessionId] : null;
