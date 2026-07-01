@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -12,6 +14,35 @@ from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
 
 CloudWorkspaceLifecycle = Literal["active", "archived", "all"]
+
+
+@dataclass(frozen=True)
+class CloudWorkspaceValue:
+    id: UUID
+    owner_user_id: UUID
+    repo_environment_id: UUID
+    display_name: str
+    git_branch: str
+    git_base_branch: str | None
+    anyharness_workspace_id: str | None
+    created_at: datetime
+    updated_at: datetime
+    archived_at: datetime | None
+
+
+def cloud_workspace_value(row: CloudWorkspace) -> CloudWorkspaceValue:
+    return CloudWorkspaceValue(
+        id=row.id,
+        owner_user_id=row.owner_user_id,
+        repo_environment_id=row.repo_environment_id,
+        display_name=row.display_name,
+        git_branch=row.git_branch,
+        git_base_branch=row.git_base_branch,
+        anyharness_workspace_id=row.anyharness_workspace_id,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        archived_at=row.archived_at,
+    )
 
 
 def _apply_lifecycle_filter(
@@ -30,14 +61,14 @@ async def list_cloud_workspaces(
     user_id: UUID,
     *,
     lifecycle: CloudWorkspaceLifecycle = "active",
-) -> list[CloudWorkspace]:
+) -> list[CloudWorkspaceValue]:
     statement = (
         select(CloudWorkspace)
         .where(CloudWorkspace.owner_user_id == user_id)
         .order_by(CloudWorkspace.updated_at.desc())
     )
     statement = _apply_lifecycle_filter(statement, lifecycle)
-    return list((await db.execute(statement)).scalars().all())
+    return [cloud_workspace_value(row) for row in (await db.execute(statement)).scalars().all()]
 
 
 async def list_active_workspace_branches_for_repo_environment(
@@ -58,8 +89,8 @@ async def get_cloud_workspace_for_user(
     db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
-) -> CloudWorkspace | None:
-    return (
+) -> CloudWorkspaceValue | None:
+    row = (
         await db.execute(
             select(CloudWorkspace).where(
                 CloudWorkspace.id == workspace_id,
@@ -67,15 +98,17 @@ async def get_cloud_workspace_for_user(
             )
         )
     ).scalar_one_or_none()
+    return cloud_workspace_value(row) if row is not None else None
 
 
 async def get_cloud_workspace_by_id(
     db: AsyncSession,
     workspace_id: UUID,
-) -> CloudWorkspace | None:
-    return (
+) -> CloudWorkspaceValue | None:
+    row = (
         await db.execute(select(CloudWorkspace).where(CloudWorkspace.id == workspace_id))
     ).scalar_one_or_none()
+    return cloud_workspace_value(row) if row is not None else None
 
 
 async def create_cloud_workspace(
@@ -87,7 +120,7 @@ async def create_cloud_workspace(
     git_branch: str,
     git_base_branch: str | None,
     anyharness_workspace_id: str | None = None,
-) -> CloudWorkspace:
+) -> CloudWorkspaceValue:
     now = utcnow()
     workspace = CloudWorkspace(
         owner_user_id=user_id,
@@ -101,55 +134,67 @@ async def create_cloud_workspace(
     )
     db.add(workspace)
     await db.flush()
-    return workspace
+    return cloud_workspace_value(workspace)
 
 
 async def update_workspace_anyharness_workspace_id(
     db: AsyncSession,
-    workspace: CloudWorkspace,
+    workspace: CloudWorkspaceValue,
     anyharness_workspace_id: str,
-) -> CloudWorkspace:
-    workspace.anyharness_workspace_id = anyharness_workspace_id
-    workspace.updated_at = utcnow()
+) -> CloudWorkspaceValue:
+    row = await _load_workspace_row(db, workspace.id)
+    row.anyharness_workspace_id = anyharness_workspace_id
+    row.updated_at = utcnow()
     await db.flush()
-    return workspace
+    return cloud_workspace_value(row)
 
 
 async def update_workspace_display_name(
     db: AsyncSession,
-    workspace: CloudWorkspace,
+    workspace: CloudWorkspaceValue,
     display_name: str,
-) -> CloudWorkspace:
-    workspace.display_name = display_name
-    workspace.updated_at = utcnow()
+) -> CloudWorkspaceValue:
+    row = await _load_workspace_row(db, workspace.id)
+    row.display_name = display_name
+    row.updated_at = utcnow()
     await db.flush()
-    return workspace
+    return cloud_workspace_value(row)
 
 
 async def archive_cloud_workspace(
     db: AsyncSession,
-    workspace: CloudWorkspace,
-) -> CloudWorkspace:
+    workspace: CloudWorkspaceValue,
+) -> CloudWorkspaceValue:
+    row = await _load_workspace_row(db, workspace.id)
     now = utcnow()
-    workspace.archived_at = now
-    workspace.updated_at = now
+    row.archived_at = now
+    row.updated_at = now
     await db.flush()
-    return workspace
+    return cloud_workspace_value(row)
 
 
 async def restore_cloud_workspace(
     db: AsyncSession,
-    workspace: CloudWorkspace,
-) -> CloudWorkspace:
-    workspace.archived_at = None
-    workspace.updated_at = utcnow()
+    workspace: CloudWorkspaceValue,
+) -> CloudWorkspaceValue:
+    row = await _load_workspace_row(db, workspace.id)
+    row.archived_at = None
+    row.updated_at = utcnow()
     await db.flush()
-    return workspace
+    return cloud_workspace_value(row)
 
 
 async def delete_cloud_workspace(
     db: AsyncSession,
-    workspace: CloudWorkspace,
+    workspace: CloudWorkspaceValue,
 ) -> None:
-    await db.delete(workspace)
+    row = await _load_workspace_row(db, workspace.id)
+    await db.delete(row)
     await db.flush()
+
+
+async def _load_workspace_row(db: AsyncSession, workspace_id: UUID) -> CloudWorkspace:
+    row = (
+        await db.execute(select(CloudWorkspace).where(CloudWorkspace.id == workspace_id))
+    ).scalar_one()
+    return row

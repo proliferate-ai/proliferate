@@ -14,11 +14,11 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.db.store.cloud_workspaces import CloudWorkspaceValue
 from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
@@ -396,7 +396,7 @@ async def _create_workspace_row_with_branch_retry(
     generated_name: bool,
     display_name_is_generated: bool,
     repo_branches: list[str],
-) -> CloudWorkspace:
+) -> CloudWorkspaceValue:
     current_branch_name = initial_branch_name
     for _attempt in range(5):
         try:
@@ -441,7 +441,7 @@ async def _load_user_workspace(
     *,
     user_id: UUID,
     workspace_id: UUID,
-) -> CloudWorkspace:
+) -> CloudWorkspaceValue:
     workspace = await cloud_workspace_store.get_cloud_workspace_for_user(
         db,
         user_id,
@@ -477,7 +477,7 @@ async def _load_repo_environment(
 
 async def _workspace_payload(
     db: AsyncSession,
-    workspace: CloudWorkspace,
+    workspace: CloudWorkspaceValue,
     *,
     detail: bool = False,
 ) -> WorkspaceSummary:
@@ -517,7 +517,7 @@ async def _workspace_payload(
     )
 
 
-def _workspace_status(workspace: CloudWorkspace) -> CloudWorkspaceStatus:
+def _workspace_status(workspace: CloudWorkspaceValue) -> CloudWorkspaceStatus:
     if workspace.archived_at is not None:
         return "archived"
     if not workspace.anyharness_workspace_id:

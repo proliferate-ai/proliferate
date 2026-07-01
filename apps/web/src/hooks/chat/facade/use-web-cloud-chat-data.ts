@@ -2,10 +2,12 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import type {
+  PendingInteraction,
   Session,
   SessionEventEnvelope,
   SessionExecutionSummary,
 } from "@anyharness/sdk";
+import { reduceEvents } from "@anyharness/sdk";
 import type {
   CloudPendingInteraction,
   CloudSessionEvent,
@@ -86,7 +88,6 @@ export function useWebCloudChatData() {
         client,
       });
       const envelopes = await anyharness.sessions.listEvents(session!.sessionId, {
-        oldestFirst: true,
         limit: 500,
       });
       return envelopes.map((envelope) => cloudSessionEventFromAnyHarness(
@@ -107,14 +108,33 @@ export function useWebCloudChatData() {
     refetch: sessionEventsQuery.refetch,
   };
   const transcriptItems = EMPTY_TRANSCRIPT_ITEMS;
-  const pendingInteractions = useMemo(
-    () => cloudPendingInteractionsFromExecutionSummary(
-      session?.executionSummary as SessionExecutionSummary | null | undefined,
-      session?.sessionId ?? null,
-    ),
-    [session?.executionSummary, session?.sessionId],
-  );
   const sessionEvents = sessionEventsQuery.data ?? EMPTY_SESSION_EVENTS;
+  const pendingInteractions = useMemo(
+    () => {
+      if (session?.sessionId && sessionEventsQuery.isFetched) {
+        const eventEnvelopes = sessionEvents
+          .map((event) => event.envelope)
+          .filter((envelope): envelope is SessionEventEnvelope =>
+            Boolean(envelope && typeof envelope === "object" && "event" in envelope)
+          );
+        const transcript = reduceEvents(eventEnvelopes, session.sessionId);
+        return cloudPendingInteractionsFromReducer(
+          transcript.pendingInteractions,
+          session.sessionId,
+        );
+      }
+      return cloudPendingInteractionsFromExecutionSummary(
+        session?.executionSummary as SessionExecutionSummary | null | undefined,
+        session?.sessionId ?? null,
+      );
+    },
+    [
+      session?.executionSummary,
+      session?.sessionId,
+      sessionEvents,
+      sessionEventsQuery.isFetched,
+    ],
+  );
   const snapshot = useMemo(
     () => workspace ? { workspace, sessions } : undefined,
     [sessions, workspace],
@@ -209,6 +229,36 @@ function cloudPendingInteractionsFromExecutionSummary(
           mode: interaction.payload.mode,
         },
       }
+      : {}),
+  }));
+}
+
+function cloudPendingInteractionsFromReducer(
+  pendingInteractions: readonly PendingInteraction[],
+  sessionId: string,
+): CloudPendingInteraction[] {
+  return pendingInteractions.map((interaction) => ({
+    requestId: interaction.requestId,
+    sessionId,
+    status: "pending",
+    kind: interaction.kind,
+    title: interaction.title,
+    description: interaction.description ?? null,
+    toolCallId: interaction.toolCallId ?? null,
+    toolKind: interaction.toolKind ?? null,
+    toolStatus: interaction.toolStatus ?? null,
+    linkedPlanId: interaction.linkedPlanId ?? null,
+    ...(interaction.kind === "permission"
+      ? {
+        options: interaction.options ?? [],
+        context: interaction.context ?? null,
+      }
+      : {}),
+    ...(interaction.kind === "user_input"
+      ? { questions: interaction.questions ?? [] }
+      : {}),
+    ...(interaction.kind === "mcp_elicitation"
+      ? { mcpElicitation: interaction.mcpElicitation }
       : {}),
   }));
 }

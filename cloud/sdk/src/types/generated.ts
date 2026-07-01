@@ -243,13 +243,8 @@ export interface CloudWorkspaceSummary {
 export interface CloudWorkspaceDetail extends CloudWorkspaceSummary {
   [key: string]: unknown;
 }
-export interface CloudWorkspaceRuntimeStatusResponse {
-  workspaceId: string;
-  status: CloudWorkspaceStatus;
-  runtimeStatus: CloudRuntimeStatus;
-  sandboxStatus?: string | null;
-  anyharnessWorkspaceId: string;
-}
+export type CloudWorkspaceRuntimeStatusResponse =
+  Schema<"CloudWorkspaceRuntimeStatusResponse">;
 export type ClaimWorkspaceRequest = Schema<"ClaimWorkspaceRequest">;
 export type ClaimWorkspaceResponse = Schema<"ClaimWorkspaceResponse">;
 export type DirectAccessTokenRequest =
