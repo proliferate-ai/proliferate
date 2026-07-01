@@ -8,7 +8,7 @@ import {
 } from "./transcript-trailing-status";
 
 describe("transcript trailing status", () => {
-  it("suppresses trailing status only while assistant prose is actively streaming", () => {
+  it("suppresses trailing status whenever assistant prose with text is the tail", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", true),
     ]);
@@ -23,18 +23,19 @@ describe("transcript trailing status", () => {
 
     transcript.itemsById.assistant = assistantItem("assistant", false);
 
-    // Prose finished but the turn is still in progress: the indicator must
-    // return so the turn never reads as "done" while the agent keeps working.
+    // OWNER RULE: prose finished and still the tail — the rendered message
+    // must be the last thing in the turn. No "Thinking…" lingering under an
+    // already-finished answer while turn_ended trails the final tokens.
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
     expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(false);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
       isLatestTurnInProgress: true,
-    })).toBe(true);
+    })).toBe(false);
   });
 
-  it("shows transient thought status after prose completes mid-turn", () => {
+  it("suppresses transient thought status while completed prose is the tail", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", false),
       transientThoughtItem("status", "Checking the next action"),
@@ -46,7 +47,7 @@ describe("transcript trailing status", () => {
       turn,
       transcript,
       isLatestTurnInProgress: true,
-    })).toBe(true);
+    })).toBe(false);
   });
 
   it("allows trailing status after transient thought when no prose is visible", () => {

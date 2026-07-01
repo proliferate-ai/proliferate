@@ -11,11 +11,15 @@ export function shouldAllowTurnTrailingStatus({
   transcript: TranscriptState;
   isLatestTurnInProgress: boolean;
 }): boolean {
-  // Completed prose must not read as "turn finished" while the agent keeps
-  // working (thinking, preparing a tool call). Only an actively streaming
-  // prose tail suppresses the trailing indicator.
+  // OWNER RULE: once the turn's tail is assistant prose with text — streaming
+  // or completed — no trailing "Thinking…" below it. The final rendered
+  // message must be the last thing in the turn; if the agent genuinely keeps
+  // working after prose, the next tool/work item announces itself when it
+  // arrives. (Previously completed prose re-showed the indicator, which read
+  // as "thinking…" lingering under an already-finished answer whenever
+  // turn_ended trailed the final tokens.)
   return isLatestTurnInProgress
-    && !lastTopLevelItemIsStreamingAssistantProse(turn, transcript);
+    && !lastTopLevelItemIsAssistantProseWithText(turn, transcript);
 }
 
 export function lastTopLevelItemIsAssistantProseWithText(

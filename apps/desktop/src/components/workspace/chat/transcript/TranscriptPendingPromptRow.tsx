@@ -8,7 +8,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 import { UserMessage } from "./UserMessage";
 import {
-  TRAILING_STATUS_MIN_HEIGHT,
   TurnShell,
 } from "./TranscriptTurnChrome";
 import {
@@ -71,9 +70,13 @@ export function TranscriptPendingPromptRow({
           activeSessionId={activeSessionId}
           prompt={prompt}
         />
-        {trailingStatus && (
-          <div className={TRAILING_STATUS_MIN_HEIGHT}>{trailingStatus}</div>
-        )}
+        {/* ANCHOR INVARIANT: fixed-height tail slot (same h-6 as the turn
+            row's slot) so "Thinking…" appearing under a just-sent message is
+            a content swap with zero layout motion — and the pending-prompt →
+            turn handoff keeps identical bottom geometry. */}
+        <div className="flex h-6 items-center" data-pending-tail-slot>
+          {trailingStatus}
+        </div>
         {outboxControls}
       </div>
     </TurnShell>

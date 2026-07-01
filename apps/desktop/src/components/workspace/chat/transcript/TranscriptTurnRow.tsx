@@ -19,7 +19,6 @@ import {
   resolveTurnPromptTiming,
 } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import {
-  lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "@proliferate/product-domain/chats/transcript/transcript-trailing-status";
@@ -130,11 +129,12 @@ export function TranscriptTurnRow({
             sessionViewState,
           })
         : null;
-  const shouldReserveTurnAssistantActionSlot =
-    isLatestTurnInProgress
-    && !!tailAssistantCopyContent
-    && !trailingStatus
-    && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
+  // ANCHOR INVARIANT: while the latest turn is in progress, the turn's bottom
+  // is ALWAYS a fixed-height tail slot (same h-6 as the completed-turn action
+  // row). "Thinking…" appearing/disappearing, and the completion handoff to
+  // the copy-actions row, are content swaps inside a constant-geometry slot —
+  // the transcript's bottom line never bumps.
+  const showFixedTailSlot = row.isLastTurnRow && isLatestTurnInProgress;
   const trailingStatusClassName = tailAssistantCopyContent
     ? undefined
     : TRAILING_STATUS_MIN_HEIGHT;
@@ -231,12 +231,16 @@ export function TranscriptTurnRow({
         <TurnAssistantActionRow
           content={tailAssistantCopyContent}
           showCopyButton={row.isLastTurnRow && !!turn.completedAt}
-          reserveSlot={row.isLastTurnRow && shouldReserveTurnAssistantActionSlot}
+          reserveSlot={false}
           timestampLabel={tailAssistantActionTime}
         />
-        {trailingStatus && (
+        {showFixedTailSlot ? (
+          <div className="flex h-6 items-center" data-turn-tail-slot>
+            {trailingStatus}
+          </div>
+        ) : trailingStatus ? (
           <div className={trailingStatusClassName}>{trailingStatus}</div>
-        )}
+        ) : null}
         {stoppedNotice && (
           <div className="flex flex-col items-start gap-2 text-chat text-foreground/60">
             <span>{stoppedNotice}</span>
