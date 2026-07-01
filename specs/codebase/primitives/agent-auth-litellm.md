@@ -437,6 +437,25 @@ credits default for cloud/empty-local.
 Gates: desktop tests; manual first-run on a clean profile (fresh
 `ANYHARNESS_HOME`) with and without native auth present.
 
+**PR 13 — OpenCode composition + key picker** (`13-slot-composition`)
+Slot axis on route selections (spec §3.3 slot semantics): migration adds
+`slot` default 'primary' + widened unique index; store enforces
+single-row for single-source harnesses; API/SDK gain the slot param.
+State-file contract carries slot; opencode renderer merges gateway + N
+api_key slots into ONE additive config (verify it merges with — never
+replaces — the user's own local opencode providers). UI: opencode pane
+becomes per-source toggles à la Conductor's providers list — searchable
+provider rows (from a new PROVIDER_REGISTRY constant: label, env_key,
+get-a-key URL, harnesses served, recommended flag, exposed via
+capabilities), each row offering pick-existing-key-by-name (searchable
+picker over the pool showing display_name + provider + redacted_hint;
+secret never re-shown) or paste-new (saves to pool, attaches to slot).
+Reusable KeyPicker component replaces raw key selects everywhere
+(single-source harness api_key route included). Recommendation order:
+gateway (free credits) → detected native (local) → provider keys.
+Gates: migration up/down; store slot-validation tests; renderer merge
+snapshot incl. multi-slot opencode; desktop typecheck+tests.
+
 ## 11. Autonomous Verification Playbook
 
 Standing gates (every PR): server `uv run pytest -q`, `cargo test`
