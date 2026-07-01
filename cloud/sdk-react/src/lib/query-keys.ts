@@ -398,18 +398,6 @@ export function cloudTargetKey(targetId: string | null) {
   return [...cloudTargetsKey(), targetId] as const;
 }
 
-export function cloudCommandKey(commandId: string | null) {
-  return [...cloudRootKey(), "commands", commandId] as const;
-}
-
-export function cloudWorkspaceSnapshotKey(workspaceId: string | null) {
-  return [...cloudRootKey(), "workspace-snapshots", workspaceId] as const;
-}
-
-export function cloudSessionSnapshotKey(targetId: string | null, sessionId: string | null) {
-  return [...cloudRootKey(), "session-snapshots", targetId, sessionId] as const;
-}
-
-export function cloudTranscriptSnapshotKey(targetId: string | null, sessionId: string | null) {
-  return [...cloudRootKey(), "transcript-snapshots", targetId, sessionId] as const;
+export function cloudWorkspaceKey(workspaceId: string | null) {
+  return [...cloudRootKey(), "workspaces", workspaceId] as const;
 }

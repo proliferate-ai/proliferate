@@ -7,7 +7,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 CloudWorkspaceStatus = Literal["pending", "materializing", "ready", "archived", "error"]
 CloudRuntimeStatus = Literal["pending", "running", "paused", "error", "disabled"]
 
@@ -24,7 +23,7 @@ class CreateCloudWorkspaceRequest(BaseModel):
 
 
 class UpdateCloudWorkspaceDisplayNameRequest(BaseModel):
-    display_name: str = Field(alias="displayName")
+    display_name: str | None = Field(default=None, alias="displayName")
 
 
 class RepoRef(BaseModel):
@@ -137,7 +136,10 @@ class WorkspaceSummary(BaseModel):
         default_factory=list,
         serialization_alias="readyAgentKinds",
     )
-    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
+    anyharness_workspace_id: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessWorkspaceId",
+    )
 
 
 class WorkspaceDetail(WorkspaceSummary):
@@ -149,4 +151,7 @@ class CloudWorkspaceRuntimeStatusResponse(BaseModel):
     status: CloudWorkspaceStatus
     runtime_status: CloudRuntimeStatus = Field(serialization_alias="runtimeStatus")
     sandbox_status: str | None = Field(default=None, serialization_alias="sandboxStatus")
-    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
+    anyharness_workspace_id: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessWorkspaceId",
+    )

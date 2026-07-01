@@ -8,26 +8,21 @@ import {
 import {
   archiveCloudWorkspace,
   createCloudWorkspace,
-  launchCloudWorkspaceOnTarget,
+  getCloudWorkspace,
   listCloudWorkspaces,
-  purgeCloudWorkspace,
   restoreCloudWorkspace,
-  getWorkspaceSnapshot,
   type CloudWorkspaceSummary,
   type CloudWorkspaceDetail,
-  type CloudWorkspaceSnapshot,
   type CloudWorkspaceListSelection,
   type CloudWorkspaceListScope,
   type CloudWorkspaceLifecycleFilter,
   type CreateCloudWorkspaceRequest,
-  type LaunchCloudWorkspaceOnTargetRequest,
-  type WorkspaceTargetLaunchResponse,
 } from "@proliferate/cloud-sdk";
 import {
   cloudRootKey,
   cloudWorkspacesListRootKey,
   cloudWorkspacesKey,
-  cloudWorkspaceSnapshotKey,
+  cloudWorkspaceKey,
   personalCloudOwnerKey,
   type CloudOwnerScope,
 } from "../lib/query-keys.js";
@@ -101,21 +96,18 @@ export function invalidateCloudWorkspaceLifecycleQueries(
   void queryClient.invalidateQueries({
     queryKey: [...cloudRootKey(), "workspaces"],
   });
-  void queryClient.invalidateQueries({
-    queryKey: [...cloudRootKey(), "commands"],
-  });
   if (workspaceId) {
     void queryClient.invalidateQueries({
-      queryKey: cloudWorkspaceSnapshotKey(workspaceId),
+      queryKey: cloudWorkspaceKey(workspaceId),
     });
   }
 }
 
-export function useCloudWorkspaceSnapshot(workspaceId: string | null, enabled = true) {
+export function useCloudWorkspace(workspaceId: string | null, enabled = true) {
   const client = useCloudClient();
-  return useQuery<CloudWorkspaceSnapshot>({
-    queryKey: cloudWorkspaceSnapshotKey(workspaceId),
-    queryFn: () => getWorkspaceSnapshot(workspaceId!, client),
+  return useQuery<CloudWorkspaceDetail | undefined>({
+    queryKey: cloudWorkspaceKey(workspaceId),
+    queryFn: () => getCloudWorkspace(workspaceId!, client),
     enabled: enabled && workspaceId !== null,
   });
 }
@@ -160,38 +152,6 @@ export function useRestoreCloudWorkspace() {
   const queryClient = useQueryClient();
   return useMutation<CloudWorkspaceDetail, Error, string>({
     mutationFn: (workspaceId) => restoreCloudWorkspace(workspaceId, client),
-    onSuccess(_data, workspaceId) {
-      invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
-    },
-  });
-}
-
-export function useLaunchCloudWorkspaceOnTarget() {
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
-  return useMutation<
-    WorkspaceTargetLaunchResponse,
-    Error,
-    LaunchCloudWorkspaceOnTargetRequest
-  >({
-    mutationFn: (input) => launchCloudWorkspaceOnTarget(input, client),
-    onSuccess(result) {
-      invalidateCloudWorkspaceLists(queryClient);
-      void queryClient.invalidateQueries({
-        queryKey: [...cloudRootKey(), "workspaces"],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: cloudWorkspaceSnapshotKey(result.workspace.id),
-      });
-    },
-  });
-}
-
-export function usePurgeCloudWorkspace() {
-  const client = useCloudClient();
-  const queryClient = useQueryClient();
-  return useMutation<void, Error, string>({
-    mutationFn: (workspaceId) => purgeCloudWorkspace(workspaceId, client),
     onSuccess(_data, workspaceId) {
       invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
     },

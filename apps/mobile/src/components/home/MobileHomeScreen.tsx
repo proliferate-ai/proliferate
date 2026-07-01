@@ -63,11 +63,7 @@ export function MobileHomeScreen({
     && Boolean(launchModel.selectedRepo)
     && Boolean(launchModel.selectedRuntime)
     && canStartCloudHarness
-    && !launchActions.submitting
-    && (launchModel.selectedRuntime?.kind !== "target" || launchModel.selectedRuntime.online);
-  const runtimeBlocker = launchModel.selectedRuntime?.kind === "target" && !launchModel.selectedRuntime.online
-    ? `${launchModel.selectedRuntime.label} is offline. Open Desktop or choose Cloud sandbox to start this chat.`
-    : null;
+    && !launchActions.submitting;
 
   function closeSheet() {
     setSheet(null);
@@ -108,12 +104,6 @@ export function MobileHomeScreen({
           {launchActions.error ?? launchActions.status ?? launchModel.harnessAvailability.message}
         </Text>
       ) : null}
-      {runtimeBlocker ? (
-        <Text style={[styles.launchNote, styles.launchError]}>
-          {runtimeBlocker}
-        </Text>
-      ) : null}
-
       <MobileHomeComposer
         draft={draft}
         keyboardInset={keyboardInset}

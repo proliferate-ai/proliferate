@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   prepareLocalRuntimeConfigForTarget: vi.fn(),
   promptAttachmentSnapshotsToBlocks: vi.fn(),
   rehydrateSessionSlotFromHistory: vi.fn(),
-  sendCloudPromptCommand: vi.fn(),
   waitForSessionMaterialization: vi.fn(),
 }));
 
@@ -31,10 +30,6 @@ vi.mock("@/lib/access/anyharness/session-runtime", () => ({
 
 vi.mock("@/lib/access/anyharness/session-runtime-config", () => ({
   prepareLocalRuntimeConfigForTarget: mocks.prepareLocalRuntimeConfigForTarget,
-}));
-
-vi.mock("@/lib/access/cloud/session-commands", () => ({
-  sendCloudPromptCommand: mocks.sendCloudPromptCommand,
 }));
 
 vi.mock("@/lib/infra/measurement/debug-latency", () => ({
@@ -244,7 +239,6 @@ describe("dispatchPromptIntent", () => {
 
     await dispatchPromptIntent(entry, createDeps());
 
-    expect(mocks.sendCloudPromptCommand).not.toHaveBeenCalled();
     expect(mocks.mutateAsync).toHaveBeenCalledWith({
       workspaceId: "cloud:cloud-workspace-1",
       sessionId: "session-1",

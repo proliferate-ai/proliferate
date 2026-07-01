@@ -22,11 +22,9 @@ import {
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/access/anyharness/session-runtime";
-import { runtimeTargetUsesCloudCommand } from "@/lib/access/anyharness/runtime-target";
 import {
   prepareLocalRuntimeConfigForTarget,
 } from "@/lib/access/anyharness/session-runtime-config";
-import { sendCloudPromptCommand } from "@/lib/access/cloud/session-commands";
 import {
   waitForSessionMaterialization,
 } from "@/lib/workflows/sessions/session-materialization";
@@ -150,32 +148,15 @@ export async function dispatchPromptIntent(
       dispatchedAt: new Date().toISOString(),
     });
     requestStarted = true;
-    let response;
-    if (runtimeTargetUsesCloudCommand(target)) {
-      if (!target.cloudWorkspaceId || !target.targetId) {
-        throw new Error("Cloud workspace is missing command routing metadata.");
-      }
-      response = await sendCloudPromptCommand({
-        idempotencyKey: `desktop:send-prompt:${target.cloudWorkspaceId}:${resolvedSessionId}:${entry.clientPromptId}`,
-        targetId: target.targetId,
-        cloudWorkspaceId: target.cloudWorkspaceId,
-        anyharnessWorkspaceId: target.anyharnessWorkspaceId,
-        sessionId: resolvedSessionId,
+    const response = await deps.promptSessionMutation.mutateAsync({
+      workspaceId,
+      sessionId: resolvedSessionId,
+      request: {
         promptId: entry.clientPromptId,
         blocks: preparedBlocks,
-        text: entry.text,
-      });
-    } else {
-      response = await deps.promptSessionMutation.mutateAsync({
-        workspaceId,
-        sessionId: resolvedSessionId,
-        request: {
-          promptId: entry.clientPromptId,
-          blocks: preparedBlocks,
-        },
-        requestOptions,
-      });
-    }
+      },
+      requestOptions,
+    });
     if (!response) {
       throw new Error("Cloud prompt command completed without a prompt response.");
     }

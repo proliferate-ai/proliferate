@@ -1,4 +1,4 @@
-import { useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type {
   CloudPendingInteraction,
   CloudSessionProjection,
@@ -8,8 +8,6 @@ import type {
 import {
   useClaimCloudWorkspace,
   useCloudClient,
-  useCommandStatus,
-  useEnqueueCloudCommand,
 } from "@proliferate/cloud-sdk-react";
 import {
   pendingConfigChangeKey,
@@ -17,7 +15,6 @@ import {
   type PendingConfigChange,
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
-import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
 import type {
   MobilePendingPrompt,
@@ -25,34 +22,22 @@ import type {
 import {
   clearPendingMobilePrompt,
 } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import type {
-  SendPromptPayload,
-  StartSessionPayload,
-  UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-types";
-import { ensureMobileWorkspaceReadyForCloudCommands } from "../../../lib/access/cloud/pending-mobile-workspace-readiness";
+import {
+  getMobileCloudSandboxAnyHarnessClient,
+  isMobileCloudSandboxWorkspace,
+} from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 import type { OptimisticPrompt } from "../../../lib/domain/chat/mobile-chat-transcript";
 import type { PermissionInteractionOption } from "../../../lib/domain/chat/mobile-chat-permissions";
 import { buildMobileChatComposerControlsModel } from "../../../lib/domain/chat/mobile-chat-composer-controls";
-import { resolveAgentKind } from "../../../lib/domain/chat/mobile-chat-presentation";
 import { useMobileCloudAgentResources } from "../../access/cloud/agents/use-mobile-cloud-agent-resources";
 import { useMobileCloudWorkspaceCache } from "../../access/cloud/workspaces/use-mobile-cloud-workspace-cache";
 import { useMobileChatPromptActions } from "./use-mobile-chat-prompt-actions";
 
-type ResolveInteractionPayload = {
-  requestId: string;
-  resolution: {
-    outcome: "selected";
-    optionId: string;
-  };
-};
-
 export function useMobileChatActions({
   ownerUserId,
+  productToken,
   workspace,
-  workspaceStatus,
   session,
-  targetId,
   draft,
   pendingPrompt,
   pendingPromptFailed,
@@ -62,7 +47,6 @@ export function useMobileChatActions({
   transcriptItems,
   transcriptRows,
   isUnclaimed,
-  pendingPromptCommandId,
   pendingConfigChanges,
   setDraft,
   setLaunchSelection,
@@ -84,10 +68,9 @@ export function useMobileChatActions({
   sessionEventsRefetch,
 }: {
   ownerUserId: string | null;
+  productToken: string | null;
   workspace: CloudWorkspaceDetail | null;
-  workspaceStatus: string;
   session: CloudSessionProjection | null;
-  targetId: string | null;
   draft: string;
   pendingPrompt: MobilePendingPrompt | null;
   pendingPromptFailed: boolean;
@@ -97,7 +80,6 @@ export function useMobileChatActions({
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
   isUnclaimed: boolean;
-  pendingPromptCommandId: string | null;
   pendingConfigChanges: Record<string, PendingConfigChange>;
   setDraft: Dispatch<SetStateAction<string>>;
   setLaunchSelection: Dispatch<SetStateAction<CloudLaunchComposerSelection>>;
@@ -120,24 +102,15 @@ export function useMobileChatActions({
 }) {
   const { invalidateWorkspaceLists } = useMobileCloudWorkspaceCache();
   const client = useCloudClient();
-  const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
-  const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
-  const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
-  const enqueueInteraction = useEnqueueCloudCommand<ResolveInteractionPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
   const agentResources = useMobileCloudAgentResources();
-  const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
-  const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
   const pendingDispatchRunRef = useRef<{ key: string; active: boolean } | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
-  const commandStatus = useCommandStatus(pendingPromptCommandId ?? latestCommandId);
-  const configCommandStatus = useCommandStatus(latestConfigCommandId);
   const {
     workspaceHarnessAvailability,
     workspaceLaunchableAgentKinds,
     canStartNewSession,
     liveConfig,
-    sessionModelId,
     resolvedLaunchSelection,
     composerControls,
     composerControlSummary,
@@ -162,7 +135,7 @@ export function useMobileChatActions({
   } = useMobileChatPromptActions({
     ownerUserId,
     client,
-    enqueuePrompt,
+    productToken,
     workspace,
     session,
     draft,
@@ -175,7 +148,6 @@ export function useMobileChatActions({
     workspaceLaunchableAgentKinds,
     resolvedLaunchSelection,
     catalog: agentResources.agentCatalog.data,
-    sessionModelId,
     transcriptItems,
     transcriptRows,
     setDraft,
@@ -183,7 +155,6 @@ export function useMobileChatActions({
     setPendingPromptStatus,
     setPendingPromptFailed,
     setOptimisticPrompts,
-    setLatestCommandId,
     transcriptRefetch,
     sessionEventsRefetch,
   });
@@ -196,9 +167,8 @@ export function useMobileChatActions({
       setPendingPromptStatus("Claim this workspace before changing session settings.");
       return;
     }
-    const readiness = cloudCommandReadiness(workspace);
-    if (!readiness.commandable) {
-      setPendingPromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+    if (!isMobileCloudSandboxWorkspace(workspace)) {
+      setPendingPromptStatus("Cloud workspace runtime is unavailable.");
       return;
     }
     const mutationId = pendingConfigMutationIdRef.current + 1;
@@ -215,39 +185,26 @@ export function useMobileChatActions({
       },
     }));
     try {
-      await ensureMobileWorkspaceReadyForCloudCommands({
-        client,
+      const { anyharness } = await getMobileCloudSandboxAnyHarnessClient({
         workspace,
-        agentKind: session.sourceAgentKind ?? resolveAgentKind(workspace),
-        modelId: sessionModelId,
-        idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${mutationId}:target-config`,
-        setLatestCommandId,
-        onStatus: setPendingPromptStatus,
-        shouldContinue: () => true,
+        productToken,
+        client,
       });
-      const command = await enqueueConfig.mutateAsync({
-        idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${value}:${mutationId}`,
-        targetId: session.targetId,
-        workspaceId: session.workspaceId,
-        cloudWorkspaceId: workspace.id,
-        sessionId: session.sessionId,
-        kind: "update_session_config",
-        source: "mobile",
-        observedEventSeq: session.lastEventSeq ?? null,
-        payload: { configId: rawConfigId, value },
+      await anyharness.sessions.setConfigOption(session.sessionId, {
+        configId: rawConfigId,
+        value,
       });
-      setLatestCommandId(command.commandId);
-      setLatestConfigCommandId(command.commandId);
       setPendingConfigChanges((current) => {
         const existing = current[changeKey];
         if (!existing || existing.mutationId !== mutationId) {
           return current;
         }
-        return {
-          ...current,
-          [changeKey]: { ...existing, commandId: command.commandId, status: "queued" },
-        };
+        const { [changeKey]: _removed, ...rest } = current;
+        return rest;
       });
+      setPendingPromptStatus(null);
+      void transcriptRefetch();
+      void sessionEventsRefetch();
     } catch (error) {
       setPendingConfigChanges((current) => {
         const { [changeKey]: _removed, ...rest } = current;
@@ -263,7 +220,7 @@ export function useMobileChatActions({
     interaction: CloudPendingInteraction,
     option: PermissionInteractionOption,
   ) {
-    if (!workspace || !session || !targetId) {
+    if (!workspace || !session) {
       setPermissionResolveError("Session is still loading. Try again in a moment.");
       return;
     }
@@ -271,35 +228,27 @@ export function useMobileChatActions({
       setPermissionResolveError("Claim this workspace before approving commands from mobile.");
       return;
     }
-    const readiness = cloudCommandReadiness(workspace);
-    if (!readiness.commandable) {
-      setPermissionResolveError(
-        readiness.message ?? "This workspace cannot accept cloud commands right now.",
-      );
+    if (!isMobileCloudSandboxWorkspace(workspace)) {
+      setPermissionResolveError("Cloud workspace runtime is unavailable.");
       return;
     }
     const key = `${interaction.requestId}:${option.optionId}`;
     setResolvingPermissionKey(key);
     setPermissionResolveError(null);
     try {
-      const command = await enqueueInteraction.mutateAsync({
-        idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:interaction:${interaction.requestId}:${option.optionId}:${Date.now()}`,
-        targetId,
-        workspaceId: session.workspaceId,
-        cloudWorkspaceId: workspace.id,
-        sessionId: session.sessionId,
-        kind: "resolve_interaction",
-        source: "mobile",
-        observedEventSeq: session.lastEventSeq ?? null,
-        payload: {
-          requestId: interaction.requestId,
-          resolution: {
-            outcome: "selected",
-            optionId: option.optionId,
-          },
-        },
+      const { anyharness } = await getMobileCloudSandboxAnyHarnessClient({
+        workspace,
+        productToken,
+        client,
       });
-      setLatestCommandId(command.commandId);
+      await anyharness.sessions.resolveInteraction(
+        session.sessionId,
+        interaction.requestId,
+        {
+          outcome: "selected",
+          optionId: option.optionId,
+        },
+      );
       setPendingPromptStatus(null);
       setToolDetailRow(null);
       void transcriptRefetch();
@@ -367,13 +316,7 @@ export function useMobileChatActions({
   return {
     client,
     invalidateWorkspaceLists,
-    commandStatus,
-    configCommandStatus,
     pendingDispatchRunRef: pendingDispatchRunRef as MutableRefObject<{ key: string; active: boolean } | null>,
-    enqueueStartSession,
-    enqueueConfig,
-    enqueuePrompt,
-    setLatestCommandId,
     liveConfig,
     composerControls,
     composerControlSummary,
@@ -387,6 +330,5 @@ export function useMobileChatActions({
     claimChat,
     startNewSession,
     selectSession,
-    setLatestConfigCommandId,
   };
 }

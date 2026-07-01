@@ -40,13 +40,13 @@ async def list_cloud_workspaces(
     return list((await db.execute(statement)).scalars().all())
 
 
-async def list_active_workspace_display_names_for_repo_environment(
+async def list_active_workspace_branches_for_repo_environment(
     db: AsyncSession,
     *,
     repo_environment_id: UUID,
 ) -> set[str]:
     rows = await db.execute(
-        select(CloudWorkspace.display_name).where(
+        select(CloudWorkspace.git_branch).where(
             CloudWorkspace.repo_environment_id == repo_environment_id,
             CloudWorkspace.archived_at.is_(None),
         )
@@ -84,18 +84,33 @@ async def create_cloud_workspace(
     user_id: UUID,
     repo_environment_id: UUID,
     display_name: str,
-    anyharness_workspace_id: str,
+    git_branch: str,
+    git_base_branch: str | None,
+    anyharness_workspace_id: str | None = None,
 ) -> CloudWorkspace:
     now = utcnow()
     workspace = CloudWorkspace(
         owner_user_id=user_id,
         repo_environment_id=repo_environment_id,
         display_name=display_name,
+        git_branch=git_branch,
+        git_base_branch=git_base_branch,
         anyharness_workspace_id=anyharness_workspace_id,
         created_at=now,
         updated_at=now,
     )
     db.add(workspace)
+    await db.flush()
+    return workspace
+
+
+async def update_workspace_anyharness_workspace_id(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+    anyharness_workspace_id: str,
+) -> CloudWorkspace:
+    workspace.anyharness_workspace_id = anyharness_workspace_id
+    workspace.updated_at = utcnow()
     await db.flush()
     return workspace
 

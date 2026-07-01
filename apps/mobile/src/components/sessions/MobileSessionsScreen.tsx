@@ -1,8 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import {
-  useCloudWorkspaceSnapshot,
-  useCloudWorkspaces,
-} from "@proliferate/cloud-sdk-react";
+import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 import type {
   CloudSessionProjection,
   CloudWorkspaceSummary,
@@ -61,12 +58,9 @@ function WorkspaceSessionRows({
   workspace: CloudWorkspaceSummary;
   onOpenChat: (chat: MobileCloudChat) => void;
 }) {
-  const snapshot = useCloudWorkspaceSnapshot(workspace.id, Boolean(workspace.lastSessionSummary));
-  const sessions = snapshot.data?.sessions.length
-    ? [...snapshot.data.sessions].sort(compareSessions)
-    : workspace.lastSessionSummary
-      ? [sessionProjectionFromSummary(workspace)]
-      : [];
+  const sessions = workspace.lastSessionSummary
+    ? [sessionProjectionFromSummary(workspace)]
+    : [];
 
   return (
     <>

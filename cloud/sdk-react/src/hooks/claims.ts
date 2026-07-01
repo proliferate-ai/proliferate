@@ -5,7 +5,7 @@ import {
   type ClaimWorkspaceResponse,
 } from "@proliferate/cloud-sdk";
 import {
-  cloudWorkspaceSnapshotKey,
+  cloudWorkspaceKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import { invalidateCloudWorkspaceLists } from "./workspaces.js";
@@ -21,7 +21,7 @@ export function useClaimCloudWorkspace() {
     onSuccess(_result, variables) {
       invalidateCloudWorkspaceLists(queryClient);
       void queryClient.invalidateQueries({
-        queryKey: cloudWorkspaceSnapshotKey(variables.workspaceId),
+        queryKey: cloudWorkspaceKey(variables.workspaceId),
       });
     },
   });

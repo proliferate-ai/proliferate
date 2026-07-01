@@ -31,5 +31,5 @@ export type EnqueueCloudCommand<TPayload> = (
 
 export type PendingMobilePromptDispatchResult = {
   sessionId: string;
-  sendCommandId: string;
+  sendCommandId: string | null;
 };

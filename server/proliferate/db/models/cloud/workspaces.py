@@ -23,6 +23,14 @@ class CloudWorkspace(Base):
             "ix_cloud_workspace_repo_environment_id",
             "repo_environment_id",
         ),
+        Index(
+            "ux_cloud_workspace_active_repo_environment_branch",
+            "owner_user_id",
+            "repo_environment_id",
+            "git_branch",
+            unique=True,
+            postgresql_where=text("archived_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -34,7 +42,13 @@ class CloudWorkspace(Base):
         ForeignKey("repo_environment.id", ondelete="RESTRICT"),
     )
     display_name: Mapped[str] = mapped_column(String(255))
-    anyharness_workspace_id: Mapped[str] = mapped_column(String(255), index=True)
+    git_branch: Mapped[str] = mapped_column(String(255))
+    git_base_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    anyharness_workspace_id: Mapped[str | None] = mapped_column(
+        String(255),
+        index=True,
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -162,7 +162,7 @@ export function cloudCommandReadiness(
   const managedWorkspace =
     workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared";
   const routedManagedWorkspace =
-    managedWorkspace && Boolean(workspace.targetId && workspace.anyharnessWorkspaceId);
+    managedWorkspace && Boolean(workspace.anyharnessWorkspaceId);
   if (activeExposureCommandable && (routedManagedWorkspace || !managedWorkspace)) {
     return {
       state: "ready",
@@ -186,7 +186,7 @@ export function cloudCommandReadiness(
         message: "Cloud runtime is still starting. Try again when it is running.",
       };
     }
-    if (!workspace.targetId || !workspace.anyharnessWorkspaceId) {
+    if (!workspace.anyharnessWorkspaceId) {
       return {
         state: "runtime_unavailable",
         commandable: false,

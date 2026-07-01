@@ -24,57 +24,6 @@ export type CloudWorkspaceListSelection = {
   lifecycle?: CloudWorkspaceLifecycleFilter;
 };
 
-export interface BootstrapCloudWorkspaceRemoteAccessRequest {
-  targetId: string;
-  anyharnessWorkspaceId: string;
-  anyharnessSessionId?: string | null;
-  displayName?: string | null;
-  repo?: {
-    provider: string;
-    owner: string;
-    name: string;
-    branch: string;
-    baseBranch?: string | null;
-  } | null;
-}
-
-export interface LaunchCloudWorkspaceOnTargetRequest {
-  targetId: string;
-  gitProvider: "github";
-  gitOwner: string;
-  gitRepoName: string;
-  baseBranch?: string | null;
-  branchName: string;
-  generatedName?: boolean;
-  displayName?: string | null;
-  prompt: string;
-  promptId?: string | null;
-  agentKind: string;
-  modelId?: string | null;
-  modeId?: string | null;
-  sessionConfigUpdates?: Array<{
-    configId: string;
-    value: string;
-  }>;
-  source?: "mobile" | "web" | "api";
-}
-
-export interface WorkspaceTargetLaunchCommandIds {
-  ensureRepoCheckout: string;
-  materializeRoot: string;
-  materializeWorktree: string;
-  startSession: string;
-  sendPrompt: string;
-  updateSessionConfig: string[];
-}
-
-export interface WorkspaceTargetLaunchResponse {
-  workspace: CloudWorkspaceDetail;
-  sessionId: string;
-  sendCommandId: string;
-  commandIds: WorkspaceTargetLaunchCommandIds;
-}
-
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
@@ -178,35 +127,6 @@ export async function createCloudWorkspace(
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
 
-export async function bootstrapCloudWorkspaceRemoteAccess(
-  input: BootstrapCloudWorkspaceRemoteAccessRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "POST",
-    path: "/v1/cloud/workspaces/remote-access",
-    body: input,
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function launchCloudWorkspaceOnTarget(
-  input: LaunchCloudWorkspaceOnTargetRequest,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<WorkspaceTargetLaunchResponse> {
-  const data = await client.requestJson<WorkspaceTargetLaunchResponse>({
-    method: "POST",
-    path: "/v1/cloud/workspaces/target-launch",
-    body: input,
-  });
-  return {
-    ...data,
-    workspace: normalizeCloudWorkspace(
-      data.workspace as unknown as CloudWorkspaceTransport,
-    ) as CloudWorkspaceDetail,
-  };
-}
-
 export async function startCloudWorkspace(
   workspaceId: string,
   client: ProliferateCloudClient = getProliferateClient(),
@@ -236,38 +156,6 @@ export async function restoreCloudWorkspace(
   const data = await client.requestJson<CloudWorkspaceTransport>({
     method: "POST",
     path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/restore`,
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function purgeCloudWorkspace(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<void> {
-  await client.requestJson({
-    method: "POST",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/purge`,
-  });
-}
-
-export async function enableCloudWorkspaceRemoteAccess(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "POST",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/remote-access/enable`,
-  });
-  return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
-}
-
-export async function disableCloudWorkspaceRemoteAccess(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const data = await client.requestJson<CloudWorkspaceTransport>({
-    method: "POST",
-    path: `/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/remote-access/disable`,
   });
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }

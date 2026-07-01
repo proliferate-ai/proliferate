@@ -6,9 +6,15 @@ from fastapi import APIRouter
 # from proliferate.server.cloud.agent_auth.api import router as agent_auth_router
 # from proliferate.server.cloud.agent_auth.api import worker_router as agent_auth_worker_router
 from proliferate.server.cloud.agent_run_config.api import router as agent_run_config_router
+
 # BACKFILL PARKED: old cloud-sync tables were removed in the model cleanup.
 # from proliferate.server.cloud.backfill.api import router as backfill_router
 from proliferate.server.cloud.capabilities.api import router as capabilities_router
+
+# LIVE TARGETS PARKED: old target sync tables were removed in the model cleanup.
+# from proliferate.server.cloud.live.api import router as live_router
+from proliferate.server.cloud.cloud_sandboxes.api import router as cloud_sandboxes_router
+
 # CLAIMS PARKED: old workspace exposure tables were removed in the model cleanup.
 # from proliferate.server.cloud.claims.api import router as claims_router
 # COMMANDS PARKED: old cloud-command tables were removed in the model cleanup.
@@ -22,10 +28,9 @@ from proliferate.server.cloud.github_app.api import (
 )
 from proliferate.server.cloud.github_app.api import router as github_app_router
 from proliferate.server.cloud.integration_policy.api import router as integration_policy_router
-# LIVE TARGETS PARKED: old target sync tables were removed in the model cleanup.
-# from proliferate.server.cloud.live.api import router as live_router
-from proliferate.server.cloud.cloud_sandboxes.api import router as cloud_sandboxes_router
 from proliferate.server.cloud.mcp_catalog.api import router as mcp_catalog_router
+from proliferate.server.cloud.repos.api import router as repos_router
+
 # MCP CONNECTIONS PARKED: retarget away from sandbox profiles before remounting.
 # from proliferate.server.cloud.mcp_connections.api import router as mcp_connections_router
 # MCP OAUTH PARKED: retarget away from sandbox profiles before remounting.
@@ -37,7 +42,7 @@ from proliferate.server.cloud.mcp_catalog.api import router as mcp_catalog_route
 # REPO CONFIG PARKED: replaced by repo environment routes.
 # from proliferate.server.cloud.repo_config.api import router as repo_config_router
 from proliferate.server.cloud.repositories.api import router as repositories_router
-from proliferate.server.cloud.repos.api import router as repos_router
+
 # TARGETS PARKED: old runtime-config/profile routes depend on deleted target tables.
 # from proliferate.server.cloud.runtime_config.api import router as runtime_config_router
 # from proliferate.server.cloud.runtime_config.api import (
@@ -45,17 +50,20 @@ from proliferate.server.cloud.repos.api import router as repos_router
 # )
 # from proliferate.server.cloud.sandbox_profiles.api import router as sandbox_profiles_router
 from proliferate.server.cloud.secrets.api import router as secrets_router
+
 # SKILLS PARKED: retarget away from sandbox profiles before remounting.
 # from proliferate.server.cloud.skills.api import router as skills_router
 # TARGETS PARKED.
 # from proliferate.server.cloud.target_config.api import router as target_config_router
-# from proliferate.server.cloud.target_config.api import worker_router as target_config_worker_router
+# from proliferate.server.cloud.target_config.api import (
+#     worker_router as target_config_worker_router,
+# )
 # from proliferate.server.cloud.target_git_identity.api import (
 #     worker_router as target_git_identity_worker_router,
 # )
 # from proliferate.server.cloud.targets.api import router as targets_router
-# WEBHOOKS PARKED: E2B webhook handling must be retargeted to CloudSandbox.
-# from proliferate.server.cloud.webhooks.api import router as webhooks_router
+from proliferate.server.cloud.webhooks.api import router as webhooks_router
+
 # WORKER PARKED: old worker target routes depend on deleted target tables.
 # from proliferate.server.cloud.worker.api import router as worker_router
 from proliferate.server.cloud.workspaces.api import router as workspaces_router
@@ -97,8 +105,7 @@ router.include_router(mcp_catalog_router)
 # router.include_router(skills_router)
 # SLACK BOT PARKED: /v1/cloud/slack/* is intentionally disabled and returns 404.
 # router.include_router(slack_router)
-# WEBHOOKS PARKED: /v1/cloud/webhooks/* is intentionally disabled.
-# router.include_router(webhooks_router)
+router.include_router(webhooks_router)
 # TARGETS PARKED: /v1/cloud/targets and compute routes are intentionally disabled.
 # router.include_router(targets_router)
 # router.include_router(compute_router)

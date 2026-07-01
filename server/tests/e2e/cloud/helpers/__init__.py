@@ -42,7 +42,6 @@ from tests.e2e.cloud.helpers.external import (
 )
 from tests.e2e.cloud.helpers.providers import (
     load_active_sandbox_record,
-    load_runtime_environment_record,
     load_workspace_record,
     provider_pause_native,
     provider_state,
@@ -122,7 +121,6 @@ __all__ = [
     "list_ngrok_requests",
     "load_active_sandbox_record",
     "load_cloud_test_config",
-    "load_runtime_environment_record",
     "load_workspace_record",
     "port_from_base_url",
     "provision_workspace_with_credentials",

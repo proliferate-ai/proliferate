@@ -1,6 +1,5 @@
 import type {
   CloudAgentCatalogResponse,
-  CloudTargetSummary,
 } from "@proliferate/cloud-sdk";
 import {
   buildLaunchSessionConfigUpdates,
@@ -19,24 +18,15 @@ export interface MobileRepoOption {
 }
 
 export type MobileRuntimeOption =
-  | {
-    id: "cloud";
-    kind: "cloud";
-    label: string;
-    description: string;
-    icon: MobileIconName;
-    online: true;
-    targetId: null;
-  }
-  | {
-    id: string;
-    kind: "target";
-    label: string;
-    description: string;
-    icon: MobileIconName;
-    online: boolean;
-    targetId: string;
-  };
+  {
+  id: "cloud";
+  kind: "cloud";
+  label: string;
+  description: string;
+  icon: MobileIconName;
+  online: true;
+  targetId: null;
+};
 
 export function buildMobileRepoOptions(
   configs: readonly {
@@ -69,8 +59,9 @@ export function buildMobileBranchOptions(input: {
 }
 
 export function buildMobileRuntimeOptions(
-  targets: readonly CloudTargetSummary[] | undefined,
+  targets?: unknown,
 ): MobileRuntimeOption[] {
+  void targets;
   return [
     {
       id: "cloud",
@@ -81,19 +72,6 @@ export function buildMobileRuntimeOptions(
       online: true,
       targetId: null,
     },
-    ...((targets ?? [])
-      .filter((target) => target.kind === "desktop_dispatch")
-      .map((target): MobileRuntimeOption => ({
-        id: target.id,
-        kind: "target",
-        label: targetLabel(target),
-        description: target.status === "online"
-          ? "Dispatch to this connected target"
-          : target.statusDetail?.statusDetail ?? "Target is offline",
-        icon: targetIcon(target),
-        online: target.status === "online",
-        targetId: target.id,
-      }))),
   ];
 }
 
@@ -138,34 +116,6 @@ export function buildWorkspaceDisplayName(prompt: string): string {
     return normalized || "Mobile chat";
   }
   return `${normalized.slice(0, 39).trimEnd()}...`;
-}
-
-function targetLabel(target: CloudTargetSummary): string {
-  if (target.displayName?.trim()) {
-    return target.displayName.trim();
-  }
-  switch (target.kind) {
-    case "desktop_dispatch":
-      return "Desktop Mac";
-    case "ssh":
-      return "SSH target";
-    case "self_hosted_cloud":
-      return "Self-hosted target";
-    default:
-      return "Target";
-  }
-}
-
-function targetIcon(target: CloudTargetSummary): MobileIconName {
-  switch (target.kind) {
-    case "desktop_dispatch":
-      return "monitor";
-    case "ssh":
-    case "self_hosted_cloud":
-      return "external";
-    default:
-      return "cloud";
-  }
 }
 
 function addUniqueBranch(options: string[], branch: string | null | undefined): void {

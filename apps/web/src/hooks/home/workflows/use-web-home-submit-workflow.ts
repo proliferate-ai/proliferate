@@ -4,7 +4,6 @@ import type { CreateCloudWorkspaceRequest } from "@proliferate/cloud-sdk";
 import {
   useCloudClient,
   useCreateCloudWorkspace,
-  useLaunchCloudWorkspaceOnTarget,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildLaunchSessionConfigUpdates,
@@ -23,7 +22,6 @@ import {
   type RuntimeOption,
 } from "../../../lib/domain/home/cloud-home-launch-model";
 import type { HomePendingPrompt } from "../../../lib/domain/home/cloud-home-pending-prompt";
-import { saveWebCloudPromptIntents } from "../../../stores/cloud/web-cloud-prompt-intent-store";
 
 export function useWebHomeSubmitWorkflow(input: {
   draft: string;
@@ -42,21 +40,14 @@ export function useWebHomeSubmitWorkflow(input: {
   const navigate = useNavigate();
   const client = useCloudClient();
   const createWorkspace = useCreateCloudWorkspace();
-  const launchOnTarget = useLaunchCloudWorkspaceOnTarget();
   const submitInFlightRef = useRef(false);
-  const submitting = createWorkspace.isPending
-    || launchOnTarget.isPending
-    || submitInFlightRef.current;
+  const submitting = createWorkspace.isPending || submitInFlightRef.current;
 
   async function handleSubmit() {
     const text = input.draft.trim();
     if (!text || !input.selectedRepo || submitInFlightRef.current) return;
     if (!input.selectedRuntime) {
       input.setSubmitError("Select a runtime before sending.");
-      return;
-    }
-    if (input.selectedRuntime.kind === "target" && !input.selectedRuntime.online) {
-      input.setSubmitError(`${input.selectedRuntime.label} is offline.`);
       return;
     }
     if (!input.canStartCloudHarness) {
@@ -91,39 +82,6 @@ export function useWebHomeSubmitWorkflow(input: {
         sessionConfigUpdates,
         createdAt: Date.now(),
       };
-      if (input.selectedRuntime.kind === "target") {
-        const result = await launchOnTarget.mutateAsync({
-          targetId: input.selectedRuntime.targetId,
-          gitProvider: "github",
-          gitOwner: input.selectedRepo.gitOwner,
-          gitRepoName: input.selectedRepo.gitRepoName,
-          baseBranch: input.selectedBaseBranch,
-          branchName: buildBranchName(text),
-          generatedName: true,
-          displayName: buildWorkspaceDisplayName(text),
-          prompt: text,
-          promptId: pendingPrompt.id,
-          agentKind: input.resolvedLaunchSelection.agentKind,
-          modelId: input.resolvedLaunchSelection.modelId,
-          modeId: input.resolvedLaunchSelection.modeId,
-          sessionConfigUpdates,
-          source: "web",
-        });
-        saveWebCloudPromptIntents(result.workspace.id, [
-          {
-            id: pendingPrompt.id,
-            workspaceId: result.workspace.id,
-            sessionId: result.sessionId,
-            text,
-            baseTranscriptSeq: 0,
-            status: "queued",
-            commandId: result.sendCommandId,
-            createdAt: Date.now(),
-          },
-        ]);
-        navigate(routes.chat(result.workspace.id, result.sessionId));
-        return;
-      }
       await ensurePersonalAgentAuthLaunchReady({
         client,
         agentKind: normalizeAgentAuthAgentKind(input.resolvedLaunchSelection.agentKind),

@@ -1,7 +1,5 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type {
-  CloudCommandEnvelope,
-  CloudCommandResponse,
   CloudSessionProjection,
   CloudTranscriptItem,
   CloudWorkspaceDetail,
@@ -18,19 +16,11 @@ import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cl
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 import { savePendingMobilePrompt } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import type {
-  SendPromptPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-types";
-import { ensureMobileWorkspaceReadyForCloudCommands } from "../../../lib/access/cloud/pending-mobile-workspace-readiness";
+import {
+  getMobileCloudSandboxAnyHarnessClient,
+  isMobileCloudSandboxWorkspace,
+} from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 import type { OptimisticPrompt } from "../../../lib/domain/chat/mobile-chat-transcript";
-import { resolveAgentKind } from "../../../lib/domain/chat/mobile-chat-presentation";
-
-type EnqueuePromptMutation = {
-  isPending: boolean;
-  mutateAsync: (
-    command: CloudCommandEnvelope<SendPromptPayload>,
-  ) => Promise<CloudCommandResponse>;
-};
 
 type CloudLaunchCatalog = Parameters<typeof resolveCloudLaunchSelection>[0]["catalog"];
 type CloudLaunchableAgentKinds = Parameters<typeof resolveCloudLaunchSelection>[0]["launchableAgentKinds"];
@@ -38,7 +28,7 @@ type CloudLaunchableAgentKinds = Parameters<typeof resolveCloudLaunchSelection>[
 export function useMobileChatPromptActions({
   ownerUserId,
   client,
-  enqueuePrompt,
+  productToken,
   workspace,
   session,
   draft,
@@ -51,7 +41,6 @@ export function useMobileChatPromptActions({
   workspaceLaunchableAgentKinds,
   resolvedLaunchSelection,
   catalog,
-  sessionModelId,
   transcriptItems,
   transcriptRows,
   setDraft,
@@ -59,13 +48,12 @@ export function useMobileChatPromptActions({
   setPendingPromptStatus,
   setPendingPromptFailed,
   setOptimisticPrompts,
-  setLatestCommandId,
   transcriptRefetch,
   sessionEventsRefetch,
 }: {
   ownerUserId: string | null;
   client: ProliferateCloudClient;
-  enqueuePrompt: EnqueuePromptMutation;
+  productToken: string | null;
   workspace: CloudWorkspaceDetail | null;
   session: CloudSessionProjection | null;
   draft: string;
@@ -78,7 +66,6 @@ export function useMobileChatPromptActions({
   workspaceLaunchableAgentKinds: CloudLaunchableAgentKinds;
   resolvedLaunchSelection: CloudLaunchComposerSelection;
   catalog: CloudLaunchCatalog;
-  sessionModelId: string | null;
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
   setDraft: Dispatch<SetStateAction<string>>;
@@ -86,7 +73,6 @@ export function useMobileChatPromptActions({
   setPendingPromptStatus: Dispatch<SetStateAction<string | null>>;
   setPendingPromptFailed: Dispatch<SetStateAction<boolean>>;
   setOptimisticPrompts: Dispatch<SetStateAction<OptimisticPrompt[]>>;
-  setLatestCommandId: Dispatch<SetStateAction<string | null>>;
   transcriptRefetch: () => void | Promise<unknown>;
   sessionEventsRefetch: () => void | Promise<unknown>;
 }) {
@@ -106,6 +92,10 @@ export function useMobileChatPromptActions({
     const readiness = cloudCommandReadiness(workspace);
     if (!readiness.commandable) {
       setPendingPromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+      return;
+    }
+    if (!isMobileCloudSandboxWorkspace(workspace)) {
+      setPendingPromptStatus("Cloud workspace runtime is unavailable.");
       return;
     }
     if (!session) {
@@ -192,31 +182,19 @@ export function useMobileChatPromptActions({
     setDraft("");
     setPendingPromptStatus(null);
     try {
-      await ensureMobileWorkspaceReadyForCloudCommands({
-        client,
+      const { anyharness } = await getMobileCloudSandboxAnyHarnessClient({
         workspace,
-        agentKind: activeSession.sourceAgentKind ?? resolveAgentKind(workspace),
-        modelId: sessionModelId,
-        idempotencyKey: `${optimisticPrompt.id}:target-config`,
-        setLatestCommandId,
-        onStatus: setPendingPromptStatus,
-        shouldContinue: () => sessionPromptDispatchingRef.current,
+        productToken,
+        client,
       });
-      const command = await enqueuePrompt.mutateAsync({
-        idempotencyKey: optimisticPrompt.id,
-        targetId: activeSession.targetId,
-        workspaceId: activeSession.workspaceId,
-        cloudWorkspaceId: workspace.id,
-        sessionId: activeSession.sessionId,
-        kind: "send_prompt",
-        source: "mobile",
-        payload: { text, promptId: optimisticPrompt.id },
+      await anyharness.sessions.prompt(activeSession.sessionId, {
+        blocks: [{ type: "text", text }],
+        promptId: optimisticPrompt.id,
       });
-      setLatestCommandId(command.commandId);
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
           prompt.id === optimisticPrompt.id
-            ? { ...prompt, commandId: command.commandId, status: "queued" }
+            ? { ...prompt, status: "queued" }
             : prompt
         )
       );
@@ -236,8 +214,7 @@ export function useMobileChatPromptActions({
 
   return {
     promptSubmitting:
-      enqueuePrompt.isPending
-      || directPromptDispatching
+      directPromptDispatching
       || (Boolean(pendingPrompt) && !pendingPromptFailed)
       || hasActiveOptimisticPrompt,
     submitPrompt,

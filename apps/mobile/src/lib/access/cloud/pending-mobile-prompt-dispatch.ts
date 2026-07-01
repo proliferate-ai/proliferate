@@ -1,79 +1,133 @@
 import type {
+  CloudSessionProjection,
   CloudWorkspaceDetail,
   ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 import {
-  assertCommandEnqueued,
-  waitForCommandAccepted,
-} from "./pending-mobile-command-status";
+  getMobileCloudSandboxAnyHarnessClient,
+} from "../anyharness/cloud-sandbox-runtime";
 import { assertStillCurrent } from "./pending-mobile-prompt-polling";
-import type {
-  EnqueueCloudCommand,
-  PendingMobilePromptDispatchResult,
-  SendPromptPayload,
-  StartSessionPayload,
-  UpdateSessionConfigPayload,
-} from "./pending-mobile-prompt-types";
-import { applyPendingSessionConfigUpdates } from "./pending-mobile-session-config";
-import {
-  resumePendingMobilePromptSession,
-  startPendingMobilePromptSession,
-} from "./pending-mobile-session-resolution";
+import type { PendingMobilePromptDispatchResult } from "./pending-mobile-prompt-types";
 
 export async function dispatchPendingMobilePrompt(args: {
   client: ProliferateCloudClient;
+  productToken: string | null;
   workspace: CloudWorkspaceDetail;
   pendingPrompt: MobilePendingPrompt;
-  modelId: string | null;
-  enqueueStartSession: EnqueueCloudCommand<StartSessionPayload>;
-  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
-  enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
-  setLatestCommandId: (commandId: string) => void;
   onSessionStarted?: (sessionId: string) => void;
-  onPromptEnqueued?: (commandId: string) => void;
+  onPromptEnqueued?: (commandId: string | null) => void;
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
 }): Promise<PendingMobilePromptDispatchResult> {
-  const session = args.pendingPrompt.dispatchedSessionId
-    ? await resumePendingMobilePromptSession(args)
-    : await startPendingMobilePromptSession(args);
-  assertStillCurrent(args.shouldContinue);
-  if (!args.pendingPrompt.dispatchedSessionId) {
-    args.onSessionStarted?.(session.sessionId);
-  }
-  await applyPendingSessionConfigUpdates({
-    client: args.client,
+  const { connection, anyharness } = await getMobileCloudSandboxAnyHarnessClient({
     workspace: args.workspace,
-    session,
-    pendingPrompt: args.pendingPrompt,
-    enqueueConfig: args.enqueueConfig,
-    setLatestCommandId: args.setLatestCommandId,
-    onStatus: args.onStatus,
-    shouldContinue: args.shouldContinue,
+    productToken: args.productToken,
+    client: args.client,
   });
+  assertStillCurrent(args.shouldContinue);
+
+  const session = args.pendingPrompt.dispatchedSessionId
+    ? await findExistingSession({
+      anyharness,
+      anyharnessWorkspaceId: connection.anyharnessWorkspaceId,
+      cloudWorkspaceId: args.workspace.id,
+      sessionId: args.pendingPrompt.dispatchedSessionId,
+    })
+    : null;
+  const activeSession = session ?? await createSession({
+    anyharness,
+    anyharnessWorkspaceId: connection.anyharnessWorkspaceId,
+    cloudWorkspaceId: args.workspace.id,
+    pendingPrompt: args.pendingPrompt,
+    onStatus: args.onStatus,
+  });
+  assertStillCurrent(args.shouldContinue);
+
+  if (!args.pendingPrompt.dispatchedSessionId) {
+    args.onSessionStarted?.(activeSession.sessionId);
+  }
+  const updates = args.pendingPrompt.sessionConfigUpdates ?? [];
+  for (const update of updates) {
+    assertStillCurrent(args.shouldContinue);
+    args.onStatus("Applying session configuration.");
+    await anyharness.sessions.setConfigOption(activeSession.sessionId, update);
+  }
   assertStillCurrent(args.shouldContinue);
   args.onStatus("Sending queued prompt.");
-  const command = await args.enqueuePrompt({
-    idempotencyKey: `${args.pendingPrompt.id}:send`,
-    targetId: session.targetId,
-    workspaceId: session.workspaceId,
-    cloudWorkspaceId: args.workspace.id,
-    sessionId: session.sessionId,
-    kind: "send_prompt",
-    source: "mobile",
-    payload: {
-      text: args.pendingPrompt.text,
-      promptId: args.pendingPrompt.id,
-    },
+  await anyharness.sessions.prompt(activeSession.sessionId, {
+    blocks: [{ type: "text", text: args.pendingPrompt.text }],
+    promptId: args.pendingPrompt.id,
   });
-  args.setLatestCommandId(command.commandId);
-  assertCommandEnqueued(command);
-  args.onPromptEnqueued?.(command.commandId);
-  await waitForCommandAccepted(command, args.client, args.shouldContinue);
+  args.onPromptEnqueued?.(null);
   return {
-    sessionId: session.sessionId,
-    sendCommandId: command.commandId,
+    sessionId: activeSession.sessionId,
+    sendCommandId: null,
+  };
+}
+
+async function createSession(input: {
+  anyharness: Awaited<ReturnType<typeof getMobileCloudSandboxAnyHarnessClient>>["anyharness"];
+  anyharnessWorkspaceId: string;
+  cloudWorkspaceId: string;
+  pendingPrompt: MobilePendingPrompt;
+  onStatus: (status: string) => void;
+}): Promise<CloudSessionProjection> {
+  input.onStatus("Starting a session for this prompt.");
+  const session = await input.anyharness.sessions.create({
+    workspaceId: input.anyharnessWorkspaceId,
+    agentKind: input.pendingPrompt.agentKind ?? "codex",
+    ...(input.pendingPrompt.modelId ? { modelId: input.pendingPrompt.modelId } : {}),
+    ...(input.pendingPrompt.modeId ? { modeId: input.pendingPrompt.modeId } : {}),
+    subagentsEnabled: false,
+    origin: { kind: "system", entrypoint: "cloud" },
+  });
+  return {
+    cloudWorkspaceId: input.cloudWorkspaceId,
+    targetId: input.cloudWorkspaceId,
+    workspaceId: session.workspaceId ?? input.anyharnessWorkspaceId,
+    sessionId: session.id,
+    nativeSessionId: session.id,
+    sourceAgentKind: session.agentKind ?? input.pendingPrompt.agentKind ?? null,
+    title: session.title ?? null,
+    status: session.status,
+    phase: session.executionSummary?.phase ?? session.status ?? null,
+    pendingInteractionCount: session.pendingPrompts?.length ?? 0,
+    liveConfig: session.liveConfig ?? null,
+    lastEventSeq: 0,
+    lastEventAt: session.updatedAt ?? session.lastPromptAt ?? session.createdAt ?? null,
+    startedAt: session.createdAt ?? null,
+    endedAt: null,
+  };
+}
+
+async function findExistingSession(input: {
+  anyharness: Awaited<ReturnType<typeof getMobileCloudSandboxAnyHarnessClient>>["anyharness"];
+  anyharnessWorkspaceId: string;
+  cloudWorkspaceId: string;
+  sessionId: string;
+}): Promise<CloudSessionProjection | null> {
+  const sessions = await input.anyharness.sessions.list(input.anyharnessWorkspaceId);
+  const session = sessions.find((candidate) => candidate.id === input.sessionId);
+  if (!session) {
+    return null;
+  }
+  return {
+    cloudWorkspaceId: input.cloudWorkspaceId,
+    targetId: input.cloudWorkspaceId,
+    workspaceId: session.workspaceId ?? input.anyharnessWorkspaceId,
+    sessionId: session.id,
+    nativeSessionId: session.id,
+    sourceAgentKind: session.agentKind ?? null,
+    title: session.title ?? null,
+    status: session.status,
+    phase: session.executionSummary?.phase ?? session.status ?? null,
+    pendingInteractionCount: session.pendingPrompts?.length ?? 0,
+    liveConfig: session.liveConfig ?? null,
+    lastEventSeq: 0,
+    lastEventAt: session.updatedAt ?? session.lastPromptAt ?? session.createdAt ?? null,
+    startedAt: session.createdAt ?? null,
+    endedAt: null,
   };
 }

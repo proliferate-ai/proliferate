@@ -26,13 +26,6 @@ export interface RuntimeTarget {
   readyAgentKinds?: AgentAuthAgentKind[];
 }
 
-export function runtimeTargetUsesCloudCommand(
-  target: Pick<RuntimeTarget, "location" | "runtimeAccessKind">,
-): boolean {
-  void target;
-  return false;
-}
-
 export async function resolveRuntimeTargetForWorkspace(
   runtimeUrl: string,
   workspaceId: string,

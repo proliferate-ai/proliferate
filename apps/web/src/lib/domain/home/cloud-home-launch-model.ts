@@ -17,22 +17,14 @@ export interface RepoOption {
 }
 
 export type RuntimeOption =
-  | {
-    id: "cloud";
-    kind: "cloud";
-    label: string;
-    description: string;
-    online: true;
-    targetId: null;
-  }
-  | {
-    id: string;
-    kind: "target";
-    label: string;
-    description: string;
-    online: boolean;
-    targetId: string;
-  };
+  {
+  id: "cloud";
+  kind: "cloud";
+  label: string;
+  description: string;
+  online: true;
+  targetId: null;
+};
 
 export type HomeRepoConfig = {
   gitOwner: string;
@@ -62,6 +54,7 @@ export function homeRecentItems(
 export function buildRuntimeOptions(
   targets: readonly HomeRuntimeTarget[] | undefined,
 ): RuntimeOption[] {
+  void targets;
   return [
     {
       id: "cloud",
@@ -71,18 +64,6 @@ export function buildRuntimeOptions(
       online: true,
       targetId: null,
     },
-    ...((targets ?? [])
-      .filter((target) => target.kind === "desktop_dispatch")
-      .map((target): RuntimeOption => ({
-        id: target.id,
-        kind: "target",
-        label: targetLabel(target),
-        description: target.status === "online"
-          ? "Dispatch to this connected Desktop"
-          : target.statusDetail?.statusDetail ?? "Desktop target is offline",
-        online: target.status === "online",
-        targetId: target.id,
-      }))),
   ];
 }
 
@@ -160,11 +141,6 @@ export function normalizeAgentAuthAgentKind(agentKind: string) {
     || agentKind === "gemini"
     ? agentKind
     : null;
-}
-
-function targetLabel(target: HomeRuntimeTarget): string {
-  const displayName = target.displayName?.trim();
-  return displayName || "Desktop Mac";
 }
 
 function addUniqueBranch(options: string[], branch: string | null | undefined): void {

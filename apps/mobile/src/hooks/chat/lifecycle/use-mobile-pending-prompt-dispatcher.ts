@@ -12,21 +12,13 @@ import {
   RetryablePendingPromptDispatchError,
   shouldRetryPendingMobilePromptFailure,
 } from "../../../lib/access/cloud/pending-mobile-prompt-errors";
-import type {
-  SendPromptPayload,
-  StartSessionPayload,
-  UpdateSessionConfigPayload,
-  EnqueueCloudCommand,
-} from "../../../lib/access/cloud/pending-mobile-prompt-types";
 import {
   markPendingPromptFailed,
 } from "../../../lib/domain/chat/mobile-chat-transcript";
 
 export function useMobilePendingPromptDispatcher({
   client,
-  enqueueStartSession,
-  enqueueConfig,
-  enqueuePrompt,
+  productToken,
   ownerUserId,
   pendingPrompt,
   pendingPromptDurable,
@@ -37,7 +29,6 @@ export function useMobilePendingPromptDispatcher({
   workspaceRefetch,
   pendingDispatchRunRef,
   onSessionSelected,
-  setLatestCommandId,
   setNewSessionMode,
   setSelectedSessionId,
   setPendingPrompt,
@@ -45,9 +36,7 @@ export function useMobilePendingPromptDispatcher({
   setPendingPromptFailed,
 }: {
   client: ProliferateCloudClient;
-  enqueueStartSession: EnqueueCloudCommand<StartSessionPayload>;
-  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
-  enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
+  productToken: string | null;
   ownerUserId: string | null;
   pendingPrompt: MobilePendingPrompt | null;
   pendingPromptDurable: boolean;
@@ -58,7 +47,6 @@ export function useMobilePendingPromptDispatcher({
   workspaceRefetch: () => void | Promise<unknown>;
   pendingDispatchRunRef: MutableRefObject<{ key: string; active: boolean } | null>;
   onSessionSelected?: (sessionId: string) => void;
-  setLatestCommandId: Dispatch<SetStateAction<string | null>>;
   setNewSessionMode: Dispatch<SetStateAction<boolean>>;
   setSelectedSessionId: Dispatch<SetStateAction<string | null>>;
   setPendingPrompt: Dispatch<SetStateAction<MobilePendingPrompt | null>>;
@@ -87,17 +75,16 @@ export function useMobilePendingPromptDispatcher({
       setPendingPromptStatus("Workspace is provisioning; the prompt will send when ready.");
       return;
     }
-    if (!workspace.targetId || !workspace.anyharnessWorkspaceId) {
+    if (!workspace.anyharnessWorkspaceId) {
       setPendingPromptStatus(
-        workspace.actionBlockReason || "Managed target configuration is still materializing.",
+        workspace.actionBlockReason || "Cloud runtime is still materializing.",
       );
       return;
     }
-    if (pendingPrompt.dispatchedSessionId && pendingPrompt.sendCommandId) {
+    if (pendingPrompt.dispatchedSessionId) {
       setNewSessionMode(false);
       setSelectedSessionId(pendingPrompt.dispatchedSessionId);
       onSessionSelected?.(pendingPrompt.dispatchedSessionId);
-      setLatestCommandId(pendingPrompt.sendCommandId);
       setPendingPromptStatus("Queued prompt; waiting for transcript.");
       setPendingPromptFailed(false);
       return;
@@ -119,17 +106,9 @@ export function useMobilePendingPromptDispatcher({
 
     void dispatchPendingMobilePrompt({
       client,
+      productToken,
       workspace,
       pendingPrompt,
-      modelId: pendingPrompt.modelId,
-      enqueueStartSession,
-      enqueueConfig,
-      enqueuePrompt,
-      setLatestCommandId: (commandId) => {
-        if (isCurrentRun()) {
-          setLatestCommandId(commandId);
-        }
-      },
       onSessionStarted: (sessionId) => {
         if (!isCurrentRun()) {
           return;
@@ -248,8 +227,7 @@ export function useMobilePendingPromptDispatcher({
     };
   }, [
     client,
-    enqueuePrompt,
-    enqueueStartSession,
+    productToken,
     ownerUserId,
     pendingPrompt,
     pendingPromptDurable,
@@ -258,7 +236,6 @@ export function useMobilePendingPromptDispatcher({
     workspace?.actionBlockReason,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,
-    workspace?.targetId,
     workspaceStatus,
     workspaceRefetch,
   ]);

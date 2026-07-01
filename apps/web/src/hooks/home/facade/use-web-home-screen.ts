@@ -132,11 +132,9 @@ export function useWebHomeScreen() {
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
-    readyAgentKinds: selectedRuntime?.kind === "target"
-      ? agentCatalog.data?.agents.map((agent) => agent.kind)
-      : readyAgentKinds,
-    agentGateway: selectedRuntime?.kind === "target" ? null : agentGateway,
-    assumeFallbackAgentKindsLaunchable: selectedRuntime?.kind === "target",
+    readyAgentKinds,
+    agentGateway,
+    assumeFallbackAgentKindsLaunchable: false,
   }), [
     agentCatalog.data,
     readyAgentKindsKey,
@@ -147,10 +145,9 @@ export function useWebHomeScreen() {
     agentGatewayAuthSlotsKey,
     agentGatewayManagedCreditKindsKey,
     catalogAgentKindsKey,
-    selectedRuntime?.kind,
   ]);
   const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
-  const selectedRuntimeReady = selectedRuntime?.kind !== "target" || selectedRuntime.online;
+  const selectedRuntimeReady = Boolean(selectedRuntime);
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
@@ -330,9 +327,7 @@ export function useWebHomeScreen() {
       && !submitWorkflow.submitting,
     submitting: submitWorkflow.submitting,
     commandMessage: pendingPrompt?.status === "creating"
-      ? selectedRuntime?.kind === "target"
-        ? "Dispatching to Desktop. The prompt will send as soon as the session is ready."
-        : "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
+      ? "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
       : null,
     setDraft,
     setAddRepoOpen,

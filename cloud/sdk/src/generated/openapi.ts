@@ -2927,7 +2927,7 @@ export interface components {
             /** Sandboxstatus */
             sandboxStatus?: string | null;
             /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
+            anyharnessWorkspaceId?: string | null;
         };
         /** CloudWorktreeRetentionPolicyRequest */
         CloudWorktreeRetentionPolicyRequest: {
@@ -4197,7 +4197,7 @@ export interface components {
         /** UpdateCloudWorkspaceDisplayNameRequest */
         UpdateCloudWorkspaceDisplayNameRequest: {
             /** Displayname */
-            displayName: string;
+            displayName?: string | null;
         };
         /** UserRead */
         UserRead: {
@@ -4371,7 +4371,7 @@ export interface components {
             /** Readyagentkinds */
             readyAgentKinds?: string[];
             /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
+            anyharnessWorkspaceId?: string | null;
         };
         /** WorkspaceExecutionTargetSummary */
         WorkspaceExecutionTargetSummary: {
@@ -4526,7 +4526,7 @@ export interface components {
             /** Readyagentkinds */
             readyAgentKinds?: string[];
             /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
+            anyharnessWorkspaceId?: string | null;
         };
     };
     responses: never;

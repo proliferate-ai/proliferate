@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.integrations.sandbox.base import ProviderSandboxState
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.e2e.cloud.helpers.shared import CloudE2ETestError
@@ -28,39 +28,18 @@ async def load_active_sandbox_record(
     workspace_id: str,
 ) -> CloudSandbox:
     workspace = await load_workspace_record(db_session, workspace_id)
-    sandbox_id = workspace.active_sandbox_id
-    if sandbox_id is None and workspace.runtime_environment_id is not None:
-        environment = await db_session.get(
-            CloudRuntimeEnvironment,
-            workspace.runtime_environment_id,
+    sandbox = (
+        await db_session.execute(
+            select(CloudSandbox).where(
+                CloudSandbox.owner_user_id == workspace.owner_user_id,
+                CloudSandbox.destroyed_at.is_(None),
+            )
         )
-        if environment is not None:
-            await db_session.refresh(environment)
-            sandbox_id = environment.active_sandbox_id
-
-    if sandbox_id is None:
-        raise CloudE2ETestError(f"Workspace {workspace_id} does not have an active sandbox.")
-    sandbox = await db_session.get(CloudSandbox, sandbox_id)
+    ).scalar_one_or_none()
     if sandbox is None:
-        raise CloudE2ETestError(f"Sandbox {sandbox_id} was not found.")
+        raise CloudE2ETestError(f"Workspace {workspace_id} does not have an active sandbox.")
     await db_session.refresh(sandbox)
     return sandbox
-
-
-async def load_runtime_environment_record(
-    db_session: AsyncSession,
-    workspace_id: str,
-) -> CloudRuntimeEnvironment:
-    workspace = await load_workspace_record(db_session, workspace_id)
-    if workspace.runtime_environment_id is None:
-        raise CloudE2ETestError(f"Workspace {workspace_id} does not have a runtime environment.")
-    environment = await db_session.get(CloudRuntimeEnvironment, workspace.runtime_environment_id)
-    if environment is None:
-        raise CloudE2ETestError(
-            f"Runtime environment {workspace.runtime_environment_id} was not found."
-        )
-    await db_session.refresh(environment)
-    return environment
 
 
 async def provider_pause_native(provider_kind: str, external_sandbox_id: str) -> None:

@@ -1,6 +1,13 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { NavigateFunction } from "react-router-dom";
-import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
+import type {
+  CloudSessionProjection,
+  CloudWorkspaceDetail,
+  ProliferateCloudClient,
+} from "@proliferate/cloud-sdk";
+import {
+  DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+} from "@proliferate/product-domain/chats/cloud/composer-controls";
 
 import { routes } from "../../../config/routes";
 import {
@@ -12,14 +19,13 @@ import {
 } from "../../../lib/domain/chat/cloud-chat-session-model";
 import { textMatches } from "../../../lib/domain/chat/cloud-chat-prompt-projection";
 import {
-  dispatchPendingHomePrompt,
-  resumePendingHomePromptInSession,
-} from "../../../lib/access/cloud/pending-home-prompt-dispatch";
-import {
   clearPendingHomePrompt,
   savePendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
+import {
+  getWebCloudSandboxAnyHarnessClient,
+} from "../../../lib/access/anyharness/cloud-sandbox-runtime";
 import {
   type WebCloudPromptIntent,
 } from "../../../stores/cloud/web-cloud-prompt-intent-store";
@@ -29,12 +35,10 @@ import {
 } from "../../../stores/cloud/web-cloud-session-draft-store";
 import type { PendingHomePromptDispatchRun } from "./use-web-cloud-chat-local-state-lifecycle";
 
-type DispatchPendingHomePromptArgs = Parameters<typeof dispatchPendingHomePrompt>[0];
-type ResumePendingHomePromptArgs = Parameters<typeof resumePendingHomePromptInSession>[0];
-
 export function useWebCloudPendingHomePromptLifecycle(input: {
-  client: DispatchPendingHomePromptArgs["client"];
-  workspace: DispatchPendingHomePromptArgs["workspace"] | null;
+  client: ProliferateCloudClient;
+  productToken: string | null;
+  workspace: CloudWorkspaceDetail | null;
   workspaceStatus: string | null;
   workspaceAllowedAgentKindsKey: string;
   workspaceReadyAgentKindsKey: string;
@@ -44,7 +48,6 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
   setPendingHomePromptStatus: Dispatch<SetStateAction<string | null>>;
   setOptimisticPrompts: Dispatch<SetStateAction<WebCloudPromptIntent[]>>;
   setDraft: Dispatch<SetStateAction<string>>;
-  setLatestCommandId: Dispatch<SetStateAction<string | null>>;
   setPendingSessionDraft: Dispatch<SetStateAction<WebCloudSessionDraft | null>>;
   pendingSessionDraft: WebCloudSessionDraft | null;
   routeSessionDraftId: string | null;
@@ -53,14 +56,12 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
   mountedRef: { current: boolean };
   directPromptDispatching: boolean;
   sessions: readonly CloudSessionProjection[];
-  enqueueStartSession: DispatchPendingHomePromptArgs["enqueueStartSession"];
-  enqueueConfig: DispatchPendingHomePromptArgs["enqueueConfig"] & ResumePendingHomePromptArgs["enqueueConfig"];
-  enqueuePrompt: DispatchPendingHomePromptArgs["enqueuePrompt"] & ResumePendingHomePromptArgs["enqueuePrompt"];
   workspaceRefetch: () => void;
   navigate: NavigateFunction;
 }) {
   const {
     client,
+    productToken,
     workspace,
     workspaceStatus,
     workspaceAllowedAgentKindsKey,
@@ -71,7 +72,6 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
     setPendingHomePromptStatus,
     setOptimisticPrompts,
     setDraft,
-    setLatestCommandId,
     setPendingSessionDraft,
     pendingSessionDraft,
     routeSessionDraftId,
@@ -80,9 +80,6 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
     mountedRef,
     directPromptDispatching,
     sessions,
-    enqueueStartSession,
-    enqueueConfig,
-    enqueuePrompt,
     workspaceRefetch,
     navigate,
   } = input;
@@ -134,19 +131,11 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
         return;
       }
       run.started = true;
-      void dispatchPendingHomePrompt({
+      void startCloudSandboxPendingHomePrompt({
         client,
+        productToken,
         workspace,
         pendingPrompt: pendingHomePrompt,
-        modelId: pendingHomePrompt.modelId,
-        enqueueStartSession,
-        enqueueConfig,
-        enqueuePrompt,
-        setLatestCommandId: (commandId) => {
-          if (isCurrentRun()) {
-            setLatestCommandId(commandId);
-          }
-        },
         onStatus: setCurrentStatus,
         shouldContinue: isCurrentRun,
       })
@@ -166,7 +155,6 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
                   text: pendingHomePrompt.text,
                   baseTranscriptSeq: 0,
                   status: "queued",
-                  commandId: result.sendCommandId,
                   createdAt: Date.now(),
                 },
               ]
@@ -185,16 +173,8 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
           }
           const message = error instanceof Error ? error.message : "Prompt could not be sent.";
           const prompt: PendingHomePrompt = isWorkspacePreparationStatus(message)
-            ? {
-              ...pendingHomePrompt,
-              status: "pending",
-              errorMessage: message,
-            }
-            : {
-              ...pendingHomePrompt,
-              status: "failed",
-              errorMessage: message,
-            };
+            ? { ...pendingHomePrompt, status: "pending", errorMessage: message }
+            : { ...pendingHomePrompt, status: "failed", errorMessage: message };
           savePendingHomePrompt(workspace.id, prompt);
           setPendingHomePrompt(prompt);
           setPendingHomePromptStatus(message);
@@ -214,23 +194,19 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
     };
   }, [
     client,
-    enqueuePrompt,
-    enqueueStartSession,
-    enqueueConfig,
     navigate,
     pendingHomePrompt,
     pendingHomePromptDispatchRunRef,
     pendingSessionDraft?.id,
+    productToken,
     routeSessionDraftId,
     setDraft,
-    setLatestCommandId,
     setOptimisticPrompts,
     setPendingHomePrompt,
     setPendingHomePromptStatus,
     setPendingSessionDraft,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,
-    workspace?.targetId,
     workspaceStatus,
     workspaceAllowedAgentKindsKey,
     workspaceReadyAgentKindsKey,
@@ -272,18 +248,12 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
     };
 
     setPendingHomePromptStatus("Session started; sending prompt.");
-    void resumePendingHomePromptInSession({
+    void resumeCloudSandboxPendingHomePrompt({
       client,
+      productToken,
       workspace,
       session: recoverableSession,
       pendingPrompt: pendingHomePrompt,
-      enqueueConfig,
-      enqueuePrompt,
-      setLatestCommandId: (commandId) => {
-        if (isCurrentRun()) {
-          setLatestCommandId(commandId);
-        }
-      },
       onStatus: setCurrentStatus,
       shouldContinue: isCurrentRun,
     })
@@ -298,7 +268,6 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
                 ...prompt,
                 sessionId: result.sessionId,
                 status: "queued" as const,
-                commandId: result.sendCommandId,
                 errorMessage: null,
               }
               : prompt
@@ -314,7 +283,6 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
                 text: pendingHomePrompt.text,
                 baseTranscriptSeq: 0,
                 status: "queued",
-                commandId: result.sendCommandId,
                 createdAt: Date.now(),
               },
             ];
@@ -355,20 +323,89 @@ export function useWebCloudPendingHomePromptLifecycle(input: {
     chatId,
     client,
     directPromptDispatching,
-    enqueueConfig,
-    enqueuePrompt,
     mountedRef,
     navigate,
     pendingHomePrompt,
     pendingHomePromptDispatchRunRef,
     pendingHomePromptResumeAttemptsRef,
+    productToken,
     sessions,
     setDraft,
-    setLatestCommandId,
     setOptimisticPrompts,
     setPendingHomePrompt,
     setPendingHomePromptStatus,
     workspace,
     workspaceRefetch,
   ]);
+}
+
+async function startCloudSandboxPendingHomePrompt(args: {
+  client: ProliferateCloudClient;
+  productToken: string | null;
+  workspace: CloudWorkspaceDetail;
+  pendingPrompt: PendingHomePrompt;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<{ sessionId: string }> {
+  args.onStatus("Preparing cloud sandbox runtime.");
+  const { connection, anyharness } = await getWebCloudSandboxAnyHarnessClient({
+    workspace: args.workspace,
+    productToken: args.productToken,
+    client: args.client,
+  });
+  assertCurrent(args.shouldContinue);
+  args.onStatus("Starting session.");
+  const session = await anyharness.sessions.create({
+    workspaceId: connection.anyharnessWorkspaceId,
+    agentKind: args.pendingPrompt.agentKind ?? DEFAULT_DIRECT_PROMPT_AGENT_KIND,
+    ...(args.pendingPrompt.modelId ? { modelId: args.pendingPrompt.modelId } : {}),
+    ...(args.pendingPrompt.modeId ? { modeId: args.pendingPrompt.modeId } : {}),
+    subagentsEnabled: false,
+    origin: { kind: "system", entrypoint: "cloud" },
+  });
+  for (const update of args.pendingPrompt.sessionConfigUpdates ?? []) {
+    await anyharness.sessions.setConfigOption(session.id, update);
+  }
+  assertCurrent(args.shouldContinue);
+  args.onStatus("Sending prompt.");
+  await anyharness.sessions.prompt(session.id, {
+    blocks: [{ type: "text", text: args.pendingPrompt.text }],
+    promptId: args.pendingPrompt.id,
+  });
+  args.onStatus("Queued prompt; waiting for transcript.");
+  return { sessionId: session.id };
+}
+
+async function resumeCloudSandboxPendingHomePrompt(args: {
+  client: ProliferateCloudClient;
+  productToken: string | null;
+  workspace: CloudWorkspaceDetail;
+  session: CloudSessionProjection;
+  pendingPrompt: PendingHomePrompt;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<{ sessionId: string }> {
+  args.onStatus("Preparing cloud sandbox runtime.");
+  const { anyharness } = await getWebCloudSandboxAnyHarnessClient({
+    workspace: args.workspace,
+    productToken: args.productToken,
+    client: args.client,
+  });
+  for (const update of args.pendingPrompt.sessionConfigUpdates ?? []) {
+    await anyharness.sessions.setConfigOption(args.session.sessionId, update);
+  }
+  assertCurrent(args.shouldContinue);
+  args.onStatus("Sending queued prompt.");
+  await anyharness.sessions.prompt(args.session.sessionId, {
+    blocks: [{ type: "text", text: args.pendingPrompt.text }],
+    promptId: args.pendingPrompt.id,
+  });
+  args.onStatus("Queued prompt; waiting for transcript.");
+  return { sessionId: args.session.sessionId };
+}
+
+function assertCurrent(shouldContinue: () => boolean): void {
+  if (!shouldContinue()) {
+    throw new Error("Action was cancelled.");
+  }
 }

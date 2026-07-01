@@ -125,6 +125,22 @@ async def load_cloud_sandbox_by_id(
     return cloud_sandbox_value(row) if row is not None else None
 
 
+async def load_cloud_sandbox_by_provider_sandbox_id(
+    db: AsyncSession,
+    provider_sandbox_id: str,
+    *,
+    lock_row: bool = False,
+) -> CloudSandboxValue | None:
+    stmt = select(CloudSandbox).where(
+        CloudSandbox.provider_sandbox_id == provider_sandbox_id,
+        CloudSandbox.destroyed_at.is_(None),
+    )
+    if lock_row:
+        stmt = stmt.with_for_update()
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
 async def ensure_personal_cloud_sandbox(
     db: AsyncSession,
     *,
@@ -223,6 +239,31 @@ async def mark_cloud_sandbox_ready(
     row.anyharness_data_key_ciphertext = anyharness_data_key_ciphertext
     row.ready_at = now
     row.last_health_at = now
+    row.updated_at = now
+    await db.flush()
+    return cloud_sandbox_value(row)
+
+
+async def mark_cloud_sandbox_provider_state(
+    db: AsyncSession,
+    sandbox_id: UUID,
+    *,
+    status: str,
+    e2b_sandbox_id: str | None | object = _UNSET,
+) -> CloudSandboxValue | None:
+    row = await db.get(CloudSandbox, sandbox_id)
+    if row is None:
+        return None
+    now = utcnow()
+    if e2b_sandbox_id is not _UNSET:
+        row.provider_sandbox_id = e2b_sandbox_id
+    row.status = "ready" if status == "running" else status
+    if row.status == "ready":
+        if row.ready_at is None:
+            row.ready_at = now
+        row.last_health_at = now
+    elif row.status == "destroyed":
+        row.destroyed_at = now
     row.updated_at = now
     await db.flush()
     return cloud_sandbox_value(row)
