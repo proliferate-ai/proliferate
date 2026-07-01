@@ -259,6 +259,10 @@
       "types": "./dist/kit/ContextMenu.d.ts",
       "import": "./dist/kit/ContextMenu.js"
     },
+    "./kit/Command": {
+      "types": "./dist/kit/Command.d.ts",
+      "import": "./dist/kit/Command.js"
+    },
     "./kit/Dialog": {
       "types": "./dist/kit/Dialog.d.ts",
       "import": "./dist/kit/Dialog.js"

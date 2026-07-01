@@ -102,6 +102,7 @@ export const MainSidebar = memo(function MainSidebar() {
 
   const isOnIntegrations = location.pathname === APP_ROUTES.integrations;
   const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
+  const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
@@ -257,7 +258,7 @@ export const MainSidebar = memo(function MainSidebar() {
     [sidebarShortcutTargetIds],
   );
   const primaryNavShortcutLabels = useMemo(() => ({
-    home: getShortcutDisplayLabel(SHORTCUTS.goHome),
+    newChat: getShortcutDisplayLabel(SHORTCUTS.newDefault),
     support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
   }), []);
 
@@ -272,10 +273,12 @@ export const MainSidebar = memo(function MainSidebar() {
         <DebugProfiler id="workspace-sidebar-primary-nav">
           <SidebarPrimaryNavigation
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
+            workspacesActive={isOnWorkspaces}
             integrationsActive={isOnIntegrations}
             workflowsActive={isOnWorkflows}
             supportActive={false}
             onGoHome={actions.handleGoHome}
+            onGoWorkspaces={actions.handleGoWorkspaces}
             onGoIntegrations={actions.handleGoIntegrations}
             onGoWorkflows={actions.handleGoWorkflows}
             onOpenSupport={handleOpenSupport}

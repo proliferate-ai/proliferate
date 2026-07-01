@@ -14,8 +14,8 @@ describe("app routes", () => {
     expect(LEGACY_APP_ROUTES.automations).toBe("/automations");
   });
 
-  it("does not keep a named constant for the retired workspace inventory route", () => {
-    expect(APP_ROUTES).not.toHaveProperty("workspaces");
+  it("registers the workspaces page as a top-level route", () => {
+    expect(APP_ROUTES.workspaces).toBe("/workspaces");
   });
 
   it("does not keep a named constant for the retired powers route", () => {

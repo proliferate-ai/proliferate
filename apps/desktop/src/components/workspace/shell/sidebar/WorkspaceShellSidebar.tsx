@@ -37,6 +37,7 @@ export function WorkspaceShellSidebar({
               iconTone="sidebar"
               phase={updaterPhase}
               downloadProgress={downloadProgress}
+              showUpdatePill={false}
               onToggleSidebar={onToggleSidebar}
               onDownloadUpdate={onDownloadUpdate}
               onOpenRestartPrompt={onOpenRestartPrompt}

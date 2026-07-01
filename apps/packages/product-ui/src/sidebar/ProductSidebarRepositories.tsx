@@ -3,6 +3,8 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
 
+import { PrStatusIconOverlay, type PrStatusView } from "../workspaces/PrStatusBadge";
+
 export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick"> {
   label: string;
   count: number;
@@ -48,7 +50,7 @@ export function ProductSidebarRepoGroupHeader({
             {hoverIconNode}
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-base leading-5 text-current">
+        <span className="min-w-0 flex-1 truncate text-[13px] leading-5 text-current">
           {label}
         </span>
 
@@ -80,6 +82,12 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   shortcutLabel?: string | null;
   shortcutRevealVisible?: boolean;
   hoverAction?: ReactNode;
+  /**
+   * PR status rendered codex-style as a dot anchored on the row icon
+   * (UX spec §2). Rendered only when present — omit when PR data is
+   * not available for the row.
+   */
+  prStatus?: PrStatusView | null;
   onSelect?: () => void;
 }
 
@@ -95,6 +103,7 @@ export function ProductSidebarWorkspaceRow({
   shortcutLabel = null,
   shortcutRevealVisible = false,
   hoverAction = null,
+  prStatus = null,
   onSelect,
   className = "",
   ...props
@@ -109,13 +118,15 @@ export function ProductSidebarWorkspaceRow({
       {...props}
     >
       {hoverAction ? (
-        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
           {hoverAction}
         </div>
       ) : null}
       <div className="flex h-full w-full items-center text-sm leading-4">
         <div className="flex w-4 shrink-0 items-center justify-center">
-          {status}
+          <PrStatusIconOverlay status={prStatus}>
+            {status}
+          </PrStatusIconOverlay>
         </div>
 
         {attentionStatus ? (
@@ -125,7 +136,7 @@ export function ProductSidebarWorkspaceRow({
         ) : null}
 
         <div className={`${attentionStatus ? "ml-1" : "ml-1.5"} flex min-w-0 flex-1 items-center gap-2 pl-0.5`}>
-          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-base leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
+          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-[13px] leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
             }`}>
             <span
               className={`${hasSubtitle ? "max-w-full" : "min-w-0 flex-1"} truncate select-none`}
@@ -151,7 +162,7 @@ export function ProductSidebarWorkspaceRow({
             }`}>
 
             {trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-[12px] leading-4 tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>
