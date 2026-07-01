@@ -67,11 +67,30 @@ async def test_complete_github_app_user_authorization_callback_stores_authorizat
         del db
         calls.append(("refresh", None))
 
+    async def fake_ensure_personal_cloud_sandbox_exists(db: object, *, user_id: uuid.UUID):
+        del db
+        calls.append(("ensure_sandbox", user_id))
+        return object()
+
+    async def fake_schedule_materialize_sandbox(db: object, *, user_id: uuid.UUID) -> None:
+        del db
+        calls.append(("materialize", user_id))
+
     monkeypatch.setattr(service, "exchange_github_app_code", fake_exchange_github_app_code)
     monkeypatch.setattr(
         service.github_app_store,
         "upsert_github_app_authorization",
         fake_upsert_github_app_authorization,
+    )
+    monkeypatch.setattr(
+        service.cloud_sandboxes_service,
+        "ensure_personal_cloud_sandbox_exists",
+        fake_ensure_personal_cloud_sandbox_exists,
+    )
+    monkeypatch.setattr(
+        service.materialization_service,
+        "schedule_materialize_sandbox",
+        fake_schedule_materialize_sandbox,
     )
     monkeypatch.setattr(
         service,
@@ -87,6 +106,8 @@ async def test_complete_github_app_user_authorization_callback_stores_authorizat
     assert redirect_url == service._default_return_after_callback("account")
     assert calls == [
         ("upsert", user_id),
+        ("ensure_sandbox", user_id),
+        ("materialize", user_id),
         ("refresh", None),
     ]
 
@@ -133,6 +154,11 @@ async def test_complete_github_app_installation_callback_links_installation_to_o
         assert installed_by_user_id is not None
         calls.append(("upsert", organization_id, installed_by_user_id))
 
+    async def fake_list_cloud_repo_environments_for_git_owner(db: object, *, git_owner: str):
+        del db
+        assert git_owner == "proliferate-ai"
+        return ()
+
     monkeypatch.setattr(
         service,
         "get_github_app_installation",
@@ -142,6 +168,11 @@ async def test_complete_github_app_installation_callback_links_installation_to_o
         service.github_app_store,
         "upsert_github_app_installation",
         fake_upsert_github_app_installation,
+    )
+    monkeypatch.setattr(
+        service.repositories_store,
+        "list_cloud_repo_environments_for_git_owner",
+        fake_list_cloud_repo_environments_for_git_owner,
     )
 
     redirect_url = await service.complete_github_app_installation_callback(

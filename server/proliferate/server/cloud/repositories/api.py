@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.db.store import cloud_repo_environment_materializations as repo_mat_store
-from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
-from proliferate.db.store.cloud_repo_environment_materializations import (
-    CloudRepoEnvironmentMaterializationValue,
-)
-from proliferate.db.store.repositories import RepoConfigValue, RepoEnvironmentValue
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.repos.access import CloudRepoGitHubCredentialsDependency
 from proliferate.server.cloud.repos.models import (
@@ -30,66 +22,18 @@ from proliferate.server.cloud.repos.service import (
     list_cloud_repositories,
 )
 from proliferate.server.cloud.repositories.models import (
-    RepoConfigResponse,
     RepoConfigsListResponse,
     RepoEnvironmentResponse,
     SaveRepoEnvironmentRequest,
-    repo_environment_payload,
 )
-from proliferate.server.cloud.repositories.service import list_repositories, save_repo_environment
+from proliferate.server.cloud.repositories.service import (
+    list_repositories,
+    repo_config_response,
+    repo_environment_response,
+    save_repo_environment,
+)
 
 router = APIRouter()
-
-
-async def _repo_environment_materialization(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    environment: RepoEnvironmentValue,
-) -> CloudRepoEnvironmentMaterializationValue | None:
-    if environment.environment_kind != "cloud":
-        return None
-    sandbox = await cloud_sandboxes_store.load_personal_cloud_sandbox(db, user_id)
-    if sandbox is None:
-        return None
-    return await repo_mat_store.load_repo_environment_materialization(
-        db,
-        cloud_sandbox_id=sandbox.id,
-        repo_environment_id=environment.id,
-    )
-
-
-async def _repo_environment_response(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    environment: RepoEnvironmentValue,
-) -> RepoEnvironmentResponse:
-    materialization = await _repo_environment_materialization(
-        db,
-        user_id=user_id,
-        environment=environment,
-    )
-    return repo_environment_payload(environment, materialization=materialization)
-
-
-async def _repo_config_response(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    value: RepoConfigValue,
-) -> RepoConfigResponse:
-    environments = [
-        await _repo_environment_response(db, user_id=user_id, environment=environment)
-        for environment in value.environments
-    ]
-    return RepoConfigResponse(
-        id=value.id,
-        git_provider=value.git_provider,
-        git_owner=value.git_owner,
-        git_repo_name=value.git_repo_name,
-        environments=environments,
-    )
 
 
 @router.get("/repositories/catalog", response_model=CloudGitRepositoriesResponse)
@@ -125,7 +69,7 @@ async def list_repositories_endpoint(
     values = await list_repositories(db, user_id=user.id)
     return RepoConfigsListResponse(
         repositories=[
-            await _repo_config_response(db, user_id=user.id, value=item) for item in values
+            await repo_config_response(db, user_id=user.id, value=item) for item in values
         ]
     )
 
@@ -166,4 +110,4 @@ async def save_repo_environment_endpoint(
         git_repo_name=git_repo_name,
         body=body,
     )
-    return await _repo_environment_response(db, user_id=user.id, environment=value)
+    return await repo_environment_response(db, user_id=user.id, environment=value)

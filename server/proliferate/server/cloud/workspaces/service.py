@@ -11,7 +11,6 @@ import re
 from typing import Literal, Protocol
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandbox_store
@@ -281,16 +280,14 @@ async def restore_cloud_workspace_for_user(
             f"A cloud workspace already exists for branch '{workspace.git_branch}'.",
             status_code=409,
         )
-    try:
-        async with db.begin_nested():
-            workspace = await cloud_workspace_store.restore_cloud_workspace(db, workspace)
-    except IntegrityError as exc:
+    restored = await cloud_workspace_store.restore_cloud_workspace(db, workspace)
+    if restored is None:
         raise CloudApiError(
             "cloud_branch_already_exists",
             f"A cloud workspace already exists for branch '{workspace.git_branch}'.",
             status_code=409,
-        ) from exc
-    return await _workspace_payload(db, workspace, detail=True)
+        )
+    return await _workspace_payload(db, restored, detail=True)
 
 
 async def delete_cloud_workspace_for_user(
@@ -400,25 +397,22 @@ async def _create_workspace_row_with_branch_retry(
 ) -> CloudWorkspaceValue:
     current_branch_name = initial_branch_name
     for _attempt in range(5):
-        try:
-            async with db.begin_nested():
-                return await cloud_workspace_store.create_cloud_workspace(
-                    db,
-                    user_id=user_id,
-                    repo_environment_id=repo_environment_id,
-                    display_name=(
-                        current_branch_name if display_name_is_generated else display_name
-                    ),
-                    git_branch=current_branch_name,
-                    git_base_branch=git_base_branch,
-                )
-        except IntegrityError as exc:
-            if not generated_name:
-                raise CloudApiError(
-                    "cloud_branch_already_exists",
-                    f"A cloud workspace already exists for branch '{current_branch_name}'.",
-                    status_code=409,
-                ) from exc
+        workspace = await cloud_workspace_store.create_cloud_workspace(
+            db,
+            user_id=user_id,
+            repo_environment_id=repo_environment_id,
+            display_name=(current_branch_name if display_name_is_generated else display_name),
+            git_branch=current_branch_name,
+            git_base_branch=git_base_branch,
+        )
+        if workspace is not None:
+            return workspace
+        if not generated_name:
+            raise CloudApiError(
+                "cloud_branch_already_exists",
+                f"A cloud workspace already exists for branch '{current_branch_name}'.",
+                status_code=409,
+            )
 
         active_workspace_branches = (
             await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(

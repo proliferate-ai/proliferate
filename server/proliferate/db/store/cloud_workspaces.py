@@ -8,6 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import Select, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -120,7 +121,8 @@ async def create_cloud_workspace(
     git_branch: str,
     git_base_branch: str | None,
     anyharness_workspace_id: str | None = None,
-) -> CloudWorkspaceValue:
+) -> CloudWorkspaceValue | None:
+    """Create a workspace row; returns None when the active branch is taken."""
     now = utcnow()
     workspace = CloudWorkspace(
         owner_user_id=user_id,
@@ -132,8 +134,12 @@ async def create_cloud_workspace(
         created_at=now,
         updated_at=now,
     )
-    db.add(workspace)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(workspace)
+            await db.flush()
+    except IntegrityError:
+        return None
     return cloud_workspace_value(workspace)
 
 
@@ -176,11 +182,16 @@ async def archive_cloud_workspace(
 async def restore_cloud_workspace(
     db: AsyncSession,
     workspace: CloudWorkspaceValue,
-) -> CloudWorkspaceValue:
+) -> CloudWorkspaceValue | None:
+    """Clear archived_at; returns None when the active branch is taken."""
     row = await _load_workspace_row(db, workspace.id)
-    row.archived_at = None
-    row.updated_at = utcnow()
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            row.archived_at = None
+            row.updated_at = utcnow()
+            await db.flush()
+    except IntegrityError:
+        return None
     return cloud_workspace_value(row)
 
 

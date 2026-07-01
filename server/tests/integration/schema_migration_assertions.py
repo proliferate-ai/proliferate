@@ -187,8 +187,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
 
     github_app_installation_columns = await conn.run_sync(
         lambda sync_conn: {
-            column["name"]
-            for column in inspect(sync_conn).get_columns("github_app_installations")
+            column["name"] for column in inspect(sync_conn).get_columns("github_app_installations")
         }
     )
     assert {

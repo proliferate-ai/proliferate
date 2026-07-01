@@ -7,6 +7,10 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_repo_environment_materializations as repo_mat_store
+from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
+from proliferate.db.store.cloud_repo_environment_materializations import (
+    CloudRepoEnvironmentMaterializationValue,
+)
 from proliferate.db.store.repositories import (
     RepoConfigValue,
     RepoEnvironmentValue,
@@ -20,7 +24,12 @@ from proliferate.server.cloud.github_app.repo_authority import require_github_cl
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
-from proliferate.server.cloud.repositories.models import SaveRepoEnvironmentRequest
+from proliferate.server.cloud.repositories.models import (
+    RepoConfigResponse,
+    RepoEnvironmentResponse,
+    SaveRepoEnvironmentRequest,
+    repo_environment_payload,
+)
 
 
 async def list_repositories(
@@ -29,6 +38,57 @@ async def list_repositories(
     user_id: UUID,
 ) -> tuple[RepoConfigValue, ...]:
     return await list_repo_configs_for_user(db, user_id=user_id)
+
+
+async def _repo_environment_materialization(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    environment: RepoEnvironmentValue,
+) -> CloudRepoEnvironmentMaterializationValue | None:
+    if environment.environment_kind != "cloud":
+        return None
+    sandbox = await cloud_sandboxes_store.load_personal_cloud_sandbox(db, user_id)
+    if sandbox is None:
+        return None
+    return await repo_mat_store.load_repo_environment_materialization(
+        db,
+        cloud_sandbox_id=sandbox.id,
+        repo_environment_id=environment.id,
+    )
+
+
+async def repo_environment_response(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    environment: RepoEnvironmentValue,
+) -> RepoEnvironmentResponse:
+    materialization = await _repo_environment_materialization(
+        db,
+        user_id=user_id,
+        environment=environment,
+    )
+    return repo_environment_payload(environment, materialization=materialization)
+
+
+async def repo_config_response(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    value: RepoConfigValue,
+) -> RepoConfigResponse:
+    environments = [
+        await repo_environment_response(db, user_id=user_id, environment=environment)
+        for environment in value.environments
+    ]
+    return RepoConfigResponse(
+        id=value.id,
+        git_provider=value.git_provider,
+        git_owner=value.git_owner,
+        git_repo_name=value.git_repo_name,
+        environments=environments,
+    )
 
 
 async def save_local_environment(

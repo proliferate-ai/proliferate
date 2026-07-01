@@ -390,7 +390,7 @@ async def complete_github_app_installation_callback(
             "Could not verify GitHub App installation.",
             status_code=502,
         ) from exc
-    installation_value = await github_app_store.upsert_github_app_installation(
+    await github_app_store.upsert_github_app_installation(
         db,
         installation=installation,
         organization_id=organization_id,
@@ -398,7 +398,7 @@ async def complete_github_app_installation_callback(
     )
     repo_environments = await repositories_store.list_cloud_repo_environments_for_git_owner(
         db,
-        git_owner=installation_value.account_login,
+        git_owner=installation.account_login,
     )
     for repo_environment in repo_environments:
         await materialization_service.schedule_materialize_repo_environment(
