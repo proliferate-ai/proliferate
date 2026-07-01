@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
@@ -18,6 +18,17 @@ import {
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
+export const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
+  "proliferate.home.modelProbeCardDismissed";
+
+function readHomeModelProbeDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 // Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
 export function useHomeScreen() {
   const navigate = useNavigate();
@@ -25,7 +36,19 @@ export function useHomeScreen() {
   const {
     readyAgents,
     isLoading: agentsLoading,
+    isReconciling,
   } = useAgentCatalog();
+  const [modelProbeDismissed, setModelProbeDismissed] = useState<boolean>(() =>
+    readHomeModelProbeDismissed()
+  );
+  const dismissModelProbeCard = useCallback(() => {
+    setModelProbeDismissed(true);
+    try {
+      window.localStorage.setItem(HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY, "1");
+    } catch {
+      // Persistence is best-effort; in-memory dismissal still applies.
+    }
+  }, []);
   const { cloudActive } = useCloudAvailabilityState();
   const {
     data: repoConfigs,
@@ -108,9 +131,24 @@ export function useHomeScreen() {
     }
   }
 
+  const readyHarnessKinds = useMemo(
+    () => readyAgents.map((agent) => agent.kind),
+    [readyAgents],
+  );
+
   return {
     onboardingCards,
     isAddingRepo,
     handleHomeAction,
+    // Model-probe card inputs (UX spec §10). The model count itself lives with
+    // the home model-selection state, so the screen combines these with its
+    // model groups via resolveHomeModelProbeCardState.
+    modelProbeInputs: {
+      dismissed: modelProbeDismissed,
+      agentsLoading,
+      isReconciling,
+      harnessKinds: readyHarnessKinds,
+    },
+    dismissModelProbeCard,
   };
 }

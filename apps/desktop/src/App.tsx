@@ -6,6 +6,8 @@ import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
 import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
+import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
+import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
@@ -316,7 +318,12 @@ function AppRuntime() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </InstrumentedRoutes>
           <RepoSetupModalHost />
+          {/* Legacy toast store container (non-update toasts) — kept until all
+              toast call sites migrate to Sonner. */}
           <ToastContainer />
+          {/* Kit Sonner toaster + update lifecycle toasts (UX spec §12). */}
+          <Toaster />
+          <UpdateToastPresenter />
           <TurnEndCelebration />
         </ShortcutRevealProvider>
       </AppCommandActionsProvider>

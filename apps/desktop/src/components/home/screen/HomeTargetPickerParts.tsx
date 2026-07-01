@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { twMerge } from "tailwind-merge";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -6,6 +7,7 @@ import {
   POPOVER_SURFACE_CLASS,
 } from "@proliferate/ui/primitives/PopoverButton";
 import {
+  ChevronDown,
   CloudIcon,
   Monitor,
   Search,
@@ -90,6 +92,52 @@ export function TargetPickerMenuItem({
     />
   );
 }
+
+interface HomeTargetRowItemProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+  icon?: ReactNode;
+  /** Category label ("Project", "Env") — 12px weight 500 foreground. */
+  category?: string | null;
+  /** Value ("proliferate", "New worktree") — 12px weight 400 muted. */
+  value: string;
+  disclosure?: boolean;
+}
+
+/**
+ * Codex home footer item (UX spec §1.3, anchor `_externalFooterItem`):
+ * inline "category value ▾" trigger — 12px text, category weight 500
+ * `--foreground`, value weight 400 truncated, 12px `--faint` chevron,
+ * pill hover fill.
+ */
+export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItemProps>(
+  function HomeTargetRowItem(
+    { icon, category, value, disclosure = true, className, type = "button", ...props },
+    ref,
+  ) {
+    return (
+      <button
+        ref={ref}
+        type={type}
+        className={twMerge(
+          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-xs leading-[18px] text-muted-foreground outline-none transition-colors enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-accent data-[state=open]:text-foreground",
+          className,
+        )}
+        {...props}
+      >
+        {icon ? <span className="inline-flex shrink-0 items-center">{icon}</span> : null}
+        <span className="inline-flex min-w-0 items-baseline gap-1 text-left">
+          {category ? (
+            <span className="shrink-0 font-medium text-foreground">{category}</span>
+          ) : null}
+          <span className="min-w-0 max-w-60 truncate font-normal">{value}</span>
+        </span>
+        {disclosure ? (
+          <ChevronDown className="size-3 shrink-0 text-faint" />
+        ) : null}
+      </button>
+    );
+  },
+);
 
 export function ProjectSearchField({
   value,

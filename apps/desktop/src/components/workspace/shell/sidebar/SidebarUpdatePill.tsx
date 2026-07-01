@@ -38,9 +38,10 @@ export function SidebarUpdatePill({
     }
   }
 
+  // UX spec §12: 12px, --special text, pill on --accent.
   const toneClass = isDownloading
-    ? "cursor-default bg-muted text-muted-foreground"
-    : "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80";
+    ? "cursor-default bg-accent text-muted-foreground"
+    : "bg-accent text-special hover:bg-foreground/10";
 
   return (
     <Button
@@ -50,7 +51,7 @@ export function SidebarUpdatePill({
       title={label}
       onClick={handleClick}
       disabled={isDownloading}
-      className={`flex h-6 max-w-44 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium leading-none transition-colors disabled:opacity-100 ${toneClass}`}
+      className={`flex h-6 max-w-44 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium leading-none transition-colors disabled:opacity-100 ${toneClass}`}
     >
       {isDownloading && <Spinner className="size-3 shrink-0" />}
       <span className="truncate">{label}</span>
