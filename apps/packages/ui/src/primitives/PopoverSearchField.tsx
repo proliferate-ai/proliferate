@@ -22,14 +22,14 @@ export function PopoverSearchField({
   autoFocus,
 }: PopoverSearchFieldProps) {
   return (
-    <div className="flex items-center gap-2 border-b border-border/60 px-2 py-1.5">
+    <div className="flex items-center gap-2 px-2.5 py-[7px]">
       <Search className="size-4 shrink-0 text-muted-foreground/75" />
       <Input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[13px] leading-[18px] shadow-none focus:ring-0"
       />
     </div>
   );
