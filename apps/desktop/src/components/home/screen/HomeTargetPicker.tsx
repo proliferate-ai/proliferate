@@ -4,9 +4,10 @@ import {
   PickerEmptyRow,
   PickerPopoverContent,
 } from "@proliferate/ui/primitives/PickerPopoverContent";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
+  ProjectNotebook,
   GitBranchIcon,
 } from "@proliferate/ui/icons";
 import { matchesPickerSearch } from "@proliferate/ui/utils/search";
@@ -116,8 +117,9 @@ export function HomeTargetPicker({
       <HomeProjectMenu
         trigger={(
           <HomeTargetRowItem
-            category="Project"
+            icon={<ProjectNotebook className="size-4" />}
             value={homeTargetProjectLabel({ destination, selectedRepository })}
+            disclosure={false}
             aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
           />
         )}
@@ -206,14 +208,13 @@ export function HomeTargetPicker({
         <PopoverButton
           trigger={(
             <HomeTargetRowItem
-              icon={<GitBranchIcon className="size-3" />}
-              category="Starting from"
+              icon={<GitBranchIcon className="size-3.5" />}
               value={selectedBranchName ?? "base branch"}
               aria-label={`Branch: ${selectedBranchName ?? "base branch"}`}
             />
           )}
           side="top"
-          className="w-[22rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
+          className={`w-72 min-w-[175px] ${POPOVER_SURFACE_CLASS}`}
         >
           {(close) => (
             <PickerPopoverContent>

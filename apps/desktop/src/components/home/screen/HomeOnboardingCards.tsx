@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight, GitHub, Settings, SlidersHorizontal, Spinner, X } from "@proliferate/ui/icons";
+import { GitHub, Settings, SlidersHorizontal, Spinner, X } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { HOME_SCREEN_LABELS } from "@/copy/home/home-screen-copy";
@@ -22,11 +22,12 @@ function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
 }
 
 /**
- * Flat onboarding card row (UX spec §10): 10px radius, 1px border, inline
- * surface (no elevation), icon 16px + title 13/500 + description 12px muted,
- * chevron CTA right, ghost dismiss that fades in on hover.
+ * Onboarding card (UX spec §10, owner rev 2026-07-01: cards, not rows):
+ * side-by-side tile — card surface (bg-card, 12px radius, 1px border),
+ * icon row on top with trailing accessories + hover dismiss, then
+ * title 13/500 and description 12px muted below.
  */
-function OnboardingCardRow({
+function OnboardingCard({
   icon,
   title,
   description,
@@ -46,7 +47,7 @@ function OnboardingCardRow({
   selectLabel: string;
 }) {
   return (
-    <div className="group relative flex w-full min-w-0 items-center gap-3 rounded-[10px] border border-border bg-background px-3 py-2.5 text-left transition-colors hover:bg-accent">
+    <div className="group relative flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-accent">
       {onSelect ? (
         <Button
           type="button"
@@ -55,43 +56,42 @@ function OnboardingCardRow({
           loading={loading}
           aria-label={selectLabel}
           onClick={onSelect}
-          className="absolute inset-0 z-0 rounded-[10px]"
+          className="absolute inset-0 z-0 rounded-xl"
         />
       ) : null}
-      <span className="pointer-events-none z-10 flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-        {icon}
+      <span className="pointer-events-none z-10 flex items-center gap-1.5">
+        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+          {icon}
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {trailing}
+        </span>
+        {onDismiss ? (
+          <Button
+            type="button"
+            variant="unstyled"
+            size="unstyled"
+            aria-label={`Dismiss: ${selectLabel}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDismiss();
+            }}
+            className="pointer-events-auto z-10 flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <X className="size-3.5" />
+          </Button>
+        ) : null}
       </span>
-      <span className="pointer-events-none z-10 flex min-w-0 flex-1 flex-col">
+      <span className="pointer-events-none z-10 flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-[13px] font-medium leading-[18px] text-foreground">
           {title}
         </span>
         {description ? (
-          <span className="truncate text-xs leading-[18px] text-muted-foreground">
+          <span className="line-clamp-2 text-[12px] leading-[16px] text-muted-foreground">
             {description}
           </span>
         ) : null}
       </span>
-      <span className="pointer-events-none z-10 flex shrink-0 items-center gap-1.5">
-        {trailing}
-        {onSelect ? (
-          <ChevronRight className="size-3.5 text-faint" />
-        ) : null}
-      </span>
-      {onDismiss ? (
-        <Button
-          type="button"
-          variant="unstyled"
-          size="unstyled"
-          aria-label={`Dismiss: ${selectLabel}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDismiss();
-          }}
-          className="z-10 flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-        >
-          <X className="size-3.5" />
-        </Button>
-      ) : null}
     </div>
   );
 }
@@ -111,7 +111,7 @@ function ModelProbeCard({
 
   if (state.kind === "probing") {
     return (
-      <OnboardingCardRow
+      <OnboardingCard
         icon={
           state.harnessKinds[0]
             ? <ProviderIcon kind={state.harnessKinds[0]} className="size-4" />
@@ -134,7 +134,7 @@ function ModelProbeCard({
       ? "1 model available"
       : `${state.modelCount} models available`;
     return (
-      <OnboardingCardRow
+      <OnboardingCard
         icon={
           state.harnessKinds[0]
             ? <ProviderIcon kind={state.harnessKinds[0]} className="size-4" />
@@ -159,7 +159,7 @@ function ModelProbeCard({
   }
 
   return (
-    <OnboardingCardRow
+    <OnboardingCard
       icon={<Settings className="size-4" />}
       title={HOME_SCREEN_LABELS.modelProbeNoneTitle}
       description={HOME_SCREEN_LABELS.modelProbeNoneDescription}
@@ -194,9 +194,9 @@ export function HomeOnboardingCards({
   const visibleCards = cards.slice(0, hasProbeCard ? 2 : 3);
 
   return (
-    <div className="mt-4 flex w-full flex-col gap-2 empty:hidden">
+    <div className="mt-4 grid w-full grid-cols-1 gap-2 empty:hidden sm:grid-cols-3">
       {visibleCards.map((card) => (
-        <OnboardingCardRow
+        <OnboardingCard
           key={card.id}
           icon={resolveOnboardingIcon(card.icon)}
           title={card.title}

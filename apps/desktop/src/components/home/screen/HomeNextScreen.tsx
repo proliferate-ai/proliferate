@@ -1,15 +1,15 @@
 import { useState } from "react";
 import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS,
+  CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX,
   HOME_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
-import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
-import { HomeModelPicker } from "@/components/home/screen/HomeModelPicker";
 import { HomeOnboardingCards } from "@/components/home/screen/HomeOnboardingCards";
 import { HomeProjectMenu } from "@/components/home/screen/HomeProjectMenu";
 import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
-import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
+import { ComposerModelConfigSelector } from "@/components/workspace/chat/input/ComposerModelConfigSelector";
+import { SessionModeControl } from "@/components/workspace/chat/input/SessionModeControl";
+import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
@@ -20,6 +20,11 @@ import { useHomeNextComposerState } from "@/hooks/home/ui/use-home-next-composer
 import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-target-selection-state";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
+import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
+import {
+  buildHomeModeControlDescriptor,
+  buildHomeModelSelectorProps,
+} from "@/lib/domain/home/home-composer-controls";
 import { type HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
 import { resolveHomeModelProbeCardState } from "@/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "@/lib/domain/home/home-target-picker";
@@ -75,7 +80,29 @@ export function HomeNextScreen() {
     launchTarget: homeNext.launchTarget,
   });
   const homeComposerInputMaxHeight =
-    `calc(${CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS} * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
+    `${CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX * HOME_CHAT_COMPOSER_INPUT.maxRows}px`;
+
+  // Unified composer (owner rev 2026-07-01): home renders the SAME control-row
+  // components as the chat input (SessionModeControl + ComposerModelConfigSelector),
+  // fed by launch-time adapters instead of live-session state.
+  const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
+  const launchControlGroups = buildComposerSessionControlGroups(homeLaunchControls.controls);
+  const homeModeControl = launchControlGroups.modeControl
+    ?? buildHomeModeControlDescriptor({
+      modes: homeNext.modeOptions,
+      selectedModeId: homeNext.effectiveMode?.value ?? null,
+      onSelect: setModeOverrideId,
+    });
+  const homeModelSelectorProps = buildHomeModelSelectorProps({
+    groups: homeNext.modelGroups,
+    selectedModel: homeNext.selectedModel,
+    availabilityState: homeNext.modelAvailabilityState,
+    onSelect: (selection) => {
+      setModelSelectionOverride(selection);
+      setModeOverrideId(null);
+      setLaunchControlOverrides({});
+    },
+  });
 
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
@@ -157,6 +184,7 @@ export function HomeNextScreen() {
             </h1>
           </div>
 
+          <div className="relative z-10">
           <ChatComposerSurface>
             <form
               className="relative flex flex-col"
@@ -192,29 +220,22 @@ export function HomeNextScreen() {
                 />
               </div>
 
-              <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-[5px]">
-                  <HomeModelPicker
-                    groups={homeNext.modelGroups}
-                    selectedModel={homeNext.selectedModel}
-                    onSelect={(selection) => {
-                      setModelSelectionOverride(selection);
-                      setModeOverrideId(null);
-                      setLaunchControlOverrides({});
-                    }}
+              <ChatComposerControlRowFrame
+                leading={homeModeControl ? (
+                  <SessionModeControl
+                    agentKind={homeAgentKind}
+                    control={homeModeControl}
+                    triggerStyle="value"
                   />
-                  <HomeModePicker
-                    modes={homeNext.modeOptions}
-                    selectedMode={homeNext.effectiveMode}
-                    onSelect={setModeOverrideId}
+                ) : null}
+                trailing={(
+                  <ComposerModelConfigSelector
+                    modelSelectorProps={homeModelSelectorProps}
+                    agentKind={homeAgentKind}
+                    controls={launchControlGroups.modelConfigControls}
                   />
-                  <SessionConfigControls
-                    agentKind={homeNext.effectiveModelSelection?.kind ?? null}
-                    controls={homeLaunchControls.controls}
-                  />
-                </div>
-
-                <div className="flex items-center">
+                )}
+                action={(
                   <ChatComposerActions
                     isRunning={false}
                     isEmpty={composer.draft.trim().length === 0}
@@ -222,14 +243,16 @@ export function HomeNextScreen() {
                     onSubmit={() => { void composer.submit(); }}
                     onCancel={composer.cancel}
                   />
-                </div>
-              </div>
+                )}
+              />
             </form>
           </ChatComposerSurface>
+          </div>
 
-          {/* Target row (spec §1.3): codex footer strip of inline
-              "category value ▾" triggers, 12px text. */}
-          <div className="mt-1.5 flex min-w-0 flex-wrap items-center justify-start gap-1 px-2">
+          {/* Target row (spec §1.3): codex home footer — a tray tucked under
+              the composer (`-mt` behind it, rounded-b, sidebar bg) so the
+              selectors read as attached to the composer, not floating. */}
+          <div className="relative z-0 -mx-px -mt-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-b-2xl bg-sidebar px-2 pb-2 pt-[25px]">
             <HomeTargetPicker
               destination={destination}
               repoLaunchKind={repoLaunchKind}
@@ -286,7 +309,7 @@ export function HomeNextScreen() {
           ) : null}
 
           {modelAvailabilityNotice ? (
-            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
+            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
               <span>{modelAvailabilityNotice.text}</span>
               {modelAvailabilityNotice.actionLabel ? (
                 <Button
@@ -302,7 +325,7 @@ export function HomeNextScreen() {
           ) : null}
 
           {composer.submitDisabledReason ? (
-            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
+            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
               <span>{composer.submitDisabledReason}</span>
               {repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
                 <Button
