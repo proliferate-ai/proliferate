@@ -64,7 +64,9 @@ export function TranscriptPendingPromptRow({
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
-      <div className="flex flex-col gap-2">
+      {/* Keep in sync with TranscriptTurnRow's turn column gap so the
+          pending-prompt → turn handoff does not shift content. */}
+      <div className="flex flex-col gap-3.5">
         <PendingPromptBody
           activeSessionId={activeSessionId}
           prompt={prompt}

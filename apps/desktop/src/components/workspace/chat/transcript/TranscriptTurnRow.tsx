@@ -195,7 +195,9 @@ export function TranscriptTurnRow({
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
-      <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+      {/* Codex parity: uniform block rhythm from --conversation-tool-assistant-gap
+          (16px at codex's 14px chat font) → 14px at our 13px chat scale. */}
+      <div className={`flex flex-col gap-3.5 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
         <TurnItemSequence
           turn={turn}
           transcript={transcript}
