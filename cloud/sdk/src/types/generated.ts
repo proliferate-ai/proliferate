@@ -268,9 +268,13 @@ export type CloudGitRepositorySummary = Schema<"CloudGitRepositorySummary">;
 export type CloudGitRepositoriesResponse =
   Schema<"CloudGitRepositoriesResponse">;
 export type CloudRepoBranchesResponse = Schema<"RepoBranchesResponse">;
+export type RepoEnvironmentMaterializationStatus =
+  Schema<"CloudMaterializationStatus">;
+export type RepoEnvironmentMaterializationResponse =
+  Schema<"RepoEnvironmentMaterializationResponse">;
+export type RepoEnvironmentResponse = Schema<"RepoEnvironmentResponse">;
 export type RepoConfigResponse = Schema<"RepoConfigResponse">;
 export type RepoConfigsListResponse = Schema<"RepoConfigsListResponse">;
-export type RepoEnvironmentResponse = Schema<"RepoEnvironmentResponse">;
 export type SaveRepoEnvironmentRequest = Schema<"SaveRepoEnvironmentRequest">;
 export type AutomationOwnerScope = "personal" | "organization";
 export type AutomationTargetMode = "local" | "personal_cloud" | "shared_cloud";

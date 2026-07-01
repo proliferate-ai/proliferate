@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
+import type {
+  RepoEnvironmentMaterializationStatus,
+  RepoEnvironmentResponse,
+} from "@proliferate/cloud-sdk";
 import {
   useCloudRepoBranches,
   useRepositories,
@@ -44,11 +47,11 @@ export function CloudEnvironmentDetail({
   const saveEnvironment = useSaveRepoEnvironment();
   const draft = useCloudEnvironmentCoreDraft(cloudEnvironment, repoId);
   const savedConfigured = cloudEnvironment !== null;
-  const statusLabel = savedConfigured
-    ? draft.dirty
-      ? "Unsaved changes"
-      : "Saved"
-    : "Ready to enable";
+  const status = cloudEnvironmentStatus({
+    configured: savedConfigured,
+    dirty: draft.dirty,
+    materializationStatus: cloudEnvironment?.materialization?.status ?? null,
+  });
 
   async function handleSave() {
     const response = await saveEnvironment.mutateAsync({
@@ -68,8 +71,8 @@ export function CloudEnvironmentDetail({
     <CloudEnvironmentEditor
       title={repoId}
       description="Personal Cloud environment. This does not create or require a local checkout."
-      statusLabel={statusLabel}
-      statusTone={savedConfigured ? (draft.dirty ? "warning" : "success") : "warning"}
+      statusLabel={status.label}
+      statusTone={status.tone}
       defaultBranch={draft.defaultBranch}
       githubDefaultBranch={branches.data?.defaultBranch ?? null}
       branches={branches.data?.branches ?? []}
@@ -106,6 +109,35 @@ export function CloudEnvironmentDetail({
       onRevert={draft.revert}
     />
   );
+}
+
+function cloudEnvironmentStatus({
+  configured,
+  dirty,
+  materializationStatus,
+}: {
+  configured: boolean;
+  dirty: boolean;
+  materializationStatus: RepoEnvironmentMaterializationStatus | null;
+}): { label: string; tone: "neutral" | "success" | "info" | "warning" | "destructive" } {
+  if (!configured) {
+    return { label: "Ready to enable", tone: "warning" };
+  }
+  if (dirty) {
+    return { label: "Unsaved changes", tone: "warning" };
+  }
+  switch (materializationStatus) {
+    case "ready":
+      return { label: "Materialized", tone: "success" };
+    case "running":
+      return { label: "Materializing", tone: "info" };
+    case "pending":
+      return { label: "Pending materialization", tone: "warning" };
+    case "error":
+      return { label: "Materialization failed", tone: "destructive" };
+    default:
+      return { label: "Saved", tone: "success" };
+  }
 }
 
 function useCloudEnvironmentCoreDraft(

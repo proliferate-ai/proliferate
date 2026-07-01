@@ -431,8 +431,8 @@ serve:
 	$(CARGO) run --bin anyharness -- serve
 
 dev-automation-worker:
-	@$(SERVER_ENV_SOURCE) \
-	cd server && uv run python -m proliferate.server.automations.worker --role scheduler
+	@echo "Automation scheduler is parked while automations are retargeted to repo environments."
+	@echo "make run PROFILE=<name> does not start automation workers in this stack."
 
 dev-mobile-auth:
 	@node scripts/dev-mobile-auth.mjs

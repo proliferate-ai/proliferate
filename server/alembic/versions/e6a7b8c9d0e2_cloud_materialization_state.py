@@ -20,7 +20,12 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "cloud_repo_environment_materialization",
-        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column(
+            "id",
+            sa.Uuid(),
+            server_default=sa.text("gen_random_uuid()"),
+            nullable=False,
+        ),
         sa.Column("cloud_sandbox_id", sa.Uuid(), nullable=False),
         sa.Column("repo_environment_id", sa.Uuid(), nullable=False),
         sa.Column("status", sa.String(length=7), nullable=False),
@@ -32,8 +37,18 @@ def upgrade() -> None:
         sa.Column("applied_manifest_json", sa.Text(), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("materialized_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint(
             "status IN ('pending', 'running', 'ready', 'error')",
             name="ck_cloud_repo_environment_materialization_status",

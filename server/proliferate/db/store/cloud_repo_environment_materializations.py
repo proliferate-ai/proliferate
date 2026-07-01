@@ -115,15 +115,57 @@ async def begin_repo_environment_materialization(
     return _materialization_value(row)
 
 
+async def queue_repo_environment_materialization(
+    db: AsyncSession,
+    *,
+    cloud_sandbox_id: UUID,
+    repo_environment_id: UUID,
+) -> CloudRepoEnvironmentMaterializationValue:
+    now = utcnow()
+    row = (
+        await db.execute(
+            pg_insert(CloudRepoEnvironmentMaterialization)
+            .values(
+                cloud_sandbox_id=cloud_sandbox_id,
+                repo_environment_id=repo_environment_id,
+                status="pending",
+                applied_repo_environment_updated_at=None,
+                applied_manifest_json=None,
+                last_error=None,
+                materialized_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    CloudRepoEnvironmentMaterialization.cloud_sandbox_id,
+                    CloudRepoEnvironmentMaterialization.repo_environment_id,
+                ],
+                set_={
+                    "status": "pending",
+                    "last_error": None,
+                    "materialized_at": None,
+                    "updated_at": now,
+                },
+            )
+            .returning(CloudRepoEnvironmentMaterialization)
+        )
+    ).scalar_one()
+    return _materialization_value(row)
+
+
 async def mark_repo_environment_materialization_ready(
     db: AsyncSession,
     materialization_id: UUID,
     *,
     applied_repo_environment_updated_at: datetime,
     applied_manifest: dict[str, object],
+    expected_updated_at: datetime | None = None,
 ) -> CloudRepoEnvironmentMaterializationValue | None:
     row = await db.get(CloudRepoEnvironmentMaterialization, materialization_id)
     if row is None:
+        return None
+    if expected_updated_at is not None and row.updated_at != expected_updated_at:
         return None
     now = utcnow()
     row.status = "ready"
@@ -141,9 +183,12 @@ async def mark_repo_environment_materialization_error(
     materialization_id: UUID,
     *,
     last_error: str,
+    expected_updated_at: datetime | None = None,
 ) -> CloudRepoEnvironmentMaterializationValue | None:
     row = await db.get(CloudRepoEnvironmentMaterialization, materialization_id)
     if row is None:
+        return None
+    if expected_updated_at is not None and row.updated_at != expected_updated_at:
         return None
     row.status = "error"
     row.last_error = last_error

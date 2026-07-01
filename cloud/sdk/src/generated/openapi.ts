@@ -243,6 +243,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Setup Callback Endpoint */
+        get: operations["github_app_setup_callback_endpoint_integrations_github_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/github/link/start": {
         parameters: {
             query?: never;
@@ -560,6 +577,40 @@ export interface paths {
         put?: never;
         /** Record Client Daily Activity Endpoint */
         post: operations["record_client_daily_activity_endpoint_v1_analytics_client_daily_activity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Repositories Endpoint */
+        get: operations["list_cloud_repositories_endpoint_v1_cloud_repos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/repos/{git_owner}/{git_repo_name}/branches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Repo Branches Endpoint */
+        get: operations["get_cloud_repo_branches_endpoint_v1_cloud_repos__git_owner___git_repo_name__branches_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -953,11 +1004,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Managed Sandbox Endpoint */
+        /** Get Cloud Sandbox Endpoint */
         get: operations["get_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_get"];
         put?: never;
         post?: never;
-        /** Destroy Managed Sandbox Endpoint */
+        /** Destroy Cloud Sandbox Endpoint */
         delete: operations["destroy_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_delete"];
         options?: never;
         head?: never;
@@ -973,7 +1024,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ensure Managed Sandbox Endpoint */
+        /** Ensure Cloud Sandbox Endpoint */
         post: operations["ensure_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_ensure_post"];
         delete?: never;
         options?: never;
@@ -990,7 +1041,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Wake Managed Sandbox Endpoint */
+        /** Wake Cloud Sandbox Endpoint */
         post: operations["wake_cloud_sandbox_endpoint_v1_cloud_cloud_sandbox_wake_post"];
         delete?: never;
         options?: never;
@@ -1007,7 +1058,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ensure Managed Sandbox Repo Runtime Connection Endpoint */
+        /** Ensure Cloud Sandbox Repo Runtime Connection Endpoint */
         post: operations["ensure_cloud_sandbox_repo_runtime_connection_endpoint_v1_cloud_cloud_sandbox_repos__git_owner___git_repo_name__runtime_connection_post"];
         delete?: never;
         options?: never;
@@ -1024,7 +1075,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ensure Managed Sandbox Workspace Runtime Connection Endpoint */
+        /** Ensure Cloud Sandbox Workspace Runtime Connection Endpoint */
         post: operations["ensure_cloud_sandbox_workspace_runtime_connection_endpoint_v1_cloud_cloud_sandbox_workspaces__workspace_id__runtime_connection_post"];
         delete?: never;
         options?: never;
@@ -1682,280 +1733,6 @@ export interface paths {
         put?: never;
         /** Disable Organization Sso Connection Endpoint */
         post: operations["disable_organization_sso_connection_endpoint_v1_organizations__organization_id__sso_connections__connection_id__disable_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Automations Endpoint */
-        get: operations["list_automations_endpoint_v1_automations_get"];
-        put?: never;
-        /** Create Automation Endpoint */
-        post: operations["create_automation_endpoint_v1_automations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/claims": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Claim Local Runs Endpoint */
-        post: operations["claim_local_runs_endpoint_v1_automations_executor_local_claims_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/heartbeat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Heartbeat Local Run Endpoint */
-        post: operations["heartbeat_local_run_endpoint_v1_automations_executor_local_runs__run_id__heartbeat_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/creating-workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Creating Workspace Endpoint */
-        post: operations["mark_local_run_creating_workspace_endpoint_v1_automations_executor_local_runs__run_id__creating_workspace_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/attach-workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Attach Local Run Workspace Endpoint */
-        post: operations["attach_local_run_workspace_endpoint_v1_automations_executor_local_runs__run_id__attach_workspace_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/provisioning-workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Provisioning Workspace Endpoint */
-        post: operations["mark_local_run_provisioning_workspace_endpoint_v1_automations_executor_local_runs__run_id__provisioning_workspace_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/creating-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Creating Session Endpoint */
-        post: operations["mark_local_run_creating_session_endpoint_v1_automations_executor_local_runs__run_id__creating_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/attach-session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Attach Local Run Session Endpoint */
-        post: operations["attach_local_run_session_endpoint_v1_automations_executor_local_runs__run_id__attach_session_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/dispatching": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Dispatching Endpoint */
-        post: operations["mark_local_run_dispatching_endpoint_v1_automations_executor_local_runs__run_id__dispatching_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/dispatched": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Dispatched Endpoint */
-        post: operations["mark_local_run_dispatched_endpoint_v1_automations_executor_local_runs__run_id__dispatched_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/executor/local/runs/{run_id}/failed": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark Local Run Failed Endpoint */
-        post: operations["mark_local_run_failed_endpoint_v1_automations_executor_local_runs__run_id__failed_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Automation Endpoint */
-        get: operations["get_automation_endpoint_v1_automations__automation_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Automation Endpoint */
-        patch: operations["update_automation_endpoint_v1_automations__automation_id__patch"];
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Pause Automation Endpoint */
-        post: operations["pause_automation_endpoint_v1_automations__automation_id__pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Resume Automation Endpoint */
-        post: operations["resume_automation_endpoint_v1_automations__automation_id__resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/run-now": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run Automation Now Endpoint */
-        post: operations["run_automation_now_endpoint_v1_automations__automation_id__run_now_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/automations/{automation_id}/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Automation Runs Endpoint */
-        get: operations["list_automation_runs_endpoint_v1_automations__automation_id__runs_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2691,157 +2468,6 @@ export interface components {
             /** Prompt */
             prompt?: "select_account" | null;
         };
-        /** AutomationListResponse */
-        AutomationListResponse: {
-            /** Automations */
-            automations: components["schemas"]["AutomationResponse"][];
-        };
-        /** AutomationResponse */
-        AutomationResponse: {
-            /** Id */
-            id: string;
-            /**
-             * Ownerscope
-             * @enum {string}
-             */
-            ownerScope: "personal" | "organization";
-            /** Owneruserid */
-            ownerUserId: string | null;
-            /** Organizationid */
-            organizationId: string | null;
-            /** Createdbyuserid */
-            createdByUserId: string;
-            /** Gitowner */
-            gitOwner: string;
-            /** Gitreponame */
-            gitRepoName: string;
-            /** Title */
-            title: string;
-            /** Prompt */
-            prompt: string;
-            schedule: components["schemas"]["AutomationScheduleResponse"];
-            /**
-             * Targetmode
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /** Cloudagentrunconfigid */
-            cloudAgentRunConfigId: string;
-            /** Enabled */
-            enabled: boolean;
-            /** Pausedat */
-            pausedAt: string | null;
-            /** Lastscheduledat */
-            lastScheduledAt: string | null;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** AutomationRunListResponse */
-        AutomationRunListResponse: {
-            /** Runs */
-            runs: components["schemas"]["AutomationRunResponse"][];
-        };
-        /** AutomationRunResponse */
-        AutomationRunResponse: {
-            /** Id */
-            id: string;
-            /** Automationid */
-            automationId: string;
-            /**
-             * Ownerscope
-             * @enum {string}
-             */
-            ownerScope: "personal" | "organization";
-            /** Owneruserid */
-            ownerUserId: string | null;
-            /** Organizationid */
-            organizationId: string | null;
-            /** Createdbyuserid */
-            createdByUserId: string;
-            /**
-             * Triggerkind
-             * @enum {string}
-             */
-            triggerKind: "scheduled" | "manual";
-            /** Scheduledfor */
-            scheduledFor: string | null;
-            /**
-             * Targetmode
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
-            /** Titlesnapshot */
-            titleSnapshot: string;
-            /** Promptsnapshot */
-            promptSnapshot: string;
-            /** Gitprovidersnapshot */
-            gitProviderSnapshot: string;
-            /** Gitownersnapshot */
-            gitOwnerSnapshot: string;
-            /** Gitreponamesnapshot */
-            gitRepoNameSnapshot: string;
-            /** Repoenvironmentidsnapshot */
-            repoEnvironmentIdSnapshot: string;
-            /** Agentrunconfigsnapshot */
-            agentRunConfigSnapshot: {
-                [key: string]: unknown;
-            } | null;
-            /** Cascadeattempt */
-            cascadeAttempt: number;
-            /** Lastcascadecommandid */
-            lastCascadeCommandId: string | null;
-            /** Lastcascadereason */
-            lastCascadeReason: string | null;
-            /** Claimexpiresat */
-            claimExpiresAt: string | null;
-            /** Dispatchstartedat */
-            dispatchStartedAt: string | null;
-            /** Dispatchedat */
-            dispatchedAt: string | null;
-            /** Failedat */
-            failedAt: string | null;
-            /** Cloudworkspaceid */
-            cloudWorkspaceId: string | null;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string | null;
-            /** Anyharnesssessionid */
-            anyharnessSessionId: string | null;
-            /** Cancelledat */
-            cancelledAt: string | null;
-            /** Lasterrorcode */
-            lastErrorCode: string | null;
-            /** Lasterrormessage */
-            lastErrorMessage: string | null;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-        };
-        /** AutomationScheduleRequest */
-        AutomationScheduleRequest: {
-            /** Rrule */
-            rrule: string;
-            /** Timezone */
-            timezone: string;
-        };
-        /** AutomationScheduleResponse */
-        AutomationScheduleResponse: {
-            /** Rrule */
-            rrule: string;
-            /** Timezone */
-            timezone: string;
-            /** Summary */
-            summary: string;
-            /** Nextrunat */
-            nextRunAt: string | null;
-        };
         /** BillingOverview */
         BillingOverview: {
             /**
@@ -3038,6 +2664,11 @@ export interface components {
              */
             repoConfigState: "missing" | "disabled" | "configured";
         };
+        /**
+         * CloudMaterializationStatus
+         * @enum {string}
+         */
+        CloudMaterializationStatus: "pending" | "running" | "ready" | "error";
         /** CloudOrganizationIntegrationPolicyItem */
         CloudOrganizationIntegrationPolicyItem: {
             /** Catalogentryid */
@@ -3127,6 +2758,53 @@ export interface components {
             legacyCloudSubscription: boolean;
             /** Grantallocations */
             grantAllocations?: components["schemas"]["GrantAllocationInfo"][];
+        };
+        /** CloudSandboxRepoRuntimeConnectionResponse */
+        CloudSandboxRepoRuntimeConnectionResponse: {
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnessreporootid */
+            anyharnessRepoRootId: string | null;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
+        };
+        /** CloudSandboxResponse */
+        CloudSandboxResponse: {
+            /** Id */
+            id: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Organizationid */
+            organizationId: string | null;
+            /** Status */
+            status: string;
+            /** Lasterror */
+            lastError: string | null;
+            /** E2Btemplateref */
+            e2bTemplateRef: string;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Readyat */
+            readyAt: string | null;
+            /** Lasthealthat */
+            lastHealthAt: string | null;
+            /** Destroyedat */
+            destroyedAt: string | null;
+        };
+        /** CloudSandboxWorkspaceRuntimeConnectionResponse */
+        CloudSandboxWorkspaceRuntimeConnectionResponse: {
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnessreporootid */
+            anyharnessRepoRootId: string | null;
+            /** Runtimegeneration */
+            runtimeGeneration: number;
         };
         /** CloudSecretEnvVarMetadata */
         CloudSecretEnvVarMetadata: {
@@ -3372,37 +3050,6 @@ export interface components {
              */
             kind: "workspace_path";
         };
-        /** CreateAutomationRequest */
-        CreateAutomationRequest: {
-            /** Title */
-            title: string;
-            /** Prompt */
-            prompt: string;
-            /**
-             * Ownerscope
-             * @default personal
-             * @enum {string}
-             */
-            ownerScope: "personal" | "organization";
-            /** Organizationid */
-            organizationId?: string | null;
-            /** Gitowner */
-            gitOwner: string;
-            /** Gitreponame */
-            gitRepoName: string;
-            schedule: components["schemas"]["AutomationScheduleRequest"];
-            /**
-             * Targetmode
-             * @default personal_cloud
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /**
-             * Cloudagentrunconfigid
-             * Format: uuid
-             */
-            cloudAgentRunConfigId: string;
-        };
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
@@ -3541,181 +3188,6 @@ export interface components {
              * @default 0.1.0
              */
             version: string;
-        };
-        /** LocalAutomationAttachSessionRequest */
-        LocalAutomationAttachSessionRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-            /** Anyharnesssessionid */
-            anyharnessSessionId: string;
-        };
-        /** LocalAutomationAttachWorkspaceRequest */
-        LocalAutomationAttachWorkspaceRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-        };
-        /** LocalAutomationClaimActionRequest */
-        LocalAutomationClaimActionRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-        };
-        /** LocalAutomationClaimListResponse */
-        LocalAutomationClaimListResponse: {
-            /** Runs */
-            runs: components["schemas"]["LocalAutomationRunClaimResponse"][];
-        };
-        /** LocalAutomationClaimRequest */
-        LocalAutomationClaimRequest: {
-            /** Executorid */
-            executorId: string;
-            /** Availablerepositories */
-            availableRepositories: components["schemas"]["LocalExecutorRepositoryIdentity"][];
-            /**
-             * Limit
-             * @default 1
-             */
-            limit: number;
-        };
-        /** LocalAutomationFailRequest */
-        LocalAutomationFailRequest: {
-            /** Executorid */
-            executorId: string;
-            /**
-             * Claimid
-             * Format: uuid
-             */
-            claimId: string;
-            /** Errorcode */
-            errorCode: string;
-        };
-        /** LocalAutomationMutationResponse */
-        LocalAutomationMutationResponse: {
-            run?: components["schemas"]["LocalAutomationRunClaimResponse"] | null;
-            /**
-             * Accepted
-             * @default true
-             */
-            accepted: boolean;
-        };
-        /** LocalAutomationRunClaimResponse */
-        LocalAutomationRunClaimResponse: {
-            /** Id */
-            id: string;
-            /** Automationid */
-            automationId: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
-            /**
-             * Targetmode
-             * @enum {string}
-             */
-            targetMode: "local" | "personal_cloud" | "shared_cloud";
-            /** Titlesnapshot */
-            titleSnapshot: string;
-            /** Promptsnapshot */
-            promptSnapshot: string;
-            /** Gitprovidersnapshot */
-            gitProviderSnapshot: string;
-            /** Gitownersnapshot */
-            gitOwnerSnapshot: string;
-            /** Gitreponamesnapshot */
-            gitRepoNameSnapshot: string;
-            /** Cloudagentrunconfigidsnapshot */
-            cloudAgentRunConfigIdSnapshot: string | null;
-            /** Agentkindsnapshot */
-            agentKindSnapshot: string | null;
-            /** Modelidsnapshot */
-            modelIdSnapshot: string | null;
-            /** Modeidsnapshot */
-            modeIdSnapshot: string | null;
-            /** Reasoningeffortsnapshot */
-            reasoningEffortSnapshot: string | null;
-            /** Claimid */
-            claimId: string;
-            /** Claimexpiresat */
-            claimExpiresAt: string;
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string | null;
-            /** Anyharnesssessionid */
-            anyharnessSessionId: string | null;
-        };
-        /** LocalExecutorRepositoryIdentity */
-        LocalExecutorRepositoryIdentity: {
-            /** Provider */
-            provider: string;
-            /** Owner */
-            owner: string;
-            /** Name */
-            name: string;
-        };
-        /** CloudSandboxRepoRuntimeConnectionResponse */
-        CloudSandboxRepoRuntimeConnectionResponse: {
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-            /** Anyharnessreporootid */
-            anyharnessRepoRootId: string | null;
-            /** Runtimegeneration */
-            runtimeGeneration: number;
-        };
-        /** CloudSandboxResponse */
-        CloudSandboxResponse: {
-            /** Id */
-            id: string;
-            /** Ownerscope */
-            ownerScope: string;
-            /** Owneruserid */
-            ownerUserId: string | null;
-            /** Organizationid */
-            organizationId: string | null;
-            /** Status */
-            status: string;
-            /** Lasterror */
-            lastError: string | null;
-            /** E2Btemplateref */
-            e2bTemplateRef: string;
-            /** Runtimegeneration */
-            runtimeGeneration: number;
-            /** Createdat */
-            createdAt: string;
-            /** Updatedat */
-            updatedAt: string;
-            /** Readyat */
-            readyAt: string | null;
-            /** Lasthealthat */
-            lastHealthAt: string | null;
-            /** Destroyedat */
-            destroyedAt: string | null;
-        };
-        /** CloudSandboxWorkspaceRuntimeConnectionResponse */
-        CloudSandboxWorkspaceRuntimeConnectionResponse: {
-            /** Anyharnessworkspaceid */
-            anyharnessWorkspaceId: string;
-            /** Anyharnessreporootid */
-            anyharnessRepoRootId: string | null;
-            /** Runtimegeneration */
-            runtimeGeneration: number;
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -4345,6 +3817,14 @@ export interface components {
          * @enum {string}
          */
         RepoEnvironmentKind: "local" | "cloud";
+        /** RepoEnvironmentMaterializationResponse */
+        RepoEnvironmentMaterializationResponse: {
+            status: components["schemas"]["CloudMaterializationStatus"];
+            /** Lasterror */
+            lastError?: string | null;
+            /** Materializedat */
+            materializedAt?: string | null;
+        };
         /** RepoEnvironmentResponse */
         RepoEnvironmentResponse: {
             /**
@@ -4368,6 +3848,7 @@ export interface components {
             setupScript: string;
             /** Runcommand */
             runCommand: string;
+            materialization?: components["schemas"]["RepoEnvironmentMaterializationResponse"] | null;
         };
         /** SaveRepoEnvironmentRequest */
         SaveRepoEnvironmentRequest: {
@@ -4602,22 +4083,6 @@ export interface components {
             github_login?: string | null;
             /** Avatar Url */
             avatar_url?: string | null;
-        };
-        /** UpdateAutomationRequest */
-        UpdateAutomationRequest: {
-            /** Title */
-            title?: string | null;
-            /** Prompt */
-            prompt?: string | null;
-            /** Gitowner */
-            gitOwner?: string | null;
-            /** Gitreponame */
-            gitRepoName?: string | null;
-            schedule?: components["schemas"]["AutomationScheduleRequest"] | null;
-            /** Targetmode */
-            targetMode?: ("local" | "personal_cloud" | "shared_cloud") | null;
-            /** Cloudagentrunconfigid */
-            cloudAgentRunConfigId?: string | null;
         };
         /** UserRead */
         UserRead: {
@@ -5077,6 +4542,39 @@ export interface operations {
         };
     };
     github_app_installation_callback_endpoint_auth_github_app_installation_callback_get: {
+        parameters: {
+            query: {
+                installation_id?: string | null;
+                setup_action?: string | null;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_setup_callback_endpoint_integrations_github_callback_get: {
         parameters: {
             query: {
                 installation_id?: string | null;
@@ -5706,6 +5204,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cloud_repositories_endpoint_v1_cloud_repos_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                affiliation?: string;
+                visibility?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudGitRepositoriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_repo_branches_endpoint_v1_cloud_repos__git_owner___git_repo_name__branches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                git_owner: string;
+                git_repo_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoBranchesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8261,611 +7826,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_automations_endpoint_v1_automations_get: {
-        parameters: {
-            query?: {
-                ownerScope?: string;
-                organizationId?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_automation_endpoint_v1_automations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateAutomationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    claim_local_runs_endpoint_v1_automations_executor_local_claims_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationClaimListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    heartbeat_local_run_endpoint_v1_automations_executor_local_runs__run_id__heartbeat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_creating_workspace_endpoint_v1_automations_executor_local_runs__run_id__creating_workspace_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    attach_local_run_workspace_endpoint_v1_automations_executor_local_runs__run_id__attach_workspace_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_provisioning_workspace_endpoint_v1_automations_executor_local_runs__run_id__provisioning_workspace_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_creating_session_endpoint_v1_automations_executor_local_runs__run_id__creating_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    attach_local_run_session_endpoint_v1_automations_executor_local_runs__run_id__attach_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachSessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_dispatching_endpoint_v1_automations_executor_local_runs__run_id__dispatching_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_dispatched_endpoint_v1_automations_executor_local_runs__run_id__dispatched_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationAttachSessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_local_run_failed_endpoint_v1_automations_executor_local_runs__run_id__failed_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LocalAutomationFailRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_automation_endpoint_v1_automations__automation_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_automation_endpoint_v1_automations__automation_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateAutomationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pause_automation_endpoint_v1_automations__automation_id__pause_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    resume_automation_endpoint_v1_automations__automation_id__resume_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_automation_now_endpoint_v1_automations__automation_id__run_now_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationRunResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_automation_runs_endpoint_v1_automations__automation_id__runs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                automation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AutomationRunListResponse"];
                 };
             };
             /** @description Validation Error */

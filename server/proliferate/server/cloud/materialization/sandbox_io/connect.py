@@ -91,6 +91,11 @@ async def connect_ready_sandbox(
                 total_attempts=4,
                 delay_seconds=0.5,
             )
+            await verify_runtime_auth_enforced(
+                endpoint.runtime_url,
+                runtime_token,
+                workspace_id=sandbox.id,
+            )
         except Exception:
             await _launch_anyharness_runtime(
                 db,

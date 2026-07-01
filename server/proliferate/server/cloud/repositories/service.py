@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.store import cloud_repo_environment_materializations as repo_mat_store
 from proliferate.db.store.repositories import (
     RepoConfigValue,
     RepoEnvironmentValue,
@@ -14,6 +15,7 @@ from proliferate.db.store.repositories import (
     upsert_local_repo_environment,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import service as materialization_service
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
@@ -101,6 +103,15 @@ async def save_cloud_environment(
         default_branch=default_branch,
         setup_script=body.setup_script,
         run_command=body.run_command,
+    )
+    sandbox = await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(
+        db,
+        user_id=user_id,
+    )
+    await repo_mat_store.queue_repo_environment_materialization(
+        db,
+        cloud_sandbox_id=sandbox.id,
+        repo_environment_id=repo_environment.id,
     )
     await materialization_service.schedule_materialize_repo_environment(
         db,

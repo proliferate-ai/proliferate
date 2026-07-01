@@ -44,8 +44,7 @@ from proliferate.server.cloud.repos.api import router as repos_router
 #     worker_router as runtime_config_worker_router,
 # )
 # from proliferate.server.cloud.sandbox_profiles.api import router as sandbox_profiles_router
-# SECRETS PARKED: retarget workspace secrets from legacy cloud repo config in PR #2.
-# from proliferate.server.cloud.secrets.api import router as secrets_router
+from proliferate.server.cloud.secrets.api import router as secrets_router
 # SKILLS PARKED: retarget away from sandbox profiles before remounting.
 # from proliferate.server.cloud.skills.api import router as skills_router
 # TARGETS PARKED.
@@ -73,8 +72,7 @@ router.include_router(repositories_router)
 # router.include_router(repo_config_router)
 router.include_router(github_app_router)
 router.include_router(github_app_organization_router)
-# SECRETS PARKED: /v1/cloud/secrets/* is intentionally disabled.
-# router.include_router(secrets_router)
+router.include_router(secrets_router)
 router.include_router(cloud_sandboxes_router)
 # WORKSPACES PARKED: /v1/cloud/workspaces/* is intentionally disabled.
 # router.include_router(workspaces_router)

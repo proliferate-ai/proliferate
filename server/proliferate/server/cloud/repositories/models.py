@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from proliferate.constants.cloud import GitProvider, RepoEnvironmentKind
+from proliferate.constants.cloud import (
+    CloudMaterializationStatus,
+    GitProvider,
+    RepoEnvironmentKind,
+)
+from proliferate.db.store.cloud_repo_environment_materializations import (
+    CloudRepoEnvironmentMaterializationValue,
+)
 from proliferate.db.store.repositories import RepoConfigValue, RepoEnvironmentValue
+
+
+class RepoEnvironmentMaterializationResponse(BaseModel):
+    status: CloudMaterializationStatus
+    last_error: str | None = Field(default=None, serialization_alias="lastError")
+    materialized_at: datetime | None = Field(default=None, serialization_alias="materializedAt")
 
 
 class RepoEnvironmentResponse(BaseModel):
@@ -19,6 +33,7 @@ class RepoEnvironmentResponse(BaseModel):
     default_branch: str | None = Field(serialization_alias="defaultBranch")
     setup_script: str = Field(serialization_alias="setupScript")
     run_command: str = Field(serialization_alias="runCommand")
+    materialization: RepoEnvironmentMaterializationResponse | None = None
 
 
 class RepoConfigResponse(BaseModel):
@@ -43,7 +58,23 @@ class SaveRepoEnvironmentRequest(BaseModel):
     run_command: str = Field(default="", alias="runCommand")
 
 
-def repo_environment_payload(value: RepoEnvironmentValue) -> RepoEnvironmentResponse:
+def repo_environment_materialization_payload(
+    value: CloudRepoEnvironmentMaterializationValue | None,
+) -> RepoEnvironmentMaterializationResponse | None:
+    if value is None:
+        return None
+    return RepoEnvironmentMaterializationResponse(
+        status=value.status,
+        last_error=value.last_error,
+        materialized_at=value.materialized_at,
+    )
+
+
+def repo_environment_payload(
+    value: RepoEnvironmentValue,
+    *,
+    materialization: CloudRepoEnvironmentMaterializationValue | None = None,
+) -> RepoEnvironmentResponse:
     return RepoEnvironmentResponse(
         id=value.id,
         repo_config_id=value.repo_config_id,
@@ -53,6 +84,7 @@ def repo_environment_payload(value: RepoEnvironmentValue) -> RepoEnvironmentResp
         default_branch=value.default_branch,
         setup_script=value.setup_script,
         run_command=value.run_command,
+        materialization=repo_environment_materialization_payload(materialization),
     )
 
 

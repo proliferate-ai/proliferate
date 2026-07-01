@@ -30,8 +30,9 @@ async def run_cloud_sandbox_operation(
     wait_timeout_seconds: int = 300,
     run: Callable[[MaterializationContext], Awaitable[None]],
 ) -> None:
+    del operation_key
     async with locks.redis_materialization_lock(
-        f"cloud-sandbox:{sandbox.id}:{operation_key}",
+        f"cloud-sandbox:{sandbox.id}",
         ttl_seconds=lock_ttl_seconds,
         wait_timeout_seconds=wait_timeout_seconds,
     ):

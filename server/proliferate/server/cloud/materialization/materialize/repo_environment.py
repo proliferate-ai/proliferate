@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shlex
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,35 +28,63 @@ async def materialize_repo_environment(
         repo_environment_id,
     )
     if repo_environment is None or repo_environment.environment_kind != "cloud":
+        await repo_mat_store.mark_repo_environment_materialization_error(
+            db,
+            materialization_id,
+            last_error="Cloud repo environment no longer exists.",
+            expected_updated_at=attempt_updated_at,
+        )
+        await db.commit()
         return
     sandbox = await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(
         db,
         user_id=repo_environment.user_id,
     )
-    await operation.run_cloud_sandbox_operation(
+    materialization = await repo_mat_store.begin_repo_environment_materialization(
         db,
-        sandbox=sandbox,
-        operation_key=f"repo-environment:{repo_environment_id}",
-        run=lambda ctx: materialize_repo_environment_in_context(
-            db,
-            ctx=ctx,
-            repo_environment=repo_environment,
-        ),
+        cloud_sandbox_id=sandbox.id,
+        repo_environment_id=repo_environment.id,
     )
+    attempt_updated_at = materialization.updated_at
+    await db.commit()
+    try:
+        await operation.run_cloud_sandbox_operation(
+            db,
+            sandbox=sandbox,
+            operation_key=f"repo-environment:{repo_environment_id}",
+            run=lambda ctx: materialize_repo_environment_in_context(
+                db,
+                ctx=ctx,
+                repo_environment_id=repo_environment_id,
+                materialization_id=materialization.id,
+                attempt_updated_at=attempt_updated_at,
+            ),
+        )
+    except Exception as exc:
+        await repo_mat_store.mark_repo_environment_materialization_error(
+            db,
+            materialization.id,
+            last_error=str(exc)[:2000],
+            expected_updated_at=attempt_updated_at,
+        )
+        await db.commit()
+        raise
 
 
 async def materialize_repo_environment_in_context(
     db: AsyncSession,
     *,
     ctx: operation.MaterializationContext,
-    repo_environment: RepoEnvironmentValue,
+    repo_environment_id: UUID,
+    materialization_id: UUID,
+    attempt_updated_at: datetime,
 ) -> None:
-    materialization = await repo_mat_store.begin_repo_environment_materialization(
+    repo_environment = await repositories_store.get_repo_environment_by_id(
         db,
-        cloud_sandbox_id=ctx.sandbox.id,
-        repo_environment_id=repo_environment.id,
+        repo_environment_id,
     )
-    await db.commit()
+    if repo_environment is None or repo_environment.environment_kind != "cloud":
+        return
     try:
         await require_github_cloud_repo_authority(
             db,
@@ -66,13 +95,13 @@ async def materialize_repo_environment_in_context(
         credential_result = await github_credentials.materialize_github_credentials(
             db,
             target=ctx.target,
-            operation_id=materialization.id,
+            operation_id=materialization_id,
             user_id=repo_environment.user_id,
         )
         repo_path = paths.repo_path(repo_environment)
         default_branch = await _materialize_git_checkout(
             ctx.target,
-            operation_id=materialization.id,
+            operation_id=materialization_id,
             repo_environment=repo_environment,
             repo_path=repo_path,
         )
@@ -96,16 +125,18 @@ async def materialize_repo_environment_in_context(
         }
         await repo_mat_store.mark_repo_environment_materialization_ready(
             db,
-            materialization.id,
+            materialization_id,
             applied_repo_environment_updated_at=repo_environment.updated_at,
             applied_manifest=manifest,
+            expected_updated_at=attempt_updated_at,
         )
         await db.commit()
     except Exception as exc:
         await repo_mat_store.mark_repo_environment_materialization_error(
             db,
-            materialization.id,
+            materialization_id,
             last_error=str(exc)[:2000],
+            expected_updated_at=attempt_updated_at,
         )
         await db.commit()
         raise

@@ -87,11 +87,20 @@ async def _ensure_git_credential_helper_configured(
     operation_id: UUID,
 ) -> None:
     helper = paths.github_credential_helper_path()
+    token_path = paths.github_token_path()
+    meta_path = paths.github_meta_path()
     script = "\n".join(
         [
             "set -eu",
             f"helper={shlex.quote(helper)}",
+            f"token_path={shlex.quote(token_path)}",
+            f"meta_path={shlex.quote(meta_path)}",
             'test -x "$helper"',
+            'test -s "$token_path"',
+            'test -s "$meta_path"',
+            'credential_output="$(printf "protocol=https\\nhost=github.com\\n\\n" | "$helper" get)"',
+            'printf "%s\\n" "$credential_output" | grep -qx "username=x-access-token"',
+            'printf "%s\\n" "$credential_output" | grep -Eq "^password=.+$"',
             'git config --global --replace-all credential.https://github.com.helper "!$helper"',
             (
                 "git config --global --get-all url.https://github.com/.insteadOf "
