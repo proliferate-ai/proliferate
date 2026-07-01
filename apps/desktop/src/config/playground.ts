@@ -35,6 +35,7 @@ export type ScenarioKey =
   | "mcp-elicitation-validation-error"
   | "mcp-elicitation-cancel-decline"
   | "status-background"
+  | "status-live-stream"
   | "status-hook-running"
   | "status-hook-completed"
   | "status-hook-blocked"
@@ -118,6 +119,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "mcp-elicitation-validation-error": { label: "MCP validation" },
   "mcp-elicitation-cancel-decline": { label: "MCP cancel/decline" },
   "status-background": { label: "Status background" },
+  "status-live-stream": { label: "Live stream" },
   "status-hook-running": { label: "Hook running" },
   "status-hook-completed": { label: "Hook completed" },
   "status-hook-blocked": { label: "Hook blocked" },

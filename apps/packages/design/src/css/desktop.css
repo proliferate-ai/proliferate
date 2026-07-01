@@ -1740,6 +1740,17 @@ body {
   animation: streaming-fade 180ms ease-out;
 }
 
+/* While assistant text is revealing, soften the trailing edge of the live
+   block so new words emerge from a fade instead of popping in. The mask only
+   covers the last line-height of the block; everything above stays opaque. */
+.streaming-tail-mask {
+  mask-image: linear-gradient(
+    to bottom,
+    black calc(100% - 1.4em),
+    rgba(0, 0, 0, 0.35) 100%
+  );
+}
+
 @keyframes thinking-text-sweep {
   0%,
   2.806% {
