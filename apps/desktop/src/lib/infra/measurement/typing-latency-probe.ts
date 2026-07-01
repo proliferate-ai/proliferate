@@ -2,7 +2,6 @@ import type {
   MeasurementOperationId,
   MeasurementSurface,
 } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   onMeasurementOperationFinish,
   recordMeasurementMetric,
@@ -64,7 +63,7 @@ export function recordTypingKeystrokeLatency(input: {
   const inputDelayMs = handlerStartMs - eventMs;
   const { operationId, surface } = input;
 
-  scheduleAfterNextPaint(() => {
+  afterPaint(() => {
     const toPaintMs = performance.now() - eventMs;
     recordMeasurementMetric({
       type: "diagnostic",
@@ -83,6 +82,25 @@ export function recordTypingKeystrokeLatency(input: {
     if (operationId) {
       trackSample(operationId, surface, toPaintMs, inputDelayMs);
     }
+  });
+}
+
+/**
+ * Runs right after the next frame paints. rAF fires before paint; a
+ * MessageChannel message posted during the rAF callback is delivered as a
+ * macrotask after the frame's rendering steps complete. (A double-rAF would
+ * overreport by a full extra frame — it fires at the START of the frame after
+ * next.)
+ */
+function afterPaint(callback: () => void): void {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+    setTimeout(callback, 0);
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => callback();
+    channel.port2.postMessage(null);
   });
 }
 

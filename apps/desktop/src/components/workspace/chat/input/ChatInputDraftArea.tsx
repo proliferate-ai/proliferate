@@ -6,6 +6,7 @@ import {
   DraftAttachmentPreviewList,
   type DraftAttachmentPreviewListProps,
 } from "@/components/workspace/chat/content/PromptContentRenderer";
+import { useChatDraftValue } from "@/hooks/chat/ui/use-chat-draft-state";
 import { ComposerCommandEditor } from "./ComposerCommandEditor";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
@@ -16,7 +17,11 @@ interface ChatInputDraftAreaProps {
   editDraft: string;
   onEditDraftChange: (value: string) => void;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
-  draft: ChatComposerDraft;
+  /**
+   * PERF: the draft area subscribes to the live draft itself (by workspace
+   * key) so keystrokes re-render only this subtree, not the whole ChatInput.
+   */
+  workspaceUiKey: string | null;
   onDraftChange: (draft: ChatComposerDraft) => void;
   canSubmit: boolean;
   isDisabled: boolean;
@@ -34,7 +39,7 @@ export function ChatInputDraftArea({
   editDraft,
   onEditDraftChange,
   textareaRef,
-  draft,
+  workspaceUiKey,
   onDraftChange,
   canSubmit,
   isDisabled,
@@ -46,6 +51,7 @@ export function ChatInputDraftArea({
   overlayHostElement,
   onCancelEdit,
 }: ChatInputDraftAreaProps) {
+  const draft = useChatDraftValue(workspaceUiKey);
   if (isEditingQueuedPrompt) {
     return (
       <>
