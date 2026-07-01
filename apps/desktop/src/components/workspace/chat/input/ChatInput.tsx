@@ -40,6 +40,7 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { clearTypingActivity } from "@/lib/infra/interaction/typing-activity-store";
 import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
   PROMPT_SUBMIT_MEASUREMENT_SURFACES,
@@ -141,6 +142,9 @@ export function ChatInput({
   });
 
   const onSubmit = useCallback(async () => {
+    // End the typing burst NOW so the transcript renders urgently: the
+    // composer clearing and the sent message appearing must be one frame.
+    clearTypingActivity();
     await runSubmit(async () => {
       if (effectiveIsEditingQueuedPrompt) {
         await commitEdit();

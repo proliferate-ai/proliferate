@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -99,15 +100,27 @@ export function useLatestTranscriptLiveStatus({
     shouldShowDelayedLatestLiveStatus
     && latestTurnTiming?.isOutboxStartedAt === true;
   const [showDelayedLatestLiveStatus, setShowDelayedLatestLiveStatus] = useState(false);
+  const shownForTurnIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!shouldShowDelayedLatestLiveStatus) {
+      shownForTurnIdRef.current = null;
       setShowDelayedLatestLiveStatus(false);
+      return;
+    }
+
+    // FLICKER GUARD: once the status is visible for a turn, keep it visible —
+    // re-arming the grace timer on every stream item (itemOrder.length is a
+    // dep) used to hide the "Thinking…" row for LIVE_STATUS_GRACE_MS on each
+    // new item, strobing it throughout active streams. The grace delay only
+    // applies to the FIRST appearance per turn.
+    if (shownForTurnIdRef.current === latestTurnId) {
       return;
     }
 
     setShowDelayedLatestLiveStatus(false);
     const timeout = window.setTimeout(() => {
+      shownForTurnIdRef.current = latestTurnId;
       setShowDelayedLatestLiveStatus(true);
     }, LIVE_STATUS_GRACE_MS);
     return () => window.clearTimeout(timeout);

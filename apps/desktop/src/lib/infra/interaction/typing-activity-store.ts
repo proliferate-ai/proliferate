@@ -42,3 +42,21 @@ export const useTypingActivityStore = create<TypingActivityState>((set, get) => 
 export function markTypingActivity(): void {
   useTypingActivityStore.getState().markTyping();
 }
+
+/**
+ * Ends the typing burst immediately. Called on prompt submit: the user always
+ * presses Enter within the typing window, so without this the composer clears
+ * urgently while the transcript (now containing their message) renders at
+ * deferred priority — a visible "text vanished… then reappeared" two-step.
+ * Clearing the flag makes the swap commit as one urgent frame.
+ */
+export function clearTypingActivity(): void {
+  if (idleTimer !== null) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  const store = useTypingActivityStore;
+  if (store.getState().typingActive) {
+    store.setState({ typingActive: false });
+  }
+}
