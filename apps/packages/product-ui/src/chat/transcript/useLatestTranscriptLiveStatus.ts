@@ -26,7 +26,7 @@ import {
   turnHasActiveToolWork,
 } from "./ChatTranscriptViewRules";
 
-const LIVE_STATUS_GRACE_MS = 750;
+const LIVE_STATUS_GRACE_MS = 150;
 
 export interface LatestTranscriptLiveStatus {
   latestLiveExplorationBlock: Extract<TurnDisplayBlock, { kind: "collapsed_actions" }> | null;
@@ -89,7 +89,6 @@ export function useLatestTranscriptLiveStatus({
     && !latestLiveExplorationBlock
     && !latestLiveWorkBlock
     && !latestTurnHasActiveToolWork
-    && transcript.isStreaming
     && sessionViewState === "working"
     && shouldAllowTurnTrailingStatus({
       turn: latestTurn,

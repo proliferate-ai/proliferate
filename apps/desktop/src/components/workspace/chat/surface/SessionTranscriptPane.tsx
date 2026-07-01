@@ -56,9 +56,16 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   // window where a prompt's outbox row is already tombstoned while its
   // transcript echo hasn't rendered yet — the message disappears for a
   // frame and the transcript visibly jumps.
+  //
+  // The optimistic prompt is the one exception, in the APPEARING direction
+  // only: a just-sent message must render on the very next frame, and the
+  // deferred snapshot can lag behind while streaming renders hog the main
+  // thread. Union of both snapshots keeps each edge safe — appearance comes
+  // from the immediate value, while clearing still waits for the deferred
+  // snapshot whose transcript already contains the echoed turn.
   const optimisticPrompt = transcriptDeferred
     ? null
-    : deferredPaneState.optimisticPrompt;
+    : immediatePaneState.optimisticPrompt ?? deferredPaneState.optimisticPrompt;
   const outboxEntries = transcriptDeferred
     ? []
     : deferredPaneState.outboxEntries;

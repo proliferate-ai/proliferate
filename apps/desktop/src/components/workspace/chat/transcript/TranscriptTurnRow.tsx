@@ -32,6 +32,9 @@ import {
 import {
   latestCompletedTurn,
 } from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
+import {
+  resolveTurnStoppedNotice,
+} from "@proliferate/product-domain/chats/transcript/turn-stopped-presentation";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
@@ -188,6 +191,8 @@ export function TranscriptTurnRow({
     undoDisabledReason,
   ]);
 
+  const stoppedNotice = row.isLastTurnRow ? resolveTurnStoppedNotice(turn) : null;
+
   return (
     <TurnShell isFirst={rowIndex === 0}>
       <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
@@ -229,6 +234,12 @@ export function TranscriptTurnRow({
         />
         {trailingStatus && (
           <div className={trailingStatusClassName}>{trailingStatus}</div>
+        )}
+        {stoppedNotice && (
+          <div className="flex flex-col items-start gap-2 text-chat text-foreground/60">
+            <span>{stoppedNotice}</span>
+            <div className="w-full border-t border-current/20" />
+          </div>
         )}
       </div>
     </TurnShell>

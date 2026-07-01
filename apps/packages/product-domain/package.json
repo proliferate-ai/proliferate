@@ -103,6 +103,10 @@
       "types": "./dist/chats/transcript/turn-file-patches.d.ts",
       "import": "./dist/chats/transcript/turn-file-patches.js"
     },
+    "./chats/transcript/turn-stopped-presentation": {
+      "types": "./dist/chats/transcript/turn-stopped-presentation.d.ts",
+      "import": "./dist/chats/transcript/turn-stopped-presentation.js"
+    },
     "./chats/transcript/transcript-collapsed-actions": {
       "types": "./dist/chats/transcript/transcript-collapsed-actions.d.ts",
       "import": "./dist/chats/transcript/transcript-collapsed-actions.js"

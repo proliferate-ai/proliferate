@@ -11,8 +11,11 @@ export function shouldAllowTurnTrailingStatus({
   transcript: TranscriptState;
   isLatestTurnInProgress: boolean;
 }): boolean {
+  // Completed prose must not read as "turn finished" while the agent keeps
+  // working (thinking, preparing a tool call). Only an actively streaming
+  // prose tail suppresses the trailing indicator.
   return isLatestTurnInProgress
-    && !lastTopLevelItemIsAssistantProseWithText(turn, transcript);
+    && !lastTopLevelItemIsStreamingAssistantProse(turn, transcript);
 }
 
 export function lastTopLevelItemIsAssistantProseWithText(
