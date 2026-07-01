@@ -1,6 +1,7 @@
 import type {
   Session,
   SessionEventEnvelope,
+  SessionExecutionSummary,
 } from "@anyharness/sdk";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -42,7 +43,6 @@ import {
 
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
-const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
 
 export function useMobileChatData({
   chat,
@@ -151,9 +151,13 @@ export function useMobileChatData({
   const transcriptItems =
     transcriptQuery.data?.transcriptItems
     ?? EMPTY_TRANSCRIPT_ITEMS;
-  const pendingInteractions =
-    transcriptQuery.data?.pendingInteractions
-    ?? EMPTY_PENDING_INTERACTIONS;
+  const pendingInteractions = useMemo(
+    () => cloudPendingInteractionsFromExecutionSummary(
+      session?.executionSummary as SessionExecutionSummary | null | undefined,
+      session?.sessionId ?? null,
+    ),
+    [session?.executionSummary, session?.sessionId],
+  );
   const pendingPermissionByRequestId = useMemo(
     () => new Map(
       pendingInteractions
@@ -289,13 +293,49 @@ function cloudSessionProjectionFromAnyHarness(
     title: session.title ?? null,
     status: session.status,
     phase: session.executionSummary?.phase ?? session.status ?? null,
-    pendingInteractionCount: session.pendingPrompts?.length ?? 0,
+    pendingInteractionCount: session.executionSummary?.pendingInteractions?.length ?? 0,
+    executionSummary: session.executionSummary ?? null,
     liveConfig: session.liveConfig ?? null,
     lastEventSeq: 0,
     lastEventAt: session.updatedAt ?? session.lastPromptAt ?? session.createdAt ?? null,
     startedAt: session.createdAt ?? null,
     endedAt: null,
   };
+}
+
+function cloudPendingInteractionsFromExecutionSummary(
+  executionSummary: SessionExecutionSummary | null | undefined,
+  sessionId: string | null,
+): CloudPendingInteraction[] {
+  return (executionSummary?.pendingInteractions ?? []).map((interaction) => ({
+    requestId: interaction.requestId,
+    sessionId,
+    status: "pending",
+    kind: interaction.kind,
+    title: interaction.title,
+    description: interaction.description ?? null,
+    toolCallId: interaction.source.toolCallId ?? null,
+    toolKind: interaction.source.toolKind ?? null,
+    toolStatus: interaction.source.toolStatus ?? null,
+    linkedPlanId: interaction.source.linkedPlanId ?? null,
+    ...(interaction.payload.type === "permission"
+      ? {
+        options: interaction.payload.options ?? [],
+        context: interaction.payload.context ?? null,
+      }
+      : {}),
+    ...(interaction.payload.type === "user_input"
+      ? { questions: interaction.payload.questions ?? [] }
+      : {}),
+    ...(interaction.payload.type === "mcp_elicitation"
+      ? {
+        mcpElicitation: {
+          serverName: interaction.payload.serverName,
+          mode: interaction.payload.mode,
+        },
+      }
+      : {}),
+  }));
 }
 
 function cloudSessionEventFromAnyHarness(

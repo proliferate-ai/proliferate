@@ -125,8 +125,7 @@ async def list_repositories_endpoint(
     values = await list_repositories(db, user_id=user.id)
     return RepoConfigsListResponse(
         repositories=[
-            await _repo_config_response(db, user_id=user.id, value=item)
-            for item in values
+            await _repo_config_response(db, user_id=user.id, value=item) for item in values
         ]
     )
 

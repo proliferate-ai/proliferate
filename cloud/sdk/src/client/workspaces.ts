@@ -127,17 +127,6 @@ export async function createCloudWorkspace(
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
 
-export async function startCloudWorkspace(
-  workspaceId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<CloudWorkspaceDetail> {
-  const workspace = await getCloudWorkspace(workspaceId, client);
-  if (!workspace) {
-    throw new Error("Cloud workspace not found.");
-  }
-  return workspace;
-}
-
 export async function archiveCloudWorkspace(
   workspaceId: string,
   client: ProliferateCloudClient = getProliferateClient(),

@@ -12,11 +12,11 @@ export function useCloudWorkspaceStatusScreenActions({
   isPrimaryActionPending: boolean;
   handlePrimaryAction: (() => void) | null;
 } {
-  const { isStartingCloudWorkspace, startCloudWorkspace } = useCloudWorkspaceActions();
+  const { isRefreshingCloudWorkspace, refreshCloudWorkspace } = useCloudWorkspaceActions();
 
   const handlePrimaryAction = useCallback(() => {
-    void startCloudWorkspace(workspaceId);
-  }, [startCloudWorkspace, workspaceId]);
+    void refreshCloudWorkspace(workspaceId);
+  }, [refreshCloudWorkspace, workspaceId]);
 
   if (mode === "pending" || mode === "blocked" || mode === "archived") {
     return {
@@ -26,7 +26,7 @@ export function useCloudWorkspaceStatusScreenActions({
   }
 
   return {
-    isPrimaryActionPending: isStartingCloudWorkspace,
+    isPrimaryActionPending: isRefreshingCloudWorkspace,
     handlePrimaryAction,
   };
 }

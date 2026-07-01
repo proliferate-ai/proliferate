@@ -37,10 +37,7 @@ def global_secret_manifest_path() -> str:
 
 
 def repo_path(repo_environment: RepoEnvironmentValue) -> str:
-    return (
-        f"{SANDBOX_REPOS_ROOT}/"
-        f"{repo_environment.git_owner}/{repo_environment.git_repo_name}"
-    )
+    return f"{SANDBOX_REPOS_ROOT}/{repo_environment.git_owner}/{repo_environment.git_repo_name}"
 
 
 def workspace_env_path(repo_environment: RepoEnvironmentValue) -> str:

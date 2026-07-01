@@ -26,7 +26,6 @@ import {
 } from "@/lib/infra/measurement/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
-import { startCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
@@ -35,7 +34,7 @@ import {
   resolveInitialActiveSessionId,
 } from "./initial-session";
 import {
-  resolveCloudSelectionConnectionWithStartRetry,
+  resolveCloudSelectionConnectionWithStatusRefresh,
 } from "./cloud-selection-connection";
 import type {
   WorkspaceSelectionContext,
@@ -324,7 +323,7 @@ export async function runWorkspaceSelection(
     return;
   }
 
-  const connectionResult = await resolveCloudSelectionConnectionWithStartRetry({
+  const connectionResult = await resolveCloudSelectionConnectionWithStatusRefresh({
     cloudReadiness,
     context,
     latencyFlowId: request.options?.latencyFlowId,
@@ -333,7 +332,6 @@ export async function runWorkspaceSelection(
   }, {
     isCloudWorkspaceNotReadyError,
     resolveSelectionConnection,
-    startCloudWorkspace,
   });
   if (connectionResult === null) {
     return;

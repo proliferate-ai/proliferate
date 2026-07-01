@@ -191,8 +191,7 @@ async def begin_workspace_secret_materialization(
                     CloudSandboxSecretMaterialization.cloud_sandbox_id,
                     CloudSandboxSecretMaterialization.repo_environment_id,
                 ],
-                index_where=CloudSandboxSecretMaterialization.materialization_kind
-                == "workspace",
+                index_where=CloudSandboxSecretMaterialization.materialization_kind == "workspace",
                 set_={
                     "cloud_secret_set_id": cloud_secret_set_id,
                     "sandbox_generation": sandbox_generation,

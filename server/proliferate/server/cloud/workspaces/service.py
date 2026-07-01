@@ -11,6 +11,7 @@ import re
 from typing import Literal, Protocol
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -151,9 +152,7 @@ async def create_cloud_workspace_for_user(
     taken_names.update(active_workspace_branches)
     generated_name = bool(body.generated_name)
     final_branch_name = (
-        resolve_generated_branch_name(branch_name, taken_names)
-        if generated_name
-        else branch_name
+        resolve_generated_branch_name(branch_name, taken_names) if generated_name else branch_name
     )
     if not generated_name:
         if final_branch_name in repo_branches.branches:
@@ -170,6 +169,7 @@ async def create_cloud_workspace_for_user(
             )
 
     display_name = (body.display_name or final_branch_name).strip() or final_branch_name
+    display_name_is_generated = not (body.display_name or "").strip()
     if len(display_name) > MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS:
         raise CloudApiError(
             "invalid_display_name",
@@ -180,14 +180,19 @@ async def create_cloud_workspace_for_user(
             status_code=400,
         )
 
-    workspace = await cloud_workspace_store.create_cloud_workspace(
+    workspace = await _create_workspace_row_with_branch_retry(
         db,
         user_id=user.id,
         repo_environment_id=repo_environment.id,
         display_name=display_name,
-        git_branch=final_branch_name,
+        initial_branch_name=final_branch_name,
+        branch_generation_seed=branch_name,
         git_base_branch=base_branch,
+        generated_name=generated_name,
+        display_name_is_generated=display_name_is_generated,
+        repo_branches=repo_branches.branches,
     )
+    final_branch_name = workspace.git_branch
 
     await materialization_service.materialize_repo_environment(
         db,
@@ -203,6 +208,7 @@ async def create_cloud_workspace_for_user(
     anyharness_workspace = await _create_anyharness_worktree(
         runtime_url,
         runtime_token,
+        workspace_id=workspace.id,
         repo_environment=repo_environment,
         repo_root_id=repo_root.repo_root_id,
         branch_name=final_branch_name,
@@ -262,7 +268,27 @@ async def restore_cloud_workspace_for_user(
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
-    workspace = await cloud_workspace_store.restore_cloud_workspace(db, workspace)
+    active_branches = (
+        await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(
+            db,
+            repo_environment_id=workspace.repo_environment_id,
+        )
+    )
+    if workspace.git_branch in active_branches:
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{workspace.git_branch}'.",
+            status_code=409,
+        )
+    try:
+        async with db.begin_nested():
+            workspace = await cloud_workspace_store.restore_cloud_workspace(db, workspace)
+    except IntegrityError as exc:
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            f"A cloud workspace already exists for branch '{workspace.git_branch}'.",
+            status_code=409,
+        ) from exc
     return await _workspace_payload(db, workspace, detail=True)
 
 
@@ -330,6 +356,7 @@ async def _create_anyharness_worktree(
     runtime_url: str,
     runtime_token: str,
     *,
+    workspace_id: UUID,
     repo_environment: RepoEnvironmentValue,
     repo_root_id: str,
     branch_name: str,
@@ -337,7 +364,7 @@ async def _create_anyharness_worktree(
     setup_script: str,
     source: str,
 ) -> ResolvedRemoteWorkspace:
-    target_path = _worktree_path(repo_environment, branch_name)
+    target_path = _worktree_path(repo_environment, branch_name, workspace_id=workspace_id)
     try:
         return await create_remote_worktree_workspace(
             runtime_url,
@@ -355,6 +382,58 @@ async def _create_anyharness_worktree(
             str(exc),
             status_code=502,
         ) from exc
+
+
+async def _create_workspace_row_with_branch_retry(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_environment_id: UUID,
+    display_name: str,
+    initial_branch_name: str,
+    branch_generation_seed: str,
+    git_base_branch: str,
+    generated_name: bool,
+    display_name_is_generated: bool,
+    repo_branches: list[str],
+) -> CloudWorkspace:
+    current_branch_name = initial_branch_name
+    for _attempt in range(5):
+        try:
+            async with db.begin_nested():
+                return await cloud_workspace_store.create_cloud_workspace(
+                    db,
+                    user_id=user_id,
+                    repo_environment_id=repo_environment_id,
+                    display_name=(
+                        current_branch_name if display_name_is_generated else display_name
+                    ),
+                    git_branch=current_branch_name,
+                    git_base_branch=git_base_branch,
+                )
+        except IntegrityError as exc:
+            if not generated_name:
+                raise CloudApiError(
+                    "cloud_branch_already_exists",
+                    f"A cloud workspace already exists for branch '{current_branch_name}'.",
+                    status_code=409,
+                ) from exc
+
+        active_workspace_branches = (
+            await cloud_workspace_store.list_active_workspace_branches_for_repo_environment(
+                db,
+                repo_environment_id=repo_environment_id,
+            )
+        )
+        taken_names = set(repo_branches)
+        taken_names.update(active_workspace_branches)
+        current_branch_name = resolve_generated_branch_name(branch_generation_seed, taken_names)
+
+    raise CloudApiError(
+        "cloud_branch_generation_failed",
+        "Could not generate a unique cloud workspace branch name.",
+        status_code=409,
+    )
 
 
 async def _load_user_workspace(
@@ -460,11 +539,16 @@ def _runtime_status(sandbox: CloudSandboxValue | None) -> CloudRuntimeStatus:
     return "pending"
 
 
-def _worktree_path(repo_environment: RepoEnvironmentValue, branch_name: str) -> str:
+def _worktree_path(
+    repo_environment: RepoEnvironmentValue,
+    branch_name: str,
+    *,
+    workspace_id: UUID,
+) -> str:
     return (
         f"{materialization_paths.SANDBOX_WORKSPACE_ROOT}/worktrees/"
         f"{repo_environment.git_owner}/{repo_environment.git_repo_name}/"
-        f"{_branch_path_segment(branch_name)}"
+        f"{_branch_path_segment(branch_name)}-{str(workspace_id)[:8]}"
     )
 
 

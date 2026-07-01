@@ -7,24 +7,16 @@ import {
   deleteCloudWorkspace,
   getCloudWorkspace,
   restoreCloudWorkspace,
-  startCloudWorkspace,
 } from "@proliferate/cloud-sdk/client/workspaces";
-import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
-import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { useCloudWorkspaceLifecycleCache } from "@/hooks/access/cloud/use-cloud-workspace-lifecycle-cache";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import {
-  resolveActiveProjectedSessionForPendingWorkspace,
-} from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import {
   captureTelemetryException,
@@ -46,8 +38,7 @@ function resolveCloudWorkspaceRuntimeId(workspaceId: string): string {
 
 export function useCloudWorkspaceActions() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
+  const { clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
   const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
@@ -74,62 +65,6 @@ export function useCloudWorkspaceActions() {
       upsertCloudWorkspace(workspace);
       invalidateCloudWorkspaceLifecycle(workspace.id);
       await invalidateWorkspaceCollections();
-    },
-  });
-
-  const startMutation = useMutation<CloudWorkspaceDetail, Error, string>({
-    meta: {
-      telemetryHandled: true,
-    },
-    mutationFn: async (workspaceId) => {
-      const cloudWorkspaceId = workspaceId.startsWith("cloud:")
-        ? workspaceId.slice("cloud:".length)
-        : workspaceId;
-      try {
-        return await startCloudWorkspace(cloudWorkspaceId);
-      } catch (error) {
-        const didSync = await autoSyncDetectedAgentAuthCredentialsIfNeeded(
-          error,
-          syncLocalAgentAuthCredentialToCloud,
-        );
-        if (!didSync) {
-          throw error;
-        }
-        return await startCloudWorkspace(cloudWorkspaceId);
-      }
-    },
-    onSuccess: async (workspace) => {
-      await clearCachedCloudWorkspaceConnections(workspace.id);
-      upsertCloudWorkspace(workspace);
-      await invalidateCloudResources();
-      const syntheticWorkspaceId = cloudWorkspaceSyntheticId(workspace.id);
-      const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
-      const shouldPreservePending = pendingWorkspaceEntry?.workspaceId === syntheticWorkspaceId
-        && pendingWorkspaceEntry.stage === "awaiting-cloud-ready";
-      const initialActiveSessionId = shouldPreservePending
-        ? resolveActiveProjectedSessionForPendingWorkspace(syntheticWorkspaceId, pendingWorkspaceEntry)
-        : null;
-      if (selectedWorkspaceId === syntheticWorkspaceId) {
-        await selectWorkspace(syntheticWorkspaceId, {
-          force: true,
-          preservePending: shouldPreservePending,
-          ...(initialActiveSessionId ? { initialActiveSessionId } : {}),
-        });
-      }
-      trackProductEvent("cloud_workspace_started", {
-        workspace_kind: "cloud",
-        status: resolveCloudWorkspaceStatus(workspace) ?? "unknown",
-        git_provider: workspace.repo.provider,
-      });
-    },
-    onError: (error) => {
-      captureTelemetryException(error, {
-        tags: {
-          action: "start_cloud_workspace",
-          domain: "cloud_workspace",
-          workspace_kind: "cloud",
-        },
-      });
     },
   });
 
@@ -231,8 +166,6 @@ export function useCloudWorkspaceActions() {
   return {
     refreshCloudWorkspace: refreshMutation.mutateAsync,
     isRefreshingCloudWorkspace: refreshMutation.isPending,
-    startCloudWorkspace: startMutation.mutateAsync,
-    isStartingCloudWorkspace: startMutation.isPending,
     archiveCloudWorkspace: archiveMutation.mutateAsync,
     isArchivingCloudWorkspace: archiveMutation.isPending,
     restoreCloudWorkspace: restoreMutation.mutateAsync,

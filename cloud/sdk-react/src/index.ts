@@ -5,7 +5,6 @@ export * from "./hooks/agent-catalog.js";
 export * from "./hooks/agent-run-configs.js";
 export * from "./hooks/agent-auth.js";
 export * from "./hooks/billing.js";
-export * from "./hooks/claims.js";
 export * from "./hooks/cloud-secrets.js";
 export * from "./hooks/github-app.js";
 export * from "./hooks/integration-policy.js";

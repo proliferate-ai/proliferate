@@ -6,6 +6,7 @@ and owns cloud-specific access checks without leaking raw GitHub behavior.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -20,7 +21,7 @@ from proliferate.integrations.github import (
     GitHubRateLimited,
     list_branches,
 )
-from proliferate.db.store.cloud_repo_config import CloudRepoConfigSummaryValue
+from proliferate.db.store.repositories import RepoEnvironmentValue
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repos.domain.github_credentials import (
     CloudRepoGitHubCredentials,
@@ -292,30 +293,22 @@ class TestListCloudRepositories:
             ],
             next_cursor="cursor-2",
         )
-        configs = [
-            CloudRepoConfigSummaryValue(
+        environments = [
+            RepoEnvironmentValue(
                 id=uuid.uuid4(),
-                owner_scope="personal",
+                repo_config_id=uuid.uuid4(),
                 user_id=credentials.user_id,
-                organization_id=None,
+                git_provider="github",
                 git_owner="acme",
                 git_repo_name="rocket",
-                configured=True,
-                configured_at=None,
+                environment_kind="cloud",
+                desktop_install_id=None,
+                local_path=None,
                 default_branch="main",
-                files_version=0,
-            ),
-            CloudRepoConfigSummaryValue(
-                id=uuid.uuid4(),
-                owner_scope="personal",
-                user_id=credentials.user_id,
-                organization_id=None,
-                git_owner="acme",
-                git_repo_name="disabled",
-                configured=False,
-                configured_at=None,
-                default_branch="main",
-                files_version=0,
+                setup_script="",
+                run_command="",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             ),
         ]
 
@@ -326,9 +319,9 @@ class TestListCloudRepositories:
                 return_value=github_page,
             ) as list_github,
             patch(
-                "proliferate.server.cloud.repos.service.list_cloud_repo_configs",
+                "proliferate.server.cloud.repos.service.list_cloud_repo_environments",
                 new_callable=AsyncMock,
-                return_value=configs,
+                return_value=environments,
             ),
         ):
             result = await list_cloud_repositories(
@@ -348,7 +341,7 @@ class TestListCloudRepositories:
         assert result.next_cursor == "cursor-2"
         assert [repo.repo_config_state for repo in result.repositories] == [
             "configured",
-            "disabled",
+            "missing",
         ]
         assert result.repositories[0].configured is True
         assert result.repositories[1].configured is False

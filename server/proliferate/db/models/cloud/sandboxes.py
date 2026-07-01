@@ -29,9 +29,7 @@ class CloudSandbox(Base):
     __tablename__ = "cloud_sandbox"
     __table_args__ = (
         CheckConstraint(
-            "status IN ("
-            "'creating', 'ready', 'paused', 'error', 'destroyed'"
-            ")",
+            "status IN ('creating', 'ready', 'paused', 'error', 'destroyed')",
             name="ck_cloud_sandbox_status",
         ),
         CheckConstraint(

@@ -50,8 +50,7 @@ async def test_complete_github_app_user_authorization_callback_stores_authorizat
     ) -> GitHubAppUserAuthorization:
         assert code == "code-test"
         assert (
-            redirect_uri
-            == "https://api.example.test/auth/github-app/user-authorization/callback"
+            redirect_uri == "https://api.example.test/auth/github-app/user-authorization/callback"
         )
         return authorization
 

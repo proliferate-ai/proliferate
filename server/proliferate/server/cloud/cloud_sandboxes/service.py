@@ -92,4 +92,3 @@ async def load_cloud_sandbox_runtime_access(
         decrypt_text(sandbox.anyharness_bearer_token_ciphertext),
         decrypt_text(sandbox.anyharness_data_key_ciphertext),
     )
-

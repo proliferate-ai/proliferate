@@ -1,7 +1,4 @@
 import { useRef, useState } from "react";
-import {
-  useClaimCloudWorkspace,
-} from "@proliferate/cloud-sdk-react";
 import type { CloudChatSurfaceProps } from "@proliferate/product-ui/chat/CloudChatSurface";
 import {
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
@@ -115,8 +112,7 @@ export function useWebCloudChatScreen(): WebCloudChatScreenState {
     pendingHomePromptStatus,
     pendingConfigChanges,
   });
-  const claimWorkspace = useClaimCloudWorkspace();
-  const isUnclaimed = workspace?.visibility === "shared_unclaimed";
+  const isUnclaimed = false;
   const {
     workspaceAllowedAgentKindsKey,
     workspaceReadyAgentKindsKey,
@@ -176,7 +172,6 @@ export function useWebCloudChatScreen(): WebCloudChatScreenState {
     sessionEventsRefetch: sessionEventsQuery.refetch,
     transcriptItems,
     transcriptRows: transcriptView.rows,
-    claimWorkspace,
     navigate,
   });
   const composerControls = useWebCloudComposerControls({
@@ -302,7 +297,7 @@ export function useWebCloudChatScreen(): WebCloudChatScreenState {
       composerControls,
       directPromptDispatching,
       promptCommandPending: directPromptDispatching,
-      claimWorkspacePending: claimWorkspace.isPending,
+      claimWorkspacePending: false,
       onClaimWorkspace: () => void claimCurrentWorkspace(),
       onCopyComposerFooterValue: copyComposerFooterValue,
       onOpenNewSessionDraft: () => openNewSessionDraft(),

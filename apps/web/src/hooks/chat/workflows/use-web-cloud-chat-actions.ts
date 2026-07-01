@@ -57,10 +57,6 @@ export function useWebCloudChatActions(input: {
   sessionEventsRefetch: () => Promise<unknown> | unknown;
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
-  claimWorkspace: {
-    isPending: boolean;
-    mutateAsync: (input: { workspaceId: string }) => Promise<unknown>;
-  };
   navigate: NavigateFunction;
 }) {
   const {
@@ -94,7 +90,6 @@ export function useWebCloudChatActions(input: {
     sessionEventsRefetch,
     transcriptItems,
     transcriptRows,
-    claimWorkspace,
     navigate,
   } = input;
   const {
@@ -170,12 +165,7 @@ export function useWebCloudChatActions(input: {
   const {
     claimCurrentWorkspace,
     copyComposerFooterValue,
-  } = useWebCloudWorkspaceActions({
-    workspace,
-    setPendingHomePromptStatus,
-    workspaceRefetch,
-    claimWorkspace,
-  });
+  } = useWebCloudWorkspaceActions();
 
   return {
     activePlanDecision,

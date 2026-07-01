@@ -19,7 +19,6 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
-import { startCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import { runWorkspaceSelection } from "./run-workspace-selection";
@@ -36,7 +35,6 @@ vi.mock("./connection", () => ({
 }));
 
 vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
-  startCloudWorkspace: vi.fn(),
 }));
 
 describe("runWorkspaceSelection", () => {
@@ -66,7 +64,6 @@ describe("runWorkspaceSelection", () => {
   beforeEach(() => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockReset();
     vi.mocked(resolveSelectionConnection).mockReset();
-    vi.mocked(startCloudWorkspace).mockReset();
     resetLatencyFlowsForTest();
     useSessionSelectionStore.setState({
       selectedWorkspaceId: null,
@@ -160,7 +157,7 @@ describe("runWorkspaceSelection", () => {
     expect(resolveCloudWorkspaceReadiness).not.toHaveBeenCalled();
   });
 
-  it("starts a ready cloud workspace when its connection metadata is stale", async () => {
+  it("refreshes cloud workspace status when connection metadata is stale", async () => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({
       kind: "cloud-ready",
       cloudWorkspaceId: "cloud-1",
@@ -168,9 +165,6 @@ describe("runWorkspaceSelection", () => {
     vi.mocked(resolveSelectionConnection).mockRejectedValueOnce(
       new ProliferateClientError("not ready", 409, "workspace_not_ready"),
     );
-    vi.mocked(startCloudWorkspace).mockResolvedValueOnce({
-      status: "queued",
-    } as never);
     const bootstrapWorkspace = vi.fn();
     const cache = selectionCache();
     const flowId = startLatencyFlow({
@@ -194,7 +188,6 @@ describe("runWorkspaceSelection", () => {
       options: { latencyFlowId: flowId },
     });
 
-    expect(startCloudWorkspace).toHaveBeenCalledWith("cloud-1");
     expect(cache.invalidateCloudWorkspaceStartState).toHaveBeenCalledTimes(1);
     expect(bootstrapWorkspace).not.toHaveBeenCalled();
     expect(listActiveLatencyFlows()).toEqual([]);

@@ -78,8 +78,6 @@ export function MobileChatScreen({
   >({});
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [actionSheetInitialExpandedId, setActionSheetInitialExpandedId] = useState<string | null>(null);
-  const [claimedLocally, setClaimedLocally] = useState(false);
-
   const {
     workspaceQuery,
     workspace,
@@ -154,7 +152,7 @@ export function MobileChatScreen({
     runtimeLabel: runtimeContext.label,
     transcriptItems,
     transcriptRows: transcriptView.rows,
-    isUnclaimed: workspace?.visibility === "shared_unclaimed" && !claimedLocally,
+    isUnclaimed: false,
     pendingConfigChanges,
     setDraft,
     setLaunchSelection,
@@ -165,7 +163,6 @@ export function MobileChatScreen({
     setPendingConfigChanges,
     setSelectedSessionId,
     setNewSessionMode,
-    setClaimedLocally,
     setPermissionResolveError,
     setResolvingPermissionKey,
     setToolDetailRow,
@@ -210,7 +207,6 @@ export function MobileChatScreen({
     setPendingPromptFailed,
     setOptimisticPrompts,
     setPendingConfigChanges,
-    setClaimedLocally,
     resetPermissionSheet,
   });
   function openWorkspaceActionSheet(expandedId: string | null = null) {
@@ -223,7 +219,7 @@ export function MobileChatScreen({
     setActionSheetInitialExpandedId(null);
   }
 
-  const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
+  const isUnclaimed = false;
   const commandReadiness = workspace ? cloudCommandReadiness(workspace) : null;
   const workspaceCommandReady =
     workspaceStatus === "ready"

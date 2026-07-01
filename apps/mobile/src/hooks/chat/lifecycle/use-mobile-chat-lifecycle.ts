@@ -67,7 +67,6 @@ export function useMobileChatLifecycle({
   setPendingPromptFailed,
   setOptimisticPrompts,
   setPendingConfigChanges,
-  setClaimedLocally,
   resetPermissionSheet,
 }: {
   chat: MobileCloudChat;
@@ -100,7 +99,6 @@ export function useMobileChatLifecycle({
   setNewSessionMode: Dispatch<SetStateAction<boolean>>; setPendingPrompt: Dispatch<SetStateAction<MobilePendingPrompt | null>>;
   setPendingPromptStatus: Dispatch<SetStateAction<string | null>>; setPendingPromptFailed: Dispatch<SetStateAction<boolean>>;
   setOptimisticPrompts: Dispatch<SetStateAction<OptimisticPrompt[]>>; setPendingConfigChanges: Dispatch<SetStateAction<Record<string, PendingConfigChange>>>;
-  setClaimedLocally: Dispatch<SetStateAction<boolean>>;
   resetPermissionSheet: () => void;
 }) {
   useEffect(() => {
@@ -111,7 +109,6 @@ export function useMobileChatLifecycle({
     setPendingPromptFailed(false);
     setOptimisticPrompts([]);
     setPendingConfigChanges({});
-    setClaimedLocally(false);
     resetPermissionSheet();
   }, [chat.workspaceId, chat.sessionId]);
 

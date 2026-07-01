@@ -11,10 +11,7 @@ from datetime import datetime
 def render_env_file(env: Mapping[str, str]) -> str:
     if not env:
         return ""
-    return "".join(
-        f"export {key}={shlex.quote(value)}\n"
-        for key, value in sorted(env.items())
-    )
+    return "".join(f"export {key}={shlex.quote(value)}\n" for key, value in sorted(env.items()))
 
 
 def render_manifest(manifest: Mapping[str, object]) -> str:

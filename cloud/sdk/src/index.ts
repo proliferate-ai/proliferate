@@ -8,7 +8,6 @@ export * from "./client/agent-catalog.js";
 export * from "./client/ai-magic.js";
 export * from "./client/automations.js";
 export * from "./client/billing.js";
-export * from "./client/claims.js";
 export * from "./client/cloud-secrets.js";
 export * from "./client/compute.js";
 export * from "./client/github-app.js";

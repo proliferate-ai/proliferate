@@ -6,7 +6,6 @@ import type {
   CloudWorkspaceDetail,
 } from "@proliferate/cloud-sdk";
 import {
-  useClaimCloudWorkspace,
   useCloudClient,
 } from "@proliferate/cloud-sdk-react";
 import {
@@ -57,7 +56,6 @@ export function useMobileChatActions({
   setPendingConfigChanges,
   setSelectedSessionId,
   setNewSessionMode,
-  setClaimedLocally,
   setPermissionResolveError,
   setResolvingPermissionKey,
   setToolDetailRow,
@@ -90,7 +88,6 @@ export function useMobileChatActions({
   setPendingConfigChanges: Dispatch<SetStateAction<Record<string, PendingConfigChange>>>;
   setSelectedSessionId: Dispatch<SetStateAction<string | null>>;
   setNewSessionMode: Dispatch<SetStateAction<boolean>>;
-  setClaimedLocally: Dispatch<SetStateAction<boolean>>;
   setPermissionResolveError: Dispatch<SetStateAction<string | null>>;
   setResolvingPermissionKey: Dispatch<SetStateAction<string | null>>;
   setToolDetailRow: Dispatch<SetStateAction<CloudChatTranscriptRowView | null>>;
@@ -102,7 +99,6 @@ export function useMobileChatActions({
 }) {
   const { invalidateWorkspaceLists } = useMobileCloudWorkspaceCache();
   const client = useCloudClient();
-  const claimWorkspace = useClaimCloudWorkspace();
   const agentResources = useMobileCloudAgentResources();
   const pendingDispatchRunRef = useRef<{ key: string; active: boolean } | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
@@ -264,20 +260,7 @@ export function useMobileChatActions({
   }
 
   async function claimChat(): Promise<boolean> {
-    if (!workspace) {
-      return false;
-    }
-    try {
-      await claimWorkspace.mutateAsync({ workspaceId: workspace.id });
-      setClaimedLocally(true);
-      setPendingPromptStatus(null);
-      void workspaceRefetch();
-      invalidateWorkspaceLists();
-      return true;
-    } catch (error) {
-      setPendingPromptStatus(error instanceof Error ? error.message : "Workspace could not be claimed.");
-      return false;
-    }
+    return false;
   }
 
   function startNewSession(selection?: CloudLaunchComposerSelection) {
@@ -322,7 +305,7 @@ export function useMobileChatActions({
     composerControlSummary,
     canStartNewSession,
     workspaceHarnessAvailability,
-    claimPending: claimWorkspace.isPending,
+    claimPending: false,
     promptSubmitting,
     submitPrompt,
     submitSessionConfig,

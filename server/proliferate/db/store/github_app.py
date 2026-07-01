@@ -237,8 +237,7 @@ async def upsert_github_app_installation(
         await db.execute(
             select(GitHubAppInstallation)
             .where(
-                GitHubAppInstallation.github_installation_id
-                == installation.github_installation_id
+                GitHubAppInstallation.github_installation_id == installation.github_installation_id
             )
             .with_for_update()
         )
@@ -277,13 +276,17 @@ async def get_github_app_installation_for_organization(
     organization_id: UUID,
 ) -> GitHubAppInstallationValue | None:
     row = (
-        await db.execute(
-            select(GitHubAppInstallation)
-            .where(GitHubAppInstallation.organization_id == organization_id)
-            .where(GitHubAppInstallation.deleted_at.is_(None))
-            .order_by(GitHubAppInstallation.updated_at.desc())
+        (
+            await db.execute(
+                select(GitHubAppInstallation)
+                .where(GitHubAppInstallation.organization_id == organization_id)
+                .where(GitHubAppInstallation.deleted_at.is_(None))
+                .order_by(GitHubAppInstallation.updated_at.desc())
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return _installation_value(row) if row is not None else None
 
 

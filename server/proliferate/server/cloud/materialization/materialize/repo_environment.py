@@ -159,7 +159,7 @@ async def _materialize_git_checkout(
             "fresh_clone=0",
             'if [ -z "$default_branch" ]; then',
             '  default_branch="$(git ls-remote --symref "$remote_url" HEAD '
-            "| awk '/^ref:/ { sub(\"refs/heads/\", \"\", $2); print $2; exit }')\"",
+            '| awk \'/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }\')"',
             "fi",
             'if [ -z "$default_branch" ]; then default_branch="main"; fi',
             'if [ ! -d "$repo_path/.git" ]; then',
@@ -176,7 +176,7 @@ async def _materialize_git_checkout(
                 '  if git -C "$repo_path" rev-parse --verify --quiet "$default_branch" '
                 ">/dev/null; then"
             ),
-            '    read -r _behind ahead <<EOF',
+            "    read -r _behind ahead <<EOF",
             (
                 '$(git -C "$repo_path" rev-list --left-right --count '
                 '"origin/$default_branch...$default_branch")'

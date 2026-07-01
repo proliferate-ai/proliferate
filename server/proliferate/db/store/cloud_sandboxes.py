@@ -47,9 +47,7 @@ class CloudSandboxValue:
 def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
     status = row.status.value if hasattr(row.status, "value") else row.status
     sandbox_type = (
-        row.sandbox_type.value
-        if hasattr(row.sandbox_type, "value")
-        else row.sandbox_type
+        row.sandbox_type.value if hasattr(row.sandbox_type, "value") else row.sandbox_type
     )
     return CloudSandboxValue(
         id=row.id,

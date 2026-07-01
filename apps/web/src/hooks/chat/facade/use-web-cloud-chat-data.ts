@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import type {
   Session,
   SessionEventEnvelope,
+  SessionExecutionSummary,
 } from "@anyharness/sdk";
 import type {
   CloudPendingInteraction,
@@ -31,7 +32,6 @@ import { useAuthToken } from "../../../providers/WebCloudProvider";
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
-const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
 
 export function useWebCloudChatData() {
   const { workspaceId, chatId } = useParams();
@@ -107,7 +107,13 @@ export function useWebCloudChatData() {
     refetch: sessionEventsQuery.refetch,
   };
   const transcriptItems = EMPTY_TRANSCRIPT_ITEMS;
-  const pendingInteractions = EMPTY_PENDING_INTERACTIONS;
+  const pendingInteractions = useMemo(
+    () => cloudPendingInteractionsFromExecutionSummary(
+      session?.executionSummary as SessionExecutionSummary | null | undefined,
+      session?.sessionId ?? null,
+    ),
+    [session?.executionSummary, session?.sessionId],
+  );
   const sessionEvents = sessionEventsQuery.data ?? EMPTY_SESSION_EVENTS;
   const snapshot = useMemo(
     () => workspace ? { workspace, sessions } : undefined,
@@ -154,7 +160,8 @@ function cloudSessionProjectionFromAnyHarness(
     startedAt: session.createdAt,
     lastEventAt: session.updatedAt ?? session.lastPromptAt ?? session.createdAt,
     lastEventSeq: 0,
-    pendingInteractionCount: session.pendingPrompts?.length ?? 0,
+    pendingInteractionCount: session.executionSummary?.pendingInteractions?.length ?? 0,
+    executionSummary: session.executionSummary ?? null,
     parentSessionId: null,
     sourceAgentKind: session.agentKind,
     modelId: session.modelId ?? session.requestedModelId ?? null,
@@ -169,6 +176,41 @@ function cloudSessionProjectionFromAnyHarness(
       }
       : null,
   };
+}
+
+function cloudPendingInteractionsFromExecutionSummary(
+  executionSummary: SessionExecutionSummary | null | undefined,
+  sessionId: string | null,
+): CloudPendingInteraction[] {
+  return (executionSummary?.pendingInteractions ?? []).map((interaction) => ({
+    requestId: interaction.requestId,
+    sessionId,
+    status: "pending",
+    kind: interaction.kind,
+    title: interaction.title,
+    description: interaction.description ?? null,
+    toolCallId: interaction.source.toolCallId ?? null,
+    toolKind: interaction.source.toolKind ?? null,
+    toolStatus: interaction.source.toolStatus ?? null,
+    linkedPlanId: interaction.source.linkedPlanId ?? null,
+    ...(interaction.payload.type === "permission"
+      ? {
+        options: interaction.payload.options ?? [],
+        context: interaction.payload.context ?? null,
+      }
+      : {}),
+    ...(interaction.payload.type === "user_input"
+      ? { questions: interaction.payload.questions ?? [] }
+      : {}),
+    ...(interaction.payload.type === "mcp_elicitation"
+      ? {
+        mcpElicitation: {
+          serverName: interaction.payload.serverName,
+          mode: interaction.payload.mode,
+        },
+      }
+      : {}),
+  }));
 }
 
 function cloudSessionEventFromAnyHarness(
