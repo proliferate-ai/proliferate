@@ -26,7 +26,6 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "github_app_authorizations",
         "github_app_installations",
         "github_app_installation_repositories",
-        "github_app_installation_links",
         "oauth_account",
         "organization",
         "organization_invitation",
@@ -50,10 +49,11 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "managed_sandbox_repo_materialization",
         "sandbox_profile",
         "sandbox_profile_target_state",
+        "github_app_installation_links",
     }.isdisjoint(tables)
 
     await assert_background_outbox_schema(conn)
-    await assert_sso_schema(conn, head_revision)
+    await assert_sso_schema(conn)
 
     repo_config_columns = await conn.run_sync(
         lambda sync_conn: {
@@ -184,3 +184,24 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "updated_at",
     } <= secret_set_columns
     assert "cloud_repo_config_id" not in secret_set_columns
+
+    github_app_installation_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("github_app_installations")
+        }
+    )
+    assert {
+        "id",
+        "organization_id",
+        "installed_by_user_id",
+        "github_installation_id",
+        "account_login",
+        "account_type",
+        "repository_selection",
+        "permissions_json",
+        "suspended_at",
+        "deleted_at",
+        "created_at",
+        "updated_at",
+    } <= github_app_installation_columns
