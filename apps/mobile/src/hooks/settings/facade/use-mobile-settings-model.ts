@@ -47,13 +47,12 @@ export function useMobileSettingsModel(account: MobileSettingsAccountSummary) {
       const cloudEnvironment = repo.environments.find((environment) =>
         environment.kind === "cloud"
       );
-      if (!cloudEnvironment?.configured) {
+      if (!cloudEnvironment) {
         return [];
       }
       return [{
         gitOwner: repo.gitOwner,
         gitRepoName: repo.gitRepoName,
-        configured: true,
       }];
     }),
     [repoConfigs.data?.repositories],

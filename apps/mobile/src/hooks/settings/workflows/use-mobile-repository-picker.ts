@@ -38,9 +38,9 @@ export function useMobileRepositoryPicker({
         gitOwner,
         gitRepoName,
         body: {
-          configured: true,
+          kind: "cloud",
+          gitProvider: "github",
           defaultBranch,
-          envVars: {},
           setupScript: "",
           runCommand: "",
         },

@@ -42,11 +42,9 @@ export function buildMobileRepoOptions(
   configs: readonly {
     gitOwner: string;
     gitRepoName: string;
-    configured: boolean;
   }[],
 ): MobileRepoOption[] {
   return configs
-    .filter((config) => config.configured)
     .map((config) => ({
       id: `${config.gitOwner}/${config.gitRepoName}`,
       gitOwner: config.gitOwner,

@@ -117,8 +117,6 @@ export function useMobileHomeLaunchActions(input: {
         branchName: buildBranchName(prompt),
         generatedName: true,
         displayName: buildWorkspaceDisplayName(prompt),
-        ownerScope: "personal",
-        requiredAgentKind: input.selection.agentKind,
         source: "mobile",
       });
       await savePendingMobilePrompt(workspace.id, input.ownerUserId, pendingPrompt)
