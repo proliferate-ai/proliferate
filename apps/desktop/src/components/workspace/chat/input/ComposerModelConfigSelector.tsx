@@ -6,8 +6,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
+import { useNavigate } from "react-router-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { summarizeComposerModelConfigControls } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import { sortComposerConfigSubmenuControls } from "@/lib/domain/chat/session-controls/composer-config-submenu-presentation";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
@@ -43,15 +44,20 @@ export function ComposerModelConfigSelector({
   agentKind,
   controls,
 }: ComposerModelConfigSelectorProps) {
+  const navigate = useNavigate();
   const menuRootRef = useRef<HTMLDivElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
   const [search, setSearch] = useState("");
-  const [addProviderOpen, setAddProviderOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<ComposerConfigSubmenu | null>(null);
   const [submenuAnchorTop, setSubmenuAnchorTop] = useState<number | null>(null);
   const [submenuPosition, setSubmenuPosition] = useState<ComposerSubmenuPosition | null>(null);
-  const [setupAgent, setSetupAgent] = useState<ModelSelectorProps["notReadyAgents"][number] | null>(null);
   const submenuCloseTimerRef = useRef<number | null>(null);
+
+  // UX_SPEC §5: adding a harness routes to Settings → Agents instead of
+  // opening AgentSetupModal in place.
+  const handleAddHarness = useCallback(() => {
+    navigate(buildSettingsHref({ section: "agent-authentication" }));
+  }, [navigate]);
 
   const cancelPendingSubmenuClose = useCallback(() => {
     if (submenuCloseTimerRef.current !== null) {
@@ -76,7 +82,6 @@ export function ComposerModelConfigSelector({
     groups,
     hasAgents,
     isLoading,
-    notReadyAgents,
     onSelect,
   } = modelSelectorProps;
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
@@ -209,7 +214,6 @@ export function ComposerModelConfigSelector({
             cancelPendingSubmenuClose();
             resetMenuState({
               setActiveSubmenu,
-              setAddProviderOpen,
               setSearch,
               setSubmenuAnchorTop,
               setSubmenuPosition,
@@ -222,23 +226,20 @@ export function ComposerModelConfigSelector({
             activeKind={activeKind}
             activeModelGroups={activeModelGroups}
             activeSubmenu={activeSubmenu}
-            addProviderOpen={addProviderOpen}
             agentKind={agentKind}
             filteredGroups={filteredGroups}
             groups={groups}
             menuRootRef={menuRootRef}
-            notReadyAgents={notReadyAgents}
             search={search}
             submenuControls={submenuControls}
             submenuPosition={submenuPosition}
             submenuRef={submenuRef}
-            onAddProviderOpenChange={setAddProviderOpen}
+            onAddHarness={handleAddHarness}
             onClose={close}
             onMenuMouseEnter={cancelPendingSubmenuClose}
             onMenuMouseLeave={scheduleSubmenuClose}
             onOpenSubmenu={(submenu, anchorElement) => {
               cancelPendingSubmenuClose();
-              setAddProviderOpen(false);
               setSubmenuPosition(null);
               setSubmenuAnchorTop(resolveSubmenuAnchorTop(menuRootRef.current, anchorElement));
               setActiveSubmenu(submenu);
@@ -248,36 +249,25 @@ export function ComposerModelConfigSelector({
               onSelect(selection);
               close();
             }}
-            onSetupAgent={setSetupAgent}
           />
         )}
       </PopoverButton>
-
-      {setupAgent && (
-        <AgentSetupModal
-          agent={setupAgent}
-          onClose={() => setSetupAgent(null)}
-        />
-      )}
     </>
   );
 }
 
 function resetMenuState({
   setActiveSubmenu,
-  setAddProviderOpen,
   setSearch,
   setSubmenuAnchorTop,
   setSubmenuPosition,
 }: {
   setActiveSubmenu: (value: ComposerConfigSubmenu | null) => void;
-  setAddProviderOpen: (value: boolean) => void;
   setSearch: (value: string) => void;
   setSubmenuAnchorTop: (value: number | null) => void;
   setSubmenuPosition: (value: ComposerSubmenuPosition | null) => void;
 }) {
   setSearch("");
-  setAddProviderOpen(false);
   setActiveSubmenu(null);
   setSubmenuAnchorTop(null);
   setSubmenuPosition(null);

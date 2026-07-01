@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render as renderBase, screen, waitFor, type RenderOptions } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 import type { ModelSelectorGroup } from "@/lib/domain/chat/models/model-selector-types";
@@ -9,8 +11,6 @@ import { ModelSelector } from "./ModelSelector";
 const modelSelectorMenuMock = vi.hoisted(() => {
   const createState = () => ({
     open: false,
-    addProviderOpen: false,
-    setupAgent: null,
     search: "",
     triggerRef: { current: null } as { current: HTMLButtonElement | null },
     menuPos: null as { bottom: number; left: number } | null,
@@ -18,9 +18,6 @@ const modelSelectorMenuMock = vi.hoisted(() => {
     setSearch: vi.fn(),
     handleOpen: vi.fn(),
     handleClose: vi.fn(),
-    toggleAddProvider: vi.fn(),
-    openSetupAgent: vi.fn(),
-    closeSetupAgent: vi.fn(),
   });
 
   return {
@@ -42,6 +39,11 @@ afterEach(() => {
 function NativeOverlayObserver() {
   const open = useNativeOverlayOpen();
   return <div data-testid="native-overlay-state" data-open={String(open)} />;
+}
+
+// ModelSelector navigates to settings via useNavigate, so renders need a Router.
+function render(ui: ReactNode, options?: RenderOptions) {
+  return renderBase(ui, { wrapper: MemoryRouter, ...options });
 }
 
 describe("ModelSelector", () => {

@@ -1,5 +1,9 @@
-import { Button } from "@proliferate/ui/primitives/Button";
+import { useMemo } from "react";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
+import {
+  ComposerOptionRow,
+  useComposerOptionNumberKeys,
+} from "./ComposerOptionRow";
 import { useActivePendingApproval } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useChatPermissionActions } from "@/hooks/chat/workflows/use-chat-permission-actions";
 import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
@@ -8,6 +12,10 @@ import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-inp
 // icon, no label chip, no uppercase prefix. The title itself is
 // self-describing (a command, a file path, or a question) so the extra
 // chrome just added visual noise.
+//
+// Options follow the Superset anatomy (UX_SPEC §5): full-width rows with
+// hairline separators, leading number-key badges, 1–9 selects. Destructive
+// options (deny/reject/cancel) render in --danger text.
 
 export interface ApprovalCardProps {
   title: string;
@@ -15,6 +23,13 @@ export interface ApprovalCardProps {
   onSelectOption: (optionId: string) => void;
   onAllow: () => void;
   onDeny: () => void;
+}
+
+interface ApprovalOption {
+  key: string;
+  label: string;
+  destructive: boolean;
+  onSelect: () => void;
 }
 
 /**
@@ -29,6 +44,25 @@ export function ApprovalCard({
   onAllow,
   onDeny,
 }: ApprovalCardProps) {
+  const options = useMemo<ApprovalOption[]>(() => {
+    if (actions.length > 0) {
+      return actions.map((action) => ({
+        key: action.optionId,
+        label: action.label,
+        destructive: isDestructiveActionKind(action.kind),
+        onSelect: () => onSelectOption(action.optionId),
+      }));
+    }
+    return [
+      { key: "allow", label: "Allow", destructive: false, onSelect: onAllow },
+      { key: "deny", label: "Deny", destructive: true, onSelect: onDeny },
+    ];
+  }, [actions, onAllow, onDeny, onSelectOption]);
+
+  useComposerOptionNumberKeys(options.length, (index) => {
+    options[index]?.onSelect();
+  });
+
   const header = (
     <div className="text-chat min-w-0 truncate font-medium leading-[var(--text-chat--line-height)] text-foreground">
       {title}
@@ -37,16 +71,24 @@ export function ApprovalCard({
 
   return (
     <ComposerAttachedPanel header={header}>
-      <div className="flex flex-col gap-3 p-3">
-        <ApprovalOptionsRow
-          actions={actions}
-          onSelectOption={onSelectOption}
-          onAllow={onAllow}
-          onDeny={onDeny}
-        />
+      <div className="max-h-[300px] overflow-y-auto px-2 pb-2">
+        {options.map((option, index) => (
+          <ComposerOptionRow
+            key={option.key}
+            index={index}
+            label={option.label}
+            destructive={option.destructive}
+            onSelect={option.onSelect}
+          />
+        ))}
       </div>
     </ComposerAttachedPanel>
   );
+}
+
+function isDestructiveActionKind(kind: string | null): boolean {
+  if (!kind) return false;
+  return kind.startsWith("reject") || kind.startsWith("deny") || kind.startsWith("cancel");
 }
 
 export function ConnectedApprovalCard() {
@@ -69,66 +111,5 @@ export function ConnectedApprovalCard() {
       onAllow={handleAllowPermission}
       onDeny={handleDenyPermission}
     />
-  );
-}
-
-const APPROVAL_BUTTON_CLASSNAME = "rounded-xl px-2.5 text-sm";
-
-function ApprovalOptionsRow({
-  actions,
-  onSelectOption,
-  onAllow,
-  onDeny,
-}: {
-  actions: PermissionOptionAction[];
-  onSelectOption: (optionId: string) => void;
-  onAllow: () => void;
-  onDeny: () => void;
-}) {
-  const hasExplicitActions = actions.length > 0;
-
-  if (!hasExplicitActions) {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          onClick={onDeny}
-          variant="secondary"
-          size="sm"
-          className={APPROVAL_BUTTON_CLASSNAME}
-        >
-          Deny
-        </Button>
-        <Button
-          type="button"
-          onClick={onAllow}
-          variant="primary"
-          size="sm"
-          className={APPROVAL_BUTTON_CLASSNAME}
-        >
-          Allow
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {actions.map((action) => {
-        const isAllow = action.kind?.startsWith("allow") ?? false;
-        return (
-          <Button
-            key={action.optionId}
-            type="button"
-            onClick={() => onSelectOption(action.optionId)}
-            variant={isAllow ? "primary" : "secondary"}
-            size="sm"
-            className={APPROVAL_BUTTON_CLASSNAME}
-          >
-            {action.label}
-          </Button>
-        );
-      })}
-    </div>
   );
 }

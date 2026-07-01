@@ -101,13 +101,38 @@ body {
   );
 }
 
+/* Codex composer chrome (UX_SPEC §5): no border — a 0.5px stroke painted in
+   the shadow stack plus the elevation shadow. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
   box-shadow:
-    0 0 0 1px var(--color-composer-border),
+    0 0 0 0.5px var(--color-composer-border),
     var(--color-composer-shadow);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
+}
+
+/* ---- Streaming text fade (UX_SPEC §13) ----
+   Shared with desktop.css: per-block 200ms opacity fade while streaming;
+   the class is only attached during live streams so history never replays. */
+@keyframes streaming-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-streaming-fade {
+  animation: streaming-fade var(--streaming-fade-duration, 200ms)
+    var(--streaming-fade-easing, cubic-bezier(0.37, 0.55, 0.86, 0.88));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-streaming-fade {
+    animation: none;
+  }
 }
 
 /* ---- Proliferate icon: one-shot resolve animation ---- */

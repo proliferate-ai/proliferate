@@ -1,22 +1,19 @@
-import type {
-  Dispatch,
-  RefObject,
-  SetStateAction,
-} from "react";
+import type { RefObject } from "react";
 import { resolveComposerControlSubmenuLabel } from "@/lib/domain/chat/session-controls/composer-config-submenu-presentation";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type {
   ModelSelectorGroup,
-  ModelSelectorProps,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Plus } from "@proliferate/ui/icons";
+import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import {
   ComposerMenuSeparator,
   ComposerModelPickerContent,
 } from "./ComposerModelPickerList";
 import {
-  ComposerAddProviderRows,
   ComposerControlSubmenu,
   ComposerHarnessSubmenu,
   ComposerSubmenuMenuItem,
@@ -35,45 +32,40 @@ export function ComposerModelConfigMenu({
   activeKind,
   activeModelGroups,
   activeSubmenu,
-  addProviderOpen,
   agentKind,
   filteredGroups,
   groups,
   menuRootRef,
-  notReadyAgents,
   search,
   submenuControls,
   submenuPosition,
   submenuRef,
-  onAddProviderOpenChange,
+  onAddHarness,
   onMenuMouseEnter,
   onMenuMouseLeave,
   onOpenSubmenu,
   onSearchChange,
   onSelect,
-  onSetupAgent,
   onClose,
 }: {
   activeKind: string | null;
   activeModelGroups: ModelSelectorGroup[];
   activeSubmenu: ComposerConfigSubmenu | null;
-  addProviderOpen: boolean;
   agentKind: string | null;
   filteredGroups: ModelSelectorGroup[];
   groups: ModelSelectorGroup[];
   menuRootRef: RefObject<HTMLDivElement | null>;
-  notReadyAgents: ModelSelectorProps["notReadyAgents"];
   search: string;
   submenuControls: LiveSessionControlDescriptor[];
   submenuPosition: ComposerSubmenuPosition | null;
   submenuRef: RefObject<HTMLDivElement | null>;
-  onAddProviderOpenChange: Dispatch<SetStateAction<boolean>>;
+  /** UX_SPEC §5: "Add harness" navigates to Settings → Agents (no modal). */
+  onAddHarness: () => void;
   onMenuMouseEnter: () => void;
   onMenuMouseLeave: () => void;
   onOpenSubmenu: (submenu: ComposerConfigSubmenu, anchorElement: HTMLElement) => void;
   onSearchChange: (search: string) => void;
   onSelect: (selection: ModelSelectorSelection) => void;
-  onSetupAgent: (agent: ModelSelectorProps["notReadyAgents"][number]) => void;
   onClose: () => void;
 }) {
   const activeControl = activeSubmenu?.kind === "control"
@@ -100,37 +92,40 @@ export function ComposerModelConfigMenu({
             onSelect={onSelect}
           />
 
-          {(showSubmenuRows || notReadyAgents.length > 0) && (
-            <div className="shrink-0">
-              <ComposerMenuSeparator />
+          <div className="shrink-0">
+            <ComposerMenuSeparator />
 
-              {notReadyAgents.length > 0 && (
-                <ComposerAddProviderRows
-                  addProviderOpen={addProviderOpen}
-                  notReadyAgents={notReadyAgents}
-                  onAddProviderOpenChange={onAddProviderOpenChange}
-                  onSetupAgent={onSetupAgent}
-                />
-              )}
+            {showSubmenuRows && (
+              <>
+                {showHarnessSubmenu && (
+                  <ComposerSubmenuMenuItem
+                    active={activeSubmenu?.kind === "harness"}
+                    label="Agent"
+                    onOpen={(anchorElement) => onOpenSubmenu({ kind: "harness" }, anchorElement)}
+                  />
+                )}
 
-              {showHarnessSubmenu && (
-                <ComposerSubmenuMenuItem
-                  active={activeSubmenu?.kind === "harness"}
-                  label="Agent"
-                  onOpen={(anchorElement) => onOpenSubmenu({ kind: "harness" }, anchorElement)}
-                />
-              )}
+                {submenuControls.map((control) => (
+                  <ComposerSubmenuMenuItem
+                    key={control.key}
+                    active={activeSubmenu?.kind === "control" && activeSubmenu.key === control.key}
+                    label={resolveComposerControlSubmenuLabel(control)}
+                    onOpen={(anchorElement) => onOpenSubmenu({ kind: "control", key: control.key }, anchorElement)}
+                  />
+                ))}
+              </>
+            )}
 
-              {submenuControls.map((control) => (
-                <ComposerSubmenuMenuItem
-                  key={control.key}
-                  active={activeSubmenu?.kind === "control" && activeSubmenu.key === control.key}
-                  label={resolveComposerControlSubmenuLabel(control)}
-                  onOpen={(anchorElement) => onOpenSubmenu({ kind: "control", key: control.key }, anchorElement)}
-                />
-              ))}
-            </div>
-          )}
+            <PopoverMenuItem
+              icon={<Plus className="size-3.5 shrink-0" />}
+              label={CHAT_MODEL_SELECTOR_LABELS.addHarness}
+              className="text-muted-foreground hover:text-popover-foreground"
+              onClick={() => {
+                onAddHarness();
+                onClose();
+              }}
+            />
+          </div>
         </div>
       </ComposerPopoverSurface>
 

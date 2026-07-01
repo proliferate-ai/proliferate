@@ -1,5 +1,6 @@
 @import "@proliferate/design/dom.css";
 
 :root {
-  --radius-composer: 1.5rem;
+  /* UX_SPEC §5: 16px composer radius (matches desktop). */
+  --radius-composer: 1rem;
 }

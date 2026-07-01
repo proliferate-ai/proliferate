@@ -49,10 +49,13 @@
 
   /* -- Border radius -- */
   --radius: 0.5rem;
-  --radius-composer: 0.5rem; /* ship/tbpn default — conductor-style 8px */
+  --radius-composer: 1rem; /* UX_SPEC §5 — codex 2xl scale, 16px for home + chat */
 
   /* -- Shadows -- */
   --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  /* Codex --elevation-prominent minus the 0.5px stroke (the stroke is painted
+     by .chat-composer-surface with the theme border token). */
+  --shadow-composer: 0 3px 7.5px rgb(0 0 0 / 0.04), 0 0 20px rgb(0 0 0 / 0.05);
   --shadow-keystone: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-floating: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-floating-dark: 0 25px 50px -12px rgb(0 0 0 / 0.5);
@@ -199,7 +202,7 @@
   --color-composer-control-hover: var(--color-muted);
   --color-composer-send-background: var(--color-foreground);
   --color-composer-send-foreground: var(--color-background);
-  --color-composer-shadow: var(--shadow-subtle);
+  --color-composer-shadow: var(--shadow-composer);
   --color-composer-backdrop-filter: none;
 
   /* -- Prose -- */
@@ -448,8 +451,7 @@ mark.codex-thread-find-active {
   /* -- Typography -- */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
-  /* -- Composer shape (codex-style 24px pill) -- */
-  --radius-composer: 1.5rem;
+  /* -- Composer shape: inherits the 16px spec default (UX_SPEC §5) -- */
 
   /* -- Core -- */
   --color-background: #181818;
@@ -733,9 +735,6 @@ mark.codex-thread-find-active {
 :root[data-theme="original"] {
   /* -- Typography: Manrope as the cross-product font -- */
   --font-sans: "Manrope Variable", Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-
-  /* -- Composer shape: sharper corner instead of mono's pill -- */
-  --radius-composer: 0.5rem;
 }
 
 /* ========================================================================
@@ -1463,10 +1462,12 @@ mark.codex-thread-find-active {
  * NON-THEME STYLES
  * ======================================================================== */
 
+/* Codex composer chrome (UX_SPEC §5): no border — a 0.5px stroke painted in
+   the shadow stack plus the prominent-elevation shadow pair. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
   box-shadow:
-    0 0 0 1px var(--color-composer-border),
+    0 0 0 0.5px var(--color-composer-border),
     var(--color-composer-shadow);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);

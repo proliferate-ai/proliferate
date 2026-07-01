@@ -81,7 +81,7 @@ export function CloudChatComposerFooter({
   }
 
   return (
-    <div className="rounded-[var(--radius-composer,1.5rem)] px-2 pt-2">
+    <div className="rounded-[var(--radius-composer,1rem)] px-2 pt-2">
       <div className="flex min-w-0 flex-wrap items-center gap-1">
         {composerControls.map((control) => (
           <CloudChatSingleControl

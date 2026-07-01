@@ -28,5 +28,5 @@ export const CHAT_MODEL_SELECTOR_LABELS = {
   searchPlaceholder: "Search models",
   noMatchPrefix: "No models matching",
   noProviders: "No configured providers. Add one to get started.",
-  addProvider: "Add provider",
+  addHarness: "Add harness",
 } as const;
