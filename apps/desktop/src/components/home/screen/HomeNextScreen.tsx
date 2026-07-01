@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { HomeComposerForm } from "@/components/home/screen/HomeComposerForm";
 import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
 import { HomeModelPicker } from "@/components/home/screen/HomeModelPicker";
@@ -73,6 +74,10 @@ export function HomeNextScreen() {
         }
         : null;
   return (
+    // home-screen profiler wraps the WHOLE screen (including this component's
+    // own render): if it reports commit time while typing but home-composer
+    // accounts for less, the draft render-isolation is leaking to the parent.
+    <DebugProfiler id="home-screen">
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
       <main className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-6 py-16">
@@ -194,5 +199,6 @@ export function HomeNextScreen() {
         </div>
       </main>
     </div>
+    </DebugProfiler>
   );
 }

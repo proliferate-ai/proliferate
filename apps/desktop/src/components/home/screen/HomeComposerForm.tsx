@@ -14,6 +14,7 @@ import {
   markOperationForNextCommit,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { recordTypingKeystrokeLatency } from "@/lib/infra/measurement/typing-latency-probe";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type {
   HomeLaunchTarget,
@@ -101,7 +102,8 @@ export function HomeComposerForm({
   // Measure home-composer typing latency + per-surface commit attribution
   // (no-op unless VITE_PROLIFERATE_DEBUG_MAIN_THREAD is enabled).
   const typingOperationRef = useRef<MeasurementOperationId | null>(null);
-  const handleDraftChange = useCallback((value: string) => {
+  const setDraft = composer.setDraft;
+  const handleDraftChange = useCallback((value: string, eventTimeStampMs?: number) => {
     const operationId = startMeasurementOperation({
       kind: "composer_typing",
       sampleKey: "composer",
@@ -114,15 +116,20 @@ export function HomeComposerForm({
       typingOperationRef.current = operationId;
       markOperationForNextCommit(operationId, [...HOME_TYPING_SURFACES]);
     }
-    composer.setDraft(value);
-  }, [composer]);
+    recordTypingKeystrokeLatency({
+      operationId,
+      surface: "home-composer",
+      eventTimeStampMs,
+    });
+    setDraft(value);
+  }, [setDraft]);
   useEffect(() => () => {
     finishOrCancelMeasurementOperation(typingOperationRef.current, "unmount");
     typingOperationRef.current = null;
   }, []);
 
   return (
-    <DebugProfiler id="home-screen">
+    <>
       <DebugProfiler id="home-composer">
         <ChatComposerSurface>
           <form
@@ -145,7 +152,7 @@ export function HomeComposerForm({
                 ref={composer.textareaRef}
                 rows={4}
                 value={composer.draft}
-                onChange={(event) => handleDraftChange(event.target.value)}
+                onChange={(event) => handleDraftChange(event.target.value, event.timeStamp)}
                 onKeyDown={composer.handleKeyDown}
                 placeholder="Describe a task"
                 spellCheck={false}
@@ -212,6 +219,6 @@ export function HomeComposerForm({
       <DebugProfiler id="home-onboarding">
         {onboardingSlot}
       </DebugProfiler>
-    </DebugProfiler>
+    </>
   );
 }
