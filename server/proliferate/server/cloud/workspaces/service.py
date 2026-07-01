@@ -180,6 +180,11 @@ async def create_cloud_workspace_for_user(
             status_code=400,
         )
 
+    await materialization_service.materialize_repo_environment(
+        db,
+        repo_environment_id=repo_environment.id,
+    )
+
     workspace = await _create_workspace_row_with_branch_retry(
         db,
         user_id=user.id,
@@ -194,10 +199,6 @@ async def create_cloud_workspace_for_user(
     )
     final_branch_name = workspace.git_branch
 
-    await materialization_service.materialize_repo_environment(
-        db,
-        repo_environment_id=repo_environment.id,
-    )
     runtime_url, runtime_token, _data_key = await _load_ready_runtime_access(db, user_id=user.id)
     repo_path = materialization_paths.repo_path(repo_environment)
     repo_root = await _resolve_repo_root(
