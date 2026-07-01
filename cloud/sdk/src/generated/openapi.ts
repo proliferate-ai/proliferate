@@ -549,6 +549,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/repositories/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Repository Catalog Endpoint */
+        get: operations["list_repository_catalog_endpoint_v1_cloud_repositories_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repositories": {
         parameters: {
             query?: never;
@@ -566,16 +583,16 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/local": {
+    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/branches": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Save Local Repo Environment Endpoint */
-        put: operations["save_local_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_local_put"];
+        /** Get Repository Branches Endpoint */
+        get: operations["get_repository_branches_endpoint_v1_cloud_repositories__git_owner___git_repo_name__branches_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -583,7 +600,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environments/cloud": {
+    "/v1/cloud/repositories/{git_owner}/{git_repo_name}/environment": {
         parameters: {
             query?: never;
             header?: never;
@@ -591,8 +608,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Save Cloud Repo Environment Endpoint */
-        put: operations["save_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_cloud_put"];
+        /** Save Repo Environment Endpoint */
+        put: operations["save_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2884,6 +2901,58 @@ export interface components {
         CloudCapabilitiesResponse: {
             agentGateway: components["schemas"]["AgentGatewayCapabilities"];
         };
+        /** CloudGitRepositoriesResponse */
+        CloudGitRepositoriesResponse: {
+            /** Repositories */
+            repositories: components["schemas"]["CloudGitRepositorySummary"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** CloudGitRepositorySummary */
+        CloudGitRepositorySummary: {
+            /**
+             * Provider
+             * @default github
+             * @constant
+             */
+            provider: "github";
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Fullname */
+            fullName: string;
+            /** Defaultbranch */
+            defaultBranch: string | null;
+            /** Private */
+            private: boolean;
+            /** Fork */
+            fork: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Disabled */
+            disabled: boolean;
+            /** Htmlurl */
+            htmlUrl: string | null;
+            /** Owneravatarurl */
+            ownerAvatarUrl: string | null;
+            /** Pushedat */
+            pushedAt: string | null;
+            /** Updatedat */
+            updatedAt: string | null;
+            /** Permission */
+            permission?: string | null;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /**
+             * Repoconfigstate
+             * @enum {string}
+             */
+            repoConfigState: "missing" | "disabled" | "configured";
+        };
         /** CloudOrganizationIntegrationPolicyItem */
         CloudOrganizationIntegrationPolicyItem: {
             /** Catalogentryid */
@@ -3320,6 +3389,11 @@ export interface components {
             /** Action */
             action?: ("connect" | "reauthorize" | "install" | "grant_repo_access") | null;
         };
+        /**
+         * GitProvider
+         * @enum {string}
+         */
+        GitProvider: "github";
         /** GrantAllocationInfo */
         GrantAllocationInfo: {
             /** Granttype */
@@ -4112,6 +4186,23 @@ export interface components {
              */
             grant_type: string;
         };
+        /** RepoBranchesResponse */
+        RepoBranchesResponse: {
+            /** Defaultbranch */
+            defaultBranch: string;
+            /** Branches */
+            branches: string[];
+            /** Permission */
+            permission?: string | null;
+            /** Private */
+            private?: boolean | null;
+            /** Fork */
+            fork?: boolean | null;
+            /** Archived */
+            archived?: boolean | null;
+            /** Disabled */
+            disabled?: boolean | null;
+        };
         /** RepoConfigResponse */
         RepoConfigResponse: {
             /**
@@ -4119,8 +4210,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Gitprovider */
-            gitProvider: string;
+            gitProvider: components["schemas"]["GitProvider"];
             /** Gitowner */
             gitOwner: string;
             /** Gitreponame */
@@ -4133,6 +4223,11 @@ export interface components {
             /** Repositories */
             repositories: components["schemas"]["RepoConfigResponse"][];
         };
+        /**
+         * RepoEnvironmentKind
+         * @enum {string}
+         */
+        RepoEnvironmentKind: "local" | "cloud";
         /** RepoEnvironmentResponse */
         RepoEnvironmentResponse: {
             /**
@@ -4145,8 +4240,7 @@ export interface components {
              * Format: uuid
              */
             repoConfigId: string;
-            /** Kind */
-            kind: string;
+            kind: components["schemas"]["RepoEnvironmentKind"];
             /** Desktopinstallid */
             desktopInstallId: string | null;
             /** Localpath */
@@ -4158,32 +4252,15 @@ export interface components {
             /** Runcommand */
             runCommand: string;
         };
-        /** SaveCloudRepoEnvironmentRequest */
-        SaveCloudRepoEnvironmentRequest: {
-            /** Defaultbranch */
-            defaultBranch?: string | null;
-            /**
-             * Setupscript
-             * @default
-             */
-            setupScript: string;
-            /**
-             * Runcommand
-             * @default
-             */
-            runCommand: string;
-        };
-        /** SaveLocalRepoEnvironmentRequest */
-        SaveLocalRepoEnvironmentRequest: {
-            /**
-             * Gitprovider
-             * @default github
-             */
-            gitProvider: string;
+        /** SaveRepoEnvironmentRequest */
+        SaveRepoEnvironmentRequest: {
+            kind: components["schemas"]["RepoEnvironmentKind"];
+            /** @default github */
+            gitProvider: components["schemas"]["GitProvider"];
             /** Desktopinstallid */
-            desktopInstallId: string;
+            desktopInstallId?: string | null;
             /** Localpath */
-            localPath: string;
+            localPath?: string | null;
             /** Defaultbranch */
             defaultBranch?: string | null;
             /**
@@ -5494,6 +5571,41 @@ export interface operations {
             };
         };
     };
+    list_repository_catalog_endpoint_v1_cloud_repositories_catalog_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                cursor?: string | null;
+                limit?: number;
+                affiliation?: string;
+                visibility?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudGitRepositoriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_repositories_endpoint_v1_cloud_repositories_get: {
         parameters: {
             query?: never;
@@ -5514,7 +5626,7 @@ export interface operations {
             };
         };
     };
-    save_local_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_local_put: {
+    get_repository_branches_endpoint_v1_cloud_repositories__git_owner___git_repo_name__branches_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5524,11 +5636,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SaveLocalRepoEnvironmentRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5536,7 +5644,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RepoEnvironmentResponse"];
+                    "application/json": components["schemas"]["RepoBranchesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5550,7 +5658,7 @@ export interface operations {
             };
         };
     };
-    save_cloud_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environments_cloud_put: {
+    save_repo_environment_endpoint_v1_cloud_repositories__git_owner___git_repo_name__environment_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5562,7 +5670,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SaveCloudRepoEnvironmentRequest"];
+                "application/json": components["schemas"]["SaveRepoEnvironmentRequest"];
             };
         };
         responses: {

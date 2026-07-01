@@ -10,16 +10,13 @@ from proliferate.config import settings
 from proliferate.constants.slack import (
     SLACK_OUTBOUND_SOURCE_ACK,
     SLACK_OUTBOUND_SOURCE_FAILED,
-    SLACK_REPO_MODE_FIXED,
 )
 from proliferate.db.store import cloud_agent_run_config as run_config_store
-from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
 from proliferate.db.store.cloud_slack import bot_configs as bot_config_store
 from proliferate.db.store.cloud_slack import connections as connection_store
 from proliferate.db.store.cloud_slack import outbound as outbound_store
-from proliferate.db.store.cloud_slack import repo_routing_profiles as routing_profile_store
 from proliferate.db.store.cloud_slack import thread_work as thread_work_store
 from proliferate.db.store.cloud_slack.records import (
     SlackBotConfigRecord,
@@ -42,10 +39,6 @@ from proliferate.server.cloud.slack.domain.message_format import (
     ack_blocks,
     clarification_blocks,
     configuration_blocks,
-)
-from proliferate.server.cloud.slack.domain.repo_router import (
-    RepoRoutingCandidate,
-    choose_repo,
 )
 from proliferate.server.cloud.slack.worker import commands as command_worker
 from proliferate.server.cloud.slack.worker.policy import require_active_slack_bot
@@ -390,57 +383,9 @@ async def _resolve_repo(
     organization_id: UUID,
     config: SlackBotConfigRecord,
     parsed: ParsedSlackMention,
-) -> repo_store.CloudRepoConfigValue | None:
-    if config.repo_mode == SLACK_REPO_MODE_FIXED and config.fixed_cloud_repo_config_id:
-        return await _require_org_repo(
-            db,
-            organization_id=organization_id,
-            repo_id=config.fixed_cloud_repo_config_id,
-        )
-    allowed_ids = _uuid_csv(config.allowed_cloud_repo_config_ids)
-    repos = await repo_store.list_organization_cloud_repo_configs(
-        db,
-        organization_id=organization_id,
-    )
-    if allowed_ids:
-        repos = [repo for repo in repos if repo.id in allowed_ids]
-    profiles = {
-        profile.cloud_repo_config_id: profile
-        for profile in await routing_profile_store.list_profiles_for_org(
-            db,
-            organization_id=organization_id,
-        )
-    }
-    candidates = tuple(
-        RepoRoutingCandidate(
-            cloud_repo_config_id=repo.id,
-            git_owner=repo.git_owner,
-            git_repo_name=repo.git_repo_name,
-            display_name=(profiles.get(repo.id).display_name if profiles.get(repo.id) else None),
-            description=(profiles.get(repo.id).description if profiles.get(repo.id) else None),
-            readme_summary=(
-                profiles.get(repo.id).readme_summary if profiles.get(repo.id) else None
-            ),
-            languages=(
-                tuple(profiles.get(repo.id).languages_json or ()) if profiles.get(repo.id) else ()
-            ),
-            topics=(
-                tuple(profiles.get(repo.id).topics_json or ()) if profiles.get(repo.id) else ()
-            ),
-        )
-        for repo in repos
-    )
-    choice = choose_repo(
-        message_text=parsed.prompt,
-        repo_hint=parsed.repo_hint,
-        candidates=candidates,
-    )
-    if choice.cloud_repo_config_id is None:
-        return None
-    return await repo_store.get_cloud_repo_config_by_id(
-        db,
-        cloud_repo_config_id=choice.cloud_repo_config_id,
-    )
+) -> None:
+    del db, organization_id, config, parsed
+    return None
 
 
 async def _resolve_run_config(
@@ -529,19 +474,13 @@ async def _require_org_repo(
     *,
     organization_id: UUID,
     repo_id: UUID,
-) -> repo_store.CloudRepoConfigValue:
-    repo = await repo_store.get_cloud_repo_config_by_id(db, cloud_repo_config_id=repo_id)
-    if (
-        repo is None
-        or repo.owner_scope != "organization"
-        or repo.organization_id != organization_id
-    ):
-        raise CloudApiError(
-            "cloud_repo_not_found",
-            "Cloud repo config not found.",
-            status_code=404,
-        )
-    return repo
+) -> None:
+    del db, organization_id, repo_id
+    raise CloudApiError(
+        "slack_repo_routing_unavailable",
+        "Slack repo routing is unavailable until Slack is retargeted to repo environments.",
+        status_code=409,
+    )
 
 
 def _workspace_url(cloud_workspace_id: UUID | None) -> str | None:

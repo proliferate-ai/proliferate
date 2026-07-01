@@ -19,14 +19,7 @@ from tests.postgres import (
 
 
 async def _cancel_test_background_tasks() -> None:
-    try:
-        from proliferate.server.cloud.runtime.wake import cancel_managed_target_wake_tasks
-    except ModuleNotFoundError as error:
-        if error.name != "proliferate.db.models.cloud.runtime_environments":
-            raise
-        return
-
-    await cancel_managed_target_wake_tasks()
+    return None
 
 
 @pytest.fixture(scope="session")

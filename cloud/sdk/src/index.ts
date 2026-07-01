@@ -25,7 +25,6 @@ export * from "./client/mcp_oauth.js";
 export * from "./client/mobility.js";
 export * from "./client/organizations.js";
 export * from "./client/plugins.js";
-export * from "./client/repo-configs.js";
 export * from "./client/repositories.js";
 export * from "./client/repos.js";
 export * from "./client/runtime-config.js";

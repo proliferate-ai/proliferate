@@ -195,14 +195,6 @@ export interface CloudWorkspaceSummary {
   claimSourceKind?: string | null;
 }
 
-export interface CloudRepoConfigSummary {
-  gitOwner: string;
-  gitRepoName: string;
-  configured: boolean;
-  configuredAt: string | null;
-  filesVersion: number;
-}
-
 export interface CreateCloudWorkspaceRequest {
   gitProvider: "github";
   gitOwner: string;

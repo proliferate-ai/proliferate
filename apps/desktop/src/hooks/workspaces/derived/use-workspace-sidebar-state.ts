@@ -1,5 +1,6 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
 import type { Workspace } from "@anyharness/sdk";
+import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -32,6 +33,7 @@ import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-tar
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
+  repoConfigs?: readonly RepoConfigResponse[];
 }
 
 interface WorkspaceSidebarState {
@@ -51,6 +53,7 @@ const EMPTY_WORKSPACES: Workspace[] = [];
 const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {};
 
 export function useWorkspaceSidebarState({
+  repoConfigs = [],
   showArchived,
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -139,6 +142,7 @@ export function useWorkspaceSidebarState({
     label: "groups",
     keys: [
       "repoRoots",
+      "repoConfigs",
       "logicalWorkspaces",
       "workspaceTypes",
       "selection",
@@ -150,6 +154,7 @@ export function useWorkspaceSidebarState({
     count: (value) => value.length,
   }, () => buildSidebarGroupStates({
       repoRoots,
+      repoConfigs,
       logicalWorkspaces,
       showArchived,
       workspaceTypes,
@@ -179,6 +184,7 @@ export function useWorkspaceSidebarState({
     logicalWorkspaces,
     pendingWorkspaceEntry,
     pendingPromptCounts,
+    repoConfigs,
     repoRoots,
     workspaceTypes,
     selectedLogicalWorkspaceId,

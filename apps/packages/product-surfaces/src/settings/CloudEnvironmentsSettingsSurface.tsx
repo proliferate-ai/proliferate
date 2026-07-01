@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useRepoConfigs } from "@proliferate/cloud-sdk-react";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudEnvironmentListItems,
 } from "@proliferate/product-domain/environments/cloud-environments";
@@ -43,7 +43,7 @@ export function CloudEnvironmentsSettingsSurface({
   onBackToList,
 }: CloudEnvironmentsSettingsSurfaceProps) {
   const [addOpen, setAddOpen] = useState(false);
-  const repoConfigs = useRepoConfigs(enabled);
+  const repoConfigs = useRepositories(enabled);
   const localCheckoutsForDomain = useMemo(
     () => localCheckouts
       .map((checkout) => ({

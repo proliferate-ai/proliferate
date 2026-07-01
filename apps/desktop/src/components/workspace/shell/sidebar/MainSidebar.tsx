@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SidebarFooter } from "./SidebarFooter";
@@ -26,7 +27,6 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
-import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
@@ -68,9 +68,9 @@ export const MainSidebar = memo(function MainSidebar() {
   } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
   const {
-    data: cloudRepoConfigs,
-    isPending: isCloudRepoConfigsPending,
-  } = useCloudRepoConfigs(cloudActive);
+    data: repoConfigs,
+    isPending: isRepoConfigsPending,
+  } = useRepositories(cloudActive);
   const showToast = useToastStore((state) => state.show);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
@@ -87,7 +87,10 @@ export const MainSidebar = memo(function MainSidebar() {
     cleanupAttentionWorkspaces,
     emptyState,
     isLoading,
-  } = useWorkspaceSidebarState({ showArchived: false });
+  } = useWorkspaceSidebarState({
+    showArchived: false,
+    repoConfigs: repoConfigs?.repositories ?? [],
+  });
   const navigate = useNavigate();
   const location = useLocation();
   const [archiveConfirmation, setArchiveConfirmation] =
@@ -120,12 +123,12 @@ export const MainSidebar = memo(function MainSidebar() {
     });
   }, []);
   const configuredCloudRepoKeys = useMemo(
-    () => buildConfiguredCloudRepoKeys(cloudRepoConfigs?.configs),
-    [cloudRepoConfigs?.configs],
+    () => buildConfiguredCloudRepoKeys(repoConfigs?.repositories),
+    [repoConfigs?.repositories],
   );
   const cloudRepoConfigsInitialLoading = cloudActive
-    && isCloudRepoConfigsPending
-    && !cloudRepoConfigs;
+    && isRepoConfigsPending
+    && !repoConfigs;
 
   const {
     allRepoKeys,

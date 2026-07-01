@@ -17,7 +17,6 @@ export * from "./hooks/cloud-sandboxes.js";
 export * from "./hooks/mcp.js";
 export * from "./hooks/organizations.js";
 export * from "./hooks/runtime-config.js";
-export * from "./hooks/repo-configs.js";
 export * from "./hooks/repositories.js";
 export * from "./hooks/repos.js";
 export * from "./hooks/sessions.js";

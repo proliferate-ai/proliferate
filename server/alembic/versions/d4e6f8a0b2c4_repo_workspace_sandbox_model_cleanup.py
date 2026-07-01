@@ -430,6 +430,29 @@ def _upgrade_cloud_sandbox() -> None:
         "cloud_sandbox",
         sa.Column("destroyed_at", sa.DateTime(timezone=True), nullable=True),
     )
+    # Existing profile DBs may already have the older cloud_sandbox table shape
+    # with NOT NULL columns that are not part of the simplified model. The
+    # backfill below intentionally writes only the new columns, and these old
+    # columns are dropped after data has been migrated.
+    for legacy_column in (
+        "sandbox_profile_id",
+        "target_id",
+        "billing_subject_id",
+        "provider",
+        "external_sandbox_id",
+        "template_version",
+        "last_provider_event_at",
+        "last_provider_event_kind",
+        "started_at",
+        "stopped_at",
+        "last_heartbeat_at",
+        "lifecycle_on_timeout",
+        "lifecycle_auto_resume",
+        "provider_timeout_seconds",
+        "blocked_reason",
+        "last_error",
+    ):
+        _alter_nullable("cloud_sandbox", legacy_column, nullable=True)
     if _has_table("managed_sandbox") and _has_column("managed_sandbox", "owner_user_id"):
         provider_expr = _column_expr(
             "managed_sandbox",

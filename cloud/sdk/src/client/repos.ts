@@ -1,5 +1,4 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
-import { legacyOpenApiClient } from "./legacy.js";
 import type {
   CloudGitRepositoriesResponse,
   CloudRepoBranchesResponse,
@@ -17,19 +16,17 @@ export async function listCloudGitRepositories(
   options: ListCloudGitRepositoriesOptions = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudGitRepositoriesResponse> {
-  return (
-    await legacyOpenApiClient(client).GET("/v1/cloud/repos", {
-      params: {
-        query: {
-          query: options.query,
-          cursor: options.cursor,
-          limit: options.limit,
-          affiliation: options.affiliation,
-          visibility: options.visibility,
-        },
-      },
-    })
-  ).data!;
+  return client.requestJson<CloudGitRepositoriesResponse>({
+    method: "GET",
+    path: "/v1/cloud/repositories/catalog",
+    query: {
+      query: options.query,
+      cursor: options.cursor,
+      limit: options.limit,
+      affiliation: options.affiliation,
+      visibility: options.visibility,
+    },
+  });
 }
 
 export async function listCloudRepoBranches(
@@ -37,9 +34,12 @@ export async function listCloudRepoBranches(
   gitRepoName: string,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudRepoBranchesResponse> {
-  return (
-    await legacyOpenApiClient(client).GET("/v1/cloud/repos/{git_owner}/{git_repo_name}/branches", {
-      params: { path: { git_owner: gitOwner, git_repo_name: gitRepoName } },
-    })
-  ).data!;
+  return client.requestJson<CloudRepoBranchesResponse>({
+    method: "GET",
+    path: "/v1/cloud/repositories/{git_owner}/{git_repo_name}/branches",
+    pathParams: {
+      git_owner: gitOwner,
+      git_repo_name: gitRepoName,
+    },
+  });
 }

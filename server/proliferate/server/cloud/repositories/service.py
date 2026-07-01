@@ -15,10 +15,7 @@ from proliferate.db.store.repositories import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
-from proliferate.server.cloud.repositories.models import (
-    SaveCloudRepoEnvironmentRequest,
-    SaveLocalRepoEnvironmentRequest,
-)
+from proliferate.server.cloud.repositories.models import SaveRepoEnvironmentRequest
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
 
@@ -37,9 +34,9 @@ async def save_local_environment(
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
-    body: SaveLocalRepoEnvironmentRequest,
+    body: SaveRepoEnvironmentRequest,
 ) -> RepoEnvironmentValue:
-    desktop_install_id = body.desktop_install_id.strip()
+    desktop_install_id = (body.desktop_install_id or "").strip()
     if not desktop_install_id:
         raise CloudApiError(
             "desktop_install_id_required",
@@ -49,11 +46,11 @@ async def save_local_environment(
     return await upsert_local_repo_environment(
         db,
         user_id=user_id,
-        git_provider=body.git_provider,
+        git_provider=body.git_provider.value,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         desktop_install_id=desktop_install_id,
-        local_path=body.local_path,
+        local_path=body.local_path or "",
         default_branch=body.default_branch,
         setup_script=body.setup_script,
         run_command=body.run_command,
@@ -66,7 +63,7 @@ async def save_cloud_environment(
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
-    body: SaveCloudRepoEnvironmentRequest,
+    body: SaveRepoEnvironmentRequest,
 ) -> RepoEnvironmentValue:
     authority = await require_github_cloud_repo_authority(
         db,
@@ -103,4 +100,35 @@ async def save_cloud_environment(
         default_branch=default_branch,
         setup_script=body.setup_script,
         run_command=body.run_command,
+    )
+
+
+async def save_repo_environment(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    body: SaveRepoEnvironmentRequest,
+) -> RepoEnvironmentValue:
+    if body.kind.value == "local":
+        if not body.local_path:
+            raise CloudApiError(
+                "local_path_required",
+                "A local path is required for local environments.",
+                status_code=400,
+            )
+        return await save_local_environment(
+            db,
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            body=body,
+        )
+    return await save_cloud_environment(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        body=body,
     )

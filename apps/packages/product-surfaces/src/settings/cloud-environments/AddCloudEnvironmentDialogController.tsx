@@ -2,15 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import type { CloudGitRepositorySummary } from "@proliferate/cloud-sdk";
 import {
   useCloudGitRepositories,
-  useLoadCloudRepoConfig,
-  useSaveCloudRepoConfig,
+  useSaveRepoEnvironment,
   useValidateCloudRepoBranches,
 } from "@proliferate/cloud-sdk-react";
 import {
   blockedCloudRepositoryBranchReason,
   blockedCloudRepositoryReason,
   buildMinimalCloudEnvironmentConfigRequest,
-  buildReenableCloudEnvironmentConfigRequest,
 } from "@proliferate/product-domain/environments/cloud-environments";
 import {
   formatGitRepoId,
@@ -111,8 +109,7 @@ function useCloudEnvironmentAddActions({
     open,
   );
   const validateBranches = useValidateCloudRepoBranches();
-  const loadConfig = useLoadCloudRepoConfig();
-  const saveConfig = useSaveCloudRepoConfig();
+  const saveEnvironment = useSaveRepoEnvironment();
 
   useEffect(() => {
     if (!open) {
@@ -196,29 +193,10 @@ function useCloudEnvironmentAddActions({
         throw new Error(branchBlockedReason);
       }
 
-      if ("repoConfigState" in repo && repo.repoConfigState === "missing") {
-        await saveConfig.mutateAsync({
-          gitOwner: repo.gitOwner,
-          gitRepoName: repo.gitRepoName,
-          body: buildMinimalCloudEnvironmentConfigRequest(branches.defaultBranch),
-        });
-        onEnvironmentAdded(repoId);
-        return;
-      }
-
-      const existingConfig = await loadConfig.mutateAsync({
+      await saveEnvironment.mutateAsync({
         gitOwner: repo.gitOwner,
         gitRepoName: repo.gitRepoName,
-      });
-      if (existingConfig.configured) {
-        onEnvironmentAdded(repoId);
-        return;
-      }
-
-      await saveConfig.mutateAsync({
-        gitOwner: repo.gitOwner,
-        gitRepoName: repo.gitRepoName,
-        body: buildReenableCloudEnvironmentConfigRequest(existingConfig, branches.defaultBranch),
+        body: buildMinimalCloudEnvironmentConfigRequest(branches.defaultBranch),
       });
       onEnvironmentAdded(repoId);
     } catch (caught) {

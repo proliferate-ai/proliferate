@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import {
-  useCloudRepoConfigs,
-  useOrganizationCloudRepoConfigs,
-} from "@/hooks/access/cloud/use-cloud-repo-configs";
+import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
 import { useSettingsRepositories } from "@/hooks/settings/derived/use-settings-repositories";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
@@ -10,9 +7,9 @@ import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
 } from "@/lib/domain/automations/target/selection";
-import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
+import type { AutomationTargetRepoConfigRecord } from "@/lib/domain/automations/target/records";
 
-const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
+const EMPTY_REPO_CONFIGS: AutomationTargetRepoConfigRecord[] = [];
 const EMPTY_CLOUD_WORKSPACES: ReturnType<typeof useStandardRepoProjection>["cloudWorkspaces"] = [];
 
 type AutomationTargetOwnerScope = "personal" | "organization";
@@ -38,13 +35,8 @@ export function useAutomationTargetSelection({
   enabled = true,
 }: UseAutomationTargetSelectionInput) {
   const isOrganization = ownerScope === "organization";
-  const { data: personalRepoConfigsData, isLoading: personalRepoConfigsLoading } =
-    useCloudRepoConfigs(enabled && !isOrganization);
-  const { data: organizationRepoConfigsData, isLoading: organizationRepoConfigsLoading } =
-    useOrganizationCloudRepoConfigs(
-      organizationId,
-      enabled && isOrganization && organizationId !== null,
-    );
+  const { data: repoConfigsData, isLoading: repoConfigsLoading } =
+    useRepositories(enabled && !isOrganization);
   const { repositories } = useSettingsRepositories();
   const { cloudWorkspaces, isLoading: repoProjectionLoading } =
     useStandardRepoProjection();
@@ -52,16 +44,19 @@ export function useAutomationTargetSelection({
     enabled,
     ownerScope,
   });
-  const repoConfigs = isOrganization
-    ? organizationRepoConfigsData?.configs
-    : personalRepoConfigsData?.configs;
+  const repoConfigs = useMemo(
+    () => (repoConfigsData?.repositories ?? []).map((repo) => ({
+      gitOwner: repo.gitOwner,
+      gitRepoName: repo.gitRepoName,
+      configured: repo.environments.some((environment) => environment.kind === "cloud"),
+    })),
+    [repoConfigsData?.repositories],
+  );
   const scopedCloudWorkspaces = isOrganization ? EMPTY_CLOUD_WORKSPACES : cloudWorkspaces;
-  const repoConfigsLoading = isOrganization
-    ? organizationRepoConfigsLoading
-    : personalRepoConfigsLoading;
+  const effectiveRepoConfigs = isOrganization ? EMPTY_REPO_CONFIGS : repoConfigs;
 
   const targetState = useMemo(() => buildAutomationTargetState({
-    repoConfigs: repoConfigs ?? EMPTY_REPO_CONFIGS,
+    repoConfigs: effectiveRepoConfigs,
     cloudWorkspaces: scopedCloudWorkspaces,
     sshTargets: computeTargets.sshTargetOptions,
     repositories,
@@ -88,7 +83,7 @@ export function useAutomationTargetSelection({
     automation?.gitRepoName,
     isOrganization,
     organizationId,
-    repoConfigs,
+    effectiveRepoConfigs,
     repositories,
     scopedCloudWorkspaces,
     computeTargets.sshTargetOptions,
@@ -97,6 +92,6 @@ export function useAutomationTargetSelection({
 
   return {
     ...targetState,
-    isLoading: repoConfigsLoading || repoProjectionLoading || computeTargets.isLoading,
+    isLoading: (!isOrganization && repoConfigsLoading) || repoProjectionLoading || computeTargets.isLoading,
   };
 }

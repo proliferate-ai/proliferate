@@ -95,6 +95,7 @@ export function RepoGroup({
       }
     };
   }, [clearActiveNewWorkspaceScope, newWorkspaceCommandScope?.id]);
+  const showLocalWorkspaceActions = environmentKind !== "cloud";
 
   const headerRow = (
     <ProductSidebarRepoGroupHeader
@@ -128,28 +129,32 @@ export function RepoGroup({
         >
           {(close) => (
             <>
-              <PopoverMenuItem
-                icon={<SidebarWorkspaceVariantIcon variant="local" className="size-3.5 shrink-0" />}
-                label="New local workspace"
-                trailing={(
-                  <ShortcutBadge
-                    label={getShortcutDisplayLabel(SHORTCUTS.newLocal)}
-                    className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+              {showLocalWorkspaceActions && (
+                <>
+                  <PopoverMenuItem
+                    icon={<SidebarWorkspaceVariantIcon variant="local" className="size-3.5 shrink-0" />}
+                    label="New local workspace"
+                    trailing={(
+                      <ShortcutBadge
+                        label={getShortcutDisplayLabel(SHORTCUTS.newLocal)}
+                        className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+                      />
+                    )}
+                    onClick={() => { close(); onNewLocalWorkspace?.(); }}
                   />
-                )}
-                onClick={() => { close(); onNewLocalWorkspace?.(); }}
-              />
-              <PopoverMenuItem
-                icon={<SidebarWorkspaceVariantIcon variant="worktree" className="size-3.5 shrink-0" />}
-                label="New worktree"
-                trailing={(
-                  <ShortcutBadge
-                    label={getShortcutDisplayLabel(SHORTCUTS.newWorktree)}
-                    className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+                  <PopoverMenuItem
+                    icon={<SidebarWorkspaceVariantIcon variant="worktree" className="size-3.5 shrink-0" />}
+                    label="New worktree"
+                    trailing={(
+                      <ShortcutBadge
+                        label={getShortcutDisplayLabel(SHORTCUTS.newWorktree)}
+                        className={CREATE_WORKSPACE_SHORTCUT_CLASS}
+                      />
+                    )}
+                    onClick={() => { close(); onNewWorkspace?.(); }}
                   />
-                )}
-                onClick={() => { close(); onNewWorkspace?.(); }}
-              />
+                </>
+              )}
               {onCloudWorkspaceAction && cloudWorkspaceLabel && (
                 cloudWorkspaceEnabled ? (
                   <PopoverMenuItem

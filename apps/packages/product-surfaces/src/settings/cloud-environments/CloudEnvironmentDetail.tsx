@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CloudRepoConfigResponse } from "@proliferate/cloud-sdk";
+import type { RepoEnvironmentResponse } from "@proliferate/cloud-sdk";
 import {
   useCloudRepoBranches,
-  useCloudRepoConfig,
-  useSaveCloudRepoConfig,
+  useRepositories,
+  useSaveRepoEnvironment,
 } from "@proliferate/cloud-sdk-react";
 import { buildCoreCloudEnvironmentSaveRequest } from "@proliferate/product-domain/environments/cloud-environments";
 import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
@@ -12,7 +12,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { CloudSecretsSettingsSurface } from "../CloudSecretsSettingsSurface";
 
 interface CloudEnvironmentDraftState {
-  configured: boolean;
   defaultBranch: string | null;
   setupScript: string;
   runCommand: string;
@@ -32,27 +31,30 @@ export function CloudEnvironmentDetail({
   onSaved: () => void;
 }) {
   const repoId = formatGitRepoId({ gitOwner, gitRepoName });
-  const config = useCloudRepoConfig(gitOwner, gitRepoName, enabled);
+  const repoConfigs = useRepositories(enabled);
+  const cloudEnvironment = useMemo(() => {
+    const repo = repoConfigs.data?.repositories.find((candidate) =>
+      candidate.gitProvider === "github"
+      && candidate.gitOwner === gitOwner
+      && candidate.gitRepoName === gitRepoName
+    );
+    return repo?.environments.find((environment) => environment.kind === "cloud") ?? null;
+  }, [gitOwner, gitRepoName, repoConfigs.data?.repositories]);
   const branches = useCloudRepoBranches(gitOwner, gitRepoName, enabled);
-  const saveConfig = useSaveCloudRepoConfig();
-  const draft = useCloudEnvironmentCoreDraft(config.data, repoId);
-  const savedConfigured = config.data?.configured ?? false;
-  const statusLabel = !draft.configured && savedConfigured
-    ? "Will disable"
-    : savedConfigured
-      ? draft.dirty
-        ? "Unsaved changes"
-        : "Saved"
-      : draft.configured
-        ? "Ready to enable"
-        : "Disabled";
+  const saveEnvironment = useSaveRepoEnvironment();
+  const draft = useCloudEnvironmentCoreDraft(cloudEnvironment, repoId);
+  const savedConfigured = cloudEnvironment !== null;
+  const statusLabel = savedConfigured
+    ? draft.dirty
+      ? "Unsaved changes"
+      : "Saved"
+    : "Ready to enable";
 
   async function handleSave() {
-    const response = await saveConfig.mutateAsync({
+    const response = await saveEnvironment.mutateAsync({
       gitOwner,
       gitRepoName,
       body: buildCoreCloudEnvironmentSaveRequest({
-        configured: draft.configured,
         defaultBranch: draft.defaultBranch,
         setupScript: draft.setupScript,
         runCommand: draft.runCommand,
@@ -71,15 +73,14 @@ export function CloudEnvironmentDetail({
       defaultBranch={draft.defaultBranch}
       githubDefaultBranch={branches.data?.defaultBranch ?? null}
       branches={branches.data?.branches ?? []}
-      branchesLoading={branches.isLoading || config.isLoading}
+      branchesLoading={branches.isLoading || repoConfigs.isLoading}
       branchError={branches.error instanceof Error ? branches.error.message : null}
       setupScript={draft.setupScript}
       runCommand={draft.runCommand}
-      saving={saveConfig.isPending}
-      saveDisabled={!enabled || config.isLoading || saveConfig.isPending || !draft.canSave}
-      revertDisabled={saveConfig.isPending || !draft.dirty}
-      disableDisabled={!draft.configured}
-      error={saveConfig.error?.message ?? null}
+      saving={saveEnvironment.isPending}
+      saveDisabled={!enabled || repoConfigs.isLoading || saveEnvironment.isPending || !draft.canSave}
+      revertDisabled={saveEnvironment.isPending || !draft.dirty}
+      error={saveEnvironment.error?.message ?? null}
       secretsSlot={(
         <CloudSecretsSettingsSurface
           scope={{ kind: "workspace", gitOwner, gitRepoName }}
@@ -103,13 +104,12 @@ export function CloudEnvironmentDetail({
         void handleSave();
       }}
       onRevert={draft.revert}
-      onDisable={savedConfigured ? draft.disable : undefined}
     />
   );
 }
 
 function useCloudEnvironmentCoreDraft(
-  config: CloudRepoConfigResponse | null | undefined,
+  config: RepoEnvironmentResponse | null | undefined,
   sourceKey: string,
 ) {
   const initial = useMemo(() => buildInitialDraftState(config), [config]);
@@ -134,26 +134,24 @@ function useCloudEnvironmentCoreDraft(
 
   const normalizedDraft = state.draft;
   const dirty = isDraftDirty(normalizedDraft, state.revertDraft);
-  const configurable = !state.baseline.configured && normalizedDraft.configured;
+  const baselineExists = config !== null && config !== undefined;
 
-  function patch(patch: Partial<Omit<CloudEnvironmentDraftState, "envVarRows">>) {
+  function patch(patch: Partial<CloudEnvironmentDraftState>) {
     setState((current) => ({
       ...current,
       draft: {
         ...current.draft,
         ...patch,
-        configured: patch.configured ?? true,
       },
     }));
   }
 
   return {
-    configured: normalizedDraft.configured,
     defaultBranch: normalizedDraft.defaultBranch,
     setupScript: normalizedDraft.setupScript,
     runCommand: normalizedDraft.runCommand,
     dirty,
-    canSave: dirty || configurable,
+    canSave: dirty || !baselineExists,
     setDefaultBranch: (defaultBranch: string | null) => patch({ defaultBranch }),
     setSetupScript: (setupScript: string) => patch({ setupScript }),
     setRunCommand: (runCommand: string) => patch({ runCommand }),
@@ -163,8 +161,7 @@ function useCloudEnvironmentCoreDraft(
         draft: current.revertDraft,
       }));
     },
-    disable: () => patch({ configured: false }),
-    reset: (nextConfig: CloudRepoConfigResponse) => {
+    reset: (nextConfig: RepoEnvironmentResponse) => {
       const next = buildInitialDraftState(nextConfig);
       setState({
         sourceKey,
@@ -177,36 +174,24 @@ function useCloudEnvironmentCoreDraft(
 }
 
 function buildInitialDraftState(
-  config: CloudRepoConfigResponse | null | undefined,
+  config: RepoEnvironmentResponse | null | undefined,
 ): {
   baseline: CloudEnvironmentDraftState;
   revertDraft: CloudEnvironmentDraftState;
   draft: CloudEnvironmentDraftState;
 } {
   const baseline = buildSavedDraft(config);
-  if (baseline.configured) {
-    return {
-      baseline,
-      revertDraft: baseline,
-      draft: baseline,
-    };
-  }
-  const draft = {
-    ...baseline,
-    configured: true,
-  };
   return {
     baseline,
-    revertDraft: draft,
-    draft,
+    revertDraft: baseline,
+    draft: baseline,
   };
 }
 
 function buildSavedDraft(
-  config: CloudRepoConfigResponse | null | undefined,
+  config: RepoEnvironmentResponse | null | undefined,
 ): CloudEnvironmentDraftState {
   return {
-    configured: config?.configured ?? false,
     defaultBranch: config?.defaultBranch ?? null,
     setupScript: config?.setupScript ?? "",
     runCommand: config?.runCommand ?? "",
@@ -217,8 +202,7 @@ function isDraftDirty(
   draft: CloudEnvironmentDraftState,
   baseline: CloudEnvironmentDraftState,
 ): boolean {
-  return draft.configured !== baseline.configured
-    || draft.defaultBranch !== baseline.defaultBranch
+  return draft.defaultBranch !== baseline.defaultBranch
     || draft.setupScript !== baseline.setupScript
     || draft.runCommand !== baseline.runCommand;
 }

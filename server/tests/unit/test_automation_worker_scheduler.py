@@ -5,22 +5,18 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from proliferate.background.config import (
-    AUTOMATIONS_EXECUTE_RUN_TASK,
-    AUTOMATIONS_EXECUTION_QUEUE,
-)
 from proliferate.constants.automations import (
     AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_RUN_STATUS_DISPATCHING,
     AUTOMATION_RUN_TRIGGER_MANUAL,
     AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
+from proliferate.constants.cloud import GitProvider, RepoEnvironmentKind
 from proliferate.db import engine as engine_module
-from proliferate.db.models.background import BackgroundOutboxTask
 from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
-from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
 from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
@@ -50,6 +46,38 @@ def _run_config_record(*, user_id: uuid.UUID) -> CloudAgentRunConfigRecord:
         updated_at=now,
         archived_at=None,
     )
+
+
+async def _create_cloud_repo_environment(  # type: ignore[no-untyped-def]
+    session,
+    *,
+    user_id: uuid.UUID,
+    now: datetime,
+) -> RepoEnvironment:
+    repo_config = RepoConfig(
+        user_id=user_id,
+        git_provider=GitProvider.github,
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(repo_config)
+    await session.flush()
+    repo_environment = RepoEnvironment(
+        repo_config_id=repo_config.id,
+        environment_kind=RepoEnvironmentKind.cloud,
+        desktop_install_id=None,
+        local_path=None,
+        default_branch="main",
+        setup_script="",
+        run_command="",
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(repo_environment)
+    await session.flush()
+    return repo_environment
 
 
 def test_scheduled_snapshot_wrapper_skips_cloud_api_errors(
@@ -107,24 +135,11 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
                 )
             )
             await session.flush()
-            repo = CloudRepoConfig(
-                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            repo_environment = await _create_cloud_repo_environment(
+                session,
                 user_id=user_id,
-                git_owner="proliferate-ai",
-                git_repo_name="proliferate",
-                configured=True,
-                configured_at=now,
-                default_branch="main",
-                env_vars_ciphertext="",
-                env_vars_version=0,
-                setup_script="",
-                setup_script_version=0,
-                files_version=0,
-                created_at=now,
-                updated_at=now,
+                now=now,
             )
-            session.add(repo)
-            await session.flush()
             run_config = CloudAgentRunConfig(
                 owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
                 owner_user_id=user_id,
@@ -147,7 +162,7 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
                 owner_user_id=user_id,
                 organization_id=None,
                 created_by_user_id=user_id,
-                cloud_repo_config_id=repo.id,
+                repo_environment_id=repo_environment.id,
                 title="Daily check",
                 prompt="Original prompt",
                 schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
@@ -177,13 +192,9 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
                 title_snapshot=automation.title,
                 prompt_snapshot=automation.prompt,
                 git_provider_snapshot="github",
-                git_owner_snapshot=repo.git_owner,
-                git_repo_name_snapshot=repo.git_repo_name,
-                cloud_repo_config_id_snapshot=repo.id,
-                cloud_target_id_snapshot=None,
-                cloud_target_kind_snapshot=None,
-                sandbox_profile_id=None,
-                cloud_workspace_exposure_id=None,
+                git_owner_snapshot="proliferate-ai",
+                git_repo_name_snapshot="proliferate",
+                repo_environment_id_snapshot=repo_environment.id,
                 agent_run_config_snapshot_json={
                     "config_id": str(run_config.id),
                     "config_name": run_config.name,
@@ -237,7 +248,7 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
 
 
 @pytest.mark.asyncio
-async def test_scheduler_tick_enqueues_created_cloud_run_outbox(
+async def test_scheduler_tick_creates_cloud_run_without_legacy_outbox(
     monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -260,24 +271,11 @@ async def test_scheduler_tick_enqueues_created_cloud_run_outbox(
                 )
             )
             await session.flush()
-            repo = CloudRepoConfig(
-                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+            repo_environment = await _create_cloud_repo_environment(
+                session,
                 user_id=user_id,
-                git_owner="proliferate-ai",
-                git_repo_name="proliferate",
-                configured=True,
-                configured_at=now,
-                default_branch="main",
-                env_vars_ciphertext="",
-                env_vars_version=0,
-                setup_script="",
-                setup_script_version=0,
-                files_version=0,
-                created_at=now,
-                updated_at=now,
+                now=now,
             )
-            session.add(repo)
-            await session.flush()
             run_config = CloudAgentRunConfig(
                 owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
                 owner_user_id=user_id,
@@ -301,7 +299,7 @@ async def test_scheduler_tick_enqueues_created_cloud_run_outbox(
                     owner_user_id=user_id,
                     organization_id=None,
                     created_by_user_id=user_id,
-                    cloud_repo_config_id=repo.id,
+                    repo_environment_id=repo_environment.id,
                     title="Daily check",
                     prompt="Original prompt",
                     schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=12;BYMINUTE=0",
@@ -326,12 +324,8 @@ async def test_scheduler_tick_enqueues_created_cloud_run_outbox(
 
         async with engine_module.async_session_factory() as session:
             run = (await session.execute(select(AutomationRun))).scalar_one()
-            outbox = (await session.execute(select(BackgroundOutboxTask))).scalar_one()
 
         assert result.created_runs == 1
-        assert outbox.task_name == AUTOMATIONS_EXECUTE_RUN_TASK
-        assert outbox.queue == AUTOMATIONS_EXECUTION_QUEUE
-        assert outbox.kwargs_json == {"run_id": str(run.id)}
-        assert outbox.idempotency_key == f"{AUTOMATIONS_EXECUTE_RUN_TASK}:{run.id}"
+        assert run.repo_environment_id_snapshot == repo_environment.id
     finally:
         engine_module.async_session_factory = original_factory

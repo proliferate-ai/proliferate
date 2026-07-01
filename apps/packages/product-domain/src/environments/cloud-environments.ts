@@ -1,4 +1,4 @@
-import type { SaveCloudRepoConfigRequest } from "@proliferate/cloud-sdk";
+import type { SaveRepoEnvironmentRequest } from "@proliferate/cloud-sdk";
 import { formatGitRepoId } from "../repos/repo-id";
 
 const WRITE_PERMISSIONS = new Set(["admin", "maintain", "push"]);
@@ -15,9 +15,7 @@ export interface CloudEnvironmentConfigSummaryInput extends CloudEnvironmentRepo
 }
 
 export interface CloudEnvironmentSavedConfigInput {
-  configured?: boolean | null;
   defaultBranch?: string | null;
-  envVars?: Record<string, string> | null;
   setupScript?: string | null;
   runCommand?: string | null;
 }
@@ -55,7 +53,6 @@ export interface CloudRepositoryAccessInput {
 }
 
 export interface CoreCloudEnvironmentDraftInput {
-  configured?: boolean;
   defaultBranch: string | null;
   setupScript: string;
   runCommand: string;
@@ -122,9 +119,10 @@ export function blockedCloudRepositoryBranchReason(repo: Omit<CloudRepositoryAcc
 
 export function buildMinimalCloudEnvironmentConfigRequest(
   defaultBranch: string | null,
-): SaveCloudRepoConfigRequest {
+): SaveRepoEnvironmentRequest {
   return {
-    configured: true,
+    kind: "cloud",
+    gitProvider: "github",
     defaultBranch,
     setupScript: "",
     runCommand: "",
@@ -134,9 +132,10 @@ export function buildMinimalCloudEnvironmentConfigRequest(
 export function buildReenableCloudEnvironmentConfigRequest(
   config: CloudEnvironmentSavedConfigInput,
   defaultBranch: string | null,
-): SaveCloudRepoConfigRequest {
+): SaveRepoEnvironmentRequest {
   return {
-    configured: true,
+    kind: "cloud",
+    gitProvider: "github",
     defaultBranch: config.defaultBranch ?? defaultBranch,
     setupScript: config.setupScript ?? "",
     runCommand: config.runCommand ?? "",
@@ -145,18 +144,10 @@ export function buildReenableCloudEnvironmentConfigRequest(
 
 export function buildCoreCloudEnvironmentSaveRequest(
   draft: CoreCloudEnvironmentDraftInput,
-): SaveCloudRepoConfigRequest {
-  if (draft.configured === false) {
-    return {
-      configured: false,
-      defaultBranch: null,
-      setupScript: "",
-      runCommand: "",
-    };
-  }
-
+): SaveRepoEnvironmentRequest {
   return {
-    configured: true,
+    kind: "cloud",
+    gitProvider: "github",
     defaultBranch: draft.defaultBranch,
     setupScript: draft.setupScript,
     runCommand: draft.runCommand,
