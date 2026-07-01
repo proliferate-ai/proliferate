@@ -86,7 +86,7 @@ export function SlackBotPane() {
     canLoadSlack && Boolean(config?.defaultAgentRunConfigId),
   );
   const agentRunConfigMutations = useAgentRunConfigMutations();
-  const targetsQuery = useCloudTargets(canLoadSlack);
+  const targetsQuery = useCloudTargets(false);
   const [sessionDraft, setSessionDraft] = useState<SlackSessionDefaultsDraft>({
     agentKind: null,
     modelId: null,

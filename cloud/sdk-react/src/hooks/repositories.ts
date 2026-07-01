@@ -9,6 +9,7 @@ import {
 import {
   cloudGitRepositoriesRootKey,
   repositoriesKey,
+  githubAppRootKey,
   repoEnvironmentKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
@@ -54,6 +55,7 @@ export function useSaveRepoEnvironment() {
       }
       void queryClient.invalidateQueries({ queryKey: repositoriesKey() });
       void queryClient.invalidateQueries({ queryKey: cloudGitRepositoriesRootKey() });
+      void queryClient.invalidateQueries({ queryKey: githubAppRootKey(client.baseUrl) });
     },
   });
 }

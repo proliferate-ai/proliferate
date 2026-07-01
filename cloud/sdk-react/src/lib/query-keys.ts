@@ -188,17 +188,45 @@ export function cloudSandboxKey() {
   return [...cloudRootKey(), "cloud-sandbox"] as const;
 }
 
-export function githubAppStatusRootKey(apiBaseUrl: string) {
-  return [...cloudRootKey(), "github-app", "status", apiBaseUrl] as const;
+export function githubAppRootKey(apiBaseUrl: string) {
+  return [...cloudRootKey(), "github-app", apiBaseUrl] as const;
 }
 
-export function githubAppStatusKey(
+export function githubAppAccessibleReposKey(
+  apiBaseUrl: string,
+  options: CloudGitRepositoriesKeyOptions = {},
+) {
+  return [
+    ...githubAppRootKey(apiBaseUrl),
+    "accessible-repos",
+    options.query?.trim() || null,
+    options.cursor ?? null,
+    options.limit ?? null,
+    options.affiliation ?? null,
+    options.visibility ?? null,
+  ] as const;
+}
+
+export function githubAppUserAuthorizationKey(
   apiBaseUrl: string,
   authCacheScope = "default",
-  gitOwner: string | null = null,
-  gitRepoName: string | null = null,
 ) {
-  return [...githubAppStatusRootKey(apiBaseUrl), authCacheScope, gitOwner, gitRepoName] as const;
+  return [...githubAppRootKey(apiBaseUrl), "user-authorization", authCacheScope] as const;
+}
+
+export function githubAppInstallationKey(
+  apiBaseUrl: string,
+  organizationId: string | null,
+) {
+  return [...githubAppRootKey(apiBaseUrl), "installation", organizationId] as const;
+}
+
+export function githubRepoAuthorityKey(
+  apiBaseUrl: string,
+  gitOwner: string,
+  gitRepoName: string,
+) {
+  return [...githubAppRootKey(apiBaseUrl), "repo-authority", gitOwner, gitRepoName] as const;
 }
 
 export function cloudWorktreeRetentionPolicyKey(userId: string | null) {

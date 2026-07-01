@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from proliferate.integrations.github.app_installations import GitHubAppInstallationInfo
 from proliferate.integrations.github.app_user_tokens import GitHubAppUserAuthorization
-from proliferate.server.cloud.github_app import api as github_app_api
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app import service
 
 
+@dataclass(frozen=True)
+class _OrgUser:
+    actor_user_id: uuid.UUID
+    organization_id: uuid.UUID
+
+
 @pytest.mark.asyncio
-async def test_complete_github_app_callback_records_authorization(
+async def test_complete_github_app_user_authorization_callback_stores_authorization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
@@ -23,7 +31,7 @@ async def test_complete_github_app_callback_records_authorization(
     monkeypatch.setattr(service.settings, "api_base_url", "https://api.example.test")
 
     user_id = uuid.uuid4()
-    state = service._state_for_user(user_id, return_to=None)
+    state = service._state_for_user_authorization(user_id, return_to=None)
     authorization = GitHubAppUserAuthorization(
         access_token="ghu_test",
         refresh_token="refresh-test",
@@ -41,7 +49,10 @@ async def test_complete_github_app_callback_records_authorization(
         redirect_uri: str | None = None,
     ) -> GitHubAppUserAuthorization:
         assert code == "code-test"
-        assert redirect_uri == "https://api.example.test/auth/github-app/callback"
+        assert (
+            redirect_uri
+            == "https://api.example.test/auth/github-app/user-authorization/callback"
+        )
         return authorization
 
     async def fake_upsert_github_app_authorization(
@@ -68,13 +79,13 @@ async def test_complete_github_app_callback_records_authorization(
         "refresh_github_app_installation_cache",
         fake_refresh_github_app_installation_cache,
     )
-    redirect_url = await service.complete_github_app_callback(
+    redirect_url = await service.complete_github_app_user_authorization_callback(
         object(),
         code="code-test",
         state=state,
     )
 
-    assert redirect_url == service._redirect_after_callback()
+    assert redirect_url == service._default_return_after_callback("account")
     assert calls == [
         ("upsert", user_id),
         ("refresh", None),
@@ -82,62 +93,113 @@ async def test_complete_github_app_callback_records_authorization(
 
 
 @pytest.mark.asyncio
-async def test_complete_github_app_installation_callback_refreshes_cache(
+async def test_complete_github_app_installation_callback_links_installation_to_org(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
     monkeypatch.setattr(service.settings, "frontend_base_url", "https://app.example.test")
-    calls: list[str] = []
 
-    async def fake_refresh_github_app_installation_cache(db: object) -> None:
-        del db
-        calls.append("refresh")
+    actor_user_id = uuid.uuid4()
+    organization_id = uuid.uuid4()
+    state = service._state_for_installation(
+        user_id=actor_user_id,
+        organization_id=organization_id,
+        return_to=None,
+    )
+    installation = GitHubAppInstallationInfo(
+        github_installation_id="142900805",
+        account_login="proliferate-ai",
+        account_type="Organization",
+        repository_selection="selected",
+        permissions={"contents": "read"},
+    )
+    calls: list[tuple[str, uuid.UUID, uuid.UUID]] = []
+
+    async def fake_get_github_app_installation(
+        *,
+        installation_id: str,
+    ) -> GitHubAppInstallationInfo:
+        assert installation_id == "142900805"
+        return installation
+
+    async def fake_upsert_github_app_installation(
+        db: object,
+        *,
+        installation: GitHubAppInstallationInfo,
+        organization_id: uuid.UUID | None = None,
+        installed_by_user_id: uuid.UUID | None = None,
+    ) -> None:
+        del db, installation
+        assert organization_id is not None
+        assert installed_by_user_id is not None
+        calls.append(("upsert", organization_id, installed_by_user_id))
 
     monkeypatch.setattr(
         service,
-        "refresh_github_app_installation_cache",
-        fake_refresh_github_app_installation_cache,
+        "get_github_app_installation",
+        fake_get_github_app_installation,
+    )
+    monkeypatch.setattr(
+        service.github_app_store,
+        "upsert_github_app_installation",
+        fake_upsert_github_app_installation,
     )
 
     redirect_url = await service.complete_github_app_installation_callback(
         object(),
         installation_id="142900805",
         setup_action="install",
+        state=state,
     )
 
-    assert redirect_url == "https://app.example.test/settings/account"
-    assert calls == ["refresh"]
+    assert redirect_url == "https://app.example.test/settings/organization"
+    assert calls == [("upsert", organization_id, actor_user_id)]
 
 
 @pytest.mark.asyncio
-async def test_github_app_callback_accepts_installation_callback_without_state(
+async def test_installation_callback_rejects_missing_state() -> None:
+    with pytest.raises(CloudApiError):
+        await service.complete_github_app_installation_callback(
+            object(),
+            installation_id="142900805",
+            setup_action="install",
+            state="",
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_github_app_installation_url_uses_app_slug_and_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[str | None, str | None]] = []
+    monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
+    monkeypatch.setattr(service.settings, "github_app_slug", "proliferate-dev")
+    org_user = _OrgUser(actor_user_id=uuid.uuid4(), organization_id=uuid.uuid4())
 
-    async def fake_complete_github_app_installation_callback(
-        db: object,
-        *,
-        installation_id: str | None,
-        setup_action: str | None,
-    ) -> str:
-        del db
-        calls.append((installation_id, setup_action))
-        return "proliferate://settings/account"
-
-    monkeypatch.setattr(
-        github_app_api,
-        "complete_github_app_installation_callback",
-        fake_complete_github_app_installation_callback,
+    response = await service.create_github_app_installation_url(
+        object(),
+        org_user=org_user,
+        return_to="proliferate://settings/organization",
     )
 
-    response = await github_app_api.github_app_callback_endpoint(
-        code="ignored-by-install-callback",
-        state=None,
-        installation_id="142900805",
-        setup_action="install",
-        db=object(),
+    assert response.installation_url.startswith(
+        "https://github.com/apps/proliferate-dev/installations/new?state="
     )
 
-    assert response.status_code == 302
-    assert response.headers["location"] == "proliferate://settings/account"
-    assert calls == [("142900805", "install")]
+
+@pytest.mark.asyncio
+async def test_create_github_app_installation_url_allows_desktop_environment_return(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
+    monkeypatch.setattr(service.settings, "github_app_slug", "proliferate-dev")
+    org_user = _OrgUser(actor_user_id=uuid.uuid4(), organization_id=uuid.uuid4())
+
+    response = await service.create_github_app_installation_url(
+        object(),
+        org_user=org_user,
+        return_to="proliferate://settings/environments?source=github_app_installation_callback",
+    )
+
+    assert response.installation_url.startswith(
+        "https://github.com/apps/proliferate-dev/installations/new?state="
+    )

@@ -135,7 +135,7 @@ async function waitForOnlineDispatchTarget(
 export function useWorkspaceRemoteAccessActions() {
   const mobility = useWorkspaceMobilityState();
   const showToast = useToastStore((state) => state.show);
-  const targetsQuery = useCloudTargets();
+  const targetsQuery = useCloudTargets(false);
   const {
     createExistingTargetEnrollment,
     createTargetEnrollment,
