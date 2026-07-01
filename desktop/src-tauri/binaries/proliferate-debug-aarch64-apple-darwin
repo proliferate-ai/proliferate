@@ -1,0 +1,3 @@
+#!/bin/sh
+printf '%s\n' 'AnyHarness sidecar is not available for target aarch64-apple-darwin.' >&2
+exit 1
