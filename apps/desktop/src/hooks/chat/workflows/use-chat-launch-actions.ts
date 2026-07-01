@@ -31,13 +31,17 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const workspaceUiKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
-  const currentDraft = useChatInputStore((state) =>
-    serializeChatDraftToPrompt(
+  // PERF: read the draft imperatively at launch time. A reactive subscription
+  // here re-rendered this hook's consumers (useChatModelSelectorState →
+  // ChatInput, ~20 hooks) on EVERY keystroke — the draft is only needed when
+  // the user actually picks a launch option.
+  const getCurrentDraftText = useCallback((): string => {
+    return serializeChatDraftToPrompt(
       workspaceUiKey
-        ? state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT
+        ? useChatInputStore.getState().draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT
         : EMPTY_CHAT_DRAFT,
-    ),
-  );
+    );
+  }, [workspaceUiKey]);
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
@@ -103,7 +107,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       void createThreadFromSelection({
         agentKind: launchSelection.kind,
         modelId: launchSelection.modelId,
-        draftText: currentDraft,
+        draftText: getCurrentDraftText(),
         sourceWorkspaceId: selectedWorkspaceId,
       })
         .then(() => {
@@ -137,7 +141,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     configuredLaunch.disabledReason,
     configuredLaunch.launchCatalog.launchAgents,
     createThreadFromSelection,
-    currentDraft,
+    getCurrentDraftText,
     createEmptySessionWithResolvedConfig,
     selectedWorkspace?.surface,
     selectedWorkspaceId,

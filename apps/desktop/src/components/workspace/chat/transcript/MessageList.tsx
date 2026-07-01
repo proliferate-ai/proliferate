@@ -13,6 +13,7 @@ import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
+  recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
@@ -116,7 +117,21 @@ export function MessageList({
     transcript,
   ]);
 
-  const handleTranscriptScroll = useCallback(() => {
+  const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
+    // Tag the scroll source: a persistent stream of `source.programmatic`
+    // samples (with no user input) means a stick-to-bottom snap / virtualizer
+    // measurement feedback loop — the difference between "user scrolled" and
+    // "we are scrolling ourselves in circles".
+    recordMeasurementMetric({
+      type: "diagnostic",
+      category: "transcript_scroll",
+      label: sample === undefined
+        ? "source.unknown"
+        : sample.programmatic
+          ? "source.programmatic"
+          : "source.user",
+      count: 1,
+    });
     const operationId = startMeasurementOperation({
       kind: "transcript_scroll",
       sampleKey: "transcript",

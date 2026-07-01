@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+
+/** Classification of a viewport scroll event: our own snap vs the user. */
+export interface TranscriptScrollSample {
+  programmatic: boolean;
+}
 import { resolveVirtualBottomDistance } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
@@ -24,7 +29,7 @@ export interface UseTranscriptStickToBottomOptions {
   /** The real scroll element ref (AutoHideScrollArea forwards its viewport here). */
   scrollRef: RefObject<HTMLDivElement | null>;
   /** Perf probe; must run on every scroll, user or programmatic. */
-  onScrollSample: () => void;
+  onScrollSample: (sample?: TranscriptScrollSample) => void;
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
 }
@@ -127,7 +132,7 @@ export function useTranscriptStickToBottom({
       // Our own snap — don't touch pin state or direction, but still probe perf.
       cancelAnimationFrame(pending.frame);
       programmaticRef.current = null;
-      onScrollSample();
+      onScrollSample({ programmatic: true });
       return;
     }
 
@@ -146,7 +151,7 @@ export function useTranscriptStickToBottom({
       // Within the band but still moving up — the user is leaving.
       setPinned(false);
     }
-    onScrollSample();
+    onScrollSample({ programmatic: false });
   }, [onScrollSample, repinThresholdPx, setPinned]);
 
   const startGlueLoop = useCallback(() => {

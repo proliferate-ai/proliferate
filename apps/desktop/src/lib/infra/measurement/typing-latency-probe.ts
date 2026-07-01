@@ -63,43 +63,38 @@ export function recordTypingKeystrokeLatency(input: {
   const inputDelayMs = handlerStartMs - eventMs;
   const { operationId, surface } = input;
 
-  afterPaint(() => {
-    const toPaintMs = performance.now() - eventMs;
-    recordMeasurementMetric({
-      type: "diagnostic",
-      category: "input_latency",
-      label: `${surface}.keystroke_to_paint`,
-      operationId: operationId ?? undefined,
-      durationMs: toPaintMs,
-    });
-    recordMeasurementMetric({
-      type: "diagnostic",
-      category: "input_latency",
-      label: `${surface}.input_delay`,
-      operationId: operationId ?? undefined,
-      durationMs: inputDelayMs,
-    });
-    if (operationId) {
-      trackSample(operationId, surface, toPaintMs, inputDelayMs);
-    }
-  });
-}
-
-/**
- * Runs right after the next frame paints. rAF fires before paint; a
- * MessageChannel message posted during the rAF callback is delivered as a
- * macrotask after the frame's rendering steps complete. (A double-rAF would
- * overreport by a full extra frame — it fires at the START of the frame after
- * next.)
- */
-function afterPaint(callback: () => void): void {
+  // Phase split. Within a frame the pipeline is: rAF callbacks → style recalc
+  // → layout → paint. So:
+  //   to_frame       = event → rAF start (queueing + JS + React render/commit)
+  //   frame_to_paint = rAF start → post-paint (style recalc + layout + paint)
+  // A high frame_to_paint with cheap commits means a style/layout storm, not
+  // React.
   if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
-    setTimeout(callback, 0);
     return;
   }
   window.requestAnimationFrame(() => {
+    const frameStartMs = performance.now();
     const channel = new MessageChannel();
-    channel.port1.onmessage = () => callback();
+    channel.port1.onmessage = () => {
+      const paintedMs = performance.now();
+      const toPaintMs = paintedMs - eventMs;
+      const record = (label: string, durationMs: number) => {
+        recordMeasurementMetric({
+          type: "diagnostic",
+          category: "input_latency",
+          label: `${surface}.${label}`,
+          operationId: operationId ?? undefined,
+          durationMs,
+        });
+      };
+      record("keystroke_to_paint", toPaintMs);
+      record("input_delay", inputDelayMs);
+      record("to_frame", frameStartMs - eventMs);
+      record("frame_to_paint", paintedMs - frameStartMs);
+      if (operationId) {
+        trackSample(operationId, surface, toPaintMs, inputDelayMs);
+      }
+    };
     channel.port2.postMessage(null);
   });
 }
