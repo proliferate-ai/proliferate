@@ -16,7 +16,6 @@ import {
   prepareLocalSessionRuntimeConfig,
 } from "@/lib/access/anyharness/session-runtime-config";
 import type { SessionStreamHandle } from "@anyharness/sdk";
-import { ProliferateClientError } from "@proliferate/cloud-sdk/client/core";
 import {
   createEmptySessionRecord,
   findClientSessionIdByMaterializedSessionId,
@@ -62,13 +61,7 @@ const sessionStreamPruningDeps: SessionStreamPruningDeps = {
 };
 
 const mocks = vi.hoisted(() => ({
-  applyAgentAuthConfig: vi.fn(),
-  applyRuntimeConfig: vi.fn(),
-  ensurePersonalSandboxProfile: vi.fn(),
-  getSandboxProfileDesktopAgentAuthConfigApplyRequest: vi.fn(),
-  getSandboxProfileDesktopRuntimeConfigApplyRequest: vi.fn(),
   listEvents: vi.fn(),
-  recordSandboxProfileDesktopAgentAuthConfigApplyStatus: vi.fn(),
   resume: vi.fn(),
   resolveRuntimeTargetForWorkspace: vi.fn(),
 }));
@@ -86,32 +79,8 @@ vi.mock("@/lib/access/anyharness/runtime-target", () => ({
   resolveRuntimeTargetForWorkspace: mocks.resolveRuntimeTargetForWorkspace,
 }));
 
-vi.mock("@/lib/access/anyharness/runtime-config", () => ({
-  applyAgentAuthConfig: mocks.applyAgentAuthConfig,
-  applyRuntimeConfig: mocks.applyRuntimeConfig,
-}));
-
-vi.mock("@proliferate/cloud-sdk/client/agent-auth", () => ({
-  ensurePersonalSandboxProfile: mocks.ensurePersonalSandboxProfile,
-  getSandboxProfileDesktopAgentAuthConfigApplyRequest:
-    mocks.getSandboxProfileDesktopAgentAuthConfigApplyRequest,
-  recordSandboxProfileDesktopAgentAuthConfigApplyStatus:
-    mocks.recordSandboxProfileDesktopAgentAuthConfigApplyStatus,
-}));
-
-vi.mock("@proliferate/cloud-sdk/client/runtime-config", () => ({
-  getSandboxProfileDesktopRuntimeConfigApplyRequest:
-    mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest,
-}));
-
 beforeEach(() => {
-  mocks.applyAgentAuthConfig.mockReset();
-  mocks.applyRuntimeConfig.mockReset();
-  mocks.ensurePersonalSandboxProfile.mockReset();
-  mocks.getSandboxProfileDesktopAgentAuthConfigApplyRequest.mockReset();
-  mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockReset();
   mocks.listEvents.mockReset();
-  mocks.recordSandboxProfileDesktopAgentAuthConfigApplyStatus.mockReset();
   mocks.resume.mockReset();
   mocks.resolveRuntimeTargetForWorkspace.mockReset();
   resetSessionStreamHandlesForTest();
@@ -221,132 +190,11 @@ describe("prepareLocalSessionRuntimeConfig", () => {
     anyharnessWorkspaceId: "workspace-1",
   };
 
-  it("applies the personal desktop runtime config and returns the applied revision expectation", async () => {
-    mocks.ensurePersonalSandboxProfile.mockResolvedValue({
-      id: "profile-1",
-      primaryTargetId: "target-1",
-    });
-    mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockResolvedValue({
-      applyRequest: {
-        source: "desktop",
-        revision: {
-          id: "revision-1",
-          sequence: 2,
-          contentHash: "hash-1",
-          externalScope: {
-            provider: "proliferate-cloud",
-            id: "profile-1",
-            targetId: "target-1",
-          },
-        },
-        manifest: {},
-      },
-      expectedRuntimeConfigRevision: {
-        revisionId: "revision-1",
-        sequence: 2,
-        contentHash: "hash-1",
-        externalScope: null,
-      },
-    });
-    mocks.applyRuntimeConfig.mockResolvedValue({
-      applied: true,
-      status: "applied",
-      revision: {
-        id: "revision-1",
-        sequence: 2,
-        contentHash: "hash-1",
-        externalScope: {
-          provider: "proliferate-cloud",
-          id: "profile-1",
-          targetId: "target-1",
-        },
-      },
-    });
-
-    await expect(prepareLocalSessionRuntimeConfig(connection)).resolves.toEqual({
-      revisionId: "revision-1",
-      sequence: 2,
-      contentHash: "hash-1",
-      externalScope: {
-        provider: "proliferate-cloud",
-        id: "profile-1",
-        targetId: "target-1",
-      },
-    });
-    expect(mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest).toHaveBeenCalledWith(
-      "profile-1",
-      { targetId: "target-1" },
-    );
-    expect(mocks.applyRuntimeConfig).toHaveBeenCalledWith(
-      connection,
-      expect.objectContaining({ source: "desktop" }),
-      undefined,
-    );
+  it("does not require a cloud runtime-config preflight for local session creation", async () => {
+    await expect(prepareLocalSessionRuntimeConfig(connection)).resolves.toBeNull();
   });
 
-  it("applies runtime config through cloud sandbox gateway targets", async () => {
-    mocks.ensurePersonalSandboxProfile.mockResolvedValue({
-      id: "profile-1",
-      primaryTargetId: "target-1",
-    });
-    mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockResolvedValue({
-      applyRequest: {
-        source: "desktop",
-        revision: {
-          id: "revision-1",
-          sequence: 2,
-          contentHash: "hash-1",
-          externalScope: {
-            provider: "proliferate-cloud",
-            id: "profile-1",
-            targetId: "target-1",
-          },
-        },
-        manifest: {},
-      },
-      expectedRuntimeConfigRevision: {
-        revisionId: "revision-1",
-        sequence: 2,
-        contentHash: "hash-1",
-        externalScope: null,
-      },
-    });
-    mocks.applyRuntimeConfig.mockResolvedValue({
-      applied: true,
-      status: "applied",
-      revision: {
-        id: "revision-1",
-        sequence: 2,
-        contentHash: "hash-1",
-        externalScope: {
-          provider: "proliferate-cloud",
-          id: "profile-1",
-          targetId: "target-1",
-        },
-      },
-    });
-    mocks.getSandboxProfileDesktopAgentAuthConfigApplyRequest.mockResolvedValue({
-      applyRequest: {
-        revision: 1,
-        selections: [{
-          agentKind: "claude",
-          authSlotId: "anthropic",
-          materializationMode: "gateway_env",
-          credentialId: "credential-1",
-          credentialRevision: 1,
-        }],
-      },
-    });
-    mocks.applyAgentAuthConfig.mockResolvedValue({
-      applied: true,
-      revision: 1,
-      selectionCount: 1,
-      noSelectionKinds: [],
-      status: "applied",
-    });
-    mocks.recordSandboxProfileDesktopAgentAuthConfigApplyStatus.mockResolvedValue({
-      changed: true,
-    });
+  it("does not require old cloud preflight endpoints for cloud sandbox gateway targets", async () => {
     const gatewayConnection = {
       runtimeUrl: "http://api.local/v1/gateway/cloud-sandbox/anyharness",
       authToken: "product-token",
@@ -360,79 +208,7 @@ describe("prepareLocalSessionRuntimeConfig", () => {
       runtimeAccessKind: "proliferate-gateway",
       runtimeGeneration: 1,
       authToken: "product-token",
-    }, gatewayConnection)).resolves.toEqual({
-      revisionId: "revision-1",
-      sequence: 2,
-      contentHash: "hash-1",
-      externalScope: {
-        provider: "proliferate-cloud",
-        id: "profile-1",
-        targetId: "target-1",
-      },
-    });
-    expect(mocks.applyRuntimeConfig).toHaveBeenCalledWith(
-      gatewayConnection,
-      expect.objectContaining({ source: "desktop" }),
-      undefined,
-    );
-    expect(mocks.applyAgentAuthConfig).toHaveBeenCalledWith(
-      gatewayConnection,
-      expect.objectContaining({ revision: 1 }),
-      undefined,
-    );
-    expect(mocks.applyAgentAuthConfig.mock.invocationCallOrder[0]!)
-      .toBeLessThan(mocks.applyRuntimeConfig.mock.invocationCallOrder[0]!);
-  });
-
-  it("keeps local session creation available when Cloud is not configured", async () => {
-    mocks.ensurePersonalSandboxProfile.mockRejectedValue(
-      new ProliferateClientError(
-        "Proliferate Cloud client is not configured.",
-        500,
-        "cloud_client_unconfigured",
-      ),
-    );
-
-    await expect(prepareLocalSessionRuntimeConfig(connection)).resolves.toBeNull();
-    expect(mocks.applyRuntimeConfig).not.toHaveBeenCalled();
-  });
-
-  it("fails fast when Cloud runtime config preflight stalls", async () => {
-    vi.useFakeTimers();
-    try {
-      mocks.ensurePersonalSandboxProfile.mockImplementation(() => new Promise(() => {}));
-
-      const prepared = prepareLocalSessionRuntimeConfig(connection, undefined, {
-        cloudPreflightTimeoutMs: 50,
-      });
-      const expectation = expect(prepared).rejects.toThrow(/timed out/i);
-
-      await vi.advanceTimersByTimeAsync(50);
-
-      await expectation;
-      expect(mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest).not.toHaveBeenCalled();
-      expect(mocks.applyRuntimeConfig).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("surfaces runtime config materialization failures", async () => {
-    mocks.ensurePersonalSandboxProfile.mockResolvedValue({
-      id: "profile-1",
-      primaryTargetId: "target-1",
-    });
-    mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockRejectedValue(
-      new ProliferateClientError(
-        "Runtime config credentials are missing.",
-        409,
-        "runtime_config_credentials_missing",
-      ),
-    );
-
-    await expect(prepareLocalSessionRuntimeConfig(connection)).rejects.toMatchObject({
-      code: "runtime_config_credentials_missing",
-    });
+    }, gatewayConnection)).resolves.toBeNull();
   });
 });
 
@@ -547,54 +323,17 @@ describe("pruneInactiveSessionStreams", () => {
 });
 
 describe("resumeSession", () => {
-  it("reapplies local runtime config before resuming without per-session MCP or plugin payloads", async () => {
+  it("resumes without the removed desktop runtime-config preflight", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
       location: "local",
       runtimeGeneration: 0,
     });
-    mocks.ensurePersonalSandboxProfile.mockResolvedValue({
-      id: "profile-1",
-      primaryTargetId: "target-1",
-    });
-    mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest.mockResolvedValue({
-      applyRequest: {
-        source: "desktop",
-        revision: {
-          id: "revision-1",
-          sequence: 2,
-          contentHash: "hash-1",
-          externalScope: {
-            provider: "proliferate-cloud",
-            id: "profile-1",
-            targetId: "target-1",
-          },
-        },
-        manifest: {},
-      },
-    });
-    mocks.applyRuntimeConfig.mockResolvedValue({
-      applied: true,
-      status: "applied",
-      revision: {
-        id: "revision-1",
-        sequence: 2,
-        contentHash: "hash-1",
-        externalScope: {
-          provider: "proliferate-cloud",
-          id: "profile-1",
-          targetId: "target-1",
-        },
-      },
-    });
     mocks.resume.mockResolvedValue({ id: "session-1" });
 
     await resumeSession("session-1");
 
-    expect(mocks.applyRuntimeConfig).toHaveBeenCalledTimes(1);
-    expect(mocks.applyRuntimeConfig.mock.invocationCallOrder[0]!)
-      .toBeLessThan(mocks.resume.mock.invocationCallOrder[0]!);
     expect(mocks.resume).toHaveBeenCalledTimes(1);
     const [sessionId, resumeOptions, requestOptions] = mocks.resume.mock.calls[0]!;
     expect(sessionId).toBe("session-1");

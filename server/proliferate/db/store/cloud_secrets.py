@@ -48,7 +48,6 @@ class CloudSecretSetValue:
     scope_kind: str
     user_id: UUID | None
     organization_id: UUID | None
-    cloud_repo_config_id: UUID | None
     repo_environment_id: UUID | None
     version: int
     created_by_user_id: UUID | None
@@ -81,7 +80,6 @@ class CloudSecretSetPayload:
     scope_kind: str
     user_id: UUID | None
     organization_id: UUID | None
-    cloud_repo_config_id: UUID | None
     repo_environment_id: UUID | None
     version: int
     env_vars: tuple[CloudSecretEnvVarPayload, ...]
@@ -90,6 +88,11 @@ class CloudSecretSetPayload:
 
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _enum_value(value: object) -> str:
+    raw = getattr(value, "value", value)
+    return str(raw)
 
 
 def _env_value(row: CloudSecretEnvVar) -> CloudSecretEnvVarValue:
@@ -176,10 +179,9 @@ async def _secret_set_value(
     file_rows = await _load_file_rows(db, row.id)
     return CloudSecretSetValue(
         id=row.id,
-        scope_kind=row.scope_kind,
+        scope_kind=_enum_value(row.scope_kind),
         user_id=row.user_id,
         organization_id=row.organization_id,
-        cloud_repo_config_id=row.cloud_repo_config_id,
         repo_environment_id=row.repo_environment_id,
         version=row.version,
         created_by_user_id=row.created_by_user_id,
@@ -197,7 +199,6 @@ async def _get_or_create_secret_set(
     scope_kind: str,
     user_id: UUID | None,
     organization_id: UUID | None,
-    cloud_repo_config_id: UUID | None,
     repo_environment_id: UUID | None,
     actor_user_id: UUID,
 ) -> CloudSecretSet:
@@ -206,7 +207,6 @@ async def _get_or_create_secret_set(
         "scope_kind": scope_kind,
         "user_id": user_id,
         "organization_id": organization_id,
-        "cloud_repo_config_id": cloud_repo_config_id,
         "repo_environment_id": repo_environment_id,
         "version": 0,
         "created_by_user_id": actor_user_id,
@@ -260,7 +260,6 @@ async def get_or_create_personal_secret_set(
         scope_kind="personal",
         user_id=user_id,
         organization_id=None,
-        cloud_repo_config_id=None,
         repo_environment_id=None,
         actor_user_id=actor_user_id,
     )
@@ -278,7 +277,6 @@ async def get_or_create_organization_secret_set(
         scope_kind="organization",
         user_id=None,
         organization_id=organization_id,
-        cloud_repo_config_id=None,
         repo_environment_id=None,
         actor_user_id=actor_user_id,
     )
@@ -290,14 +288,12 @@ async def get_or_create_workspace_secret_set(
     *,
     repo_environment_id: UUID,
     actor_user_id: UUID,
-    cloud_repo_config_id: UUID | None = None,
 ) -> CloudSecretSetValue:
     row = await _get_or_create_secret_set(
         db,
         scope_kind="workspace",
         user_id=None,
         organization_id=None,
-        cloud_repo_config_id=cloud_repo_config_id,
         repo_environment_id=repo_environment_id,
         actor_user_id=actor_user_id,
     )
@@ -364,10 +360,9 @@ async def load_secret_set_payload(
     file_rows = await _load_file_rows(db, row.id)
     return CloudSecretSetPayload(
         id=row.id,
-        scope_kind=row.scope_kind,
+        scope_kind=_enum_value(row.scope_kind),
         user_id=row.user_id,
         organization_id=row.organization_id,
-        cloud_repo_config_id=row.cloud_repo_config_id,
         repo_environment_id=row.repo_environment_id,
         version=row.version,
         env_vars=tuple(_env_payload(item) for item in env_rows),

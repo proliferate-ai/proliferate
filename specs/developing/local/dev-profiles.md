@@ -68,6 +68,12 @@ intentionally want to bypass the profile database for a one-off run, or
 When `DATABASE_URL` is set, profile setup and run skip profile database
 creation/readiness checks and migrate the provided database URL.
 
+`make run PROFILE=<name>` also starts and waits for the local Docker Redis
+service from `server/docker-compose.yml`. Redis backs RedBeat and cloud
+materialization locks in local development. Use `USE_EXISTING_REDIS=1` only
+when an external Redis is already reachable; in that case the server still reads
+the Redis URL from normal configuration, such as `REDBEAT_REDIS_URL`.
+
 Desktop auth sessions, pending-auth entries, and stored provider API keys are
 profile-scoped `0600` files under the dev app home, so per-profile databases do
 not reuse each other's login tokens. The AnyHarness runtime data key stays

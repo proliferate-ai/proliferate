@@ -72,7 +72,7 @@ export function SecretManagementPanel({
     () => files.map((item) => secretMetadataToListItem(item, item.path ?? "")),
     [files],
   );
-  const status = materialization?.status ?? "pending";
+  const status = error ? "error" : materialization?.status ?? "pending";
 
   function handleEditorSave(input: SecretEditorSaveInput) {
     if (input.kind === "env") {

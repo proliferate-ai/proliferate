@@ -144,21 +144,25 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     });
     cloudHooks.usePutCloudSecretEnvVar.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
     });
     cloudHooks.useDeleteCloudSecretEnvVar.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
     });
     cloudHooks.usePutCloudSecretFile.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
     });
     cloudHooks.useDeleteCloudSecretFile.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false,
       error: null,
     });
