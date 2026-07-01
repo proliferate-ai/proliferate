@@ -1,6 +1,7 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ChevronRight, Server } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import {
   computeTargetKindLabel,
   computeTargetOwnerLabel,
@@ -107,13 +108,7 @@ function TargetGroup({
   onSelectTarget: (targetId: string) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="space-y-0.5 px-1">
-        <h4 className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-          {group.label}
-        </h4>
-        <p className="text-sm leading-5 text-muted-foreground">{group.description}</p>
-      </div>
+    <SettingsSection title={group.label} description={group.description}>
       <div className="space-y-2">
         {group.targets.map((target) => (
           <TargetRow
@@ -125,7 +120,7 @@ function TargetGroup({
           />
         ))}
       </div>
-    </div>
+    </SettingsSection>
   );
 }
 

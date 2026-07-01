@@ -1,8 +1,8 @@
 import { useState, type KeyboardEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { SettingsSection } from "@/components/settings/shared/SettingsSection";
-import { SettingsRow } from "@/components/settings/shared/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { RuntimePressureDetailsDialog } from "@/components/workspace/chat/input/RuntimePressureDetailsDialog";
 import { RuntimePressureRing } from "@/components/workspace/chat/input/RuntimePressureIndicator";
 import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";

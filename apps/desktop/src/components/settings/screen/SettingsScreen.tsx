@@ -36,12 +36,14 @@ import {
 } from "@/lib/domain/settings/repositories";
 import { type SettingsFocus } from "@/lib/domain/settings/navigation";
 import {
+  SETTINGS_SCOPE_LABELS,
+  SETTINGS_SCOPE_ORDER,
   getFirstSectionForScope,
   getSettingsScopeForSection,
   isSettingsAdminOnlySection,
 } from "@/lib/domain/settings/navigation-presentation";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
-import { SettingsScopeTabs } from "@/components/settings/screen/SettingsScopeTabs";
+import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScopeTabs";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "lucide-react";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
@@ -318,7 +320,14 @@ export function SettingsScreen({
           </button>
         </div>
         <div className="flex h-[46px] items-center gap-4 px-4">
-          <SettingsScopeTabs value={activeScope} onChange={handleScopeChange} />
+          <SettingsScopeTabs
+            items={SETTINGS_SCOPE_ORDER.map((scope) => ({
+              id: scope,
+              label: SETTINGS_SCOPE_LABELS[scope],
+            }))}
+            value={activeScope}
+            onChange={handleScopeChange}
+          />
           <div className="ml-auto flex shrink-0 items-center">
             <Button
               type="button"

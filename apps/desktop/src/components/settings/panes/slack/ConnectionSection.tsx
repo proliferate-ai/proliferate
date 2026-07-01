@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { SettingsSection } from "@/components/settings/shared/SettingsSection";
-import { SettingsRow } from "@/components/settings/shared/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import type { SlackWorkspaceConnection } from "@proliferate/cloud-sdk";
 import { SlackConnectionStatusBadge } from "@/components/settings/panes/slack/SlackStatusBadge";
 

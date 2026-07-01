@@ -12,8 +12,8 @@ import {
   type AgentConfigurationIssueAction,
 } from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
-import { SettingsRow } from "@/components/settings/shared/SettingsRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";

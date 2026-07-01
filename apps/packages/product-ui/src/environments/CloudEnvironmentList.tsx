@@ -3,8 +3,8 @@ import { Cloud, Folder, Plus } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsCard } from "../settings/SettingsCard";
-import { SettingsCardRow } from "../settings/SettingsCardRow";
+import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsRow } from "../settings/SettingsRow";
 import { SettingsPageHeader } from "../settings/SettingsPageHeader";
 
 export interface CloudEnvironmentListItemView {
@@ -55,22 +55,22 @@ export function CloudEnvironmentList({
             </Button>
           ) : null}
         />
-        <SettingsCard>
+        <SettingsSection>
           {cloudUnavailableReason ? (
-            <SettingsCardRow
+            <SettingsRow
               label="Cloud environments unavailable"
               description={cloudUnavailableReason}
             />
           ) : loadingCloudEnvironments && cloudEnvironments.length === 0 ? (
-            <SettingsCardRow label="Repositories" description="Loading..." />
+            <SettingsRow label="Repositories" description="Loading..." />
           ) : cloudEnvironments.length === 0 ? (
-            <SettingsCardRow
+            <SettingsRow
               label="No repositories"
               description="Add a local checkout or GitHub repo to use it from Desktop, web, or mobile."
             />
           ) : (
             cloudEnvironments.map((environment) => (
-              <SettingsCardRow
+              <SettingsRow
                 key={environment.id}
                 label={(
                   <span className="flex min-w-0 items-center gap-2">
@@ -108,17 +108,17 @@ export function CloudEnvironmentList({
                     Configure
                   </Button>
                 </div>
-              </SettingsCardRow>
+              </SettingsRow>
             ))
           )}
           {onRetryCloudEnvironments ? (
-            <SettingsCardRow label="Refresh" description="Reload cloud environment records.">
+            <SettingsRow label="Refresh" description="Reload cloud environment records.">
               <Button type="button" variant="secondary" size="sm" onClick={onRetryCloudEnvironments}>
                 Retry
               </Button>
-            </SettingsCardRow>
+            </SettingsRow>
           ) : null}
-        </SettingsCard>
+        </SettingsSection>
       </section>
     </section>
   );

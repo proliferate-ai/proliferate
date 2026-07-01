@@ -1,8 +1,8 @@
 import type { FC } from "react";
-import { SettingsSection } from "@/components/settings/shared/SettingsSection";
-import { SettingsRow } from "@/components/settings/shared/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";

@@ -1,4 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 
 interface AdminOnlyPlaceholderProps {
   role?: string | null;
@@ -14,18 +15,17 @@ export function AdminOnlyPlaceholder({
     : "Your current role does not allow changes here.";
 
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-      <div className="text-sm font-medium text-foreground">Admin access required</div>
-      <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-        Organization owners and admins can configure this page. {roleDescription}
-      </p>
-      {onOpenOrganization ? (
-        <div className="mt-2">
+    <SettingsEmptyState
+      size="compact"
+      title="Admin access required"
+      description={`Organization owners and admins can configure this page. ${roleDescription}`}
+      action={
+        onOpenOrganization ? (
           <Button type="button" variant="outline" size="sm" onClick={onOpenOrganization}>
             Open organization
           </Button>
-        </div>
-      ) : null}
-    </div>
+        ) : undefined
+      }
+    />
   );
 }

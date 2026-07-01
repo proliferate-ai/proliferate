@@ -1,5 +1,6 @@
 import { Archive, CloudIcon, RefreshCw } from "@proliferate/ui/icons";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import {
   type ArchivedChatCleanupTone,
   type ArchivedChatRowView,
@@ -53,15 +54,12 @@ export function ArchivedChatsPane() {
           Could not load archived chats.
         </div>
       ) : rows.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-          <span className="text-muted-foreground [&>svg]:size-[22px]">
-            <Archive aria-hidden="true" />
-          </span>
-          <p className="text-sm font-medium text-foreground">No archived chats</p>
-          <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-            Archive a chat from the sidebar to move it here.
-          </p>
-        </div>
+        <SettingsEmptyState
+          size="compact"
+          icon={<Archive aria-hidden="true" />}
+          title="No archived chats"
+          description="Archive a chat from the sidebar to move it here."
+        />
       ) : (
         <div role="list" aria-label="Archived chats" className="divide-y divide-border">
           {rows.map((row) => (

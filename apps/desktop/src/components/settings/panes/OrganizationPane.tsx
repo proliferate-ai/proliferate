@@ -16,9 +16,10 @@ import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
-import { SettingsSection } from "@/components/settings/shared/SettingsSection";
-import { SettingsRow } from "@/components/settings/shared/SettingsRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import {
   useCurrentTeamCheckout,
@@ -170,11 +171,7 @@ export function OrganizationPane() {
 
       {shouldShowSignInState ? (
         <OrganizationSection title="Organization" description="Organization access is tied to your signed-in account.">
-          <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-            <div className="text-sm font-medium text-foreground">
-              Sign in to view your organization.
-            </div>
-          </div>
+          <SettingsEmptyState title="Sign in to view your organization." />
         </OrganizationSection>
       ) : null}
 
@@ -184,36 +181,31 @@ export function OrganizationPane() {
 
       {shouldShowErrorState ? (
         <OrganizationSection title="Organization">
-          <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-            <div className="text-sm font-medium text-foreground">
-              Organization settings could not be loaded.
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="mt-2"
-              onClick={() => {
-                void organizationsQuery.refetch();
-              }}
-            >
-              Retry
-            </Button>
-          </div>
+          <SettingsEmptyState
+            title="Organization settings could not be loaded."
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  void organizationsQuery.refetch();
+                }}
+              >
+                Retry
+              </Button>
+            }
+          />
         </OrganizationSection>
       ) : null}
 
       {shouldShowEmptyState ? (
         <OrganizationSection title="Team">
-          <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-            {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
-              <>
-                <div className="text-sm font-medium text-foreground">
-                  {teamCheckoutQuery.data.intent.teamName}
-                </div>
-                <div className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-                  Team checkout is pending. Continue checkout or cancel setup.
-                </div>
-                <div className="mt-2 flex flex-wrap justify-center gap-2">
+          {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
+            <SettingsEmptyState
+              title={teamCheckoutQuery.data.intent.teamName}
+              description="Team checkout is pending. Continue checkout or cancel setup."
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
                   <Button
                     type="button"
                     variant="secondary"
@@ -234,41 +226,43 @@ export function OrganizationPane() {
                     Cancel setup
                   </Button>
                 </div>
-              </>
-            ) : (
-              <form
-                className="flex flex-col items-center gap-2"
-                onSubmit={(event) => { void handleCreateTeamCheckout(event); }}
-              >
-                <div className="text-sm font-medium text-foreground">Create a Team</div>
-                <div className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-                  Choose a Team name, review what Team unlocks, then continue to checkout.
-                </div>
-                <div className="mt-2 flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-center">
-                  <Input
-                    value={newTeamName}
-                    onChange={(event) => setNewTeamName(event.currentTarget.value)}
-                    placeholder="Team name"
-                    aria-label="Team name"
-                  />
-                  <Button
-                    type="submit"
-                    loading={teamCheckoutActions.creatingTeamCheckout}
-                    disabled={!newTeamName.trim()}
-                  >
-                    Create Team
-                  </Button>
-                </div>
-                {teamCheckoutActions.createTeamCheckoutError && !teamUpgradeGateOpen ? (
-                  <div className="mt-2 text-sm text-destructive">
-                    {teamCheckoutActions.createTeamCheckoutError instanceof Error
-                      ? teamCheckoutActions.createTeamCheckoutError.message
-                      : "Team checkout could not start."}
+              }
+            />
+          ) : (
+            <SettingsEmptyState
+              title="Create a Team"
+              description="Choose a Team name, review what Team unlocks, then continue to checkout."
+              action={
+                <form
+                  className="flex flex-col items-center gap-2"
+                  onSubmit={(event) => { void handleCreateTeamCheckout(event); }}
+                >
+                  <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-center">
+                    <Input
+                      value={newTeamName}
+                      onChange={(event) => setNewTeamName(event.currentTarget.value)}
+                      placeholder="Team name"
+                      aria-label="Team name"
+                    />
+                    <Button
+                      type="submit"
+                      loading={teamCheckoutActions.creatingTeamCheckout}
+                      disabled={!newTeamName.trim()}
+                    >
+                      Create Team
+                    </Button>
                   </div>
-                ) : null}
-              </form>
-            )}
-          </div>
+                  {teamCheckoutActions.createTeamCheckoutError && !teamUpgradeGateOpen ? (
+                    <div className="mt-2 text-sm text-destructive">
+                      {teamCheckoutActions.createTeamCheckoutError instanceof Error
+                        ? teamCheckoutActions.createTeamCheckoutError.message
+                        : "Team checkout could not start."}
+                    </div>
+                  ) : null}
+                </form>
+              }
+            />
+          )}
         </OrganizationSection>
       ) : null}
 

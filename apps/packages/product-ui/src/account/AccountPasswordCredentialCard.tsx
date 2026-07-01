@@ -5,7 +5,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 
-import { SettingsCard } from "../settings/SettingsCard";
+import { SettingsSection } from "../settings/SettingsSection";
 import { ProviderBrandIcon } from "../auth/ProviderBrandIcon";
 
 export interface AccountPasswordCredentialSubmit {
@@ -78,7 +78,7 @@ export function AccountPasswordCredentialCard({
   }
 
   return (
-    <SettingsCard>
+    <SettingsSection>
       <div className="space-y-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
@@ -198,6 +198,6 @@ export function AccountPasswordCredentialCard({
           </form>
         ) : null}
       </div>
-    </SettingsCard>
+    </SettingsSection>
   );
 }

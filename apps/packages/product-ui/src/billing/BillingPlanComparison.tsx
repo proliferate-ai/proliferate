@@ -1,9 +1,9 @@
 import { Check, CheckCircle2 } from "lucide-react";
+import { twMerge } from "tailwind-merge";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 
-import { SettingsCard } from "../settings/SettingsCard";
 import type { BillingActionView } from "./billing-types";
 import {
   BILLING_PLAN_COLUMNS,
@@ -53,25 +53,23 @@ export function PlanComparisonCard({
         ))}
       </div>
 
-      <SettingsCard>
-        <div className="overflow-x-auto">
-          <div className="min-w-[680px]">
-            <div className="grid grid-cols-[minmax(11rem,1.35fr)_repeat(3,minmax(9rem,1fr))]">
-              <div className="border-b border-border-light p-4" aria-hidden />
-              {BILLING_PLAN_COLUMNS.map((plan) => (
-                <PlanHeader
-                  key={plan.key}
-                  plan={plan}
-                />
-              ))}
+      <div className="overflow-x-auto">
+        <div className="min-w-[680px]">
+          <div className="grid grid-cols-[minmax(11rem,1.35fr)_repeat(3,minmax(9rem,1fr))]">
+            <div className="border-b border-border p-4" aria-hidden />
+            {BILLING_PLAN_COLUMNS.map((plan) => (
+              <PlanHeader
+                key={plan.key}
+                plan={plan}
+              />
+            ))}
 
-              {BILLING_PLAN_SECTIONS.map((section) => (
-                <PlanSectionRows key={section.title} section={section} />
-              ))}
-            </div>
+            {BILLING_PLAN_SECTIONS.map((section) => (
+              <PlanSectionRows key={section.title} section={section} />
+            ))}
           </div>
         </div>
-      </SettingsCard>
+      </div>
     </section>
   );
 }
@@ -86,14 +84,15 @@ function PlanSummaryCard({
   current: boolean;
 }) {
   return (
-    <SettingsCard
-      className={
+    <div
+      className={twMerge(
+        "flex flex-col overflow-hidden rounded-lg border border-border",
         current
           ? "border-info/50 bg-info/10"
           : plan.featured
             ? "border-border-heavy bg-foreground/[0.04]"
-            : ""
-      }
+            : "",
+      )}
     >
       <div className="flex h-full flex-col gap-5 p-4">
         <div className="space-y-3">
@@ -135,7 +134,7 @@ function PlanSummaryCard({
           <div className="mt-auto h-8" aria-hidden />
         )}
       </div>
-    </SettingsCard>
+    </div>
   );
 }
 

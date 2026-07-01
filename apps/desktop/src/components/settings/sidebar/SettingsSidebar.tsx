@@ -102,14 +102,8 @@ const SETTINGS_NAV_ICONS = {
   worktrees: Scissors,
 } satisfies Record<SettingsNavIconId, typeof Settings2>;
 
-// Scope the row label to 13px and enlarge the icon, without editing the shared
-// SidebarNavRow (used by the app sidebar too). The label div is the only direct
-// child carrying `flex-1`; the icon box is the first direct child div.
-const SETTINGS_ROW_SCALE_CLASS = "[&>.flex-1]:text-[13px] [&>div:first-child]:size-[17px]";
-
 function settingsRowClass(active: boolean, disabled = false) {
   return [
-    SETTINGS_ROW_SCALE_CLASS,
     active ? SETTINGS_ROW_ACTIVE_CLASS : SETTINGS_ROW_INACTIVE_CLASS,
     disabled ? SETTINGS_ROW_DISABLED_CLASS : "",
   ].filter(Boolean).join(" ");

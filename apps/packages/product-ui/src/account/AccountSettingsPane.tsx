@@ -3,8 +3,8 @@ import { useState, type ReactNode } from "react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 
-import { SettingsCard } from "../settings/SettingsCard";
-import { SettingsCardRow } from "../settings/SettingsCardRow";
+import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsRow } from "../settings/SettingsRow";
 import {
   AccountPasswordCredentialCard,
   type AccountPasswordCredentialView,
@@ -94,7 +94,7 @@ export function AccountSettingsPane({
 }: AccountSettingsPaneProps) {
   return (
     <div className="space-y-6">
-      <SettingsCard>
+      <SettingsSection>
         <AccountProfileHeader
           avatarUrl={avatarUrl ?? null}
           displayName={displayName}
@@ -102,10 +102,10 @@ export function AccountSettingsPane({
           githubLabel={githubLabel}
           profileSummary={profileSummary}
         />
-      </SettingsCard>
+      </SettingsSection>
 
-      <SettingsCard>
-        <SettingsCardRow label={accessTitle} description={accessDescription}>
+      <SettingsSection>
+        <SettingsRow label={accessTitle} description={accessDescription}>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {actions.signIn ? <AccountAction action={actions.signIn} /> : null}
             {actions.connectGitHub ? <AccountAction action={actions.connectGitHub} /> : null}
@@ -115,10 +115,10 @@ export function AccountSettingsPane({
             ) : null}
             {actions.signOut ? <AccountAction action={actions.signOut} variant="ghost" /> : null}
           </div>
-        </SettingsCardRow>
-      </SettingsCard>
+        </SettingsRow>
+      </SettingsSection>
 
-      <SettingsCard>
+      <SettingsSection>
         <div className="space-y-3 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-1">
@@ -143,10 +143,10 @@ export function AccountSettingsPane({
             ))}
           </div>
         </div>
-      </SettingsCard>
+      </SettingsSection>
 
       {connectedServices.length > 0 ? (
-        <SettingsCard>
+        <SettingsSection>
           <div className="space-y-3 p-4">
             <div className="min-w-0 space-y-1">
               <div className="text-sm font-medium text-foreground">
@@ -162,7 +162,7 @@ export function AccountSettingsPane({
               ))}
             </div>
           </div>
-        </SettingsCard>
+        </SettingsSection>
       ) : null}
 
       {passwordCredential ? (

@@ -1,5 +1,5 @@
-import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
-import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
 
@@ -10,8 +10,8 @@ export function SupportSettingsSection({ onOpenSupport }: { onOpenSupport: () =>
         title="Support"
         description="Open the dedicated support page for cloud sessions, workflows, billing, and Desktop handoff."
       />
-      <SettingsCard>
-        <SettingsCardRow
+      <SettingsSection>
+        <SettingsRow
           label="Product support"
           description="Send a support message with account and page context."
         >
@@ -23,12 +23,12 @@ export function SupportSettingsSection({ onOpenSupport }: { onOpenSupport: () =>
           >
             Open support
           </Button>
-        </SettingsCardRow>
-        <SettingsCardRow
+        </SettingsRow>
+        <SettingsRow
           label="Support context"
           description="Support messages are telemetry-blocked and include the current app location."
         />
-      </SettingsCard>
+      </SettingsSection>
     </section>
   );
 }

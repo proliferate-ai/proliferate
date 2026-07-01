@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsSection } from "@/components/settings/shared/SettingsSection";
-import { SettingsRow } from "@/components/settings/shared/SettingsRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 
 interface OrganizationSelectorProps {
   organizationId: string | null;
@@ -57,9 +58,7 @@ export function OrganizationSelector({
 export function SlackBotOrganizationsLoadingState() {
   return (
     <SlackBotShell>
-      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-        <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">Loading organizations...</p>
-      </div>
+      <SettingsEmptyState size="compact" title="Loading organizations..." />
     </SlackBotShell>
   );
 }
@@ -67,11 +66,10 @@ export function SlackBotOrganizationsLoadingState() {
 export function SlackBotNoOrganizationState() {
   return (
     <SlackBotShell>
-      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-        <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-          Join or create an organization before configuring Slack.
-        </p>
-      </div>
+      <SettingsEmptyState
+        size="compact"
+        title="Join or create an organization before configuring Slack."
+      />
     </SlackBotShell>
   );
 }
@@ -80,9 +78,7 @@ export function SlackBotAdminLoadingState(props: OrganizationSelectorProps) {
   return (
     <SlackBotShell>
       <OrganizationSelector {...props} />
-      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-        <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">Checking admin access...</p>
-      </div>
+      <SettingsEmptyState size="compact" title="Checking admin access..." />
     </SlackBotShell>
   );
 }
@@ -91,12 +87,11 @@ export function SlackBotAdminRequiredState(props: OrganizationSelectorProps) {
   return (
     <SlackBotShell>
       <OrganizationSelector {...props} />
-      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-        <div className="text-sm font-medium text-foreground">Admin access required</div>
-        <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-          Slack bot settings are available to organization owners and admins.
-        </p>
-      </div>
+      <SettingsEmptyState
+        size="compact"
+        title="Admin access required"
+        description="Slack bot settings are available to organization owners and admins."
+      />
     </SlackBotShell>
   );
 }

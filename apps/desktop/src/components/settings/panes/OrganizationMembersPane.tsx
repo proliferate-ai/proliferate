@@ -4,7 +4,8 @@ import { CurrentUserInvitationsSection } from "@/components/settings/panes/organ
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
@@ -125,11 +126,7 @@ export function OrganizationMembersPane() {
 
       {shouldShowSignInState ? (
         <OrganizationSection title="Members" description="Organization access is tied to your signed-in account.">
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-              Sign in to view organization members.
-            </p>
-          </div>
+          <SettingsEmptyState size="compact" title="Sign in to view organization members." />
         </OrganizationSection>
       ) : null}
 
@@ -139,11 +136,10 @@ export function OrganizationMembersPane() {
 
       {shouldShowErrorState ? (
         <OrganizationSection title="Members">
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-              Organization members could not be loaded.
-            </p>
-            <div className="mt-2">
+          <SettingsEmptyState
+            size="compact"
+            title="Organization members could not be loaded."
+            action={
               <Button
                 type="button"
                 variant="secondary"
@@ -153,8 +149,8 @@ export function OrganizationMembersPane() {
               >
                 Retry
               </Button>
-            </div>
-          </div>
+            }
+          />
         </OrganizationSection>
       ) : null}
 
@@ -171,11 +167,7 @@ export function OrganizationMembersPane() {
 
       {shouldShowEmptyState ? (
         <OrganizationSection title="Members">
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <p className="max-w-[48ch] text-xs leading-[1.45] text-muted-foreground">
-              No organization yet.
-            </p>
-          </div>
+          <SettingsEmptyState size="compact" title="No organization yet." />
         </OrganizationSection>
       ) : null}
 

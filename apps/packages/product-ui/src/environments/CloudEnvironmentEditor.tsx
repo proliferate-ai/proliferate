@@ -6,8 +6,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { SettingsCard } from "../settings/SettingsCard";
-import { SettingsCardRow } from "../settings/SettingsCardRow";
+import { SettingsRow } from "../settings/SettingsRow";
+import { SettingsSection } from "../settings/SettingsSection";
 import { SettingsPageHeader } from "../settings/SettingsPageHeader";
 
 export interface CloudEnvironmentEnvVarRowView {
@@ -115,8 +115,8 @@ export function CloudEnvironmentEditor({
         </div>
       ) : null}
 
-      <SettingsCard>
-        <SettingsCardRow
+      <SettingsSection>
+        <SettingsRow
           label={(
             <span className="flex items-center gap-2">
               <Cloud size={14} className="text-muted-foreground" />
@@ -145,9 +145,9 @@ export function CloudEnvironmentEditor({
               </option>
             ))}
           </Select>
-        </SettingsCardRow>
+        </SettingsRow>
 
-        <SettingsCardRow
+        <SettingsRow
           label="Cloud action command"
           description="Command launched by the workspace Run action for cloud workspaces in this environment."
         >
@@ -158,9 +158,9 @@ export function CloudEnvironmentEditor({
             className="w-72 font-mono text-sm"
             onChange={(event: ChangeEvent<HTMLInputElement>) => onRunCommandChange(event.currentTarget.value)}
           />
-        </SettingsCardRow>
+        </SettingsRow>
 
-        <SettingsCardRow
+        <SettingsRow
           label="Setup script"
           description="Runs after a new cloud workspace reaches ready."
           className="sm:items-start"
@@ -172,12 +172,12 @@ export function CloudEnvironmentEditor({
             className="h-36 w-96 font-mono text-sm"
             onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onSetupScriptChange(event.currentTarget.value)}
           />
-        </SettingsCardRow>
-      </SettingsCard>
+        </SettingsRow>
+      </SettingsSection>
 
       {secretsSlot ?? (
-        <SettingsCard>
-        <SettingsCardRow
+        <SettingsSection>
+        <SettingsRow
           label="Environment variables"
           description="Injected into new cloud workspaces for this environment."
           className="sm:items-start"
@@ -221,15 +221,15 @@ export function CloudEnvironmentEditor({
               Add variable
             </Button>
           </div>
-        </SettingsCardRow>
+        </SettingsRow>
 
         {trackedFilesReadOnly && trackedFileCount > 0 ? (
-          <SettingsCardRow
+          <SettingsRow
             label="Tracked files"
             description={`${trackedFileCount} tracked file${trackedFileCount === 1 ? "" : "s"} ${trackedFileCount === 1 ? "is" : "are"} saved for this environment. Cloud-only edits preserve them; local file sync requires a local checkout.`}
           />
         ) : null}
-        </SettingsCard>
+        </SettingsSection>
       )}
 
       <div className="flex justify-end gap-2">

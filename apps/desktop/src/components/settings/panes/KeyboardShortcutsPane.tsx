@@ -9,7 +9,7 @@ import {
 } from "@/config/shortcuts/composer-shortcuts";
 import { SHORTCUTS, type ShortcutKey } from "@/config/shortcuts/registry";
 import type { ComposerShortcutDef, ShortcutDef } from "@/config/shortcuts/types";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";

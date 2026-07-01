@@ -2,9 +2,9 @@ import {
   SETTINGS_SCAFFOLD_COPY,
   type SettingsScaffoldPageId,
 } from "@/copy/settings/settings-scaffold-copy";
-import { SettingsSection } from "@/components/settings/shared/SettingsSection";
-import { SettingsRow } from "@/components/settings/shared/SettingsRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 
 interface SettingsScaffoldPaneProps {
   pageId: SettingsScaffoldPageId;
