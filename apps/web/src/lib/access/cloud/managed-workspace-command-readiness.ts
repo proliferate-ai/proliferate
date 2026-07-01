@@ -123,12 +123,6 @@ async function waitForManagedAgentAuthCurrent(args: {
     if (runtimeAuth?.targetCurrent === true) {
       return latest;
     }
-    if (runtimeAuth?.status === "apply_failed" || runtimeAuth?.status === "missing_credentials") {
-      throw new Error(
-        runtimeAuth.lastError
-          ?? "Cloud agent credentials are not ready for this workspace.",
-      );
-    }
     args.onStatus("Applying cloud agent credentials.");
     if (Date.now() >= deadline) {
       throw new Error("Timed out waiting for cloud agent credentials to apply.");

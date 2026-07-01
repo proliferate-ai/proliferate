@@ -50,8 +50,6 @@ export function useCloudWorkspaces(options: UseCloudWorkspacesOptions | boolean 
     organizationId: normalizedOptions.organizationId ?? null,
   };
   const selection: CloudWorkspaceListSelection = {
-    ownerScope: owner.ownerScope,
-    organizationId: owner.organizationId,
     scope: normalizedOptions.scope ?? undefined,
     lifecycle: normalizedOptions.lifecycle ?? undefined,
   };

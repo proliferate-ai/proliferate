@@ -146,7 +146,6 @@ describe("cloud workspace creation helpers", () => {
       branchName: attempt.branchName,
       displayName: null,
       generatedName: true,
-      ownerScope: "personal",
     });
     expect(attempt.triedBranchNames).toEqual(new Set([attempt.branchName]));
   });
@@ -182,7 +181,6 @@ describe("cloud workspace creation helpers", () => {
       branchName: "proliferate/acacia",
       displayName: null,
       generatedName: false,
-      ownerScope: "personal" as const,
     };
 
     expect(isCreateCloudWorkspaceRequest(request)).toBe(true);

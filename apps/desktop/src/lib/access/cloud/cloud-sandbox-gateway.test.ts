@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  ensureCloudSandboxWorkspaceRuntimeConnection,
-} from "@proliferate/cloud-sdk/client/cloud-sandboxes";
-import {
   getDesktopCloudAccessToken,
+  getProliferateClient,
   isCloudAgentKind,
   type CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
@@ -11,35 +9,30 @@ import {
   resolveCloudSandboxGatewayConnectionForWorkspace,
 } from "@/lib/access/cloud/cloud-sandbox-gateway";
 
-vi.mock("@proliferate/cloud-sdk/client/cloud-sandboxes", () => ({
-  ensureCloudSandboxWorkspaceRuntimeConnection: vi.fn(),
-}));
-
 vi.mock("@/lib/access/cloud/client", () => ({
   getDesktopCloudAccessToken: vi.fn(),
+  getProliferateClient: vi.fn(),
   isCloudAgentKind: vi.fn(),
 }));
 
-const ensureRuntimeConnection = vi.mocked(ensureCloudSandboxWorkspaceRuntimeConnection);
 const getProductToken = vi.mocked(getDesktopCloudAccessToken);
+const getClient = vi.mocked(getProliferateClient);
 const isKnownCloudAgent = vi.mocked(isCloudAgentKind);
 
 describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     getProductToken.mockResolvedValue("product-token");
+    getClient.mockReturnValue({
+      buildUrl: (path: string) => `http://api.test${path}`,
+    } as ReturnType<typeof getProliferateClient>);
     isKnownCloudAgent.mockImplementation((kind) => kind === "claude" || kind === "codex");
-    ensureRuntimeConnection.mockResolvedValue({
-      gatewayAnyHarnessBaseUrl: "http://api.test/v1/gateway/cloud-sandbox/anyharness",
-      anyharnessWorkspaceId: "repo-root-workspace",
-      anyharnessRepoRootId: "repo-root",
-      runtimeGeneration: 7,
-    });
   });
 
-  it("uses the authoritative cloud-sandbox runtime workspace id", async () => {
+  it("uses the gateway URL and CloudWorkspace AnyHarness workspace id", async () => {
     const connection = await resolveCloudSandboxGatewayConnectionForWorkspace({
       id: "cloud-workspace-1",
+      anyharnessWorkspaceId: "runtime-workspace",
       repo: {
         owner: "proliferate-ai",
         name: "proliferate",
@@ -50,6 +43,7 @@ describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
         anyharnessWorkspaceId: "selected-workspace",
       },
       runtime: {
+        generation: 7,
         runtimeAuth: {
           status: "current",
           configCurrent: true,
@@ -62,13 +56,12 @@ describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
     expect(connection).toMatchObject({
       runtimeUrl: "http://api.test/v1/gateway/cloud-sandbox/anyharness",
       accessToken: "product-token",
-      anyharnessWorkspaceId: "repo-root-workspace",
+      anyharnessWorkspaceId: "runtime-workspace",
       runtimeGeneration: 7,
       runtimeAccessKind: "proliferate-gateway",
-      anyharnessRepoRootId: "repo-root",
+      anyharnessRepoRootId: null,
       allowedAgentKinds: ["claude"],
       readyAgentKinds: ["claude"],
     });
-    expect(ensureRuntimeConnection).toHaveBeenCalledWith("cloud-workspace-1");
   });
 });

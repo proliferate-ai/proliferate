@@ -187,7 +187,6 @@ export function buildNextCloudWorkspaceAttempt(args: {
       branchName,
       displayName: null,
       generatedName: true,
-      ownerScope: "personal",
     },
     triedBranchNames: nextTriedBranchNames,
   };

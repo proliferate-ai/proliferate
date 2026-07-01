@@ -8,7 +8,6 @@ import {
   getCloudWorkspace,
   restoreCloudWorkspace,
   startCloudWorkspace,
-  updateCloudWorkspaceBranch,
 } from "@proliferate/cloud-sdk/client/workspaces";
 import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
 import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
@@ -229,29 +228,11 @@ export function useCloudWorkspaceActions() {
     },
   });
 
-  const syncBranchMutation = useMutation<CloudWorkspaceDetail, Error, {
-    workspaceId: string;
-    branchName: string;
-  }>({
-    mutationFn: async ({ workspaceId, branchName }) => {
-      const cloudWorkspaceId = workspaceId.startsWith("cloud:")
-        ? workspaceId.slice("cloud:".length)
-        : workspaceId;
-      return updateCloudWorkspaceBranch(cloudWorkspaceId, branchName);
-    },
-    onSuccess: async (workspace) => {
-      upsertCloudWorkspace(workspace);
-      await invalidateCloudResources();
-    },
-  });
-
   return {
     refreshCloudWorkspace: refreshMutation.mutateAsync,
     isRefreshingCloudWorkspace: refreshMutation.isPending,
     startCloudWorkspace: startMutation.mutateAsync,
     isStartingCloudWorkspace: startMutation.isPending,
-    syncCloudWorkspaceBranch: syncBranchMutation.mutateAsync,
-    isSyncingCloudWorkspaceBranch: syncBranchMutation.isPending,
     archiveCloudWorkspace: archiveMutation.mutateAsync,
     isArchivingCloudWorkspace: archiveMutation.isPending,
     restoreCloudWorkspace: restoreMutation.mutateAsync,

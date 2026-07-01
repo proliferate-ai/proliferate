@@ -9,7 +9,6 @@ const request: CreateCloudWorkspaceRequest = {
   gitRepoName: "proliferate",
   branchName: "codex/otter",
   generatedName: true,
-  ownerScope: "personal",
 };
 
 describe("create workspace transient recovery", () => {
@@ -39,8 +38,9 @@ describe("create workspace transient recovery", () => {
 function workspace(
   branch: string,
   overrides: Partial<CloudWorkspaceDetail["repo"]> = {},
-): Pick<CloudWorkspaceDetail, "repo"> {
+): Pick<CloudWorkspaceDetail, "displayName" | "repo"> {
   return {
+    displayName: branch,
     repo: {
       provider: "github",
       owner: "proliferate-ai",

@@ -58,8 +58,7 @@ from proliferate.server.cloud.secrets.api import router as secrets_router
 # from proliferate.server.cloud.webhooks.api import router as webhooks_router
 # WORKER PARKED: old worker target routes depend on deleted target tables.
 # from proliferate.server.cloud.worker.api import router as worker_router
-# WORKSPACES PARKED: new workspace/resume flow lands in a later PR.
-# from proliferate.server.cloud.workspaces.api import router as workspaces_router
+from proliferate.server.cloud.workspaces.api import router as workspaces_router
 from proliferate.server.cloud.worktree_policy.api import router as worktree_policy_router
 
 # SLACK BOT PARKED: preserve the Slack API module, but do not mount its routes.
@@ -74,8 +73,7 @@ router.include_router(github_app_router)
 router.include_router(github_app_organization_router)
 router.include_router(secrets_router)
 router.include_router(cloud_sandboxes_router)
-# WORKSPACES PARKED: /v1/cloud/workspaces/* is intentionally disabled.
-# router.include_router(workspaces_router)
+router.include_router(workspaces_router)
 router.include_router(worktree_policy_router)
 router.include_router(capabilities_router)
 # CLAIMS PARKED: /v1/cloud/claims/* is intentionally disabled.

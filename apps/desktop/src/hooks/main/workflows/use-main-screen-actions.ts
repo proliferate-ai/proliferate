@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { updateCloudWorkspaceBranch } from "@proliferate/cloud-sdk/client/workspaces";
+import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -166,7 +166,7 @@ export function useMainScreenActions({
     await renameBranchMutation.mutateAsync(newName);
     const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
     if (cloudWorkspaceId) {
-      await updateCloudWorkspaceBranch(cloudWorkspaceId, newName).catch(() => undefined);
+      await updateCloudWorkspaceDisplayName(cloudWorkspaceId, newName).catch(() => undefined);
     }
     await invalidateWorkspaceCollections();
   }, [

@@ -29,18 +29,6 @@ class CloudSandboxResponse(BaseModel):
     destroyed_at: str | None = Field(serialization_alias="destroyedAt")
 
 
-class CloudSandboxRepoRuntimeConnectionResponse(BaseModel):
-    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
-    anyharness_repo_root_id: str | None = Field(serialization_alias="anyharnessRepoRootId")
-    runtime_generation: int = Field(serialization_alias="runtimeGeneration")
-
-
-class CloudSandboxWorkspaceRuntimeConnectionResponse(BaseModel):
-    anyharness_workspace_id: str = Field(serialization_alias="anyharnessWorkspaceId")
-    anyharness_repo_root_id: str | None = Field(serialization_alias="anyharnessRepoRootId")
-    runtime_generation: int = Field(serialization_alias="runtimeGeneration")
-
-
 def cloud_sandbox_payload(value: CloudSandboxValue) -> CloudSandboxResponse:
     return CloudSandboxResponse(
         id=str(value.id),

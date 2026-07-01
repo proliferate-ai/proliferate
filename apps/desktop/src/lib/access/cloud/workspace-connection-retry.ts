@@ -7,10 +7,8 @@ import {
 } from "@/lib/access/cloud/client";
 import {
   getCloudWorkspace,
-  getCloudWorkspaceConnection as getDirectCloudWorkspaceConnection,
 } from "@proliferate/cloud-sdk/client/workspaces";
 import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { cloudWorkspaceUsesCloudSandboxGateway } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 
 export const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
 export const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;
@@ -83,10 +81,7 @@ export async function getResolvedCloudWorkspaceConnection(
       "workspace_not_found",
     );
   }
-  if (cloudWorkspaceUsesCloudSandboxGateway(workspace)) {
-    return resolveCloudSandboxGatewayConnectionForWorkspace(workspace);
-  }
-  return getDirectCloudWorkspaceConnection(workspaceId);
+  return resolveCloudSandboxGatewayConnectionForWorkspace(workspace);
 }
 
 export function getCloudWorkspaceConnectionWithRetry(

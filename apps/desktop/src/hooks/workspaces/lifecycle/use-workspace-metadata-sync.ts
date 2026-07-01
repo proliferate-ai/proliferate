@@ -3,16 +3,7 @@ import { useGitStatusQuery } from "@anyharness/sdk-react";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
-import {
-  updateCloudWorkspaceBranch,
-  updateCloudWorkspaceDisplayName,
-} from "@proliferate/cloud-sdk/client/workspaces";
-import type {
-  CloudWorkspaceDetail,
-} from "@/lib/access/cloud/client";
-import {
-  buildRemoteLogicalWorkspaceId,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+import { updateCloudWorkspaceDisplayName } from "@proliferate/cloud-sdk/client/workspaces";
 import {
   CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS,
   markCloudDisplayNameSyncCompleted,
@@ -21,7 +12,6 @@ import {
   type CloudDisplayNameSyncState,
 } from "@/lib/domain/workspaces/cloud/cloud-display-name-sync";
 import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backfill-suppression";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspace } from "@/lib/access/anyharness/workspaces";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
@@ -34,19 +24,9 @@ import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/clou
 
 const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
 
-function buildLogicalIdForCloudWorkspace(workspace: CloudWorkspaceDetail): string {
-  return buildRemoteLogicalWorkspaceId(
-    workspace.repo.provider,
-    workspace.repo.owner,
-    workspace.repo.name,
-    workspace.repo.branch,
-  );
-}
-
 // Owns mounted metadata synchronization for the selected workspace.
 // Display state and user-triggered workspace actions live in sibling hook folders.
 export function useWorkspaceMetadataSync() {
-  const syncingCloudBranchRef = useRef<string | null>(null);
   const syncingCloudDisplayNameRef = useRef<string | null>(null);
   const cloudDisplayNameSyncStateRef = useRef<CloudDisplayNameSyncState | null>(null);
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -87,60 +67,6 @@ export function useWorkspaceMetadataSync() {
 
     void gitStatusQuery.refetch();
   }, [gitStatusQuery.refetch, shouldPoll]);
-
-  useEffect(() => {
-    const currentBranch = gitStatusQuery.data?.currentBranch?.trim();
-    if (!currentBranch) {
-      return;
-    }
-
-    const cloudBranch = selectedCloudWorkspace?.repo.branch.trim() ?? null;
-    const cloudBranchNeedsSync =
-      !!selectedCloudWorkspace
-      && !!cloudBranch
-      && cloudBranch !== currentBranch;
-    if (!cloudBranchNeedsSync) {
-      return;
-    }
-
-    void (async () => {
-      try {
-        if (!selectedCloudWorkspace) {
-          return;
-        }
-        const syncKey = `${selectedCloudWorkspace.id}:${currentBranch}`;
-        if (syncingCloudBranchRef.current === syncKey) {
-          return;
-        }
-        const requestedCloudWorkspaceId = selectedCloudWorkspace.id;
-        syncingCloudBranchRef.current = syncKey;
-        const cloudWorkspace = await updateCloudWorkspaceBranch(
-          requestedCloudWorkspaceId,
-          currentBranch,
-        );
-        upsertCloudWorkspace(cloudWorkspace);
-        const currentSelectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
-        if (
-          currentSelectedWorkspaceId === cloudWorkspaceSyntheticId(requestedCloudWorkspaceId)
-          || currentSelectedWorkspaceId === cloudWorkspaceSyntheticId(cloudWorkspace.id)
-        ) {
-          useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId(
-            buildLogicalIdForCloudWorkspace(cloudWorkspace),
-          );
-        }
-        await invalidateWorkspaceCollections();
-      } finally {
-        if (selectedCloudWorkspace) {
-          syncingCloudBranchRef.current = null;
-        }
-      }
-    })();
-  }, [
-    gitStatusQuery.data?.currentBranch,
-    invalidateWorkspaceCollections,
-    selectedCloudWorkspace,
-    upsertCloudWorkspace,
-  ]);
 
   useEffect(() => {
     if (

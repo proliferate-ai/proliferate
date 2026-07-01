@@ -203,8 +203,6 @@ export interface CreateCloudWorkspaceRequest {
   branchName: string;
   displayName?: string | null;
   generatedName?: boolean | null;
-  ownerScope: "personal" | "organization";
-  organizationId?: string | null;
 }
 
 export interface CloudMobilityRepoRef {

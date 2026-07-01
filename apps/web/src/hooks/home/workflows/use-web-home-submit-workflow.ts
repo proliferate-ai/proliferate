@@ -137,8 +137,6 @@ export function useWebHomeSubmitWorkflow(input: {
         branchName: buildBranchName(text),
         generatedName: true,
         displayName: buildWorkspaceDisplayName(text),
-        ownerScope: "personal",
-        requiredAgentKind: input.resolvedLaunchSelection.agentKind,
         source: "web",
       };
       const workspace = await createCloudWorkspaceWithTransientRecovery({

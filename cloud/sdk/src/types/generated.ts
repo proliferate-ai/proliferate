@@ -197,6 +197,7 @@ export interface CurrentTeamCheckoutResponse {
 export interface CloudWorkspaceSummary {
   id: string;
   targetId?: string | null;
+  repoEnvironmentId?: string | null;
   displayName: string | null;
   repo: RepoRef;
   status: CloudWorkspaceStatus;
@@ -241,6 +242,13 @@ export interface CloudWorkspaceSummary {
 }
 export interface CloudWorkspaceDetail extends CloudWorkspaceSummary {
   [key: string]: unknown;
+}
+export interface CloudWorkspaceRuntimeStatusResponse {
+  workspaceId: string;
+  status: CloudWorkspaceStatus;
+  runtimeStatus: CloudRuntimeStatus;
+  sandboxStatus?: string | null;
+  anyharnessWorkspaceId: string;
 }
 export type ClaimWorkspaceRequest = Schema<"ClaimWorkspaceRequest">;
 export type ClaimWorkspaceResponse = Schema<"ClaimWorkspaceResponse">;
@@ -612,9 +620,6 @@ export interface CreateCloudWorkspaceRequest {
   branchName: string;
   displayName?: string | null;
   generatedName?: boolean | null;
-  ownerScope: "personal" | "organization";
-  organizationId?: string | null;
-  requiredAgentKind?: string | null;
   source?: "desktop" | "web" | "mobile" | null;
 }
 export type GenerateSessionTitleRequest = Schema<"GenerateSessionTitleRequest">;
