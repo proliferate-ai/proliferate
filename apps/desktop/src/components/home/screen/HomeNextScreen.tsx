@@ -1,21 +1,13 @@
 import { useState } from "react";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS,
-  HOME_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
+import { HomeComposerForm } from "@/components/home/screen/HomeComposerForm";
 import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
 import { HomeModelPicker } from "@/components/home/screen/HomeModelPicker";
 import { HomeOnboardingCards } from "@/components/home/screen/HomeOnboardingCards";
 import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
-import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
 import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
-import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
-import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
-import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "@/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
-import { useHomeNextComposerState } from "@/hooks/home/ui/use-home-next-composer-state";
 import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-target-selection-state";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
@@ -61,17 +53,6 @@ export function HomeNextScreen() {
     },
   });
   const configureCloud = useHomeCloudRepoSettingsNavigation(homeNext.cloudRepoTarget);
-  const composer = useHomeNextComposerState({
-    targetDisabledReason: homeNext.targetDisabledReason,
-    modelAvailabilityState: homeNext.modelAvailabilityState,
-    canLaunchTarget: homeNext.canLaunchTarget,
-    modelSelection: homeNext.effectiveModelSelection,
-    modeId: homeNext.effectiveModeId,
-    launchControlValues: homeLaunchControls.launchControlValues,
-    launchTarget: homeNext.launchTarget,
-  });
-  const homeComposerInputMaxHeight =
-    `calc(${CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS} * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
@@ -102,152 +83,96 @@ export function HomeNextScreen() {
             </p>
           </div>
 
-          <ChatComposerSurface>
-            <form
-              className="relative flex flex-col"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (composer.canSubmit) void composer.submit();
-              }}
-            >
-              <div
-                className="mt-3 mb-2 flex-grow select-text overflow-y-auto px-4"
-                style={{
-                  minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-                  maxHeight: homeComposerInputMaxHeight,
-                }}
-              >
-                <ComposerTextarea
-                  data-telemetry-mask
-                  data-home-composer-editor
-                  ref={composer.textareaRef}
-                  rows={4}
-                  value={composer.draft}
-                  onChange={(event) => composer.setDraft(event.target.value)}
-                  onKeyDown={composer.handleKeyDown}
-                  placeholder="Describe a task"
-                  spellCheck={false}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  style={{
-                    minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-                    maxHeight: homeComposerInputMaxHeight,
+          <HomeComposerForm
+            targetDisabledReason={homeNext.targetDisabledReason}
+            modelAvailabilityState={homeNext.modelAvailabilityState}
+            canLaunchTarget={homeNext.canLaunchTarget}
+            modelSelection={homeNext.effectiveModelSelection}
+            modeId={homeNext.effectiveModeId}
+            launchControlValues={homeLaunchControls.launchControlValues}
+            launchTarget={homeNext.launchTarget}
+            controlsSlot={
+              <>
+                <HomeModelPicker
+                  groups={homeNext.modelGroups}
+                  selectedModel={homeNext.selectedModel}
+                  onSelect={(selection) => {
+                    setModelSelectionOverride(selection);
+                    setModeOverrideId(null);
+                    setLaunchControlOverrides({});
                   }}
                 />
-              </div>
-
-              <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-[5px]">
-                  <HomeModelPicker
-                    groups={homeNext.modelGroups}
-                    selectedModel={homeNext.selectedModel}
-                    onSelect={(selection) => {
-                      setModelSelectionOverride(selection);
-                      setModeOverrideId(null);
-                      setLaunchControlOverrides({});
-                    }}
-                  />
-                  <HomeModePicker
-                    modes={homeNext.modeOptions}
-                    selectedMode={homeNext.effectiveMode}
-                    onSelect={setModeOverrideId}
-                  />
-                  <SessionConfigControls
-                    agentKind={homeNext.effectiveModelSelection?.kind ?? null}
-                    controls={homeLaunchControls.controls}
-                  />
-                </div>
-
-                <div className="flex items-center">
-                  <ChatComposerActions
-                    isRunning={false}
-                    isEmpty={composer.draft.trim().length === 0}
-                    isDisabled={!composer.canSubmit}
-                    onSubmit={() => { void composer.submit(); }}
-                    onCancel={composer.cancel}
-                  />
-                </div>
-              </div>
-            </form>
-          </ChatComposerSurface>
-
-          <div className="mt-2 flex min-w-0 flex-wrap items-center justify-start gap-[5px] px-2">
-            <HomeTargetPicker
-              destination={destination}
-              repoLaunchKind={repoLaunchKind}
-              repositories={homeNext.repositories}
-              selectedRepository={homeNext.selectedRepository}
-              selectedBranchName={homeNext.selectedBranchName}
-              branchOptions={homeNext.branchOptions}
-              branchLoading={homeNext.branchQuery.isLoading}
-              cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
-              sshTargetOptions={homeNext.sshTargetOptions}
-              selectedSshTargetId={selectedSshTargetId}
-              sshTargetsLoading={homeNext.sshTargetsLoading}
-              onSelectCowork={() => {
-                patchTargetSelection({ destination: "cowork" });
-              }}
-              onSelectRepository={(sourceRoot) => {
-                const launchKind = resolveHomeTargetLaunchKindForRepository({
-                  currentLaunchKind: repoLaunchKind,
-                  sourceRoot,
-                  cloudActionBySourceRoot: homeNext.cloudRepoActionBySourceRoot,
-                });
-                patchTargetSelection({
-                  destination: "repository",
-                  repositorySelection: { kind: "repository", sourceRoot },
-                  repoLaunchKind: launchKind,
-                });
-              }}
-              onSelectRuntime={(launchKind, targetId = null) => {
-                patchTargetSelection({
-                  repoLaunchKind: launchKind,
-                  selectedSshTargetId: launchKind === "ssh" ? targetId : selectedSshTargetId,
-                });
-              }}
-              onSelectBranch={(branchName) => {
-                patchTargetSelection({ baseBranchOverride: branchName });
-              }}
-              onAddRepository={() => handleHomeAction("add-repository")}
-              onConfigureCloud={configureCloud}
-            />
-          </div>
-
-          {composer.submittedPreview ? (
-            <div
-              key={composer.submittedPreview.id}
-              className="mt-5"
-              data-home-submit-preview
-            >
-              <UserMessage
-                sessionId={null}
-                content={composer.submittedPreview.text}
-                contentParts={[{ type: "text", text: composer.submittedPreview.text }]}
+                <HomeModePicker
+                  modes={homeNext.modeOptions}
+                  selectedMode={homeNext.effectiveMode}
+                  onSelect={setModeOverrideId}
+                />
+                <SessionConfigControls
+                  agentKind={homeNext.effectiveModelSelection?.kind ?? null}
+                  controls={homeLaunchControls.controls}
+                />
+              </>
+            }
+            targetPickerSlot={
+              <HomeTargetPicker
+                destination={destination}
+                repoLaunchKind={repoLaunchKind}
+                repositories={homeNext.repositories}
+                selectedRepository={homeNext.selectedRepository}
+                selectedBranchName={homeNext.selectedBranchName}
+                branchOptions={homeNext.branchOptions}
+                branchLoading={homeNext.branchQuery.isLoading}
+                cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
+                sshTargetOptions={homeNext.sshTargetOptions}
+                selectedSshTargetId={selectedSshTargetId}
+                sshTargetsLoading={homeNext.sshTargetsLoading}
+                onSelectCowork={() => {
+                  patchTargetSelection({ destination: "cowork" });
+                }}
+                onSelectRepository={(sourceRoot) => {
+                  const launchKind = resolveHomeTargetLaunchKindForRepository({
+                    currentLaunchKind: repoLaunchKind,
+                    sourceRoot,
+                    cloudActionBySourceRoot: homeNext.cloudRepoActionBySourceRoot,
+                  });
+                  patchTargetSelection({
+                    destination: "repository",
+                    repositorySelection: { kind: "repository", sourceRoot },
+                    repoLaunchKind: launchKind,
+                  });
+                }}
+                onSelectRuntime={(launchKind, targetId = null) => {
+                  patchTargetSelection({
+                    repoLaunchKind: launchKind,
+                    selectedSshTargetId: launchKind === "ssh" ? targetId : selectedSshTargetId,
+                  });
+                }}
+                onSelectBranch={(branchName) => {
+                  patchTargetSelection({ baseBranchOverride: branchName });
+                }}
+                onAddRepository={() => handleHomeAction("add-repository")}
+                onConfigureCloud={configureCloud}
               />
-            </div>
-          ) : null}
-
-          {modelAvailabilityNotice ? (
-            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
-              <span>{modelAvailabilityNotice.text}</span>
-              {modelAvailabilityNotice.actionLabel ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleHomeAction("agent-settings")}
-                  className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                >
-                  {modelAvailabilityNotice.actionLabel}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {composer.submitDisabledReason ? (
-            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
-              <span>{composer.submitDisabledReason}</span>
-              {repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
+            }
+            modelAvailabilityNoticeSlot={
+              modelAvailabilityNotice ? (
+                <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
+                  <span>{modelAvailabilityNotice.text}</span>
+                  {modelAvailabilityNotice.actionLabel ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleHomeAction("agent-settings")}
+                      className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                    >
+                      {modelAvailabilityNotice.actionLabel}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null
+            }
+            submitDisabledReasonCtaSlot={
+              repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -256,14 +181,15 @@ export function HomeNextScreen() {
                 >
                   Configure
                 </Button>
-              ) : null}
-            </div>
-          ) : null}
-
-          <HomeOnboardingCards
-            cards={onboardingCards}
-            isAddingRepo={isAddingRepo}
-            onSelect={(card) => handleHomeAction(card.id)}
+              ) : null
+            }
+            onboardingSlot={
+              <HomeOnboardingCards
+                cards={onboardingCards}
+                isAddingRepo={isAddingRepo}
+                onSelect={(card) => handleHomeAction(card.id)}
+              />
+            }
           />
         </div>
       </main>
