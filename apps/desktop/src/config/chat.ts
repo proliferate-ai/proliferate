@@ -12,5 +12,5 @@ export const WORKSPACE_CHAT_COMPOSER_INPUT = {
 export const HOME_CHAT_COMPOSER_INPUT = {
   minRows: 2,
   maxRows: 8,
-  minHeightRem: 6.5,
+  minHeightRem: 2.5,
 } as const;

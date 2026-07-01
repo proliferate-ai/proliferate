@@ -1,8 +1,8 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
-import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import {
   POPOVER_SURFACE_CLASS,
 } from "@proliferate/ui/primitives/PopoverButton";
@@ -10,7 +10,6 @@ import {
   ChevronDown,
   CloudIcon,
   Monitor,
-  Search,
   Terminal,
   Tree,
 } from "@proliferate/ui/icons";
@@ -146,19 +145,7 @@ export function ProjectSearchField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  return (
-    <div className="p-2 pb-1.5">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search projects"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-        />
-      </div>
-    </div>
-  );
+  return <PopoverSearchField value={value} onChange={onChange} placeholder="Search projects" />;
 }
 
 export function BranchSearchField({
@@ -168,17 +155,5 @@ export function BranchSearchField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  return (
-    <div className="px-1 pb-1">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search branches"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-        />
-      </div>
-    </div>
-  );
+  return <PopoverSearchField value={value} onChange={onChange} placeholder="Search branches" />;
 }

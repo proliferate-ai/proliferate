@@ -176,7 +176,7 @@ export function HomeNextScreen() {
                   data-telemetry-mask
                   data-home-composer-editor
                   ref={composer.textareaRef}
-                  rows={4}
+                  rows={2}
                   value={composer.draft}
                   onChange={(event) => composer.setDraft(event.target.value)}
                   onKeyDown={composer.handleKeyDown}
@@ -229,7 +229,7 @@ export function HomeNextScreen() {
 
           {/* Target row (spec §1.3): codex footer strip of inline
               "category value ▾" triggers, 12px text. */}
-          <div className="mt-2 flex min-w-0 flex-wrap items-center justify-start gap-1 px-2">
+          <div className="mt-1.5 flex min-w-0 flex-wrap items-center justify-start gap-1 px-2">
             <HomeTargetPicker
               destination={destination}
               repoLaunchKind={repoLaunchKind}

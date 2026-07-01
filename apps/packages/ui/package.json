@@ -167,6 +167,10 @@
       "types": "./dist/primitives/PickerPopoverContent.d.ts",
       "import": "./dist/primitives/PickerPopoverContent.js"
     },
+    "./primitives/PopoverSearchField": {
+      "types": "./dist/primitives/PopoverSearchField.d.ts",
+      "import": "./dist/primitives/PopoverSearchField.js"
+    },
     "./primitives/PillControlButton": {
       "types": "./dist/primitives/PillControlButton.d.ts",
       "import": "./dist/primitives/PillControlButton.js"
