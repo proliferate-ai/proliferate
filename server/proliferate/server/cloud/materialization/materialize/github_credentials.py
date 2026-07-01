@@ -98,7 +98,10 @@ async def _ensure_git_credential_helper_configured(
             'test -x "$helper"',
             'test -s "$token_path"',
             'test -s "$meta_path"',
-            'credential_output="$(printf "protocol=https\\nhost=github.com\\n\\n" | "$helper" get)"',
+            (
+                'credential_output="$(printf "protocol=https\\nhost=github.com\\n\\n" '
+                '| "$helper" get)"'
+            ),
             'printf "%s\\n" "$credential_output" | grep -qx "username=x-access-token"',
             'printf "%s\\n" "$credential_output" | grep -Eq "^password=.+$"',
             'git config --global --replace-all credential.https://github.com.helper "!$helper"',

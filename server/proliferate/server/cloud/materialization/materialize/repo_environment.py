@@ -28,13 +28,6 @@ async def materialize_repo_environment(
         repo_environment_id,
     )
     if repo_environment is None or repo_environment.environment_kind != "cloud":
-        await repo_mat_store.mark_repo_environment_materialization_error(
-            db,
-            materialization_id,
-            last_error="Cloud repo environment no longer exists.",
-            expected_updated_at=attempt_updated_at,
-        )
-        await db.commit()
         return
     sandbox = await cloud_sandboxes_service.ensure_personal_cloud_sandbox_exists(
         db,
@@ -179,17 +172,29 @@ async def _materialize_git_checkout(
             '    echo "Refusing to reset dirty cloud repo checkout: $repo_path" >&2',
             "    exit 43",
             "  fi",
-            '  if git -C "$repo_path" rev-parse --verify --quiet "$default_branch" >/dev/null; then',
+            (
+                '  if git -C "$repo_path" rev-parse --verify --quiet "$default_branch" '
+                ">/dev/null; then"
+            ),
             '    read -r _behind ahead <<EOF',
-            '$(git -C "$repo_path" rev-list --left-right --count "origin/$default_branch...$default_branch")',
+            (
+                '$(git -C "$repo_path" rev-list --left-right --count '
+                '"origin/$default_branch...$default_branch")'
+            ),
             "EOF",
             '    if [ "${ahead:-0}" != "0" ]; then',
-            '      echo "Refusing to reset cloud repo checkout with local commits: $repo_path" >&2',
+            (
+                '      echo "Refusing to reset cloud repo checkout with local commits: '
+                '$repo_path" >&2'
+            ),
             "      exit 44",
             "    fi",
             '    git -C "$repo_path" checkout "$default_branch"',
             "  else",
-            '    git -C "$repo_path" checkout --track -b "$default_branch" "origin/$default_branch"',
+            (
+                '    git -C "$repo_path" checkout --track -b "$default_branch" '
+                '"origin/$default_branch"'
+            ),
             "  fi",
             "else",
             '  git -C "$repo_path" checkout --force "$default_branch"',

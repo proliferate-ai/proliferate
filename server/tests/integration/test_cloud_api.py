@@ -1724,7 +1724,11 @@ class TestCloudRepoConfig:
         assert repositories_response.status_code == 200
         repositories_payload = repositories_response.json()
         assert repositories_payload["repositories"][0]["gitOwner"] == "proliferate-ai"
-        assert {item["kind"] for item in repositories_payload["repositories"][0]["environments"]} == {
+        environment_kinds = {
+            item["kind"]
+            for item in repositories_payload["repositories"][0]["environments"]
+        }
+        assert environment_kinds == {
             "cloud",
             "local",
         }

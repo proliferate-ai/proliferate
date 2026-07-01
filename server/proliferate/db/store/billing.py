@@ -15,6 +15,7 @@ from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_SENDING,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
 )
+from proliferate.constants.cloud import RepoEnvironmentKind
 from proliferate.db.models.billing import (
     BillingEntitlement,
     BillingGrant,
@@ -23,10 +24,8 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
-from proliferate.constants.cloud import RepoEnvironmentKind
 from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 
 
 def coerce_utc(value: datetime | None) -> datetime | None:

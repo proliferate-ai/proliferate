@@ -6,8 +6,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
 from redis.asyncio import Redis
