@@ -83,7 +83,7 @@ function OrganizationSwitcherMark({
  * The single sidebar bottom-left account block, shared verbatim by the main
  * sidebar and the settings sidebar: avatar + name/organization trigger opening
  * one popover with invitations, the organization switcher, plan, help links,
- * settings/log out and the harness-versions footer.
+ * settings/log out and the Proliferate app-version footer.
  */
 export function SidebarAccountFooter() {
   const navigate = useNavigate();
@@ -367,9 +367,8 @@ export function SidebarAccountFooter() {
 }
 
 /**
- * §9 footer line: `Proliferate v{x} • Claude Code {y} • …` from installed
- * agent artifact versions (agentProcess.version via the agents query).
- * Truncated with a tooltip listing everything.
+ * Popover footer line: `Proliferate v{x}` only. Harness versions (and their
+ * tooltip) were dropped by owner decision 2026-07-01.
  */
 function AppVersionRow() {
   const { data: appVersion } = useAppVersion();

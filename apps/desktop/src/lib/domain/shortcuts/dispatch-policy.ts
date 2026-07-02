@@ -43,12 +43,15 @@ function canBypassDefaultPrevented(
     return true;
   }
 
+  // Derived from the registry binding (⌘/ today) so the bypass cannot drift
+  // when the shortcut is rebound again (it used to hardcode the old ⌘⇧/).
+  const showShortcutsMatch = SHORTCUTS.showKeyboardShortcuts.match;
   if (
     shortcut.id === SHORTCUTS.showKeyboardShortcuts.id
     && (event.metaKey || event.ctrlKey)
-    && !event.altKey
-    && event.shiftKey
-    && event.code === "Slash"
+    && event.altKey === showShortcutsMatch.alt
+    && event.shiftKey === showShortcutsMatch.shift
+    && event.code === showShortcutsMatch.code
   ) {
     return true;
   }

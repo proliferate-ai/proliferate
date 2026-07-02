@@ -44,6 +44,11 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
   if (value === "shared-environments") {
     return SETTINGS_DEFAULT_SECTION;
   }
+  if (value === "keyboard") {
+    // KEYBOARD PANE REMOVED (owner rev 2026-07-01): the ⌘/ shortcuts modal is
+    // the only surface, so old settings links fall back to the default page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
   if (value === "cloud") {
     return "agent-authentication";
   }

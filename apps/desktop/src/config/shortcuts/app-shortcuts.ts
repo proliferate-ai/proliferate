@@ -63,7 +63,8 @@ export const APP_SHORTCUTS = {
     description: "Show keyboard shortcuts",
     owner: "js",
     match: { kind: "fixed-code", code: "Slash", meta: true, shift: false, alt: false },
-    allowInInputs: true,
+    // false so editable surfaces keep Mod-/ (e.g. CodeMirror toggleComment).
+    allowInInputs: false,
   },
   increaseWindowZoom: {
     id: "app.increase-window-zoom",
