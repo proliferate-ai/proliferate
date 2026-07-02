@@ -1,0 +1,127 @@
+name: Self-Host Smoke
+
+# Boots the production self-hosted control plane the way an operator does
+# (server/deploy/docker-compose.production.yml via bootstrap.sh: generated
+# secrets, migrate, health gate) with an http-only Caddy site so no DNS or TLS
+# issuance is needed, then walks the first-run operator journey: /health,
+# /meta, setup-token claim, desktop password login, invite, invited
+# registration, and membership checks (SMOKE_PHASE=1 restricts the script to
+# the health assertions). Nobody lives in the production-compose lane day to
+# day, so this is the check that keeps it from regressing silently. Designed
+# to be a blocking required check on PRs to main.
+#
+# No on.*.paths filter: a path-skipped run of a required check never reports a
+# conclusion, so unrelated PRs would sit on a Pending check forever and be
+# unmergeable. Instead a cheap changes job always runs, diffs against the merge
+# base, and gates the heavy smoke job on the surfaces that change the smoke
+# result (server image inputs plus the deploy bundle and this workflow). A
+# skipped smoke job reports a "skipped" conclusion, which branch protection
+# treats as satisfied, so doc-only PRs still skip the image build while the
+# check always goes green. The push:main run seeds the buildx layer cache that
+# PR builds restore from, so steady-state runtime is dominated by the ~30s
+# stack boot, not the build.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-host-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SMOKE_IMAGE: proliferate-server:smoke
+
+jobs:
+  changes:
+    name: Detect smoke-relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.detect.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Path list mirrors server-ci.yml's server-image inputs (.dockerignore,
+      # catalogs/**, server/**, minus the lint/test-only entries the image does
+      # not consume) plus the root VERSION file the Dockerfile copies, the
+      # deploy bundle and smoke harness (both under server/**), and this
+      # workflow. Keep it in sync with server/Dockerfile.
+      - name: Diff against merge base
+        id: detect
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          PUSH_BEFORE: ${{ github.event.before || '' }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              base="$(git merge-base "origin/${BASE_REF}" HEAD)"
+              ;;
+            push)
+              base="$PUSH_BEFORE"
+              if [[ ! "$base" =~ ^[0-9a-f]{40}$ ]] || [[ "$base" =~ ^0+$ ]] \
+                || ! git cat-file -e "$base" 2>/dev/null; then
+                echo "No usable push base; running the smoke."
+                echo "relevant=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              ;;
+            *)
+              echo "Event $GITHUB_EVENT_NAME always runs the smoke."
+              echo "relevant=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+          relevant=false
+          while IFS= read -r file; do
+            case "$file" in
+              .dockerignore|VERSION|.github/workflows/self-host-smoke.yml)
+                relevant=true
+                ;;
+              catalogs/*|server/*)
+                relevant=true
+                ;;
+            esac
+          done < <(git diff --name-only "$base" HEAD)
+          echo "Smoke-relevant changes since ${base}: ${relevant}"
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    name: Production compose smoke
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build once and load into the local Docker engine so the compose stack
+      # reuses it (no registry push). GHA cache is shared from the main-branch
+      # build, so PR builds restore unchanged dependency layers.
+      - name: Build server image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: server/Dockerfile
+          load: true
+          tags: ${{ env.SMOKE_IMAGE }}
+          cache-from: type=gha,scope=self-host-smoke
+          cache-to: type=gha,scope=self-host-smoke,mode=max
+
+      - name: Run self-host smoke
+        env:
+          PROLIFERATE_SMOKE_IMAGE: ${{ env.SMOKE_IMAGE }}
+        run: server/deploy/smoke/run-smoke.sh

@@ -1,0 +1,12 @@
+# Smoke-only override for docker-compose.production.yml. Keeps the production
+# topology (Caddy -> api -> db) but replaces the host port bindings so the
+# stack can boot on CI runners and developer machines without claiming
+# 80/443/8000. Requires Docker Compose v2.24.4+ for the !override tag.
+services:
+  caddy:
+    ports: !override
+      - "${PROLIFERATE_SMOKE_HTTP_PORT:-8080}:80"
+
+  api:
+    ports: !override
+      - "127.0.0.1:${PROLIFERATE_SMOKE_API_PORT:-18000}:8000"

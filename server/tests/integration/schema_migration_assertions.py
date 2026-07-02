@@ -33,6 +33,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "github_app_authorizations",
         "github_app_installations",
         "github_app_installation_repositories",
+        "instance_setup_token",
         "oauth_account",
         "organization",
         "organization_invitation",
@@ -80,6 +81,26 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
 
     await assert_background_outbox_schema(conn)
     await assert_sso_schema(conn)
+
+    organization_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("organization")
+        }
+    )
+    assert "is_instance" in organization_columns
+    organization_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("organization")
+        }
+    )
+    assert "ux_organization_instance" in organization_indexes
+
+    setup_token_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("instance_setup_token")
+        }
+    )
+    assert {"id", "token_hash", "created_at", "updated_at"} <= setup_token_columns
 
     repo_config_columns = await conn.run_sync(
         lambda sync_conn: {

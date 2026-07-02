@@ -2,6 +2,7 @@ import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
+import { PasswordSignInForm } from "@/components/auth/PasswordSignInForm";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -34,6 +35,11 @@ export interface AuthScreenLayoutProps {
   ssoSignInUnavailableDescription?: string;
   ssoDisplayName?: string | null;
   onSsoSignIn?: () => void;
+  // Email/password sign-in: the default surface when the server reports
+  // GitHub OAuth is not configured (self-hosted posture).
+  passwordSignInAvailable?: boolean;
+  passwordSubmitting?: boolean;
+  onPasswordSignIn?: (email: string, password: string) => void;
   onCancelSignIn?: () => void;
   canContinueLocally?: boolean;
   onContinueLocally?: () => void;
@@ -57,14 +63,26 @@ export function AuthScreenLayout({
   ssoSignInUnavailableDescription = "",
   ssoDisplayName = null,
   onSsoSignIn,
+  passwordSignInAvailable = false,
+  passwordSubmitting = false,
+  onPasswordSignIn,
   onCancelSignIn,
   canContinueLocally = false,
   onContinueLocally,
 }: AuthScreenLayoutProps) {
   const showAuth = mode === "auth";
   const showSso = showAuth && ssoSignInAvailable;
-  const showCancelSignIn = showAuth && Boolean(onCancelSignIn) && (submitting || ssoSubmitting);
+  // Password form is the DEFAULT when GitHub OAuth is not configured; the
+  // GitHub button keeps its place whenever GitHub is (or may still be) enabled.
+  const showPasswordForm = showAuth
+    && passwordSignInAvailable
+    && !githubSignInChecking
+    && !githubSignInAvailable;
+  const showCancelSignIn = showAuth
+    && Boolean(onCancelSignIn)
+    && (submitting || ssoSubmitting);
   const showUnavailableMessage = showAuth
+    && !showPasswordForm
     && !ssoSignInChecking
     && !ssoSignInAvailable
     && !githubSignInChecking
@@ -87,7 +105,16 @@ export function AuthScreenLayout({
 
         {/* Reserved actions slot: identical height in both modes so the block
             above never shifts. Two absolutely-positioned layers cross-fade. */}
-        <div className={twMerge("relative", ssoSignInAvailable ? "h-[5.875rem]" : "h-11")}>
+        <div
+          className={twMerge(
+            "relative",
+            showPasswordForm
+              ? (showSso ? "h-[11.5rem]" : "h-[8.25rem]")
+              : ssoSignInAvailable
+                ? "h-[5.875rem]"
+                : "h-11",
+          )}
+        >
           {/* Loading layer: a skeleton sitting where the button will land.
               On exit it slides up so nothing drifts downward. */}
           <div
@@ -117,24 +144,33 @@ export function AuthScreenLayout({
             aria-hidden={!showAuth}
           >
             <div className="grid gap-2">
-              <Button
-                type="button"
-                size="md"
-                loading={submitting}
-                onClick={onGitHubSignIn}
-                disabled={
-                  !showAuth
-                  || busy
-                  || githubSignInChecking
-                  || !githubSignInAvailable
-                }
-                tabIndex={showAuth ? 0 : -1}
-                className="h-11 w-full"
-              >
-                {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
-                {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
-                {!submitting && <ArrowRight className="h-4 w-4" />}
-              </Button>
+              {showPasswordForm ? (
+                <PasswordSignInForm
+                  submitting={passwordSubmitting}
+                  disabled={!showAuth || busy}
+                  tabbable={showAuth}
+                  onSubmit={(email, password) => onPasswordSignIn?.(email, password)}
+                />
+              ) : (
+                <Button
+                  type="button"
+                  size="md"
+                  loading={submitting}
+                  onClick={onGitHubSignIn}
+                  disabled={
+                    !showAuth
+                    || busy
+                    || githubSignInChecking
+                    || !githubSignInAvailable
+                  }
+                  tabIndex={showAuth ? 0 : -1}
+                  className="h-11 w-full"
+                >
+                  {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
+                  {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
+                  {!submitting && <ArrowRight className="h-4 w-4" />}
+                </Button>
+              )}
 
               {showSso ? (
                 <Button

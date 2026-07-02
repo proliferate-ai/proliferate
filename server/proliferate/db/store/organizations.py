@@ -24,6 +24,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_CURRENT_STATUSES,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+    ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
     ORGANIZATION_STATUS_ARCHIVED,
@@ -71,6 +72,22 @@ async def _active_owner_count(db: AsyncSession, organization_id: UUID) -> int:
             select(func.count(OrganizationMembership.id)).where(
                 OrganizationMembership.organization_id == organization_id,
                 OrganizationMembership.role == ORGANIZATION_ROLE_OWNER,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
+        )
+        or 0
+    )
+
+
+async def count_active_admin_memberships(db: AsyncSession, organization_id: UUID) -> int:
+    """Count active memberships holding an admin-capable role (owner or admin)."""
+    return int(
+        await db.scalar(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.role.in_(
+                    (ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN)
+                ),
                 OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
             )
         )
@@ -526,6 +543,34 @@ async def list_organization_members(
         )
         for membership, user in rows
     ]
+
+
+async def get_organization_member(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    membership_id: UUID,
+) -> MemberRecord | None:
+    """Load one membership (any status) with its user's email, or None."""
+    row = (
+        await db.execute(
+            select(OrganizationMembership, User)
+            .join(User, User.id == OrganizationMembership.user_id)
+            .where(
+                OrganizationMembership.id == membership_id,
+                OrganizationMembership.organization_id == organization_id,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    membership, user = row
+    return MemberRecord(
+        membership=membership_record(membership),
+        email=user.email,
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+    )
 
 
 async def update_organization_membership(

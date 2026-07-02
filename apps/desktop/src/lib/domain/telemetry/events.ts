@@ -14,8 +14,8 @@ export type SupportReportScopeKind =
   | "app_only";
 export type RuntimeConnectionTelemetryState = "connecting" | "failed" | "healthy";
 export type TrackedFileTelemetrySource = "workspace" | "repo_root";
-export type AuthTelemetryProvider = "apple" | "dev_bypass" | "github" | "google" | "sso";
-export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_poll";
+export type AuthTelemetryProvider = "apple" | "dev_bypass" | "github" | "google" | "password" | "sso";
+export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_poll" | "password_form";
 export type WorkspaceCreationKind = "repo" | "worktree" | "local";
 export type WorkspaceOpenSource = "filesystem";
 export type SetupScriptTelemetryStatus = "failed" | "not_run" | "succeeded";

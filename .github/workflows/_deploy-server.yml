@@ -115,6 +115,23 @@ jobs:
           echo "image_uri=$image_uri" >> "$GITHUB_OUTPUT"
           echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
 
+      # Version pins stamped into the image and reported by /health and /meta.
+      # serverVersion comes from the root VERSION file; desktop/runtime pins from
+      # their tracked package manifests at this commit.
+      - name: Resolve version pins
+        id: pins
+        run: |
+          set -euo pipefail
+          server_version="$(cat VERSION)"
+          desktop_version="$(jq -r '.version' apps/desktop/package.json)"
+          runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
+          {
+            echo "server_version=${server_version}"
+            echo "desktop_version=${desktop_version}"
+            echo "runtime_version=${runtime_version}"
+            echo "min_desktop_version=${desktop_version}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push server image
         uses: docker/build-push-action@v7
         with:
@@ -124,6 +141,11 @@ jobs:
           tags: |
             ${{ steps.image.outputs.image_uri }}
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_SERVER_REPOSITORY }}:${{ inputs.environment }}-latest
+          build-args: |
+            SERVER_VERSION=${{ steps.pins.outputs.server_version }}
+            DESKTOP_VERSION=${{ steps.pins.outputs.desktop_version }}
+            RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
+            MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
 
       - name: Render ECS task definition
         id: task

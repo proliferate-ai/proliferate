@@ -41,9 +41,8 @@ from proliferate.db.store.auth import create_auth_code
 from proliferate.server.cloud.agent_gateway.signup_hook import (
     schedule_agent_gateway_user_enrollment,
 )
-from proliferate.server.organizations.registration import (
-    ensure_default_organization_for_account,
-)
+from proliferate.server.organizations.admin_emails import ensure_admin_email_role
+from proliferate.server.organizations.membership_policy import place_new_identity
 
 AUTH_CHALLENGE_LIFETIME_SECONDS = 600
 
@@ -415,6 +414,21 @@ async def resolve_provider_user(
     verified: VerifiedProviderIdentity,
     challenge: AuthChallengeSnapshot,
 ) -> User:
+    user = await _resolve_provider_user(db, verified=verified, challenge=challenge)
+    if challenge.purpose == "login":
+        # ADMIN_EMAILS floor: asserted at every login. Covers every OAuth
+        # callback surface (web, desktop, mobile) for all providers because
+        # they all resolve their user here.
+        await ensure_admin_email_role(db, user)
+    return user
+
+
+async def _resolve_provider_user(
+    db: AsyncSession,
+    *,
+    verified: VerifiedProviderIdentity,
+    challenge: AuthChallengeSnapshot,
+) -> User:
     existing_identity = await get_identity_by_provider_subject(
         db,
         provider=verified.provider,
@@ -487,7 +501,7 @@ async def resolve_provider_user(
         display_name=verified.display_name,
         avatar_url=verified.avatar_url,
     )
-    await ensure_default_organization_for_account(db, user)
+    await place_new_identity(db, user)
     await attach_verified_identity(db, user=user, verified=verified)
     return user
 

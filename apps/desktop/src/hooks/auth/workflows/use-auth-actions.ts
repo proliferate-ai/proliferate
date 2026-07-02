@@ -13,6 +13,10 @@ import {
   signOut,
 } from "@/lib/integrations/auth/orchestration-provider-flow";
 import {
+  signInWithPassword,
+  type PasswordSignInCredentials,
+} from "@/lib/integrations/auth/orchestration-password-flow";
+import {
   isAbortError,
   type GitHubDesktopSignInOptions,
 } from "@/lib/integrations/auth/proliferate-auth";
@@ -48,6 +52,34 @@ export function useAuthActions() {
         trackProductEvent("auth_sign_in_failed", {
           failure_kind: classifyTelemetryFailure(error),
           provider: "github",
+        });
+        throw error;
+      }
+    }, [authEffects]),
+    signInWithPassword: useCallback(async (credentials: PasswordSignInCredentials) => {
+      try {
+        const result = await signInWithPassword(credentials, authEffects);
+        trackProductEvent("auth_signed_in", {
+          provider: result.provider,
+          source: result.source,
+        });
+        return result;
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+        if (!isTelemetryHandled(error)) {
+          captureTelemetryException(error, {
+            tags: {
+              action: "sign_in",
+              domain: "auth",
+              provider: "password",
+            },
+          });
+        }
+        trackProductEvent("auth_sign_in_failed", {
+          failure_kind: classifyTelemetryFailure(error),
+          provider: "password",
         });
         throw error;
       }

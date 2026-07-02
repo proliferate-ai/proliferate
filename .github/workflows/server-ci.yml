@@ -177,7 +177,25 @@ jobs:
             echo "tags<<EOF"
             printf '%s\n' "${TAGS[@]}"
             echo "EOF"
+            echo "version=${VERSION}"
           } >> "$GITHUB_OUTPUT"
+
+      # Version pins stamped into the image and reported by /health and /meta.
+      # serverVersion is the release version (server-v tag / input). The desktop
+      # and runtime pins are read from their tracked package manifests at this
+      # commit; minDesktopVersion defaults to the pinned desktop version.
+      - name: Resolve version pins
+        id: pins
+        run: |
+          set -euo pipefail
+          desktop_version="$(jq -r '.version' apps/desktop/package.json)"
+          runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
+          {
+            echo "desktop_version=${desktop_version}"
+            echo "runtime_version=${runtime_version}"
+            echo "min_desktop_version=${desktop_version}"
+          } >> "$GITHUB_OUTPUT"
+        working-directory: .
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -186,6 +204,11 @@ jobs:
           file: server/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            SERVER_VERSION=${{ steps.tags.outputs.version }}
+            DESKTOP_VERSION=${{ steps.pins.outputs.desktop_version }}
+            RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
+            MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
 
   self-hosted-release-assets:
     runs-on: ubuntu-latest
@@ -222,25 +245,50 @@ jobs:
         working-directory: .
 
       - name: Prepare release assets
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
+          if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/server-v}"
+          else
+            VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
+          fi
+          # Archive as root:root so a root extraction on the operator host does
+          # not hand ownership of executables to the runner's unprivileged uid.
           tar czf artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
+            --owner=0 --group=0 --numeric-owner \
             -C target/x86_64-unknown-linux-musl/release \
             anyharness \
             proliferate-worker \
             proliferate-supervisor
           tar czf artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz \
+            --owner=0 --group=0 --numeric-owner \
             -C target/aarch64-unknown-linux-musl/release \
             anyharness \
             proliferate-worker \
             proliferate-supervisor
           cp server/infra/self-hosted-aws/template.yaml \
             artifacts/proliferate-self-hosted-aws-template.yaml
-          sha256sum artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
-            artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz \
-            artifacts/proliferate-self-hosted-aws-template.yaml \
-            > artifacts/self-hosted-assets.SHA256SUMS
+          bundle_root="$(mktemp -d)"
+          mkdir -p "$bundle_root/proliferate-deploy"
+          cp -R server/deploy/. "$bundle_root/proliferate-deploy/"
+          rm -rf "$bundle_root/proliferate-deploy/smoke"
+          printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
+          tar czf artifacts/proliferate-deploy.tar.gz \
+            --owner=0 --group=0 --numeric-owner \
+            -C "$bundle_root" proliferate-deploy
+          rm -rf "$bundle_root"
+          (
+            cd artifacts
+            sha256sum \
+              anyharness-x86_64-unknown-linux-musl.tar.gz \
+              anyharness-aarch64-unknown-linux-musl.tar.gz \
+              proliferate-self-hosted-aws-template.yaml \
+              proliferate-deploy.tar.gz \
+              > self-hosted-assets.SHA256SUMS
+          )
         working-directory: .
 
       - name: Ensure server release tag exists
@@ -272,4 +320,5 @@ jobs:
             artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz
             artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz
             artifacts/proliferate-self-hosted-aws-template.yaml
+            artifacts/proliferate-deploy.tar.gz
             artifacts/self-hosted-assets.SHA256SUMS

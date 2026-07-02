@@ -9,12 +9,15 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITE_EXPIRES_DAYS,
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_OWNER,
 )
+from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organization_member_auth_methods as member_auth_method_store
 from proliferate.db.store import organizations as organization_store
@@ -41,6 +44,7 @@ from proliferate.server.cloud.agent_gateway.signup_hook import (
     schedule_agent_gateway_org_enrollment,
 )
 from proliferate.server.organizations import invitation_delivery
+from proliferate.server.organizations.admin_emails import is_admin_listed_email
 from proliferate.server.organizations.domain.policy import (
     is_membership_update_status,
     is_organization_role,
@@ -58,6 +62,7 @@ from proliferate.server.organizations.domain.profile import (
 from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.join_links import organization_join_url
 from proliferate.server.organizations.landing import build_join_landing_html
+from proliferate.server.organizations.membership_policy import place_new_identity
 from proliferate.utils.time import utcnow
 
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
@@ -205,6 +210,16 @@ async def list_organizations(
     db: AsyncSession,
     actor_user: OrganizationActor,
 ) -> OrganizationMembershipRecords:
+    if settings.single_org_mode:
+        # Single-org mode: never mint a personal org from a list/read path.
+        # A user without an active membership is routed through the membership
+        # policy seam, which joins the instance organization or fails closed
+        # (503 before the first-run claim, 403 after an admin removed them).
+        records = await organization_store.list_organizations_for_user(db, actor_user.id)
+        if records:
+            return records
+        await place_new_identity(db, actor_user)
+        return await organization_store.list_organizations_for_user(db, actor_user.id)
     return await organization_store.ensure_default_organization_for_user(
         db,
         user_id=actor_user.id,
@@ -291,6 +306,13 @@ async def update_membership(
             "Invalid membership status.",
             status_code=400,
         )
+    await _enforce_instance_admin_invariants(
+        db,
+        org_user=org_user,
+        membership_id=membership_id,
+        role=role,
+        status=status,
+    )
     membership, error = await organization_store.update_organization_membership(
         db,
         organization_id=org_user.organization_id,
@@ -320,6 +342,57 @@ async def update_membership(
             membership_id=membership.id,
         )
     return membership
+
+
+async def _enforce_instance_admin_invariants(
+    db: AsyncSession,
+    *,
+    org_user: CurrentOrgUser,
+    membership_id: UUID,
+    role: str | None,
+    status: str | None,
+) -> None:
+    """Admin invariants for the instance organization (single-org mode).
+
+    Two rules, both scoped to THE instance org so hosted-mode organizations
+    are untouched:
+
+    - a user listed in ADMIN_EMAILS cannot be given a role below admin
+      (the env is a floor; see ``admin_emails`` module docstring)
+    - the instance org must always keep at least one active admin, so the
+      last admin cannot be demoted or removed
+    """
+    demotes_below_admin = role is not None and role not in organization_admin_roles()
+    removes_membership = status == ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
+    if not demotes_below_admin and not removes_membership:
+        return
+    instance_organization = await instance_organization_store.get_instance_organization(db)
+    if instance_organization is None or instance_organization.id != org_user.organization_id:
+        return
+    member = await organization_store.get_organization_member(
+        db,
+        organization_id=org_user.organization_id,
+        membership_id=membership_id,
+    )
+    if member is None or member.membership.status != ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE:
+        return
+    if demotes_below_admin and is_admin_listed_email(member.email):
+        raise OrganizationServiceError(
+            "admin_email_role_floor",
+            "This user is listed in ADMIN_EMAILS and must keep at least the admin role.",
+            status_code=409,
+        )
+    if member.membership.role not in organization_admin_roles():
+        return
+    # Serialize with concurrent membership updates so two demotions cannot
+    # both observe a safe admin count and drop the org to zero admins.
+    await organization_store.acquire_organization_membership_lock(db, org_user.organization_id)
+    if await organization_store.count_active_admin_memberships(db, org_user.organization_id) <= 1:
+        raise OrganizationServiceError(
+            "last_admin_cannot_be_removed",
+            "The last admin of this instance cannot be demoted or removed.",
+            status_code=409,
+        )
 
 
 async def remove_membership(

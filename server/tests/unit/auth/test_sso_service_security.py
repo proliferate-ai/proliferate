@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.sso import service as sso_service
+from proliferate.auth.sso import user_resolution as sso_user_resolution
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
     SsoConnectionSnapshot,
@@ -147,18 +148,18 @@ async def test_resolve_sso_user_rechecks_org_membership_for_existing_identity(
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_id", fake_get_user_by_id)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_id", fake_get_user_by_id)
     monkeypatch.setattr(
-        sso_service.organization_store,
+        sso_user_resolution.organization_store,
         "get_active_membership",
         fake_get_active_membership,
     )
     monkeypatch.setattr(
-        sso_service.invitation_store,
+        sso_user_resolution.invitation_store,
         "has_live_pending_invitation_for_organization_email",
         _false_pending_invitation,
     )
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     with pytest.raises(HTTPException) as exc_info:
         await sso_service.resolve_sso_user(
@@ -188,6 +189,7 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
 ) -> None:
     user = _user(user_id=uuid4(), email="person@example.com")
     ensured_user_ids: list[object] = []
+    placed_default_roles: list[object] = []
 
     async def fake_get_sso_identity_by_connection_subject(
         *_args: object,
@@ -201,11 +203,14 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
     async def fake_create_auth_user(*_args: object, **_kwargs: object) -> User:
         return user
 
-    async def fake_ensure_default_organization_for_account(
+    async def fake_place_new_identity(
         _db: AsyncSession,
         ensured_user: User,
+        *,
+        default_role: str | None = None,
     ) -> None:
         ensured_user_ids.append(ensured_user.id)
+        placed_default_roles.append(default_role)
 
     async def fake_attach_sso_identity(*_args: object, **_kwargs: object) -> None:
         return None
@@ -215,14 +220,14 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
-    monkeypatch.setattr(sso_service, "create_auth_user", fake_create_auth_user)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_user_resolution, "create_auth_user", fake_create_auth_user)
     monkeypatch.setattr(
-        sso_service,
-        "ensure_default_organization_for_account",
-        fake_ensure_default_organization_for_account,
+        sso_user_resolution,
+        "place_new_identity",
+        fake_place_new_identity,
     )
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     resolved = await sso_service.resolve_sso_user(
         cast(AsyncSession, object()),
@@ -242,6 +247,9 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
 
     assert resolved is user
     assert ensured_user_ids == [user.id]
+    # The connection's default role travels into the membership policy so
+    # single-org placement honors it (hosted placement ignores it).
+    assert placed_default_roles == ["member"]
 
 
 @pytest.mark.asyncio
@@ -269,8 +277,8 @@ async def test_resolve_sso_user_rejects_unlinked_deployment_user_when_jit_disabl
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     with pytest.raises(HTTPException) as exc_info:
         await sso_service.resolve_sso_user(
@@ -316,9 +324,11 @@ async def test_resolve_sso_user_accepts_pending_org_invitation_when_jit_disabled
     async def fake_create_auth_user(*_args: object, **_kwargs: object) -> User:
         return user
 
-    async def fake_ensure_default_organization_for_account(
+    async def fake_place_new_identity(
         _db: AsyncSession,
         ensured_user: User,
+        *,
+        default_role: str | None = None,
     ) -> None:
         ensured_user_ids.append(ensured_user.id)
 
@@ -360,34 +370,34 @@ async def test_resolve_sso_user_accepts_pending_org_invitation_when_jit_disabled
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
-    monkeypatch.setattr(sso_service, "create_auth_user", fake_create_auth_user)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_user_resolution, "create_auth_user", fake_create_auth_user)
     monkeypatch.setattr(
-        sso_service,
-        "ensure_default_organization_for_account",
-        fake_ensure_default_organization_for_account,
+        sso_user_resolution,
+        "place_new_identity",
+        fake_place_new_identity,
     )
     monkeypatch.setattr(
-        sso_service.invitation_store,
+        sso_user_resolution.invitation_store,
         "has_live_pending_invitation_for_organization_email",
         fake_has_pending_invitation,
     )
     monkeypatch.setattr(
-        sso_service.organization_store,
+        sso_user_resolution.organization_store,
         "get_active_membership",
         fake_get_active_membership,
     )
     monkeypatch.setattr(
-        sso_service.invitation_store,
+        sso_user_resolution.invitation_store,
         "accept_pending_invitation_for_organization_email",
         fake_accept_pending_invitation,
     )
     monkeypatch.setattr(
-        sso_service,
+        sso_user_resolution,
         "maybe_create_organization_seat_adjustment",
         fake_maybe_create_organization_seat_adjustment,
     )
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     resolved = await sso_service.resolve_sso_user(
         cast(AsyncSession, object()),
