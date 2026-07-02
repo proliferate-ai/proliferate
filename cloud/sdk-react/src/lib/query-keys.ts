@@ -18,6 +18,26 @@ export function cloudAgentCatalogKey() {
   return [...cloudRootKey(), "agent-catalog", "v1"] as const;
 }
 
+export function agentGatewayRootKey() {
+  return [...cloudRootKey(), "agent-gateway"] as const;
+}
+
+export function agentApiKeysKey() {
+  return [...agentGatewayRootKey(), "api-keys"] as const;
+}
+
+export function agentRouteSelectionsKey() {
+  return [...agentGatewayRootKey(), "route-selections"] as const;
+}
+
+export function agentGatewayCapabilitiesKey() {
+  return [...agentGatewayRootKey(), "capabilities"] as const;
+}
+
+export function agentGatewayEnrollmentKey() {
+  return [...agentGatewayRootKey(), "enrollment"] as const;
+}
+
 export function cloudPluginInventoryRootKey() {
   return [...cloudRootKey(), "plugin-inventory"] as const;
 }
