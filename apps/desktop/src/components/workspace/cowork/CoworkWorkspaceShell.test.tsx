@@ -141,4 +141,43 @@ describe("CoworkWorkspaceShell", () => {
       }),
     );
   });
+
+  it("keeps the update pill in the sidebar's top-left header while the sidebar is open", () => {
+    workspaceUiState.sidebarOpen = true;
+
+    const { getAllByTestId } = render(
+      <CoworkWorkspaceShell
+        workspaceId="workspace-cowork"
+        workspacePath="/tmp/workspace-cowork"
+      />,
+    );
+
+    // The pill's single home is the top-left next to the sidebar toggle — it
+    // must be mounted even when the sidebar (with its account footer) is open.
+    const pills = getAllByTestId("sidebar-update-pill");
+    expect(pills).toHaveLength(1);
+    expect(document.getElementById("cowork-sidebar")?.contains(pills[0])).toBe(true);
+  });
+
+  it("keeps the update pill in the content header while the sidebar is hidden", () => {
+    workspaceUiState.sidebarOpen = false;
+
+    try {
+      const { getAllByTestId } = render(
+        <CoworkWorkspaceShell
+          workspaceId="workspace-cowork"
+          workspacePath="/tmp/workspace-cowork"
+        />,
+      );
+
+      // The collapsed sidebar stays mounted at width 0 (clipped), so the
+      // visible pill is the one rendered outside of it, in the content header.
+      const sidebar = document.getElementById("cowork-sidebar");
+      const visiblePills = getAllByTestId("sidebar-update-pill")
+        .filter((pill) => !sidebar?.contains(pill));
+      expect(visiblePills).toHaveLength(1);
+    } finally {
+      workspaceUiState.sidebarOpen = true;
+    }
+  });
 });

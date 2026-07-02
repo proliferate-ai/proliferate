@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
+import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import type { AppCommandActions } from "./app-command-action-types";
 
@@ -30,9 +30,10 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const openSettings = useCallback(() => {
     navigate("/settings");
   }, [navigate]);
+  const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const showKeyboardShortcuts = useCallback(() => {
-    navigate(buildSettingsHref({ section: "keyboard" }));
-  }, [navigate]);
+    openShortcutsDialog(true);
+  }, [openShortcutsDialog]);
   const goHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);

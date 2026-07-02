@@ -16,8 +16,8 @@ vi.mock("@/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("./SidebarFooter", () => ({
-  SidebarFooter: () => <div data-testid="sidebar-footer" />,
+vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
+  SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
 vi.mock("@proliferate/ui/layout/SidebarRowSurface", () => ({

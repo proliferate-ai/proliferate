@@ -1,7 +1,6 @@
 export const SETTINGS_CONTENT_SECTIONS = [
   "general",
   "appearance",
-  "keyboard",
   "account",
   "personal-secrets",
   "organization",
@@ -33,7 +32,6 @@ export const TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION = false;
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "general",
   "appearance",
-  "keyboard",
   "account",
   "personal-secrets",
   "organization",

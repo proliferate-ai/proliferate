@@ -11,7 +11,6 @@ export type SettingsNavIconId =
   | "compute"
   | "environments"
   | "general"
-  | "keyboard"
   | "organization"
   | "organization-integrations"
   | "organization-limits"
@@ -77,7 +76,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         items: [
           { kind: "section", id: "general", label: "General", iconId: "general" },
           { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
-          { kind: "section", id: "keyboard", label: "Keyboard shortcuts", iconId: "keyboard" },
           { kind: "section", id: "account", label: "Account", iconId: "account" },
           { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
           { kind: "section", id: "worktrees", label: "Pruning", iconId: "worktrees" },

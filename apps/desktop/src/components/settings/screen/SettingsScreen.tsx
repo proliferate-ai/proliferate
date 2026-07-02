@@ -12,7 +12,6 @@ import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane
 import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
-import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
@@ -84,9 +83,6 @@ function renderSettingsSection(
   }
   if (activeSection === "appearance") {
     return <AppearancePane />;
-  }
-  if (activeSection === "keyboard") {
-    return <KeyboardShortcutsPane />;
   }
   if (activeSection === "account") {
     return <AccountPane />;

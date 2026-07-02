@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { SidebarFooter } from "./SidebarFooter";
+import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
 import { SidebarPrimaryNavigation } from "./SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "./SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
@@ -266,7 +266,7 @@ export const MainSidebar = memo(function MainSidebar() {
     <DebugProfiler id="workspace-sidebar">
       <ProductSidebarFrame footer={(
         <DebugProfiler id="workspace-sidebar-footer">
-          <SidebarFooter />
+          <SidebarAccountFooter />
         </DebugProfiler>
       )}>
       <ProductSidebarBody>

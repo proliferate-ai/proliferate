@@ -8,7 +8,6 @@ import {
   FolderTree,
   Gauge,
   KeyRound,
-  Keyboard,
   LifeBuoy,
   Link2,
   Palette,
@@ -23,7 +22,7 @@ import {
 } from "lucide-react";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
-import { AppSidebarFooter } from "@/components/app/sidebar/AppSidebarFooter";
+import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   SETTINGS_SHORTCUT_SECTION_ORDER,
@@ -89,7 +88,6 @@ const SETTINGS_NAV_ICONS = {
   compute: Server,
   environments: FolderTree,
   general: Settings2,
-  keyboard: Keyboard,
   organization: Building2,
   "organization-integrations": Plug,
   "organization-limits": Gauge,
@@ -315,7 +313,7 @@ export function SettingsSidebar({
           </div>
         </div>
       </nav>
-      <AppSidebarFooter />
+      <SidebarAccountFooter />
     </div>
   );
 }

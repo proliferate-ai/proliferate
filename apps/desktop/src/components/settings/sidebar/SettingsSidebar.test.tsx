@@ -23,8 +23,8 @@ vi.mock("@/lib/access/tauri/support", () => ({
   openSupportReportWindow,
 }));
 
-vi.mock("@/components/app/sidebar/AppSidebarFooter", () => ({
-  AppSidebarFooter: () => <div data-testid="app-sidebar-footer" />,
+vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
+  SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
 vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
@@ -133,7 +133,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
     const expectedOrder = [
       "General",
       "Appearance",
-      "Keyboard shortcuts",
       "Account",
       "Personal secrets",
       "Pruning",

@@ -13,7 +13,7 @@ Scope:
 - `cloud/sdk/src/client/organizations.ts`
 - `apps/web/src/pages/OrganizationJoinPage.tsx`
 - `apps/desktop/src/components/settings/panes/OrganizationMembersPane.tsx`
-- `apps/desktop/src/components/app/sidebar/AppSidebarFooter.tsx`
+- `apps/desktop/src/components/app/sidebar/SidebarAccountFooter.tsx`
 - `apps/desktop/src/lib/domain/auth/desktop-navigation.ts`
 
 ## Model

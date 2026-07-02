@@ -95,6 +95,18 @@ describe("settings navigation", () => {
     });
   });
 
+  it("falls retired keyboard settings links back to general", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "keyboard",
+      repositories: [],
+    })).toEqual({
+      activeSection: "general",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
   it("falls removed review settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "review",

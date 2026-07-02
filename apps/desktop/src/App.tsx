@@ -3,6 +3,7 @@ import { Navigate, Route, useLocation } from "react-router-dom"
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
+import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
@@ -326,6 +327,7 @@ function AppRuntime() {
           {/* Kit Sonner toaster + update lifecycle toasts (UX spec §12). */}
           <Toaster />
           <UpdateToastPresenter />
+          <KeyboardShortcutsDialog />
           <TurnEndCelebration />
         </ShortcutRevealProvider>
       </AppCommandActionsProvider>
