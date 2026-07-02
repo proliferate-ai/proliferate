@@ -7,23 +7,18 @@
   </picture>
 </p>
 
-<h3>The Open Source AI IDE</h3>
-
 <p>
-  <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&logo=github&label=stars" /></a>
-  <a href="https://proliferate.com/changelog"><img alt="Latest release" src="https://img.shields.io/badge/release-changelog-0969DA?style=flat" /></a>
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat" /></a>
-  <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
-  <a href="https://discord.gg/wCEgUnEuF"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&logo=discord&logoColor=white" /></a>
-  <img alt="Platforms" src="https://img.shields.io/badge/macOS-000000?style=flat&logo=apple&logoColor=white" />
+  <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://badgen.net/github/stars/proliferate-ai/proliferate?label=%E2%98%85" /></a>
+  <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://badgen.net/badge/license/AGPL-3.0/45618E" /></a>
+  <a href="https://discord.gg/wCEgUnEuF"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" /></a>
+  <img alt="Platform: macOS" src="https://img.shields.io/badge/macOS-2f363d?logo=apple&logoColor=white" />
 </p>
 
-<br />
-
-Run Claude Code, Codex, Gemini, and any coding agent in parallel — on your machine,<br />
-in cloud sandboxes, or on your own servers. Move running sessions between them.
-
-<br />
+<p>
+  <strong>The Open Source AI IDE.</strong><br />
+  Run Claude Code, Codex, Gemini, and any coding agent in parallel — locally, in cloud<br />
+  sandboxes, or on your own servers. Move running sessions between them.
+</p>
 
 <h3><a href="https://proliferate.com"><ins>Download for macOS</ins></a></h3>
 
@@ -145,7 +140,7 @@ AGPL, one Docker Compose stack (or one-click AWS). Point the official desktop ap
 - **[Plugins](https://proliferate.com/docs/concepts/plugins)** — MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
 - **[Artifacts](https://proliferate.com/docs/concepts/artifacts)** — docs, UI, demos, and components rendered inline as agents produce them
 - **Remote dispatch &amp; SSH** — kick off and steer work from the web; drop into any cloud sandbox from your terminal
-- **Credential gateway** — your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
+- **Model &amp; credential gateway** — bring your own provider keys or agent subscriptions; agents and sandboxes only ever see short-lived per-user keys, with budgets and limits where you want them
 - **Multiplayer cloud chats &amp; organizations** — live sessions your team can inspect, claim, and continue; seats, shared settings, and governance
 - **Mobile** — coming soon: dispatch work, approve actions, and follow runs from your phone
 - **And more, constantly** — the [changelog](https://proliferate.com/changelog) is the real feature list.
@@ -154,7 +149,7 @@ AGPL, one Docker Compose stack (or one-click AWS). Point the official desktop ap
 
 ## Bring Your Agent
 
-Each agent runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact. New harness features show up in Proliferate the day they ship.
+Any coding agent, frontier or open. Each one runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact — and new harness features show up in Proliferate the day they ship.
 
 <p>
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/claude.svg" alt="Claude" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
@@ -201,7 +196,6 @@ See [dev profiles](./specs/developing/local/dev-profiles.md) and [CONTRIBUTING.m
 Run the whole Proliferate server yourself (beta): one Docker Compose stack, or a one-click AWS deployment. Point the official desktop app at your server and your team is on your infrastructure.
 
 - **[Self-hosting docs](https://proliferate.com/docs/deployment)** — overview, quickstart, add-ons, and operations
-- Source-of-truth deploy references in-repo: [Docker Compose](./specs/developing/deploying/self-hosted-deploy.md) · [AWS one-click](./specs/developing/deploying/self-hosted-aws.md) · [`.env.production.example`](./server/deploy/.env.production.example)
 
 Expect rough edges while in beta — [open an issue](../../issues/new/choose) or ask in [Discord](https://discord.gg/wCEgUnEuF). See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
