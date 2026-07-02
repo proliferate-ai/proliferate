@@ -36,7 +36,7 @@ dev = [
     "httpx>=0.28.0",
     "mypy>=1.20.2",
     "ruff>=0.15.17",
-    "sqlalchemy[mypy]>=2.0.0",
+    "sqlalchemy[mypy]>=2.0.51",
 ]
 
 [tool.ruff]
