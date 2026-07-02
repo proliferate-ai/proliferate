@@ -201,7 +201,7 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
     async def fake_create_auth_user(*_args: object, **_kwargs: object) -> User:
         return user
 
-    async def fake_ensure_default_organization_for_account(
+    async def fake_place_new_identity(
         _db: AsyncSession,
         ensured_user: User,
     ) -> None:
@@ -219,8 +219,8 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
     monkeypatch.setattr(sso_service, "create_auth_user", fake_create_auth_user)
     monkeypatch.setattr(
         sso_service,
-        "ensure_default_organization_for_account",
-        fake_ensure_default_organization_for_account,
+        "place_new_identity",
+        fake_place_new_identity,
     )
     monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
 
@@ -316,7 +316,7 @@ async def test_resolve_sso_user_accepts_pending_org_invitation_when_jit_disabled
     async def fake_create_auth_user(*_args: object, **_kwargs: object) -> User:
         return user
 
-    async def fake_ensure_default_organization_for_account(
+    async def fake_place_new_identity(
         _db: AsyncSession,
         ensured_user: User,
     ) -> None:
@@ -364,8 +364,8 @@ async def test_resolve_sso_user_accepts_pending_org_invitation_when_jit_disabled
     monkeypatch.setattr(sso_service, "create_auth_user", fake_create_auth_user)
     monkeypatch.setattr(
         sso_service,
-        "ensure_default_organization_for_account",
-        fake_ensure_default_organization_for_account,
+        "place_new_identity",
+        fake_place_new_identity,
     )
     monkeypatch.setattr(
         sso_service.invitation_store,

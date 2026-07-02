@@ -38,9 +38,7 @@ from proliferate.constants.auth import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth import create_auth_code
-from proliferate.server.organizations.registration import (
-    ensure_default_organization_for_account,
-)
+from proliferate.server.organizations.membership_policy import place_new_identity
 
 AUTH_CHALLENGE_LIFETIME_SECONDS = 600
 
@@ -481,7 +479,7 @@ async def resolve_provider_user(
         display_name=verified.display_name,
         avatar_url=verified.avatar_url,
     )
-    await ensure_default_organization_for_account(db, user)
+    await place_new_identity(db, user)
     await attach_verified_identity(db, user=user, verified=verified)
     return user
 

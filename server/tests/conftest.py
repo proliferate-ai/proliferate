@@ -8,6 +8,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from proliferate.config import settings
 from tests.postgres import (
     TEST_DATABASE_NAME,
     TEST_DATABASE_URL,
@@ -20,6 +21,18 @@ from tests.postgres import (
 
 async def _cancel_test_background_tasks() -> None:
     return None
+
+
+@pytest.fixture(autouse=True)
+def _hosted_membership_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the membership policy to hosted (personal org per user) by default.
+
+    The suite predates single-org mode and asserts hosted behavior. The default
+    single-org expression (`telemetry_mode != "hosted_product"`) would otherwise
+    flip local/test deployments into single-org mode. Tests that exercise
+    single-org mode override this within the test body.
+    """
+    monkeypatch.setattr(settings, "single_org_mode_override", False)
 
 
 @pytest.fixture(scope="session")
