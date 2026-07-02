@@ -47,6 +47,9 @@ from proliferate.server.billing.domain.webhooks import (
 )
 from proliferate.server.billing.models import BillingServiceError, coerce_utc, utcnow
 from proliferate.server.billing.pricing import billing_price_ids_from_settings
+from proliferate.server.cloud.agent_gateway.signup_hook import (
+    schedule_agent_gateway_org_enrollment,
+)
 from proliferate.server.organizations.join_links import organization_join_url
 
 logger = logging.getLogger("proliferate.billing.team_checkout.activation")
@@ -359,6 +362,9 @@ async def activate_team_checkout_from_stripe_session(
             activated_creator_email,
             activated_invite_emails_json,
         ) = staged_invites
+        schedule_agent_gateway_org_enrollment(
+            activated_organization_id, activated_created_by_user_id
+        )
         await _send_staged_team_checkout_invitations(
             organization_id=activated_organization_id,
             organization_name=activated_organization_name,

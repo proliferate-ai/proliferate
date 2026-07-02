@@ -218,6 +218,51 @@ async def mint_virtual_key(
     return key
 
 
+async def list_key_token_ids_by_alias(*, alias: str) -> list[str]:
+    """Return the token ids (hashes) of every key whose ``key_alias`` matches.
+
+    Used to make eager enrollment crash-idempotent: ``/key/generate`` enforces
+    a globally-unique ``key_alias`` (400 on duplicate), so a mint that lands in
+    LiteLLM but whose id never commits (rollback between mint and DB write)
+    leaves an orphan under a deterministic alias. Looking the alias up lets the
+    retry adopt/purge that orphan instead of wedging on the duplicate.
+
+    ``/key/list`` may or may not honour the ``key_alias`` filter depending on
+    the image, so results are also filtered client-side.
+    """
+    payload = await _admin_request(
+        "GET",
+        "/key/list",
+        params={"key_alias": alias, "return_full_object": "true", "size": "100"},
+    )
+    rows = payload.get("keys") if isinstance(payload, dict) else payload
+    if not isinstance(rows, list):
+        return []
+    token_ids: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("key_alias") != alias:
+            continue
+        token_id = row.get("token") or row.get("token_id")
+        if isinstance(token_id, str) and token_id:
+            token_ids.append(token_id)
+    return token_ids
+
+
+async def delete_virtual_keys_by_alias(*, alias: str) -> int:
+    """Delete every key carrying ``alias``; returns how many were removed.
+
+    Idempotent orphan cleanup for enrollment retries. A no-op (returns 0) when
+    nothing matches.
+    """
+    token_ids = await list_key_token_ids_by_alias(alias=alias)
+    if not token_ids:
+        return 0
+    await _admin_request("POST", "/key/delete", json_body={"keys": token_ids})
+    return len(token_ids)
+
+
 async def rotate_virtual_key(
     *,
     key_or_token_id: str,

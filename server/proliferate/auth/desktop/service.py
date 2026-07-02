@@ -80,6 +80,9 @@ from proliferate.integrations.github import (
     GitHubIntegrationError,
     get_github_user_profile,
 )
+from proliferate.server.cloud.agent_gateway.signup_hook import (
+    schedule_agent_gateway_user_enrollment,
+)
 from proliferate.server.notifications import (
     SignupSlackNotification,
     schedule_signup_slack_notification,
@@ -466,6 +469,7 @@ async def finish_github_desktop_callback(
         redirect_uri=state_data["redirect_uri"],
     )
     schedule_customerio_desktop_authenticated_user_sync(user)
+    schedule_agent_gateway_user_enrollment(user.id, db=db)
     if not github_account_or_email_exists:
         schedule_signup_slack_notification(
             SignupSlackNotification(

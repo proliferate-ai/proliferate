@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from proliferate.integrations.litellm.client import (
+    delete_virtual_keys_by_alias,
     disable_virtual_key,
     ensure_team,
     ensure_user,
     health,
+    list_key_token_ids_by_alias,
     list_models,
     mint_virtual_key,
     page_spend_logs,
@@ -21,10 +23,12 @@ __all__ = [
     "LiteLLMIntegrationError",
     "LiteLLMSpendLogEntry",
     "LiteLLMVirtualKey",
+    "delete_virtual_keys_by_alias",
     "disable_virtual_key",
     "ensure_team",
     "ensure_user",
     "health",
+    "list_key_token_ids_by_alias",
     "list_models",
     "mint_virtual_key",
     "page_spend_logs",

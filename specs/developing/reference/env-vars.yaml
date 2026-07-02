@@ -521,6 +521,24 @@
   description: Timeout for LiteLLM management API requests
   tags: [local-dev, self-hosted, production]
 
+- name: AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD
+  secret: false
+  default: "5"
+  description: Default LiteLLM budget (USD) applied to a personal team and virtual key at enrollment; "0" means uncapped
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_DEFAULT_ORG_BUDGET_USD
+  secret: false
+  default: "0"
+  description: Default LiteLLM budget (USD) applied to an organization team at enrollment; "0" means uncapped (hard caps arrive with limits/top-ups)
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_BACKFILL_INTERVAL_SECONDS
+  secret: false
+  default: "300.0"
+  description: Interval for the enrollment backfill worker that retries pending/failed LiteLLM enrollments and enrolls pre-existing users
+  tags: [local-dev, self-hosted, production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud MCP
 # ═══════════════════════════════════════════════════════════════════════

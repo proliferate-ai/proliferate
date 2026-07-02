@@ -38,6 +38,9 @@ from proliferate.constants.auth import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth import create_auth_code
+from proliferate.server.cloud.agent_gateway.signup_hook import (
+    schedule_agent_gateway_user_enrollment,
+)
 from proliferate.server.organizations.registration import (
     ensure_default_organization_for_account,
 )
@@ -221,6 +224,7 @@ async def complete_oauth_provider_callback(
         state=challenge.client_state,
         redirect_uri=challenge.redirect_uri,
     )
+    schedule_agent_gateway_user_enrollment(user.id, db=db)
     if callback_surface == "desktop" and provider == "github":
         _schedule_desktop_github_login_side_effects(
             db,
@@ -319,6 +323,7 @@ async def complete_apple_mobile_login(
         display_name_hint=display_name,
     )
     user = await resolve_provider_user(db, verified=verified, challenge=challenge)
+    schedule_agent_gateway_user_enrollment(user.id, db=db)
     return await mint_auth_session(db, user=user)
 
 
@@ -355,6 +360,7 @@ async def complete_apple_web_callback(
         state=challenge.client_state,
         redirect_uri=challenge.redirect_uri,
     )
+    schedule_agent_gateway_user_enrollment(user.id, db=db)
     return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
 
 

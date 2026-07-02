@@ -168,6 +168,9 @@ lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 | `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL` | No | When gateway is enabled | Public LiteLLM inference base URL rendered into sandbox/local harness auth config |
 | `AGENT_GATEWAY_LITELLM_MASTER_KEY` | Yes | When gateway is enabled | LiteLLM master key for the management API; never sent to sandboxes or clients |
 | `AGENT_GATEWAY_LITELLM_TIMEOUT_SECONDS` | No | No | LiteLLM management API timeout |
+| `AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD` | No | No | Default LiteLLM budget (USD) for personal enrollments; "0" = uncapped |
+| `AGENT_GATEWAY_DEFAULT_ORG_BUDGET_USD` | No | No | Default LiteLLM budget (USD) for organization enrollments; "0" = uncapped |
+| `AGENT_GATEWAY_BACKFILL_INTERVAL_SECONDS` | No | No | Enrollment backfill worker interval |
 
 The LiteLLM service itself (a separate ECS service / docker-compose pair) is
 configured with `LITELLM_MASTER_KEY`, its own `DATABASE_URL`, and the managed
