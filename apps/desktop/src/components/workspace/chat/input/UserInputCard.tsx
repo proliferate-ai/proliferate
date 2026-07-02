@@ -1,23 +1,26 @@
 import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { useMemo, useState } from "react";
-import { ArrowUp } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
-import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
+import {
+  ComposerAttachedPanel,
+  ComposerCardFooter,
+} from "./ComposerAttachedPanel";
 import {
   ComposerOptionRow,
   useComposerOptionNumberKeys,
 } from "./ComposerOptionRow";
 
-// Superset-style agent input (UX_SPEC §5): option rows with number-key
-// badges (1–9 selects), an inset free-text row on --control with an inset
-// ring, outline chips for secondary actions, and a circular solid submit.
+// Agent question wizard on the shared interaction-card anatomy: header/type
+// grammar from ComposerAttachedPanel (text-ui title + text-ui-sm progress
+// context), codex-style option rows with number-key badges (1–9 selects), an
+// inset free-text row on --control with an inset ring, and the shared
+// ComposerCardFooter (secondary chips left, primary chip right).
 
 const OTHER_OPTION_LABEL = "None of the above";
-const CHIP_BUTTON_CLASSNAME =
-  "rounded-md border border-input px-3 py-1 text-base font-medium text-muted-foreground transition-colors hover:border-border-heavy hover:text-foreground";
 
 function optionsForQuestion(question: UserInputQuestion) {
   return [
@@ -81,19 +84,6 @@ export function UserInputCard({
     ? `${Math.min(questionIndex + 1, questions.length)} of ${questions.length}`
     : null;
 
-  const header = (
-    <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-      <div className="text-chat min-w-0 truncate font-medium leading-[var(--text-chat--line-height)] text-foreground">
-        {title}
-      </div>
-      {progressLabel && (
-        <div className="shrink-0 text-base text-faint">
-          {progressLabel}
-        </div>
-      )}
-    </div>
-  );
-
   const answers = useMemo<UserInputSubmittedAnswer[]>(() =>
     questions.map((question) => {
       const draft = drafts[question.questionId] ?? {
@@ -140,12 +130,10 @@ export function UserInputCard({
 
   if (!currentQuestion) {
     return (
-      <ComposerAttachedPanel header={header}>
-        <div className="flex items-center justify-end gap-2 px-3 pb-3">
-          <button type="button" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
+      <ComposerAttachedPanel title={title} context={progressLabel}>
+        <ComposerCardFooter
+          secondaryActions={[{ label: "Cancel", onSelect: onCancel }]}
+        />
       </ComposerAttachedPanel>
     );
   }
@@ -162,18 +150,18 @@ export function UserInputCard({
   };
 
   return (
-    <ComposerAttachedPanel header={header}>
+    <ComposerAttachedPanel title={title} context={progressLabel}>
       <div className="flex max-h-[300px] flex-col">
         <div className="min-h-0 overflow-y-auto px-2">
           {(currentQuestion.header && currentQuestion.header !== title)
             || currentQuestion.question ? (
               <div className="space-y-1 px-1 pb-2">
                 {currentQuestion.header && currentQuestion.header !== title && (
-                  <div className="text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
+                  <div className="text-ui font-medium text-foreground">
                     {currentQuestion.header}
                   </div>
                 )}
-                <div className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
+                <div className="text-ui text-muted-foreground">
                   {currentQuestion.question}
                 </div>
               </div>
@@ -211,7 +199,7 @@ export function UserInputCard({
                   : "Enter your answer"}
                 autoComplete="off"
                 data-telemetry-mask="true"
-                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-chat text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
+                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-ui text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
               />
             ) : (
               <Textarea
@@ -231,37 +219,28 @@ export function UserInputCard({
                   : "Enter your answer"}
                 autoComplete="off"
                 data-telemetry-mask="true"
-                className="flex-1 cursor-text px-0 py-1 text-chat text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)]"
+                className="flex-1 cursor-text px-0 py-1 text-ui text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)]"
               />
             )}
           </div>
         )}
 
-        <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-3 pt-1">
-          <button type="button" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
-            Cancel
-          </button>
-          <div className="flex items-center gap-2">
-            {!isFirst && (
-              <button
-                type="button"
-                className={CHIP_BUTTON_CLASSNAME}
-                onClick={() =>
-                  setQuestionIndex((index) => Math.max(0, index - 1))}
-              >
-                Back
-              </button>
-            )}
-            <button
-              type="button"
-              aria-label={isLast ? "Submit" : "Next"}
-              onClick={handleAdvance}
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80"
-            >
-              <ArrowUp className="size-3.5" />
-            </button>
-          </div>
-        </div>
+        <ComposerCardFooter
+          secondaryActions={[
+            { label: "Cancel", onSelect: onCancel },
+            ...(!isFirst
+              ? [{
+                label: "Back",
+                onSelect: () =>
+                  setQuestionIndex((index) => Math.max(0, index - 1)),
+              }]
+              : []),
+          ]}
+          primaryAction={{
+            label: isLast ? "Submit" : "Next",
+            onSelect: handleAdvance,
+          }}
+        />
       </div>
     </ComposerAttachedPanel>
   );
@@ -269,17 +248,20 @@ export function UserInputCard({
 
 export function ConnectedUserInputCard() {
   const { pendingUserInput } = useActivePendingInteractionState();
+  // Hold the last payload so the card can still render while the dock slot
+  // plays its 150ms exit fade after the request resolves.
+  const held = useHeldInteractionPayload(pendingUserInput);
   const { handleSubmitUserInput, handleCancelUserInput } = useChatUserInputActions();
 
-  if (!pendingUserInput) {
+  if (!held) {
     return null;
   }
 
   return (
     <UserInputCard
-      key={pendingUserInput.requestId}
-      title={pendingUserInput.title}
-      questions={pendingUserInput.questions}
+      key={held.requestId}
+      title={held.title}
+      questions={held.questions}
       onSubmit={handleSubmitUserInput}
       onCancel={handleCancelUserInput}
     />

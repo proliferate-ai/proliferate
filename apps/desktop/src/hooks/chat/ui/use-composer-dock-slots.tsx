@@ -14,6 +14,7 @@ import {
 } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useDelegatedWorkComposer } from "@/hooks/chat/facade/use-delegated-work-composer";
 import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-tracker";
+import { useComposerDockCardPresence } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
 
@@ -74,11 +75,21 @@ export function useComposerDockSlots(options?: {
         ? <CloudRuntimeAttachedPanel />
         : null
   ), [dockSlotResolution.attachedSlot?.ambientSlot?.kind]);
-  const activeAgentSlot = useMemo<ReactNode | null>(() => (
+  const activeSlotContent = useMemo<ReactNode | null>(() => (
     interactionPanel || (dockSlotResolution.activeSlot?.kind === "todo_tracker" && activeTodoTracker
       ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
       : null)
   ), [activeTodoTracker, dockSlotResolution.activeSlot?.kind, interactionPanel]);
+  // Identity key for the active-slot presence animation: a new interaction
+  // (or the todo tracker taking the slot back) replays the entrance, while
+  // resolving the last card fades the slot out before unmount.
+  const activeSlotKind = dockSlotResolution.activeSlot?.kind ?? null;
+  const activeSlotKey = activeSlotKind === "todo_tracker"
+    ? "todo_tracker"
+    : activeSlotKind && primaryPendingInteraction
+      ? `${primaryPendingInteraction.kind}:${primaryPendingInteraction.requestId}`
+      : null;
+  const activeAgentSlot = useComposerDockCardPresence(activeSlotKey, activeSlotContent);
   const delegatedWorkSlot = useMemo<ReactNode | null>(() => (
     dockSlotResolution.attachedSlot?.delegatedWork && delegatedWorkComposer
       ? (
