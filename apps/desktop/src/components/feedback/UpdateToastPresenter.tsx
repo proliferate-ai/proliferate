@@ -103,6 +103,7 @@ export function UpdateToastPresenter() {
       // usually a network-layer string. Download failures keep the store
       // message only when it's short and human.
       const checkFailed = errorSource === "check";
+      toast.dismiss(UP_TO_DATE_TOAST_ID);
       toast(checkFailed ? "Couldn't check for updates" : "Update failed", {
         id: UPDATE_TOAST_ID,
         description: checkFailed
@@ -129,6 +130,10 @@ export function UpdateToastPresenter() {
       }
       return;
     }
+
+    // An update entering the flow supersedes the "you're up to date"
+    // confirmation — the two contradict each other in the stack.
+    toast.dismiss(UP_TO_DATE_TOAST_ID);
 
     const versionLabel = availableVersion ? ` ${availableVersion}` : "";
     const onDismiss = () => {

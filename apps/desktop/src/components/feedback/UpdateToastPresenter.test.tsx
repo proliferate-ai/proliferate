@@ -72,6 +72,13 @@ describe("UpdateToastPresenter", () => {
     expect(updaterMocks.downloadUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it("supersedes the up-to-date toast when an update enters the flow", () => {
+    updaterMocks.phase = "available";
+    render(<UpdateToastPresenter />);
+
+    expect(sonnerMocks.toast.dismiss).toHaveBeenCalledWith(UP_TO_DATE_TOAST_ID);
+  });
+
   it("shows the downloading toast without actions", () => {
     updaterMocks.phase = "downloading";
     updaterMocks.downloadProgress = 42;
