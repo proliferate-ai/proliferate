@@ -20,6 +20,17 @@ export async function resolveSshDirectTargetBearer(
   if (profile.anyharnessBearerToken) {
     return profile.anyharnessBearerToken;
   }
+  return refreshSshDirectTargetBearer(profile);
+}
+
+/**
+ * Re-fetch the runtime bearer from Cloud, bypassing the profile cache, and
+ * persist the result. Used when the runtime rejects the bearer Desktop holds
+ * (the target was re-enrolled with a fresh credential).
+ */
+export async function refreshSshDirectTargetBearer(
+  profile: SshDirectTargetProfile,
+): Promise<string | null> {
   try {
     const access = await getTargetRuntimeAccess(profile.targetId);
     const bearer = access.anyharnessBearerToken.trim();

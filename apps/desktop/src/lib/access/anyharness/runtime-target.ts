@@ -1,10 +1,9 @@
 import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
+import { resolveDirectRuntimeConnection } from "@/lib/access/anyharness/direct-runtime-connection";
 import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { getCloudWorkspaceWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
-import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
-import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
-import { resolveSshDirectTargetBearer } from "@/lib/access/anyharness/ssh-direct-bearer";
+import { sshDirectRuntimeRef } from "@/lib/domain/compute/direct-runtime";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -13,6 +12,14 @@ type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
   targetId?: string | null;
 };
 
+/**
+ * `"local"` and `"target"` are both members of the direct-runtime family
+ * (user-owned AnyHarness that Desktop attaches to); the two literals survive
+ * only as wire-compatible transport aliases for loopback vs ssh. No consumer
+ * may branch on local-vs-target for anything except presentation — transport
+ * resolution lives solely in resolveDirectRuntimeConnection
+ * (specs/tbd/ssh-personal-target-design.md §3.2).
+ */
 export interface RuntimeTarget {
   location: "local" | "cloud" | "target";
   baseUrl: string;
@@ -33,26 +40,13 @@ export async function resolveRuntimeTargetForWorkspace(
 ): Promise<RuntimeTarget> {
   const targetWorkspace = parseTargetWorkspaceSyntheticId(workspaceId);
   if (targetWorkspace) {
-    const profile = await getSshDirectTargetProfile(targetWorkspace.targetId);
-    if (!profile) {
-      throw new Error(
-        "SSH direct access is not configured for this target. Add the SSH host, user, and key in Compute settings.",
-      );
-    }
-    const authToken = await resolveSshDirectTargetBearer(profile);
-    const tunnel = await ensureSshAnyHarnessTunnel({
-      targetId: profile.targetId,
-      sshHost: profile.sshHost,
-      sshUser: profile.sshUser,
-      sshPort: profile.sshPort,
-      identityFile: profile.identityFile ?? null,
-      remoteAnyHarnessPort: profile.remoteAnyHarnessPort,
-      anyharnessBearerToken: authToken,
-    });
+    const connection = await resolveDirectRuntimeConnection(
+      sshDirectRuntimeRef(targetWorkspace.targetId),
+    );
     return {
       location: "target",
-      baseUrl: tunnel.localUrl,
-      authToken: authToken ?? undefined,
+      baseUrl: connection.baseUrl,
+      authToken: connection.authToken ?? undefined,
       anyharnessWorkspaceId: targetWorkspace.anyharnessWorkspaceId,
       runtimeGeneration: 0,
       targetId: targetWorkspace.targetId,
