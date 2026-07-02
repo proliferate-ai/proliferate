@@ -1171,6 +1171,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-gateway/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Api Keys Endpoint */
+        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get"];
+        put?: never;
+        /** Create Agent Api Key Endpoint */
+        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/api-keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Agent Api Key Endpoint */
+        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/route-selections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Route Selections Endpoint */
+        get: operations["list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/route-selections/{harness_kind}/{surface}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Agent Route Selection Endpoint */
+        put: operations["upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put"];
+        post?: never;
+        /** Clear Agent Route Selection Endpoint */
+        delete: operations["clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Gateway Capabilities Endpoint */
+        get: operations["get_agent_gateway_capabilities_endpoint_v1_cloud_agent_gateway_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Gateway Enrollment Endpoint */
+        get: operations["get_agent_gateway_enrollment_endpoint_v1_cloud_agent_gateway_enrollment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-run-configs": {
         parameters: {
             query?: never;
@@ -1893,6 +1997,77 @@ export interface components {
             /** Githubgrantstatus */
             githubGrantStatus: string | null;
         };
+        /** AgentApiKeyCreateRequest */
+        AgentApiKeyCreateRequest: {
+            /** Provider */
+            provider: string;
+            /** Displayname */
+            displayName: string;
+            /** Secret */
+            secret: string;
+        };
+        /** AgentApiKeyListResponse */
+        AgentApiKeyListResponse: {
+            /** Keys */
+            keys: components["schemas"]["AgentApiKeyResponse"][];
+        };
+        /** AgentApiKeyResponse */
+        AgentApiKeyResponse: {
+            /** Id */
+            id: string;
+            /** Provider */
+            provider: string;
+            /** Displayname */
+            displayName: string;
+            /** Redactedhint */
+            redactedHint: string;
+            /** Status */
+            status: string;
+            /** Lastvalidatedat */
+            lastValidatedAt: string | null;
+            /** Createdat */
+            createdAt: string;
+        };
+        /** AgentAuthRouteSelectionListResponse */
+        AgentAuthRouteSelectionListResponse: {
+            /** Selections */
+            selections: components["schemas"]["AgentAuthRouteSelectionResponse"][];
+        };
+        /** AgentAuthRouteSelectionResponse */
+        AgentAuthRouteSelectionResponse: {
+            /** Id */
+            id: string;
+            /** Harnesskind */
+            harnessKind: string;
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Apikeyid */
+            apiKeyId: string | null;
+            /** Revision */
+            revision: number;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AgentAuthRouteSelectionUpsertRequest */
+        AgentAuthRouteSelectionUpsertRequest: {
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Apikeyid */
+            apiKeyId?: string | null;
+        };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
             /**
@@ -2161,6 +2336,32 @@ export interface components {
             mapping?: components["schemas"]["AgentCatalogControlMapping"] | null;
         } & {
             [key: string]: unknown;
+        };
+        /** AgentGatewayCapabilitiesResponse */
+        AgentGatewayCapabilitiesResponse: {
+            /** Gatewayenabled */
+            gatewayEnabled: boolean;
+            /** Publicbaseurl */
+            publicBaseUrl: string | null;
+            /** Enrollmentstatus */
+            enrollmentStatus: string;
+        };
+        /** AgentGatewayEnrollmentResponse */
+        AgentGatewayEnrollmentResponse: {
+            /** Id */
+            id: string;
+            /** Subjectkind */
+            subjectKind: string;
+            /** Litellmteamid */
+            litellmTeamId: string | null;
+            /** Syncstatus */
+            syncStatus: string;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -6918,6 +7119,216 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKeyListResponse"];
+                };
+            };
+        };
+    };
+    create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentApiKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKeyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKeyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthRouteSelectionListResponse"];
+                };
+            };
+        };
+    };
+    upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+                surface: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAuthRouteSelectionUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthRouteSelectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+                surface: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_gateway_capabilities_endpoint_v1_cloud_agent_gateway_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCapabilitiesResponse"];
+                };
+            };
+        };
+    };
+    get_agent_gateway_enrollment_endpoint_v1_cloud_agent_gateway_enrollment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayEnrollmentResponse"];
                 };
             };
         };
