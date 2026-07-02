@@ -6,12 +6,18 @@ import { cloudIntegrationsHealthKey, cloudIntegrationsRootKey } from "./query-ke
 
 export function useIntegrationHealth(
   organizationId: string | null,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    refetchInterval?: number | false;
+    refetchOnWindowFocus?: boolean;
+  },
 ) {
   const authStatus = useAuthStore((state) => state.status);
   return useQuery({
     queryKey: cloudIntegrationsHealthKey(organizationId),
     enabled: authStatus === "authenticated" && (options?.enabled ?? true),
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? true,
     queryFn: () => getIntegrationHealth({ organizationId }),
   });
 }
