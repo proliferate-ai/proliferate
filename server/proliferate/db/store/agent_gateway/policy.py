@@ -2,14 +2,31 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.agent_gateway import OrgAgentPolicy
+from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+from proliferate.db.models.auth import User
+from proliferate.db.models.cloud.agent_gateway import AgentAuthRouteSelection, OrgAgentPolicy
+from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.db.store.agent_gateway.mappers import org_agent_policy_record
 from proliferate.db.store.agent_gateway.records import OrgAgentPolicyRecord
 from proliferate.utils.time import utcnow
+
+
+@dataclass(frozen=True)
+class OrgMemberRouteSelectionRecord:
+    """A member's route selection joined with identity, for violation checks."""
+
+    user_id: UUID
+    email: str | None
+    display_name: str | None
+    harness_kind: str
+    surface: str
+    route: str
 
 
 async def get_org_agent_policy(
@@ -45,3 +62,48 @@ async def set_org_agent_policy(
         row.updated_at = utcnow()
     await db.flush()
     return org_agent_policy_record(row)
+
+
+async def list_org_member_route_selections(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+) -> list[OrgMemberRouteSelectionRecord]:
+    """Active members' route selections, joined live (no violations table)."""
+    rows = (
+        await db.execute(
+            select(
+                AgentAuthRouteSelection.user_id,
+                User.email,
+                User.display_name,
+                AgentAuthRouteSelection.harness_kind,
+                AgentAuthRouteSelection.surface,
+                AgentAuthRouteSelection.route,
+            )
+            .join(
+                OrganizationMembership,
+                OrganizationMembership.user_id == AgentAuthRouteSelection.user_id,
+            )
+            .join(User, User.id == AgentAuthRouteSelection.user_id)
+            .where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
+            .order_by(
+                AgentAuthRouteSelection.user_id,
+                AgentAuthRouteSelection.harness_kind,
+                AgentAuthRouteSelection.surface,
+            )
+        )
+    ).all()
+    return [
+        OrgMemberRouteSelectionRecord(
+            user_id=row.user_id,
+            email=row.email,
+            display_name=row.display_name,
+            harness_kind=row.harness_kind,
+            surface=row.surface,
+            route=row.route,
+        )
+        for row in rows
+    ]

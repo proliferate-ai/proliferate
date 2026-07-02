@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from proliferate.server.cloud.agent_gateway.api import (
+    organization_router as agent_gateway_organization_router,
+)
 from proliferate.server.cloud.agent_gateway.api import router as agent_gateway_router
 from proliferate.server.cloud.agent_run_config.api import router as agent_run_config_router
 from proliferate.server.cloud.cloud_sandboxes.api import router as cloud_sandboxes_router
@@ -32,6 +35,7 @@ router.include_router(cloud_sandboxes_router)
 router.include_router(workspaces_router)
 router.include_router(worktree_policy_router)
 router.include_router(agent_gateway_router)
+router.include_router(agent_gateway_organization_router)
 router.include_router(agent_run_config_router)
 router.include_router(integration_policy_router)
 router.include_router(mcp_catalog_router)
