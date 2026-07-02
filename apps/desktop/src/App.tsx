@@ -20,6 +20,7 @@ import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
+import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-auth-adoption"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
 import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
@@ -195,6 +196,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_agent_auto_reconcile")
   useAgentAutoReconcile()
   recordBootDiagnosticOnce("app_runtime.render.after.use_agent_auto_reconcile")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_first_run_auth_adoption")
+  useFirstRunAuthAdoption()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_first_run_auth_adoption")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
