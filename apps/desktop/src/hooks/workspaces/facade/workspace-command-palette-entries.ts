@@ -242,16 +242,6 @@ export function buildWorkspaceCommandPaletteEntries(args: {
       execute: () => args.appActions.goHome.execute("palette"),
     },
     {
-      id: "app.go-integrations",
-      value: commandPaletteCommandValue("app.go-integrations"),
-      group: "app",
-      label: "Go to Integrations",
-      icon: "command",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.goPlugins),
-      disabledReason: args.appActions.goIntegrations.disabledReason,
-      execute: () => args.appActions.goIntegrations.execute("palette"),
-    },
-    {
       id: "app.go-workflows",
       value: commandPaletteCommandValue("app.go-workflows"),
       group: "app",

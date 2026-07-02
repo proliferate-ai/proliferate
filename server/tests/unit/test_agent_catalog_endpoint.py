@@ -14,11 +14,6 @@ from proliferate.server.catalogs.service import (
     read_agent_catalog,
     served_agent_catalog_version,
 )
-from proliferate.server.cloud.worker.models import (
-    WorkerDesiredVersionsResponse,
-    WorkerHeartbeatRequest,
-    WorkerHeartbeatResponse,
-)
 from proliferate.server.cloud.agent_auth.registry import (
     REGISTRY_PATH,
     _resolve_registry_path,
@@ -120,37 +115,6 @@ def test_served_agent_catalog_version_handles_missing_or_invalid_document(
     versionless = tmp_path / "versionless.json"
     versionless.write_text('{"schemaVersion": 2}', encoding="utf-8")
     assert served_agent_catalog_version(versionless) is None
-
-
-def test_worker_heartbeat_response_advertises_catalog_version() -> None:
-    response = WorkerHeartbeatResponse(
-        target_id="target",
-        worker_id="worker",
-        status="online",
-        server_time="2026-06-10T00:00:00Z",
-        desired_versions=WorkerDesiredVersionsResponse(
-            should_update=False,
-            update_channel="stable",
-            update_generation=0,
-        ),
-        catalog_version="2026-06-10.6",
-    )
-
-    payload = response.model_dump(by_alias=True)
-    assert payload["catalogVersion"] == "2026-06-10.6"
-
-    # Pre-convergence behavior: the field defaults to null.
-    assert WorkerHeartbeatResponse.model_fields["catalog_version"].default is None
-
-
-def test_worker_heartbeat_request_accepts_catalog_version() -> None:
-    request = WorkerHeartbeatRequest.model_validate(
-        {"status": "online", "catalogVersion": "2026-06-10.6"}
-    )
-    assert request.catalog_version == "2026-06-10.6"
-
-    legacy = WorkerHeartbeatRequest.model_validate({"status": "online"})
-    assert legacy.catalog_version is None
 
 
 def test_agent_registry_file_is_available_from_source_checkout() -> None:

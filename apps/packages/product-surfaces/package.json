@@ -7,10 +7,6 @@
     "dist"
   ],
   "exports": {
-    "./plugins/CloudPluginsSurface": {
-      "types": "./dist/plugins/CloudPluginsSurface.d.ts",
-      "import": "./dist/plugins/CloudPluginsSurface.js"
-    },
     "./settings/BillingSettingsSurface": {
       "types": "./dist/settings/BillingSettingsSurface.d.ts",
       "import": "./dist/settings/BillingSettingsSurface.js"
@@ -22,10 +18,6 @@
     "./settings/CloudSecretsSettingsSurface": {
       "types": "./dist/settings/CloudSecretsSettingsSurface.d.ts",
       "import": "./dist/settings/CloudSecretsSettingsSurface.js"
-    },
-    "./settings/CloudOrganizationIntegrationsPolicySurface": {
-      "types": "./dist/settings/CloudOrganizationIntegrationsPolicySurface.d.ts",
-      "import": "./dist/settings/CloudOrganizationIntegrationsPolicySurface.js"
     },
     "./settings/CloudOrganizationSsoSettingsSurface": {
       "types": "./dist/settings/CloudOrganizationSsoSettingsSurface.d.ts",

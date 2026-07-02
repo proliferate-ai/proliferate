@@ -44,10 +44,6 @@ export type SidebarStatusIndicator =
   | {
     kind: "queued_prompt";
     tooltip: string;
-  }
-  | {
-    kind: "needs_review";
-    tooltip: string;
   };
 
 export type SidebarDetailIndicator =
@@ -109,13 +105,11 @@ export function logicalWorkspaceSshTargetId(workspace: LogicalWorkspace): string
 
 export function sidebarStatusIndicatorFromActivity(args: {
   activity: SidebarSessionActivityState;
-  needsReview?: boolean;
   pendingPromptCount?: number;
   errorAction?: SidebarIndicatorAction | null;
 }): SidebarStatusIndicator | null {
   const {
     activity,
-    needsReview = false,
     pendingPromptCount = 0,
     errorAction = null,
   } = args;
@@ -156,12 +150,7 @@ export function sidebarStatusIndicatorFromActivity(args: {
     };
   }
 
-  return needsReview
-    ? {
-      kind: "needs_review",
-      tooltip: "Needs review",
-    }
-    : null;
+  return null;
 }
 
 export function activeWorkspaceActivity(

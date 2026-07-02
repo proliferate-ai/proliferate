@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { CoworkThread } from "@anyharness/sdk";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
 import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
 import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/ui/use-cowork-session-native-context-menu";
@@ -69,7 +69,7 @@ export function CoworkThreadItem({
     <div className="min-w-0">
       <PopoverButton
         triggerMode="contextMenu"
-        className="w-44 rounded-lg border border-border bg-popover p-1 shadow-floating"
+        className={`w-44 ${POPOVER_FRAME_CLASS} p-1`}
         trigger={
           <div className="min-w-0" data-telemetry-mask="true" onContextMenuCapture={onContextMenuCapture}>
             <SessionTitleRenamePopover

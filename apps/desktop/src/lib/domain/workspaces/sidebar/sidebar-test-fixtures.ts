@@ -3,6 +3,7 @@ import type { RepoConfigResponse, RepoEnvironmentResponse } from "@proliferate/c
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";
 import {
   buildSidebarGroupStates,
@@ -329,6 +330,7 @@ export function buildGroups(args: {
   sessionLastInteracted?: Record<string, string>;
   sessionLastViewedAt?: Record<string, string>;
   suppressActiveNeedsReview?: boolean;
+  gitStatusesByLogicalId?: Record<string, WorkspaceGitStatus>;
 }) {
   return buildSidebarGroupStates({
     repoRoots: args.repoRoots ?? [],
@@ -344,6 +346,7 @@ export function buildGroups(args: {
     workspaceActivities: args.workspaceActivities ?? {},
     pendingPromptCounts: args.pendingPromptCounts,
     gitStatus: undefined,
+    gitStatusesByLogicalId: args.gitStatusesByLogicalId,
     activeSessionTitle: null,
     lastViewedAt: args.lastViewedAt ?? {},
     workspaceLastInteracted: args.workspaceLastInteracted ?? {},

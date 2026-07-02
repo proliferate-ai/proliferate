@@ -9,7 +9,6 @@ const chatViewRender = vi.hoisted(() => vi.fn());
 
 vi.mock("@/components/workspace/chat/ChatView", () => ({
   ChatView: (props: {
-    showWorkspaceFooter?: boolean;
     showWorkspaceStatusPanels?: boolean;
   }) => {
     chatViewRender(props);
@@ -136,7 +135,6 @@ describe("CoworkWorkspaceShell", () => {
 
     expect(chatViewRender).toHaveBeenCalledWith(
       expect.objectContaining({
-        showWorkspaceFooter: false,
         showWorkspaceStatusPanels: false,
       }),
     );

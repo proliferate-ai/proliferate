@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   SETTINGS_DEFAULT_SECTION,
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
@@ -9,10 +10,8 @@ import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
 import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
-import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
-import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
@@ -21,13 +20,10 @@ import { OrganizationSecretsPane } from "@/components/settings/panes/Organizatio
 import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
 import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
-// SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
-// import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
 import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
-import { ComputePane } from "@/components/settings/panes/ComputePane";
 import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
 import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
 import {
@@ -126,21 +122,6 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  if (activeSection === "organization-integrations") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <OrganizationIntegrationsPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
   // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
   // if (activeSection === "organization-limits") {
   //   return <OrganizationBudgetsPane />;
@@ -178,42 +159,8 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  // SLACK BOT PARKED: render branch is intentionally disabled with the settings entry point.
-  // if (activeSection === "slack-bot") {
-  //   if (!cloudEnabled) {
-  //     return <CloudUnavailablePane />;
-  //   }
-  //
-  //   if (cloudActive) {
-  //     return <SlackBotPane />;
-  //   }
-  //
-  //   if (cloudSignInChecking) {
-  //     return <CloudSignInRequiredPane />;
-  //   }
-  //
-  //   return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  // }
-  if (activeSection === "compute") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <ComputePane initialTargetId={focus.target ?? null} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
   if (activeSection === "worktrees") {
     return <WorktreesPane />;
-  }
-  if (activeSection === "archived-chats") {
-    return <ArchivedChatsPane />;
   }
   return (
     <EnvironmentsPane
@@ -294,14 +241,16 @@ export function SettingsScreen({
           className="flex h-10 items-center gap-2 pl-[82px] pr-3"
           data-tauri-drag-region="true"
         >
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={onNavigateHome}
             className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
             {SETTINGS_COPY.back}
-          </button>
+          </Button>
         </div>
         <div className="flex h-[46px] items-center gap-4 px-4">
           <SettingsScopeTabs
@@ -326,18 +275,12 @@ export function SettingsScreen({
           onSelectSection={onSelectSection}
           disabledSections={{
             "agent-authentication": !cloudEnabled,
-            "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,
-            compute: !cloudEnabled,
             "personal-secrets": !cloudEnabled,
-            // SLACK BOT PARKED: section is not registered while the flow is disabled.
-            // "slack-bot": !cloudEnabled,
           }}
           onCheckForUpdates={() => { void checkNow(); }}
           updateActionState={{
-            isChecking: phase === "checking",
-            hasAvailableUpdate: phase === "available" || phase === "ready",
             phase,
             updatesSupported,
           }}
@@ -346,13 +289,9 @@ export function SettingsScreen({
         <div className="relative min-w-0 flex-1 bg-background">
           <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-10">
             <div className="flex justify-center pb-8">
-              <div
-                className={`w-full space-y-6 ${
-                  effectiveActiveSection === "worktrees"
-                    ? "max-w-[58rem]"
-                    : "max-w-[50rem]"
-                }`}
-              >
+              {/* The single settings page-width contract: panes never set their
+                  own max-w — they inherit this container's. */}
+              <div className="w-full max-w-[50rem] space-y-6">
                 <SettingsContentBoundary section={effectiveActiveSection}>
                   {renderSettingsSection(
                     effectiveActiveSection,

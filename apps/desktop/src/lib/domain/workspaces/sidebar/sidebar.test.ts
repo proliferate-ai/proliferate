@@ -407,7 +407,7 @@ describe("sidebar workspace filters", () => {
     ]);
   });
 
-  it("marks the row needs_review when a related session has unseen activity, even when active", () => {
+  it("marks the row needsReview when a related session has unseen activity, even when active", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
         makeLocalLogicalWorkspace({
@@ -433,7 +433,52 @@ describe("sidebar workspace filters", () => {
     });
 
     expect(groups[0]?.items[0]?.needsReview).toBe(true);
-    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("needs_review");
+    // The unread state renders as the trailing dot (item.needsReview), not a
+    // leading status indicator (§3.4).
+    expect(groups[0]?.items[0]?.statusIndicator).toBeNull();
+  });
+
+  it("attaches git statuses to items by logical workspace id", () => {
+    const gitStatus = {
+      branch: "feature/attach",
+      dirty: false,
+      conflicted: false,
+      ahead: 1,
+      behind: 0,
+      hasUpstream: true,
+      pr: {
+        state: "open" as const,
+        number: 42,
+        url: "https://github.com/acme/repo/pull/42",
+        checks: "passing" as const,
+        reviewDecision: "none" as const,
+      },
+      attention: "none" as const,
+      capturedAt: "2026-07-01T10:00:00.000Z",
+      source: "live" as const,
+    };
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "with-status",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "without-status",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+      ],
+      gitStatusesByLogicalId: { "with-status": gitStatus },
+    });
+
+    const withStatus = groups[0]?.items.find((item) => item.id === "with-status");
+    const withoutStatus = groups[0]?.items.find((item) => item.id === "without-status");
+    expect(withStatus?.gitStatus).toBe(gitStatus);
+    expect(withoutStatus?.gitStatus).toBeNull();
   });
 
   it("falls back to record recency when a workspace has no interaction timestamp", () => {

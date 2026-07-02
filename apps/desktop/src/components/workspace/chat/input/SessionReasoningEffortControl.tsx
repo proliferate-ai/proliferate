@@ -30,8 +30,7 @@ export function SessionReasoningEffortControl({ control }: SessionReasoningEffor
       <Tooltip content={tooltip}>
         <ComposerControlButton
           disabled
-          tone={currentPresentation.tone}
-          icon={<Brain className="size-3.5" />}
+          icon={<Brain className="size-4" />}
           label={currentLabel}
           trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           aria-label={tooltip}
@@ -47,8 +46,7 @@ export function SessionReasoningEffortControl({ control }: SessionReasoningEffor
         <span className="inline-flex shrink-0">
           <Tooltip content={tooltip}>
             <ComposerControlButton
-              tone={currentPresentation.tone}
-              icon={<Brain className="size-3.5" />}
+              icon={<Brain className="size-4" />}
               label={currentLabel}
               trailing={
                 <span className="flex items-center gap-1">

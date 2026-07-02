@@ -2,12 +2,35 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { WorkspaceItem } from "./WorkspaceItem";
 
 vi.mock("@/lib/access/tauri/context-menu", () => ({
   canShowNativeContextMenu: () => false,
   showNativeContextMenu: vi.fn(),
 }));
+
+function makeGitStatus(overrides: Partial<WorkspaceGitStatus> = {}): WorkspaceGitStatus {
+  return {
+    branch: "feature/thing",
+    dirty: false,
+    conflicted: false,
+    ahead: 0,
+    behind: 0,
+    hasUpstream: true,
+    pr: {
+      state: "open",
+      number: 805,
+      url: "https://github.com/acme/repo/pull/805",
+      checks: "none",
+      reviewDecision: "none",
+    },
+    attention: "none",
+    capturedAt: "2026-07-01T10:00:00.000Z",
+    source: "live",
+    ...overrides,
+  };
+}
 
 describe("WorkspaceItem", () => {
 
@@ -88,16 +111,113 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the timestamp on active workspace rows", () => {
+  it("renders the PR status dot on the leading git glyph", () => {
     render(
       <WorkspaceItem
-        name="Fresh worktree"
+        name="Feature worktree"
         variant="worktree"
-        active
-        lastInteracted={new Date().toISOString()}
+        gitStatus={makeGitStatus()}
       />,
     );
 
-    expect(screen.getByText("now")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
+  });
+
+  it("renders the activity indicator in the right slot, keeping the PR glyph", () => {
+    render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        statusIndicator={{ kind: "iterating", tooltip: "Iterating" }}
+        gitStatus={makeGitStatus()}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
+    // The status no longer evicts the PR glyph + dot from the leading well.
+    expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
+  });
+
+  it("renders no leading glyph for an authoritative no-PR branch", () => {
+    const { container } = render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        gitStatus={makeGitStatus({
+          pr: {
+            state: "none",
+            number: null,
+            url: null,
+            checks: "none",
+            reviewDecision: "none",
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByRole("img")).toBeNull();
+    // No branch-glyph fallback: the leading well stays empty.
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("renders no leading glyph when PR data is unknown", () => {
+    const { container } = render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        gitStatus={makeGitStatus({ pr: null })}
+      />,
+    );
+
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("shows the unread dot in the right slot when the row needs review", () => {
+    render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        needsReview
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Unseen activity" })).toBeTruthy();
+  });
+
+  it("lets an activity indicator beat the unread dot in the right slot", () => {
+    render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        needsReview
+        statusIndicator={{ kind: "iterating", tooltip: "Iterating" }}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Unseen activity" })).toBeNull();
+  });
+
+  it("opens the pull request from the context menu", () => {
+    const onOpenPullRequest = vi.fn();
+
+    render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        onSelect={vi.fn()}
+        gitStatus={makeGitStatus()}
+        onOpenPullRequest={onOpenPullRequest}
+      />,
+    );
+
+    const row = screen.getByText("Feature worktree").closest('[role="button"]');
+    expect(row).not.toBeNull();
+
+    fireEvent.contextMenu(row!);
+    fireEvent.click(screen.getByRole("button", { name: "Open pull request #805" }));
+
+    expect(onOpenPullRequest).toHaveBeenCalledWith("https://github.com/acme/repo/pull/805");
   });
 });

@@ -11,12 +11,12 @@ export function CoworkSessionActionsMenu({
   return (
     <div className="py-0.5">
       <PopoverMenuItem
-        icon={<Pencil className="size-3.5" />}
+        icon={<Pencil className="size-4" />}
         label="Rename"
         onClick={onRename}
       />
       <PopoverMenuItem
-        icon={<Trash className="size-3.5" />}
+        icon={<Trash className="size-4" />}
         label="Archive"
         className="text-destructive hover:text-destructive"
         onClick={onArchive}

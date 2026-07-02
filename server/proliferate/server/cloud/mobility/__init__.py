@@ -1,1 +1,0 @@
-"""Logical workspace mobility domain."""

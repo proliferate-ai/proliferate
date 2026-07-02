@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
+import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { useNativeOverlayRegistration } from "@proliferate/ui/overlays/overlay-presence";
 import {
   MANUAL_CHAT_GROUP_COLOR_IDS,
@@ -84,7 +85,7 @@ export function ManualChatGroupEditorPopover({
       <div className="fixed inset-0 z-[60]" onClick={onClose} />
       <FixedPositionLayer
         position={position}
-        className="fixed z-[61] w-[304px] rounded-lg border border-border bg-popover p-3 shadow-floating"
+        className={`fixed z-[61] w-[304px] ${POPOVER_FRAME_CLASS} p-3`}
         data-telemetry-mask="true"
         onClick={(event) => event.stopPropagation()}
       >

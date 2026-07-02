@@ -55,7 +55,6 @@ export function ModelSelector({
     return (
       <ComposerControlButton
         disabled
-        tone="quiet"
         label={
           connectionState === "connecting"
             ? "Connecting…"

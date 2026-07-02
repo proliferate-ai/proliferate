@@ -9,14 +9,12 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 
 function applyStoredAppearancePreference(): void {
   const {
-    themePreset,
     colorMode,
     uiFontSizeId,
     readableCodeFontSizeId,
     windowZoomId,
   } = useUserPreferencesStore.getState();
   applyAppearancePreference({
-    themePreset,
     colorMode,
     uiFontSizeId,
     readableCodeFontSizeId,
@@ -41,8 +39,7 @@ export function useAppearancePreferenceLifecycle(): void {
 
     const unsubscribeAppearance = useUserPreferencesStore.subscribe((state, prev) => {
       if (
-        state.themePreset !== prev.themePreset
-        || state.colorMode !== prev.colorMode
+        state.colorMode !== prev.colorMode
         || state.uiFontSizeId !== prev.uiFontSizeId
         || state.readableCodeFontSizeId !== prev.readableCodeFontSizeId
         || state.windowZoomId !== prev.windowZoomId

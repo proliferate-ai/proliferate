@@ -10,7 +10,6 @@ import {
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
 import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
 import { ChatPreMessageCanvas } from "@/components/workspace/chat/surface/ChatPreMessageCanvas";
@@ -19,7 +18,6 @@ import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspac
 import { SessionTranscriptPane } from "@/components/workspace/chat/surface/SessionTranscriptPane";
 import { SessionContentSearchOverlay } from "@/components/workspace/chat/surface/SessionContentSearchOverlay";
 import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
-import { WorkspaceMobilityOverlay } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/derived/use-chat-surface-state";
 import {
   useActiveSessionId,
@@ -36,7 +34,6 @@ import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { useSessionErrorAcknowledgement } from "@/hooks/sessions/lifecycle/use-session-error-acknowledgement";
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/lifecycle/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
-import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/lifecycle/mobility/use-workspace-mobility-lifecycle";
 import { canAttachPromptContent } from "@proliferate/product-domain/chats/composer/prompt-attachment-rules";
 import {
   canAcceptChatFileDrop,
@@ -105,11 +102,9 @@ function shouldEnableContentSearchOverlay(mode: ChatSurfaceState): boolean {
 
 export const ChatView = memo(function ChatView({
   shellRenderSurface = null,
-  showWorkspaceFooter = true,
   showWorkspaceStatusPanels = true,
 }: {
   shellRenderSurface?: WorkspaceRenderSurface | null;
-  showWorkspaceFooter?: boolean;
   showWorkspaceStatusPanels?: boolean;
 }) {
   useDebugRenderCount("chat-surface");
@@ -157,18 +152,17 @@ export const ChatView = memo(function ChatView({
   useCloudWorkspacePolling();
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
   useSessionErrorAcknowledgement();
-  useWorkspaceMobilityLifecycle();
 
+  // The composer placeholder flips to the follow-up variant once the session
+  // transcript already has turns; the surface mode is the cheap signal.
+  const hasSessionTurns = mode.kind === "session-transcript";
   const chatInput = useMemo(() => (
     <ChatInput
       attachments={promptAttachments}
       suppressActiveSessionState={suppressComposerActiveSessionState}
+      hasSessionTurns={hasSessionTurns}
     />
-  ), [promptAttachments, suppressComposerActiveSessionState]);
-  const footerSlot = useMemo(
-    () => showWorkspaceFooter ? <WorkspaceMobilityFooterRow /> : null,
-    [showWorkspaceFooter],
-  );
+  ), [hasSessionTurns, promptAttachments, suppressComposerActiveSessionState]);
 
   const handleFileDrag = useCallback((event: DragEvent<HTMLDivElement>) => {
     const dragInput = readFileDragInput(event.dataTransfer);
@@ -233,7 +227,6 @@ export const ChatView = memo(function ChatView({
         />
       )}
       <SessionContentSearchOverlay enabled={contentSearchEnabled} surface="chat" />
-      <WorkspaceMobilityOverlay />
       <DebugProfiler id="chat-composer-dock-region">
         <ChatComposerDock
           ref={dockRef}
@@ -241,7 +234,6 @@ export const ChatView = memo(function ChatView({
           outboundSlot={composerDockSlots.outboundSlot}
           activeSlot={composerDockSlots.activeSlot}
           attachedSlot={composerDockSlots.attachedSlot}
-          footerSlot={footerSlot}
           lowerBackdropTopPx={lowerBackdropTopPx}
           shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
           data-telemetry-block

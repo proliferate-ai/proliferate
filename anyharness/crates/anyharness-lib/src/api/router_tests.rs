@@ -473,6 +473,136 @@ async fn legacy_repo_root_post_route_still_resolves_repo_root() {
 }
 
 #[tokio::test]
+async fn repo_root_pull_request_statuses_route_returns_coded_404_for_unknown_repo_root() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state(false);
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/repo-roots/missing-repo-root/hosting/pull-requests?refresh=0")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    // Coded ProblemDetails 404: distinguishable from a bare axum 404 on
+    // older daemons that lack this route.
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["code"], "REPO_ROOT_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn repo_root_pull_request_statuses_route_returns_empty_entries_without_active_branches() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let repo_root = TempDirGuard::new("repo-root-pr-statuses-empty");
+    let state = test_state(false);
+    // Seeds repo root `repo-root-ws-pr-empty` plus one active workspace with
+    // no current branch: the derived branch set is empty.
+    seed_workspace(
+        &state,
+        "ws-pr-empty",
+        &repo_root.path().display().to_string(),
+    );
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/repo-roots/repo-root-ws-pr-empty/hosting/pull-requests")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["entries"], json!([]));
+    assert!(
+        payload["fetchedAt"]
+            .as_str()
+            .is_some_and(|at| !at.is_empty()),
+        "fetchedAt must be a non-empty string: {payload}"
+    );
+}
+
+#[tokio::test]
+async fn repo_root_pull_request_statuses_route_maps_unsupported_remote() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let repo_root = TempDirGuard::new("repo-root-pr-statuses-remote");
+    init_repo(repo_root.path());
+    run_git(
+        repo_root.path(),
+        [
+            "remote",
+            "add",
+            "origin",
+            "https://gitlab.com/acme/widgets.git",
+        ],
+    );
+    let state = test_state(false);
+    seed_workspace(
+        &state,
+        "ws-pr-remote",
+        &repo_root.path().display().to_string(),
+    );
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute(
+                "UPDATE workspaces SET current_branch = 'feature-x' WHERE id = 'ws-pr-remote'",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("set workspace current branch");
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/repo-roots/repo-root-ws-pr-remote/hosting/pull-requests?refresh=1")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    // Non-github.com origin: v1 supports github.com only.
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["code"], "HOSTING_REMOTE_UNSUPPORTED");
+}
+
+#[tokio::test]
 async fn repo_root_file_read_route_reads_text_files() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))

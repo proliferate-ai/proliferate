@@ -133,22 +133,27 @@ def supervisor_log_path(runtime_context: SandboxRuntimeContext) -> str:
     return f"{runtime_context.home_dir}/proliferate-supervisor.log"
 
 
+def anyharness_runtime_home(runtime_context: SandboxRuntimeContext) -> str:
+    """Where AnyHarness keeps its runtime home (and reads its dotfiles) in-sandbox."""
+    return f"{runtime_context.home_dir}/.proliferate/anyharness"
+
+
+def worker_log_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/proliferate-worker.log"
+
+
 def build_worker_config(
     *,
     cloud_base_url: str,
     enrollment_token: str,
-    anyharness_base_url: str,
-    anyharness_bearer_token: str,
     runtime_context: SandboxRuntimeContext,
 ) -> str:
     worker_dir = f"{runtime_context.home_dir}/.proliferate/worker"
     values = {
         "cloud_base_url": cloud_base_url,
         "enrollment_token": enrollment_token,
-        "anyharness_base_url": anyharness_base_url,
-        "anyharness_bearer_token": anyharness_bearer_token,
         "worker_db_path": f"{worker_dir}/worker.sqlite3",
-        "supervisor_update_request_dir": supervisor_update_request_dir(runtime_context),
+        "integration_gateway_home": anyharness_runtime_home(runtime_context),
         "heartbeat_interval_seconds": 30,
     }
     lines = []

@@ -1,6 +1,5 @@
 @import "./dom.css";
 @import "@fontsource-variable/inter";
-@import "@fontsource-variable/space-grotesk";
 @import "@fontsource-variable/manrope";
 
 /* -- Geist font loading (kept for fallback / mono) -- */
@@ -21,22 +20,16 @@
 }
 
 /* ========================================================================
- * Proliferate Theme System
+ * Proliferate Theme (Mono)
  *
- * Two layers:
- *   1. @theme inline — structural tokens + ship (default) color values.
- *      Using `inline` so Tailwind generates utilities while values resolve
- *      at runtime from the cascade.
- *   2. [data-theme="<preset>"] selectors — overrides for non-default presets.
- *
- * The ship palette lives directly in @theme inline so it serves as both
- * the Tailwind build-time default AND the runtime default. The other
- * presets override via higher-specificity attribute selectors.
- *
- * Presets:
- *   "ship"   — warm-tinted dark palette     (default, in @theme)
- *   "mono"   — cool neutral dark palette    (override via [data-theme])
- *   "tbpn"   — dark forest mint palette
+ * Single palette, two modes:
+ *   1. @theme — structural tokens + the mono dark palette. Tailwind
+ *      generates utilities from these; values resolve at runtime from the
+ *      cascade.
+ *   2. :root — mono ink refinements that need color-mix() (unsupported
+ *      inside @theme) plus derived diff/git tokens.
+ *   3. :root[data-mode="light"] — the mono light palette. Mode is the only
+ *      runtime theme switch (dark / light / system via data-mode).
  * ======================================================================== */
 
 @theme {
@@ -44,7 +37,7 @@
   --color-*: initial;
 
   /* -- Typography -- */
-  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* -- Border radius -- */
@@ -86,120 +79,114 @@
 
   /* -- Animations -- */
   --animate-blink-cursor: blink-cursor 1s step-end infinite;
+  --animate-popover-in: popover-in 150ms cubic-bezier(0.19, 1, 0.22, 1); /* codex --cubic-enter */
 
   /* -- Scrollbars -- */
   --color-scrollbar-thumb: rgba(255, 255, 255, 0.08);
   --color-scrollbar-thumb-active: rgba(255, 255, 255, 0.16);
 
   /* ====================================================================
-   * SHIP PRESET ("Dominic", default) — Claude-style warm palette:
-   * warm-gray surfaces, ivory ink, terracotta #cc7d5e accent. Dark values
-   * lifted from Codex's runtime Claude preset (reference/codex/copied.css).
+   * MONO PALETTE (dark base) — cool neutral dark surfaces tracking Codex
+   * Electron dark, white ink, #339cff accent.
    * ==================================================================== */
 
-  /* -- Core --
-     Claude theme, lifted verbatim from Codex's runtime Claude preset
-     (reference/codex/copied.css ROOT block): warm-gray surfaces a full
-     step lighter than mono, ivory ink #f9f9f7, terracotta accent
-     #cc7d5e with #e0b09d for text/icons. */
-  --color-background: #2d2d2b;
-  --color-foreground: #f9f9f7;
-  --color-overlay: hsl(0 0% 0%);
+  /* -- Core -- */
+  --color-background: #181818;
+  --color-foreground: #ffffff;
+  --color-overlay: #000000;
 
   /* -- Primary -- */
-  --color-primary: #f9f9f7;
-  --color-primary-foreground: #191918;
+  --color-primary: #ffffff;
+  --color-primary-foreground: #0d0d0d;
 
   /* -- Secondary -- */
-  --color-secondary: #373735;
-  --color-secondary-foreground: #f9f9f7;
+  --color-secondary: #212121;
+  --color-secondary-foreground: #ffffff;
 
-  /* -- Accent / Muted --
-     Hover/selection states are translucent ivory overlays (not opaque
-     panel grays) so elevation reads consistently on any surface. */
-  --color-accent: rgb(249 249 247 / 0.052);
-  --color-accent-foreground: #f9f9f7;
-  --color-muted: #373735;
-  --color-muted-foreground: rgb(249 249 247 / 0.71);
-  --color-faint: rgb(249 249 247 / 0.5);
-  --color-helper: rgb(249 249 247 / 0.71);
+  /* -- Accent / Muted -- */
+  --color-accent: #232323;
+  --color-accent-foreground: #ffffff;
+  --color-muted: #212121;
+  --color-muted-foreground: rgba(255, 255, 255, 0.71);
+  --color-faint: rgba(255, 255, 255, 0.498);
+  --color-helper: rgba(255, 255, 255, 0.71);
 
   /* -- Card -- */
-  --color-card: #373735;
-  --color-card-foreground: #f9f9f7;
+  --color-card: #212121;
+  --color-card-foreground: #ffffff;
 
   /* -- Popover (Codex elevated-primary) -- */
-  --color-popover: #474745;
-  --color-popover-foreground: #f9f9f7;
-  --color-popover-accent: rgb(249 249 247 / 0.052);
-  --color-popover-ring: rgb(249 249 247 / 0.084);
+  --color-popover: #2d2d2d; /* codex dropdown surface — one step above panels */
+  --color-popover-foreground: #ffffff;
+  --color-popover-accent: rgba(255, 255, 255, 0.05);
+  --color-popover-ring: rgba(255, 255, 255, 0.084);
 
-  /* -- Border & Input (ivory-tinted) -- */
-  --color-border: rgb(249 249 247 / 0.084);
-  --color-input: rgb(249 249 247 / 0.15);
-  --color-input-border: rgb(249 249 247 / 0.15);
-  --color-separator: rgb(249 249 247 / 0.06);
-  --color-ring: rgb(224 176 157 / 0.76);
-  --color-border-light: rgb(249 249 247 / 0.042);
-  --color-border-heavy: rgb(249 249 247 / 0.156);
+  /* -- Border & Input -- */
+  --color-border: rgba(255, 255, 255, 0.084);
+  --color-input: rgba(255, 255, 255, 0.15);
+  --color-input-border: rgba(255, 255, 255, 0.15);
+  --color-separator: #232323;
+  --color-ring: rgba(131, 195, 255, 0.76);
+  --color-border-light: rgba(255, 255, 255, 0.05);
+  --color-border-heavy: rgba(255, 255, 255, 0.15);
 
   /* -- Surface roles (ladder: under < background < card < elevated) -- */
-  --color-surface: var(--color-background);
-  --color-surface-under: #262624;
-  --color-surface-control: rgb(63 63 61 / 0.96);
-  --color-surface-control-opaque: #3f3f3d;
-  --color-surface-elevated: var(--color-card);
-  --color-surface-elevated-secondary: rgb(249 249 247 / 0.032);
-  --color-surface-editor: #3b3b39;
-  --color-list-hover: var(--color-accent);
-  --color-foreground-secondary: var(--color-muted-foreground);
-  --color-foreground-tertiary: var(--color-faint);
+  --color-surface: #181818;
+  --color-surface-under: #141414;
+  --color-surface-control: rgba(43, 43, 43, 0.96);
+  --color-surface-control-opaque: #2b2b2b;
+  --color-surface-elevated: #212121;
+  --color-surface-elevated-secondary: rgba(255, 255, 255, 0.03);
+  --color-surface-editor: #282828;
+  --color-list-hover: rgba(255, 255, 255, 0.05);
+  --color-foreground-secondary: rgba(255, 255, 255, 0.7);
+  --color-foreground-tertiary: rgba(255, 255, 255, 0.5);
 
-  /* -- Highlight / Unread / Special --
-     One terracotta accent (#cc7d5e solid, #e0b09d for text/icons),
-     applied as translucent washes. */
-  --color-highlight: rgb(204 125 94 / 0.16);
-  --color-highlight-foreground: #f9f9f7;
-  --color-highlight-muted: rgb(224 176 157);
-  --color-border-highlight: #cc7d5e;
-  --color-unread: #cc7d5e;
-  --color-special: #cc7d5e;
+  /* -- Highlight / Unread / Special -- */
+  --color-highlight: rgba(51, 156, 255, 0.12);
+  --color-highlight-foreground: #ffffff;
+  --color-highlight-muted: rgba(51, 156, 255, 0.5);
+  --color-border-highlight: #339cff;
+  --color-unread: #339cff;
+  --color-special: #339cff;
 
   /* -- Destructive / Success / Warning / Info -- */
-  --color-destructive: hsl(0 91% 71%);
-  --color-destructive-foreground: hsl(0 86% 97%);
-  --color-success: hsl(142 69% 58%);
-  --color-success-foreground: hsl(138 76% 97%);
-  --color-warning: rgb(255 133 73 / 0.13);
-  --color-warning-foreground: #ff8549;
-  --color-warning-foreground-secondary: rgb(255 133 73 / 0.6);
-  --color-warning-border: rgb(255 133 73 / 0.3);
-  --color-info: hsl(217 91% 60%);
-  --color-info-foreground: hsl(217 91% 95%);
-  --color-positive: hsl(142 69% 58%);
-  --color-positive-muted: hsl(144 48% 15%);
-  --color-positive-foreground: hsl(138 76% 97%);
+  --color-destructive: #fa423e;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #40c977;
+  --color-success-foreground: #ffffff;
+  --color-warning: rgba(255, 180, 50, 0.15);
+  --color-warning-foreground: #ffb432;
+  --color-warning-foreground-secondary: rgba(255, 180, 50, 0.6);
+  --color-warning-border: rgba(255, 180, 50, 0.25);
+  --color-info: #339cff;
+  --color-info-foreground: #ffffff;
+  --color-positive: #40c977;
+  --color-positive-muted: rgba(64, 201, 119, 0.15);
+  --color-positive-foreground: #ffffff;
+  /* Merged-PR dot (GitHub-convention purple). Distinct from `info`, which
+   * doubles as the unread color. */
+  --color-pr-merged: #ad7bf9;
 
   /* -- Link -- */
-  --color-link: rgb(204 125 94 / 0.14);
-  --color-link-foreground: rgb(224 176 157);
-  --color-link-elevated: rgb(204 125 94 / 0.24);
+  --color-link: rgba(51, 156, 255, 0.12);
+  --color-link-foreground: #339cff;
+  --color-link-elevated: rgba(51, 156, 255, 0.2);
 
   /* -- Tip / Plan -- */
-  --color-tip: rgb(204 125 94 / 0.14);
-  --color-tip-border: rgb(204 125 94 / 0.3);
-  --color-tip-secondary: rgb(204 125 94 / 0.4);
-  --color-tip-secondary-border: rgb(204 125 94 / 0.5);
-  --color-tip-muted: rgb(224 176 157);
-  --color-tip-foreground: #f9f9f7;
-  --color-plan-border: rgb(204 125 94 / 0.5);
+  --color-tip: rgba(51, 156, 255, 0.12);
+  --color-tip-border: rgba(51, 156, 255, 0.25);
+  --color-tip-secondary: rgba(51, 156, 255, 0.4);
+  --color-tip-secondary-border: rgba(51, 156, 255, 0.5);
+  --color-tip-muted: rgba(51, 156, 255, 0.6);
+  --color-tip-foreground: #ffffff;
 
   /* -- Switch -- */
-  --color-switch-background: #f9f9f7;
-  --color-switch-foreground: #191918;
+  --color-switch-background: #ffffff;
+  --color-switch-foreground: #0d0d0d;
 
   /* -- Composer -- */
-  --color-composer-background: #373735;
+  --color-composer-background: #212121;
   --color-composer-border: var(--color-border);
   --color-composer-control-foreground: var(--color-muted-foreground);
   --color-composer-control-active-foreground: var(--color-foreground);
@@ -211,32 +198,32 @@
   --color-composer-backdrop-filter: none;
 
   /* -- Prose -- */
-  --color-prose-border: rgb(249 249 247 / 0.12);
+  --color-prose-border: rgba(255, 255, 255, 0.15);
 
-  /* -- Sidebar (Claude-style: one step darker than the content surface) -- */
-  --color-sidebar: #262624;
-  --color-sidebar-background: #2d2d2b;
-  --color-sidebar-foreground: #f9f9f7;
-  --color-sidebar-primary: #f9f9f7;
-  --color-sidebar-primary-foreground: #f9f9f7;
-  --color-sidebar-muted-foreground: rgb(249 249 247 / 0.5);
-  --color-sidebar-accent: rgb(249 249 247 / 0.07);
-  --color-sidebar-accent-foreground: #f9f9f7;
-  --color-sidebar-border: rgb(249 249 247 / 0.08);
-  --color-sidebar-ring: rgb(224 176 157 / 0.76);
-  --color-sidebar-blue: #cc7d5e;
+  /* -- Sidebar (one step darker than the content surface) -- */
+  --color-sidebar: #1d1d1d;
+  --color-sidebar-background: #181818;
+  --color-sidebar-foreground: #ffffff;
+  --color-sidebar-primary: #ffffff;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
+  --color-sidebar-accent: rgba(255, 255, 255, 0.074);
+  --color-sidebar-accent-foreground: #ffffff;
+  --color-sidebar-border: rgba(255, 255, 255, 0.079);
+  --color-sidebar-ring: rgba(127, 193, 255, 0.747);
+  --color-sidebar-blue: #339cff;
 
   /* -- Status -- */
-  --color-status-backlog: hsl(22 4% 54%);
-  --color-status-backlog-hover: hsl(20 6% 72%);
-  --color-status-in-progress: hsl(50 100% 59%);
-  --color-status-in-progress-hover: hsl(50 100% 69%);
-  --color-status-in-review: hsl(142 69% 58%);
-  --color-status-in-review-hover: hsl(142 77% 73%);
-  --color-status-done: #cc7d5e;
-  --color-status-done-hover: rgb(224 176 157);
-  --color-status-canceled: hsl(23 5% 63%);
-  --color-status-canceled-hover: hsl(20 6% 72%);
+  --color-status-backlog: rgba(255, 255, 255, 0.4);
+  --color-status-backlog-hover: rgba(255, 255, 255, 0.6);
+  --color-status-in-progress: #ffcc33;
+  --color-status-in-progress-hover: #ffd966;
+  --color-status-in-review: #40c977;
+  --color-status-in-review-hover: #66d997;
+  --color-status-done: #339cff;
+  --color-status-done-hover: #66b3ff;
+  --color-status-canceled: rgba(255, 255, 255, 0.5);
+  --color-status-canceled-hover: rgba(255, 255, 255, 0.7);
 
   /* -- Delegated work identity -- */
   --color-delegated-agent-1: hsl(213 94% 68%);
@@ -249,43 +236,43 @@
   --color-delegated-agent-8: hsl(199 89% 68%);
 
   /* -- Todo -- */
-  --color-todo-in-progress: hsl(213 94% 68%);
-  --color-todo-completed: hsl(142 69% 58%);
-  --color-todo-pending: hsl(23 5% 63%);
+  --color-todo-in-progress: #339cff;
+  --color-todo-completed: #40c977;
+  --color-todo-pending: rgba(255, 255, 255, 0.5);
 
   /* -- App switcher -- */
-  --color-app-switcher-bg: hsl(24 7% 81%);
+  --color-app-switcher-bg: rgba(255, 255, 255, 0.8);
 
   /* -- Brand assets -- */
   --color-brand-logo-tile: hsl(0 0% 100%);
 
   /* -- Git -- */
-  --color-git-green: hsl(142 69% 58%);
-  --color-git-red: hsl(0 91% 71%);
-  --color-git-yellow: hsl(50 100% 75%);
-  --color-git-gray: hsl(23 5% 63%);
-  --color-git-new-line: hsl(142 76% 44%);
-  --color-git-removed-line: hsl(0 100% 45%);
+  --color-git-green: #40c977;
+  --color-git-red: #fa423e;
+  --color-git-yellow: #ffd240;
+  --color-git-gray: rgba(255, 255, 255, 0.5);
+  --color-git-new-line: #40c977;
+  --color-git-removed-line: #fa423e;
 
   /* -- Terminal ANSI standard -- */
-  --color-terminal-black: hsl(30 9% 95%);
-  --color-terminal-red: hsl(0 91% 71%);
-  --color-terminal-green: hsl(142 69% 58%);
-  --color-terminal-yellow: hsl(50 100% 75%);
-  --color-terminal-blue: hsl(213 94% 68%);
-  --color-terminal-magenta: hsl(292 100% 66%);
-  --color-terminal-cyan: hsl(188 85% 59%);
-  --color-terminal-white: hsl(25 8% 16%);
+  --color-terminal-black: rgba(255, 255, 255, 0.5);
+  --color-terminal-red: #ff6764;
+  --color-terminal-green: #40c977;
+  --color-terminal-yellow: #ffd240;
+  --color-terminal-blue: #339cff;
+  --color-terminal-magenta: #ad7bf9;
+  --color-terminal-cyan: #339cff;
+  --color-terminal-white: #ffffff;
 
   /* -- Terminal ANSI bright -- */
-  --color-terminal-bright-black: hsl(23 5% 63%);
-  --color-terminal-bright-red: hsl(0 94% 82%);
-  --color-terminal-bright-green: hsl(142 77% 73%);
-  --color-terminal-bright-yellow: hsl(50 100% 84%);
-  --color-terminal-bright-blue: hsl(212 96% 78%);
-  --color-terminal-bright-magenta: hsl(292 100% 78%);
-  --color-terminal-bright-cyan: hsl(187 92% 73%);
-  --color-terminal-bright-white: hsl(24 9% 12%);
+  --color-terminal-bright-black: rgba(255, 255, 255, 0.71);
+  --color-terminal-bright-red: #ff6764;
+  --color-terminal-bright-green: #40c977;
+  --color-terminal-bright-yellow: #ffd240;
+  --color-terminal-bright-blue: #339cff;
+  --color-terminal-bright-magenta: #ad7bf9;
+  --color-terminal-bright-cyan: #339cff;
+  --color-terminal-bright-white: #ffffff;
 
   /* -- File icon tones -- */
   --color-file-icon-folder: hsl(0 0% 89%);
@@ -295,18 +282,18 @@
   --color-file-icon-red: hsl(0 0% 89%);
 }
 
-/* -- Git diff backgrounds (ship default, outside @theme — color-mix unsupported there) -- */
+/* -- Git diff backgrounds + mono refinements (outside @theme — color-mix unsupported there) -- */
 :root {
-  --git-new-line-bg: color-mix(in oklab, hsl(142 76% 44%) 10%, transparent);
-  --git-new-line-border: color-mix(in oklab, hsl(142 76% 44%) 60%, transparent);
-  --git-new-line-highlight: color-mix(in oklab, hsl(142 76% 44%) 20%, transparent);
-  --git-removed-line-bg: color-mix(in oklab, hsl(0 100% 45%) 10%, transparent);
-  --git-removed-line-border: color-mix(in oklab, hsl(0 100% 45%) 60%, transparent);
-  --git-removed-line-highlight: color-mix(in oklab, hsl(0 100% 45%) 20%, transparent);
-  --color-diff-main-surface: var(--color-background);
-  --color-diff-code-surface: var(--color-diff-main-surface);
-  --color-diff-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
-  --color-diff-panel-surface: color-mix(in oklab, var(--color-foreground) 3%, transparent);
+  --git-new-line-bg: color-mix(in srgb, #181818 88%, #00a240);
+  --git-new-line-border: #00a240;
+  --git-new-line-highlight: color-mix(in srgb, #181818 82%, #00a240);
+  --git-removed-line-bg: color-mix(in srgb, #181818 88%, #e02e2a);
+  --git-removed-line-border: #e02e2a;
+  --git-removed-line-highlight: color-mix(in srgb, #181818 82%, #e02e2a);
+  --color-diff-main-surface: #181818;
+  --color-diff-code-surface: #111111;
+  --color-diff-surface: color-mix(in srgb, #181818 94%, #ffffff);
+  --color-diff-panel-surface: color-mix(in oklab, #ffffff 3%, transparent);
   --color-diff-header-surface: var(--color-diff-surface);
   /* Near-flat headers: the turn header ("Edited x" + Undo/Review), inline
      tool headers, and the right-panel git file headers (sidebar variant
@@ -324,8 +311,8 @@
   --color-diff-chat-file-header-surface: var(--color-diff-surface);
   --color-diff-chat-file-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground));
   --color-code-block-background: var(--color-diff-surface);
-  --color-diff-added: var(--color-git-new-line);
-  --color-diff-deleted: var(--color-git-removed-line);
+  --color-diff-added: #00a240;
+  --color-diff-deleted: #e02e2a;
   --diffs-font-family: var(--font-mono);
   --diffs-font-size: 11px;
   --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
@@ -338,8 +325,8 @@
   --readable-code-font-size: 0.6875rem;
   --readable-code-line-height: 1.625;
   --diffs-min-number-column-width: 4ch;
-  --diffs-fg: var(--color-foreground);
-  --diffs-mixer: var(--diffs-fg);
+  --diffs-fg: #fcfcfc;
+  --diffs-mixer: #fcfcfc;
   --diffs-addition-color-override: var(--color-diff-added);
   --diffs-deletion-color-override: var(--color-diff-deleted);
   --codex-diffs-surface: var(--color-diff-surface);
@@ -353,12 +340,39 @@
   --diffs-bg-context-override: var(--codex-diffs-context-surface);
   --diffs-bg-separator-override: var(--codex-diffs-separator-surface);
   --diffs-bg-hover-override: var(--codex-diffs-hover-surface);
-  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-addition-color-override));
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-deletion-color-override));
-  --diffs-bg-addition-number-override: var(--codex-diffs-addition-number);
-  --diffs-bg-deletion-number-override: var(--codex-diffs-deletion-number);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #00a240);
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #e02e2a);
+  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #00a240);
+  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #e02e2a);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
+
+  /* -- Mono ink refinements — color-mix() versions of the @theme literals
+     above (color-mix is unsupported inside @theme), plus tokens that
+     dom.css's :root would otherwise shadow. -- */
+  --color-accent: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-muted-foreground: color-mix(in oklab, #ffffff 70%, transparent);
+  --color-faint: color-mix(in oklab, #ffffff 50%, transparent);
+  --color-helper: color-mix(in oklab, #ffffff 70%, transparent);
+  --color-popover-accent: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-popover-ring: color-mix(in oklab, #ffffff 8%, transparent);
+  --color-border: color-mix(in oklab, #ffffff 8%, transparent);
+  --color-input: color-mix(in oklab, #ffffff 12%, transparent);
+  --color-input-border: color-mix(in oklab, #ffffff 12%, transparent);
+  --color-separator: color-mix(in oklab, #ffffff 4%, transparent);
+  --color-ring: color-mix(in oklab, #339cff 70%, transparent);
+  --color-border-light: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-border-heavy: color-mix(in oklab, #ffffff 12%, transparent);
+  --color-surface-control: color-mix(in oklab, #2b2b2b 96%, transparent);
+  --color-surface-elevated-secondary: color-mix(in oklab, #ffffff 3%, transparent);
+  --color-list-hover: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-foreground-secondary: color-mix(in oklab, #ffffff 70%, transparent);
+  --color-foreground-tertiary: color-mix(in oklab, #ffffff 50%, transparent);
+  --color-link: color-mix(in oklab, #339cff 12%, transparent);
+  --color-link-elevated: color-mix(in oklab, #339cff 20%, transparent);
+  --color-composer-background: #212121;
+  --color-prose-border: color-mix(in oklab, #ffffff 8%, transparent);
+  --color-git-gray: color-mix(in oklab, #ffffff 50%, transparent);
 }
 
 .hide-scrollbar {
@@ -442,698 +456,15 @@ mark.codex-thread-find-active {
 }
 
 
-/* ========================================================================
- * MONO PRESET — cool neutral dark palette
- * Overrides ship defaults via attribute selector specificity.
- *
- * NOTE: ORIGINAL PRESET shares this entire palette via the combined
- * selector below, then overrides typography + composer shape further down
- * to distinguish itself.
- * ======================================================================== */
 
-:root[data-theme="mono"],
-:root[data-theme="original"] {
-  /* -- Typography -- */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
-  /* -- Composer shape: inherits the 16px spec default (UX_SPEC §5) -- */
-
-  /* -- Core -- */
-  --color-background: #181818;
-  --color-foreground: #ffffff;
-  --color-overlay: #000000;
-
-  /* -- Primary -- */
-  --color-primary: #ffffff;
-  --color-primary-foreground: #0d0d0d;
-
-  /* -- Secondary -- */
-  --color-secondary: #212121;
-  --color-secondary-foreground: #ffffff;
-
-  /* -- Accent / Muted -- */
-  --color-accent: #232323;
-  --color-accent-foreground: #ffffff;
-  --color-muted: #212121;
-  --color-muted-foreground: rgba(255, 255, 255, 0.71);
-  --color-faint: rgba(255, 255, 255, 0.498);
-  --color-helper: rgba(255, 255, 255, 0.71);
-
-  /* -- Card -- */
-  --color-card: #232323;
-  --color-card-foreground: #ffffff;
-
-  /* -- Popover -- */
-  --color-popover: #232323;
-  --color-popover-foreground: #ffffff;
-  --color-popover-accent: rgba(255, 255, 255, 0.05);
-  --color-popover-ring: rgba(255, 255, 255, 0.084);
-
-  /* -- Border & Input -- */
-  --color-border: rgba(255, 255, 255, 0.084);
-  --color-input: rgba(255, 255, 255, 0.15);
-  --color-input-border: rgba(255, 255, 255, 0.15);
-  --color-separator: #232323;
-  --color-ring: rgba(131, 195, 255, 0.76);
-  --color-border-light: rgba(255, 255, 255, 0.05);
-  --color-border-heavy: rgba(255, 255, 255, 0.15);
-  --color-surface: #181818;
-  --color-surface-under: #141414;
-  --color-surface-control: rgba(43, 43, 43, 0.96);
-  --color-surface-control-opaque: #2b2b2b;
-  --color-surface-elevated: #232323;
-  --color-surface-elevated-secondary: rgba(255, 255, 255, 0.03);
-  --color-surface-editor: #282828;
-  --color-list-hover: rgba(255, 255, 255, 0.05);
-  --color-foreground-secondary: rgba(255, 255, 255, 0.7);
-  --color-foreground-tertiary: rgba(255, 255, 255, 0.5);
-
-  /* -- Highlight / Unread / Special -- */
-  --color-highlight: rgba(51, 156, 255, 0.12);
-  --color-highlight-foreground: #ffffff;
-  --color-highlight-muted: rgba(51, 156, 255, 0.5);
-  --color-border-highlight: #339cff;
-  --color-unread: #339cff;
-  --color-special: #339cff;
-
-  /* -- Destructive / Success / Warning / Info -- */
-  --color-destructive: #fa423e;
-  --color-destructive-foreground: #ffffff;
-  --color-success: #40c977;
-  --color-success-foreground: #ffffff;
-  --color-warning: rgba(255, 180, 50, 0.15);
-  --color-warning-foreground: #ffb432;
-  --color-warning-foreground-secondary: rgba(255, 180, 50, 0.6);
-  --color-warning-border: rgba(255, 180, 50, 0.25);
-  --color-info: #339cff;
-  --color-info-foreground: #ffffff;
-  --color-positive: #40c977;
-  --color-positive-muted: rgba(64, 201, 119, 0.15);
-  --color-positive-foreground: #ffffff;
-
-  /* -- Link -- */
-  --color-link: rgba(51, 156, 255, 0.12);
-  --color-link-foreground: #339cff;
-  --color-link-elevated: rgba(51, 156, 255, 0.2);
-
-  /* -- Tip / Plan -- */
-  --color-tip: rgba(51, 156, 255, 0.12);
-  --color-tip-border: rgba(51, 156, 255, 0.25);
-  --color-tip-secondary: rgba(51, 156, 255, 0.4);
-  --color-tip-secondary-border: rgba(51, 156, 255, 0.5);
-  --color-tip-muted: rgba(51, 156, 255, 0.6);
-  --color-tip-foreground: #ffffff;
-  --color-plan-border: rgba(51, 156, 255, 0.4);
-
-  /* -- Switch -- */
-  --color-switch-background: #ffffff;
-  --color-switch-foreground: #0d0d0d;
-
-  /* -- Composer -- */
-  --color-composer-background: #1b1b1b;
-
-  /* -- Prose -- */
-  --color-prose-border: rgba(255, 255, 255, 0.15);
-
-  /* -- Sidebar -- */
-  --color-sidebar: #1d1d1d;
-  --color-sidebar-background: #181818;
-  --color-sidebar-foreground: #ffffff;
-  --color-sidebar-primary: #ffffff;
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
-  --color-sidebar-accent: rgba(255, 255, 255, 0.074);
-  --color-sidebar-accent-foreground: #ffffff;
-  --color-sidebar-border: rgba(255, 255, 255, 0.079);
-  --color-sidebar-ring: rgba(127, 193, 255, 0.747);
-  --color-sidebar-blue: #339cff;
-
-  /* -- Status -- */
-  --color-status-backlog: rgba(255, 255, 255, 0.4);
-  --color-status-backlog-hover: rgba(255, 255, 255, 0.6);
-  --color-status-in-progress: #ffcc33;
-  --color-status-in-progress-hover: #ffd966;
-  --color-status-in-review: #40c977;
-  --color-status-in-review-hover: #66d997;
-  --color-status-done: #339cff;
-  --color-status-done-hover: #66b3ff;
-  --color-status-canceled: rgba(255, 255, 255, 0.5);
-  --color-status-canceled-hover: rgba(255, 255, 255, 0.7);
-
-  /* -- Todo -- */
-  --color-todo-in-progress: #339cff;
-  --color-todo-completed: #40c977;
-  --color-todo-pending: rgba(255, 255, 255, 0.5);
-
-  /* -- App switcher -- */
-  --color-app-switcher-bg: rgba(255, 255, 255, 0.8);
-
-  /* -- Git -- */
-  --color-git-green: #40c977;
-  --color-git-red: #fa423e;
-  --color-git-yellow: #ffd240;
-  --color-git-gray: rgba(255, 255, 255, 0.5);
-  --color-git-new-line: #40c977;
-  --color-git-removed-line: #fa423e;
-
-  /* -- Terminal ANSI standard -- */
-  --color-terminal-black: rgba(255, 255, 255, 0.5);
-  --color-terminal-red: #ff6764;
-  --color-terminal-green: #40c977;
-  --color-terminal-yellow: #ffd240;
-  --color-terminal-blue: #339cff;
-  --color-terminal-magenta: #ad7bf9;
-  --color-terminal-cyan: #339cff;
-  --color-terminal-white: #ffffff;
-
-  /* -- Terminal ANSI bright -- */
-  --color-terminal-bright-black: rgba(255, 255, 255, 0.71);
-  --color-terminal-bright-red: #ff6764;
-  --color-terminal-bright-green: #40c977;
-  --color-terminal-bright-yellow: #ffd240;
-  --color-terminal-bright-blue: #339cff;
-  --color-terminal-bright-magenta: #ad7bf9;
-  --color-terminal-bright-cyan: #339cff;
-  --color-terminal-bright-white: #ffffff;
-
-  /* -- Git diff backgrounds (higher opacity for dark neutral) -- */
-  --git-new-line-bg: color-mix(in oklab, #40c977 15%, transparent);
-  --git-new-line-border: color-mix(in oklab, #40c977 60%, transparent);
-  --git-new-line-highlight: color-mix(in oklab, #40c977 23%, transparent);
-  --git-removed-line-bg: color-mix(in oklab, #fa423e 15%, transparent);
-  --git-removed-line-border: color-mix(in oklab, #fa423e 60%, transparent);
-  --git-removed-line-highlight: color-mix(in oklab, #fa423e 23%, transparent);
-  --color-diff-main-surface: #181818;
-  --color-diff-surface: color-mix(in srgb, #181818 94%, #ffffff);
-  --color-diff-panel-surface: color-mix(in oklab, #ffffff 3%, transparent);
-  --color-diff-header-surface: var(--color-diff-surface);
-  --color-diff-added: #40c977;
-  --color-diff-deleted: #fa423e;
-  --diffs-fg: #fcfcfc;
-  --diffs-mixer: #fcfcfc;
-  --color-diff-added-bg: var(--diffs-bg-addition-override);
-  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
-}
-
-/* Mono + original dark track Codex Electron dark; `original` keeps only its
-   Manrope typography + sharper composer as identity (see below). */
-:root[data-theme="mono"],
-:root[data-theme="original"] {
-  --color-background: #181818;
-  --color-foreground: #ffffff;
-
-  --color-primary: #ffffff;
-  --color-primary-foreground: #0d0d0d;
-
-  --color-secondary: #212121;
-  --color-secondary-foreground: #ffffff;
-  --color-accent: color-mix(in oklab, #ffffff 5%, transparent);
-  --color-accent-foreground: #ffffff;
-  --color-muted: #212121;
-  --color-muted-foreground: color-mix(in oklab, #ffffff 70%, transparent);
-  --color-faint: color-mix(in oklab, #ffffff 50%, transparent);
-  --color-helper: color-mix(in oklab, #ffffff 70%, transparent);
-
-  --color-card: #212121;
-  --color-card-foreground: #ffffff;
-  --color-popover: #212121;
-  --color-popover-foreground: #ffffff;
-  --color-popover-accent: color-mix(in oklab, #ffffff 5%, transparent);
-  --color-popover-ring: color-mix(in oklab, #ffffff 8%, transparent);
-
-  --color-border: color-mix(in oklab, #ffffff 8%, transparent);
-  --color-input: color-mix(in oklab, #ffffff 12%, transparent);
-  --color-input-border: color-mix(in oklab, #ffffff 12%, transparent);
-  --color-separator: color-mix(in oklab, #ffffff 4%, transparent);
-  --color-ring: color-mix(in oklab, #339cff 70%, transparent);
-  --color-border-light: color-mix(in oklab, #ffffff 5%, transparent);
-  --color-border-heavy: color-mix(in oklab, #ffffff 12%, transparent);
-  --color-surface: #181818;
-  --color-surface-under: #141414;
-  --color-surface-control: color-mix(in oklab, #2b2b2b 96%, transparent);
-  --color-surface-control-opaque: #2b2b2b;
-  --color-surface-elevated: #212121;
-  --color-surface-elevated-secondary: color-mix(in oklab, #ffffff 3%, transparent);
-  --color-surface-editor: #282828;
-  --color-list-hover: color-mix(in oklab, #ffffff 5%, transparent);
-  --color-foreground-secondary: color-mix(in oklab, #ffffff 70%, transparent);
-  --color-foreground-tertiary: color-mix(in oklab, #ffffff 50%, transparent);
-
-  --color-link: color-mix(in oklab, #339cff 12%, transparent);
-  --color-link-foreground: #339cff;
-  --color-link-elevated: color-mix(in oklab, #339cff 20%, transparent);
-
-  --color-composer-background: #212121;
-  --color-prose-border: color-mix(in oklab, #ffffff 8%, transparent);
-
-  --color-sidebar: #1d1d1d;
-  --color-sidebar-background: #181818;
-  --color-sidebar-foreground: #ffffff;
-  --color-sidebar-primary: #ffffff;
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-muted-foreground: rgba(255, 255, 255, 0.481);
-  --color-sidebar-accent: rgba(255, 255, 255, 0.074);
-  --color-sidebar-accent-foreground: #ffffff;
-  --color-sidebar-border: rgba(255, 255, 255, 0.079);
-  --color-sidebar-ring: rgba(127, 193, 255, 0.747);
-  --color-sidebar-blue: #339cff;
-
-  --color-git-green: #40c977;
-  --color-git-red: #fa423e;
-  --color-git-yellow: #ffd240;
-  --color-git-gray: color-mix(in oklab, #ffffff 50%, transparent);
-  --color-git-new-line: #40c977;
-  --color-git-removed-line: #fa423e;
-
-  --git-new-line-bg: color-mix(in srgb, #181818 88%, #00a240);
-  --git-new-line-border: #00a240;
-  --git-new-line-highlight: color-mix(in srgb, #181818 82%, #00a240);
-  --git-removed-line-bg: color-mix(in srgb, #181818 88%, #e02e2a);
-  --git-removed-line-border: #e02e2a;
-  --git-removed-line-highlight: color-mix(in srgb, #181818 82%, #e02e2a);
-  --color-diff-main-surface: #181818;
-  --color-diff-code-surface: #111111;
-  --color-diff-surface: color-mix(in srgb, #181818 94%, #ffffff);
-  --color-diff-panel-surface: color-mix(in oklab, #ffffff 3%, transparent);
-  --color-diff-header-surface: var(--color-diff-surface);
-  --color-diff-added: #00a240;
-  --color-diff-deleted: #e02e2a;
-  --diffs-fg: #fcfcfc;
-  --diffs-mixer: #fcfcfc;
-  /* Derive from --color-diff-main-surface (same #181818 in dark) so these
-     do not leak Codex-dark gutter colors into light mode — this selector
-     has no mode qualifier and the light blocks don't re-override them. */
-  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #00a240);
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #e02e2a);
-  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #00a240);
-  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #e02e2a);
-  --color-diff-added-bg: var(--diffs-bg-addition-override);
-  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
-}
 
 /* ========================================================================
- * ORIGINAL PRESET — legacy dark mono palette + Manrope typography + sharper composer.
- * Inherits the shared original/mono base block, but not the Codex-dark mono
- * override above.
- * ======================================================================== */
-
-:root[data-theme="original"] {
-  /* -- Typography: Manrope as the cross-product font -- */
-  --font-sans: "Manrope Variable", Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-}
-
-/* ========================================================================
- * TBPN PRESET — dark forest mint palette
- * ======================================================================== */
-
-:root[data-theme="tbpn"] {
-  /* -- Typography -- */
-  --font-sans: "Space Grotesk Variable", "Space Grotesk", system-ui, -apple-system, sans-serif;
-
-  /* -- Core -- */
-  --color-background: #0b1412;
-  --color-foreground: #f0f5f2;
-  --color-overlay: #000000;
-
-  /* -- Primary (mint forest) -- */
-  --color-primary: #59e5bf;
-  --color-primary-foreground: #03120f;
-
-  /* -- Secondary -- */
-  --color-secondary: #0f1b18;
-  --color-secondary-foreground: #f0f5f2;
-
-  /* -- Accent / Muted -- */
-  --color-accent: #131f1c;
-  --color-accent-foreground: #f0f5f2;
-  --color-muted: #0f1b18;
-  --color-muted-foreground: rgba(240, 245, 242, 0.7);
-  --color-faint: rgba(240, 245, 242, 0.45);
-  --color-helper: rgba(240, 245, 242, 0.7);
-
-  /* -- Card -- */
-  --color-card: #162520;
-  --color-card-foreground: #f0f5f2;
-
-  /* -- Popover -- */
-  --color-popover: #162520;
-  --color-popover-foreground: #f0f5f2;
-  --color-popover-accent: rgba(255, 255, 255, 0.05);
-  --color-popover-ring: rgba(255, 255, 255, 0.09);
-
-  /* -- Border & Input -- */
-  --color-border: rgba(255, 255, 255, 0.09);
-  --color-input: rgba(255, 255, 255, 0.12);
-  --color-input-border: rgba(255, 255, 255, 0.14);
-  --color-separator: #162520;
-  --color-ring: rgba(89, 229, 191, 0.7);
-  --color-border-light: rgba(255, 255, 255, 0.05);
-  --color-border-heavy: rgba(255, 255, 255, 0.14);
-  --color-surface: #0b1412;
-  --color-surface-under: #060d0b;
-  --color-surface-control: rgba(22, 37, 32, 0.96);
-  --color-surface-control-opaque: #162520;
-  --color-surface-elevated: #162520;
-  --color-surface-elevated-secondary: rgba(240, 245, 242, 0.03);
-  --color-surface-editor: #0f1b18;
-  --color-list-hover: rgba(255, 255, 255, 0.05);
-  --color-foreground-secondary: rgba(240, 245, 242, 0.7);
-  --color-foreground-tertiary: rgba(240, 245, 242, 0.5);
-
-  /* -- Highlight / Unread / Special -- */
-  --color-highlight: rgba(89, 229, 191, 0.1);
-  --color-highlight-foreground: #f0f5f2;
-  --color-highlight-muted: #59e5bf;
-  --color-border-highlight: #59e5bf;
-  --color-unread: #f0f5f2;
-  --color-special: #ecff4f;
-
-  /* -- Destructive / Success / Warning / Info -- */
-  --color-destructive: #ff6b7a;
-  --color-destructive-foreground: #fff8fa;
-  --color-success: #59e5bf;
-  --color-success-foreground: #03120f;
-  --color-warning: rgba(245, 197, 66, 0.14);
-  --color-warning-foreground: #f5c542;
-  --color-warning-foreground-secondary: rgba(245, 197, 66, 0.68);
-  --color-warning-border: rgba(245, 197, 66, 0.26);
-  --color-info: #7dc6ff;
-  --color-info-foreground: #02111c;
-  --color-positive: #59e5bf;
-  --color-positive-muted: rgba(89, 229, 191, 0.12);
-  --color-positive-foreground: #03120f;
-
-  /* -- Link (blue, distinct from primary) -- */
-  --color-link: rgba(125, 198, 255, 0.1);
-  --color-link-foreground: #7dc6ff;
-  --color-link-elevated: rgba(125, 198, 255, 0.18);
-
-  /* -- Tip / Plan -- */
-  --color-tip: rgba(89, 229, 191, 0.08);
-  --color-tip-border: rgba(89, 229, 191, 0.2);
-  --color-tip-secondary: rgba(125, 198, 255, 0.1);
-  --color-tip-secondary-border: rgba(125, 198, 255, 0.22);
-  --color-tip-muted: rgba(240, 245, 242, 0.7);
-  --color-tip-foreground: #f0f5f2;
-  --color-plan-border: rgba(89, 229, 191, 0.34);
-
-  /* -- Switch -- */
-  --color-switch-background: #f0f5f2;
-  --color-switch-foreground: #03120f;
-
-  /* -- Composer -- */
-  --color-composer-background: #162520;
-
-  /* -- Prose -- */
-  --color-prose-border: rgba(255, 255, 255, 0.14);
-
-  /* -- Sidebar -- */
-  --color-sidebar: #060d0b;
-  --color-sidebar-background: #060d0b;
-  --color-sidebar-foreground: rgba(240, 245, 242, 0.86);
-  --color-sidebar-primary: #59e5bf;
-  --color-sidebar-primary-foreground: #03120f;
-  --color-sidebar-muted-foreground: rgba(240, 245, 242, 0.5);
-  --color-sidebar-accent: rgba(255, 255, 255, 0.04);
-  --color-sidebar-accent-foreground: rgba(240, 245, 242, 0.92);
-  --color-sidebar-border: rgba(255, 255, 255, 0.08);
-  --color-sidebar-ring: rgba(89, 229, 191, 0.7);
-  --color-sidebar-blue: #7dc6ff;
-
-  /* -- Status -- */
-  --color-status-backlog: rgba(240, 245, 242, 0.45);
-  --color-status-backlog-hover: rgba(240, 245, 242, 0.65);
-  --color-status-in-progress: #7dc6ff;
-  --color-status-in-progress-hover: #a6dbff;
-  --color-status-in-review: #ecff4f;
-  --color-status-in-review-hover: #f4ff9a;
-  --color-status-done: #59e5bf;
-  --color-status-done-hover: #86efd2;
-  --color-status-canceled: rgba(240, 245, 242, 0.5);
-  --color-status-canceled-hover: rgba(240, 245, 242, 0.7);
-
-  /* -- Todo -- */
-  --color-todo-in-progress: #7dc6ff;
-  --color-todo-completed: #59e5bf;
-  --color-todo-pending: rgba(240, 245, 242, 0.5);
-
-  /* -- App switcher -- */
-  --color-app-switcher-bg: rgba(240, 245, 242, 0.92);
-
-  /* -- Git -- */
-  --color-git-green: #59e5bf;
-  --color-git-red: #ff6b7a;
-  --color-git-yellow: #ecff4f;
-  --color-git-gray: rgba(240, 245, 242, 0.5);
-  --color-git-new-line: #59e5bf;
-  --color-git-removed-line: #ff6b7a;
-
-  /* -- Terminal ANSI standard -- */
-  --color-terminal-black: rgba(240, 245, 242, 0.5);
-  --color-terminal-red: #ff6b7a;
-  --color-terminal-green: #59e5bf;
-  --color-terminal-yellow: #ecff4f;
-  --color-terminal-blue: #7dc6ff;
-  --color-terminal-magenta: #a7e8d7;
-  --color-terminal-cyan: #86efd2;
-  --color-terminal-white: #f0f5f2;
-
-  /* -- Terminal ANSI bright -- */
-  --color-terminal-bright-black: rgba(240, 245, 242, 0.72);
-  --color-terminal-bright-red: #ff97a1;
-  --color-terminal-bright-green: #86efd2;
-  --color-terminal-bright-yellow: #f7ff9c;
-  --color-terminal-bright-blue: #addfff;
-  --color-terminal-bright-magenta: #c3f0e0;
-  --color-terminal-bright-cyan: #b2f5e2;
-  --color-terminal-bright-white: #ffffff;
-
-  /* -- Git diff backgrounds -- */
-  --git-new-line-bg: color-mix(in oklab, #59e5bf 14%, transparent);
-  --git-new-line-border: color-mix(in oklab, #59e5bf 56%, transparent);
-  --git-new-line-highlight: color-mix(in oklab, #59e5bf 22%, transparent);
-  --git-removed-line-bg: color-mix(in oklab, #ff6b7a 14%, transparent);
-  --git-removed-line-border: color-mix(in oklab, #ff6b7a 56%, transparent);
-  --git-removed-line-highlight: color-mix(in oklab, #ff6b7a 22%, transparent);
-  --color-diff-main-surface: #0b1412;
-  --color-diff-surface: color-mix(in srgb, #0b1412 94%, #f0f5f2);
-  --color-diff-panel-surface: color-mix(in oklab, #f0f5f2 3%, transparent);
-  --color-diff-header-surface: var(--color-diff-surface);
-  --color-diff-added: #59e5bf;
-  --color-diff-deleted: #ff6b7a;
-  --diffs-fg: #f0f5f2;
-  --diffs-mixer: #f0f5f2;
-  --color-diff-added-bg: var(--diffs-bg-addition-override);
-  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
-}
-
-:root[data-theme="tbpn"] body {
-  background:
-    radial-gradient(ellipse 90% 60% at 50% -25%, rgba(89, 229, 191, 0.09) 0%, transparent 65%),
-    #0b1412;
-  background-attachment: fixed;
-}
-
-:root[data-theme="tbpn"] #root {
-  background-color: transparent;
-}
-
-/* ========================================================================
- * SHIP LIGHT — warm-tinted light palette
+ * MONO LIGHT — neutral light palette (base values; Codex-aligned
+ * refinements in the following block).
  * ======================================================================== */
 
 :root[data-mode="light"] {
-  --color-scrollbar-thumb: rgba(0, 0, 0, 0.08);
-  --color-scrollbar-thumb-active: rgba(0, 0, 0, 0.16);
-
-  /* Claude-style light: oat paper, white cards, warm near-black ink,
-     ink-alpha overlay states. Derived from the claude.ai light aesthetic;
-     provisional until a Codex Claude+light capture replaces it. */
-  --color-background: #faf9f5;
-  --color-foreground: #21201c;
-  --color-overlay: hsl(0 0% 0%);
-
-  --color-primary: #21201c;
-  --color-primary-foreground: #faf9f5;
-
-  --color-secondary: #f1efe7;
-  --color-secondary-foreground: #21201c;
-
-  --color-accent: rgb(33 32 28 / 0.05);
-  --color-accent-foreground: #21201c;
-  --color-muted: #f1efe7;
-  --color-muted-foreground: rgb(33 32 28 / 0.62);
-  --color-faint: rgb(33 32 28 / 0.46);
-  --color-helper: rgb(33 32 28 / 0.62);
-
-  --color-card: #ffffff;
-  --color-card-foreground: #21201c;
-
-  --color-popover: #ffffff;
-  --color-popover-foreground: #21201c;
-  --color-popover-accent: rgb(33 32 28 / 0.05);
-  --color-popover-ring: rgb(33 32 28 / 0.08);
-
-  --color-border: rgb(33 32 28 / 0.09);
-  --color-input: rgb(33 32 28 / 0.1);
-  --color-input-border: rgb(33 32 28 / 0.1);
-  --color-separator: rgb(33 32 28 / 0.07);
-  --color-ring: hsl(17 52% 50%);
-  --color-border-light: rgb(33 32 28 / 0.05);
-  --color-border-heavy: rgb(33 32 28 / 0.13);
-  --color-surface: #faf9f5;
-  --color-surface-under: #f3f1ea;
-  --color-surface-control: #f0eee6;
-  --color-surface-control-opaque: #f0eee6;
-  --color-surface-elevated: #ffffff;
-  --color-surface-elevated-secondary: rgb(33 32 28 / 0.03);
-  --color-surface-editor: #f5f4ee;
-  --color-list-hover: rgb(33 32 28 / 0.05);
-  --color-foreground-secondary: rgb(33 32 28 / 0.7);
-  --color-foreground-tertiary: rgb(33 32 28 / 0.5);
-
-  /* Terracotta accent family anchored at #cc7d5e = hsl(17 52% 58%);
-     darkened cuts for text contrast on paper. */
-  --color-highlight: hsl(17 52% 58% / 0.14);
-  --color-highlight-foreground: hsl(14 13% 31%);
-  --color-highlight-muted: hsl(17 52% 58%);
-  --color-border-highlight: hsl(17 52% 58%);
-  --color-unread: hsl(17 52% 46%);
-  --color-special: hsl(17 52% 58%);
-
-  --color-destructive: hsl(0 72% 51%);
-  --color-destructive-foreground: hsl(0 86% 97%);
-  --color-success: hsl(142 76% 36%);
-  --color-success-foreground: hsl(138 76% 97%);
-  --color-warning: hsl(40 90% 45% / 0.1);
-  --color-warning-foreground: hsl(32 75% 28%);
-  --color-warning-foreground-secondary: hsl(32 75% 28% / 0.65);
-  --color-warning-border: hsl(40 90% 45% / 0.25);
-  --color-info: hsl(199 89% 48%);
-  --color-info-foreground: hsl(199 89% 95%);
-  --color-positive: hsl(142 76% 36%);
-  --color-positive-muted: hsl(138 76% 97%);
-  --color-positive-foreground: hsl(138 76% 97%);
-
-  --color-link: hsl(17 52% 58% / 0.12);
-  --color-link-foreground: hsl(17 52% 44%);
-  --color-link-elevated: hsl(17 52% 58% / 0.2);
-
-  --color-tip: hsl(17 52% 58% / 0.1);
-  --color-tip-border: hsl(17 52% 58% / 0.25);
-  --color-tip-secondary: hsl(17 52% 58% / 0.16);
-  --color-tip-secondary-border: hsl(17 52% 58% / 0.35);
-  --color-tip-muted: hsl(17 52% 44%);
-  --color-tip-foreground: hsl(14 15% 22%);
-  --color-plan-border: hsl(17 52% 58% / 0.5);
-
-  --color-switch-background: #21201c;
-  --color-switch-foreground: #faf9f5;
-
-  --color-composer-background: rgb(255 255 255 / 0.85);
-
-  --color-prose-border: rgb(33 32 28 / 0.14);
-
-  /* Sidebar: darker oat than the content paper, mirroring dark mode. */
-  --color-sidebar: #f3f1ea;
-  --color-sidebar-background: #faf9f5;
-  --color-sidebar-foreground: rgb(33 32 28 / 0.8);
-  --color-sidebar-primary: #21201c;
-  --color-sidebar-primary-foreground: #faf9f5;
-  --color-sidebar-muted-foreground: rgb(33 32 28 / 0.45);
-  --color-sidebar-accent: rgb(33 32 28 / 0.05);
-  --color-sidebar-accent-foreground: rgb(33 32 28 / 0.88);
-  --color-sidebar-border: rgb(33 32 28 / 0.08);
-  --color-sidebar-ring: hsl(17 52% 50%);
-  --color-sidebar-blue: hsl(17 52% 48%);
-
-  --color-status-backlog: hsl(36 4% 54%);
-  --color-status-backlog-hover: hsl(38 6% 35%);
-  --color-status-in-progress: hsl(50 100% 44%);
-  --color-status-in-progress-hover: hsl(50 100% 36%);
-  --color-status-in-review: hsl(142 76% 36%);
-  --color-status-in-review-hover: hsl(142 72% 29%);
-  --color-status-done: hsl(17 52% 50%);
-  --color-status-done-hover: hsl(17 52% 42%);
-  --color-status-canceled: hsl(37 5% 63%);
-  --color-status-canceled-hover: hsl(36 4% 54%);
-
-  --color-delegated-agent-1: hsl(221 83% 53%);
-  --color-delegated-agent-2: hsl(292 100% 46%);
-  --color-delegated-agent-3: hsl(0 72% 51%);
-  --color-delegated-agent-4: hsl(36 95% 42%);
-  --color-delegated-agent-5: hsl(265 80% 55%);
-  --color-delegated-agent-6: hsl(192 90% 36%);
-  --color-delegated-agent-7: hsl(25 95% 46%);
-  --color-delegated-agent-8: hsl(199 89% 42%);
-
-  --color-todo-in-progress: hsl(221 83% 53%);
-  --color-todo-completed: hsl(142 76% 36%);
-  --color-todo-pending: hsl(37 5% 44%);
-
-  --color-app-switcher-bg: hsl(38 7% 81%);
-
-  --color-git-green: hsl(142 76% 36%);
-  --color-git-red: hsl(0 72% 51%);
-  --color-git-yellow: hsl(50 100% 59%);
-  --color-git-gray: hsl(37 5% 63%);
-  --color-git-new-line: hsl(142 76% 44%);
-  --color-git-removed-line: hsl(0 100% 45%);
-
-  --color-terminal-black: hsl(39 8% 16%);
-  --color-terminal-red: hsl(0 72% 51%);
-  --color-terminal-green: hsl(142 76% 36%);
-  --color-terminal-yellow: hsl(50 100% 59%);
-  --color-terminal-blue: hsl(221 83% 53%);
-  --color-terminal-magenta: hsl(292 100% 46%);
-  --color-terminal-cyan: hsl(192 90% 36%);
-  --color-terminal-white: hsl(44 8% 91%);
-
-  --color-terminal-bright-black: hsl(37 5% 44%);
-  --color-terminal-bright-red: hsl(0 84% 60%);
-  --color-terminal-bright-green: hsl(142 71% 45%);
-  --color-terminal-bright-yellow: hsl(50 100% 69%);
-  --color-terminal-bright-blue: hsl(217 91% 60%);
-  --color-terminal-bright-magenta: hsl(292 100% 54%);
-  --color-terminal-bright-cyan: hsl(189 94% 43%);
-  --color-terminal-bright-white: hsl(44 9% 95%);
-
-  --color-file-icon-folder: hsl(0 0% 17%);
-  --color-file-icon-neutral: hsl(0 0% 17%);
-  --color-file-icon-muted: hsl(0 0% 43%);
-  --color-file-icon-accent: hsl(0 0% 17%);
-  --color-file-icon-red: hsl(0 0% 17%);
-
-  --git-new-line-bg: color-mix(in oklab, hsl(142 76% 44%) 10%, transparent);
-  --git-new-line-border: color-mix(in oklab, hsl(142 76% 44%) 60%, transparent);
-  --git-new-line-highlight: color-mix(in oklab, hsl(142 76% 44%) 20%, transparent);
-  --git-removed-line-bg: color-mix(in oklab, hsl(0 100% 45%) 10%, transparent);
-  --git-removed-line-border: color-mix(in oklab, hsl(0 100% 45%) 60%, transparent);
-  --git-removed-line-highlight: color-mix(in oklab, hsl(0 100% 45%) 20%, transparent);
-  --color-diff-main-surface: hsl(44 0% 100%);
-  --color-diff-surface: color-mix(in srgb, hsl(44 0% 100%) 94%, hsl(39 8% 16%));
-  --color-diff-panel-surface: color-mix(in oklab, hsl(39 8% 16%) 3%, transparent);
-  --color-diff-header-surface: var(--color-diff-surface);
-  --color-diff-added: hsl(142 76% 44%);
-  --color-diff-deleted: hsl(0 100% 45%);
-  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
-  /* The dark-mode header darkening above is a slab on light paper —
-     light mode keeps headers flat on the diff surface (Codex parity). */
-  --color-diff-chat-turn-header-surface: var(--color-diff-surface);
-  --color-diff-chat-inline-tool-header-surface: var(--color-diff-surface);
-  --color-diff-added-bg: var(--diffs-bg-addition-override);
-  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
-}
-
-
-/* ========================================================================
- * SHARED NEUTRAL LIGHT — base palette for mono/original before mono's
- * Codex-aligned override below.
- * ======================================================================== */
-
-:root[data-theme="mono"][data-mode="light"],
-:root[data-theme="original"][data-mode="light"] {
   --color-scrollbar-thumb: rgba(0, 0, 0, 0.08);
   --color-scrollbar-thumb-active: rgba(0, 0, 0, 0.16);
 
@@ -1197,6 +528,7 @@ mark.codex-thread-find-active {
   --color-warning-border: rgba(13, 13, 13, 0.078);
   --color-info: #0285ff;
   --color-info-foreground: #ffffff;
+  --color-pr-merged: #8250df;
   --color-positive: #00a240;
   --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;
@@ -1211,7 +543,6 @@ mark.codex-thread-find-active {
   --color-tip-secondary-border: rgba(13, 13, 13, 0.078);
   --color-tip-muted: #0285ff;
   --color-tip-foreground: #0d0d0d;
-  --color-plan-border: #0285ff;
 
   --color-switch-background: #0d0d0d;
   --color-switch-foreground: #ffffff;
@@ -1293,9 +624,8 @@ mark.codex-thread-find-active {
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
-/* Mono + original light track Codex Electron light. */
-:root[data-theme="mono"][data-mode="light"],
-:root[data-theme="original"][data-mode="light"] {
+/* Light refinements tracking Codex Electron light. */
+:root[data-mode="light"] {
   --color-scrollbar-thumb: rgba(13, 13, 13, 0.08);
   --color-scrollbar-thumb-active: rgba(13, 13, 13, 0.16);
 
@@ -1358,6 +688,7 @@ mark.codex-thread-find-active {
   --color-warning-border: var(--color-border);
   --color-info: #0285ff;
   --color-info-foreground: #ffffff;
+  --color-pr-merged: #8250df;
   --color-positive: #00a240;
   --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;
@@ -1372,7 +703,6 @@ mark.codex-thread-find-active {
   --color-tip-secondary-border: var(--color-border);
   --color-tip-muted: #339cff;
   --color-tip-foreground: var(--color-foreground);
-  --color-plan-border: #339cff;
 
   --color-switch-background: var(--color-primary);
   --color-switch-foreground: #ffffff;
@@ -1461,6 +791,27 @@ mark.codex-thread-find-active {
   --diffs-mixer: var(--color-foreground);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
+
+  /* -- Shared light-mode values (delegated-work identity, file icons,
+     light diff mixes, flat diff headers) formerly declared once for all
+     presets. -- */
+  --color-delegated-agent-1: hsl(221 83% 53%);
+  --color-delegated-agent-2: hsl(292 100% 46%);
+  --color-delegated-agent-3: hsl(0 72% 51%);
+  --color-delegated-agent-4: hsl(36 95% 42%);
+  --color-delegated-agent-5: hsl(265 80% 55%);
+  --color-delegated-agent-6: hsl(192 90% 36%);
+  --color-delegated-agent-7: hsl(25 95% 46%);
+  --color-delegated-agent-8: hsl(199 89% 42%);
+  --color-file-icon-folder: hsl(0 0% 17%);
+  --color-file-icon-neutral: hsl(0 0% 17%);
+  --color-file-icon-muted: hsl(0 0% 43%);
+  --color-file-icon-accent: hsl(0 0% 17%);
+  --color-file-icon-red: hsl(0 0% 17%);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  --color-diff-chat-turn-header-surface: var(--color-diff-surface);
+  --color-diff-chat-inline-tool-header-surface: var(--color-diff-surface);
 }
 
 /* ========================================================================
@@ -1675,6 +1026,21 @@ body {
 
 .animate-panel-in {
   animation: panel-in 150ms ease-out;
+}
+
+/* Shared menu-surface enter (codex parity): applied at Radix positioned
+   wrappers (PopoverButton/DropdownMenu/ContextMenu content, Tooltip), never
+   inside POPOVER_SURFACE_CLASS, so hand-positioned surfaces don't
+   double-animate. No exit animation — Radix unmounts immediately. */
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ---- Composer dock card motion (interaction cards / todo tracker) ----
@@ -1917,6 +1283,75 @@ body {
   }
 }
 
+/* ---- Sidebar update pill ---- */
+/* One-shot "ready" text sweep. Reuses the thinking-band compositor recipe
+   above (masked window whose transform sweeps the label while the glyph copy
+   inside counter-translates — transform-only, no per-frame paint) and its
+   keyframes, but runs exactly once when the pill enters the ready phase.
+   Same geometry contract as .thinking-text-band: band width 50% of the
+   label; window sweep -100%→200% pairs with glyph counter-sweep 50%→-100%. */
+.update-pill-ready-sweep {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 40%,
+    black 60%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 40%,
+    black 60%,
+    transparent 100%
+  );
+  will-change: transform;
+  animation: thinking-band-sweep 0.7s ease-in-out 1 both;
+}
+
+.update-pill-ready-sweep-glyphs {
+  display: block;
+  /* 200% of the 50%-wide band = exactly the label width, so the copy lays
+     out identically to the base text beneath it. */
+  width: 200%;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--color-foreground);
+  will-change: transform;
+  animation: thinking-band-glyphs-sweep 0.7s ease-in-out 1 both;
+}
+
+/* First-appearance chip entrance (codex overshoot): slides in from the
+   lower-left with a slight overshoot, then settles. Transform/opacity only. */
+/* Owner rev 2026-07-02: plain fade — no translate/scale on entrances. */
+@keyframes update-pill-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-update-pill-in {
+  animation: update-pill-in 0.28s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-pill-ready-sweep {
+    display: none;
+  }
+
+  .animate-update-pill-in {
+    animation: none;
+  }
+}
+
 /* ---- Loading illustration animations ---- */
 @keyframes loading-line {
   0%, 100% { opacity: 0.15; transform: scaleX(0.7); }
@@ -2090,134 +1525,34 @@ body {
   animation: toast-in 0.2s ease-out;
 }
 
+/* ---- Dialog pop-in (update restart confirm) ----
+   Compositor-only entrance for centered Radix dialog panels. The keyframes
+   restate the -translate-x/y-1/2 centering because `animation` overrides the
+   utility transform while it plays. */
+/* Owner rev 2026-07-02: plain fade — the centering transform stays constant. */
+@keyframes dialog-pop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-dialog-pop-in {
+  animation: dialog-pop-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-dialog-pop-in {
+    animation: none;
+  }
+}
+
 /* ---- Turn-end celebration ---- */
 /* 4.5s total: trot in (0-30%), pause & celebrate (30-70%), trot out (70-100%) */
-@keyframes turn-end-run {
-  0% {
-    transform: translateX(-32px) translateY(0) rotate(0deg);
-    opacity: 0;
-  }
-  3% {
-    opacity: 0.7;
-  }
-  10% {
-    transform: translateX(15vw) translateY(-6px) rotate(12deg);
-  }
-  20% {
-    transform: translateX(35vw) translateY(0px) rotate(-8deg);
-  }
-  30% {
-    transform: translateX(50vw) translateY(0) rotate(0deg);
-    opacity: 0.7;
-  }
-  /* Hold in center */
-  70% {
-    transform: translateX(50vw) translateY(0) rotate(0deg);
-    opacity: 0.7;
-  }
-  80% {
-    transform: translateX(70vw) translateY(-6px) rotate(10deg);
-  }
-  90% {
-    transform: translateX(85vw) translateY(0px) rotate(-6deg);
-  }
-  95% {
-    opacity: 0.7;
-  }
-  100% {
-    transform: translateX(calc(100vw + 32px)) translateY(0) rotate(0deg);
-    opacity: 0;
-  }
-}
-
-.animate-turn-end-run {
-  animation: turn-end-run 4.5s ease-in-out forwards;
-}
-
 /* Arms down during trot, raise when paused in center, stay up for exit */
-@keyframes arm-left {
-  0%, 28% {
-    transform: rotate(0deg);
-  }
-  38% {
-    transform: rotate(-65deg);
-  }
-  45% {
-    transform: rotate(-50deg);
-  }
-  55% {
-    transform: rotate(-60deg);
-  }
-  65% {
-    transform: rotate(-50deg);
-  }
-  100% {
-    transform: rotate(-55deg);
-  }
-}
-
-@keyframes arm-right {
-  0%, 28% {
-    transform: rotate(0deg);
-  }
-  38% {
-    transform: rotate(65deg);
-  }
-  45% {
-    transform: rotate(50deg);
-  }
-  55% {
-    transform: rotate(60deg);
-  }
-  65% {
-    transform: rotate(50deg);
-  }
-  100% {
-    transform: rotate(55deg);
-  }
-}
-
-.animate-arm-left {
-  animation: arm-left 4.5s ease-out forwards;
-}
-
-.animate-arm-right {
-  animation: arm-right 4.5s ease-out forwards;
-}
-
 /* Trophy pops in after arms are up, stays for the hold, exits with the trot */
-@keyframes trophy-raise {
-  0%, 35% {
-    transform: translateY(4px) scale(0);
-    opacity: 0;
-  }
-  42% {
-    transform: translateY(0) scale(1.2);
-    opacity: 1;
-  }
-  48% {
-    transform: translateY(-3px) scale(1);
-  }
-  55% {
-    transform: translateY(-5px) scale(1.15);
-  }
-  62% {
-    transform: translateY(-3px) scale(1);
-  }
-  90% {
-    transform: translateY(-4px) scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-4px) scale(1);
-    opacity: 1;
-  }
-}
-
-.animate-trophy-raise {
-  animation: trophy-raise 4.5s ease-out forwards;
-}
-
 /* ---- Focus ring utility ---- */
 .focus-ring:focus-visible {
   outline: none;
@@ -2240,33 +1575,34 @@ body {
 :root {
   --workspace-shell-header-height: 46px; /* codex --height-toolbar */
   --workspace-shell-tab-height: 1.75rem; /* 28px */
-  --workspace-shell-tab-font-size: var(--text-sm);
-  --workspace-shell-tab-line-height: var(--text-sm--line-height);
+  --workspace-shell-tab-font-size: var(--text-ui-sm);
+  --workspace-shell-tab-line-height: var(--text-ui-sm--line-height);
   --workspace-shell-tab-font-weight: 500;
   --workspace-shell-tab-icon-size: 0.875rem; /* 14px */
   --workspace-shell-tab-content-gap: 0.5rem;
-  --workspace-shell-tab-radius: 0.5rem; /* 8px — codex tab chrome */
-  /* Codex tab chrome (UX_SPEC §7): fill-only tabs, no rim. Rest is
-     transparent, hover paints the accent tint, the active tab a stronger
-     foreground mix (--accent-strong equivalent). */
+  --workspace-shell-tab-radius: 0.625rem; /* 10px — codex rounded-lg */
+  /* Tabs are flat at rest (transparent fill, no rim), paint the accent tint
+     on hover, and "chip up" when active/multi-selected: the stronger
+     foreground-mix fill plus a --color-border-heavy hairline rim, rhyming
+     with the rimmed header action chips. */
   --workspace-shell-tab-border: transparent;
   --workspace-shell-tab-inactive-background: transparent;
   --workspace-shell-tab-inactive-border: transparent;
   --workspace-shell-tab-hover-background: var(--color-accent);
   --workspace-shell-tab-hover-border: transparent;
   --workspace-shell-tab-active-background: color-mix(in oklab, var(--color-foreground) 8%, transparent);
-  --workspace-shell-tab-active-border: transparent;
+  --workspace-shell-tab-active-border: var(--color-border-heavy);
   --workspace-shell-tab-selected-background: color-mix(in oklab, var(--color-foreground) 10%, transparent);
-  --workspace-shell-tab-selected-border: transparent;
+  --workspace-shell-tab-selected-border: var(--color-border-heavy);
   --workspace-shell-action-size: 1.75rem; /* 28px */
-  --workspace-shell-action-font-size: var(--text-sm);
-  --workspace-shell-action-line-height: var(--text-sm--line-height);
+  --workspace-shell-action-font-size: var(--text-ui-sm);
+  --workspace-shell-action-line-height: var(--text-ui-sm--line-height);
   --workspace-shell-action-font-weight: 500;
   --workspace-shell-action-icon-size: 0.8125rem; /* 13px */
   --workspace-shell-action-radius: 0.5rem;
-  /* Header action buttons (+, Run, open-in) follow the codex toolbar: ghost
-     (no rim, no fill) at rest, tint on hover. */
-  --workspace-shell-action-border: transparent;
+  /* Header action buttons (+, Run, open-in) are chips: a 1px --color-border
+     rim at rest (pre-migration feel), tint fill on hover/open. */
+  --workspace-shell-action-border: var(--color-border);
   --workspace-shell-action-background: transparent;
   --workspace-shell-action-foreground: var(--color-muted-foreground);
   --workspace-shell-action-hover-background: var(--color-composer-control-hover);
@@ -2433,8 +1769,7 @@ body {
   line-height: var(--right-panel-tab-line-height);
 }
 
-:root[data-theme="mono"][data-mode="light"] .right-panel-tab-system,
-:root[data-theme="original"][data-mode="light"] .right-panel-tab-system {
+:root[data-mode="light"] .right-panel-tab-system {
   --right-panel-tab-surface: var(--color-surface);
   --right-panel-tab-sticky-surface: color-mix(in srgb, var(--color-surface) 88%, transparent);
   --right-panel-tab-hover-bg: color-mix(in oklab, var(--color-foreground) 5%, transparent);

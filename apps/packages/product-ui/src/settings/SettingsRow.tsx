@@ -1,6 +1,12 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
+/**
+ * Shared width for right-aligned row controls (menus, selects) and their
+ * popover menus — 240px. Menu width always matches trigger width.
+ */
+export const SETTINGS_CONTROL_WIDTH_CLASS = "w-60";
+
 export interface SettingsRowProps extends HTMLAttributes<HTMLDivElement> {
   label: ReactNode;
   description?: ReactNode;

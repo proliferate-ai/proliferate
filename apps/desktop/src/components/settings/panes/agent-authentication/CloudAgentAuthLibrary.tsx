@@ -18,20 +18,8 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <h2 className="text-sm font-medium text-foreground">
-            Personal sandbox authentication
-          </h2>
-          <p className="max-w-2xl text-sm leading-5 text-muted-foreground">
-            Choose what your local sandbox and personal cloud sandboxes use for
-            each harness.
-          </p>
-        </div>
-      </section>
-
       {(library.feedback || library.localSourceError || credentialLoadError) && (
-        <p className="text-sm leading-5 text-muted-foreground">
+        <p className="text-ui-sm leading-[1.45] text-muted-foreground">
           {library.feedback
             ?? library.localSourceError
             ?? "Could not load personal cloud credentials. Try again in a moment."}

@@ -76,12 +76,12 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           <MoreHorizontal className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="shadow-popover">
+      <DropdownMenuContent align="start">
         <DropdownMenuItem
           disabled={!session.canRename}
           onSelect={session.onRename}
         >
-          <Pencil className="size-4 text-muted-foreground" />
+          <Pencil className="size-4" />
           Rename chat
           <DropdownMenuShortcut>
             {getShortcutDisplayLabel(SHORTCUTS.renameSession)}
@@ -91,7 +91,7 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           disabled={!session.canFork}
           onSelect={session.onFork}
         >
-          <Fork className="size-4 text-muted-foreground" />
+          <Fork className="size-4" />
           Fork chat
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -111,7 +111,7 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
             title="Copy branch name"
             data-telemetry-mask="true"
           >
-            <GitBranch className="size-4 text-muted-foreground" />
+            <GitBranch className="size-4" />
             <span className="min-w-0 flex-1 truncate font-mono text-xs leading-5 text-muted-foreground">
               {git.branchName}
             </span>
@@ -123,7 +123,7 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           title={git.gitActionsDisabledReason ?? undefined}
           onSelect={handlePr}
         >
-          <GitPullRequest className="size-4 text-muted-foreground" />
+          <GitPullRequest className="size-4" />
           {git.hasExistingPr ? "Open PR" : "Create PR"}
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -131,7 +131,7 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           title={git.gitActionsDisabledReason ?? undefined}
           onSelect={git.onCommit}
         >
-          <GitCommit className="size-4 text-muted-foreground" />
+          <GitCommit className="size-4" />
           Commit…
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -139,7 +139,7 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           title={git.gitActionsDisabledReason ?? undefined}
           onSelect={git.onPush}
         >
-          <ArrowUp className="size-4 text-muted-foreground" />
+          <ArrowUp className="size-4" />
           Push
         </DropdownMenuItem>
       </DropdownMenuContent>

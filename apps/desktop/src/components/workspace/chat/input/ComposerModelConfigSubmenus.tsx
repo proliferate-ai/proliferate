@@ -86,7 +86,7 @@ export function ComposerSubmenuMenuItem({
     <PopoverMenuItem
       aria-expanded={active}
       aria-haspopup="menu"
-      className={active ? "bg-popover-accent text-popover-foreground" : ""}
+      className={active ? "bg-list-hover text-popover-foreground" : ""}
       data-state={active ? "open" : "closed"}
       icon={icon}
       label={label}

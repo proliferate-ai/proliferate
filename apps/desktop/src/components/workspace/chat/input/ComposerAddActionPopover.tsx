@@ -10,7 +10,7 @@ import {
 } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { PlanPickerContentBody } from "./PlanPickerPopover";
+import { PlanPickerContentBody } from "./PlanPickerContentBody";
 
 interface ComposerAddActionPopoverProps {
   canAttachFile: boolean;

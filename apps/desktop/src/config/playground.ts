@@ -75,14 +75,6 @@ export type ScenarioKey =
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagent-wake-card"
-  | "mobility-local-actionable"
-  | "mobility-local-blocked"
-  | "mobility-unpublished-branch"
-  | "mobility-unpushed-commits"
-  | "mobility-out-of-sync-branch"
-  | "mobility-cloud-active"
-  | "mobility-in-flight"
-  | "mobility-failed"
   | "loading-states";
 
 interface Scenario {
@@ -166,14 +158,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
-  "mobility-local-actionable": { label: "Mobility (actionable)" },
-  "mobility-local-blocked": { label: "Mobility (blocked)" },
-  "mobility-unpublished-branch": { label: "Mobility (publish branch)" },
-  "mobility-unpushed-commits": { label: "Mobility (push commits)" },
-  "mobility-out-of-sync-branch": { label: "Mobility (out of sync)" },
-  "mobility-cloud-active": { label: "Mobility (cloud footer)" },
-  "mobility-in-flight": { label: "Mobility (in flight)" },
-  "mobility-failed": { label: "Mobility (failed)" },
   "loading-states": { label: "Loading states" },
 };
 

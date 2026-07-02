@@ -1,7 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Copy, Plus } from "@proliferate/ui/icons";
-import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { OrganizationSelectMenu } from "@/components/settings/panes/organization/OrganizationSelectMenu";
 
 const INVITE_ROLE_OPTIONS = [
@@ -39,14 +39,14 @@ export function OrganizationInvitationsSection({
   return (
     <div className="space-y-6">
       {onCopyInviteLink ? (
-        <OrganizationSection
+        <SettingsSection
           title="Invite link"
           description="Share this link with people who already have an invitation for this organization."
         >
           <div className="flex flex-col items-stretch gap-2 sm:flex-row">
             <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-3 text-sm text-foreground">
-              <span className="min-w-0 truncate font-mono text-xs sm:text-sm">
-                {inviteLinkUrl || (copyingInviteLink ? "Loading invite link..." : "Invite link unavailable")}
+              <span className="min-w-0 truncate font-mono text-ui-sm">
+                {inviteLinkUrl || (copyingInviteLink ? "Loading invite link…" : "Invite link unavailable")}
               </span>
             </div>
             <Button
@@ -62,12 +62,12 @@ export function OrganizationInvitationsSection({
               Copy link
             </Button>
           </div>
-        </OrganizationSection>
+        </SettingsSection>
       ) : null}
 
-      <OrganizationSection
+      <SettingsSection
         title="Invite by email"
-        description="Add an email address, choose a role, then send the same join link by email."
+        description="Send the join link to an email address with the selected role"
       >
         <form
           onSubmit={(event) => {
@@ -100,10 +100,10 @@ export function OrganizationInvitationsSection({
             loading={creatingInvitation}
           >
             <Plus className="size-4" />
-            Add
+            Send invitation
           </Button>
         </form>
-      </OrganizationSection>
+      </SettingsSection>
     </div>
   );
 }

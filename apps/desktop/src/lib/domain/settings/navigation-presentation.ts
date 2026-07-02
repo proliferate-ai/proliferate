@@ -5,14 +5,11 @@ export type SettingsNavIconId =
   | "agent-authentication"
   | "agent-defaults"
   | "appearance"
-  | "archived-chats"
   | "billing"
   | "check-for-updates"
-  | "compute"
   | "environments"
   | "general"
   | "organization"
-  | "organization-integrations"
   | "organization-limits"
   | "organization-members"
   | "organization-model-policy"
@@ -29,14 +26,12 @@ export type SettingsNavItem =
     label: string;
     iconId: SettingsNavIconId;
     adminOnly?: boolean;
-    tbr?: boolean;
   }
   | {
     kind: "action";
     id: "checkForUpdates" | "support";
     label: string;
     iconId: SettingsNavIconId;
-    tbr?: boolean;
   };
 
 export interface SettingsNavGroup {
@@ -74,12 +69,11 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "user_main",
         heading: null,
         items: [
+          { kind: "section", id: "account", label: "Account", iconId: "account" },
           { kind: "section", id: "general", label: "General", iconId: "general" },
           { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
-          { kind: "section", id: "account", label: "Account", iconId: "account" },
           { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
           { kind: "section", id: "worktrees", label: "Pruning", iconId: "worktrees" },
-          { kind: "section", id: "archived-chats", label: "Archived chats", iconId: "archived-chats", tbr: true },
         ],
       },
     ],
@@ -101,7 +95,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "org_policies",
         heading: "Policies",
         items: [
-          { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
           { kind: "section", id: "organization-model-policy", label: "Model policy", iconId: "organization-model-policy", adminOnly: true },
         ],
       },
@@ -122,7 +115,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         heading: null,
         items: [
           { kind: "section", id: "environments", label: "Environments", iconId: "environments" },
-          { kind: "section", id: "compute", label: "Personal compute", iconId: "compute" },
         ],
       },
     ],

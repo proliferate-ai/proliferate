@@ -1,6 +1,5 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import {
-  Archive,
   Brain,
   Building2,
   CircleUser,
@@ -11,10 +10,8 @@ import {
   LifeBuoy,
   Link2,
   Palette,
-  Plug,
   RefreshCw,
   Scissors,
-  Server,
   Settings2,
   Shield,
   SlidersHorizontal,
@@ -56,8 +53,6 @@ interface SettingsSidebarProps {
   onSelectSection: (section: SettingsSection) => void;
   onCheckForUpdates: () => void;
   updateActionState: {
-    isChecking: boolean;
-    hasAvailableUpdate: boolean;
     phase: UpdaterPhase;
     updatesSupported: boolean;
   };
@@ -82,14 +77,11 @@ const SETTINGS_NAV_ICONS = {
   "agent-authentication": Shield,
   "agent-defaults": SlidersHorizontal,
   appearance: Palette,
-  "archived-chats": Archive,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
-  compute: Server,
   environments: FolderTree,
   general: Settings2,
   organization: Building2,
-  "organization-integrations": Plug,
   "organization-limits": Gauge,
   "organization-members": Users,
   "organization-model-policy": Brain,
@@ -129,19 +121,18 @@ function settingsItemStatus(
   updateActionState: SettingsSidebarProps["updateActionState"],
 ) {
   const statusItems: ReactNode[] = [];
-  if (item.tbr === true) {
-    statusItems.push(<TbrPill key="tbr" />);
-  }
 
   if (item.kind === "action" && item.id === "checkForUpdates") {
     if (!updateActionState.updatesSupported) {
-      statusItems.push(<span key="updates">Packaged only</span>);
-    } else if (updateActionState.isChecking) {
-      statusItems.push(<span key="updates">Checking...</span>);
+      statusItems.push(<span key="updates">Packaged app only</span>);
+    } else if (updateActionState.phase === "checking") {
+      statusItems.push(<span key="updates">Checking…</span>);
     } else if (updateActionState.phase === "downloading") {
       statusItems.push(<span key="updates">Downloading</span>);
-    } else if (updateActionState.hasAvailableUpdate) {
+    } else if (updateActionState.phase === "available") {
       statusItems.push(<span key="updates">Available</span>);
+    } else if (updateActionState.phase === "ready") {
+      statusItems.push(<span key="updates">Restart to update</span>);
     }
   }
 
@@ -164,21 +155,9 @@ function settingsItemDisabledReason(
     return undefined;
   }
   if (item.kind === "action" && item.id === "checkForUpdates" && !updateActionState.updatesSupported) {
-    return "Desktop updates are available in packaged builds.";
+    return "Updates only work in the packaged app.";
   }
   return undefined;
-}
-
-function TbrPill() {
-  return (
-    <span
-      aria-hidden="true"
-      title="To be removed"
-      className="rounded-md border border-border bg-accent px-1.5 py-0.5 text-base font-medium leading-none tracking-normal text-muted-foreground"
-    >
-      tbr
-    </span>
-  );
 }
 
 export function SettingsSidebar({

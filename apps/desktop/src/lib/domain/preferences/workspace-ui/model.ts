@@ -1,3 +1,4 @@
+import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { RightPanelDurableState, RightPanelMaterializedState } from "@/lib/domain/workspaces/shell/right-panel-model";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
@@ -24,8 +25,9 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "@/lib/domain/preferences/worksp
  *     state; materialized last-viewed session ids own restart restore.
  * v10: add session-scoped activity/read timestamps for chat tab unread dots.
  * v11: drop retired finish-suggestion sidebar dismissal state.
+ * v12: add per-logical-workspace git/PR status snapshots.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 11;
+export const WORKSPACE_UI_MIGRATION_VERSION = 12;
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
@@ -52,6 +54,7 @@ export interface PersistedWorkspaceUiState {
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
   manualChatGroupsByWorkspace: Record<string, ManualChatGroup[]>;
+  gitStatusSnapshotByWorkspace: Record<string, PersistedWorkspaceGitStatusSnapshot>;
 }
 
 export interface WorkspaceUiChangeTrackedState extends PersistedWorkspaceUiState {
@@ -84,4 +87,5 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   recentlyHiddenChatSessionIdsByWorkspace: {},
   collapsedChatGroupsByWorkspace: {},
   manualChatGroupsByWorkspace: {},
+  gitStatusSnapshotByWorkspace: {},
 };

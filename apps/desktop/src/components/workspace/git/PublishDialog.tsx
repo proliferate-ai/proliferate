@@ -95,7 +95,6 @@ export function PublishDialog({
       onClose={onClose}
       disableClose={isSubmitting}
       title={title}
-      description="Commit, publish, and create pull requests for this workspace."
       sizeClassName="max-h-[88vh] max-w-xl"
       bodyClassName="min-h-0 px-0 pb-0 pt-0"
       footer={(
@@ -133,23 +132,18 @@ export function PublishDialog({
           <div className="space-y-4">
             {initialIntent === "publish" && !hasDirtyChanges && viewState.publishStatus && (
               <PublishSection flush>
-                <p className="text-sm font-medium text-foreground">Publish branch</p>
-                <p className="mt-1 text-xs text-muted-foreground">{viewState.publishStatus}</p>
+                <p className="text-ui font-medium text-foreground">Publish branch</p>
+                <p className="mt-1 text-ui-sm text-muted-foreground">{viewState.publishStatus}</p>
               </PublishSection>
             )}
 
             {hasDirtyChanges && (
               <PublishSection flush>
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Changed files</p>
-                    <p className="text-xs text-muted-foreground">
-                      Staged, partial, and unstaged files in this workspace.
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums">
-                    <span className="text-git-green">+{stats.additions}</span>
-                    <span className="text-git-red">-{stats.deletions}</span>
+                  <p className="text-ui font-medium text-foreground">Changed files</p>
+                  <div className="flex shrink-0 items-center gap-2 text-base tabular-nums">
+                    {stats.additions > 0 && <span className="text-git-green">+{stats.additions}</span>}
+                    {stats.deletions > 0 && <span className="text-git-red">-{stats.deletions}</span>}
                   </div>
                 </div>
                 <PublishChangedFiles
@@ -162,14 +156,7 @@ export function PublishDialog({
             {hasDirtyChanges && (
               <PublishSection>
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Commit message</p>
-                    <p className="text-xs text-muted-foreground">
-                      {commitDraft.includeUnstaged
-                        ? "Stages unstaged files before committing."
-                        : "Commits the currently staged index."}
-                    </p>
-                  </div>
+                  <p className="text-ui font-medium text-foreground">Commit message</p>
                   {viewState.hasUnstagedChanges && (
                     <div className="flex items-center gap-2">
                       <Switch
@@ -182,17 +169,17 @@ export function PublishDialog({
                     </div>
                   )}
                 </div>
-                <Label htmlFor={commitSummaryId}>Commit message</Label>
                 <Textarea
                   id={commitSummaryId}
+                  aria-label="Commit message"
                   rows={3}
                   value={commitDraft.summary}
                   onChange={(event) => setCommitDraft({ ...commitDraft, summary: event.target.value })}
-                  placeholder="Commit message"
+                  placeholder="Describe your changes"
                   disabled={isSubmitting}
                 />
                 {viewState.partialWarning && (
-                  <p className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+                  <p className="rounded-md border border-border px-3 py-2 text-ui-sm text-muted-foreground">
                     {viewState.partialWarning}
                   </p>
                 )}
@@ -202,8 +189,8 @@ export function PublishDialog({
             {initialIntent === "pull_request" && !viewState.existingPr && (
               <PublishSection>
                 <div>
-                  <p className="text-sm font-medium text-foreground">Pull request</p>
-                  <p className="text-xs text-muted-foreground">Create a pull request after publishing the branch.</p>
+                  <p className="text-ui font-medium text-foreground">Pull request</p>
+                  <p className="text-ui-sm text-muted-foreground">Create a pull request after publishing the branch.</p>
                 </div>
                 <div>
                   <Label htmlFor={prTitleId}>Title</Label>
@@ -251,7 +238,7 @@ export function PublishDialog({
             )}
 
             {(error || viewState.disabledReason) && (
-              <p className="border-t border-border/60 pt-4 text-xs text-destructive">
+              <p className="text-ui-sm text-destructive">
                 {error ?? viewState.disabledReason}
               </p>
             )}

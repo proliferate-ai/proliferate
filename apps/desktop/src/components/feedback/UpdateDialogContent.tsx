@@ -27,8 +27,12 @@ export function UpdateDialogContent({
   onRemindLater,
   onInstall,
 }: UpdateDialogContentProps) {
-  const newVersion = availableVersion ? `Proliferate ${availableVersion}` : "A new version";
-  const haveClause = currentVersion ? `—you have ${currentVersion}` : "";
+  const outClause = availableVersion
+    ? `Proliferate ${availableVersion} is out`
+    : "A new version of Proliferate is out";
+  const currentClause = availableVersion && currentVersion
+    ? ` — you're on ${currentVersion}`
+    : "";
 
   return (
     <div className="flex h-full flex-col gap-5 px-6 pb-5 pt-4">
@@ -38,10 +42,10 @@ export function UpdateDialogContent({
         </div>
         <div className="min-w-0 pt-0.5">
           <h2 className="text-[15px] font-semibold leading-6 text-foreground">
-            A new version of Proliferate is available!
+            Update available
           </h2>
           <p className="mt-1 text-ui leading-5 text-muted-foreground">
-            {`${newVersion} is now available${haveClause}. Would you like to download it now?`}
+            {`${outClause}${currentClause}. Download in the background and keep working.`}
           </p>
         </div>
       </div>
@@ -52,19 +56,19 @@ export function UpdateDialogContent({
           onChange={(event) => onToggleAutoUpdate(event.target.checked)}
           className="size-4"
         />
-        Automatically download and install updates in the future
+        Keep Proliferate up to date automatically
       </Label>
 
       <div className="mt-auto flex items-center justify-between gap-3">
         <Button variant="ghost" size="sm" onClick={onSkip}>
-          Skip This Version
+          Skip this version
         </Button>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={onRemindLater}>
-            Remind Me Later
+            Later
           </Button>
           <Button variant="primary" size="sm" onClick={onInstall}>
-            Install Update
+            Install update
           </Button>
         </div>
       </div>

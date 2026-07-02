@@ -1,5 +1,6 @@
 export const CHAT_COMPOSER_LABELS = {
   placeholder: "Describe a task",
+  followUpPlaceholder: "Ask for a follow-up",
   send: "Send message",
   stop: "Stop run",
 } as const;

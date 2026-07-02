@@ -121,7 +121,6 @@ describe("settings navigation", () => {
 
   it("resolves the Admin settings sections", () => {
     for (const section of [
-      "organization-integrations",
       "organization-members",
       "organization-model-policy",
     ]) {
@@ -276,7 +275,7 @@ describe("settings navigation", () => {
       rawTarget: "target-1",
       repositories: [],
     })).toEqual({
-      activeSection: "compute",
+      activeSection: "agent-authentication",
       activeRepoSourceRoot: null,
       focus: { target: "target-1" },
       joinOrganizationId: null,
@@ -307,12 +306,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("resolves the archived chats settings section", () => {
+  it("falls retired archived-chats settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "archived-chats",
       repositories: [],
     })).toEqual({
-      activeSection: "archived-chats",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,

@@ -1,10 +1,8 @@
 export const routes = {
   home: "/",
   auth: "/auth",
-  integrations: "/integrations",
   workflows: "/workflows",
   workflow: (workflowId: string) => `/workflows/${workflowId}`,
-  pluginConnectComplete: "/plugins/connect/complete",
   support: "/support",
   settings: "/settings",
   settingsSection: (sectionId: string) => `/settings/${sectionId}`,

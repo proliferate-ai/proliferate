@@ -106,7 +106,7 @@ export function ChatInputControlRow({
         <>
           <RuntimePressureIndicator />
           <div
-            className={`flex min-w-0 items-center gap-[5px] ${
+            className={`flex min-w-0 items-center gap-1 ${
               runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
             }`}
           >

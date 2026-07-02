@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::adapters::git::WorkspaceFileSearchCache;
+use crate::adapters::hosting::PrStatusCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
 use crate::domains::agents::auth::{AgentAuthConfigStore, AgentAuthService};
@@ -107,6 +108,7 @@ pub struct AppState {
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
     pub process_service: Arc<ProcessService>,
     pub workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
+    pub pr_status_cache: Arc<PrStatusCache>,
     pub artifact_runtime: Arc<ArtifactRuntime>,
     pub cowork_service: Arc<CoworkService>,
     pub cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
@@ -194,6 +196,7 @@ impl AppState {
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
+        let pr_status_cache = Arc::new(PrStatusCache::new());
         let artifact_runtime = Arc::new(ArtifactRuntime::new());
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
         let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::from_artifact_runtime(
@@ -444,6 +447,7 @@ impl AppState {
             files_runtime,
             process_service,
             workspace_file_search_cache,
+            pr_status_cache,
             artifact_runtime,
             cowork_service,
             cowork_artifact_runtime,

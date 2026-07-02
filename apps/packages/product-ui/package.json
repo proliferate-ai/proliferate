@@ -187,14 +187,6 @@
       "types": "./dist/layout/ProductPageShell.d.ts",
       "import": "./dist/layout/ProductPageShell.js"
     },
-    "./plugins/PluginsSurface": {
-      "types": "./dist/plugins/PluginsSurface.d.ts",
-      "import": "./dist/plugins/PluginsSurface.js"
-    },
-    "./plugins/OrganizationIntegrationsPolicySurface": {
-      "types": "./dist/plugins/OrganizationIntegrationsPolicySurface.d.ts",
-      "import": "./dist/plugins/OrganizationIntegrationsPolicySurface.js"
-    },
     "./settings/SettingsPageHeader": {
       "types": "./dist/settings/SettingsPageHeader.d.ts",
       "import": "./dist/settings/SettingsPageHeader.js"

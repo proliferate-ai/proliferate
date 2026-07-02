@@ -2,6 +2,7 @@ import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sd
 import { useMemo, useState } from "react";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
@@ -311,8 +312,10 @@ function SyntheticOptionRow({
 }) {
   return (
     <div className={hasAgentOptions ? "mt-1 border-t border-border/60 pt-1" : ""}>
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         onClick={onSelect}
         className={twMerge(
           "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent",
@@ -333,7 +336,7 @@ function SyntheticOptionRow({
           </span>
           <span className="text-ui-sm text-faint">Write a custom answer</span>
         </span>
-      </button>
+      </Button>
     </div>
   );
 }

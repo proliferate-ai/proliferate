@@ -153,7 +153,7 @@ export function BillingSettingsSurface({
     : comparisonActions.creatingCloudCheckout;
 
   return (
-    <section className="max-w-[820px] space-y-6">
+    <section className="space-y-6">
       <SettingsPageHeader
         title="Billing"
         description="Manage usage and billing details."

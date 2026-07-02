@@ -61,6 +61,7 @@ export {
   anyHarnessGitBaseWorktreeDiffFilesKey,
   anyHarnessGitBranchesKey,
   anyHarnessPullRequestKey,
+  anyHarnessRepoRootPullRequestsKey,
   anyHarnessWorkspaceFilesScopeKey,
   anyHarnessWorkspaceFileTreeKey,
   anyHarnessWorkspaceFileSearchScopeKey,
@@ -197,6 +198,7 @@ export {
 } from "./hooks/git.js";
 export {
   useCurrentPullRequestQuery,
+  useRepoPullRequestStatusesQuery,
   useCreatePullRequestMutation,
 } from "./hooks/pull-requests.js";
 export {

@@ -91,6 +91,7 @@ export function buildPendingSidebarProjection(args: {
       workspaceLocationCopyValue: null,
       workspaceLocationCopyToastLabel: null,
       branchName: null,
+      gitStatus: null,
     },
     sortRecency: {
       activityAt: createdAt,

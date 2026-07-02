@@ -1160,6 +1160,66 @@
         }
       }
     },
+    "/v1/repo-roots/{repo_root_id}/hosting/pull-requests": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "operationId": "get_repo_pull_request_statuses",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "description": "Set to 1 to request a refresh (10s floor); default 0 serves the 60s throttle window",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch-scoped pull request statuses for the repo root's active workspace branches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoPullRequestStatusesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Hosting error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repo-roots/{repo_root_id}/mobility/prepare-destination": {
       "post": {
         "tags": [
@@ -6593,6 +6653,86 @@
           "availableCommands": {
             "type": "array",
             "items": {}
+          }
+        }
+      },
+      "BranchPullRequestStatus": {
+        "type": "object",
+        "description": "One queried head branch. `pullRequest` null/absent means the branch WAS\nqueried and has no PR (authoritative none). Branches missing from\n[`RepoPullRequestStatusesResponse::entries`] were not queried (unknown).",
+        "required": [
+          "headBranch"
+        ],
+        "properties": {
+          "headBranch": {
+            "type": "string"
+          },
+          "pullRequest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BranchPullRequestSummary"
+              }
+            ]
+          }
+        }
+      },
+      "BranchPullRequestSummary": {
+        "type": "object",
+        "description": "[`PullRequestSummary`] plus reduced check-rollup and review-decision\nfields. Both are optional so new clients deserialize old daemons (and\nvice versa); absent maps to \"none\" at the domain layer.",
+        "required": [
+          "number",
+          "title",
+          "url",
+          "state",
+          "draft",
+          "headBranch",
+          "baseBranch"
+        ],
+        "properties": {
+          "baseBranch": {
+            "type": "string"
+          },
+          "checks": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PullRequestChecksState"
+              }
+            ]
+          },
+          "draft": {
+            "type": "boolean"
+          },
+          "headBranch": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "reviewDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PullRequestReviewDecision"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/PullRequestState"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
           }
         }
       },
@@ -12169,6 +12309,25 @@
           }
         }
       },
+      "PullRequestChecksState": {
+        "type": "string",
+        "description": "Reduced CI-check rollup state for a pull request's head commit.",
+        "enum": [
+          "none",
+          "pending",
+          "passing",
+          "failing"
+        ]
+      },
+      "PullRequestReviewDecision": {
+        "type": "string",
+        "description": "Reduced review decision for a pull request.",
+        "enum": [
+          "none",
+          "approved",
+          "changes_requested"
+        ]
+      },
       "PullRequestState": {
         "type": "string",
         "enum": [
@@ -12567,6 +12726,24 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "RepoPullRequestStatusesResponse": {
+        "type": "object",
+        "required": [
+          "entries",
+          "fetchedAt"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BranchPullRequestStatus"
+            }
+          },
+          "fetchedAt": {
+            "type": "string"
           }
         }
       },

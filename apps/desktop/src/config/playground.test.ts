@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { SCENARIOS, type ScenarioKey } from "./playground";
 import { renderDelegationSlot } from "@/components/playground/delegation/PlaygroundComposerDelegation";
-import { renderMobilityOverlayPreview } from "@/components/playground/PlaygroundComposerMobility";
 import { renderActiveSlot } from "@/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
 import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
 import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
@@ -189,12 +188,6 @@ describe("playground scenarios", () => {
       .map((slot) => html.indexOf(`data-slot="${slot}"`));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((left, right) => left - right));
-  });
-
-  it("keeps in-flight mobility in the footer and renders recovery as an overlay", () => {
-    expect(Object.keys(SCENARIOS)).toContain("mobility-cloud-active");
-    expect(renderMobilityOverlayPreview("mobility-in-flight")).toBeNull();
-    expect(isValidElement(renderMobilityOverlayPreview("mobility-failed"))).toBe(true);
   });
 
   it("includes slash command scenarios with grouped and empty states", () => {

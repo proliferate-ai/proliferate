@@ -41,7 +41,7 @@ export function SessionModeControl({
     return (
       <ComposerControlButton
         disabled
-        tone={currentPresentation.tone}
+        emphasizeLabel={triggerStyle === "value"}
         icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
         label={triggerLabel}
         detail={triggerDetail}
@@ -55,7 +55,7 @@ export function SessionModeControl({
     <PopoverButton
       trigger={
         <ComposerControlButton
-          tone={currentPresentation.tone}
+          emphasizeLabel={triggerStyle === "value"}
           icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
           label={triggerLabel}
           detail={triggerDetail}

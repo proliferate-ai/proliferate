@@ -169,6 +169,12 @@ export function applyBatchedStreamSideEffects(input: {
       workspaceId: input.workspaceId,
     });
   }
+  if (plan.invalidatePrStatus && input.workspaceId) {
+    input.sessionStreamCache.refreshPrStatuses({
+      runtimeUrl: input.runtimeUrl,
+      workspaceId: input.workspaceId,
+    });
+  }
 
   for (const effect of plan.orderedEffects) {
     switch (effect.kind) {

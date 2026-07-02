@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { selectPrimaryPendingInteraction } from "@anyharness/sdk";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -39,7 +38,6 @@ export function useChatAvailabilityState(options?: {
   });
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const mobility = useWorkspaceMobilityState();
   const configuredLaunch = useConfiguredLaunchReadiness();
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
 
@@ -74,11 +72,6 @@ export function useChatAvailabilityState(options?: {
     hasReadyConfiguredLaunch: configuredLaunch.isReady,
     configuredLaunchDisabledReason: configuredLaunch.disabledReason,
     pendingWorkspaceEntry,
-    mobility: {
-      handoffActive: mobility.handoffActive,
-      statusDescription: mobility.status.description ?? null,
-      selectedEffectiveOwner: mobility.selectedLogicalWorkspace?.effectiveOwner ?? null,
-    },
     pendingInteractionKind: primaryPendingInteractionKind,
   }), [
     activeSessionId,
@@ -88,9 +81,6 @@ export function useChatAvailabilityState(options?: {
     configuredLaunch.isReady,
     configuredLaunch.launchCatalog.launchAgents,
     currentLaunchIdentity,
-    mobility.handoffActive,
-    mobility.selectedLogicalWorkspace?.effectiveOwner,
-    mobility.status.description,
     pendingWorkspaceEntry,
     primaryPendingInteractionKind,
     selectedCloudRuntime.state?.actionBlockReason,

@@ -133,9 +133,9 @@ function cloudUnavailableDescription({
     return "Cloud environments are unavailable in this build or deployment.";
   }
   if (cloudSignInChecking) {
-    return "Checking cloud sign-in before loading personal Cloud environments.";
+    return "Checking cloud sign-in before loading personal cloud environments.";
   }
   return cloudSignInAvailable
-    ? "Sign in to configure personal Cloud environments."
+    ? "Sign in to configure personal cloud environments."
     : "GitHub sign-in is unavailable, so Cloud environments cannot load.";
 }

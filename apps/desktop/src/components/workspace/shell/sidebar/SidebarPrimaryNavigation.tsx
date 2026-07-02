@@ -1,5 +1,4 @@
 import {
-  Blocks,
   LayoutGrid,
   LifeBuoy,
   SquarePen,
@@ -11,7 +10,6 @@ import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
   workspacesActive: boolean;
-  integrationsActive: boolean;
   workflowsActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
@@ -21,7 +19,6 @@ interface SidebarPrimaryNavigationProps {
   };
   onGoHome: () => void;
   onGoWorkspaces: () => void;
-  onGoIntegrations: () => void;
   onGoWorkflows: () => void;
   onOpenSupport: () => void;
 }
@@ -29,14 +26,12 @@ interface SidebarPrimaryNavigationProps {
 export function SidebarPrimaryNavigation({
   homeActive,
   workspacesActive,
-  integrationsActive,
   workflowsActive,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
   onGoHome,
   onGoWorkspaces,
-  onGoIntegrations,
   onGoWorkflows,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
@@ -66,12 +61,6 @@ export function SidebarPrimaryNavigation({
       ),
     },
     {
-      id: "integrations",
-      active: integrationsActive,
-      icon: <Blocks className="size-4" />,
-      label: "Integrations",
-    },
-    {
       id: "support",
       active: supportActive,
       icon: <LifeBuoy className="size-4" />,
@@ -87,9 +76,6 @@ export function SidebarPrimaryNavigation({
         break;
       case "workspaces":
         onGoWorkspaces();
-        break;
-      case "integrations":
-        onGoIntegrations();
         break;
       case "workflows":
         onGoWorkflows();

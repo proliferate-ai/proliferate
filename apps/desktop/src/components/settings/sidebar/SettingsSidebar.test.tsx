@@ -65,8 +65,6 @@ function renderSettingsSidebar({
   onSelectSection?: (section: SettingsSection) => void;
   onCheckForUpdates?: () => void;
   updateActionState?: Partial<{
-    isChecking: boolean;
-    hasAvailableUpdate: boolean;
     phase: "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error";
     updatesSupported: boolean;
   }>;
@@ -89,8 +87,6 @@ function renderSettingsSidebar({
           onSelectSection={onSelectSection}
           onCheckForUpdates={onCheckForUpdates}
           updateActionState={{
-            isChecking: false,
-            hasAvailableUpdate: false,
             phase: "idle",
             updatesSupported: true,
             ...updateActionState,
@@ -131,12 +127,11 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
+      "Account",
       "General",
       "Appearance",
-      "Account",
       "Personal secrets",
       "Pruning",
-      "Archived chats",
       "Support",
       "Desktop updates",
     ];
@@ -160,12 +155,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
     expect(screen.getByText("Policies")).toBeTruthy();
     expect(screen.getByText("Authentication")).toBeTruthy();
-  });
-
-  it("marks the Archived chats row as tbr", () => {
-    renderSettingsSidebar({ activeScope: "user" });
-
-    expect(screen.getAllByText("tbr")).toHaveLength(1);
   });
 
   it("hides Org admin sections from non-admins", () => {
@@ -199,18 +188,61 @@ describe("SettingsSidebar layout and shortcuts", () => {
     renderSettingsSidebar({
       onCheckForUpdates,
       updateActionState: {
-        hasAvailableUpdate: true,
         phase: "ready",
       },
     });
 
     const desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
-    expect(desktopUpdates.textContent).toContain("Available");
-    expect(screen.queryByRole("button", { name: /Restart to update/ })).toBeNull();
+    expect(desktopUpdates.textContent).toContain("Restart to update");
     expect(screen.queryByRole("button", { name: /Download update/ })).toBeNull();
 
     fireEvent.click(desktopUpdates);
     expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows Available only for the available phase and Restart to update for ready", () => {
+    renderSettingsSidebar({ updateActionState: { phase: "available" } });
+    let desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Available");
+    expect(desktopUpdates.textContent).not.toContain("Restart to update");
+
+    cleanup();
+
+    renderSettingsSidebar({ updateActionState: { phase: "ready" } });
+    desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Restart to update");
+    expect(desktopUpdates.textContent).not.toContain("Available");
+  });
+
+  it("shows the checking and downloading statuses", () => {
+    renderSettingsSidebar({ updateActionState: { phase: "checking" } });
+    expect(
+      screen.getByRole("button", { name: /Desktop updates/ }).textContent,
+    ).toContain("Checking…");
+
+    cleanup();
+
+    renderSettingsSidebar({ updateActionState: { phase: "downloading" } });
+    expect(
+      screen.getByRole("button", { name: /Desktop updates/ }).textContent,
+    ).toContain("Downloading");
+  });
+
+  it("disables the update row outside packaged builds with the packaged-only status", () => {
+    const onCheckForUpdates = vi.fn();
+    renderSettingsSidebar({
+      onCheckForUpdates,
+      updateActionState: { phase: "idle", updatesSupported: false },
+    });
+
+    const desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Packaged app only");
+    expect(desktopUpdates.getAttribute("title")).toBe(
+      "Updates only work in the packaged app.",
+    );
+
+    fireEvent.click(desktopUpdates);
+    expect(onCheckForUpdates).not.toHaveBeenCalled();
   });
 
   it("uses the settings sidebar rail width", () => {
@@ -238,13 +270,13 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 1,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("general");
+    expect(onSelectSection).toHaveBeenLastCalledWith("account");
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {
@@ -256,7 +288,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
     const onSelectSection = vi.fn();
     renderSettingsSidebar({
       activeScope: "user",
-      disabledSections: { general: true },
+      disabledSections: { account: true },
       onSelectSection,
     });
 
@@ -276,6 +308,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 });

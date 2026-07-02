@@ -3,6 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { CloudUpload, FileText, Folder, LifeBuoy, X } from "@proliferate/ui/icons";
 import {
@@ -182,11 +183,11 @@ export function SupportReportWindow() {
             </div>
 
             {scopeKind === "choose_workspace" && snapshot?.workspaceOptions.length ? (
-              <div className="space-y-1 rounded-xl border border-border/70 bg-popover p-1 shadow-popover">
+              <div className={`space-y-1 ${POPOVER_FRAME_CLASS} p-1`}>
                 {snapshot.workspaceOptions.map((workspace) => (
                   <Label
                     key={workspace.id}
-                    className="mb-0 flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-popover-accent"
+                    className="mb-0 flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-list-hover"
                   >
                     <Checkbox
                       name="support-workspace"

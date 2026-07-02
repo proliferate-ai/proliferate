@@ -175,7 +175,7 @@ export function CloudRepoSection({
 
   if (!cloudRepository) {
     return (
-      <CloudEnvironmentNotice description="Cloud environments are available for GitHub-backed repositories." />
+      <CloudEnvironmentNotice description="Cloud environments are available for GitHub-backed repos." />
     );
   }
 
@@ -195,13 +195,13 @@ export function CloudRepoSection({
 
   if (repoConfigs.isLoading) {
     return (
-      <CloudEnvironmentNotice description="Loading saved cloud environment..." />
+      <CloudEnvironmentNotice description="Loading saved cloud environment…" />
     );
   }
 
   if (repoAuthority.isLoading) {
     return (
-      <CloudEnvironmentNotice description="Checking GitHub App access for this repository..." />
+      <CloudEnvironmentNotice description="Checking GitHub App access for this repository…" />
     );
   }
 
