@@ -1,8 +1,8 @@
 import type { CloudGitRepositorySummary } from "@proliferate/cloud-sdk";
 import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import type {
-  AddCloudEnvironmentBlockerView,
-} from "@proliferate/product-ui/environments/AddCloudEnvironmentDialog";
+  CloudRepoPickerBlockerView,
+} from "@proliferate/product-ui/repos/CloudRepoPicker";
 
 export function buildGitHubAppPrerequisiteBlocker({
   organizationId,
@@ -30,7 +30,7 @@ export function buildGitHubAppPrerequisiteBlocker({
   onAuthorizeUser: () => void;
   onInstallGitHubApp: () => void;
   onCopyAdminRequest: () => void;
-}): AddCloudEnvironmentBlockerView | null {
+}): CloudRepoPickerBlockerView | null {
   if (!organizationId) {
     return {
       title: "Organization required",

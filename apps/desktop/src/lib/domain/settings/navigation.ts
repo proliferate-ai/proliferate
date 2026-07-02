@@ -3,11 +3,13 @@ import {
   SETTINGS_DEFAULT_SECTION,
   type SettingsSection,
 } from "@/config/settings";
+import { getSettingsScopeForSection } from "@/lib/domain/settings/navigation-presentation";
 import {
   cloudRepositoryKey,
   isCloudRepository,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
+import { isRepoSettingsContext } from "@/lib/domain/settings/repo-scope-selection";
 
 const FOCUS_PARAM_NAMES = [
   "focus",
@@ -18,6 +20,7 @@ const FOCUS_PARAM_NAMES = [
   "cloudRepoName",
   "checkout",
   "joinOrganizationId",
+  "context",
 ] as const;
 
 type SettingsFocusParam = (typeof FOCUS_PARAM_NAMES)[number];
@@ -62,6 +65,15 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
   return isSettingsSection(value) ? value : SETTINGS_DEFAULT_SECTION;
 }
 
+/**
+ * Sections that edit a picked repository (the whole Repo scope): they carry
+ * the `repo` selection and Cloud|Local `context` params. Keyed off the scope
+ * nav so WP2/WP3 section registration extends URL handling automatically.
+ */
+export function isRepoScopeSection(section: SettingsSection): boolean {
+  return getSettingsScopeForSection(section) === "repo";
+}
+
 interface SettingsNavigationTarget {
   section: SettingsSection | "repo";
   repo?: string | null;
@@ -76,7 +88,7 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
   const params = new URLSearchParams();
   const section = target.section === "repo" ? "environments" : target.section;
   params.set("section", section);
-  if (section === "environments" && target.repo) {
+  if (isRepoScopeSection(section) && target.repo) {
     params.set("repo", target.repo);
   }
   const focus = target.focus ?? {};
@@ -157,6 +169,7 @@ export interface SettingsSelectionInput {
   rawKind?: string | null;
   rawCheckout?: string | null;
   rawJoinOrganizationId?: string | null;
+  rawContext?: string | null;
   repositories: SettingsRepositoryEntry[];
 }
 
@@ -178,6 +191,7 @@ export function resolveSettingsSelection({
   rawKind = null,
   rawCheckout = null,
   rawJoinOrganizationId = null,
+  rawContext = null,
   repositories,
 }: SettingsSelectionInput): SettingsSelection {
   const repositoryRoots = new Set(repositories.map((repository) => repository.sourceRoot));
@@ -205,14 +219,15 @@ export function resolveSettingsSelection({
     joinOrganizationId: rawJoinOrganizationId,
     cloudRepoOwner: rawCloudRepoOwner,
     cloudRepoName: rawCloudRepoName,
+    context: rawContext,
   });
-  let repoSourceRoot: string | null = section === "environments" ? rawRepo : null;
+  let repoSourceRoot: string | null = isRepoScopeSection(section) ? rawRepo : null;
 
   if (rawSection === "cloud") {
     section = cloudRedirectSection(focus);
   }
 
-  if (section === "environments" && rawRepo) {
+  if (isRepoScopeSection(section) && rawRepo) {
     repoSourceRoot = rawRepo;
   }
 
@@ -230,9 +245,18 @@ export function resolveSettingsSelection({
     }
   }
 
-  if (section === "environments") {
+  if (isRepoScopeSection(section)) {
     if (!repoSourceRoot || !repositoryRoots.has(repoSourceRoot)) {
       repoSourceRoot = null;
+    }
+    // Cloud deep links (cloudRepoOwner/cloudRepoName) select the matching
+    // repository entry — including cloud-only entries whose sourceRoot is
+    // `cloud:owner/name` — when no explicit repo selection survived.
+    if (!repoSourceRoot && rawCloudRepoOwner && rawCloudRepoName) {
+      const matches = cloudRepositoriesByKey.get(
+        cloudRepositoryKey(rawCloudRepoOwner, rawCloudRepoName),
+      ) ?? [];
+      repoSourceRoot = matches[0]?.sourceRoot ?? null;
     }
   }
 
@@ -278,11 +302,12 @@ function sanitizeFocusForSection(
       kind: focus.kind,
     });
   }
-  if (section === "environments") {
+  if (isRepoScopeSection(section)) {
     return pickFocus({
       focus: focus.focus,
       cloudRepoOwner: focus.cloudRepoOwner,
       cloudRepoName: focus.cloudRepoName,
+      context: isRepoSettingsContext(focus.context) ? focus.context : null,
     });
   }
   if (section === "billing") {

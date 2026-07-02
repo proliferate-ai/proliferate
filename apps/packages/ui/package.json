@@ -191,6 +191,10 @@
       "types": "./dist/primitives/RangeSlider.d.ts",
       "import": "./dist/primitives/RangeSlider.js"
     },
+    "./primitives/SegmentedControl": {
+      "types": "./dist/primitives/SegmentedControl.d.ts",
+      "import": "./dist/primitives/SegmentedControl.js"
+    },
     "./primitives/Select": {
       "types": "./dist/primitives/Select.d.ts",
       "import": "./dist/primitives/Select.js"

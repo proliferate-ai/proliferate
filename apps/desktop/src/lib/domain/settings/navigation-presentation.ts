@@ -16,6 +16,8 @@ export type SettingsNavIconId =
   | "organization-secrets"
   | "organization-sso"
   | "personal-secrets"
+  | "repo-actions"
+  | "repo-environment"
   | "support"
   | "worktrees";
 
@@ -114,7 +116,9 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "repo_main",
         heading: null,
         items: [
-          { kind: "section", id: "environments", label: "Environments", iconId: "environments" },
+          { kind: "section", id: "environments", label: "Configure", iconId: "environments" },
+          { kind: "section", id: "repo-actions", label: "Actions", iconId: "repo-actions" },
+          { kind: "section", id: "repo-environment", label: "Environment", iconId: "repo-environment" },
         ],
       },
     ],

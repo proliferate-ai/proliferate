@@ -30,7 +30,7 @@ function describeAddRepoFailure(error: unknown): string {
 }
 
 export type AddRepoFromPathResult =
-  | { succeeded: true }
+  | { succeeded: true; sourceRoot: string }
   | { succeeded: false; error: string };
 
 function isRepoEntryBlockedPath(pathname: string): boolean {
@@ -92,7 +92,7 @@ export function useAddRepo() {
     const createCloudEnvironment = options?.createCloudEnvironment ?? true;
     setIsAddingRepo(true);
     try {
-      await runAddRepoWorkflow({
+      const repoRoot = await runAddRepoWorkflow({
         path,
         ensureRuntimeReady,
         resolveRepoRootFromPath: (repoPath) => resolveRepoRootFromPath(repoPath),
@@ -104,7 +104,9 @@ export function useAddRepo() {
         unhideRepoRoot,
         openRepoSetupModal,
       });
-      return { succeeded: true };
+      // Mirrors resolveRepoSourceRoot (lib/domain/settings/repositories.ts) so
+      // completion callbacks can select the new settings repository entry.
+      return { succeeded: true, sourceRoot: repoRoot.path.trim() || repoRoot.id };
     } catch (error) {
       const message = describeAddRepoFailure(error);
       showToast(message);

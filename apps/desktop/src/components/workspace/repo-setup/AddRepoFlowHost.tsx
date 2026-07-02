@@ -4,8 +4,8 @@ import {
   type AddRepoFlowOption,
 } from "@proliferate/product-ui/repos/AddRepoFlow";
 import {
-  AddCloudEnvironmentDialogController,
-} from "@proliferate/product-surfaces/settings/cloud-environments/AddCloudEnvironmentDialogController";
+  useAddCloudEnvironment,
+} from "@proliferate/product-surfaces/settings/cloud-environments/use-add-cloud-environment";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
@@ -16,15 +16,13 @@ import { useToastStore } from "@/stores/toast/toast-store";
 /**
  * App-level host for the unified add-repository flow (UX_SPEC §4).
  * Entry offers three options; local paths run the existing add-repo
- * workflow, the cloud path reuses the AddCloudEnvironmentDialog wiring.
+ * workflow, the cloud path runs the authorize → pick → create sequence
+ * as an in-dialog step backed by useAddCloudEnvironment.
  */
 export function AddRepoFlowHost() {
   const open = useAddRepoFlowStore((state) => state.open);
   const step = useAddRepoFlowStore((state) => state.step);
-  const cloudPickerOpen = useAddRepoFlowStore((state) => state.cloudPickerOpen);
   const setStep = useAddRepoFlowStore((state) => state.setStep);
-  const openCloudPicker = useAddRepoFlowStore((state) => state.openCloudPicker);
-  const closeCloudPicker = useAddRepoFlowStore((state) => state.closeCloudPicker);
   const closeFlow = useAddRepoFlowStore((state) => state.close);
 
   const { addRepoFromPath, isAddingRepo } = useAddRepo();
@@ -35,10 +33,30 @@ export function AddRepoFlowHost() {
 
   const canCreateCloudEnvironment = activeOrganizationId !== null;
 
+  const cloudPicker = useAddCloudEnvironment({
+    enabled: open && step.kind === "cloud",
+    organizationId: activeOrganizationId,
+    canManageGitHubAppInstallation: isSettingsAdminRole(
+      activeOrganization?.membership?.role,
+    ),
+    userAuthorizationReturnTo: "proliferate://settings/environments?source=github_app_callback",
+    installationReturnTo: "proliferate://settings/environments?source=github_app_installation_callback",
+    onOpenExternalUrl: openExternal,
+    onEnvironmentAdded: (repoId) => {
+      // Read before closeFlow — close() clears the completion callback.
+      const onCompleted = useAddRepoFlowStore.getState().onCompleted;
+      closeFlow();
+      showToast(repoId ? `Added ${repoId}` : "Cloud repo added.", "info");
+      if (repoId) {
+        onCompleted?.({ kind: "cloud", repoId });
+      }
+    },
+  });
+
   const handlePickOption = useCallback((option: AddRepoFlowOption) => {
     setFlowError(null);
     if (option === "cloud") {
-      openCloudPicker();
+      setStep({ kind: "cloud" });
       return;
     }
     // "link-local" and "add-local" both start from the native folder picker;
@@ -50,7 +68,7 @@ export function AddRepoFlowHost() {
       }
       setStep({ kind: "confirm-local", path });
     })();
-  }, [openCloudPicker, pickFolder, setStep]);
+  }, [pickFolder, setStep]);
 
   const handleConfirmLocal = useCallback((options: { createCloudEnvironment: boolean }) => {
     if (step.kind !== "confirm-local") {
@@ -61,7 +79,10 @@ export function AddRepoFlowHost() {
       createCloudEnvironment: canCreateCloudEnvironment && options.createCloudEnvironment,
     }).then((result) => {
       if (result.succeeded) {
+        // Read before closeFlow — close() clears the completion callback.
+        const onCompleted = useAddRepoFlowStore.getState().onCompleted;
         closeFlow();
+        onCompleted?.({ kind: "local", sourceRoot: result.sourceRoot });
         return;
       }
       // Failures also toast from useAddRepo; surface the reason inline and
@@ -86,40 +107,22 @@ export function AddRepoFlowHost() {
   }, [closeFlow, isAddingRepo]);
 
   return (
-    <>
-      <AddRepoFlow
-        open={open}
-        step={step.kind === "confirm-local"
-          ? {
-            kind: "confirm-local",
-            path: step.path,
-            canCreateCloudEnvironment,
-          }
-          : { kind: "entry" }}
-        confirming={isAddingRepo}
-        error={flowError}
-        onPickOption={handlePickOption}
-        onConfirmLocal={handleConfirmLocal}
-        onBack={handleBack}
-        onClose={handleClose}
-      />
-      {cloudPickerOpen ? (
-        <AddCloudEnvironmentDialogController
-          open={cloudPickerOpen}
-          organizationId={activeOrganizationId}
-          canManageGitHubAppInstallation={isSettingsAdminRole(
-            activeOrganization?.membership?.role,
-          )}
-          userAuthorizationReturnTo="proliferate://settings/environments?source=github_app_callback"
-          installationReturnTo="proliferate://settings/environments?source=github_app_installation_callback"
-          onOpenExternalUrl={openExternal}
-          onClose={closeCloudPicker}
-          onEnvironmentAdded={(repoId) => {
-            // The controller closes itself (calls onClose) after this fires.
-            showToast(repoId ? `Added ${repoId}` : "Cloud repo added.", "info");
-          }}
-        />
-      ) : null}
-    </>
+    <AddRepoFlow
+      open={open}
+      step={step.kind === "confirm-local"
+        ? {
+          kind: "confirm-local",
+          path: step.path,
+          canCreateCloudEnvironment,
+        }
+        : step}
+      confirming={isAddingRepo}
+      error={step.kind === "cloud" ? null : flowError}
+      cloudPicker={step.kind === "cloud" ? cloudPicker : null}
+      onPickOption={handlePickOption}
+      onConfirmLocal={handleConfirmLocal}
+      onBack={handleBack}
+      onClose={handleClose}
+    />
   );
 }
