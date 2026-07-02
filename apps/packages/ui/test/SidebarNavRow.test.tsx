@@ -19,7 +19,7 @@ describe("SidebarNavRow", () => {
     );
 
     const row = screen.getByRole("button", { name: "G General" });
-    expect(row.className).toContain("h-[30px]");
+    expect(row.className).toContain("min-h-[calc(1lh+0.5rem)]");
     expect(row.className).toContain("gap-2");
     expect(row.className).toContain("px-2");
     expect(row.className).toContain("!text-sidebar-foreground");
