@@ -57,7 +57,7 @@ jobs:
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
       summary_json: ${{ steps.detect.outputs.summary_json }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref }}
