@@ -317,6 +317,72 @@ async def create_meter_event(
     )
 
 
+async def create_invoice(
+    *,
+    stripe_customer_id: str,
+    billing_subject_id: str,
+    purpose: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    """Create a draft invoice that charges the customer's default payment method.
+
+    ``pending_invoice_items_behavior=exclude`` keeps unrelated pending invoice
+    items off the invoice — line items are attached explicitly via
+    :func:`create_invoice_item`.
+    """
+    return await _request(
+        "POST",
+        "/invoices",
+        data=[
+            ("customer", stripe_customer_id),
+            ("collection_method", "charge_automatically"),
+            ("auto_advance", "true"),
+            ("pending_invoice_items_behavior", "exclude"),
+            ("metadata[billing_subject_id]", billing_subject_id),
+            ("metadata[purpose]", purpose),
+        ],
+        idempotency_key=idempotency_key,
+    )
+
+
+async def create_invoice_item(
+    *,
+    stripe_customer_id: str,
+    invoice_id: str,
+    price_id: str,
+    billing_subject_id: str,
+    purpose: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    """Attach a priced line item to a draft invoice."""
+    return await _request(
+        "POST",
+        "/invoiceitems",
+        data=[
+            ("customer", stripe_customer_id),
+            ("invoice", invoice_id),
+            ("pricing[price]", price_id),
+            ("metadata[billing_subject_id]", billing_subject_id),
+            ("metadata[purpose]", purpose),
+        ],
+        idempotency_key=idempotency_key,
+    )
+
+
+async def finalize_invoice(
+    *,
+    invoice_id: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    """Finalize a draft invoice; charge_automatically invoices then collect."""
+    return await _request(
+        "POST",
+        f"/invoices/{invoice_id}/finalize",
+        data=[("auto_advance", "true")],
+        idempotency_key=idempotency_key,
+    )
+
+
 def _price_id(line: dict[str, Any]) -> str | None:
     price = line.get("price")
     if isinstance(price, dict) and isinstance(price.get("id"), str):

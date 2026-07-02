@@ -37,8 +37,10 @@ from proliferate.constants.agent_gateway import (
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
+from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMSpendLogEntry
+from proliferate.server.cloud.agent_gateway.topups import topups_enabled
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -252,7 +254,10 @@ async def _enforce_subject_exhaustion(
     Only subjects that actually hold a credit grant are enforced: with no grant
     at all, the LiteLLM default budget is the guardrail (see enrollment sync),
     and a zero-grant subject would otherwise be permanently "exhausted".
-    Reactivation on top-up is PR 9 — this only ever tightens.
+    Overage-enabled subjects are exempt while auto top-ups are configured —
+    the top-up worker funds them back above zero instead of the key
+    bouncing disabled/enabled between ticks. Reactivation on top-up lives in
+    ``topups.reactivate_subject_if_credited``; this only ever tightens.
     """
     balance = await agent_gateway_store.get_remaining_credit_usd(
         db,
@@ -261,6 +266,10 @@ async def _enforce_subject_exhaustion(
     )
     if balance.granted_usd <= _ZERO or balance.remaining_usd > _ZERO:
         return False
+    if topups_enabled():
+        subject = await get_billing_subject_by_id(db, billing_subject_id)
+        if subject is not None and subject.overage_enabled:
+            return False
 
     enforced = False
     for enrollment in enrollments:

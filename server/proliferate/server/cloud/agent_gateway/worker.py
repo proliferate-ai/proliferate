@@ -1,12 +1,14 @@
-"""Background enrollment backfill + usage-import workers.
+"""Background enrollment backfill, usage-import, and top-up workers.
 
-Both are started from the app lifespan (mirroring the anonymous-telemetry
+All are started from the app lifespan (mirroring the anonymous-telemetry
 sender). The backfill worker retries pending/failed enrollments and enrolls
 users that predate the signup hooks every
 ``agent_gateway_backfill_interval_seconds``. The usage-import worker pages
 LiteLLM spend logs and enforces LLM-credit exhaustion every
-``agent_gateway_usage_import_interval_seconds``. Both only run when the gateway
-is enabled.
+``agent_gateway_usage_import_interval_seconds``. The top-up worker charges
+overage-enabled subjects that dropped below the credit threshold every
+``agent_gateway_topup_interval_seconds`` (and only when the LLM top-up price
+is configured). All only run when the gateway is enabled.
 """
 
 from __future__ import annotations
@@ -18,6 +20,11 @@ from contextlib import suppress
 from proliferate.config import settings
 from proliferate.db import session_ops as db_session
 from proliferate.server.cloud.agent_gateway.enrollment import backfill_enrollments
+from proliferate.server.cloud.agent_gateway.topups import (
+    LlmTopupRunResult,
+    run_llm_topups,
+    topups_enabled,
+)
 from proliferate.server.cloud.agent_gateway.usage_import import (
     UsageImportResult,
     run_usage_import,
@@ -98,6 +105,48 @@ async def start_agent_gateway_usage_import() -> asyncio.Task[None] | None:
 
 
 async def stop_agent_gateway_usage_import(
+    task: asyncio.Task[None] | None,
+) -> None:
+    if task is None:
+        return
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+async def run_llm_topups_once() -> LlmTopupRunResult:
+    async with db_session.open_async_transaction() as db:
+        return await run_llm_topups(db)
+
+
+async def _topup_loop() -> None:
+    while True:
+        try:
+            result = await run_llm_topups_once()
+            if result.topped_up or result.skipped:
+                logger.info(
+                    "Agent gateway LLM top-up tick processed subjects",
+                    extra={
+                        "eligible": result.eligible,
+                        "topped_up": result.topped_up,
+                        "skipped": result.skipped,
+                    },
+                )
+        except Exception:
+            logger.exception("Agent gateway LLM top-up tick failed")
+        await asyncio.sleep(settings.agent_gateway_topup_interval_seconds)
+
+
+async def start_agent_gateway_llm_topups() -> asyncio.Task[None] | None:
+    if not settings.agent_gateway_enabled or not topups_enabled():
+        return None
+    return asyncio.create_task(
+        _topup_loop(),
+        name="agent-gateway-llm-topups",
+    )
+
+
+async def stop_agent_gateway_llm_topups(
     task: asyncio.Task[None] | None,
 ) -> None:
     if task is None:
