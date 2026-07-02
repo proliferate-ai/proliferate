@@ -1,11 +1,15 @@
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Minus, Plus } from "@proliferate/ui/icons";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { RuntimePressureDetailsDialog } from "@/components/workspace/chat/input/RuntimePressureDetailsDialog";
 import { RuntimePressureRing } from "@/components/workspace/chat/input/RuntimePressureIndicator";
 import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";
+import {
+  WORKTREE_AUTO_DELETE_LIMIT_MAX,
+  WORKTREE_AUTO_DELETE_LIMIT_MIN,
+} from "@/lib/domain/preferences/user/worktree-auto-delete";
 import {
   type RuntimePressureTargetState,
   useRuntimePressureControlStateFromSettings,
@@ -80,6 +84,8 @@ export function WorktreeStorageSection() {
   );
 }
 
+const WORKTREE_POLICY_COMMIT_DELAY_MS = 600;
+
 function WorktreePolicyRow({
   draftValue,
   currentValue,
@@ -99,37 +105,65 @@ function WorktreePolicyRow({
 }) {
   const helperText = applyDisabledReason ?? statusMessage;
   const parsedDraft = Number.parseInt(draftValue, 10);
-  const commitIfChanged = () => {
-    if (canApply && parsedDraft !== currentValue) {
-      onApply();
+  const value = Number.isFinite(parsedDraft) ? parsedDraft : currentValue;
+  const dirty = canApply && value !== currentValue;
+
+  // Stepper clicks land in draft state; the commit (cloud PUT + preference
+  // write) fires once clicking settles, replacing the old commit-on-blur.
+  const onApplyRef = useRef(onApply);
+  onApplyRef.current = onApply;
+  useEffect(() => {
+    if (!dirty) {
+      return;
     }
-  };
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.currentTarget.blur();
-    }
+    const handle = window.setTimeout(() => onApplyRef.current(), WORKTREE_POLICY_COMMIT_DELAY_MS);
+    return () => window.clearTimeout(handle);
+  }, [dirty, value]);
+
+  const step = (delta: number) => {
+    const next = Math.min(
+      WORKTREE_AUTO_DELETE_LIMIT_MAX,
+      Math.max(WORKTREE_AUTO_DELETE_LIMIT_MIN, value + delta),
+    );
+    onDraftValueChange(String(next));
   };
 
   return (
     <SettingsRow
       label="Ideal worktrees"
-      description="Per-repo target for managed worktrees. Composer pressure warns above this count; cleanup skips dirty checkouts."
+      description="Per-repo target. Composer pressure warns above this count; cleanup skips dirty checkouts."
     >
       <div className="flex flex-col items-end gap-1">
-        <div className="flex items-center gap-2">
-          <Input
-            id="worktree-policy-global"
-            aria-label="Ideal worktrees per repo"
-            type="number"
-            min={10}
-            max={100}
-            value={draftValue}
-            onChange={(event) => onDraftValueChange(event.target.value)}
-            onBlur={commitIfChanged}
-            onKeyDown={handleKeyDown}
-            className="h-8 w-20 text-right"
-          />
-          <span className="text-sm text-muted-foreground">worktrees</span>
+        <div
+          role="group"
+          aria-label="Ideal worktrees per repo"
+          className={`grid h-8 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[2rem_minmax(0,1fr)_2rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Fewer ideal worktrees"
+            disabled={value <= WORKTREE_AUTO_DELETE_LIMIT_MIN}
+            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            onClick={() => step(-1)}
+          >
+            <Minus className="size-3.5" />
+          </Button>
+          <div className="flex h-8 min-w-16 items-center justify-center border-x border-border-light px-3 text-ui font-medium tabular-nums text-foreground">
+            {value} worktrees
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="More ideal worktrees"
+            disabled={value >= WORKTREE_AUTO_DELETE_LIMIT_MAX}
+            className="h-8 w-8 rounded-none text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            onClick={() => step(1)}
+          >
+            <Plus className="size-3.5" />
+          </Button>
         </div>
         {helperText ? (
           <p className="max-w-72 text-right text-sm text-muted-foreground">

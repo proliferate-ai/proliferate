@@ -1,5 +1,6 @@
 import type { WorktreeInventoryRow } from "@anyharness/sdk";
 import { Check, ListFilter, SlidersHorizontal, Trash } from "@proliferate/ui/icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -7,6 +8,11 @@ import {
   worktreeGitStatusView,
   worktreeRowLabel,
 } from "@/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
+
+/** Shared column template — header and rows are separate grids, so the
+ * template must stay identical for the columns to align. */
+const WORKTREE_GRID_CLASS =
+  "grid min-w-[700px] grid-cols-[minmax(0,1fr)_92px_52px_82px_68px_136px] items-center gap-3 px-5";
 
 export type WorktreeStatusFilter = "all" | "clean" | "changes" | "conflicts" | "unknown";
 export type WorktreeSortKey = "size" | "name" | "sessions";
@@ -137,7 +143,7 @@ export function WorktreeSortMenu({
 
 export function WorktreeTableHeader() {
   return (
-    <div className="grid h-7 min-w-[700px] grid-cols-[minmax(0,1fr)_74px_52px_82px_68px_136px] items-center gap-4 px-5 text-sm uppercase tracking-[0.04em] text-muted-foreground/60">
+    <div className={`${WORKTREE_GRID_CLASS} h-8 border-b border-border/60 text-ui-sm text-muted-foreground`}>
       <span>Worktree</span>
       <span>Status</span>
       <span className="text-right">Chats</span>
@@ -168,52 +174,58 @@ export function RuntimeWorktreeRow({
     && row.availableActions.includes("delete_workspace_history");
 
   return (
-    <div className="group grid min-h-10 min-w-[700px] grid-cols-[minmax(0,1fr)_74px_52px_82px_68px_136px] items-center gap-4 px-5 text-xs transition-colors hover:bg-foreground/[0.04]">
-      <div className="flex min-w-0 items-baseline gap-2.5">
-        <span className="min-w-0 truncate text-ui font-medium text-foreground">{label}</span>
-        <span className="min-w-0 truncate text-xs text-muted-foreground/60">
+    <div className={`group ${WORKTREE_GRID_CLASS} min-h-12 py-2 text-ui transition-colors hover:bg-foreground/[0.04]`}>
+      <div className="min-w-0">
+        <div className="truncate text-ui font-medium leading-5 text-foreground">{label}</div>
+        <div className="truncate text-ui-sm leading-4 text-muted-foreground">
           {branchLabel ? `${repoLabel} / ${branchLabel}` : repoLabel}
-        </span>
+        </div>
       </div>
-      <span className="truncate text-xs text-muted-foreground/70">{status.label}</span>
-      <span className="text-right text-xs tabular-nums text-muted-foreground/70">{row.totalSessionCount}</span>
-      <span className="text-right text-xs tabular-nums text-muted-foreground/80">
+      <span className="min-w-0">
+        <Badge tone={status.tone} className="truncate">{status.label}</Badge>
+      </span>
+      <span className="text-right text-ui tabular-nums text-muted-foreground">{row.totalSessionCount}</span>
+      <span className="text-right text-ui tabular-nums text-foreground">
         {formatByteEstimate(row.storage?.worktreeBytes)}
       </span>
-      <span className="text-right text-xs tabular-nums text-muted-foreground/70">
+      <span className="text-right text-ui tabular-nums text-muted-foreground">
         {formatByteEstimate(row.storage?.sqliteBytes)}
       </span>
       <div className="flex justify-end gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         {canDeleteOrphan ? (
-          <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => onDeleteOrphan(row.path)}>
-            <Trash className="size-3.5" />
-            Delete
-          </Button>
+          <WorktreeDeleteButton onClick={() => onDeleteOrphan(row.path)} />
         ) : null}
         {row.associatedWorkspaces.map((workspace) => (
-          <div key={workspace.id} className="flex items-center gap-1.5">
-            {canDeleteHistory ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                onClick={() => onPurgeWorkspace(workspace.id, workspace.displayName ?? label)}
-              >
-                <Trash className="size-3.5" />
-                Delete
-              </Button>
-            ) : null}
-          </div>
+          canDeleteHistory ? (
+            <WorktreeDeleteButton
+              key={workspace.id}
+              onClick={() => onPurgeWorkspace(workspace.id, workspace.displayName ?? label)}
+            />
+          ) : null
         ))}
       </div>
     </div>
   );
 }
 
+function WorktreeDeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-6 px-1.5 text-ui-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+      onClick={onClick}
+    >
+      <Trash className="size-3" />
+      Delete
+    </Button>
+  );
+}
+
 export function EmptyWorktreeState({ label }: { label: string }) {
   return (
-    <div className="flex min-h-32 items-center justify-center px-4 py-8 text-center text-sm text-muted-foreground">
+    <div className="flex min-h-32 items-center justify-center px-4 py-8 text-center text-ui-sm text-muted-foreground">
       {label}
     </div>
   );

@@ -132,7 +132,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Appearance",
       "Personal secrets",
       "Pruning",
-      "Archived chats",
       "Support",
       "Desktop updates",
     ];
@@ -156,12 +155,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
     expect(screen.getByText("Policies")).toBeTruthy();
     expect(screen.getByText("Authentication")).toBeTruthy();
-  });
-
-  it("marks the Archived chats row as tbr", () => {
-    renderSettingsSidebar({ activeScope: "user" });
-
-    expect(screen.getAllByText("tbr")).toHaveLength(1);
   });
 
   it("hides Org admin sections from non-admins", () => {

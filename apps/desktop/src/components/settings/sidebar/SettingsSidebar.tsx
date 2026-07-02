@@ -1,6 +1,5 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import {
-  Archive,
   Brain,
   Building2,
   CircleUser,
@@ -80,7 +79,6 @@ const SETTINGS_NAV_ICONS = {
   "agent-authentication": Shield,
   "agent-defaults": SlidersHorizontal,
   appearance: Palette,
-  "archived-chats": Archive,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
   compute: Server,
@@ -127,9 +125,6 @@ function settingsItemStatus(
   updateActionState: SettingsSidebarProps["updateActionState"],
 ) {
   const statusItems: ReactNode[] = [];
-  if (item.tbr === true) {
-    statusItems.push(<TbrPill key="tbr" />);
-  }
 
   if (item.kind === "action" && item.id === "checkForUpdates") {
     if (!updateActionState.updatesSupported) {
@@ -167,18 +162,6 @@ function settingsItemDisabledReason(
     return "Updates only work in the packaged app.";
   }
   return undefined;
-}
-
-function TbrPill() {
-  return (
-    <span
-      aria-hidden="true"
-      title="To be removed"
-      className="rounded-md border border-border bg-accent px-1.5 py-0.5 text-base font-medium leading-none tracking-normal text-muted-foreground"
-    >
-      tbr
-    </span>
-  );
 }
 
 export function SettingsSidebar({

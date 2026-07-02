@@ -13,7 +13,6 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "environments",
   "compute",
   "worktrees",
-  "archived-chats",
   "agent-authentication",
   "agent-defaults",
   // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
@@ -46,7 +45,6 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "environments",
   "compute",
   "worktrees",
-  "archived-chats",
   "agent-authentication",
   "agent-defaults",
   // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.

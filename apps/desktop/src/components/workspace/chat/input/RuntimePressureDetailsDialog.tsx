@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { Input } from "@proliferate/ui/primitives/Input";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { Search } from "@proliferate/ui/icons";
+import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import type {
   RuntimePressureTargetState,
   useRuntimePressureControlState,
@@ -69,6 +68,7 @@ export function RuntimePressureDetailsDialog({
   }, [filter, repoFilter, sort, statusFilter, targetState.inventory]);
 
   const storageSummary = summarizeStorage(visibleRows);
+  const summary = pruningSummary(targetState, repoFilter);
 
   return (
     <>
@@ -76,34 +76,35 @@ export function RuntimePressureDetailsDialog({
         open={open}
         onClose={onClose}
         title="Pruning"
-        description={`${targetState.target.label} pruning details`}
-        headerContent={<PruningHeader targetState={targetState} repoFilter={repoFilter} />}
+        description={summary}
+        headerContent={(
+          <div className="min-w-0 space-y-1">
+            <h2 className="text-lg font-medium tracking-tight text-foreground">Pruning</h2>
+            <p className="truncate text-ui-sm text-muted-foreground">{summary}</p>
+          </div>
+        )}
         sizeClassName="max-w-[760px] max-h-[84vh]"
         panelClassName="border-border/80 bg-[#181818] shadow-2xl"
         overlayClassName="bg-black/70 backdrop-blur-[1px]"
         bodyClassName="flex min-h-0 flex-col px-0 pb-0 pt-0"
-        footerClassName="flex shrink-0 flex-col gap-2 border-t border-border/60 px-6 py-3 sm:flex-row sm:items-center sm:justify-between"
+        footerClassName="flex shrink-0 flex-col gap-2 border-t border-border/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
         footer={(
           <>
-            <p className="min-w-0 text-xs text-muted-foreground">
+            <p className="min-w-0 text-ui-sm text-muted-foreground">
               Delete removes the selected checkout and any attached runtime history.
             </p>
-            <div className="flex shrink-0 items-center gap-3">
-              <span className="text-base text-muted-foreground">
-                {formatByteEstimate(storageSummary.worktreeBytes)} + {formatByteEstimate(storageSummary.sqliteBytes)}
-              </span>
-            </div>
+            <span className="shrink-0 text-ui-sm tabular-nums text-muted-foreground">
+              {formatByteEstimate(storageSummary.worktreeBytes)} checkout + {formatByteEstimate(storageSummary.sqliteBytes)} logs
+            </span>
           </>
         )}
       >
-        <div className="flex items-center gap-2 px-6 pb-3">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
+        <div className="flex items-center gap-2 border-b border-border/60 py-1 pl-2.5 pr-4">
+          <div className="min-w-0 flex-1">
+            <PopoverSearchField
               value={filter}
-              onChange={(event) => setFilter(event.target.value)}
+              onChange={setFilter}
               placeholder="Filter by name, branch..."
-              className="h-8 rounded-md border-border/70 bg-black/20 pl-8 text-sm"
             />
           </div>
           <WorktreeFilterMenu
@@ -115,7 +116,7 @@ export function RuntimePressureDetailsDialog({
           />
           <WorktreeSortMenu sort={sort} onSortChange={setSort} />
         </div>
-        <div className="min-h-0 flex-1 overflow-auto border-t border-border/60">
+        <div className="min-h-0 flex-1 overflow-auto">
           <WorktreeTableHeader />
           {targetState.inventoryLoading ? (
             <EmptyWorktreeState label="Loading worktrees..." />
@@ -157,41 +158,21 @@ export function RuntimePressureDetailsDialog({
   );
 }
 
-function PruningHeader({
-  targetState,
-  repoFilter,
-}: {
-  targetState: RuntimePressureTargetState;
-  repoFilter: string;
-}) {
-  return (
-    <div className="space-y-4 px-1">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-baseline gap-2.5">
-          <h2 className="text-base font-medium text-foreground">Pruning</h2>
-          <span className="truncate text-xs text-muted-foreground">
-            {targetState.target.location === "cloud" ? "Cloud sandbox" : "Local runtime"}
-          </span>
-        </div>
-      </div>
-      <div className="space-y-2.5">
-        {targetState.target.location === "cloud" ? (
-          <CloudGauges targetState={targetState} />
-        ) : (
-          <LocalGauge targetState={targetState} repoFilter={repoFilter} />
-        )}
-      </div>
-    </div>
-  );
-}
+/**
+ * One quiet summary line under the dialog title — replaces the old gauge
+ * header. Local: "Local runtime · repo — 5 of 20 worktrees" (count follows
+ * the active repo filter). Cloud: "Cloud sandbox — CPU 42% · RAM 31%".
+ */
+function pruningSummary(
+  targetState: RuntimePressureTargetState,
+  repoFilter: string,
+): string {
+  if (targetState.target.location === "cloud") {
+    const cpu = formatSummaryPercent(targetState.resourcePressure?.cpu?.normalizedPercent);
+    const ram = formatSummaryPercent(targetState.resourcePressure?.memory?.percent);
+    return `${targetState.target.label} — CPU ${cpu} · RAM ${ram}`;
+  }
 
-function LocalGauge({
-  targetState,
-  repoFilter,
-}: {
-  targetState: RuntimePressureTargetState;
-  repoFilter: string;
-}) {
   const count = repoFilter === "all"
     ? targetState.worktreeCount
     : targetState.inventory.filter((row) => (
@@ -199,115 +180,15 @@ function LocalGauge({
       && row.associatedWorkspaces.length > 0
       && (row.repoRootName ?? repoLabelFromPath(row.path)) === repoFilter
     )).length;
-  const repoLabel = repoFilter === "all"
-    ? targetState.pressureRepoLabel ?? "worktrees"
-    : repoFilter;
-
-  return (
-    <Gauge
-      label={`in ${repoLabel}`}
-      value={count}
-      suffix=""
-      limit={targetState.idealWorktreeCount}
-      ratio={targetState.idealWorktreeCount > 0 ? count / targetState.idealWorktreeCount : null}
-    />
-  );
+  const repoLabel = repoFilter === "all" ? targetState.pressureRepoLabel : repoFilter;
+  const scope = repoLabel
+    ? `${targetState.target.label} · ${repoLabel}`
+    : targetState.target.label;
+  return `${scope} — ${count} of ${targetState.idealWorktreeCount} worktrees`;
 }
 
-function CloudGauges({ targetState }: { targetState: RuntimePressureTargetState }) {
-  return (
-    <>
-      <Gauge
-        label="CPU"
-        value={targetState.resourcePressure?.cpu?.normalizedPercent ?? null}
-        suffix="%"
-        limit={targetState.resourcePressure?.cpu?.idealMaxPercent ?? targetState.pressureLimitPercent}
-        ratio={ratioFromPercent(
-          targetState.resourcePressure?.cpu?.normalizedPercent ?? null,
-          targetState.resourcePressure?.cpu?.idealMaxPercent ?? targetState.pressureLimitPercent,
-        )}
-        scaleMax={100}
-      />
-      <Gauge
-        label="RAM"
-        value={targetState.resourcePressure?.memory?.percent ?? null}
-        suffix="%"
-        limit={targetState.resourcePressure?.memory?.idealMaxPercent ?? targetState.pressureLimitPercent}
-        ratio={ratioFromPercent(
-          targetState.resourcePressure?.memory?.percent ?? null,
-          targetState.resourcePressure?.memory?.idealMaxPercent ?? targetState.pressureLimitPercent,
-        )}
-        scaleMax={100}
-      />
-    </>
-  );
-}
-
-function Gauge({
-  label,
-  value,
-  suffix,
-  limit,
-  ratio,
-  scaleMax,
-}: {
-  label: string;
-  value: number | null;
-  suffix: string;
-  limit: number;
-  ratio: number | null;
-  scaleMax?: number;
-}) {
-  const finiteValue = typeof value === "number" && Number.isFinite(value) ? value : null;
-  const width = finiteValue === null
-    ? 0
-    : Math.max(2, Math.min(100, (finiteValue / (scaleMax ?? limit)) * 100));
-  const limitPosition = scaleMax
-    ? Math.max(0, Math.min(100, (limit / scaleMax) * 100))
-    : 100;
-
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-[78px] shrink-0 truncate text-xs text-muted-foreground/70">{label}</span>
-      <span className="w-[52px] shrink-0 text-right text-ui tabular-nums text-foreground">
-        {finiteValue === null ? "--" : `${Math.round(finiteValue)}${suffix}`}
-      </span>
-      <div className="relative h-1.5 flex-1 rounded-full bg-foreground/[0.08]">
-        <div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{
-            width: `${width}%`,
-            backgroundColor: gaugeFillColor(ratio),
-          }}
-        />
-        <div
-          className="absolute -top-0.5 bottom-[-2px] w-px bg-foreground/35"
-          style={{ left: `${limitPosition}%` }}
-        />
-      </div>
-      <span className="w-7 shrink-0 text-right text-base tabular-nums text-muted-foreground/60">
-        {Math.round(limit)}
-      </span>
-    </div>
-  );
-}
-
-function ratioFromPercent(value: number | null, limit: number): number | null {
-  if (value === null || !Number.isFinite(value) || limit <= 0) {
-    return null;
-  }
-  return value / limit;
-}
-
-function gaugeFillColor(ratio: number | null): string {
-  if (ratio === null) {
-    return "rgba(255,255,255,0.28)";
-  }
-  if (ratio >= 1) {
-    return "#d98480";
-  }
-  if (ratio >= 0.75) {
-    return "#cdb878";
-  }
-  return "rgba(255,255,255,0.5)";
+function formatSummaryPercent(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${Math.round(value)}%`
+    : "unavailable";
 }

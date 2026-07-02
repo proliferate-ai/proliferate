@@ -49,6 +49,12 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
     // the only surface, so old settings links fall back to the default page.
     return SETTINGS_DEFAULT_SECTION;
   }
+  if (value === "archived-chats") {
+    // ARCHIVED CHATS PAGE REMOVED (owner rev 2026-07-02): archive/unarchive
+    // lives in the workspace sidebar, so old settings links fall back to the
+    // default page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
   if (value === "cloud") {
     return "agent-authentication";
   }
