@@ -326,11 +326,11 @@ Control-row tone rule — the pills are **monochrome**:
   `tone` prop; the tone system was deleted 2026-07-02 along with the plan-mode
   tint (`--color-plan-border` is gone). Do **not** reintroduce mode-based
   tinting on the mode pill or any other control.
-- Hierarchy is two-tone value-vs-affordance, not color: the pill's *value*
-  (active state or `emphasizeLabel`) renders in
-  `--color-composer-control-active-foreground` (bright), while icons, details,
-  and idle affordances stay in `--color-composer-control-foreground` /
-  `--color-composer-control-muted-foreground` (dim).
+- Hierarchy is two-tone value-vs-affordance, not color. Two bright paths:
+  `emphasizeLabel` brightens ONLY the label span (icons/chevrons/details stay
+  in `--color-composer-control-foreground` / `-muted-foreground`, dim), while
+  `active` brightens the whole button — including its icon — with only the
+  detail span forced back to muted. Idle pills are fully dim.
 
 As-built composer surface — `ChatComposerSurface` (product-ui) tags itself with
 the `chat-composer-surface` class, whose paint lives in
