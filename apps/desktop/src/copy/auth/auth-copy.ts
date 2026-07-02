@@ -24,6 +24,14 @@ export const AUTH_LOGIN_LABELS = {
   cancelSignIn: "Cancel sign-in",
   continueLocally: "Start locally",
   continueLocallyInline: "start locally",
+  // Email/password sign-in (default surface when GitHub OAuth is not
+  // configured on the connected server, e.g. self-hosted instances).
+  emailFieldLabel: "Email",
+  emailFieldPlaceholder: "you@company.com",
+  passwordFieldLabel: "Password",
+  passwordFieldPlaceholder: "Password",
+  passwordSignIn: "Sign in",
+  passwordWaiting: "Signing in...",
 } as const;
 
 export const AUTH_ACCOUNT_LABELS = {

@@ -14,8 +14,11 @@ export function LoginPage() {
     ssoSignInChecking,
     ssoSignInUnavailableDescription,
     ssoDisplayName,
+    passwordSignInAvailable,
+    passwordSubmitting,
     handleGitHubSignIn,
     handleSsoSignIn,
+    handlePasswordSignIn,
     handleCancelSignIn,
     handleContinueLocally,
     canContinueLocally,
@@ -36,8 +39,11 @@ export function LoginPage() {
       ssoSignInChecking={ssoSignInChecking}
       ssoSignInUnavailableDescription={ssoSignInUnavailableDescription}
       ssoDisplayName={ssoDisplayName}
+      passwordSignInAvailable={passwordSignInAvailable}
+      passwordSubmitting={passwordSubmitting}
       onGitHubSignIn={() => void handleGitHubSignIn()}
       onSsoSignIn={() => void handleSsoSignIn()}
+      onPasswordSignIn={(email, password) => void handlePasswordSignIn(email, password)}
       onCancelSignIn={handleCancelSignIn}
       canContinueLocally={canContinueLocally}
       onContinueLocally={handleContinueLocally}
