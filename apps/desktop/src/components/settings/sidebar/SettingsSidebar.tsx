@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Scissors,
   Settings2,
-  Shield,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
@@ -75,7 +74,6 @@ const SETTINGS_ROW_DISABLED_CLASS =
 
 const SETTINGS_NAV_ICONS = {
   account: CircleUser,
-  "agent-authentication": Shield,
   "agent-defaults": SlidersHorizontal,
   appearance: Palette,
   billing: CreditCard,

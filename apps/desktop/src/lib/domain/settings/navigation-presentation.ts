@@ -2,7 +2,6 @@ import type { SettingsSection } from "@/config/settings";
 
 export type SettingsNavIconId =
   | "account"
-  | "agent-authentication"
   | "agent-defaults"
   | "appearance"
   | "billing"
@@ -135,7 +134,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         heading: null,
         items: [
           { kind: "section", id: "agent-defaults", label: "Defaults", iconId: "agent-defaults" },
-          { kind: "section", id: "agent-authentication", label: "Authentication", iconId: "agent-authentication" },
         ],
       },
     ],

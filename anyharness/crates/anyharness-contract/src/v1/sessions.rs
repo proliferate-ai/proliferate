@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{AgentAuthExternalScope, OriginContext};
+use super::OriginContext;
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
@@ -155,10 +155,6 @@ pub struct PendingPromptSummary {
 pub struct CreateSessionRequest {
     pub workspace_id: String,
     pub agent_kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_auth_scope: Option<AgentAuthExternalScope>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_agent_auth_revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -617,8 +613,6 @@ mod tests {
         let request = CreateSessionRequest {
             workspace_id: "workspace-1".to_string(),
             agent_kind: "claude".to_string(),
-            agent_auth_scope: None,
-            required_agent_auth_revision: None,
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),

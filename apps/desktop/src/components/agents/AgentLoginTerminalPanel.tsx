@@ -1,11 +1,11 @@
-import type { AgentAuthTerminalSession } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
+import type { AgentLoginTerminalSession } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
 import { useCallback } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { TerminalErrorBoundary } from "@/components/workspace/terminals/TerminalErrorBoundary";
-import { useAgentAuthTerminalViewport } from "@/hooks/agents/lifecycle/use-agent-auth-terminal-viewport";
+import { useAgentLoginTerminalViewport } from "@/hooks/agents/lifecycle/use-agent-login-terminal-viewport";
 
-interface AgentAuthTerminalPanelProps {
-  session: AgentAuthTerminalSession;
+interface AgentLoginTerminalPanelProps {
+  session: AgentLoginTerminalSession;
   baseUrl: string;
   authToken?: string;
   onClose: (kind: string) => void;
@@ -13,19 +13,19 @@ interface AgentAuthTerminalPanelProps {
   onRestart: () => void;
 }
 
-export function AgentAuthTerminalPanel({
+export function AgentLoginTerminalPanel({
   session,
   baseUrl,
   authToken,
   onClose,
   onExit,
   onRestart,
-}: AgentAuthTerminalPanelProps) {
+}: AgentLoginTerminalPanelProps) {
   const terminal = session.terminal;
   const handleExit = useCallback((code: number | null) => {
     onExit(session.kind, code);
   }, [onExit, session.kind]);
-  const { connectionError, containerRef } = useAgentAuthTerminalViewport({
+  const { connectionError, containerRef } = useAgentLoginTerminalViewport({
     terminal,
     baseUrl,
     authToken,

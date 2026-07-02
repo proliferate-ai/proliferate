@@ -263,8 +263,6 @@ pub fn run() {
             ssh_tunnel::probe_ssh_target_connection,
             ssh_tunnel::ensure_ssh_anyharness_tunnel,
             keychain::list_configured_env_var_names,
-            keychain::list_syncable_agent_auth_credentials,
-            keychain::export_syncable_agent_auth_credential,
             keychain::set_env_var_secret,
             keychain::delete_env_var_secret,
             keychain::get_auth_session,

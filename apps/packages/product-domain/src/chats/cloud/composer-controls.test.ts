@@ -7,11 +7,7 @@ import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "./composer-controls";
-import {
-  readyCloudAgentKinds,
-  readySyncedCloudAgentKinds,
-  resolveCloudHarnessAvailability,
-} from "./harness-availability";
+import { resolveCloudHarnessAvailability } from "./harness-availability";
 
 type Catalog = NonNullable<Parameters<typeof buildCloudLaunchComposerControls>[0]["catalog"]>;
 type ChatControlsInput = Parameters<typeof buildCloudChatComposerControls>[0];
@@ -230,7 +226,7 @@ describe("buildCloudLaunchComposerControls", () => {
     });
   });
 
-  it("renders disabled launch controls when no cloud harness can start", () => {
+  it("falls back to default launch controls when no catalog agent matches", () => {
     const controls = buildCloudLaunchComposerControls({
       catalog: multiAgentCatalog(),
       launchableAgentKinds: [],
@@ -244,15 +240,7 @@ describe("buildCloudLaunchComposerControls", () => {
       onControlSelect: () => {},
     });
 
-    expect(controls.map((control) => [control.key, control.disabled])).toEqual([
-      ["model", true],
-      ["mode", true],
-    ]);
-    expect(controls[0]?.groups[0]?.options[0]).toMatchObject({
-      id: "unavailable",
-      label: "No cloud agents ready",
-      disabled: true,
-    });
+    expect(controls.map((control) => control.key)).toEqual(["model", "mode"]);
     expect(resolveCloudLaunchSelection({
       catalog: multiAgentCatalog(),
       launchableAgentKinds: [],
@@ -263,105 +251,38 @@ describe("buildCloudLaunchComposerControls", () => {
         controlValues: {},
       },
     })).toMatchObject({
-      modelId: null,
-      modeId: null,
+      agentKind: "claude",
+      modelId: "us.anthropic.claude-opus-4-6",
     });
   });
 });
 
 describe("resolveCloudHarnessAvailability", () => {
-  it("normalizes ready synced credentials into launchable harness kinds", () => {
-    const readyAgentKinds = readySyncedCloudAgentKinds([
-      { credentialKind: "synced_path", redactedSummary: { agentKind: "codex" }, status: "ready" },
-      { credentialKind: "synced_path", redactedSummary: { agentKind: "claude" }, status: "ready" },
-      { credentialKind: "managed_gateway", redactedSummary: { agentKind: "gemini" }, status: "ready" },
-      { credentialKind: "synced_path", redactedSummary: { agentKind: "opencode" }, status: "syncing" },
-      { credentialKind: "synced_path", redactedSummary: { agentKind: "unknown" }, status: "ready" },
-    ]);
-
-    expect(readyAgentKinds).toEqual(["claude", "codex"]);
+  it("intersects catalog agents with workspace-allowed agent kinds", () => {
     expect(resolveCloudHarnessAvailability({
-      allowedAgentKinds: ["claude", "codex"],
-      readyAgentKinds,
-      agentGateway: {
-        enabled: false,
-        managedCreditsPersonalEnabled: false,
-        managedCreditsOrganizationEnabled: false,
-      },
-    })).toMatchObject({
-      launchableAgentKinds: ["claude", "codex"],
-      message: null,
-    });
-  });
-
-  it("normalizes ready gateway credentials through capability auth slots", () => {
-    const readyAgentKinds = readyCloudAgentKinds({
-      credentials: [
-        { credentialKind: "managed_gateway", credentialProviderId: "openai", status: "ready" },
-        { credentialKind: "managed_gateway", credentialProviderId: "gemini", status: "ready" },
-        { credentialKind: "managed_gateway", credentialProviderId: "anthropic", status: "invalid" },
-      ],
-      agentGateway: {
-        enabled: true,
-        agentAuthSlots: [
-          { agentKind: "codex", credentialProviderIds: ["openai"] },
-          { agentKind: "opencode", credentialProviderIds: ["openai", "anthropic", "gemini"] },
-          { agentKind: "gemini", credentialProviderIds: ["gemini"] },
-        ],
-      },
-    });
-
-    expect(readyAgentKinds).toEqual(["codex", "gemini", "opencode"]);
-    expect(resolveCloudHarnessAvailability({
+      catalogAgentKinds: ["claude", "codex", "gemini"],
       allowedAgentKinds: ["codex", "gemini", "opencode"],
-      readyAgentKinds,
-      agentGateway: {
-        enabled: true,
-        managedCreditsPersonalEnabled: false,
-        managedCreditsOrganizationEnabled: false,
-        opencodeGatewayEnabled: true,
-      },
     })).toMatchObject({
-      launchableAgentKinds: ["codex", "gemini", "opencode"],
+      launchableAgentKinds: ["codex", "gemini"],
       message: null,
     });
   });
 
-  it("combines workspace-ready auth with managed-credit harnesses", () => {
-    expect(resolveCloudHarnessAvailability({
-      allowedAgentKinds: ["claude", "codex", "gemini", "opencode"],
-      readyAgentKinds: ["gemini"],
-      agentGateway: {
-        enabled: true,
-        managedCreditsPersonalEnabled: true,
-        managedCreditsOrganizationEnabled: false,
-        managedCreditAgentKinds: ["claude", "codex", "opencode"],
-        opencodeGatewayEnabled: false,
-      },
-    })).toMatchObject({
-      launchableAgentKinds: ["claude", "codex", "gemini"],
+  it("treats missing inputs as fully launchable", () => {
+    expect(resolveCloudHarnessAvailability({})).toMatchObject({
+      launchableAgentKinds: ["claude", "codex", "gemini", "opencode", "grok"],
       message: null,
     });
   });
 
-  it("returns a precise blocked state when gateway and synced auth are unavailable", () => {
+  it("reports a message when nothing is launchable", () => {
     const availability = resolveCloudHarnessAvailability({
-      allowedAgentKinds: ["claude", "codex"],
-      readyAgentKinds: [],
-      agentGateway: {
-        enabled: false,
-        managedCreditsPersonalEnabled: false,
-        managedCreditsOrganizationEnabled: false,
-        managedCreditAgentKinds: ["claude", "codex"],
-      },
+      catalogAgentKinds: ["claude"],
+      allowedAgentKinds: ["codex"],
     });
 
     expect(availability.launchableAgentKinds).toEqual([]);
-    expect(availability.unavailableAgentKinds.map((item) => item.reason)).toEqual([
-      "agent_gateway_disabled",
-      "agent_gateway_disabled",
-    ]);
-    expect(availability.message).toContain("Agent Gateway is disabled");
+    expect(availability.message).toContain("No cloud agents");
   });
 });
 

@@ -8,7 +8,6 @@ import {
 } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
-import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
@@ -175,12 +174,6 @@ function renderSettingsSection(
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
   }
-  if (activeSection === "agent-authentication") {
-    return renderCloudGatedPane(
-      cloudGate,
-      () => <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />,
-    );
-  }
   if (activeSection === "worktrees") {
     return <WorktreesPane />;
   }
@@ -338,7 +331,6 @@ export function SettingsScreen({
           }}
           onSelectSection={onSelectSection}
           disabledSections={{
-            "agent-authentication": !cloudEnabled,
             integrations: !cloudEnabled,
             "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,

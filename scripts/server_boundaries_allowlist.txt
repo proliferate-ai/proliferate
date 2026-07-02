@@ -6,10 +6,5 @@
 # This is migration debt, not permission for new code. If a cleanup reduces a
 # count, update this file in the same PR.
 
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/managed_credits.py 1 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/refresh.py 1 remaining agent-auth service concern refresh wake/error session boundary debt through session_ops
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/session_loader.py 1 remaining agent-auth service concern read-loader session boundary debt through db engine
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/managed_credits.py 2 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/refresh.py 1 remaining agent-auth service concern error session boundary debt through session_ops
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/agent_run_config/domain/resolve.py 1 transitional agent run config resolver imports product constants
 PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/gateway/proxy.py 1 managed sandbox gateway owns temporary HTTP/WS proxy transport until gateway access moves below product service layer
