@@ -199,7 +199,7 @@ export function TerminalHeaderIcon({
           <div className="py-0.5">
             <PopoverMenuItem
               label="Rename"
-              icon={<Pencil className="size-3.5" />}
+              icon={<Pencil className="size-4" />}
               onClick={() => {
                 close();
                 handleRenameCommand();
@@ -207,7 +207,7 @@ export function TerminalHeaderIcon({
             />
             <PopoverMenuItem
               label="Close"
-              icon={<X className="size-3.5" />}
+              icon={<X className="size-4" />}
               disabled={!isRuntimeReady}
               className="text-destructive hover:text-destructive"
               onClick={() => {

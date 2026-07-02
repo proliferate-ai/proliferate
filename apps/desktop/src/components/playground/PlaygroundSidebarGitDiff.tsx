@@ -69,7 +69,7 @@ export function PlaygroundSidebarGitDiff() {
                 ) : (
                   <GitReviewEmptyState
                     variant="inline"
-                    icon={<CheckCircleFilled className="size-3.5" />}
+                    icon={<CheckCircleFilled className="size-4" />}
                     title="Working tree clean"
                     description="No files to review in this section."
                   />

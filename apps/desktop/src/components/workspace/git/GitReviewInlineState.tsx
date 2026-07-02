@@ -16,7 +16,7 @@ export function DiffDisplayPolicyPlaceholder({
 }) {
   return (
     <GitReviewInlineEmptyState
-      icon={<CircleAlert className="size-3.5" />}
+      icon={<CircleAlert className="size-4" />}
       title={title}
       description={description}
       onOpenFile={onOpenFile}

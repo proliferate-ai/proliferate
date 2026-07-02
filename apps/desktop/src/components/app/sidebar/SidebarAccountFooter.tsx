@@ -188,7 +188,7 @@ export function SidebarAccountFooter() {
                       key={invitation.id}
                       variant="sidebar"
                       label={invitation.organizationName ?? invitation.email}
-                      icon={<Mail className="size-3.5" />}
+                      icon={<Mail className="size-4" />}
                       trailing={<span className="font-[520]">Accept</span>}
                       trailingClassName="text-sidebar-muted-foreground group-hover/menu-item:text-sidebar-foreground group-focus/menu-item:text-sidebar-foreground"
                       onClick={() => {
@@ -246,7 +246,7 @@ export function SidebarAccountFooter() {
                   <PopoverMenuItem
                     variant="sidebar"
                     label="Plan"
-                    icon={<CreditCard className="size-3.5" />}
+                    icon={<CreditCard className="size-4" />}
                     trailing={<span>{planLabel}</span>}
                     onClick={() => {
                       navigate("/settings");
@@ -260,7 +260,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Keyboard shortcuts"
-                  icon={<Keyboard className="size-3.5" />}
+                  icon={<Keyboard className="size-4" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
                   onClick={() => {
                     close();
@@ -270,7 +270,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Docs"
-                  icon={<BookOpen className="size-3.5" />}
+                  icon={<BookOpen className="size-4" />}
                   trailing={<ArrowUpRight className="size-3" />}
                   onClick={() => {
                     openExternalUrl(PROLIFERATE_DOCS_URL);
@@ -280,7 +280,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Changelog"
-                  icon={<BookMarked className="size-3.5" />}
+                  icon={<BookMarked className="size-4" />}
                   trailing={<ArrowUpRight className="size-3" />}
                   onClick={() => {
                     openExternalUrl(PROLIFERATE_CHANGELOG_URL);
@@ -290,7 +290,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Discord"
-                  icon={<Discord className="size-3.5" />}
+                  icon={<Discord className="size-4" />}
                   trailing={<ArrowUpRight className="size-3" />}
                   onClick={() => {
                     openExternalUrl(PROLIFERATE_DISCORD_URL);
@@ -300,7 +300,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Go to web"
-                  icon={<Globe className="size-3.5" />}
+                  icon={<Globe className="size-4" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
                   onClick={() => {
                     openExternalUrl(getProliferateWebBaseUrl());
@@ -310,7 +310,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Send feedback"
-                  icon={<MessageSquare className="size-3.5" />}
+                  icon={<MessageSquare className="size-4" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSupport)}</span>}
                   onClick={() => {
                     openSupport();
@@ -323,7 +323,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Settings"
-                  icon={<Settings className="size-3.5" />}
+                  icon={<Settings className="size-4" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSettings)}</span>}
                   onClick={() => {
                     navigate("/settings");
@@ -333,7 +333,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Log out"
-                  icon={<LogOut className="size-3.5" />}
+                  icon={<LogOut className="size-4" />}
                   onClick={() => {
                     handleSignOut();
                     close();

@@ -118,7 +118,7 @@ export const GlobalHeader = memo(function GlobalHeader({
             </Button>
             {workspacePath && (
               <SplitButton
-                icon={<FilePen className="size-3.5" />}
+                icon={<FilePen className="size-4" />}
                 label={preferredTarget?.label ?? "Open"}
                 showLabel={false}
                 onClick={handleDefaultOpen}

@@ -69,7 +69,7 @@ function ContextMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 py-[5px] text-ui outline-none data-[highlighted]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[variant=destructive]:text-destructive data-[inset]:pl-8",
+        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 py-[5px] text-ui-sm outline-none [&_svg]:opacity-75 data-[highlighted]:[&_svg]:opacity-100 data-[highlighted]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[variant=destructive]:text-destructive data-[inset]:pl-8",
         className,
       )}
       {...props}
@@ -87,7 +87,7 @@ function ContextMenuCheckboxItem({
     <ContextMenuPrimitive.CheckboxItem
       data-slot="context-menu-checkbox-item"
       className={cn(
-        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg py-[5px] pl-8 pr-2.5 text-ui outline-none data-[highlighted]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg py-[5px] pl-8 pr-2.5 text-ui-sm outline-none data-[highlighted]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       checked={checked}
@@ -123,7 +123,7 @@ function ContextMenuRadioItem({
     <ContextMenuPrimitive.RadioItem
       data-slot="context-menu-radio-item"
       className={cn(
-        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg py-[5px] pl-8 pr-2.5 text-ui outline-none data-[highlighted]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg py-[5px] pl-8 pr-2.5 text-ui-sm outline-none data-[highlighted]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       {...props}
@@ -179,7 +179,7 @@ function ContextMenuShortcut({
     <span
       data-slot="context-menu-shortcut"
       className={cn(
-        "ml-auto pl-2 text-ui-sm text-muted-foreground",
+        "ml-auto pl-2 text-base text-muted-foreground",
         className,
       )}
       {...props}
@@ -206,7 +206,7 @@ function ContextMenuSubTrigger({
       data-slot="context-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 py-[5px] text-ui outline-none data-[highlighted]:bg-list-hover data-[state=open]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8",
+        "relative flex min-h-7 cursor-pointer select-none items-center gap-1.5 rounded-lg px-2.5 py-[5px] text-ui-sm outline-none [&_svg]:opacity-75 data-[highlighted]:[&_svg]:opacity-100 data-[highlighted]:bg-list-hover data-[state=open]:bg-list-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8",
         className,
       )}
       {...props}
