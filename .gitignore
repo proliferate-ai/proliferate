@@ -81,3 +81,6 @@ package-lock.json
 
 # Standalone design-system workspace (UI scratch, not wired into build)
 design-system/
+
+# Stray local debug log dumps
+/logs*.json
