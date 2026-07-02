@@ -539,6 +539,12 @@
   description: Interval for the enrollment backfill worker that retries pending/failed LiteLLM enrollments and enrolls pre-existing users
   tags: [local-dev, self-hosted, production]
 
+- name: AGENT_GATEWAY_POLICY_MIN_PLAN
+  secret: false
+  default: "pro"
+  description: Minimum org plan required to edit the org agent policy ("free" disables the gate; "pro" requires a healthy paid cloud subscription or an active unlimited-cloud entitlement); reading the policy and violations is never plan-gated
+  tags: [local-dev, self-hosted, production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud MCP
 # ═══════════════════════════════════════════════════════════════════════
