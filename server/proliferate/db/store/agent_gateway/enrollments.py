@@ -268,6 +268,97 @@ async def list_org_memberships_missing_enrollment(
     return [(org_id, user_id) for org_id, user_id in rows.all()]
 
 
+async def get_enrollment_by_virtual_key_id(
+    db: AsyncSession,
+    *,
+    virtual_key_id: str,
+) -> AgentGatewayEnrollmentRecord | None:
+    """Resolve an active enrollment from a LiteLLM key token hash.
+
+    The importer keys off the spend-log ``api_key`` field, which equals the
+    ``token_id`` stored as ``virtual_key_id`` at mint time.
+    """
+    row = (
+        await db.execute(
+            select(AgentGatewayEnrollment).where(
+                AgentGatewayEnrollment.virtual_key_id == virtual_key_id,
+                AgentGatewayEnrollment.revoked_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    return enrollment_record(row) if row is not None else None
+
+
+async def list_active_enrollments_for_subject(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+) -> list[AgentGatewayEnrollmentRecord]:
+    """Active (non-revoked) enrollments billed to a subject."""
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayEnrollment).where(
+                    AgentGatewayEnrollment.billing_subject_id == billing_subject_id,
+                    AgentGatewayEnrollment.revoked_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [enrollment_record(row) for row in rows]
+
+
+async def list_billing_subject_ids_with_active_enrollments(
+    db: AsyncSession,
+    *,
+    limit: int = 1000,
+    after: UUID | None = None,
+) -> list[UUID]:
+    """Distinct billing subjects that hold at least one active enrollment.
+
+    The top-up worker scans these and filters to overage-enabled subjects;
+    the join to ``billing_subject`` happens in the service layer so this
+    store stays inside the agent-gateway table family.
+
+    Ordered by ``billing_subject_id`` and keyset-paginated via ``after`` so
+    callers can walk *every* subject (not just the first page) without offset
+    drift: pass the last id from the previous page to fetch the next.
+    """
+    query = select(AgentGatewayEnrollment.billing_subject_id).where(
+        AgentGatewayEnrollment.revoked_at.is_(None)
+    )
+    if after is not None:
+        query = query.where(AgentGatewayEnrollment.billing_subject_id > after)
+    rows = (
+        (
+            await db.execute(
+                query.distinct().order_by(AgentGatewayEnrollment.billing_subject_id).limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return list(rows)
+
+
+async def set_enrollment_budget_status(
+    db: AsyncSession,
+    *,
+    enrollment_id: UUID,
+    budget_status: str,
+) -> AgentGatewayEnrollmentRecord:
+    row = await db.get(AgentGatewayEnrollment, enrollment_id)
+    if row is None:
+        raise RuntimeError("Agent gateway enrollment not found.")
+    if row.budget_status != budget_status:
+        row.budget_status = budget_status
+        row.updated_at = utcnow()
+        await db.flush()
+    return enrollment_record(row)
+
+
 async def get_enrollment_virtual_key_decrypted(
     db: AsyncSession,
     *,
