@@ -9,8 +9,10 @@ desktop renderer.
 | Code | Owns |
 | --- | --- |
 | `apps/desktop/src-tauri/tauri.conf.json` | Declares `binaries/anyharness`, `binaries/proliferate-worker`, and `binaries/proliferate-debug` as Tauri `externalBin` entries. |
+| `apps/desktop/src-tauri/tauri.<platform>.conf.json` | Provides platform-native window defaults such as macOS overlay chrome or Linux decorated windows. |
 | `apps/desktop/src-tauri/build.rs` | Stages target-suffixed binaries into `apps/desktop/src-tauri/binaries/` before Tauri packaging. |
 | `apps/desktop/src-tauri/src/lib.rs` | Creates shared native state, registers commands, collects launch env, and starts boot during `setup`. |
+| `apps/desktop/src-tauri/src/platform.rs` | Resolves OS-native open/reveal/terminal actions and shell `PATH` for child processes. |
 | `apps/desktop/src-tauri/src/sidecar.rs` | Finds the AnyHarness binary, spawns it, polls `/health`, persists runtime info, and restarts it. |
 | `apps/desktop/src-tauri/src/commands/runtime.rs` | Exposes renderer commands for runtime status and restart. |
 | `anyharness/crates/anyharness/src/commands/serve.rs` | Starts the HTTP runtime once the sidecar process is spawned. |
@@ -60,7 +62,7 @@ anyharness serve --host 127.0.0.1 --port <port>
 
 7. Launch env also includes:
    - `ANYHARNESS_DEFER_STARTUP_RETENTION=1`
-   - the user's login-shell `PATH`
+   - the user's platform-resolved shell `PATH`
    - hosted-product Sentry env when applicable
 8. The native shell polls `<runtime-url>/health` until healthy, failed, exited,
    or timed out.
@@ -100,14 +102,15 @@ storage backends, split by sensitivity:
   the build's code signature, so a reinstalled/re-signed build can no longer read
   it (the former "log in again after reinstall" bug).
 - **The anyharness data key** (`ANYHARNESS_DATA_KEY`) — an at-rest **encryption
-  key** that a plaintext file would defeat — stays in the **macOS keychain**
-  (`com.proliferate.app.runtime`). Generated on first use, injected into the
-  sidecar env.
+  key** that a plaintext file would defeat — stays in the user's **OS
+  keychain/keyring** (`com.proliferate.app.runtime`). Generated on first use,
+  injected into the sidecar env. Linux builds require a working Secret
+  Service/KWallet-compatible user keyring; missing keyring support is logged and
+  leaves the sidecar without `ANYHARNESS_DATA_KEY`.
 
 A one-time, best-effort purge clears secrets an older build left in the keychain.
-The desktop release matrix is macOS-only and the files are owner-only (`0600`) on
-unix; Windows/Linux desktop builds, if added, should revisit storage (Windows has
-no `0600` path, and both have user-scoped OS keychains that survive reinstall).
+The desktop release matrix is macOS-only; Linux source/dev builds use the same
+secret split and owner-only (`0600`) files for recreatable secrets.
 
 ## Restart Rules
 

@@ -74,7 +74,7 @@ portable-pty = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 # Tauri
-tauri = { version = "2", features = ["tray-icon", "macos-private-api", "unstable", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "unstable", "image-png"] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-store = "2"
 tauri-plugin-shell = "2"

@@ -5,14 +5,14 @@ use std::path::{Path, PathBuf};
 
 #[derive(Default)]
 struct TestEditorRuntime {
-    which_paths: HashMap<&'static str, PathBuf>,
+    executable_paths: HashMap<&'static str, PathBuf>,
     existing_files: HashSet<PathBuf>,
     spawns: RefCell<Vec<(PathBuf, String)>>,
 }
 
 impl EditorRuntime for TestEditorRuntime {
-    fn which(&self, bin: &str) -> Option<PathBuf> {
-        self.which_paths.get(bin).cloned()
+    fn resolve_executable(&self, bin: &str) -> Option<PathBuf> {
+        self.executable_paths.get(bin).cloned()
     }
 
     fn is_file(&self, path: &Path) -> bool {
@@ -52,7 +52,7 @@ fn every_editor_definition_has_an_icon_id() {
 #[test]
 fn listing_includes_only_resolved_editors() {
     let runtime = TestEditorRuntime {
-        which_paths: HashMap::from([
+        executable_paths: HashMap::from([
             ("cursor", PathBuf::from("/mock/bin/cursor")),
             ("zed", PathBuf::from("/mock/bin/zed")),
         ]),
@@ -83,7 +83,7 @@ fn listing_includes_only_resolved_editors() {
 #[test]
 fn path_resolution_wins_over_macos_bundle_fallback() {
     let runtime = TestEditorRuntime {
-        which_paths: HashMap::from([("code", PathBuf::from("/mock/bin/code"))]),
+        executable_paths: HashMap::from([("code", PathBuf::from("/mock/bin/code"))]),
         #[cfg(target_os = "macos")]
         existing_files: HashSet::from([PathBuf::from(
             "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
@@ -124,7 +124,7 @@ fn unknown_editor_ids_return_a_clean_error() {
 #[test]
 fn opening_uses_the_same_resolver_path_as_listing() {
     let runtime = TestEditorRuntime {
-        which_paths: HashMap::from([("cursor", PathBuf::from("/mock/bin/cursor"))]),
+        executable_paths: HashMap::from([("cursor", PathBuf::from("/mock/bin/cursor"))]),
         ..Default::default()
     };
 

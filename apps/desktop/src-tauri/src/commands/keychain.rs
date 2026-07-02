@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Mutex, OnceLock};
+use std::time::Duration;
 
 use anyharness_credential_discovery::{export_portable_auth, PortableAuthExport, ProviderId};
 use base64::Engine;
@@ -13,13 +15,18 @@ use crate::app_config::{app_dir_path, read_json_file};
 const RUNTIME_SERVICE: &str = "com.proliferate.app.runtime";
 const ANYHARNESS_DATA_KEY_ACCOUNT: &str = "anyharness_data_key";
 const ANYHARNESS_DATA_KEY_ENV: &str = "ANYHARNESS_DATA_KEY";
+const KEYCHAIN_OP_TIMEOUT: Duration = Duration::from_secs(5);
 
 // Legacy keychain locations recreatable secrets used to live in, kept only so we
 // can purge orphaned items after migrating to file storage (see
 // `purge_legacy_keychain_secrets`).
+#[cfg(target_os = "macos")]
 const LEGACY_ENV_SERVICE: &str = "com.proliferate.app.env";
+#[cfg(target_os = "macos")]
 const LEGACY_AUTH_SERVICE: &str = "com.proliferate.app.auth";
+#[cfg(target_os = "macos")]
 const LEGACY_AUTH_SESSION_ACCOUNT: &str = "desktop_session";
+#[cfg(target_os = "macos")]
 const LEGACY_PENDING_AUTH_ACCOUNT: &str = "desktop_pending_auth";
 
 // Serializes writes to the secret files so concurrent Tauri commands cannot lose
@@ -43,12 +50,9 @@ const KNOWN_ENV_VARS: &[&str] = &[
 // not: its ACL is bound to the build's code signature, so a reinstalled or
 // re-signed build can no longer read it (hence the "log in again after
 // reinstall" bug). Only the anyharness data key — an at-rest encryption key that
-// a plaintext file would defeat — stays in the keychain.
-//
-// The desktop release matrix is macOS-only; the file is owner-only (0600) on
-// unix. If Windows/Linux desktop builds are added, revisit storage there:
-// Windows has no 0600 path, and both have user-scoped OS keychains that survive
-// reinstall and could keep encrypting at rest.
+// a plaintext file would defeat — stays in the OS keychain/keyring. Linux builds
+// require a working user Secret Service/KWallet-compatible keyring for that data
+// key.
 fn auth_session_file_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("auth-session.json"))
 }
@@ -126,6 +130,18 @@ pub struct PendingAuthRecord {
     pub redirect_uri: String,
     pub created_at: String,
     pub last_handled_callback_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthSessionResponse {
+    pub session: Option<AuthSessionRecord>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingAuthResponse {
+    pub record: Option<PendingAuthRecord>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -315,8 +331,8 @@ fn read_password(service: &str, account: &str) -> Result<Option<String>, String>
         })
         .map_err(|_| "Keychain worker is unavailable.".to_string())?;
     response_rx
-        .recv()
-        .map_err(|_| "Keychain worker did not return a result.".to_string())?
+        .recv_timeout(KEYCHAIN_OP_TIMEOUT)
+        .map_err(|_| "Keychain read timed out or worker is unavailable.".to_string())?
 }
 
 fn set_password(service: &str, account: &str, value: &str) -> Result<(), String> {
@@ -330,8 +346,8 @@ fn set_password(service: &str, account: &str, value: &str) -> Result<(), String>
         })
         .map_err(|_| "Keychain worker is unavailable.".to_string())?;
     response_rx
-        .recv()
-        .map_err(|_| "Keychain worker did not return a result.".to_string())?
+        .recv_timeout(KEYCHAIN_OP_TIMEOUT)
+        .map_err(|_| "Keychain write timed out or worker is unavailable.".to_string())?
 }
 
 fn delete_password(service: &str, account: &str) -> Result<(), String> {
@@ -344,16 +360,16 @@ fn delete_password(service: &str, account: &str) -> Result<(), String> {
         })
         .map_err(|_| "Keychain worker is unavailable.".to_string())?;
     response_rx
-        .recv()
-        .map_err(|_| "Keychain worker did not return a result.".to_string())?
+        .recv_timeout(KEYCHAIN_OP_TIMEOUT)
+        .map_err(|_| "Keychain delete timed out or worker is unavailable.".to_string())?
 }
 
-/// One-time, best-effort cleanup of the keychain items that recreatable secrets
-/// used to live in, so an old refresh token / provider key is not left orphaned
-/// after the move to file storage. Deleting a keychain item never decrypts it,
-/// so this succeeds even on items whose ACL no longer trusts this build. Runs at
-/// most once per process and ignores every error (a missing item is the norm on
-/// a fresh install).
+/// One-time, best-effort cleanup of keychain items that recreatable secrets used
+/// to live in, so an old refresh token / provider key is not left orphaned after
+/// the move to file storage. Only runs on macOS where the legacy entries may
+/// exist — Linux desktop support is new and has never stored secrets in the
+/// keyring under the legacy service names.
+#[cfg(target_os = "macos")]
 fn purge_legacy_keychain_secrets() {
     static PURGED: AtomicBool = AtomicBool::new(false);
     if PURGED.swap(true, Ordering::Relaxed) {
@@ -417,11 +433,19 @@ pub async fn delete_env_var_secret(name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
+pub fn get_auth_session() -> Result<AuthSessionResponse, String> {
+    tracing::debug!("get_auth_session command started");
     // The boot read is also the natural point to purge any session/creds an older
     // build left in the keychain (runs at most once per process).
+    #[cfg(target_os = "macos")]
     purge_legacy_keychain_secrets();
-    read_json_file(&auth_session_file_path()?)
+    let path = auth_session_file_path()?;
+    let session = read_json_file(&path)?;
+    tracing::debug!(
+        has_session = session.is_some(),
+        "get_auth_session command completed"
+    );
+    Ok(AuthSessionResponse { session })
 }
 
 #[tauri::command]
@@ -441,8 +465,9 @@ pub async fn clear_auth_session() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn get_pending_auth() -> Result<Option<PendingAuthRecord>, String> {
-    read_json_file(&pending_auth_file_path()?)
+pub fn get_pending_auth() -> Result<PendingAuthResponse, String> {
+    let record = read_json_file(&pending_auth_file_path()?)?;
+    Ok(PendingAuthResponse { record })
 }
 
 #[tauri::command]
@@ -628,8 +653,16 @@ pub fn load_all_secrets_for_sidecar() -> HashMap<String, String> {
             }
         }
     }
-    if let Ok(data_key) = ensure_runtime_data_key() {
-        env.insert(ANYHARNESS_DATA_KEY_ENV.to_string(), data_key);
+    match ensure_runtime_data_key() {
+        Ok(data_key) => {
+            env.insert(ANYHARNESS_DATA_KEY_ENV.to_string(), data_key);
+        }
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "failed to load AnyHarness data key from OS keychain/keyring"
+            );
+        }
     }
     env
 }
@@ -742,8 +775,14 @@ mod tests {
         let parsed: HashMap<String, String> = read_json_file(&path)
             .expect("read should succeed")
             .expect("file should exist");
-        assert_eq!(parsed.get("ANTHROPIC_API_KEY").map(String::as_str), Some("sk-ant-xxx"));
-        assert_eq!(parsed.get("OPENAI_API_KEY").map(String::as_str), Some("sk-openai-yyy"));
+        assert_eq!(
+            parsed.get("ANTHROPIC_API_KEY").map(String::as_str),
+            Some("sk-ant-xxx")
+        );
+        assert_eq!(
+            parsed.get("OPENAI_API_KEY").map(String::as_str),
+            Some("sk-openai-yyy")
+        );
 
         #[cfg(unix)]
         {

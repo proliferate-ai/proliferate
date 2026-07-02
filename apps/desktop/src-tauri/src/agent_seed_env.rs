@@ -117,6 +117,10 @@ mod tests {
             seed_archive_name("aarch64-apple-darwin"),
             "agent-seed-aarch64-apple-darwin.tar.zst"
         );
+        assert_eq!(
+            seed_archive_name("x86_64-unknown-linux-musl"),
+            "agent-seed-x86_64-unknown-linux-musl.tar.zst"
+        );
     }
 
     #[test]

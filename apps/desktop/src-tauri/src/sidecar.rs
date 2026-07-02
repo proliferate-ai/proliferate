@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 use crate::agent_seed_env::current_target_triple;
 use crate::app_config::{write_runtime_info_record, RuntimeInfoRecord};
 use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode};
+use crate::platform;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -247,32 +248,6 @@ fn pick_port() -> u16 {
         .unwrap_or(8457)
 }
 
-/// Resolve the user's full shell PATH. macOS apps launched from Finder/Dock
-/// inherit a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that doesn't include
-/// node, homebrew, nvm, fnm, etc. Running `$SHELL -l -i -c 'echo $PATH'` gives
-/// us the PATH the user would have in a terminal (login + interactive ensures
-/// both .zprofile and .zshrc are sourced, which is needed for tools like fnm/nvm
-/// that set up PATH in .zshrc).
-pub(crate) fn resolve_shell_path() -> Option<String> {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
-    let output = std::process::Command::new(&shell)
-        .args(["-l", "-i", "-c", "echo $PATH"])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path.is_empty() {
-        None
-    } else {
-        Some(path)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,7 +316,7 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
     );
     runtime_env.extend(launch_env.clone());
 
-    if let Some(shell_path) = resolve_shell_path() {
+    if let Some(shell_path) = platform::resolve_shell_path() {
         runtime_env.insert("PATH".to_string(), shell_path);
     }
 

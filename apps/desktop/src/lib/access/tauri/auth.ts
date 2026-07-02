@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core"
+import { invoke, type InvokeArgs } from "@tauri-apps/api/core"
 
 import type { KeychainTelemetryOperation } from "@/lib/domain/telemetry/events"
 
@@ -23,8 +23,17 @@ export interface StoredPendingAuthSession {
 
 const BROWSER_AUTH_SESSION_KEY = "proliferate.auth.session"
 const BROWSER_PENDING_AUTH_KEY = "proliferate.auth.pending"
+const AUTH_STORAGE_INVOKE_TIMEOUT_MS = 1_500
 
 const reportedKeychainFailures = new Set<KeychainTelemetryOperation>()
+
+interface NativeAuthSessionResponse {
+  session: StoredAuthSession | null
+}
+
+interface NativePendingAuthResponse {
+  record: StoredPendingAuthSession | null
+}
 
 // A rejected invoke means native auth storage is broken (e.g. a keychain item
 // whose ACL no longer trusts this binary) — the silent localStorage fallback
@@ -46,6 +55,26 @@ function reportKeychainFailure(
       })
     })
     .catch(() => {})
+}
+
+async function invokeAuthStorage<T>(
+  operation: KeychainTelemetryOperation,
+  args?: InvokeArgs,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null
+  const timeout = new Promise<T>((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      reject(new Error(`${operation} timed out`))
+    }, AUTH_STORAGE_INVOKE_TIMEOUT_MS)
+  })
+
+  try {
+    return await Promise.race([invoke<T>(operation, args), timeout])
+  } finally {
+    if (timeoutId !== null) {
+      globalThis.clearTimeout(timeoutId)
+    }
+  }
 }
 
 function readBrowserSession(): StoredAuthSession | null {
@@ -102,7 +131,8 @@ function clearBrowserPendingAuth(): void {
 
 export async function getStoredAuthSession(): Promise<StoredAuthSession | null> {
   try {
-    return await invoke<StoredAuthSession | null>("get_auth_session")
+    const response = await invokeAuthStorage<NativeAuthSessionResponse>("get_auth_session")
+    return response.session
   } catch (error) {
     reportKeychainFailure("get_auth_session", error)
     return readBrowserSession()
@@ -111,7 +141,7 @@ export async function getStoredAuthSession(): Promise<StoredAuthSession | null> 
 
 export async function setStoredAuthSession(session: StoredAuthSession): Promise<void> {
   try {
-    await invoke("set_auth_session", { session })
+    await invokeAuthStorage<void>("set_auth_session", { session })
     return
   } catch (error) {
     reportKeychainFailure("set_auth_session", error)
@@ -121,7 +151,7 @@ export async function setStoredAuthSession(session: StoredAuthSession): Promise<
 
 export async function clearStoredAuthSession(): Promise<void> {
   try {
-    await invoke("clear_auth_session")
+    await invokeAuthStorage<void>("clear_auth_session")
     return
   } catch (error) {
     reportKeychainFailure("clear_auth_session", error)
@@ -131,7 +161,8 @@ export async function clearStoredAuthSession(): Promise<void> {
 
 export async function getStoredPendingAuthSession(): Promise<StoredPendingAuthSession | null> {
   try {
-    return await invoke<StoredPendingAuthSession | null>("get_pending_auth")
+    const response = await invokeAuthStorage<NativePendingAuthResponse>("get_pending_auth")
+    return response.record
   } catch (error) {
     reportKeychainFailure("get_pending_auth", error)
     return readBrowserPendingAuth()
@@ -142,7 +173,7 @@ export async function setStoredPendingAuthSession(
   record: StoredPendingAuthSession,
 ): Promise<void> {
   try {
-    await invoke("set_pending_auth", { record })
+    await invokeAuthStorage<void>("set_pending_auth", { record })
     return
   } catch (error) {
     reportKeychainFailure("set_pending_auth", error)
@@ -152,7 +183,7 @@ export async function setStoredPendingAuthSession(
 
 export async function clearStoredPendingAuthSession(): Promise<void> {
   try {
-    await invoke("clear_pending_auth")
+    await invokeAuthStorage<void>("clear_pending_auth")
     return
   } catch (error) {
     reportKeychainFailure("clear_pending_auth", error)

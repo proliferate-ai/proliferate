@@ -72,7 +72,7 @@ pub(super) async fn run_auth_flow(
     if let Some(email) = &expected_email {
         command.env("USER_GOOGLE_EMAIL", email);
     }
-    if let Some(path) = crate::sidecar::resolve_shell_path() {
+    if let Some(path) = crate::platform::resolve_shell_path() {
         command.env("PATH", path);
     }
 
@@ -253,20 +253,7 @@ fn extract_google_auth_url(text: &str) -> Option<String> {
 }
 
 fn open_external_url(url: &str) -> Result<(), ()> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(url)
-            .spawn()
-            .map(|_| ())
-            .map_err(|_| ())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = url;
-        Err(())
-    }
+    crate::platform::open_url(url).map_err(|_| ())
 }
 
 async fn wait_for_authenticated_credential(

@@ -5,6 +5,8 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
+    println!("cargo:rerun-if-changed=tauri.linux.conf.json");
+    println!("cargo:rerun-if-changed=tauri.macos.conf.json");
     println!("cargo:rerun-if-env-changed=ANYHARNESS_BIN");
     println!("cargo:rerun-if-env-changed=PROLIFERATE_WORKER_BIN");
     println!("cargo:rerun-if-env-changed=PROLIFERATE_DEBUG_BIN");
@@ -577,6 +579,8 @@ fn is_supported_sidecar_target(target: &str) -> bool {
         target,
         "aarch64-apple-darwin"
             | "x86_64-apple-darwin"
+            | "x86_64-unknown-linux-gnu"
+            | "aarch64-unknown-linux-gnu"
             | "x86_64-unknown-linux-musl"
             | "aarch64-unknown-linux-musl"
             | "x86_64-pc-windows-msvc"

@@ -4,6 +4,7 @@ mod commands;
 mod desktop_telemetry_mode;
 pub mod diagnostics;
 mod editors;
+mod platform;
 mod quit_flow;
 mod sidecar;
 mod state;
