@@ -48,6 +48,12 @@ export function UpdateToastPresenter() {
   useEffect(() => {
     const dismissalKey = `${phase}:${availableVersion ?? "unknown"}`;
 
+    // Once the phase leaves "error", forget the shown message so a retry that
+    // fails with the same message re-surfaces the toast.
+    if (phase !== "error") {
+      shownErrorRef.current = null;
+    }
+
     if (phase === "error" && errorMessage && shownErrorRef.current !== errorMessage) {
       shownErrorRef.current = errorMessage;
       toast("Update failed", {
@@ -66,7 +72,7 @@ export function UpdateToastPresenter() {
       || dismissedKeyRef.current === dismissalKey
       || (phase === "ready" && restartPromptOpen)
     ) {
-      if (UPDATE_TOAST_PHASES.has(phase) && phase === "ready" && restartPromptOpen) {
+      if (phase === "ready" && restartPromptOpen) {
         toast.dismiss(UPDATE_TOAST_ID);
       }
       if (!UPDATE_TOAST_PHASES.has(phase) && phase !== "error") {

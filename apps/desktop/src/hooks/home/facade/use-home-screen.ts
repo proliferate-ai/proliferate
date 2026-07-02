@@ -18,7 +18,7 @@ import {
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
-export const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
+const HOME_MODEL_PROBE_DISMISSED_STORAGE_KEY =
   "proliferate.home.modelProbeCardDismissed";
 
 function readHomeModelProbeDismissed(): boolean {

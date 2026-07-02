@@ -95,22 +95,19 @@ export function TargetPickerMenuItem({
 interface HomeTargetRowItemProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon?: ReactNode;
-  /** Category label ("Project", "Env") — 12px weight 500 foreground. */
-  category?: string | null;
-  /** Value ("proliferate", "New worktree") — 12px weight 400 muted. */
+  /** Value ("proliferate", "New worktree") — 13px weight 400 muted. */
   value: string;
   disclosure?: boolean;
 }
 
 /**
  * Codex home footer item (UX spec §1.3, anchor `_externalFooterItem`):
- * inline "category value ▾" trigger — 12px text, category weight 500
- * `--foreground`, value weight 400 truncated, 12px `--faint` chevron,
- * pill hover fill.
+ * inline "value ▾" trigger — 13px text, value weight 400 truncated,
+ * 12px `--faint` chevron, pill hover fill.
  */
 export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItemProps>(
   function HomeTargetRowItem(
-    { icon, category, value, disclosure = true, className, type = "button", ...props },
+    { icon, value, disclosure = true, className, type = "button", ...props },
     ref,
   ) {
     return (
@@ -125,9 +122,6 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
       >
         {icon ? <span className="inline-flex shrink-0 items-center">{icon}</span> : null}
         <span className="inline-flex min-w-0 items-baseline gap-1 text-left">
-          {category ? (
-            <span className="shrink-0 font-medium text-foreground">{category}</span>
-          ) : null}
           <span className="min-w-0 max-w-60 truncate font-normal">{value}</span>
         </span>
         {disclosure ? (

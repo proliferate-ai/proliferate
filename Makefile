@@ -948,7 +948,7 @@ shared-build:
 # worktree never needs its own runtime build. (`tauri dev` still compiles the
 # desktop shell into the worktree's target/ on first run.)
 build-rust:
-	@if [ -n "$(SKIP_RUST)" ]; then \
+	@if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ]; then \
 		echo "SKIP_RUST set — skipping cargo builds (runtime: $${ANYHARNESS_DEV_RUNTIME_BIN:-<unset>})"; \
 	else \
 		$(CARGO) build --workspace && \

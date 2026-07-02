@@ -136,7 +136,7 @@ function ComposerActionRow({
         onClick={onClick}
         className="min-w-0 flex-1"
       >
-        <span className="block whitespace-normal text-sm leading-4 text-muted-foreground">
+        <span className="block whitespace-normal text-[12px] leading-4 text-muted-foreground">
           {detail}
         </span>
       </PopoverMenuItem>

@@ -87,12 +87,13 @@ export function HomeNextScreen() {
   // fed by launch-time adapters instead of live-session state.
   const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
   const launchControlGroups = buildComposerSessionControlGroups(homeLaunchControls.controls);
-  const homeModeControl = launchControlGroups.modeControl
-    ?? buildHomeModeControlDescriptor({
-      modes: homeNext.modeOptions,
-      selectedModeId: homeNext.effectiveMode?.value ?? null,
-      onSelect: setModeOverrideId,
-    });
+  // Mode always comes from the home adapter: useHomeNextLaunchControls filters
+  // mode keys out of `controls`, so launchControlGroups.modeControl never fires.
+  const homeModeControl = buildHomeModeControlDescriptor({
+    modes: homeNext.modeOptions,
+    selectedModeId: homeNext.effectiveMode?.value ?? null,
+    onSelect: setModeOverrideId,
+  });
   const homeModelSelectorProps = buildHomeModelSelectorProps({
     groups: homeNext.modelGroups,
     selectedModel: homeNext.selectedModel,
