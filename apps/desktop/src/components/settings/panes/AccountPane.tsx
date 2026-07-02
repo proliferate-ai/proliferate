@@ -188,9 +188,11 @@ export function AccountPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Account"
+        // In local mode the profile card below carries the control-plane
+        // explanation; repeating it as the page subtitle read as a bug.
         description={
           localMode
-            ? CAPABILITY_COPY.accountLocalDescription
+            ? undefined
             : signInUnavailable
               ? CAPABILITY_COPY.accountAuthUnavailableDescription
             : "Sign in to use cloud workspaces and credential sync. Local workspaces remain available without an account."
