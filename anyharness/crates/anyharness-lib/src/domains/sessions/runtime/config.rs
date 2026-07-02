@@ -55,11 +55,13 @@ impl SessionRuntime {
                 StartSessionError::Closed => {
                     SetSessionConfigOptionError::Rejected("session is closed".to_string())
                 }
-                StartSessionError::MissingDataKey
-                | StartSessionError::RestartRequired(_) => {
+                StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
                     SetSessionConfigOptionError::Internal(anyhow::anyhow!(
                         "{SESSION_RESTART_REQUIRED_DETAIL}"
                     ))
+                }
+                StartSessionError::RouteAuth(error) => {
+                    SetSessionConfigOptionError::Rejected(error.to_string())
                 }
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     SetSessionConfigOptionError::Internal(error)

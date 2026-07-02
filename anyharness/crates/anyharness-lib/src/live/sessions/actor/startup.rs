@@ -20,17 +20,17 @@ use crate::live::sessions::background_work::{
     BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate,
 };
 use crate::live::sessions::driver::connection::establish_connection;
+use crate::live::sessions::driver::inbound::InboundDoor;
 use crate::live::sessions::driver::native_session::{
     has_anyharness_targeted_fork_extension, start_native_session,
 };
 use crate::live::sessions::driver::process::spawn_agent_process;
-use crate::live::sessions::driver::stderr::AgentStderrTail;
-use crate::live::sessions::driver::inbound::InboundDoor;
 use crate::live::sessions::driver::session_lifecycle::initialize_connection;
+use crate::live::sessions::driver::stderr::AgentStderrTail;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
+use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{QueueDurable, SessionStateDurable};
 use crate::live::sessions::sink::SessionEventSink;
-use crate::live::sessions::handle::LiveSessionHandle;
 
 impl SessionActor {
     /// Spawns the agent process, establishes the ACP connection, starts the
@@ -58,8 +58,7 @@ impl SessionActor {
         let spawned = spawn_agent_process(
             &config.launch.agent,
             &config.launch.workspace_path,
-            &config.launch.env.workspace,
-            &config.launch.env.session,
+            &config.launch.env,
             &session_id,
             &workspace_id,
             &source_agent_kind,
