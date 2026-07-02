@@ -31,6 +31,10 @@
       "types": "./dist/code/VirtualizedCodeContent.d.ts",
       "import": "./dist/code/VirtualizedCodeContent.js"
     },
+    "./activity/GoalBar": {
+      "types": "./dist/activity/GoalBar.d.ts",
+      "import": "./dist/activity/GoalBar.js"
+    },
     "./account/AccountIdentityCard": {
       "types": "./dist/account/AccountIdentityCard.d.ts",
       "import": "./dist/account/AccountIdentityCard.js"
