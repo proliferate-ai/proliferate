@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITE_EXPIRES_DAYS,
@@ -204,6 +205,12 @@ async def list_organizations(
     db: AsyncSession,
     actor_user: OrganizationActor,
 ) -> OrganizationMembershipRecords:
+    if settings.single_org_mode:
+        # Single-org mode: placement is owned by the membership policy seam
+        # (first-run claim and invited registration). Listing must never mint
+        # a personal organization for a member who does not own one, so this
+        # skips the hosted ensure-default path entirely.
+        return await organization_store.list_organizations_for_user(db, actor_user.id)
     return await organization_store.ensure_default_organization_for_user(
         db,
         user_id=actor_user.id,
