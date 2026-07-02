@@ -79,6 +79,14 @@ const UpdatePlaygroundPage = import.meta.env.DEV
     )
   : null
 
+const WorkspaceStatusPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/WorkspaceStatusPlaygroundPage").then((m) => ({
+        default: m.WorkspaceStatusPlaygroundPage,
+      })),
+    )
+  : null
+
 const AuthPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/AuthPlaygroundPage").then((m) => ({
@@ -306,6 +314,16 @@ function AppRuntime() {
                 element={
                   <Suspense fallback={null}>
                     <UpdatePlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
+            {import.meta.env.DEV && WorkspaceStatusPlaygroundPage && (
+              <Route
+                path="/playground/workspace-status"
+                element={
+                  <Suspense fallback={null}>
+                    <WorkspaceStatusPlaygroundPage />
                   </Suspense>
                 }
               />
