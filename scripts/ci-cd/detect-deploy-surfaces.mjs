@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 export const SURFACES = [
   "server",
   "workers",
+  "litellm",
   "e2b",
   "web",
   "mobile",
@@ -132,6 +133,10 @@ export function classifyFile(path) {
     ])
   ) {
     touched.add("workers");
+  }
+
+  if (matches(path, ["server/litellm"])) {
+    touched.add("litellm");
   }
 
   if (

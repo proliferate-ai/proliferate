@@ -16,6 +16,9 @@ LOCAL_REDIS_PORT ?= 6379
 USE_EXISTING_REDIS ?= 0
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
+AGENT_GATEWAY ?= 0
+LOCAL_LITELLM_BASE_URL ?= http://127.0.0.1:14000
+LOCAL_LITELLM_MASTER_KEY ?= sk-proliferate-local-dev
 CLOUD_WORKER_TUNNEL ?= 0
 AUTH_PROFILE ?=
 SSO_STATUS ?= enabled
@@ -96,7 +99,8 @@ endif
 endif
 
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
-        server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready db db-local db-ah server-migrate serve install \
+        server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
+        server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
@@ -231,6 +235,32 @@ run: dev-artifacts-ready
 	fi; \
 	if [ "$$use_profile_db" = "1" ]; then \
 		$(PROFILE_DB_ENSURE_COMMAND) \
+	fi; \
+	agent_gateway_mode="$(AGENT_GATEWAY)"; \
+	if [ "$$agent_gateway_mode" = "1" ] || [ "$$agent_gateway_mode" = "litellm" ]; then \
+		export AGENT_GATEWAY_ENABLED=true; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL="$${AGENT_GATEWAY_LITELLM_BASE_URL:-$(LOCAL_LITELLM_BASE_URL)}"; \
+		export AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL="$${AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL:-$$AGENT_GATEWAY_LITELLM_BASE_URL}"; \
+		if [ -z "$${LITELLM_MASTER_KEY:-}" ] && [ -z "$${AGENT_GATEWAY_LITELLM_MASTER_KEY:-}" ]; then \
+			case "$$AGENT_GATEWAY_LITELLM_BASE_URL" in \
+				*127.0.0.1*|*localhost*) \
+					echo "WARNING: LITELLM_MASTER_KEY unset; booting the local LiteLLM proxy with the well-known dev default ($(LOCAL_LITELLM_MASTER_KEY)). Set LITELLM_MASTER_KEY for anything shared." >&2; \
+					export LITELLM_MASTER_KEY="$(LOCAL_LITELLM_MASTER_KEY)"; \
+					;; \
+				*) \
+					echo "ERROR: AGENT_GATEWAY_LITELLM_BASE_URL=$$AGENT_GATEWAY_LITELLM_BASE_URL is not local but LITELLM_MASTER_KEY/AGENT_GATEWAY_LITELLM_MASTER_KEY are unset. Refusing to boot with a default master key. Set the master key explicitly." >&2; \
+					exit 1; \
+					;; \
+			esac; \
+		fi; \
+		export LITELLM_MASTER_KEY="$${LITELLM_MASTER_KEY:-$(LOCAL_LITELLM_MASTER_KEY)}"; \
+		export AGENT_GATEWAY_LITELLM_MASTER_KEY="$${AGENT_GATEWAY_LITELLM_MASTER_KEY:-$$LITELLM_MASTER_KEY}"; \
+		make server-litellm-up; \
+		make server-litellm-wait; \
+		echo "Agent gateway LiteLLM enabled: admin $$AGENT_GATEWAY_LITELLM_BASE_URL, public $$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL"; \
+	elif [ "$$agent_gateway_mode" != "0" ]; then \
+		echo "Unsupported AGENT_GATEWAY=$$agent_gateway_mode. Use 0, 1, or litellm."; \
+		exit 1; \
 	fi; \
 	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
 	stripe_listener_ready=0; \
@@ -425,6 +455,31 @@ server-redis-wait:
 
 server-redis-down:
 	@docker compose -f server/docker-compose.yml stop redis
+
+server-litellm-up:
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "Docker is required for the local LiteLLM gateway. Install or start Docker and retry."; \
+		exit 1; \
+	}
+	@docker info >/dev/null 2>&1 || { \
+		echo "Docker is not running. Start Docker Desktop and retry."; \
+		exit 1; \
+	}
+	@docker compose -f server/docker-compose.yml up -d litellm
+
+server-litellm-wait:
+	@attempts=0; \
+	until curl -fsS "$(LOCAL_LITELLM_BASE_URL)/health/liveliness" >/dev/null 2>&1; do \
+		attempts=$$((attempts + 1)); \
+		if [ $$attempts -ge 30 ]; then \
+			echo "Local LiteLLM did not become ready. Check \`docker compose -f server/docker-compose.yml logs litellm\`."; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+
+server-litellm-down:
+	@docker compose -f server/docker-compose.yml stop litellm litellm-db
 
 server-redis-ready:
 ifeq ($(USE_EXISTING_REDIS),1)
