@@ -341,6 +341,10 @@ class Settings(BaseSettings):
     agent_gateway_topup_amount_usd: str = "10"
     # Stripe price for one auto top-up charge; empty disables auto top-ups.
     agent_gateway_llm_topup_price_id: str = ""
+    # Minimum org plan required to edit the org agent policy: "free" (no
+    # gate) or "pro" (org needs a healthy paid cloud subscription or an
+    # active unlimited-cloud entitlement). Reading is never plan-gated.
+    agent_gateway_policy_min_plan: str = "pro"
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""

@@ -38,7 +38,9 @@ from proliferate.db.store.agent_gateway.enrollments import (
     set_enrollment_budget_status,
 )
 from proliferate.db.store.agent_gateway.policy import (
+    OrgMemberRouteSelectionRecord,
     get_org_agent_policy,
+    list_org_member_route_selections,
     set_org_agent_policy,
 )
 from proliferate.db.store.agent_gateway.records import (
@@ -75,6 +77,7 @@ __all__ = [
     "LlmCreditBalanceRecord",
     "LlmCreditGrantRecord",
     "OrgAgentPolicyRecord",
+    "OrgMemberRouteSelectionRecord",
     "advance_usage_import_cursor",
     "build_redacted_hint",
     "count_topup_grants",
@@ -100,6 +103,7 @@ __all__ = [
     "list_agent_api_keys",
     "list_billing_subject_ids_with_active_enrollments",
     "list_enrollments_needing_sync",
+    "list_org_member_route_selections",
     "list_org_memberships_missing_enrollment",
     "list_route_selections",
     "list_user_ids_missing_enrollment",

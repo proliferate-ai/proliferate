@@ -7,7 +7,7 @@ virtual-key fields exist on any model here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,7 +17,11 @@ from proliferate.db.store.agent_gateway import (
     AgentCatalogOverrideRecord,
     AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
+    OrgMemberRouteSelectionRecord,
 )
+
+if TYPE_CHECKING:
+    from proliferate.server.cloud.agent_gateway.service import OrgAgentPolicySnapshot
 
 AgentAuthSurface = Literal["local", "cloud"]
 AgentAuthRoute = Literal["native", "api_key", "gateway"]
@@ -107,6 +111,35 @@ class AgentGatewayCatalogOverrideResponse(AgentGatewayBaseModel):
     updated_at: str = Field(alias="updatedAt")
 
 
+class OrgAgentPolicyResponse(AgentGatewayBaseModel):
+    """Flag-only policy. ``None`` lists mean "no restriction"."""
+
+    organization_id: str = Field(alias="organizationId")
+    allowed_routes: list[str] | None = Field(alias="allowedRoutes")
+    allowed_harnesses: list[str] | None = Field(alias="allowedHarnesses")
+    editable: bool
+    updated_by_user_id: str | None = Field(alias="updatedByUserId")
+    updated_at: str | None = Field(alias="updatedAt")
+
+
+class OrgAgentPolicyUpdateRequest(AgentGatewayBaseModel):
+    allowed_routes: list[str] | None = Field(default=None, alias="allowedRoutes")
+    allowed_harnesses: list[str] | None = Field(default=None, alias="allowedHarnesses")
+
+
+class OrgAgentPolicyViolation(AgentGatewayBaseModel):
+    user_id: str = Field(alias="userId")
+    email: str | None
+    display_name: str | None = Field(alias="displayName")
+    harness_kind: str = Field(alias="harnessKind")
+    surface: AgentAuthSurface
+    route: AgentAuthRoute
+
+
+class OrgAgentPolicyViolationListResponse(AgentGatewayBaseModel):
+    violations: list[OrgAgentPolicyViolation]
+
+
 class AgentGatewayEnrollmentResponse(AgentGatewayBaseModel):
     id: str
     subject_kind: str = Field(alias="subjectKind")
@@ -178,6 +211,36 @@ def catalog_override_payload(
         patch_json=record.patch_json,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
+    )
+
+
+def org_agent_policy_payload(snapshot: OrgAgentPolicySnapshot) -> OrgAgentPolicyResponse:
+    return OrgAgentPolicyResponse(
+        organization_id=str(snapshot.organization_id),
+        allowed_routes=(
+            list(snapshot.allowed_routes) if snapshot.allowed_routes is not None else None
+        ),
+        allowed_harnesses=(
+            list(snapshot.allowed_harnesses) if snapshot.allowed_harnesses is not None else None
+        ),
+        editable=snapshot.editable,
+        updated_by_user_id=(
+            str(snapshot.updated_by_user_id) if snapshot.updated_by_user_id is not None else None
+        ),
+        updated_at=_iso(snapshot.updated_at),
+    )
+
+
+def org_agent_policy_violation_payload(
+    record: OrgMemberRouteSelectionRecord,
+) -> OrgAgentPolicyViolation:
+    return OrgAgentPolicyViolation(
+        user_id=str(record.user_id),
+        email=record.email,
+        display_name=record.display_name,
+        harness_kind=record.harness_kind,
+        surface=record.surface,  # type: ignore[arg-type]
+        route=record.route,  # type: ignore[arg-type]
     )
 
 
