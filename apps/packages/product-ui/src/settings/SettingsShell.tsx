@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";

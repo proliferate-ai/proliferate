@@ -213,7 +213,7 @@ function OutboxPromptFailureLine({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-auto rounded-none px-1 py-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+              className="h-auto rounded-none px-1 py-0 text-base font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
               onClick={() => outboxActions.retryPrompt(entry.clientPromptId)}
             >
               Retry
@@ -223,7 +223,7 @@ function OutboxPromptFailureLine({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-auto rounded-none px-1 py-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+            className="h-auto rounded-none px-1 py-0 text-base font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
             onClick={() => outboxActions.dismissPrompt(entry.clientPromptId)}
           >
             Dismiss

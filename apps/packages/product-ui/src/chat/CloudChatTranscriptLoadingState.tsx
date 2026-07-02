@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 export function CloudChatTranscriptLoadingState() {
   return (

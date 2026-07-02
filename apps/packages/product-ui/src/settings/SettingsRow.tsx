@@ -1,5 +1,5 @@
 import { type HTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 export interface SettingsRowProps extends HTMLAttributes<HTMLDivElement> {
   label: ReactNode;
@@ -32,9 +32,9 @@ export function SettingsRow({
       {...props}
     >
       <div className="min-w-0 space-y-1">
-        <div className="text-[13px] font-medium leading-5 text-foreground">{label}</div>
+        <div className="text-ui font-medium leading-5 text-foreground">{label}</div>
         {description ? (
-          <div className="max-w-2xl text-[12px] leading-[1.45] text-muted-foreground">{description}</div>
+          <div className="max-w-2xl text-ui-sm leading-[1.45] text-muted-foreground">{description}</div>
         ) : null}
       </div>
       {children ? (

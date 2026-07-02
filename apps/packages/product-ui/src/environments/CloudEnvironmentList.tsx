@@ -138,7 +138,7 @@ function SectionHeading({
     <div className="flex items-end justify-between gap-3">
       <div className="min-w-0">
         <SettingsEyebrow as="h3">{title}</SettingsEyebrow>
-        <p className="mt-1 max-w-2xl text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
+        <p className="mt-1 max-w-2xl text-ui-sm leading-[1.45] text-muted-foreground">{description}</p>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

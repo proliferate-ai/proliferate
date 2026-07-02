@@ -224,7 +224,7 @@ export function WorkspaceItem({
           <>
             <DropdownMenuSeparator />
             {branchName && (
-              <div className="flex items-center gap-2 px-2 py-1.5 font-mono text-[12px] leading-4 text-muted-foreground">
+              <div className="flex items-center gap-2 px-2 py-1.5 font-mono text-ui-sm text-muted-foreground">
                 <GitBranch className="size-3.5 shrink-0" />
                 <span className="min-w-0 truncate">{branchName}</span>
               </div>

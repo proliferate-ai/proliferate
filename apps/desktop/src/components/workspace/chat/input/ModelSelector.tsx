@@ -126,13 +126,13 @@ export function ModelSelector({
                 ))}
 
                 {filteredGroups.length === 0 && groups.length > 0 && (
-                  <p className="px-3 py-4 text-center text-[13px] leading-[18px] text-muted-foreground">
+                  <p className="px-3 py-4 text-center text-ui text-muted-foreground">
                     {CHAT_MODEL_SELECTOR_LABELS.noMatchPrefix} "{search}"
                   </p>
                 )}
 
                 {groups.length === 0 && (
-                  <p className="px-3 py-4 text-center text-[13px] leading-[18px] text-muted-foreground">
+                  <p className="px-3 py-4 text-center text-ui text-muted-foreground">
                     {CHAT_MODEL_SELECTOR_LABELS.noProviders}
                   </p>
                 )}
@@ -176,7 +176,7 @@ function ProviderModelGroup({
   return (
     <>
       {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
-      <div className="min-h-5 truncate px-2.5 py-0.5 text-[12px] font-[430] leading-4 text-muted-foreground/70">
+      <div className="min-h-5 truncate px-2.5 py-0.5 text-ui-sm font-[430] text-muted-foreground/70">
         {group.providerDisplayName}
       </div>
       {group.models.map((model) => (
@@ -218,11 +218,11 @@ function ModelRow({
       icon={<ProviderIcon kind={kind} className="size-3.5 shrink-0 text-muted-foreground" />}
       label={displayName}
       trailing={showNewChatBadge ? (
-        <span className="shrink-0 text-[12px] leading-4 text-muted-foreground/60">
+        <span className="shrink-0 text-ui-sm text-muted-foreground/60">
           {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
         </span>
       ) : isSelected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
-      className="px-2.5 leading-[18px]"
+      className="px-2.5"
       trailingClassName="size-auto opacity-100"
     />
   );

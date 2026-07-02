@@ -1,5 +1,5 @@
 import type { HTMLAttributes } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 interface ThinkingTextProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
   text?: string;

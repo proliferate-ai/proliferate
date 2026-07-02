@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ChevronRight } from "lucide-react";
 
 import { Button } from "@proliferate/ui/primitives/Button";

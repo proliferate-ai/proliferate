@@ -87,11 +87,11 @@ function OnboardingCard({
         </Button>
       ) : null}
       <span className="pointer-events-none z-10 flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-[13px] font-medium leading-[18px] text-foreground">
+        <span className="truncate text-ui font-medium text-foreground">
           {title}
         </span>
         {description ? (
-          <span className="line-clamp-2 text-[12px] leading-[16px] text-muted-foreground">
+          <span className="line-clamp-2 text-ui-sm text-muted-foreground">
             {description}
           </span>
         ) : null}
@@ -124,7 +124,7 @@ function ModelProbeCard({
         title={(
           <ThinkingText
             text={HOME_SCREEN_LABELS.modelProbeProbingTitle}
-            className="text-[13px] font-medium"
+            className="text-ui font-medium"
           />
         )}
         trailing={<Spinner className="size-3.5 text-muted-foreground" />}

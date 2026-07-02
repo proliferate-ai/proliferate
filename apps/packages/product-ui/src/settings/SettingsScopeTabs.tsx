@@ -32,7 +32,7 @@ export function SettingsScopeTabs<Id extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(item.id)}
-            className={`relative -mb-px inline-flex items-center border-b-2 text-[13px] leading-none transition-colors ${
+            className={`relative -mb-px inline-flex items-center border-b-2 text-ui leading-none transition-colors ${
               active
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"

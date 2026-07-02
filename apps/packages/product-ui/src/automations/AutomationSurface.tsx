@@ -1,6 +1,6 @@
 import { CalendarClock, List, Plus, RotateCcw } from "lucide-react";
 import { type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type {

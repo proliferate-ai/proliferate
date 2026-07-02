@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Navigate, Outlet } from "react-router-dom"
-import { twMerge } from "tailwind-merge"
+import { twMerge } from "@proliferate/ui/utils/tw-merge"
 import { AuthShell } from "@/components/auth/AuthShell"
 import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode"
 import { useAuthStore } from "@/stores/auth/auth-store"

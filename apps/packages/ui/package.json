@@ -243,6 +243,10 @@
       "types": "./dist/utils/search.d.ts",
       "import": "./dist/utils/search.js"
     },
+    "./utils/tw-merge": {
+      "types": "./dist/utils/tw-merge.d.ts",
+      "import": "./dist/utils/tw-merge.js"
+    },
     "./kit/AlertDialog": {
       "types": "./dist/kit/AlertDialog.d.ts",
       "import": "./dist/kit/AlertDialog.js"

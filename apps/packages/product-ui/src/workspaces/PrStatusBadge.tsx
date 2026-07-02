@@ -15,7 +15,7 @@
  * `faint`, `info`) so the component works on both desktop and web surfaces.
  */
 import type { ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 export type PrStatusKind =
   | "open"

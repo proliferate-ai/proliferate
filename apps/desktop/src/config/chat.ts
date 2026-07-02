@@ -1,7 +1,5 @@
 /** Default rem fallback used when computed textarea line-height is unavailable. */
 export const CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM = 1.375;
-/** Pixels; keep aligned with the shared ComposerTextarea line-height (14px + 8). */
-export const CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX = 22;
 
 export const WORKSPACE_CHAT_COMPOSER_INPUT = {
   minRows: 2,

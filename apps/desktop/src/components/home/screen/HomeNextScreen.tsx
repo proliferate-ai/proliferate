@@ -119,7 +119,7 @@ export function HomeNextScreen() {
           {/* Hero heading (spec §1.1): 28px / 400 / centered; the project name
               is an inline menu trigger with a pill hover fill. */}
           <div className="mb-5 flex flex-col items-center text-center">
-            <h1 className="max-w-full whitespace-pre-wrap text-[28px] font-normal leading-9 text-foreground">
+            <h1 className="max-w-full whitespace-pre-wrap text-hero font-normal text-foreground">
               <span className="group/title inline-block max-w-full">
                 {promptTarget ? (
                   <>
@@ -228,7 +228,7 @@ export function HomeNextScreen() {
               />
             )}
             modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
-              <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
+              <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
                 <span>{modelAvailabilityNotice.text}</span>
                 {modelAvailabilityNotice.actionLabel ? (
                   <Button

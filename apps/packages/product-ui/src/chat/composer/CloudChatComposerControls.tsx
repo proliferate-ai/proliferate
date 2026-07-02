@@ -1,5 +1,5 @@
 import { ArrowUp, Plus } from "lucide-react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ComposerActionButton } from "@proliferate/ui/primitives/ComposerActionButton";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import type {

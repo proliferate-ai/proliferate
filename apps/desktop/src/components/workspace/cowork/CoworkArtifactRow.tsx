@@ -29,7 +29,7 @@ export function CoworkArtifactRow({
           {artifact.path}
         </div>
         {!artifact.exists && (
-          <div className="pt-1 text-[11px] text-destructive">
+          <div className="pt-1 text-base text-destructive">
             File missing
           </div>
         )}

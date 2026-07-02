@@ -89,7 +89,7 @@ export function RuntimePressureDetailsDialog({
               Delete removes the selected checkout and any attached runtime history.
             </p>
             <div className="flex shrink-0 items-center gap-3">
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-base text-muted-foreground">
                 {formatByteEstimate(storageSummary.worktreeBytes)} + {formatByteEstimate(storageSummary.sqliteBytes)}
               </span>
             </div>
@@ -269,7 +269,7 @@ function Gauge({
   return (
     <div className="flex items-center gap-3">
       <span className="w-[78px] shrink-0 truncate text-xs text-muted-foreground/70">{label}</span>
-      <span className="w-[52px] shrink-0 text-right text-[13px] tabular-nums text-foreground">
+      <span className="w-[52px] shrink-0 text-right text-ui tabular-nums text-foreground">
         {finiteValue === null ? "--" : `${Math.round(finiteValue)}${suffix}`}
       </span>
       <div className="relative h-1.5 flex-1 rounded-full bg-foreground/[0.08]">
@@ -285,7 +285,7 @@ function Gauge({
           style={{ left: `${limitPosition}%` }}
         />
       </div>
-      <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground/60">
+      <span className="w-7 shrink-0 text-right text-base tabular-nums text-muted-foreground/60">
         {Math.round(limit)}
       </span>
     </div>

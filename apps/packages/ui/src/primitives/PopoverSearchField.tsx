@@ -29,7 +29,7 @@ export function PopoverSearchField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[13px] leading-[18px] shadow-none focus:ring-0"
+        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
       />
     </div>
   );

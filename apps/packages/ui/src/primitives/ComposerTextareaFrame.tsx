@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 export type ComposerTextareaFrameTopInset = "standard" | "none";
 

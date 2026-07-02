@@ -47,7 +47,7 @@ export function ProductSidebarThreadRow({
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className={`flex min-w-0 flex-1 ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} truncate text-[13px] leading-5 text-sidebar-foreground`}>
+          <div className={`flex min-w-0 flex-1 ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} truncate text-ui leading-5 text-sidebar-foreground`}>
             <span className="max-w-full truncate">
               {label}
             </span>

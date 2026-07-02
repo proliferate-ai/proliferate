@@ -27,7 +27,7 @@ export function SidebarActionIconButton({
       className={`${action.destructive ? "text-destructive hover:text-destructive" : ""
         } ${alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
     >
-      {action.icon ?? <span className="text-[10px] leading-none">...</span>}
+      {action.icon ?? <span className="text-sm leading-none">...</span>}
     </SidebarActionButton>
   );
 }

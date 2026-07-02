@@ -38,7 +38,7 @@ export function PickerPopoverContent({
 
 export function PickerEmptyRow({ label }: { label: string }) {
   return (
-    <div className="px-2.5 py-[5px] text-[13px] leading-[18px] text-muted-foreground">
+    <div className="px-2.5 py-[5px] text-ui text-muted-foreground">
       {label}
     </div>
   );

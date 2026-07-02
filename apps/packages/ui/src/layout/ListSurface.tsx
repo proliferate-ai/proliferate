@@ -1,5 +1,5 @@
 import { type HTMLAttributes } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 export function ListSurface({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
   return (

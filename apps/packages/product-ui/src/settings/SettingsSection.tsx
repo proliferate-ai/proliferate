@@ -28,7 +28,7 @@ export function SettingsSection({
         <div className="mb-1.5">
           {title ? <SettingsEyebrow>{title}</SettingsEyebrow> : null}
           {description ? (
-            <p className="mt-1 max-w-2xl text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
+            <p className="mt-1 max-w-2xl text-ui-sm leading-[1.45] text-muted-foreground">{description}</p>
           ) : null}
         </div>
       ) : null}

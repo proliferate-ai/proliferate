@@ -54,7 +54,7 @@ export function PlaygroundSidebarGitDiff() {
             );
             return (
               <section key={section} className="flex flex-col gap-1">
-                <h2 className="px-1.5 text-[10px] font-medium uppercase tracking-wide text-sidebar-muted-foreground">
+                <h2 className="px-1.5 text-sm font-medium uppercase tracking-wide text-sidebar-muted-foreground">
                   {section}
                 </h2>
                 {files.length > 0 ? (
@@ -118,7 +118,7 @@ function PlaygroundSidebarGitDiffCard({
               variant="chat"
             />
             {file.truncated && (
-              <p className="px-3 pb-1 text-[10px] text-sidebar-muted-foreground">
+              <p className="px-3 pb-1 text-sm text-sidebar-muted-foreground">
                 Diff truncated
               </p>
             )}

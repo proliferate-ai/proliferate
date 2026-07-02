@@ -130,7 +130,7 @@ export function PlaygroundThinkingTimingControls() {
       </div>
 
       <p
-        className="rounded-md bg-foreground/5 px-3 py-2 font-mono text-[11px] leading-5 text-muted-foreground"
+        className="rounded-md bg-foreground/5 px-3 py-2 font-mono text-base leading-5 text-muted-foreground"
         data-thinking-timing-summary
       >
         forward {timing.forwardSpeedMs}ms {" | "}gap {"->"}/{"->"}{" "}
@@ -159,7 +159,7 @@ function TimingRangeControl({
         <Label htmlFor={id} className="mb-0 text-foreground">
           {control.label}
         </Label>
-        <span className="font-mono text-[11px] text-muted-foreground">
+        <span className="font-mono text-base text-muted-foreground">
           {value}ms
         </span>
       </div>

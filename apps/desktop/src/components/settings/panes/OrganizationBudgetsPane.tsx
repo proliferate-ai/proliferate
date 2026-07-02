@@ -324,7 +324,7 @@ function UsageAreaChart({ points }: { points: UsagePoint[] }) {
             y={height - 10}
             textAnchor="middle"
             fill="currentColor"
-            className="text-[10px] text-muted-foreground"
+            className="text-sm text-muted-foreground"
           >
             {point.label}
           </text>
