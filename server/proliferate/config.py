@@ -24,6 +24,14 @@ class Settings(BaseSettings):
         default="local_dev",
         validation_alias=AliasChoices("PROLIFERATE_TELEMETRY_MODE", "TELEMETRY_MODE"),
     )
+    # Org membership mode. When single-org mode is on, every new identity joins
+    # the one instance organization instead of getting a personal default org.
+    # The default is derived (hosted production stays multi-org; every other
+    # deployment posture defaults to single-org); an explicit env value wins.
+    single_org_mode_override: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SINGLE_ORG_MODE", "PROLIFERATE_SINGLE_ORG_MODE"),
+    )
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"
@@ -364,6 +372,12 @@ class Settings(BaseSettings):
         "install/proliferate-target-install.sh"
     )
     proliferate_target_artifact_base_url: str = ""
+
+    @property
+    def single_org_mode(self) -> bool:
+        if self.single_org_mode_override is not None:
+            return self.single_org_mode_override
+        return self.telemetry_mode != "hosted_product"
 
     @model_validator(mode="after")
     def validate_secrets_in_production(self) -> "Settings":
