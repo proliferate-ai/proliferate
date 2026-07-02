@@ -193,10 +193,17 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
             SendPromptError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
         }
         StartSessionError::Closed => SendPromptError::SessionClosed,
-        StartSessionError::MissingDataKey
-        | StartSessionError::RestartRequired(_) => {
+        StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
             SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))
         }
+        // Lazy-start on prompt: surface the typed agent-auth code so clients
+        // can distinguish the fail-closed launch refusal from generic errors.
+        StartSessionError::RouteAuth(error) => SendPromptError::InvalidPrompt(
+            crate::domains::sessions::prompt::PromptValidationError::new(
+                error.code(),
+                error.to_string(),
+            ),
+        ),
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             SendPromptError::Internal(error)
         }

@@ -58,8 +58,7 @@ impl SessionActor {
         let spawned = spawn_agent_process(
             &config.launch.agent,
             &config.launch.workspace_path,
-            &config.launch.env.workspace,
-            &config.launch.env.session,
+            &config.launch.env,
             &session_id,
             &workspace_id,
             &source_agent_kind,
