@@ -63,6 +63,51 @@ class IntegrationOAuthFlowStatusResponse(_CamelModel):
     final_surface: str
 
 
+# --------------------------------------------------------------------------- #
+# Connect catalog
+# --------------------------------------------------------------------------- #
+
+
+class IntegrationCatalogSecretField(_CamelModel):
+    id: str
+    label: str
+    placeholder: str | None = None
+    helper_text: str | None = None
+    prefix_hint: str | None = None
+
+
+class IntegrationCatalogSettingOption(_CamelModel):
+    value: str
+    label: str
+
+
+class IntegrationCatalogSettingField(_CamelModel):
+    id: str
+    label: str
+    kind: str
+    required: bool = False
+    options: list[IntegrationCatalogSettingOption] = []
+    default: str | bool | None = None
+
+
+class IntegrationConnectSchema(_CamelModel):
+    secret_fields: list[IntegrationCatalogSecretField] = []
+    settings_fields: list[IntegrationCatalogSettingField] = []
+
+
+class IntegrationCatalogItem(_CamelModel):
+    definition_id: UUID
+    namespace: str
+    display_name: str
+    description: str | None = None
+    auth_kind: str
+    connect_schema: IntegrationConnectSchema
+
+
+class IntegrationCatalogResponse(_CamelModel):
+    items: list[IntegrationCatalogItem]
+
+
 class IntegrationHealthItem(_CamelModel):
     definition_id: UUID
     account_id: UUID | None = None

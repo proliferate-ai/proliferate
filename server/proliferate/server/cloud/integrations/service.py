@@ -28,6 +28,7 @@ from proliferate.db.store.integrations.definitions import (
     create_org_custom_definition,
     get_definition,
     list_definitions_visible_to_org,
+    list_seed_definitions,
 )
 from proliferate.db.store.integrations.policies import (
     list_policies_for_org,
@@ -45,6 +46,11 @@ from proliferate.server.cloud.integrations.models import (
     AdminIntegrationDefinitionResponse,
     AuthenticateIntegrationResponse,
     IntegrationAccountResponse,
+    IntegrationCatalogItem,
+    IntegrationCatalogSecretField,
+    IntegrationCatalogSettingField,
+    IntegrationCatalogSettingOption,
+    IntegrationConnectSchema,
 )
 from proliferate.server.cloud.integrations.oauth_service import (
     OAuthCallbackResult,
@@ -132,6 +138,88 @@ def _first_secret_field_id(definition: IntegrationDefinitionRecord) -> str:
     if config.secret_fields:
         return config.secret_fields[0].id
     return _DEFAULT_SECRET_FIELD_ID
+
+
+# --------------------------------------------------------------------------- #
+# Connect catalog
+# --------------------------------------------------------------------------- #
+
+
+def _connect_schema(definition: IntegrationDefinitionRecord) -> IntegrationConnectSchema:
+    """Derive the connect-time field schema from a definition's config codec.
+
+    Only field *metadata* (ids, labels, hints) is exposed — never any stored
+    secret values, header templates, or endpoint internals.
+    """
+    try:
+        config = parse_definition_config(definition.config_json)
+    except ValueError:
+        return IntegrationConnectSchema()
+    return IntegrationConnectSchema(
+        secret_fields=[
+            IntegrationCatalogSecretField(
+                id=field.id,
+                label=field.label,
+                placeholder=field.placeholder,
+                helper_text=field.helper_text,
+                prefix_hint=field.prefix_hint,
+            )
+            for field in config.secret_fields
+        ],
+        settings_fields=[
+            IntegrationCatalogSettingField(
+                id=field.id,
+                label=field.label,
+                kind=field.kind,
+                required=field.required,
+                options=[
+                    IntegrationCatalogSettingOption(value=option.value, label=option.label)
+                    for option in field.options
+                ],
+                default=field.default,
+            )
+            for field in config.settings_fields
+        ],
+    )
+
+
+def _catalog_item(definition: IntegrationDefinitionRecord) -> IntegrationCatalogItem:
+    return IntegrationCatalogItem(
+        definition_id=definition.id,
+        namespace=definition.namespace,
+        display_name=definition.display_name,
+        description=definition.description,
+        auth_kind=definition.auth_kind,
+        connect_schema=_connect_schema(definition),
+    )
+
+
+async def list_integration_catalog(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    organization_id: UUID | None = None,
+) -> list[IntegrationCatalogItem]:
+    """List the definitions ``user_id`` may connect to, with connect schemas.
+
+    Mirrors the health endpoint's visibility rules: seeds only by default;
+    seeds plus the org's custom definitions when ``organization_id`` is given
+    (membership-guarded so non-members cannot enumerate an org's customs).
+    """
+    if organization_id is not None:
+        membership = await organization_store.get_active_membership(
+            db, organization_id=organization_id, user_id=user_id
+        )
+        if membership is None:
+            raise CloudApiError(
+                "organization_not_found", "Organization not found.", status_code=404
+            )
+        definitions = await list_definitions_visible_to_org(db, organization_id)
+    else:
+        definitions = await list_seed_definitions(db)
+    return [
+        _catalog_item(definition) for definition in definitions if definition.archived_at is None
+    ]
 
 
 # --------------------------------------------------------------------------- #

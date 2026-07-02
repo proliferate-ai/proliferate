@@ -26,6 +26,7 @@ from proliferate.server.cloud.integrations.models import (
     AuthenticateIntegrationRequest,
     AuthenticateIntegrationResponse,
     CreateAdminIntegrationDefinitionRequest,
+    IntegrationCatalogResponse,
     IntegrationHealthItem,
     IntegrationHealthResponse,
     IntegrationOAuthFlowStatusResponse,
@@ -43,6 +44,7 @@ from proliferate.server.cloud.integrations.service import (
     create_admin_integration_definition,
     get_integration_oauth_flow_status,
     list_admin_integration_definitions,
+    list_integration_catalog,
     remove_integration_account,
     set_admin_integration_enabled,
 )
@@ -67,6 +69,16 @@ def _flow_status_response(status: OAuthFlowStatus) -> IntegrationOAuthFlowStatus
 # --------------------------------------------------------------------------- #
 # User routes
 # --------------------------------------------------------------------------- #
+
+
+@router.get("/catalog", response_model=IntegrationCatalogResponse)
+async def list_integration_catalog_endpoint(
+    organization_id: UUID | None = Query(default=None, alias="organizationId"),
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> IntegrationCatalogResponse:
+    items = await list_integration_catalog(db, user_id=user.id, organization_id=organization_id)
+    return IntegrationCatalogResponse(items=items)
 
 
 @router.get("/health", response_model=IntegrationHealthResponse)
