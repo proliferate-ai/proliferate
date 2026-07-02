@@ -158,9 +158,11 @@ export function UpdateToastPresenter() {
         // Spec §12: solid is reserved for Restart — Download stays secondary,
         // but quiet-secondary (faint fill + full-contrast label), not ghost:
         // muted-on-transparent was near-invisible on the toast surface.
+        // [&&] doubles specificity: the kit's solid-primary default is also
+        // !important, and sonner concatenates rather than replaces classNames.
         classNames: {
           actionButton:
-            "!bg-foreground/5 !text-foreground hover:!bg-foreground/10 !border !border-input",
+            "[&&]:!bg-foreground/5 [&&]:!text-foreground [&&]:hover:!bg-foreground/10 [&&]:!border [&&]:!border-input",
         },
       });
       return;
