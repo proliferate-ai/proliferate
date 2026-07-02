@@ -34,7 +34,7 @@ jobs:
       E2B_PUBLIC_TEMPLATE_FAMILY: ${{ vars.E2B_PUBLIC_TEMPLATE_FAMILY }}
       E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha }}
 

@@ -120,7 +120,7 @@ jobs:
 
       - name: Checkout
         if: steps.filter.outputs.skip != 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -535,7 +535,7 @@ jobs:
     if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run)
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -604,7 +604,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
