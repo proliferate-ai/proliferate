@@ -102,30 +102,26 @@ function AssistantMessageContent({
 function splitAssistantContent(content: string): {
   stableContent: string;
   liveContent: string;
-  animateLiveContent: boolean;
 } {
   if (!content) {
-    return { stableContent: "", liveContent: "", animateLiveContent: false };
+    return { stableContent: "", liveContent: "" };
   }
 
   // Always split at the last safe paragraph boundary — including for plain
   // prose. The live MarkdownBody re-parses on every reveal flush; without a
   // split, a long prose message re-parses in its entirety at the flush rate,
   // which starves the main thread and lags composer typing.
-  const structuredTail = hasOpenCodeFence(content) || hasTrailingTable(content);
   const boundary = findStableBoundary(content);
   if (boundary < 0 || boundary + 2 >= content.length) {
     return {
       stableContent: "",
       liveContent: content,
-      animateLiveContent: !structuredTail,
     };
   }
 
   return {
     stableContent: content.slice(0, boundary + 2),
     liveContent: content.slice(boundary + 2),
-    animateLiveContent: !structuredTail,
   };
 }
 
@@ -145,16 +141,5 @@ function findStableBoundary(content: string): number {
 
 function hasOpenCodeFence(content: string): boolean {
   return (content.match(/```/g)?.length ?? 0) % 2 === 1;
-}
-
-function hasTrailingTable(content: string): boolean {
-  const lines = content.trimEnd().split("\n");
-  if (lines.length < 2) return false;
-  const tail = lines.slice(-3);
-  const tableLikeLines = tail.filter((line) => {
-    const trimmed = line.trim();
-    return trimmed.startsWith("|") && trimmed.endsWith("|");
-  });
-  return tableLikeLines.length >= 2;
 }
 

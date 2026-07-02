@@ -203,6 +203,10 @@
       "types": "./dist/primitives/SettingsMenu.d.ts",
       "import": "./dist/primitives/SettingsMenu.js"
     },
+    "./primitives/Skeleton": {
+      "types": "./dist/primitives/Skeleton.d.ts",
+      "import": "./dist/primitives/Skeleton.js"
+    },
     "./primitives/Spinner": {
       "types": "./dist/primitives/Spinner.d.ts",
       "import": "./dist/primitives/Spinner.js"
