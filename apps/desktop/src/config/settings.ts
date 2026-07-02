@@ -15,6 +15,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "worktrees",
   "archived-chats",
   "agent-defaults",
+  "agent-api-keys",
   // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
   // the page until real budget data/enforcement replaces mocked UI.
   // "organization-limits",
@@ -45,6 +46,7 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "worktrees",
   "archived-chats",
   "agent-defaults",
+  "agent-api-keys",
   // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "organization-limits",
   // SLACK BOT PARKED: omit from Cmd-number settings shortcuts while disabled.

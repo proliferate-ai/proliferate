@@ -11,6 +11,7 @@ import {
   type AgentConfigurationIssueAction,
 } from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
+import { AgentAuthenticationSection } from "@/components/settings/panes/agent-auth/AgentAuthenticationSection";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
@@ -234,6 +235,11 @@ export function AgentDefaultsPane() {
               row={row}
               launchAgent={launchAgents.find((agent) => agent.kind === row.kind) ?? null}
               preferences={preferences}
+            />
+
+            <AgentAuthenticationSection
+              agentKind={row.kind}
+              displayName={row.displayName}
             />
 
             {row.visibilityModels.length > 0 ? (
