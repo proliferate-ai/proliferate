@@ -268,6 +268,43 @@ async def list_org_memberships_missing_enrollment(
     return [(org_id, user_id) for org_id, user_id in rows.all()]
 
 
+async def get_enrollment_by_virtual_key_id(
+    db: AsyncSession,
+    *,
+    virtual_key_id: str,
+) -> AgentGatewayEnrollmentRecord | None:
+    """Resolve an active enrollment from a LiteLLM key token hash.
+
+    The importer keys off the spend-log ``api_key`` field, which equals the
+    ``token_id`` stored as ``virtual_key_id`` at mint time.
+    """
+    row = (
+        await db.execute(
+            select(AgentGatewayEnrollment).where(
+                AgentGatewayEnrollment.virtual_key_id == virtual_key_id,
+                AgentGatewayEnrollment.revoked_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    return enrollment_record(row) if row is not None else None
+
+
+async def set_enrollment_budget_status(
+    db: AsyncSession,
+    *,
+    enrollment_id: UUID,
+    budget_status: str,
+) -> AgentGatewayEnrollmentRecord:
+    row = await db.get(AgentGatewayEnrollment, enrollment_id)
+    if row is None:
+        raise RuntimeError("Agent gateway enrollment not found.")
+    if row.budget_status != budget_status:
+        row.budget_status = budget_status
+        row.updated_at = utcnow()
+        await db.flush()
+    return enrollment_record(row)
+
+
 async def get_enrollment_virtual_key_decrypted(
     db: AsyncSession,
     *,

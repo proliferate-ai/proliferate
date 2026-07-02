@@ -9,6 +9,7 @@ from proliferate.db.models.cloud.agent_gateway import (
     AgentCatalogSnapshot,
     AgentGatewayEnrollment,
     AgentLlmUsageImportCursor,
+    LlmCreditGrant,
     OrgAgentPolicy,
 )
 from proliferate.db.store.agent_gateway.records import (
@@ -18,6 +19,7 @@ from proliferate.db.store.agent_gateway.records import (
     AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
+    LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
 )
 
@@ -62,6 +64,7 @@ def enrollment_record(row: AgentGatewayEnrollment) -> AgentGatewayEnrollmentReco
         litellm_user_id=row.litellm_user_id,
         virtual_key_id=row.virtual_key_id,
         sync_status=row.sync_status,
+        budget_status=row.budget_status,
         sync_fingerprint=row.sync_fingerprint,
         last_error_code=row.last_error_code,
         last_error_message=row.last_error_message,
@@ -105,6 +108,19 @@ def org_agent_policy_record(row: OrgAgentPolicy) -> OrgAgentPolicyRecord:
         updated_by_user_id=row.updated_by_user_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def llm_credit_grant_record(row: LlmCreditGrant) -> LlmCreditGrantRecord:
+    return LlmCreditGrantRecord(
+        id=row.id,
+        billing_subject_id=row.billing_subject_id,
+        user_id=row.user_id,
+        source=row.source,
+        amount_usd=row.amount_usd,
+        created_at=row.created_at,
+        expires_at=row.expires_at,
+        source_ref=row.source_ref,
     )
 
 

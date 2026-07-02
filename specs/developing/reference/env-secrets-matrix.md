@@ -171,6 +171,9 @@ lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 | `AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD` | No | No | Default LiteLLM budget (USD) for personal enrollments; "0" = uncapped |
 | `AGENT_GATEWAY_DEFAULT_ORG_BUDGET_USD` | No | No | Default LiteLLM budget (USD) for organization enrollments; "0" = uncapped |
 | `AGENT_GATEWAY_BACKFILL_INTERVAL_SECONDS` | No | No | Enrollment backfill worker interval |
+| `AGENT_GATEWAY_FREE_CREDIT_USD` | No | No | One-time free LLM credit (USD) granted at enrollment; "0" disables |
+| `AGENT_GATEWAY_USAGE_IMPORT_INTERVAL_SECONDS` | No | No | Usage-import worker interval (spend-log paging + exhaustion) |
+| `AGENT_GATEWAY_USAGE_IMPORT_OVERLAP_SECONDS` | No | No | Overlap window re-read each usage-import tick (dedupe on request id) |
 
 The LiteLLM service itself (a separate ECS service / docker-compose pair) is
 configured with `LITELLM_MASTER_KEY`, its own `DATABASE_URL`, and the managed

@@ -14,6 +14,7 @@ from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_SUBJECT_KIND_ORGANIZATION,
     BILLING_SUBJECT_KIND_PERSONAL,
+    FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
     FREE_CLOUD_ALLOCATION_KIND_PERSONAL_TRIAL,
     FREE_CLOUD_ALLOCATION_PERIOD_V2,
     FREE_INCLUDED_GRANT_TYPE,
@@ -196,6 +197,35 @@ async def ensure_free_trial_v2_grant(db: AsyncSession, subject: BillingSubject) 
             await db.flush()
         return True
     return False
+
+
+async def ensure_agent_gateway_free_credit_allocation(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    period_key: str,
+) -> bool:
+    """Reserve the one-time agent-gateway free-credit allocation for a user.
+
+    Deduped through ``free_cloud_allocation`` on (allocation_kind, github
+    identity, period_key) — the same anti-abuse guard the compute free trial
+    uses. Returns True only when this call owns the allocation (either it
+    created the row, or an existing row already belongs to this subject), so
+    the caller can grant credits exactly once per GitHub identity. Returns
+    False when the user has no linked GitHub identity or the allocation
+    belongs to a different subject.
+    """
+    github_provider_user_id = await _linked_github_provider_user_id(db, user_id)
+    if github_provider_user_id is None:
+        return False
+    subject = await ensure_personal_billing_subject(db, user_id)
+    return await _ensure_free_cloud_allocation(
+        db,
+        allocation_kind=FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+        subject=subject,
+        github_provider_user_id=github_provider_user_id,
+        period_key=period_key,
+    )
 
 
 async def _linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:
