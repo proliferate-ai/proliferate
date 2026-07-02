@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DETACHED_DIRECT_RUNTIME_CONNECTION,
+  directAuthSyncTargetIds,
   directRuntimeConnectionKey,
   directRuntimeTransport,
   loopbackDirectRuntimeConnectionState,
@@ -39,6 +40,33 @@ describe("direct runtime refs", () => {
     expect(directRuntimeConnectionKey(null)).toBe("loopback");
     expect(directRuntimeConnectionKey("loopback")).toBe("target:loopback");
     expect(directRuntimeConnectionKey("target-1")).toBe("target:target-1");
+  });
+});
+
+describe("directAuthSyncTargetIds", () => {
+  it("is loopback-only before the targets query settles", () => {
+    expect(directAuthSyncTargetIds(undefined)).toEqual([null]);
+    expect(directAuthSyncTargetIds([])).toEqual([null]);
+  });
+
+  it("appends enrolled ssh targets after the loopback runtime", () => {
+    expect(
+      directAuthSyncTargetIds([
+        { id: "t-ssh-1", kind: "ssh", status: "online" },
+        { id: "t-ssh-2", kind: "ssh", status: "offline" },
+      ]),
+    ).toEqual([null, "t-ssh-1", "t-ssh-2"]);
+  });
+
+  it("excludes archived and non-ssh targets", () => {
+    expect(
+      directAuthSyncTargetIds([
+        { id: "t-archived", kind: "ssh", status: "archived" },
+        { id: "t-cloud", kind: "managed_cloud", status: "online" },
+        { id: "t-dispatch", kind: "desktop_dispatch", status: "online" },
+        { id: "t-ssh", kind: "ssh", status: "enrolling" },
+      ]),
+    ).toEqual([null, "t-ssh"]);
   });
 });
 

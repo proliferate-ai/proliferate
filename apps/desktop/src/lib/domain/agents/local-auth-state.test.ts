@@ -62,6 +62,71 @@ describe("planLocalAuthStatePush", () => {
   });
 });
 
+describe("planLocalAuthStatePush across direct runtimes", () => {
+  // A target-scoped document: the ssh runtime overrides claude to an api_key
+  // route while inheriting the default codex selection (spec §3.1 render).
+  function targetState(overrides: Partial<AgentAuthState> = {}): AgentAuthState {
+    return state({
+      selections: [
+        {
+          harness: "claude",
+          route: "api_key",
+          slot: "primary",
+          provider: "anthropic",
+          key: "sk-target-override",
+        },
+        {
+          harness: "codex",
+          route: "api_key",
+          slot: "primary",
+          provider: "openai",
+          key: "sk-raw",
+        },
+      ],
+      ...overrides,
+    });
+  }
+
+  it("plans the default and target documents independently", () => {
+    const defaultPlan = planLocalAuthStatePush({
+      state: state(),
+      lastPushedFingerprint: null,
+    });
+    const targetPlan = planLocalAuthStatePush({
+      state: targetState(),
+      lastPushedFingerprint: null,
+    });
+    expect(defaultPlan.shouldPush).toBe(true);
+    expect(targetPlan.shouldPush).toBe(true);
+    expect(targetPlan.fingerprint).not.toBe(defaultPlan.fingerprint);
+  });
+
+  it("pushes a target override even when the default doc was already pushed", () => {
+    const plan = planLocalAuthStatePush({
+      state: targetState(),
+      lastPushedFingerprint: localAuthStateFingerprint(state()),
+    });
+    expect(plan.shouldPush).toBe(true);
+  });
+
+  it("plans a zero-override runtime exactly like the default document", () => {
+    const inherited = planLocalAuthStatePush({
+      state: state(),
+      lastPushedFingerprint: localAuthStateFingerprint(state()),
+    });
+    expect(inherited.shouldPush).toBe(false);
+    expect(inherited.fingerprint).toBe(localAuthStateFingerprint(state()));
+  });
+
+  it("never pushes a target-scoped revision-0 marker", () => {
+    const plan = planLocalAuthStatePush({
+      state: targetState({ revision: 0, selections: [] }),
+      lastPushedFingerprint: null,
+    });
+    expect(plan.shouldPush).toBe(false);
+  });
+});
+
 describe("localAuthStateFingerprint", () => {
   it("is insensitive to object key order", () => {
     const a = localAuthStateFingerprint(state());

@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import {
   clearAgentRouteSelection,
   createAgentApiKey,
@@ -113,17 +119,52 @@ export function useRouteSelections(enabled = true) {
   });
 }
 
+export interface AgentAuthStateOptions {
+  /**
+   * Scope the local-surface document to one enrolled direct runtime
+   * (per-target overrides rendered over the inherited defaults). Null/absent
+   * fetches the default direct document.
+   */
+  targetId?: string | null;
+  enabled?: boolean;
+}
+
 /**
  * The caller's rendered state.json document for one surface. The payload
  * carries the user's OWN decrypted key material (state.json contract), so it
  * exists for the local-writer sync path — not for display surfaces.
  */
-export function useAgentAuthState(surface: AgentAuthSurface, enabled = true) {
+export function useAgentAuthState(
+  surface: AgentAuthSurface,
+  options: AgentAuthStateOptions = {},
+) {
   const client = useCloudClient();
+  const targetId = options.targetId ?? null;
   return useQuery<AgentAuthState>({
-    queryKey: agentAuthStateKey(surface),
-    queryFn: () => getAgentAuthState(surface, client),
-    enabled,
+    queryKey: agentAuthStateKey(surface, targetId),
+    queryFn: () => getAgentAuthState(surface, { targetId }, client),
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * One state query per direct runtime, in input order (`null` = the default
+ * loopback document). Keys/fetchers match `useAgentAuthState`, so both hooks
+ * share the query cache and the same mutation invalidations
+ * (`agentAuthStateRootKey`) refresh every runtime's document.
+ */
+export function useAgentAuthStates(
+  surface: AgentAuthSurface,
+  targetIds: ReadonlyArray<string | null>,
+  enabled = true,
+): UseQueryResult<AgentAuthState>[] {
+  const client = useCloudClient();
+  return useQueries({
+    queries: targetIds.map((targetId) => ({
+      queryKey: agentAuthStateKey(surface, targetId),
+      queryFn: () => getAgentAuthState(surface, { targetId }, client),
+      enabled,
+    })),
   });
 }
 

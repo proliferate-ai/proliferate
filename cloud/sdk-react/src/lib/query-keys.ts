@@ -34,8 +34,8 @@ export function agentAuthStateRootKey() {
   return [...agentGatewayRootKey(), "state"] as const;
 }
 
-export function agentAuthStateKey(surface: string) {
-  return [...agentAuthStateRootKey(), surface] as const;
+export function agentAuthStateKey(surface: string, targetId: string | null = null) {
+  return [...agentAuthStateRootKey(), surface, targetId] as const;
 }
 
 export function agentGatewayCapabilitiesKey() {

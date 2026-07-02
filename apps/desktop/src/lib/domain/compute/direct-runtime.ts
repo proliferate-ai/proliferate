@@ -45,6 +45,28 @@ export function directRuntimeConnectionKey(targetId: string | null): string {
   return targetId === null ? "loopback" : `target:${targetId}`;
 }
 
+export interface DirectRuntimeTargetCandidate {
+  id: string;
+  kind: string;
+  status: string;
+}
+
+/**
+ * The direct-runtime family Desktop syncs agent-auth state to: the loopback
+ * runtime (targetId null) first, then every enrolled ssh target that is not
+ * archived. Order is stable so consumers can zip per-runtime queries against
+ * the returned ids. Cloud targets never appear here — their credentials flow
+ * through the materializer, not the desktop writer.
+ */
+export function directAuthSyncTargetIds(
+  targets: ReadonlyArray<DirectRuntimeTargetCandidate> | undefined,
+): Array<string | null> {
+  const sshTargetIds = (targets ?? [])
+    .filter((target) => target.kind === "ssh" && target.status !== "archived")
+    .map((target) => target.id);
+  return [null, ...sshTargetIds];
+}
+
 /**
  * The loopback runtime has no attach machinery of its own: its connection
  * state derives from the local harness bootstrap health.

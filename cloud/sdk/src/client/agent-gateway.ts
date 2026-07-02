@@ -90,14 +90,24 @@ export async function clearAgentRouteSelection(
   });
 }
 
+export interface GetAgentAuthStateOptions {
+  /**
+   * Scope the local-surface document to one enrolled direct runtime
+   * (per-target overrides rendered over the inherited defaults). Null/absent
+   * fetches the default direct document.
+   */
+  targetId?: string | null;
+}
+
 export async function getAgentAuthState(
   surface: AgentAuthSurface,
+  options: GetAgentAuthStateOptions = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AgentAuthState> {
   return client.requestJson<AgentAuthState>({
     method: "GET",
     path: "/v1/cloud/agent-gateway/state",
-    query: { surface },
+    query: { surface, targetId: options.targetId ?? undefined },
   });
 }
 
