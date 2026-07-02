@@ -15,9 +15,8 @@
 </p>
 
 <p>
-  <strong>The Open Source AI IDE.</strong><br />
-  Run Claude Code, Codex, OpenCode, and any coding agent in parallel: locally, in cloud<br />
-  sandboxes, or on your own servers. Move running sessions between them.
+  The open source AI IDE for running Claude Code, Codex, OpenCode, and any coding agent<br />
+  in parallel: locally, in cloud sandboxes, or on your own servers. Move running sessions between them.
 </p>
 
 <h3><a href="https://proliferate.com"><ins>Download for macOS</ins></a></h3>
