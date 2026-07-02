@@ -328,7 +328,7 @@
   "dependencies": {
     "@proliferate/product-domain": "workspace:*",
     "@proliferate/ui": "workspace:*",
-    "@tanstack/react-virtual": "3.14.3",
+    "@tanstack/react-virtual": "3.14.5",
     "lucide-react": "^0.577.0",
     "react-markdown": "^9",
     "remark-gfm": "^4",
