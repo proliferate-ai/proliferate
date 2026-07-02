@@ -21,6 +21,12 @@ interface ComposerAttachedPanelProps {
   children?: ReactNode;
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  /**
+   * Make the whole header row a collapse/expand pointer target (the chevron
+   * button stays the accessible control). Progress-style panels opt in so a
+   * click anywhere on the header folds the list down to just the header.
+   */
+  toggleOnHeaderClick?: boolean;
 }
 
 export function ComposerAttachedPanel({
@@ -31,6 +37,7 @@ export function ComposerAttachedPanel({
   children,
   expanded = true,
   onToggleExpanded,
+  toggleOnHeaderClick = false,
 }: ComposerAttachedPanelProps) {
   // Attached-panel shell (UX_SPEC §5): 13px radius (top — the bottom edge
   // docks into the composer), 0.5px border, 2% foreground tint. No backdrop
@@ -58,10 +65,17 @@ export function ComposerAttachedPanel({
       </>
     )
     : header;
+  const headerClickToggles = toggleOnHeaderClick && onToggleExpanded != null;
   return (
     <div className="relative overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] transition-colors">
       {headerContent && (
-        <div className="flex w-full items-start justify-between gap-1.5 py-3 pr-2 pl-3 text-chat leading-[var(--text-chat--line-height)]">
+        <div
+          className={twMerge(
+            "flex w-full items-start justify-between gap-1.5 py-3 pr-2 pl-3 text-chat leading-[var(--text-chat--line-height)]",
+            headerClickToggles && "cursor-pointer select-none",
+          )}
+          onClick={headerClickToggles ? onToggleExpanded : undefined}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {headerContent}
           </div>
@@ -71,7 +85,12 @@ export function ComposerAttachedPanel({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                onClick={onToggleExpanded}
+                onClick={(event) => {
+                  // Keep the chevron a single toggle when the header row is
+                  // itself a click target.
+                  event.stopPropagation();
+                  onToggleExpanded();
+                }}
                 className="h-6 w-6 text-muted-foreground hover:text-foreground"
                 aria-label={expanded ? "Collapse panel" : "Expand panel"}
               >
