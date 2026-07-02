@@ -255,12 +255,16 @@ jobs:
           else
             VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
           fi
+          # Archive as root:root so a root extraction on the operator host does
+          # not hand ownership of executables to the runner's unprivileged uid.
           tar czf artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
+            --owner=0 --group=0 --numeric-owner \
             -C target/x86_64-unknown-linux-musl/release \
             anyharness \
             proliferate-worker \
             proliferate-supervisor
           tar czf artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz \
+            --owner=0 --group=0 --numeric-owner \
             -C target/aarch64-unknown-linux-musl/release \
             anyharness \
             proliferate-worker \
@@ -272,7 +276,9 @@ jobs:
           cp -R server/deploy/. "$bundle_root/proliferate-deploy/"
           rm -rf "$bundle_root/proliferate-deploy/smoke"
           printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
-          tar czf artifacts/proliferate-deploy.tar.gz -C "$bundle_root" proliferate-deploy
+          tar czf artifacts/proliferate-deploy.tar.gz \
+            --owner=0 --group=0 --numeric-owner \
+            -C "$bundle_root" proliferate-deploy
           rm -rf "$bundle_root"
           (
             cd artifacts
