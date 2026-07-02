@@ -33,6 +33,9 @@ export function useSettingsNavigation({
   const rawCheckout = searchParams.get("checkout");
   const rawJoinOrganizationId = searchParams.get("joinOrganizationId");
   const rawContext = searchParams.get("context");
+  const rawFlowId = searchParams.get("flowId");
+  const rawStatus = searchParams.get("status");
+  const rawFailureCode = searchParams.get("failureCode");
 
   const selection = useMemo(() => resolveSettingsSelection({
     rawSection,
@@ -46,6 +49,9 @@ export function useSettingsNavigation({
     rawCheckout,
     rawJoinOrganizationId,
     rawContext,
+    rawFlowId,
+    rawStatus,
+    rawFailureCode,
     repositories,
   }), [
     rawCloudRepoName,
@@ -53,11 +59,14 @@ export function useSettingsNavigation({
     rawContext,
     rawCredential,
     rawCheckout,
+    rawFailureCode,
+    rawFlowId,
     rawFocus,
     rawJoinOrganizationId,
     rawKind,
     rawRepo,
     rawSection,
+    rawStatus,
     rawTarget,
     repositories,
   ]);
