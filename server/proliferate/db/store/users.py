@@ -27,6 +27,37 @@ async def get_active_user_by_id(
     return user
 
 
+async def bump_user_token_generation(
+    db: AsyncSession,
+    user_id: UUID,
+) -> int | None:
+    """Increment the user's ``token_generation``, revoking all issued tokens.
+
+    Every access/refresh token embeds the generation current at mint time, so
+    incrementing it invalidates every previously issued token for this user
+    (all surfaces) on their next use — the "log out everywhere" primitive.
+    Returns the new generation, or ``None`` when the user is missing.
+
+    The increment is a single atomic ``UPDATE ... RETURNING`` (no read-modify-
+    write race). If the user is already loaded in this session, the cached ORM
+    instance is refreshed so callers that then re-mint tokens observe the new
+    generation.
+    """
+    result = await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(token_generation=User.token_generation + 1)
+        .returning(User.token_generation)
+    )
+    new_generation = result.scalar_one_or_none()
+    if new_generation is None:
+        return None
+    cached = await db.get(User, user_id)
+    if cached is not None:
+        await db.refresh(cached)
+    return new_generation
+
+
 async def get_user_with_oauth_accounts_by_id(
     db: AsyncSession,
     user_id: UUID,

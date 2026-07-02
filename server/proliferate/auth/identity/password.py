@@ -32,6 +32,7 @@ from proliferate.db.store.auth_passwords import (
     record_password_login_failure,
     update_user_password_hash,
 )
+from proliferate.db.store.users import bump_user_token_generation
 from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 
 PASSWORD_BAD_CREDENTIALS_MESSAGE = "Email or password is incorrect."
@@ -190,9 +191,21 @@ async def set_password_credential(
     user: User,
     current_password: str | None,
     new_password: str,
-) -> PasswordCredentialResponse:
+) -> tuple[PasswordCredentialResponse, AuthSession | None]:
+    """Set or change the user's password credential.
+
+    Returns the credential status and, when this was a password *change*, a
+    freshly minted ``AuthSession`` for the acting caller. A change bumps the
+    user's token generation, which revokes every previously issued token for
+    this user (all surfaces, including any captured token); the re-minted
+    session carries the new generation so the caller stays logged in while every
+    *other* session is revoked. A first-time set has no prior password-derived
+    sessions to revoke, so it neither bumps nor re-mints (the caller's current
+    session — e.g. an OAuth login — is left untouched).
+    """
     ensure_password_auth_enabled()
-    if user.password_set_at is not None:
+    is_password_change = user.password_set_at is not None
+    if is_password_change:
         if not current_password:
             raise HTTPException(status_code=400, detail="Current password is required.")
         verification = verify_password(current_password, user.hashed_password)
@@ -213,7 +226,20 @@ async def set_password_credential(
     )
     if updated_user is None:
         raise HTTPException(status_code=400, detail="User not found.")
-    return password_credential_response(updated_user)
+
+    if not is_password_change:
+        return password_credential_response(updated_user), None
+
+    # Password change: revoke every previously issued token by bumping the
+    # generation, then re-mint the acting session at the new generation so the
+    # caller is not logged out of the session they are changing from. The bump
+    # refreshes ``updated_user`` in place, so the new session embeds the new
+    # generation and every other previously issued token is now invalid.
+    await bump_user_token_generation(db, updated_user.id)
+    from proliferate.auth.identity.sessions import mint_auth_session
+
+    reminted = await mint_auth_session(db, user=updated_user)
+    return password_credential_response(updated_user), reminted
 
 
 def password_credential_response(user: User) -> PasswordCredentialResponse:
