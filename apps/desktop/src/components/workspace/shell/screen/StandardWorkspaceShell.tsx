@@ -129,6 +129,26 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     workspaceWebActions,
     workspaceRemoteAccessActions,
   }), [actions.openTerminalPanel, workspaceRemoteAccessActions, workspaceWebActions]);
+  const workspaceActionsMenuProps = useMemo(() => ({
+    branchName: data.gitStatus?.currentBranch?.trim() || null,
+    hasExistingPr: data.existingPr !== null,
+    gitActionsDisabledReason: hasRuntimeReadyWorkspace
+      ? runtimeBlockedReason
+      : "Workspace runtime is not ready.",
+    onCommit: actions.handleCommitOpen,
+    onPush: actions.handlePushOpen,
+    onCreatePr: actions.handlePrOpen,
+    onViewPr: actions.handleViewPr,
+  }), [
+    actions.handleCommitOpen,
+    actions.handlePrOpen,
+    actions.handlePushOpen,
+    actions.handleViewPr,
+    data.existingPr,
+    data.gitStatus?.currentBranch,
+    hasRuntimeReadyWorkspace,
+    runtimeBlockedReason,
+  ]);
   const repoSettingsHref = useMemo(() => {
     const cloudOwner = selectedCloudWorkspace?.repo?.owner?.trim() ?? "";
     const cloudName = selectedCloudWorkspace?.repo?.name?.trim() ?? "";
@@ -270,6 +290,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             runLoading={runCommand.isLaunching}
                             runLabel={runCommand.runLabel}
                             runTitle={runCommand.runTitle}
+                            workspaceActions={workspaceActionsMenuProps}
                             onRun={runCommand.onRun}
                             onTogglePanel={actions.toggleRightPanel}
                           />

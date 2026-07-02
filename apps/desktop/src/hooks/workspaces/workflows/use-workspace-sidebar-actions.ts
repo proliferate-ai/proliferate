@@ -6,7 +6,7 @@ import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/u
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
+import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
 import {
@@ -33,13 +33,13 @@ export function useWorkspaceSidebarActions() {
     createCloudWorkspaceAndEnter,
     isCreatingCloudWorkspace,
   } = useCreateCloudWorkspace();
-  const { addRepoFromPicker } = useAddRepo();
+  const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const showToast = useToastStore((state) => state.show);
   const { markDone, retryCleanup } = useWorkspaceRetireActions();
 
   const handleAddRepo = useCallback(() => {
-    void addRepoFromPicker();
-  }, [addRepoFromPicker]);
+    openAddRepoFlow();
+  }, [openAddRepoFlow]);
 
   const handleGoHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);

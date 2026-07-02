@@ -4,6 +4,7 @@ import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
+import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   type HomeActionId,
@@ -32,7 +33,8 @@ function readHomeModelProbeDismissed(): boolean {
 // Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
 export function useHomeScreen() {
   const navigate = useNavigate();
-  const { addRepoFromPicker, isAddingRepo } = useAddRepo();
+  const { isAddingRepo } = useAddRepo();
+  const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const {
     readyAgents,
     isLoading: agentsLoading,
@@ -105,7 +107,7 @@ export function useHomeScreen() {
   function handleHomeAction(actionId: HomeActionId) {
     switch (actionId) {
       case "add-repository":
-        void addRepoFromPicker();
+        openAddRepoFlow();
         return;
       case "agent-defaults":
         navigate("/settings?section=agent-defaults");

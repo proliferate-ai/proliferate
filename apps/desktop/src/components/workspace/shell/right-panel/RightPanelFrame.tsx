@@ -113,7 +113,7 @@ export function RightPanelFrame({
       data-group="true"
       tabIndex={-1}
       onPointerDownCapture={onPointerDownCapture}
-      className="relative flex h-full flex-col overflow-hidden border-l border-t border-sidebar-border bg-sidebar-background text-sidebar-foreground outline-none"
+      className="relative flex h-full flex-col overflow-hidden border-l border-t border-sidebar-border bg-sidebar-background text-sidebar-foreground shadow-[-8px_0_16px_-8px_color-mix(in_oklab,var(--color-overlay)_16%,transparent)] outline-none"
     >
       <RightPanelHeaderTabs
         entries={entries}

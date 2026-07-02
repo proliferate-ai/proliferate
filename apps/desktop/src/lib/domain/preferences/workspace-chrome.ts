@@ -5,8 +5,9 @@ const WORKSPACE_GLASS_HEADER_BASE_CLASS =
   "flex h-16 shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60";
 const WORKSPACE_GLASS_HEADER_CLASS =
   `${WORKSPACE_GLASS_HEADER_BASE_CLASS} border-b border-foreground/10`;
+// 46px = codex --height-toolbar (UX_SPEC §7).
 const WORKSPACE_SOLID_HEADER_BASE_CLASS =
-  "flex h-12 shrink-0 items-center bg-background";
+  "flex h-[46px] shrink-0 items-center bg-background";
 const WORKSPACE_SOLID_HEADER_CLASS =
   `${WORKSPACE_SOLID_HEADER_BASE_CLASS} border-b border-border/70`;
 
