@@ -85,13 +85,52 @@ describe("IntegrationRow", () => {
     expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
   });
 
-  it("shows the pending browser handoff with a cancel action", () => {
+  it("shows the pending browser handoff inline within the row, with a cancel action", () => {
     const onCancelOauth = vi.fn();
     renderRow(makeIntegration(), { oauthPending: true, onCancelOauth });
 
+    // The pending state renders in the row's action cell — the rest of the
+    // row (and the list) stays put, it is not a pane-level replacement.
+    expect(screen.getByText("Linear")).toBeTruthy();
+    expect(screen.getByText("OAuth")).toBeTruthy();
     expect(screen.getByText("Waiting for browser...")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
     screen.getByRole("button", { name: "Cancel" }).click();
     expect(onCancelOauth).toHaveBeenCalledTimes(1);
+  });
+
+  it("swaps Connect to a disabled inline Connecting state in the same row", () => {
+    renderRow(makeIntegration(), { connecting: true });
+
+    // Row content and health badge stay rendered; only the button label flips.
+    expect(screen.getByText("Linear")).toBeTruthy();
+    expect(screen.getByText("Not connected")).toBeTruthy();
+    const button = screen.getByRole<HTMLButtonElement>("button", {
+      name: "Connecting...",
+    });
+    expect(button.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+  });
+
+  it("keeps a fixed action-button width across connect states", () => {
+    // Connect, Connecting..., and the OAuth-pending Cancel all share the same
+    // min-width, so state changes swap labels in place instead of reflowing
+    // the row.
+    const idle = renderRow(makeIntegration());
+    expect(
+      screen.getByRole("button", { name: "Connect" }).className,
+    ).toContain("min-w-24");
+    idle.unmount();
+
+    const connecting = renderRow(makeIntegration(), { connecting: true });
+    expect(
+      screen.getByRole("button", { name: "Connecting..." }).className,
+    ).toContain("min-w-24");
+    connecting.unmount();
+
+    renderRow(makeIntegration(), { oauthPending: true });
+    expect(
+      screen.getByRole("button", { name: "Cancel" }).className,
+    ).toContain("min-w-24");
   });
 });
