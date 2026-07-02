@@ -27,6 +27,6 @@ export const CHAT_MODEL_SELECTOR_LABELS = {
   newChatHint: "Opens a new chat in this workspace",
   searchPlaceholder: "Search models",
   noMatchPrefix: "No models matching",
-  noProviders: "No configured providers. Add one to get started.",
+  noProviders: "No harnesses yet. Add one to get started.",
   addHarness: "Add harness",
 } as const;

@@ -86,7 +86,6 @@ describe("ModelSelector", () => {
         groups={groups}
         hasAgents
         isLoading={false}
-        notReadyAgents={[]}
         onSelect={vi.fn()}
       />,
     );
@@ -135,7 +134,6 @@ describe("ModelSelector", () => {
         groups={groups}
         hasAgents
         isLoading={false}
-        notReadyAgents={[]}
         onSelect={vi.fn()}
       />,
     );
@@ -188,7 +186,6 @@ describe("ModelSelector", () => {
         groups={groups}
         hasAgents
         isLoading={false}
-        notReadyAgents={[]}
         onSelect={vi.fn()}
       />,
     );
@@ -213,7 +210,6 @@ describe("ModelSelector", () => {
           groups={[]}
           hasAgents
           isLoading={false}
-          notReadyAgents={[]}
           onSelect={vi.fn()}
         />
       </>,
@@ -233,7 +229,6 @@ describe("ModelSelector", () => {
           groups={[]}
           hasAgents
           isLoading={false}
-          notReadyAgents={[]}
           onSelect={vi.fn()}
         />
       </>,
@@ -262,7 +257,6 @@ describe("ModelSelector", () => {
           groups={[]}
           hasAgents
           isLoading={false}
-          notReadyAgents={[]}
           onSelect={vi.fn()}
         />
       </>,

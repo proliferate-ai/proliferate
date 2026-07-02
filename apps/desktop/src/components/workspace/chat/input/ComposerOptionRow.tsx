@@ -96,6 +96,9 @@ export function useComposerOptionNumberKeys(
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.defaultPrevented) {
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }

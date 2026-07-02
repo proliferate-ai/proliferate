@@ -2,6 +2,7 @@ import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sd
 import { useMemo, useState } from "react";
 import { ArrowUp } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
@@ -191,27 +192,49 @@ export function UserInputCard({
         </div>
 
         {showTextInput && (
-          <form
-            className="mx-2 mb-2 mt-1 flex shrink-0 cursor-text items-center gap-3 rounded-lg bg-surface-control px-2.5 py-2 ring-1 ring-inset ring-input"
-            onSubmit={(event) => {
-              event.preventDefault();
-              handleAdvance();
-            }}
-          >
-            <Input
-              variant="unstyled"
-              type={currentQuestion.isSecret ? "password" : "text"}
-              value={draft.text}
-              onChange={(event) =>
-                updateDraft({ text: event.currentTarget.value })}
-              placeholder={draft.selectedOptionLabel === OTHER_OPTION_LABEL
-                ? "Write a custom answer"
-                : "Enter your answer"}
-              autoComplete="off"
-              data-telemetry-mask="true"
-              className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-chat text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
-            />
-          </form>
+          <div className="mx-2 mb-2 mt-1 flex shrink-0 cursor-text items-start gap-3 rounded-lg bg-surface-control px-2.5 py-2 ring-1 ring-inset ring-input">
+            {currentQuestion.isSecret ? (
+              <Input
+                variant="unstyled"
+                type="password"
+                value={draft.text}
+                onChange={(event) =>
+                  updateDraft({ text: event.currentTarget.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAdvance();
+                  }
+                }}
+                placeholder={draft.selectedOptionLabel === OTHER_OPTION_LABEL
+                  ? "Write a custom answer"
+                  : "Enter your answer"}
+                autoComplete="off"
+                data-telemetry-mask="true"
+                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-chat text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
+              />
+            ) : (
+              <Textarea
+                variant="ghost"
+                rows={3}
+                value={draft.text}
+                onChange={(event) =>
+                  updateDraft({ text: event.currentTarget.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    handleAdvance();
+                  }
+                }}
+                placeholder={draft.selectedOptionLabel === OTHER_OPTION_LABEL
+                  ? "Write a custom answer"
+                  : "Enter your answer"}
+                autoComplete="off"
+                data-telemetry-mask="true"
+                className="flex-1 cursor-text px-0 py-1 text-chat text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)]"
+              />
+            )}
+          </div>
         )}
 
         <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-3 pt-1">

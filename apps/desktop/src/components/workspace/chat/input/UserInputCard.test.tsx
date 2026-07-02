@@ -26,6 +26,15 @@ const FREEFORM_ONLY: UserInputQuestion[] = [{
   options: [],
 }];
 
+const SECRET_ONLY: UserInputQuestion[] = [{
+  questionId: "api_key",
+  header: "API key",
+  question: "Paste the API key for the integration.",
+  isOther: false,
+  isSecret: true,
+  options: [],
+}];
+
 describe("UserInputCard", () => {
 
   afterEach(() => {
@@ -106,6 +115,85 @@ describe("UserInputCard", () => {
       questionId: "workspace_name",
       selectedOptionLabel: undefined,
       text: "composer-cleanup",
+    }]);
+  });
+
+  it("renders a multiline textarea where Enter does not submit", () => {
+    const onSubmit = vi.fn<(answers: UserInputSubmittedAnswer[]) => void>();
+    render(
+      <UserInputCard
+        title="Name workspace"
+        questions={FREEFORM_ONLY}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const field = screen.getByPlaceholderText("Enter your answer");
+    expect(field.tagName).toBe("TEXTAREA");
+
+    fireEvent.change(field, {
+      target: { value: "line one\nline two" },
+    });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(onSubmit).toHaveBeenCalledWith([{
+      questionId: "workspace_name",
+      selectedOptionLabel: undefined,
+      text: "line one\nline two",
+    }]);
+  });
+
+  it("submits multiline text with Cmd/Ctrl+Enter", () => {
+    const onSubmit = vi.fn<(answers: UserInputSubmittedAnswer[]) => void>();
+    render(
+      <UserInputCard
+        title="Name workspace"
+        questions={FREEFORM_ONLY}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const field = screen.getByPlaceholderText("Enter your answer");
+    fireEvent.change(field, {
+      target: { value: "first line\nsecond line" },
+    });
+    fireEvent.keyDown(field, { key: "Enter", metaKey: true });
+
+    expect(onSubmit).toHaveBeenCalledWith([{
+      questionId: "workspace_name",
+      selectedOptionLabel: undefined,
+      text: "first line\nsecond line",
+    }]);
+  });
+
+  it("keeps secret questions on a single-line password input that submits on Enter", () => {
+    const onSubmit = vi.fn<(answers: UserInputSubmittedAnswer[]) => void>();
+    render(
+      <UserInputCard
+        title="API key"
+        questions={SECRET_ONLY}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const field = screen.getByPlaceholderText("Enter your answer");
+    expect(field.tagName).toBe("INPUT");
+    expect(field).toHaveProperty("type", "password");
+
+    fireEvent.change(field, { target: { value: "sk-secret" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    expect(onSubmit).toHaveBeenCalledWith([{
+      questionId: "api_key",
+      selectedOptionLabel: undefined,
+      text: "sk-secret",
     }]);
   });
 });

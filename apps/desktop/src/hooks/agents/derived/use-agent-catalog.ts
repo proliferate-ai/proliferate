@@ -6,7 +6,6 @@ import { useMemo } from "react";
 import type { AgentSummary } from "@anyharness/sdk";
 import {
   getAgentsNeedingSetup,
-  getNotReadyAgents,
   getReadyAgentKinds,
   getReadyAgents,
 } from "@/lib/domain/agents/status";
@@ -25,7 +24,6 @@ export function useAgentCatalog() {
   const derived = useMemo(() => ({
     readyAgents: getReadyAgents(agents),
     agentsNeedingSetup: getAgentsNeedingSetup(agents),
-    notReadyAgents: getNotReadyAgents(agents),
     readyAgentKinds: getReadyAgentKinds(agents),
     installingAgents: agents.filter((agent) => agent.installState === "installing"),
     agentsByKind: new Map(agents.map((agent) => [agent.kind, agent])),
