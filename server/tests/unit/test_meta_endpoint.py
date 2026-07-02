@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from proliferate.integrations import desktop_downloads as downloads_module
 from proliferate.server import meta as meta_module
 from proliferate.server import version as version_module
 from proliferate.server.health import router as health_router
@@ -131,7 +132,7 @@ def test_updater_falls_back_to_flat_manifest_when_pin_unpublished(monkeypatch) -
 
 
 def test_manifest_probe_caches_results(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    meta_module._manifest_probe_cache.clear()
+    downloads_module._manifest_probe_cache.clear()
     calls: list[str] = []
 
     class _Response:
@@ -151,15 +152,15 @@ def test_manifest_probe_caches_results(monkeypatch) -> None:  # type: ignore[no-
             calls.append(url)
             return _Response()
 
-    monkeypatch.setattr(meta_module.httpx, "AsyncClient", _Client)
+    monkeypatch.setattr(downloads_module.httpx, "AsyncClient", _Client)
 
     import asyncio
 
     url = "https://downloads.proliferate.com/desktop/stable/9.9.9/latest.json"
-    assert asyncio.run(meta_module._versioned_manifest_exists(url)) is True
-    assert asyncio.run(meta_module._versioned_manifest_exists(url)) is True
+    assert asyncio.run(downloads_module.versioned_manifest_exists(url)) is True
+    assert asyncio.run(downloads_module.versioned_manifest_exists(url)) is True
     assert calls == [url]
-    meta_module._manifest_probe_cache.clear()
+    downloads_module._manifest_probe_cache.clear()
 
 
 def test_health_reports_stamped_server_version(monkeypatch) -> None:  # type: ignore[no-untyped-def]

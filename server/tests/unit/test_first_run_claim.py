@@ -27,7 +27,7 @@ from proliferate.server.setup.domain.tokens import (
     mint_setup_token,
     setup_token_matches,
 )
-from proliferate.server.setup.service import ensure_first_run_setup_token
+from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 
 CLAIM_EMAIL = "owner@acme.test"
 CLAIM_PASSWORD = "a-strong-enough-password"

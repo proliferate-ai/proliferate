@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Depends, Form
 from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.engine import AsyncSessionDep
-from proliferate.server.setup import service
+from proliferate.db.engine import get_async_session
+from proliferate.server.setup import lifecycle, service
 from proliferate.server.setup.errors import FirstRunSetupError
 from proliferate.server.setup.pages import (
     render_setup_form,
@@ -24,7 +25,7 @@ router = APIRouter()
 
 
 @router.get("/setup", response_class=HTMLResponse, include_in_schema=False)
-async def first_run_setup_page(db: AsyncSessionDep) -> HTMLResponse:
+async def first_run_setup_page(db: AsyncSession = Depends(get_async_session)) -> HTMLResponse:
     if not await service.is_setup_open(db):
         return HTMLResponse(render_setup_not_found(), status_code=404)
     return HTMLResponse(render_setup_form())
@@ -32,7 +33,7 @@ async def first_run_setup_page(db: AsyncSessionDep) -> HTMLResponse:
 
 @router.post("/setup", response_class=HTMLResponse, include_in_schema=False)
 async def first_run_setup_claim(
-    db: AsyncSessionDep,
+    db: AsyncSession = Depends(get_async_session),
     email: Annotated[str, Form()] = "",
     password: Annotated[str, Form()] = "",
     setup_token: Annotated[str, Form()] = "",
@@ -41,6 +42,7 @@ async def first_run_setup_claim(
     try:
         claim = await service.claim_first_run(
             db,
+            schedule_token_file_cleanup=lifecycle.schedule_token_file_cleanup,
             email=email,
             password=password,
             setup_token=setup_token,

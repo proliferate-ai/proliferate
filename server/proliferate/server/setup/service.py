@@ -20,13 +20,13 @@ The lifecycle, all single-org mode only:
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db import engine as db_engine
 from proliferate.db.store import instance_setup as instance_setup_store
 from proliferate.server.organizations.domain.profile import (
     clean_organization_name,
@@ -64,26 +64,8 @@ async def is_setup_open(db: AsyncSession) -> bool:
     return await instance_setup_store.count_users(db) == 0
 
 
-async def ensure_first_run_setup_token() -> None:
-    """Mint or reuse the first-run setup token at API boot.
-
-    No-op outside single-org mode. Opens its own short-lived session because
-    it runs from the application lifespan, not a request.
-    """
-    if not settings.single_org_mode:
-        return
-    session = db_engine.async_session_factory()
-    try:
-        await _ensure_setup_token(session)
-        await session.commit()
-    except BaseException:
-        await db_engine.rollback_session(session)
-        raise
-    finally:
-        await db_engine.close_session(session)
-
-
-async def _ensure_setup_token(db: AsyncSession) -> None:
+async def ensure_setup_token(db: AsyncSession) -> None:
+    """Session-scoped body of the boot-time token mint (see lifecycle.py)."""
     await instance_setup_store.acquire_first_run_claim_lock(db)
 
     if await instance_setup_store.count_users(db) > 0:
@@ -126,6 +108,7 @@ async def claim_first_run(
     password: str,
     setup_token: str,
     organization_name: str = "",
+    schedule_token_file_cleanup: Callable[[AsyncSession], Awaitable[None]] | None = None,
 ) -> FirstRunClaim:
     """Create the owner account and THE instance organization, exactly once.
 
@@ -168,7 +151,10 @@ async def claim_first_run(
         name=requested_organization_name or None,
     )
     await instance_setup_store.delete_setup_token(db)
-    await db_engine.run_after_commit(db, _remove_token_file_after_commit)
+    if schedule_token_file_cleanup is not None:
+        # Injected by the transport (see lifecycle.py); when omitted the file
+        # still gets cleaned up by the next boot's ensure_setup_token pass.
+        await schedule_token_file_cleanup(db)
 
     logger.info(
         "Instance claimed: owner %s, organization %r.",
@@ -206,5 +192,5 @@ def _remove_token_file() -> None:
         logger.warning("Could not remove the setup token file at %s.", _token_file_path())
 
 
-async def _remove_token_file_after_commit() -> None:
+async def remove_token_file_after_commit() -> None:
     _remove_token_file()

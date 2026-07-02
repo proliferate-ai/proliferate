@@ -71,7 +71,7 @@ from proliferate.server.organizations.registration_pages import (
 )
 from proliferate.server.organizations.sso.api import router as organization_sso_router
 from proliferate.server.setup.api import router as first_run_setup_router
-from proliferate.server.setup.service import ensure_first_run_setup_token
+from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.version import server_version
 
 # SUPPORT PARKED: diagnostics imports deleted target runtime access models.
