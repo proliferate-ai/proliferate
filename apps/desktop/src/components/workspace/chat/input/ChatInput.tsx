@@ -64,9 +64,12 @@ const CHAT_INPUT_ATTACHMENT_ACCEPT =
 export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
+  hasSessionTurns = false,
 }: {
   attachments: PromptAttachmentController;
   suppressActiveSessionState?: boolean;
+  /** Flips the placeholder to the follow-up variant once the transcript has turns. */
+  hasSessionTurns?: boolean;
 }) {
   useDebugRenderCount("chat-composer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -338,6 +341,7 @@ export function ChatInput({
               accept={CHAT_INPUT_ATTACHMENT_ACCEPT}
             />
             <ChatInputDraftArea
+              hasSessionTurns={hasSessionTurns}
               isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
               editDraft={editDraft}
               onEditDraftChange={setEditDraftText}

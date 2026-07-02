@@ -1,74 +1,12 @@
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { AddPlan, ClipboardList, Spinner } from "@proliferate/ui/icons";
-import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { ClipboardList, Spinner } from "@proliferate/ui/icons";
 import { usePlanPicker } from "@/hooks/plans/ui/use-plan-picker";
 import {
   formatPlanAgentKindLabel,
   formatPlanDecisionStateLabel,
 } from "@/lib/domain/plans/plan-presentation";
 import { PLAN_PICKER_SEARCH_PLACEHOLDER } from "@/copy/plans/plan-picker-copy";
-
-interface PlanPickerPopoverProps {
-  workspaceUiKey: string | null;
-  sdkWorkspaceId: string | null;
-  disabled?: boolean;
-}
-
-export function PlanPickerPopover({
-  workspaceUiKey,
-  sdkWorkspaceId,
-  disabled = false,
-}: PlanPickerPopoverProps) {
-  return (
-    <PopoverButton
-      trigger={(
-        <ComposerControlButton
-          iconOnly
-          disabled={disabled}
-          icon={<AddPlan className="size-4" />}
-          label="Attach plan"
-          title={disabled ? "Select a workspace before attaching a plan" : "Attach plan"}
-          aria-label="Attach plan"
-        />
-      )}
-      align="end"
-      side="top"
-      offset={8}
-      className="w-auto border-0 bg-transparent p-0 shadow-none"
-    >
-      {(close) => (
-        <PlanPickerPopoverSurface
-          workspaceUiKey={workspaceUiKey}
-          sdkWorkspaceId={sdkWorkspaceId}
-          onClose={close}
-        />
-      )}
-    </PopoverButton>
-  );
-}
-
-export function PlanPickerPopoverSurface({
-  workspaceUiKey,
-  sdkWorkspaceId,
-  onClose,
-}: {
-  workspaceUiKey: string | null;
-  sdkWorkspaceId: string | null;
-  onClose: () => void;
-}) {
-  return (
-    <ComposerPopoverSurface className="w-[min(24rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
-      <PlanPickerContentBody
-        workspaceUiKey={workspaceUiKey}
-        sdkWorkspaceId={sdkWorkspaceId}
-        onClose={onClose}
-      />
-    </ComposerPopoverSurface>
-  );
-}
 
 export function PlanPickerContentBody({
   workspaceUiKey,

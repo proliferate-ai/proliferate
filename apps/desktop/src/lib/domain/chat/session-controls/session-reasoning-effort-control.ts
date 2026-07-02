@@ -1,12 +1,4 @@
-export type SessionReasoningEffortTone =
-  | "neutral"
-  | "accent"
-  | "primary"
-  | "warning"
-  | "destructive";
-
 export interface SessionReasoningEffortPresentation {
-  tone: SessionReasoningEffortTone;
   shortLabel: string | null;
 }
 
@@ -19,7 +11,6 @@ export function resolveReasoningEffortPresentation(
   const normalizedValue = normalizeReasoningEffortValue(value);
 
   return {
-    tone: resolveTone(normalizedValue),
     shortLabel: resolveShortLabel(normalizedValue, label),
   };
 }
@@ -27,20 +18,6 @@ export function resolveReasoningEffortPresentation(
 function normalizeReasoningEffortValue(value: string | null): string | null {
   const normalizedValue = value?.toLowerCase() ?? null;
   return normalizedValue === "max" ? "xhigh" : normalizedValue;
-}
-
-function resolveTone(value: string | null): SessionReasoningEffortTone {
-  switch (value) {
-    case "medium":
-      return "accent";
-    case "high":
-      return "primary";
-    case "xhigh":
-      return "warning";
-    case "low":
-    default:
-      return "neutral";
-  }
 }
 
 function resolveShortLabel(value: string | null, label?: string | null): string | null {

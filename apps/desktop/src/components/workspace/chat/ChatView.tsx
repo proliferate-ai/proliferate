@@ -159,12 +159,16 @@ export const ChatView = memo(function ChatView({
   useSessionErrorAcknowledgement();
   useWorkspaceMobilityLifecycle();
 
+  // The composer placeholder flips to the follow-up variant once the session
+  // transcript already has turns; the surface mode is the cheap signal.
+  const hasSessionTurns = mode.kind === "session-transcript";
   const chatInput = useMemo(() => (
     <ChatInput
       attachments={promptAttachments}
       suppressActiveSessionState={suppressComposerActiveSessionState}
+      hasSessionTurns={hasSessionTurns}
     />
-  ), [promptAttachments, suppressComposerActiveSessionState]);
+  ), [hasSessionTurns, promptAttachments, suppressComposerActiveSessionState]);
   const footerSlot = useMemo(
     () => showWorkspaceFooter ? <WorkspaceMobilityFooterRow /> : null,
     [showWorkspaceFooter],

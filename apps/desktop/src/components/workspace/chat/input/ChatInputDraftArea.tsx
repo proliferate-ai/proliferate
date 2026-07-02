@@ -13,6 +13,8 @@ import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextar
 import { QueuedPromptEditBanner } from "./QueuedPromptEditBanner";
 
 interface ChatInputDraftAreaProps {
+  /** Picks the follow-up placeholder once the session transcript has turns. */
+  hasSessionTurns: boolean;
   isEditingQueuedPrompt: boolean;
   editDraft: string;
   onEditDraftChange: (value: string) => void;
@@ -35,6 +37,7 @@ interface ChatInputDraftAreaProps {
 }
 
 export function ChatInputDraftArea({
+  hasSessionTurns,
   isEditingQueuedPrompt,
   editDraft,
   onEditDraftChange,
@@ -52,6 +55,9 @@ export function ChatInputDraftArea({
   onCancelEdit,
 }: ChatInputDraftAreaProps) {
   const draft = useChatDraftValue(workspaceUiKey);
+  const placeholder = hasSessionTurns
+    ? CHAT_COMPOSER_LABELS.followUpPlaceholder
+    : CHAT_COMPOSER_LABELS.placeholder;
   if (isEditingQueuedPrompt) {
     return (
       <>
@@ -65,7 +71,7 @@ export function ChatInputDraftArea({
             value={editDraft}
             onChange={(event) => onEditDraftChange(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={CHAT_COMPOSER_LABELS.placeholder}
+            placeholder={placeholder}
             spellCheck={false}
             autoComplete="off"
             autoCorrect="off"
@@ -85,7 +91,7 @@ export function ChatInputDraftArea({
       <ComposerCommandEditor
         draft={draft}
         onDraftChange={onDraftChange}
-        placeholder={CHAT_COMPOSER_LABELS.placeholder}
+        placeholder={placeholder}
         canSubmit={canSubmit}
         disabled={isDisabled}
         onSubmit={onSubmit}

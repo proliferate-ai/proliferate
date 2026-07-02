@@ -5,7 +5,7 @@ import {
   resolveConfiguredSessionControlValue,
 } from "@/lib/domain/chat/session-controls/session-mode-control";
 import {
-  resolveSessionToggleControlStateIndicator,
+  resolveSessionToggleControlStateLabel,
 } from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type {
   LiveSessionControlDescriptor,
@@ -55,7 +55,7 @@ export function summarizeComposerModelConfigControls(
       if (!control.isEnabled) {
         return [];
       }
-      return [resolveSessionToggleControlStateIndicator(control.key, true).label];
+      return [resolveSessionToggleControlStateLabel(control.key, true)];
     }
 
     if (control.key === "mode" || control.key === "collaboration_mode") {
