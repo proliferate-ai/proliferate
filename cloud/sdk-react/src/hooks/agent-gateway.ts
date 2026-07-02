@@ -6,10 +6,13 @@ import {
   getAgentCatalog,
   getAgentGatewayCapabilities,
   getAgentGatewayEnrollment,
+  getOrgAgentPolicy,
   listAgentApiKeys,
   listAgentRouteSelections,
+  listOrgAgentPolicyViolations,
   refreshAgentCatalog,
   revokeAgentApiKey,
+  updateOrgAgentPolicy,
   upsertAgentCatalogOverride,
   upsertAgentRouteSelection,
   type AgentApiKey,
@@ -23,7 +26,10 @@ import {
   type AgentGatewayCatalogOverride,
   type AgentGatewayEnrollment,
   type CreateAgentApiKeyRequest,
+  type OrgAgentPolicy,
+  type OrgAgentPolicyViolationListResponse,
   type RefreshAgentGatewayCatalogRequest,
+  type UpdateOrgAgentPolicyRequest,
   type UpsertAgentAuthRouteSelectionRequest,
   type UpsertAgentGatewayCatalogOverrideRequest,
 } from "@proliferate/cloud-sdk";
@@ -35,6 +41,8 @@ import {
   agentGatewayCatalogRootKey,
   agentGatewayEnrollmentKey,
   agentRouteSelectionsKey,
+  orgAgentPolicyKey,
+  orgAgentPolicyViolationsKey,
 } from "../lib/query-keys.js";
 
 export interface UpsertRouteSelectionInput {
@@ -194,5 +202,47 @@ export function useAgentGatewayEnrollment(enabled = true) {
     queryKey: agentGatewayEnrollmentKey(),
     queryFn: () => getAgentGatewayEnrollment(client),
     enabled,
+  });
+}
+
+export function useOrgAgentPolicy(organizationId: string | null, enabled = true) {
+  const client = useCloudClient();
+  return useQuery<OrgAgentPolicy>({
+    queryKey: orgAgentPolicyKey(organizationId ?? "none"),
+    queryFn: () => getOrgAgentPolicy(organizationId ?? "", client),
+    enabled: enabled && organizationId !== null,
+  });
+}
+
+export function useUpdateOrgAgentPolicy(organizationId: string | null) {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<OrgAgentPolicy, Error, UpdateOrgAgentPolicyRequest>({
+    mutationFn: (input) => {
+      if (!organizationId) {
+        return Promise.reject(new Error("No organization selected."));
+      }
+      return updateOrgAgentPolicy(organizationId, input, client);
+    },
+    onSuccess: () => {
+      if (!organizationId) {
+        return;
+      }
+      void queryClient.invalidateQueries({
+        queryKey: orgAgentPolicyKey(organizationId),
+      });
+    },
+  });
+}
+
+export function useOrgAgentPolicyViolations(
+  organizationId: string | null,
+  enabled = true,
+) {
+  const client = useCloudClient();
+  return useQuery<OrgAgentPolicyViolationListResponse>({
+    queryKey: orgAgentPolicyViolationsKey(organizationId ?? "none"),
+    queryFn: () => listOrgAgentPolicyViolations(organizationId ?? "", client),
+    enabled: enabled && organizationId !== null,
   });
 }

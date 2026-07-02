@@ -11,7 +11,10 @@ import type {
   AgentGatewayCatalogOverride,
   AgentGatewayEnrollment,
   CreateAgentApiKeyRequest,
+  OrgAgentPolicy,
+  OrgAgentPolicyViolationListResponse,
   RefreshAgentGatewayCatalogRequest,
+  UpdateOrgAgentPolicyRequest,
   UpsertAgentAuthRouteSelectionRequest,
   UpsertAgentGatewayCatalogOverrideRequest,
 } from "../types/index.js";
@@ -22,6 +25,10 @@ function routeSelectionPath(harnessKind: string, surface: string): string {
 
 function catalogPath(harnessKind: string): string {
   return `/v1/cloud/agent-gateway/catalog/${encodeURIComponent(harnessKind)}`;
+}
+
+function orgAgentPolicyPath(organizationId: string): string {
+  return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-gateway/policy`;
 }
 
 export async function listAgentApiKeys(
@@ -149,5 +156,37 @@ export async function getAgentGatewayEnrollment(
   return client.requestJson<AgentGatewayEnrollment>({
     method: "GET",
     path: "/v1/cloud/agent-gateway/enrollment",
+  });
+}
+
+export async function getOrgAgentPolicy(
+  organizationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<OrgAgentPolicy> {
+  return client.requestJson<OrgAgentPolicy>({
+    method: "GET",
+    path: orgAgentPolicyPath(organizationId),
+  });
+}
+
+export async function updateOrgAgentPolicy(
+  organizationId: string,
+  input: UpdateOrgAgentPolicyRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<OrgAgentPolicy> {
+  return client.requestJson<OrgAgentPolicy>({
+    method: "PUT",
+    path: orgAgentPolicyPath(organizationId),
+    body: input,
+  });
+}
+
+export async function listOrgAgentPolicyViolations(
+  organizationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<OrgAgentPolicyViolationListResponse> {
+  return client.requestJson<OrgAgentPolicyViolationListResponse>({
+    method: "GET",
+    path: `${orgAgentPolicyPath(organizationId)}/violations`,
   });
 }

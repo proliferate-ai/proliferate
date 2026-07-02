@@ -581,6 +581,12 @@
   description: Stripe price id charged once per LLM auto top-up (distinct from the compute overage meter/price); empty disables auto top-ups entirely
   tags: [production]
 
+- name: AGENT_GATEWAY_POLICY_MIN_PLAN
+  secret: false
+  default: "pro"
+  description: Minimum org plan required to edit the org agent policy ("free" disables the gate; "pro" requires a healthy paid cloud subscription or an active unlimited-cloud entitlement); reading the policy and violations is never plan-gated
+  tags: [local-dev, self-hosted, production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud MCP
 # ═══════════════════════════════════════════════════════════════════════

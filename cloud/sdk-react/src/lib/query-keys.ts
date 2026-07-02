@@ -50,6 +50,19 @@ export function agentGatewayCatalogKey(
   return [...agentGatewayCatalogRootKey(), harnessKind, surface, route] as const;
 }
 
+export function orgAgentPolicyKey(organizationId: string) {
+  return [...agentGatewayRootKey(), "org-policy", organizationId] as const;
+}
+
+export function orgAgentPolicyViolationsKey(organizationId: string) {
+  return [
+    ...agentGatewayRootKey(),
+    "org-policy",
+    organizationId,
+    "violations",
+  ] as const;
+}
+
 export function cloudPluginInventoryRootKey() {
   return [...cloudRootKey(), "plugin-inventory"] as const;
 }
