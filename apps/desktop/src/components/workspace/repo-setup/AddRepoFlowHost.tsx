@@ -10,7 +10,6 @@ import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
-import { pickFolder } from "@/lib/access/tauri/shell";
 import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -30,7 +29,7 @@ export function AddRepoFlowHost() {
 
   const { addRepoFromPath, isAddingRepo } = useAddRepo();
   const { activeOrganization, activeOrganizationId } = useActiveOrganization();
-  const { openExternal } = useTauriShellActions();
+  const { openExternal, pickFolder } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const [flowError, setFlowError] = useState<string | null>(null);
 
@@ -51,7 +50,7 @@ export function AddRepoFlowHost() {
       }
       setStep({ kind: "confirm-local", path });
     })();
-  }, [openCloudPicker, setStep]);
+  }, [openCloudPicker, pickFolder, setStep]);
 
   const handleConfirmLocal = useCallback((options: { createCloudEnvironment: boolean }) => {
     if (step.kind !== "confirm-local") {
