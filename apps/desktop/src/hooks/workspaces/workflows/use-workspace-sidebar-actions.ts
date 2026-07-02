@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -17,7 +16,6 @@ import { useWorkspaceRetireActions } from "@/hooks/workspaces/workflows/use-work
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 
 export function useWorkspaceSidebarActions() {
-  const mobility = useWorkspaceMobilityState();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const {
     goToTopLevelRoute,
@@ -45,10 +43,6 @@ export function useWorkspaceSidebarActions() {
     goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
 
-  const handleGoIntegrations = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.integrations);
-  }, [goToTopLevelRoute]);
-
   const handleGoWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
@@ -72,11 +66,6 @@ export function useWorkspaceSidebarActions() {
           : "/workflows");
         return;
       case "open_source_session": {
-        if (mobility.selectionLocked && action.workspaceId !== mobility.selectedLogicalWorkspaceId) {
-          showToast("Finish the current workspace move before switching workspaces.");
-          return;
-        }
-
         navigateToWorkspaceShell();
         void openWorkspaceSession({
           workspaceId: action.workspaceId,
@@ -92,8 +81,6 @@ export function useWorkspaceSidebarActions() {
   }, [
     goToTopLevelRoute,
     handleSelectWorkspace,
-    mobility.selectedLogicalWorkspaceId,
-    mobility.selectionLocked,
     navigateToWorkspaceShell,
     openWorkspaceSession,
     showToast,
@@ -194,7 +181,6 @@ export function useWorkspaceSidebarActions() {
   return {
     handleAddRepo,
     handleGoHome,
-    handleGoIntegrations,
     handleGoWorkflows,
     handleGoWorkspaces,
     handleSidebarIndicatorAction,

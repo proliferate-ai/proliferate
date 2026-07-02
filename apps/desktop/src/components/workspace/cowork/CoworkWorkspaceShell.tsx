@@ -208,7 +208,6 @@ export function CoworkWorkspaceShell({
                 className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent"
               />
               <ChatView
-                showWorkspaceFooter={false}
                 showWorkspaceStatusPanels={false}
               />
             </div>

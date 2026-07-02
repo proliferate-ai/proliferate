@@ -17,7 +17,6 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "openSettings",
       "goHome",
-      "goPlugins",
       "goAutomations",
       "openWebApp",
       "openSupport",

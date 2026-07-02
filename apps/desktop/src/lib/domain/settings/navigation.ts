@@ -86,7 +86,7 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
       params.set(name, value);
     }
   }
-  if ((section === "agent-authentication" || section === "compute") && target.target) {
+  if (section === "agent-authentication" && target.target) {
     params.set("target", target.target);
   }
   if (section === "agent-authentication" && target.credential) {
@@ -258,9 +258,6 @@ function pickFocus(
 }
 
 function cloudRedirectSection(focus: SettingsFocus): SettingsSection {
-  if (focus.target) {
-    return "compute";
-  }
   if (focus.cloudRepoOwner || focus.cloudRepoName || focus.focus === "repo" || focus.focus === "environment") {
     return "environments";
   }
@@ -280,9 +277,6 @@ function sanitizeFocusForSection(
       credential: focus.credential,
       kind: focus.kind,
     });
-  }
-  if (section === "compute") {
-    return pickFocus({ target: focus.target });
   }
   if (section === "environments") {
     return pickFocus({

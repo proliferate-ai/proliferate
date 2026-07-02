@@ -12,7 +12,6 @@ interface ChatInputAvailabilityArgs {
   hasReadyConfiguredLaunch: boolean;
   configuredLaunchDisabledReason: string | null;
   pendingWorkspaceEntry: ChatInputPendingWorkspaceEntry | null;
-  mobility: ChatInputMobilityState | null;
   pendingInteractionKind?: ChatInputPendingInteractionKind | null;
 }
 
@@ -22,12 +21,6 @@ export type ChatInputPendingInteractionKind = "permission" | "user_input" | "mcp
 export interface ChatInputPendingWorkspaceEntry {
   source: "local-created" | "worktree-created" | "cloud-created" | "cowork-created";
   stage: "submitting" | "awaiting-cloud-ready" | "failed";
-}
-
-export interface ChatInputMobilityState {
-  handoffActive: boolean;
-  statusDescription: string | null;
-  selectedEffectiveOwner: "cloud" | "local" | null;
 }
 
 interface ModeValueLike {
@@ -83,7 +76,6 @@ export function resolveChatInputAvailability({
   hasReadyConfiguredLaunch,
   configuredLaunchDisabledReason,
   pendingWorkspaceEntry,
-  mobility,
   pendingInteractionKind = null,
 }: ChatInputAvailabilityArgs): ChatInputAvailabilityState {
   const selectedWorkspaceKind = isCloudWorkspaceSelected ? "cloud" : "local";
@@ -103,15 +95,6 @@ export function resolveChatInputAvailability({
       disabledReason: "Resolve workspace setup before starting chat.",
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
-    };
-  }
-
-  if (mobility?.handoffActive) {
-    return {
-      isDisabled: true,
-      disabledReason: mobility.statusDescription ?? "Workspace mobility is in progress.",
-      areRuntimeControlsDisabled: true,
-      selectedWorkspaceKind: mobility.selectedEffectiveOwner === "cloud" ? "cloud" : "local",
     };
   }
 
