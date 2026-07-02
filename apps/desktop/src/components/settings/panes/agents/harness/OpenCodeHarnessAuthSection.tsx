@@ -14,6 +14,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { ExternalLink } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
@@ -168,14 +169,16 @@ export function OpenCodeHarnessAuthSection({
             </span>
           }
           description={
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               className="inline-flex items-center gap-1 hover:text-foreground"
               onClick={() => { void openExternal(provider.keyUrl); }}
             >
               {HARNESS_PANE_COPY.getApiKey}
               <ExternalLink className="size-3" />
-            </button>
+            </Button>
           }
         >
           <Switch

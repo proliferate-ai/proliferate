@@ -10,6 +10,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
@@ -27,7 +28,7 @@ import {
   formatApiKeyUsages,
   formatLastValidated,
   usagesForApiKey,
-} from "./api-key-usages";
+} from "@/lib/domain/settings/api-key-usages";
 
 export function ApiKeysPane() {
   const { cloudActive } = useCloudAvailabilityState();
@@ -164,9 +165,12 @@ export function ApiKeysPane() {
         description={AGENT_API_KEYS_COPY.addSectionDescription}
       >
         <form className="flex flex-col gap-2 pt-2 sm:flex-row" onSubmit={handleSubmit}>
-          <label className="sm:w-44">
-            <span className="sr-only">{AGENT_API_KEYS_COPY.providerLabel}</span>
+          <div className="sm:w-44">
+            <Label htmlFor="agent-api-key-provider" className="sr-only">
+              {AGENT_API_KEYS_COPY.providerLabel}
+            </Label>
             <Select
+              id="agent-api-key-provider"
               aria-label={AGENT_API_KEYS_COPY.providerLabel}
               value={provider}
               onChange={(event) =>
@@ -178,7 +182,7 @@ export function ApiKeysPane() {
                 </option>
               ))}
             </Select>
-          </label>
+          </div>
           <Input
             aria-label={AGENT_API_KEYS_COPY.nameLabel}
             placeholder={AGENT_API_KEYS_COPY.namePlaceholder}

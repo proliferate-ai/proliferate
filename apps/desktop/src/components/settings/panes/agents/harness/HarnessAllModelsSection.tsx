@@ -19,7 +19,7 @@ import {
   buildEnabledOverridePatchJson,
   catalogRouteForSurface,
   normalizeCatalogModels,
-} from "./harness-catalog";
+} from "@/lib/domain/settings/harness-catalog";
 
 interface HarnessAllModelsSectionProps {
   harnessKind: string;

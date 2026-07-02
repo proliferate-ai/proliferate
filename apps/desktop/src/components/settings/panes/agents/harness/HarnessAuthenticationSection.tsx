@@ -24,7 +24,7 @@ import { useAgentLoginTerminalWorkflow } from "@/hooks/agents/workflows/use-agen
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { isReadyAgent } from "@/lib/domain/agents/status";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { defaultRouteForSurface } from "./harness-catalog";
+import { defaultRouteForSurface } from "@/lib/domain/settings/harness-catalog";
 
 interface HarnessAuthenticationSectionProps {
   harnessKind: string;

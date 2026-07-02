@@ -18,7 +18,7 @@ import {
   formatAgentOverviewMeta,
   getAgentOverviewStatus,
   getInstalledAgents,
-} from "./agents-overview-presentation";
+} from "@/lib/domain/settings/agents-overview-presentation";
 
 export interface AgentsOverviewPaneProps {
   onSelectSection: (section: SettingsSection) => void;
@@ -149,13 +149,15 @@ function AgentOverviewRow({
     return <div className={rowClass}>{content}</div>;
   }
   return (
-    <button
+    <Button
       type="button"
+      variant="unstyled"
+      size="unstyled"
       onClick={onOpen}
       className={`${rowClass} transition-colors hover:bg-accent`}
     >
       {content}
       <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </button>
+    </Button>
   );
 }
