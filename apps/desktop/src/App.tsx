@@ -44,6 +44,7 @@ import {
   recordBootDiagnosticOnce,
 } from "@/lib/infra/measurement/boot-stall-diagnostics"
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap"
+import { ensureDesktopWorker } from "@/lib/workflows/cloud/ensure-desktop-worker"
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { AddRepoFlowHost } from "@/components/workspace/repo-setup/AddRepoFlowHost"
@@ -60,6 +61,10 @@ const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
 let appRuntimeRenderCount = 0
+
+// Guards the desktop worker enrollment so it fires once per authenticated
+// session, whether reached via fresh login or a restored-session launch.
+let desktopWorkerEnrollmentStarted = false
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
 // nor any of its fixtures / transitive deps land in production bundles.
@@ -258,6 +263,14 @@ function AppRuntime() {
         })
       })
     }
+  }, [authStatus])
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || desktopWorkerEnrollmentStarted) {
+      return
+    }
+    desktopWorkerEnrollmentStarted = true
+    void ensureDesktopWorker()
   }, [authStatus])
 
   recordBootDiagnosticOnce("app_runtime.render.before_return", { authStatus })

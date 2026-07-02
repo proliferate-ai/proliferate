@@ -547,6 +547,24 @@ CLOUD_TARGET_DEFAULT_ENROLLMENT_TTL_SECONDS: Final = 3600
 CLOUD_TARGET_MAX_ENROLLMENT_TTL_SECONDS: Final = 86_400
 CLOUD_TARGET_HEARTBEAT_STALE_SECONDS: Final = 180
 
+# ---------------------------------------------------------------------------
+# Runtime workers (cloud sandbox + desktop) auth
+# ---------------------------------------------------------------------------
+# HMAC domains keep the three token families independent even if a raw token
+# value ever collides across systems.
+CLOUD_RUNTIME_WORKER_ENROLLMENT_TOKEN_DOMAIN: Final = "cloud-runtime-worker-enrollment"
+CLOUD_RUNTIME_WORKER_TOKEN_DOMAIN: Final = "cloud-runtime-worker"
+CLOUD_INTEGRATION_GATEWAY_TOKEN_DOMAIN: Final = "cloud-integration-gateway"
+
+# Cloud sandboxes mint a longer-lived enrollment (the worker boots once per
+# provisioning); desktop mints a short-lived one at login.
+CLOUD_RUNTIME_WORKER_CLOUD_ENROLLMENT_TTL_SECONDS: Final = 3600
+CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS: Final = 900
+# Heartbeat cadence advertised to the worker + the read-time offline threshold.
+CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS: Final = 30
+CLOUD_RUNTIME_WORKER_OFFLINE_THRESHOLD_SECONDS: Final = 90
+CLOUD_INTEGRATION_GATEWAY_MCP_PATH: Final = "/v1/cloud/integration-gateway/mcp"
+
 
 # ---------------------------------------------------------------------------
 # Cloud commands
