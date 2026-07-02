@@ -12,6 +12,7 @@ import {
 } from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
 import { AgentAuthenticationSection } from "@/components/settings/panes/agent-auth/AgentAuthenticationSection";
+import { AgentAuthInstallGate } from "@/components/settings/panes/agent-auth/AgentAuthInstallGate";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
@@ -27,6 +28,7 @@ import {
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
 import { isReadyAgent } from "@/lib/domain/agents/status";
+import { resolveAgentAuthDisplay } from "@/lib/domain/agents/auth-onboarding";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
 
@@ -53,6 +55,10 @@ export function AgentDefaultsPane() {
   } = useModelRegistrySettings();
   const cloudAgentCatalogQuery = useCloudAgentCatalog(connectionState !== "failed");
   const canUpdateLocalInstalls = connectionState === "healthy" && !isReconciling;
+  const localAgentsByKind = useMemo(
+    () => new Map(agents.map((agent) => [agent.kind, agent] as const)),
+    [agents],
+  );
   const launchAgents = useMemo(
     () => mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
       cloudAgentCatalogQuery.data?.agents ?? [],
@@ -228,74 +234,86 @@ export function AgentDefaultsPane() {
           )}
       </AgentDefaultsSection>
 
-      {connectionState !== "failed" && orderedAgentDefaultRows.map((row) => (
-        <AgentDefaultsSection key={row.kind} title={`${row.displayName} defaults`}>
-          <div className="space-y-2">
-            <AgentDefaultComposer
-              row={row}
-              launchAgent={launchAgents.find((agent) => agent.kind === row.kind) ?? null}
-              preferences={preferences}
-            />
-
-            <AgentAuthenticationSection
-              agentKind={row.kind}
-              displayName={row.displayName}
-            />
-
-            {row.visibilityModels.length > 0 ? (
-              <ModelRegistryPane
-                agentKind={row.kind}
-                models={row.visibilityModels}
-                refreshable={row.kind === "cursor" || row.kind === "opencode"}
-                refreshing={runtimeLaunchOptions.isRefetching}
-                onRefresh={() => {
-                  void runtimeLaunchOptions.refetch().then((result) => {
-                    if (result.error) {
-                      showToast(
-                        result.error instanceof Error
-                          ? result.error.message
-                          : `Could not refresh ${row.displayName} models.`,
-                      );
-                    }
-                  });
-                }}
-                onVisibilityChange={(modelId, visible, catalogDefaultOptIn) => {
-                  if (!visible) {
-                    const visibleRows = row.visibilityModels.filter((model) => model.isVisible);
-                    if (visibleRows.length <= 1 && visibleRows.some((model) => model.id === modelId)) {
-                      return;
-                    }
-                  }
-
-                  const nextVisibilityOverrides = withUpdatedModelVisibilityOverride(
-                    preferences.chatModelVisibilityOverridesByAgentKind,
-                    row.kind,
-                    modelId,
-                    visible,
-                    catalogDefaultOptIn,
-                  );
-                  const nextVisibleModel = row.visibilityModels.find((model) =>
-                    model.id !== modelId && model.isVisible
-                  ) ?? null;
-                  const nextDefaultModelIds =
-                    !visible && row.selectedModel.id === modelId && nextVisibleModel
-                      ? withUpdatedDefaultModelIdByAgentKind(
-                        preferences.defaultChatModelIdByAgentKind,
-                        row.kind,
-                        nextVisibleModel.id,
-                      )
-                      : preferences.defaultChatModelIdByAgentKind;
-
-                  preferences.setMultiple({
-                    chatModelVisibilityOverridesByAgentKind: nextVisibilityOverrides,
-                    defaultChatModelIdByAgentKind: nextDefaultModelIds,
-                  });
-                }}
+      {connectionState !== "failed" && orderedAgentDefaultRows.map((row) => {
+        const localAgent = localAgentsByKind.get(row.kind) ?? null;
+        const authDisplay = resolveAgentAuthDisplay(localAgent, agentsLoading);
+        return (
+          <AgentDefaultsSection key={row.kind} title={`${row.displayName} defaults`}>
+            <div className="space-y-2">
+              <AgentDefaultComposer
+                row={row}
+                launchAgent={launchAgents.find((agent) => agent.kind === row.kind) ?? null}
+                preferences={preferences}
               />
-            ) : null}
-          </div>
-        </AgentDefaultsSection>
-      ))}
+
+              {authDisplay === "auth-controls" ? (
+                <AgentAuthenticationSection
+                  agentKind={row.kind}
+                  displayName={row.displayName}
+                />
+              ) : (
+                <AgentAuthInstallGate
+                  displayName={row.displayName}
+                  loading={authDisplay === "loading"}
+                  onInstall={localAgent ? () => setSetupAgent(localAgent) : undefined}
+                />
+              )}
+
+              {row.visibilityModels.length > 0 ? (
+                <ModelRegistryPane
+                  agentKind={row.kind}
+                  models={row.visibilityModels}
+                  refreshable={row.kind === "cursor" || row.kind === "opencode"}
+                  refreshing={runtimeLaunchOptions.isRefetching}
+                  onRefresh={() => {
+                    void runtimeLaunchOptions.refetch().then((result) => {
+                      if (result.error) {
+                        showToast(
+                          result.error instanceof Error
+                            ? result.error.message
+                            : `Could not refresh ${row.displayName} models.`,
+                        );
+                      }
+                    });
+                  }}
+                  onVisibilityChange={(modelId, visible, catalogDefaultOptIn) => {
+                    if (!visible) {
+                      const visibleRows = row.visibilityModels.filter((model) => model.isVisible);
+                      if (visibleRows.length <= 1 && visibleRows.some((model) => model.id === modelId)) {
+                        return;
+                      }
+                    }
+
+                    const nextVisibilityOverrides = withUpdatedModelVisibilityOverride(
+                      preferences.chatModelVisibilityOverridesByAgentKind,
+                      row.kind,
+                      modelId,
+                      visible,
+                      catalogDefaultOptIn,
+                    );
+                    const nextVisibleModel = row.visibilityModels.find((model) =>
+                      model.id !== modelId && model.isVisible
+                    ) ?? null;
+                    const nextDefaultModelIds =
+                      !visible && row.selectedModel.id === modelId && nextVisibleModel
+                        ? withUpdatedDefaultModelIdByAgentKind(
+                          preferences.defaultChatModelIdByAgentKind,
+                          row.kind,
+                          nextVisibleModel.id,
+                        )
+                        : preferences.defaultChatModelIdByAgentKind;
+
+                    preferences.setMultiple({
+                      chatModelVisibilityOverridesByAgentKind: nextVisibilityOverrides,
+                      defaultChatModelIdByAgentKind: nextDefaultModelIds,
+                    });
+                  }}
+                />
+              ) : null}
+            </div>
+          </AgentDefaultsSection>
+        );
+      })}
 
       {connectionState !== "failed" && agentsNeedingSetup.length > 0 ? (
         <AgentConfigurationIssuesSection
