@@ -34,8 +34,8 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_MEMBER,
 )
+from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.db.store import organization_invitations as invitation_store
-from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.organization_records import OrganizationRecord
 from proliferate.server.organizations.admin_emails import is_admin_listed_email
 from proliferate.server.organizations.domain.policy import (
@@ -94,12 +94,12 @@ class SingleOrgPolicy:
         *,
         default_role: str | None = None,
     ) -> None:
-        instance_organization = await organization_store.get_instance_organization(db)
+        instance_organization = await instance_organization_store.get_instance_organization(db)
         if instance_organization is None:
             # No instance org yet. Only the first-run claim flow may create one;
             # a normal sign-in must not, so we fail closed.
             raise InstanceOrganizationNotClaimed()
-        membership = await organization_store.get_membership_for_user(
+        membership = await instance_organization_store.get_membership_for_user(
             db,
             organization_id=instance_organization.id,
             user_id=user.id,
@@ -114,7 +114,7 @@ class SingleOrgPolicy:
                 raise InstanceOrganizationAccessRemoved()
             # ADMIN_EMAILS floor: reinstating a listed email is the deliberate
             # lockout-recovery path (see the admin_emails module docstring).
-            await organization_store.add_active_membership(
+            await instance_organization_store.add_active_membership(
                 db,
                 organization_id=instance_organization.id,
                 user_id=user.id,
@@ -127,7 +127,7 @@ class SingleOrgPolicy:
             user=user,
             default_role=default_role,
         )
-        await organization_store.add_active_membership(
+        await instance_organization_store.add_active_membership(
             db,
             organization_id=instance_organization.id,
             user_id=user.id,
@@ -182,10 +182,10 @@ async def ensure_instance_membership_not_removed(
     """
     if not settings.single_org_mode:
         return
-    instance_organization = await organization_store.get_instance_organization(db)
+    instance_organization = await instance_organization_store.get_instance_organization(db)
     if instance_organization is None or instance_organization.id != organization_id:
         return
-    membership = await organization_store.get_membership_for_user(
+    membership = await instance_organization_store.get_membership_for_user(
         db,
         organization_id=organization_id,
         user_id=user_id,
@@ -210,10 +210,10 @@ async def claim_instance_organization(
     Called exactly once, by the first-run claim flow, under its advisory lock.
     ``name`` overrides the default derived from the owner's email when given.
     """
-    existing = await organization_store.get_instance_organization(db)
+    existing = await instance_organization_store.get_instance_organization(db)
     if existing is not None:
         raise InstanceOrganizationAlreadyClaimed()
-    return await organization_store.create_instance_organization(
+    return await instance_organization_store.create_instance_organization(
         db,
         owner_user_id=owner.id,
         name=name or default_organization_name(email=owner.email, display_name=owner.display_name),

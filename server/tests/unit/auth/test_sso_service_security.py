@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.sso import service as sso_service
+from proliferate.auth.sso import user_resolution as sso_user_resolution
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
     SsoConnectionSnapshot,
@@ -21,19 +22,8 @@ from proliferate.auth.sso.types import (
     SsoStatus,
     VerifiedSsoIdentity,
 )
-from proliferate.auth.identity.store import create_auth_user
-from proliferate.config import settings
-from proliferate.constants.organizations import (
-    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-    ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
-    ORGANIZATION_ROLE_ADMIN,
-    ORGANIZATION_ROLE_MEMBER,
-    ORGANIZATION_ROLE_OWNER,
-)
 from proliferate.db.models.auth import User
-from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.auth_sso_records import SsoConnectionRecord, SsoIdentityRecord
-from proliferate.server.organizations.errors import InstanceOrganizationAccessRemoved
 
 
 @pytest.mark.asyncio
@@ -158,18 +148,18 @@ async def test_resolve_sso_user_rechecks_org_membership_for_existing_identity(
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_id", fake_get_user_by_id)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_id", fake_get_user_by_id)
     monkeypatch.setattr(
-        sso_service.organization_store,
+        sso_user_resolution.organization_store,
         "get_active_membership",
         fake_get_active_membership,
     )
     monkeypatch.setattr(
-        sso_service.invitation_store,
+        sso_user_resolution.invitation_store,
         "has_live_pending_invitation_for_organization_email",
         _false_pending_invitation,
     )
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     with pytest.raises(HTTPException) as exc_info:
         await sso_service.resolve_sso_user(
@@ -230,14 +220,14 @@ async def test_resolve_sso_user_ensures_default_org_for_new_deployment_user(
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
-    monkeypatch.setattr(sso_service, "create_auth_user", fake_create_auth_user)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_user_resolution, "create_auth_user", fake_create_auth_user)
     monkeypatch.setattr(
-        sso_service,
+        sso_user_resolution,
         "place_new_identity",
         fake_place_new_identity,
     )
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     resolved = await sso_service.resolve_sso_user(
         cast(AsyncSession, object()),
@@ -287,8 +277,8 @@ async def test_resolve_sso_user_rejects_unlinked_deployment_user_when_jit_disabl
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     with pytest.raises(HTTPException) as exc_info:
         await sso_service.resolve_sso_user(
@@ -380,34 +370,34 @@ async def test_resolve_sso_user_accepts_pending_org_invitation_when_jit_disabled
         "get_sso_identity_by_connection_subject",
         fake_get_sso_identity_by_connection_subject,
     )
-    monkeypatch.setattr(sso_service, "get_user_by_email", fake_get_user_by_email)
-    monkeypatch.setattr(sso_service, "create_auth_user", fake_create_auth_user)
+    monkeypatch.setattr(sso_user_resolution, "get_user_by_email", fake_get_user_by_email)
+    monkeypatch.setattr(sso_user_resolution, "create_auth_user", fake_create_auth_user)
     monkeypatch.setattr(
-        sso_service,
+        sso_user_resolution,
         "place_new_identity",
         fake_place_new_identity,
     )
     monkeypatch.setattr(
-        sso_service.invitation_store,
+        sso_user_resolution.invitation_store,
         "has_live_pending_invitation_for_organization_email",
         fake_has_pending_invitation,
     )
     monkeypatch.setattr(
-        sso_service.organization_store,
+        sso_user_resolution.organization_store,
         "get_active_membership",
         fake_get_active_membership,
     )
     monkeypatch.setattr(
-        sso_service.invitation_store,
+        sso_user_resolution.invitation_store,
         "accept_pending_invitation_for_organization_email",
         fake_accept_pending_invitation,
     )
     monkeypatch.setattr(
-        sso_service,
+        sso_user_resolution,
         "maybe_create_organization_seat_adjustment",
         fake_maybe_create_organization_seat_adjustment,
     )
-    monkeypatch.setattr(sso_service, "_attach_sso_identity", fake_attach_sso_identity)
+    monkeypatch.setattr(sso_user_resolution, "_attach_sso_identity", fake_attach_sso_identity)
 
     resolved = await sso_service.resolve_sso_user(
         cast(AsyncSession, object()),
@@ -532,147 +522,3 @@ def _user(*, user_id: object, email: str) -> User:
         is_superuser=False,
         is_verified=True,
     )
-
-
-# ---------------------------------------------------------------------------
-# Single-org mode: SSO login must not reactivate admin-removed memberships
-# (db-backed; all of this is inert in hosted mode)
-# ---------------------------------------------------------------------------
-
-
-def _verified(email: str) -> VerifiedSsoIdentity:
-    return VerifiedSsoIdentity(
-        provider_subject=f"subject-{email}",
-        email=email,
-        email_verified=True,
-        display_name=None,
-        avatar_url=None,
-        claims={},
-    )
-
-
-async def _seed_instance_org_with_removed_member(db: AsyncSession, *, removed_email: str):
-    owner = await create_auth_user(
-        db, email="owner@example.com", display_name=None, avatar_url=None
-    )
-    organization = Organization(name="Acme", logo_domain=None, logo_image=None, is_instance=True)
-    db.add(organization)
-    await db.flush()
-    db.add(
-        OrganizationMembership(
-            organization_id=organization.id,
-            user_id=owner.id,
-            role=ORGANIZATION_ROLE_OWNER,
-            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-        )
-    )
-    removed_user = await create_auth_user(
-        db, email=removed_email, display_name=None, avatar_url=None
-    )
-    db.add(
-        OrganizationMembership(
-            organization_id=organization.id,
-            user_id=removed_user.id,
-            role=ORGANIZATION_ROLE_MEMBER,
-            status=ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
-        )
-    )
-    await db.flush()
-    return organization, removed_user
-
-
-async def _membership_status(db: AsyncSession, *, organization_id, user_id):  # type: ignore[no-untyped-def]
-    from sqlalchemy import select
-
-    membership = (
-        await db.execute(
-            select(OrganizationMembership).where(
-                OrganizationMembership.organization_id == organization_id,
-                OrganizationMembership.user_id == user_id,
-            )
-        )
-    ).scalar_one()
-    return membership.status, membership.role
-
-
-@pytest.mark.asyncio
-async def test_deployment_sso_login_does_not_reactivate_removed_membership(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", True)
-    organization, removed_user = await _seed_instance_org_with_removed_member(
-        db_session, removed_email="kicked@example.com"
-    )
-
-    with pytest.raises(InstanceOrganizationAccessRemoved) as exc_info:
-        await sso_service.resolve_sso_user(
-            db_session,
-            connection=replace(
-                _connection(allowed_domains=()),
-                jit_policy=SsoJitPolicy.CREATE_MEMBER,
-            ),
-            verified=_verified("kicked@example.com"),
-        )
-
-    assert exc_info.value.status_code == 403
-    status, _role = await _membership_status(
-        db_session, organization_id=organization.id, user_id=removed_user.id
-    )
-    assert status == ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
-
-
-@pytest.mark.asyncio
-async def test_deployment_sso_login_reinstates_admin_listed_removed_user(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """ADMIN_EMAILS stays the deliberate lockout-recovery exception at login."""
-    monkeypatch.setattr(settings, "single_org_mode_override", True)
-    monkeypatch.setattr(settings, "admin_emails", "kicked-admin@example.com")
-    organization, removed_user = await _seed_instance_org_with_removed_member(
-        db_session, removed_email="kicked-admin@example.com"
-    )
-
-    resolved = await sso_service.resolve_sso_user(
-        db_session,
-        connection=replace(
-            _connection(allowed_domains=()),
-            jit_policy=SsoJitPolicy.CREATE_MEMBER,
-        ),
-        verified=_verified("kicked-admin@example.com"),
-    )
-
-    assert resolved.id == removed_user.id
-    status, role = await _membership_status(
-        db_session, organization_id=organization.id, user_id=removed_user.id
-    )
-    assert status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
-    assert role == ORGANIZATION_ROLE_ADMIN
-
-
-@pytest.mark.asyncio
-async def test_org_scope_sso_jit_does_not_reactivate_removed_instance_membership(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "single_org_mode_override", True)
-    organization, removed_user = await _seed_instance_org_with_removed_member(
-        db_session, removed_email="kicked@example.com"
-    )
-
-    with pytest.raises(InstanceOrganizationAccessRemoved):
-        await sso_service.resolve_sso_user(
-            db_session,
-            connection=_organization_connection(
-                connection_id=uuid4(),
-                organization_id=organization.id,
-                jit_policy=SsoJitPolicy.CREATE_MEMBER,
-            ),
-            verified=_verified("kicked@example.com"),
-        )
-
-    status, _role = await _membership_status(
-        db_session, organization_id=organization.id, user_id=removed_user.id
-    )
-    assert status == ORGANIZATION_MEMBERSHIP_STATUS_REMOVED

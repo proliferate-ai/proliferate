@@ -17,6 +17,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_OWNER,
 )
+from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organization_member_auth_methods as member_auth_method_store
 from proliferate.db.store import organizations as organization_store
@@ -362,7 +363,7 @@ async def _enforce_instance_admin_invariants(
     removes_membership = status == ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
     if not demotes_below_admin and not removes_membership:
         return
-    instance_organization = await organization_store.get_instance_organization(db)
+    instance_organization = await instance_organization_store.get_instance_organization(db)
     if instance_organization is None or instance_organization.id != org_user.organization_id:
         return
     member = await organization_store.get_organization_member(

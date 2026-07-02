@@ -43,8 +43,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.password import ensure_password_auth_enabled
 from proliferate.config import settings
+from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.db.store import organization_invitations as invitation_store
-from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth_passwords import get_user_by_normalized_email
 from proliferate.db.store.organization_records import InvitationRecord
 from proliferate.server.organizations.errors import OrganizationServiceError
@@ -182,7 +182,7 @@ async def register_invited_account(
     except AccountValidationError as exc:
         raise RegistrationValidationError(exc.reason) from exc
 
-    instance_organization = await organization_store.get_instance_organization(db)
+    instance_organization = await instance_organization_store.get_instance_organization(db)
     if instance_organization is None:
         # Nothing exists to register into before the first-run claim; the
         # response is indistinguishable from "not invited" on purpose.

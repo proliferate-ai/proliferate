@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN
+from proliferate.db.store import instance_organizations as instance_organization_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 
@@ -68,7 +69,7 @@ async def ensure_admin_email_role(db: AsyncSession, user: AdminEmailUser) -> Non
     """
     if not is_admin_listed_email(user.email):
         return
-    instance_organization = await organization_store.get_instance_organization(db)
+    instance_organization = await instance_organization_store.get_instance_organization(db)
     if instance_organization is None:
         return
     membership = await organization_store.get_active_membership(
@@ -84,7 +85,7 @@ async def ensure_admin_email_role(db: AsyncSession, user: AdminEmailUser) -> Non
         # policy), but the operator's env wins for listed emails. The flip side
         # is that offboarding someone requires removing them from ADMIN_EMAILS
         # too, or they are reinstated as admin at their next login.
-        await organization_store.add_active_membership(
+        await instance_organization_store.add_active_membership(
             db,
             organization_id=instance_organization.id,
             user_id=user.id,
