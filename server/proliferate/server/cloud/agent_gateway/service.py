@@ -13,7 +13,10 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.agent_gateway import AGENT_API_KEY_PROVIDERS
+from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_PROVIDERS,
+    AGENT_AUTH_SURFACE_CLOUD,
+)
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
@@ -22,6 +25,7 @@ from proliferate.db.store.agent_gateway import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
+from proliferate.server.cloud.materialization import service as materialization_service
 
 _ENROLLMENT_STATUS_NONE = "none"
 _MAX_DISPLAY_NAME_LENGTH = 255
@@ -99,6 +103,8 @@ async def revoke_api_key(
         api_key_id=str(record.id),
         provider=record.provider,
     )
+    # A revoked key may back a cloud api_key selection; the next pass strips it.
+    await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
     return record
 
 
@@ -158,6 +164,8 @@ async def upsert_route_selection(
         api_key_id=str(api_key_id) if api_key_id is not None else None,
         revision=record.revision,
     )
+    if surface == AGENT_AUTH_SURFACE_CLOUD:
+        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
     return record
 
 
@@ -186,6 +194,8 @@ async def clear_route_selection(
         harness_kind=harness_kind,
         surface=surface,
     )
+    if surface == AGENT_AUTH_SURFACE_CLOUD:
+        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
 
 
 async def get_capabilities(
