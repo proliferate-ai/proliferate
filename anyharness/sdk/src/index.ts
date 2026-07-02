@@ -474,6 +474,11 @@ export type {
   CurrentPullRequestResponse,
   CreatePullRequestRequest,
   CreatePullRequestResponse,
+  PullRequestChecksState,
+  PullRequestReviewDecision,
+  BranchPullRequestSummary,
+  BranchPullRequestStatus,
+  RepoPullRequestStatusesResponse,
 } from "./types/hosting.js";
 
 export type {

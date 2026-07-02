@@ -420,6 +420,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repo-roots/{repo_root_id}/hosting/pull-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_repo_pull_request_statuses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repo-roots/{repo_root_id}/mobility/prepare-destination": {
         parameters: {
             query?: never;
@@ -1963,6 +1979,32 @@ export interface components {
         AvailableCommandsUpdatePayload: {
             availableCommands: unknown[];
         };
+        /**
+         * @description One queried head branch. `pullRequest` null/absent means the branch WAS
+         *     queried and has no PR (authoritative none). Branches missing from
+         *     [`RepoPullRequestStatusesResponse::entries`] were not queried (unknown).
+         */
+        BranchPullRequestStatus: {
+            headBranch: string;
+            pullRequest?: null | components["schemas"]["BranchPullRequestSummary"];
+        };
+        /**
+         * @description [`PullRequestSummary`] plus reduced check-rollup and review-decision
+         *     fields. Both are optional so new clients deserialize old daemons (and
+         *     vice versa); absent maps to "none" at the domain layer.
+         */
+        BranchPullRequestSummary: {
+            baseBranch: string;
+            checks?: null | components["schemas"]["PullRequestChecksState"];
+            draft: boolean;
+            headBranch: string;
+            /** Format: int64 */
+            number: number;
+            reviewDecision?: null | components["schemas"]["PullRequestReviewDecision"];
+            state: components["schemas"]["PullRequestState"];
+            title: string;
+            url: string;
+        };
         ChildSubagentSummary: {
             agentKind: string;
             childCreatedAt: string;
@@ -3214,6 +3256,16 @@ export interface components {
         PruneOrphanWorktreeRequest: {
             path: string;
         };
+        /**
+         * @description Reduced CI-check rollup state for a pull request's head commit.
+         * @enum {string}
+         */
+        PullRequestChecksState: "none" | "pending" | "passing" | "failing";
+        /**
+         * @description Reduced review decision for a pull request.
+         * @enum {string}
+         */
+        PullRequestReviewDecision: "none" | "approved" | "changes_requested";
         /** @enum {string} */
         PullRequestState: "open" | "closed" | "merged";
         PullRequestSummary: {
@@ -3328,6 +3380,10 @@ export interface components {
             id: string;
             label: string;
             sourceSessionId?: string | null;
+        };
+        RepoPullRequestStatusesResponse: {
+            entries: components["schemas"]["BranchPullRequestStatus"][];
+            fetchedAt: string;
         };
         RepoRoot: {
             createdAt: string;
@@ -5463,6 +5519,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitBranchRef"][];
+                };
+            };
+            /** @description Repo root not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_repo_pull_request_statuses: {
+        parameters: {
+            query?: {
+                /** @description Set to 1 to request a refresh (10s floor); default 0 serves the 60s throttle window */
+                refresh?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repo root ID */
+                repo_root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Branch-scoped pull request statuses for the repo root's active workspace branches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoPullRequestStatusesResponse"];
+                };
+            };
+            /** @description Hosting error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Repo root not found */

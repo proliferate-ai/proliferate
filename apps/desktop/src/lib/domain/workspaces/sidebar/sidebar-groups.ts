@@ -6,6 +6,7 @@ import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import { parseLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
+import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type {
   SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
@@ -85,6 +86,7 @@ export function buildSidebarGroupStates(args: {
   workspaceActivities: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   gitStatus: GitStatusSnapshot | undefined;
+  gitStatusesByLogicalId?: Record<string, WorkspaceGitStatus>;
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
@@ -165,6 +167,7 @@ export function buildSidebarGroupStates(args: {
         workspaceActivities: args.workspaceActivities,
         pendingPromptCounts: args.pendingPromptCounts,
         gitStatus: args.gitStatus,
+        gitStatusesByLogicalId: args.gitStatusesByLogicalId,
         activeSessionTitle: args.activeSessionTitle,
         lastViewedAt: args.lastViewedAt,
         workspaceLastInteracted: args.workspaceLastInteracted,

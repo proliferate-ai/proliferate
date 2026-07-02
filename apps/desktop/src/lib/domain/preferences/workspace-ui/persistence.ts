@@ -4,6 +4,9 @@ import {
   sanitizeSessionIdArrayRecord,
 } from "@/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
 import {
+  sanitizeGitStatusSnapshotsByWorkspace,
+} from "@/lib/domain/preferences/workspace-ui/persisted-git-status";
+import {
   sanitizeActiveShellTabKeysByWorkspace,
   sanitizeShellTabOrderByWorkspace,
 } from "@/lib/domain/preferences/workspace-ui/persisted-shell-tabs";
@@ -55,6 +58,9 @@ export function selectPersistedWorkspaceUiState(
     manualChatGroupsByWorkspace: sanitizeManualChatGroupsWithoutTransientSessions(
       state.manualChatGroupsByWorkspace,
     ),
+    gitStatusSnapshotByWorkspace: sanitizeGitStatusSnapshotsByWorkspace(
+      state.gitStatusSnapshotByWorkspace,
+    ),
   };
 }
 
@@ -89,6 +95,7 @@ export function getChangedWorkspaceUiStateKeys(
     "recentlyHiddenChatSessionIdsByWorkspace",
     "collapsedChatGroupsByWorkspace",
     "manualChatGroupsByWorkspace",
+    "gitStatusSnapshotByWorkspace",
   ].filter((key) => !Object.is(
     previous[key as keyof WorkspaceUiChangeTrackedState],
     next[key as keyof WorkspaceUiChangeTrackedState],
