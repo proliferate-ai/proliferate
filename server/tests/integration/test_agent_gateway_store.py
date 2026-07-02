@@ -354,6 +354,46 @@ async def test_list_user_ids_missing_enrollment(db_session: AsyncSession) -> Non
 
 
 @pytest.mark.asyncio
+async def test_list_billing_subject_ids_paginates_past_a_page(
+    db_session: AsyncSession,
+) -> None:
+    """Keyset pagination walks every active subject, not just the first page."""
+    subject_ids: set[uuid.UUID] = set()
+    for _ in range(5):
+        user_id = await _create_user(db_session)
+        subject = await ensure_personal_billing_subject(db_session, user_id)
+        await store.ensure_enrollment_row(
+            db_session,
+            subject_kind="user",
+            billing_subject_id=subject.id,
+            user_id=user_id,
+        )
+        subject_ids.add(subject.id)
+
+    # Walk in pages of 2 and collect the union — no subject is starved.
+    seen: list[uuid.UUID] = []
+    after: uuid.UUID | None = None
+    while True:
+        page = await store.list_billing_subject_ids_with_active_enrollments(
+            db_session,
+            limit=2,
+            after=after,
+        )
+        if not page:
+            break
+        seen.extend(page)
+        if len(page) < 2:
+            break
+        after = page[-1]
+
+    # Every seeded subject appears, ordering is ascending, and no duplicates.
+    assert subject_ids.issubset(set(seen))
+    relevant = [sid for sid in seen if sid in subject_ids]
+    assert relevant == sorted(relevant)
+    assert len(relevant) == len(set(relevant))
+
+
+@pytest.mark.asyncio
 async def test_usage_insert_once_dedupes(db_session: AsyncSession) -> None:
     occurred_at = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
     inserted = await store.insert_usage_event_once(
