@@ -58,11 +58,11 @@ export const APP_SHORTCUTS = {
   },
   showKeyboardShortcuts: {
     id: "app.show-keyboard-shortcuts",
-    label: "⌘?",
-    nonMacLabel: "Ctrl+?",
+    label: "⌘/",
+    nonMacLabel: "Ctrl+/",
     description: "Show keyboard shortcuts",
     owner: "js",
-    match: { kind: "fixed-code", code: "Slash", meta: true, shift: true, alt: false },
+    match: { kind: "fixed-code", code: "Slash", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
   increaseWindowZoom: {

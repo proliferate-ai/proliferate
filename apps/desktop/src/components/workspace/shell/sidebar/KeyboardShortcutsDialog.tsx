@@ -10,6 +10,7 @@ import {
   buildShortcutSections,
   type ShortcutSectionView,
 } from "@/lib/domain/shortcuts/shortcut-sections";
+import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 
 function ShortcutSection({ section }: { section: ShortcutSectionView }) {
   return (
@@ -43,13 +44,9 @@ function ShortcutSection({ section }: { section: ShortcutSectionView }) {
  * popover. Modal-native chrome — visible title, borderless inline search,
  * flat groups — over the same section data as the settings pane.
  */
-export function KeyboardShortcutsDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+export function KeyboardShortcutsDialog() {
+  const open = useKeyboardShortcutsDialogStore((state) => state.open);
+  const setOpen = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const sections = useMemo(
@@ -64,7 +61,7 @@ export function KeyboardShortcutsDialog({
         if (!nextOpen) {
           setQuery("");
         }
-        onOpenChange(nextOpen);
+        setOpen(nextOpen);
       }}
     >
       <DialogContent className="max-w-lg gap-0 p-0">

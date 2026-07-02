@@ -133,7 +133,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
     const expectedOrder = [
       "General",
       "Appearance",
-      "Keyboard shortcuts",
       "Account",
       "Personal secrets",
       "Pruning",

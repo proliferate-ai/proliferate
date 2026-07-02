@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BookMarked,
@@ -24,11 +24,8 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog";
 import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
@@ -44,6 +41,7 @@ import type {
   OrganizationRecord,
 } from "@/lib/domain/organizations/organization-records";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
@@ -93,6 +91,7 @@ export function SidebarAccountFooter() {
   const authStatus = useAuthStore((state) => state.status);
   const { openExternal } = useTauriShellActions();
   const handleSignOut = useAppSidebarSignOutAction();
+  const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const openSupport = useOpenSupportReportWindow({ source: "sidebar" });
   const showToast = useToastStore((state) => state.show);
   const { data: billingPlan } = useCloudBilling();
@@ -109,7 +108,6 @@ export function SidebarAccountFooter() {
   const actions = useOrganizationActions(activeOrganizationId);
   const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? [];
   const [acceptTarget, setAcceptTarget] = useState<OrganizationInvitationRecord | null>(null);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const displayName = user?.display_name?.trim() || user?.email || "Account";
   const initials = displayName.trim().slice(0, 2).toUpperCase() || "PR";
@@ -263,9 +261,10 @@ export function SidebarAccountFooter() {
                   variant="sidebar"
                   label="Keyboard shortcuts"
                   icon={<Keyboard className="size-3.5" />}
+                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
                   onClick={() => {
                     close();
-                    setShortcutsOpen(true);
+                    openShortcutsDialog(true);
                   }}
                 />
                 <PopoverMenuItem
@@ -342,7 +341,7 @@ export function SidebarAccountFooter() {
                 />
               </div>
 
-              <HarnessVersionsRow />
+              <AppVersionRow />
             </div>
           )}
         </PopoverButton>
@@ -363,7 +362,6 @@ export function SidebarAccountFooter() {
           void handleAcceptInvitation();
         }}
       />
-      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }
@@ -373,31 +371,12 @@ export function SidebarAccountFooter() {
  * agent artifact versions (agentProcess.version via the agents query).
  * Truncated with a tooltip listing everything.
  */
-function HarnessVersionsRow() {
+function AppVersionRow() {
   const { data: appVersion } = useAppVersion();
-  const { agents } = useAgentCatalog();
-
-  const versions = useMemo(() => {
-    const parts: string[] = [`Proliferate v${appVersion ?? "…"}`];
-    for (const agent of agents) {
-      if (agent.installState !== "installed") {
-        continue;
-      }
-      const version = agent.agentProcess?.version ?? agent.native?.version;
-      if (version) {
-        parts.push(`${agent.displayName} ${version}`);
-      }
-    }
-    return parts;
-  }, [agents, appVersion]);
-
-  const line = versions.join(" • ");
 
   return (
     <div className="mt-1 border-t border-border px-2.5 pb-1 pt-2">
-      <Tooltip content={line} className="block max-w-full">
-        <div className="truncate text-ui-sm text-faint">{line}</div>
-      </Tooltip>
+      <div className="truncate text-ui-sm text-faint">{`Proliferate v${appVersion ?? "…"}`}</div>
     </div>
   );
 }
