@@ -52,12 +52,21 @@ test("all expands to every known surface", () => {
   assert.deepEqual([...parseSurfaceList("all", "only")].sort(), [
     "desktop",
     "e2b",
+    "litellm",
     "mobile",
     "runtime",
     "server",
     "web",
     "workers",
   ]);
+});
+
+test("litellm config changes select the litellm surface", () => {
+  const selection = selectSurfaces({
+    files: ["server/litellm/config.yaml"],
+  });
+
+  assert.deepEqual([...selection.selected].sort(), ["litellm", "server"]);
 });
 
 test("invalid surfaces fail fast", () => {

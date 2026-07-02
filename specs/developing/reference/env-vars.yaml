@@ -488,6 +488,40 @@
   tags: [local-dev]
 
 # ═══════════════════════════════════════════════════════════════════════
+# Server: Agent LLM Gateway (LiteLLM)
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: AGENT_GATEWAY_ENABLED
+  secret: false
+  default: "false"
+  description: Enables the LiteLLM-backed agent LLM gateway on the control plane
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_BASE_URL
+  secret: false
+  default: "http://127.0.0.1:14000"
+  description: Private LiteLLM admin/base URL (in-VPC) used by the control plane for teams, users, virtual keys, and spend logs
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL
+  secret: false
+  default: ""
+  description: Public LiteLLM inference base URL rendered into sandbox/local harness auth config
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_MASTER_KEY
+  secret: true
+  default: ""
+  description: LiteLLM master key for the management API; never sent to sandboxes or clients
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LITELLM_TIMEOUT_SECONDS
+  secret: false
+  default: "30.0"
+  description: Timeout for LiteLLM management API requests
+  tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud MCP
 # ═══════════════════════════════════════════════════════════════════════
 

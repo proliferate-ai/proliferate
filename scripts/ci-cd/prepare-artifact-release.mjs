@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { parseSurfaceList } from "./detect-deploy-surfaces.mjs";
 
 const ARTIFACT_SURFACES = new Set(["desktop", "runtime", "server"]);
-const SHA_ONLY_SURFACES = new Set(["workers", "e2b", "web"]);
+const SHA_ONLY_SURFACES = new Set(["workers", "litellm", "e2b", "web"]);
 const PRODUCT_TAG_PREFIX = "proliferate-v";
 
 function parseArgs(argv) {

@@ -159,6 +159,23 @@ secrets (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `CURSOR_API_KEY`,
 The billing reconciler interval (`BILLING_RECONCILE_INTERVAL_SECONDS`) now
 lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 
+## Agent LLM Gateway
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `AGENT_GATEWAY_ENABLED` | No | No | Enables the LiteLLM-backed agent LLM gateway on the control plane |
+| `AGENT_GATEWAY_LITELLM_BASE_URL` | No | When gateway is enabled | Private LiteLLM admin/base URL (in-VPC) for teams, users, virtual keys, and spend logs |
+| `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL` | No | When gateway is enabled | Public LiteLLM inference base URL rendered into sandbox/local harness auth config |
+| `AGENT_GATEWAY_LITELLM_MASTER_KEY` | Yes | When gateway is enabled | LiteLLM master key for the management API; never sent to sandboxes or clients |
+| `AGENT_GATEWAY_LITELLM_TIMEOUT_SECONDS` | No | No | LiteLLM management API timeout |
+
+The LiteLLM service itself (a separate ECS service / docker-compose pair) is
+configured with `LITELLM_MASTER_KEY`, its own `DATABASE_URL`, and the managed
+provider keys (`AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY`,
+`AGENT_GATEWAY_MANAGED_OPENAI_API_KEY`) referenced by
+`server/litellm/config.yaml` — those are deployment secrets for the LiteLLM
+task, not control-plane settings.
+
 ## Cloud MCP
 
 | Variable | Secret | Required | Used for |

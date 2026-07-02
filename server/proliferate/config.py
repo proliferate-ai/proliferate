@@ -324,6 +324,12 @@ class Settings(BaseSettings):
     cloud_mcp_google_workspace_enabled: bool = False
     cloud_mcp_google_workspace_oauth_client_id: str = ""
     cloud_mcp_google_workspace_oauth_client_secret: str = ""
+    # Agent LLM gateway (LiteLLM proxy)
+    agent_gateway_enabled: bool = False
+    agent_gateway_litellm_base_url: str = "http://127.0.0.1:14000"
+    agent_gateway_litellm_public_base_url: str = ""
+    agent_gateway_litellm_master_key: str = ""
+    agent_gateway_litellm_timeout_seconds: float = 30.0
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
