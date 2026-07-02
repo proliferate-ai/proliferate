@@ -48,20 +48,29 @@ function PublishFileSection({
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">{title}</p>
-        <span className="text-xs text-muted-foreground">{files.length}</span>
+        <p className="text-base font-medium text-muted-foreground">{title}</p>
+        <span className="text-base tabular-nums text-muted-foreground">{files.length}</span>
       </div>
-      <div className="overflow-hidden rounded-lg border border-border/60">
+      <div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border/60">
         {files.map((file) => (
           <div
             key={`${title}:${file.path}`}
-            className="flex items-center gap-3 border-b border-border/60 bg-surface-elevated-secondary px-3 py-2 last:border-b-0"
+            className="flex items-center gap-3 px-2.5 py-1.5"
           >
-            <span className="min-w-0 flex-1 truncate text-start text-xs text-foreground [direction:rtl]" title={file.path}>
+            {/* rtl keeps the tail of long paths visible; text-left pins short
+                paths to the reading edge (text-start maps to right under rtl) */}
+            <span className="min-w-0 flex-1 truncate text-left text-ui-sm text-foreground [direction:rtl]" title={file.path}>
               <span className="[direction:ltr] [unicode-bidi:plaintext]">{file.path}</span>
             </span>
-            <span className="shrink-0 text-xs tabular-nums text-git-green">+{file.additions}</span>
-            <span className="shrink-0 text-xs tabular-nums text-git-red">-{file.deletions}</span>
+            {file.additions > 0 && (
+              <span className="shrink-0 text-base tabular-nums text-git-green">+{file.additions}</span>
+            )}
+            {file.deletions > 0 && (
+              <span className="shrink-0 text-base tabular-nums text-git-red">-{file.deletions}</span>
+            )}
+            {file.additions === 0 && file.deletions === 0 && (
+              <span className="shrink-0 text-base text-muted-foreground">new</span>
+            )}
           </div>
         ))}
       </div>
