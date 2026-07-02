@@ -1275,6 +1275,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/organizations/{organization_id}/agent-gateway/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Org Agent Policy Endpoint */
+        get: operations["get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_get"];
+        /** Put Org Agent Policy Endpoint */
+        put: operations["put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/organizations/{organization_id}/agent-gateway/policy/violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Org Agent Policy Violations Endpoint */
+        get: operations["list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_violations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-run-configs": {
         parameters: {
             query?: never;
@@ -3452,6 +3487,57 @@ export interface components {
             enabled: boolean;
             /** Client Id */
             client_id?: string | null;
+        };
+        /**
+         * OrgAgentPolicyResponse
+         * @description Flag-only policy. ``None`` lists mean "no restriction".
+         */
+        OrgAgentPolicyResponse: {
+            /** Organizationid */
+            organizationId: string;
+            /** Allowedroutes */
+            allowedRoutes: string[] | null;
+            /** Allowedharnesses */
+            allowedHarnesses: string[] | null;
+            /** Editable */
+            editable: boolean;
+            /** Updatedbyuserid */
+            updatedByUserId: string | null;
+            /** Updatedat */
+            updatedAt: string | null;
+        };
+        /** OrgAgentPolicyUpdateRequest */
+        OrgAgentPolicyUpdateRequest: {
+            /** Allowedroutes */
+            allowedRoutes?: string[] | null;
+            /** Allowedharnesses */
+            allowedHarnesses?: string[] | null;
+        };
+        /** OrgAgentPolicyViolation */
+        OrgAgentPolicyViolation: {
+            /** Userid */
+            userId: string;
+            /** Email */
+            email: string | null;
+            /** Displayname */
+            displayName: string | null;
+            /** Harnesskind */
+            harnessKind: string;
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+        };
+        /** OrgAgentPolicyViolationListResponse */
+        OrgAgentPolicyViolationListResponse: {
+            /** Violations */
+            violations: components["schemas"]["OrgAgentPolicyViolation"][];
         };
         /** OrganizationInvitationAcceptRequest */
         OrganizationInvitationAcceptRequest: {
@@ -7329,6 +7415,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentGatewayEnrollmentResponse"];
+                };
+            };
+        };
+    };
+    get_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_org_agent_policy_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgAgentPolicyUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgAgentPolicyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_org_agent_policy_violations_endpoint_v1_cloud_organizations__organization_id__agent_gateway_policy_violations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgAgentPolicyViolationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
