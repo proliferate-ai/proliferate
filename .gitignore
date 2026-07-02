@@ -78,3 +78,9 @@ package-lock.json
 *.p8
 .probe-secrets.env
 .auth-env/.env.*
+
+# Standalone design-system workspace (UI scratch, not wired into build)
+design-system/
+
+# Stray local debug log dumps
+/logs*.json

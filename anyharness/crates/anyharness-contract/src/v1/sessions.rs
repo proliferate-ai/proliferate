@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{AgentAuthExternalScope, OriginContext, RuntimeConfigRevisionExpectation};
+use super::OriginContext;
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
@@ -156,12 +156,6 @@ pub struct CreateSessionRequest {
     pub workspace_id: String,
     pub agent_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_auth_scope: Option<AgentAuthExternalScope>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required_agent_auth_revision: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
@@ -246,13 +240,6 @@ impl fmt::Debug for CreateSessionRequest {
             .field("agent_kind", &self.agent_kind)
             .field("model_id", &self.model_id)
             .field("mode_id", &self.mode_id)
-            .field(
-                "expected_runtime_config_revision",
-                &self
-                    .expected_runtime_config_revision
-                    .as_ref()
-                    .map(|revision| &revision.revision_id),
-            )
             .field(
                 "system_prompt_append_count",
                 &self
@@ -349,26 +336,9 @@ pub struct SubagentCompletionSummary {
     pub parent_prompt_seq: Option<i64>,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ResumeSessionRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
-}
-
-impl fmt::Debug for ResumeSessionRequest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ResumeSessionRequest")
-            .field(
-                "expected_runtime_config_revision",
-                &self
-                    .expected_runtime_config_revision
-                    .as_ref()
-                    .map(|revision| &revision.revision_id),
-            )
-            .finish()
-    }
-}
+pub struct ResumeSessionRequest {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -450,8 +420,6 @@ pub enum PromptAttachmentSource {
 pub struct PromptSessionRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
     pub blocks: Vec<PromptInputBlock>,
 }
 
@@ -645,9 +613,6 @@ mod tests {
         let request = CreateSessionRequest {
             workspace_id: "workspace-1".to_string(),
             agent_kind: "claude".to_string(),
-            agent_auth_scope: None,
-            required_agent_auth_revision: None,
-            expected_runtime_config_revision: None,
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),

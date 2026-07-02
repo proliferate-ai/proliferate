@@ -138,7 +138,7 @@ export function CommandPaletteRoot({
           role="dialog"
           aria-modal="true"
           aria-label={label}
-          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[calc(100vw-16px)] max-w-[580px] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-border/70 bg-popover/85 text-foreground shadow-floating-dark backdrop-blur-[16px]"
+          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[calc(100vw-16px)] max-w-[580px] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-popover/90 text-popover-foreground shadow-floating-dark ring-[0.5px] ring-popover-ring backdrop-blur-[16px]"
           onKeyDown={onKeyDown}
         >
           <Command
@@ -164,7 +164,7 @@ export function CommandPaletteInput({
 }: CommandPaletteInputProps) {
   return (
     <Command.Input
-      className={`h-11 w-full min-w-0 bg-transparent text-base leading-[21px] text-foreground outline-none placeholder:text-muted-foreground ${className ?? ""}`}
+      className={`h-11 w-full min-w-0 bg-transparent text-ui text-foreground outline-none placeholder:text-muted-foreground ${className ?? ""}`}
       data-telemetry-mask
       {...props}
     />
@@ -194,7 +194,7 @@ export function CommandPaletteGroup({
 }: CommandPaletteGroupProps) {
   return (
     <Command.Group
-      className={`py-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:leading-4 [&_[cmdk-group-heading]]:text-muted-foreground ${className ?? ""}`}
+      className={`py-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:text-ui-sm [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground ${className ?? ""}`}
       {...props}
     />
   );
@@ -208,7 +208,7 @@ export function CommandPaletteItem({
 }: CommandPaletteItemProps) {
   return (
     <Command.Item
-      className={`flex h-9 cursor-default select-none items-center gap-2 rounded-md px-2 text-xs leading-4 text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground ${className ?? ""}`}
+      className={`flex h-9 cursor-default select-none items-center gap-2 rounded-lg px-2.5 text-ui text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-list-hover ${className ?? ""}`}
       {...props}
     />
   );

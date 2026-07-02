@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_product_user
+from proliferate.auth.dependencies import current_organization_actor
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.permissions import (
@@ -54,7 +54,7 @@ router = APIRouter(prefix="/organizations", tags=["organizations"])
 @router.post("/invitations/accept", response_model=OrganizationInvitationAcceptResponse)
 async def accept_organization_invitation_endpoint(
     body: OrganizationInvitationAcceptRequest,
-    user: User = Depends(current_product_user),
+    user: User = Depends(current_organization_actor),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationAcceptResponse:
     record = await accept_invitation(
@@ -69,7 +69,7 @@ async def accept_organization_invitation_endpoint(
 
 @router.get("/invitations/current", response_model=OrganizationInvitationsResponse)
 async def list_current_user_organization_invitations_endpoint(
-    user: User = Depends(current_product_user),
+    user: User = Depends(current_organization_actor),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationsResponse:
     invitations = await list_current_user_invitations(db, user)
@@ -84,7 +84,7 @@ async def list_current_user_organization_invitations_endpoint(
 )
 async def accept_current_user_organization_invitation_endpoint(
     invitation_id: UUID,
-    user: User = Depends(current_product_user),
+    user: User = Depends(current_organization_actor),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationAcceptResponse:
     record = await accept_current_user_invitation(db, user, invitation_id)
@@ -95,7 +95,7 @@ async def accept_current_user_organization_invitation_endpoint(
 
 @router.get("", response_model=OrganizationListResponse)
 async def list_organizations_endpoint(
-    user: User = Depends(current_product_user),
+    user: User = Depends(current_organization_actor),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationListResponse:
     records = await list_organizations(db, user)
@@ -197,7 +197,7 @@ async def get_organization_join_link_endpoint(
 async def create_organization_invitation_endpoint(
     body: OrganizationInviteRequest,
     org_admin: CurrentOrgUser = Depends(current_path_org_admin),
-    user: User = Depends(current_product_user),
+    user: User = Depends(current_organization_actor),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
     result = await create_invitation(
@@ -217,7 +217,7 @@ async def create_organization_invitation_endpoint(
 async def resend_organization_invitation_endpoint(
     invitation_id: UUID,
     org_admin: CurrentOrgUser = Depends(current_path_org_admin),
-    user: User = Depends(current_product_user),
+    user: User = Depends(current_organization_actor),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
     result = await resend_invitation(

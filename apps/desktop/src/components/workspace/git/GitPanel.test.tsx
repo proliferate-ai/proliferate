@@ -131,7 +131,7 @@ describe("GitPanel", () => {
     expect(html).toContain("data-app-action-review-metrics-probe=\"\"");
     expect(html).toContain("[container-name:review-header]");
     expect(html).toContain("grid-cols-[minmax(0,1fr)_auto]");
-    expect(html).toContain("min-h-9");
+    expect(html).toContain("min-h-10");
     expect(html).toContain("px-2 pb-3");
     expect(html).toContain("pt-2");
     expect(html).not.toContain("No diff available");
@@ -179,9 +179,9 @@ describe("GitPanel", () => {
     );
 
     expect(unstagedHtml).not.toContain("origin/main");
-    expect(unstagedHtml).toContain("min-h-9");
+    expect(unstagedHtml).toContain("min-h-10");
     expect(branchHtml).toContain("origin/main");
-    expect(branchHtml).toContain("min-h-9");
+    expect(branchHtml).toContain("min-h-10");
     expect(branchHtml).not.toContain("min-h-[68px]");
     expect(branchHtml).not.toContain("col-span-2");
   });

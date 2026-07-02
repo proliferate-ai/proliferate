@@ -18,7 +18,6 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
-from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
@@ -237,10 +236,12 @@ async def _resolve_scope(
 
 
 def _target_requires_cloud_workspace(target: targets_store.CloudTargetSnapshot) -> bool:
-    return managed_profile_target_requires_slot(
-        kind=target.kind,
-        sandbox_profile_id=target.sandbox_profile_id,
-        profile_target_role=target.profile_target_role,
+    # Inlined from the removed cloud_profile_target_guard store (Bifrost
+    # gateway teardown, specs/codebase/primitives/agent-auth-litellm.md).
+    return (
+        target.kind == "managed_cloud"
+        and target.sandbox_profile_id is not None
+        and target.profile_target_role == "primary"
     )
 
 

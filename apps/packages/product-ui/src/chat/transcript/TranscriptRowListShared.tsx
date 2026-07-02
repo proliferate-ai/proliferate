@@ -47,7 +47,7 @@ export interface TranscriptRowListBaseProps {
   isSessionBusy: boolean;
   pendingPromptText: string | null;
   onLoadOlderHistory: () => void;
-  onScrollSample: () => void;
+  onScrollSample: (sample?: import("./useTranscriptStickToBottom").TranscriptScrollSample) => void;
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
   columnClassName?: string;
   gutterClassName?: string;
@@ -178,6 +178,8 @@ export function TranscriptScrollToBottomButton({
   bottomInsetPx: number;
   onClick: () => void;
 }) {
+  // UX_SPEC §6: 32px circle, --background fill, 1px --border, muted arrow,
+  // 150ms opacity fade, floating above the composer.
   return (
     <div
       className="pointer-events-none absolute inset-x-0 z-10 flex justify-center"
@@ -185,17 +187,17 @@ export function TranscriptScrollToBottomButton({
     >
       <Button
         type="button"
-        variant="secondary"
+        variant="ghost"
         size="icon-sm"
         aria-label="Scroll to bottom"
         aria-hidden={!visible}
         tabIndex={visible ? 0 : -1}
         data-chat-transcript-ignore
         onClick={onClick}
-        className={`text-muted-foreground shadow-md transition-[opacity,transform,color] duration-200 hover:text-foreground ${
+        className={`size-8 rounded-full border border-border bg-background text-muted-foreground shadow-none transition-opacity duration-150 ease-in-out hover:bg-background hover:text-foreground ${
           visible
-            ? "pointer-events-auto translate-y-0 opacity-100"
-            : "translate-y-1 opacity-0"
+            ? "pointer-events-auto opacity-100"
+            : "opacity-0"
         }`}
       >
         <ChevronDown className="size-4" />

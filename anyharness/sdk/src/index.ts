@@ -33,33 +33,6 @@ export type {
 } from "./types/runtime.js";
 
 export type {
-  RuntimeConfigSource,
-  RuntimeConfigExternalScope,
-  RuntimeConfigRevision,
-  RuntimeConfigRevisionExpectation,
-  ApplyRuntimeConfigRequest,
-  ApplyRuntimeConfigResponse,
-  RuntimeConfigStatusResponse,
-  RuntimeConfigManifest,
-  RuntimeDirectAttachAuthConfig,
-  RuntimeJwtVerificationKey,
-  RuntimeMcpServer,
-  RuntimeMcpTransport,
-  RuntimeMcpLaunch,
-  RuntimeMcpNamedValue,
-  RuntimeMcpValue,
-  RuntimeMcpTemplatePart,
-  RuntimeSkill,
-  RuntimeSkillSourceKind,
-  RuntimeArtifactRef,
-  RuntimeArtifactPayload,
-  RuntimeArtifactStatus,
-  RuntimeCredentialRef,
-  RuntimeCredentialUse,
-  RuntimeCredentialValue,
-} from "./types/runtime-config.js";
-
-export type {
   ReplayRecordingSummary,
   ListReplayRecordingsResponse,
   ExportReplayRecordingRequest,
@@ -70,15 +43,15 @@ export type {
 } from "./types/replay.js";
 
 export type {
+  AgentAuthStateSelection,
+  AgentAuthStateDocument,
+  ApplyAgentAuthStateResponse,
+} from "./types/agent-auth.js";
+
+export type {
   AgentInstallState,
   AgentCredentialState,
   AgentReadinessState,
-  AgentAuthExternalScope,
-  AgentAuthSelectionConfig,
-  AgentAuthSelectionStatus,
-  AgentAuthConfigStatusResponse,
-  ApplyAgentAuthConfigRequest,
-  ApplyAgentAuthConfigResponse,
   AgentLaunchOptionsResponse,
   ArtifactStatus,
   AgentSummary,
@@ -474,6 +447,11 @@ export type {
   CurrentPullRequestResponse,
   CreatePullRequestRequest,
   CreatePullRequestResponse,
+  PullRequestChecksState,
+  PullRequestReviewDecision,
+  BranchPullRequestSummary,
+  BranchPullRequestStatus,
+  RepoPullRequestStatusesResponse,
 } from "./types/hosting.js";
 
 export type {

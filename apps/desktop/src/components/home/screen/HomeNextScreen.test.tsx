@@ -5,10 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
 import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS,
-  HOME_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
+import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();
@@ -122,12 +119,12 @@ vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
   },
 }));
 
-vi.mock("@/components/home/screen/HomeModelPicker", () => ({
-  HomeModelPicker: () => <div data-testid="model-picker" />,
+vi.mock("@/components/workspace/chat/input/ComposerModelConfigSelector", () => ({
+  ComposerModelConfigSelector: () => <div data-testid="model-picker" />,
 }));
 
-vi.mock("@/components/home/screen/HomeModePicker", () => ({
-  HomeModePicker: () => <div data-testid="mode-picker" />,
+vi.mock("@/components/workspace/chat/input/SessionModeControl", () => ({
+  SessionModeControl: () => <div data-testid="mode-picker" />,
 }));
 
 vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
@@ -259,8 +256,10 @@ describe("HomeNextScreen model availability notices", () => {
     render(<HomeNextScreen />);
 
     const textarea = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    // jsdom does not collapse var() calcs, so assert the literal calc string
+    // that ties the cap to the --text-composer--line-height scale token.
     const expectedMaxHeight =
-      `calc(${CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS} * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
+      `calc(var(--text-composer--line-height) * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
     expect(textarea.style.maxHeight).toBe(expectedMaxHeight);
     expect(textarea.parentElement?.style.maxHeight).toBe(expectedMaxHeight);

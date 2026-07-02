@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ExternalLink } from "lucide-react";
 
 import { Button } from "@proliferate/ui/primitives/Button";

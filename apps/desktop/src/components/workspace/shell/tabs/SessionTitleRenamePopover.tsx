@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 
 interface SessionTitleRenamePopoverProps {
   currentTitle: string;
@@ -39,7 +39,7 @@ export function SessionTitleRenamePopover({
       align="start"
       side="bottom"
       offset={6}
-      className="w-72 rounded-xl border border-border bg-popover p-3 shadow-floating"
+      className={`w-64 ${POPOVER_FRAME_CLASS} p-2`}
       externalOpen={externalOpen}
       onOpenChange={onOpenChange}
     >
@@ -100,15 +100,10 @@ function SessionTitleRenamePanel({
   }, [isSaving, onClose, onRename, value]);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <div className="text-sm font-medium text-foreground">Rename chat</div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          Rename from the tab menu or with the keyboard shortcut.
-        </div>
-      </div>
+    <div className="space-y-2">
       <Input
         ref={inputRef}
+        aria-label="Rename chat"
         value={value}
         onChange={(event) => {
           setValue(event.target.value);
@@ -129,31 +124,26 @@ function SessionTitleRenamePanel({
         disabled={isSaving}
         spellCheck={false}
         maxLength={160}
-        className="h-9"
+        className="h-8 text-ui-sm"
         data-telemetry-mask="true"
       />
       {error && (
-        <div className="text-xs text-destructive">
+        <div className="px-0.5 text-ui-sm text-destructive">
           {error}
         </div>
       )}
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-between px-0.5 text-base text-muted-foreground">
+        <span>{isSaving ? "Saving…" : "↵ save · esc cancel"}</span>
         <Button
           variant="ghost"
           size="sm"
-          onClick={onClose}
-          disabled={isSaving}
-        >
-          Cancel
-        </Button>
-        <Button
-          size="sm"
+          className="h-6 px-1.5 text-ui-sm"
           onClick={() => {
             void handleSave();
           }}
           disabled={isSaving}
         >
-          {isSaving ? "Saving…" : "Save"}
+          Save
         </Button>
       </div>
     </div>

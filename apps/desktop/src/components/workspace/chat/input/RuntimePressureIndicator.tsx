@@ -24,7 +24,6 @@ export function RuntimePressureIndicator() {
       <Tooltip content={tooltip}>
         <ComposerControlButton
           iconOnly
-          tone="quiet"
           label="Workspace pressure"
           aria-label="Open pruning details"
           aria-haspopup="dialog"

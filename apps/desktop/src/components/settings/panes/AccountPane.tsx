@@ -12,7 +12,7 @@ import {
   useStartGitHubAppUserAuthorization,
 } from "@proliferate/cloud-sdk-react";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
@@ -188,9 +188,11 @@ export function AccountPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Account"
+        // In local mode the profile card below carries the control-plane
+        // explanation; repeating it as the page subtitle read as a bug.
         description={
           localMode
-            ? CAPABILITY_COPY.accountLocalDescription
+            ? undefined
             : signInUnavailable
               ? CAPABILITY_COPY.accountAuthUnavailableDescription
             : "Sign in to use cloud workspaces and credential sync. Local workspaces remain available without an account."
@@ -279,7 +281,7 @@ export function AccountPane() {
             : undefined,
           connectGoogle: isAuthenticated && !devAuthBypassed
             ? {
-                label: linkingGoogle ? "Waiting for Google..." : "Add Google",
+                label: linkingGoogle ? "Waiting for Google…" : "Add Google",
                 icon: <ProviderBrandIcon provider="google" className="size-[13px]" />,
                 loading: linkingGoogle,
                 disabled: !canLinkGoogle || linkingGoogle,

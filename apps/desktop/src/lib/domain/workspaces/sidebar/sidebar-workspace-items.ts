@@ -9,6 +9,7 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-wor
 import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
 import { workspaceDefaultDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
+import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { SidebarCloudWorkspaceStatus } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
 import { cloudSidebarEntryDefaultDisplayName } from "@/lib/domain/workspaces/sidebar/sidebar-entries";
 import type { SidebarWorkspaceItemState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
@@ -39,6 +40,7 @@ export function buildSidebarWorkspaceItems(args: {
   workspaceActivities: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   gitStatus: GitStatusSnapshot | undefined;
+  gitStatusesByLogicalId?: Record<string, WorkspaceGitStatus>;
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
@@ -81,6 +83,7 @@ function buildSidebarWorkspaceItem(
     workspaceActivities: Record<string, SidebarSessionActivityState>;
     pendingPromptCounts?: Record<string, number>;
     gitStatus: GitStatusSnapshot | undefined;
+    gitStatusesByLogicalId?: Record<string, WorkspaceGitStatus>;
     activeSessionTitle: string | null;
     lastViewedAt: Record<string, string>;
     workspaceLastInteracted: Record<string, string>;
@@ -161,7 +164,6 @@ function buildSidebarWorkspaceItem(
       variant,
       statusIndicator: sidebarStatusIndicatorFromActivity({
         activity,
-        needsReview,
         pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
         errorAction: { kind: "open_workspace", workspaceId: entry.id },
       }),
@@ -179,6 +181,7 @@ function buildSidebarWorkspaceItem(
       workspaceLocationCopyValue: copyMetadata.workspaceLocation?.value ?? null,
       workspaceLocationCopyToastLabel: copyMetadata.workspaceLocation?.toastLabel ?? null,
       branchName: copyMetadata.branchName,
+      gitStatus: args.gitStatusesByLogicalId?.[entry.id] ?? null,
     },
   };
 }

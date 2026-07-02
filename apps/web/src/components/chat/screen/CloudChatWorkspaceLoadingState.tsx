@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 interface CloudChatWorkspaceLoadingStateProps {
   label?: string;
@@ -56,7 +56,7 @@ export function CloudChatWorkspaceLoadingState({
       </div>
 
       <footer className="relative z-20 shrink-0 border-t border-border/40 px-6 py-4">
-        <div className="mx-auto w-full max-w-3xl rounded-[var(--radius-composer,1.5rem)] bg-foreground/5 p-3">
+        <div className="mx-auto w-full max-w-3xl rounded-[var(--radius-composer,1rem)] bg-foreground/5 p-3">
           <SkeletonBlock className="h-3 w-44 bg-muted/45" />
           <div className="mt-5 flex items-center justify-between gap-3" aria-hidden="true">
             <SkeletonBlock className="h-7 w-28 rounded-full bg-muted/35" />

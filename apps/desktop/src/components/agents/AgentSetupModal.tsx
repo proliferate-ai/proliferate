@@ -120,7 +120,7 @@ export function AgentSetupModal({
               <div className="space-y-1 text-xs text-destructive">
                 <p>{state.installError ?? reconcileResult?.message}</p>
                 {(runtimeHome || anyHarnessLogPath) && (
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  <p className="text-base leading-relaxed text-muted-foreground">
                     {runtimeHome && (
                       <span>Runtime home: {runtimeHome}</span>
                     )}

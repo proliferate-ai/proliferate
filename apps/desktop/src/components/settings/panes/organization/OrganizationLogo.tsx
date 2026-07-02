@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 interface OrganizationLogoRecord {
   name: string;
   logoDomain?: string | null;
@@ -56,27 +54,5 @@ export function Avatar({ member }: { member: OrganizationAvatarMember }) {
     <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-light bg-foreground/5 text-xs font-medium text-muted-foreground">
       {initials || "U"}
     </div>
-  );
-}
-
-export function OrganizationSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="space-y-3">
-      <div className="space-y-1">
-        <h2 className="text-sm font-medium text-foreground">{title}</h2>
-        {description ? (
-          <p className="max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      {children}
-    </section>
   );
 }

@@ -103,6 +103,10 @@
       "types": "./dist/chats/transcript/turn-file-patches.d.ts",
       "import": "./dist/chats/transcript/turn-file-patches.js"
     },
+    "./chats/transcript/turn-stopped-presentation": {
+      "types": "./dist/chats/transcript/turn-stopped-presentation.d.ts",
+      "import": "./dist/chats/transcript/turn-stopped-presentation.js"
+    },
     "./chats/transcript/transcript-collapsed-actions": {
       "types": "./dist/chats/transcript/transcript-collapsed-actions.d.ts",
       "import": "./dist/chats/transcript/transcript-collapsed-actions.js"
@@ -167,6 +171,10 @@
       "types": "./dist/chats/tools/mcp-tool-presentation.d.ts",
       "import": "./dist/chats/tools/mcp-tool-presentation.js"
     },
+    "./chats/tools/mode-switch-display": {
+      "types": "./dist/chats/tools/mode-switch-display.d.ts",
+      "import": "./dist/chats/tools/mode-switch-display.js"
+    },
     "./chats/tools/skills-tool-result": {
       "types": "./dist/chats/tools/skills-tool-result.d.ts",
       "import": "./dist/chats/tools/skills-tool-result.js"
@@ -194,14 +202,6 @@
     "./environments/cloud-environments": {
       "types": "./dist/environments/cloud-environments.d.ts",
       "import": "./dist/environments/cloud-environments.js"
-    },
-    "./plugins/cloud-plugin-inventory": {
-      "types": "./dist/plugins/cloud-plugin-inventory.d.ts",
-      "import": "./dist/plugins/cloud-plugin-inventory.js"
-    },
-    "./plugins/organization-integration-policy": {
-      "types": "./dist/plugins/organization-integration-policy.d.ts",
-      "import": "./dist/plugins/organization-integration-policy.js"
     },
     "./workspaces/model": {
       "types": "./dist/workspaces/model.d.ts",

@@ -1,21 +1,32 @@
 use anyharness_contract::v1::{
-    CreatePullRequestRequest, CreatePullRequestResponse, CurrentPullRequestResponse,
+    BranchPullRequestStatus as ContractBranchPullRequestStatus,
+    BranchPullRequestSummary as ContractBranchPullRequestSummary, CreatePullRequestRequest,
+    CreatePullRequestResponse, CurrentPullRequestResponse,
+    PullRequestChecksState as ContractPullRequestChecksState,
+    PullRequestReviewDecision as ContractPullRequestReviewDecision,
     PullRequestState as ContractPullRequestState, PullRequestSummary as ContractPullRequestSummary,
+    RepoPullRequestStatusesResponse,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
+use super::blocking::run_blocking;
 use super::error::ApiError;
 use crate::adapters::hosting::types::{
-    CreatePullRequestResult, CurrentPullRequestResult, HostingServiceError,
+    BranchPullRequestStatus as InternalBranchPullRequestStatus, CreatePullRequestResult,
+    CurrentPullRequestResult, HostingServiceError,
+    PullRequestChecksState as InternalPullRequestChecksState,
+    PullRequestReviewDecision as InternalPullRequestReviewDecision,
     PullRequestState as InternalPullRequestState, PullRequestSummary as InternalPullRequestSummary,
+    RepoPullRequestStatusesResult,
 };
 use crate::adapters::hosting::HostingService;
 use crate::app::AppState;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::store::WorkspaceStore;
 
 fn resolve_workspace_path(
     workspace_runtime: &crate::domains::workspaces::runtime::WorkspaceRuntime,
@@ -121,6 +132,7 @@ pub async fn create_pull_request(
     let body = req.body;
     let base_branch = req.base_branch;
     let draft = req.draft;
+    let pr_status_cache = state.pr_status_cache.clone();
     let response = run_hosting_task(
         &state,
         workspace_id,
@@ -133,6 +145,7 @@ pub async fn create_pull_request(
                 body.as_deref(),
                 &base_branch,
                 draft,
+                &pr_status_cache,
             )
             .map(create_pull_request_to_contract)
             .map_err(map_hosting_error)
@@ -141,6 +154,76 @@ pub async fn create_pull_request(
     .await?;
 
     Ok(Json(response))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+pub struct RepoPullRequestStatusesQuery {
+    /// "1" requests a refresh (honored with a 10s floor); anything else uses
+    /// the default 60s throttle window.
+    #[serde(default)]
+    pub refresh: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/repo-roots/{repo_root_id}/hosting/pull-requests",
+    params(
+        ("repo_root_id" = String, Path, description = "Repo root ID"),
+        ("refresh" = Option<String>, Query, description = "Set to 1 to request a refresh (10s floor); default 0 serves the 60s throttle window"),
+    ),
+    responses(
+        (status = 200, description = "Branch-scoped pull request statuses for the repo root's active workspace branches", body = RepoPullRequestStatusesResponse),
+        (status = 404, description = "Repo root not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 400, description = "Hosting error", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "hosting"
+)]
+pub async fn get_repo_pull_request_statuses(
+    State(state): State<AppState>,
+    Path(repo_root_id): Path<String>,
+    Query(query): Query<RepoPullRequestStatusesQuery>,
+) -> Result<Json<RepoPullRequestStatusesResponse>, ApiError> {
+    let refresh = matches!(query.refresh.as_deref(), Some("1") | Some("true"));
+
+    // Repo-root-not-found is a coded ProblemDetails 404 so clients can tell
+    // it apart from a bare axum 404 on older daemons missing this route.
+    let repo_root_service = state.repo_root_service.clone();
+    let lookup_id = repo_root_id.clone();
+    let repo_root = run_blocking("get repo root", move || {
+        repo_root_service.get_repo_root(&lookup_id)
+    })
+    .await?
+    .map_err(|error| ApiError::internal(error.to_string()))?
+    .ok_or_else(|| ApiError::not_found("Repo root not found", "REPO_ROOT_NOT_FOUND"))?;
+
+    // The daemon derives the branch set itself: distinct current branches
+    // over the repo root's non-retired workspaces (clients send nothing).
+    let workspace_store = WorkspaceStore::new(state.db.clone());
+    let workspaces = run_blocking("list active repo root workspaces", move || {
+        workspace_store.list_active_by_repo_root_id(&repo_root_id)
+    })
+    .await?
+    .map_err(|error| ApiError::internal(error.to_string()))?;
+    let active_branches: Vec<String> = workspaces
+        .into_iter()
+        .filter_map(|workspace| workspace.current_branch)
+        .filter(|branch| !branch.is_empty())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Reads the repo root only — never a worktree — so no workspace
+    // operation lease is taken (cannot race retire/purge).
+    let result = HostingService::list_repo_pull_requests(
+        &repo_root.path,
+        active_branches,
+        refresh,
+        &state.pr_status_cache,
+    )
+    .await
+    .map_err(map_hosting_error)?;
+
+    Ok(Json(repo_pull_request_statuses_to_contract(result)))
 }
 
 fn map_hosting_error(error: HostingServiceError) -> ApiError {
@@ -152,11 +235,77 @@ fn map_hosting_error(error: HostingServiceError) -> ApiError {
         HostingServiceError::GhAuthRequired(message) => {
             ApiError::bad_request(message, "HOSTING_GH_AUTH_REQUIRED")
         }
+        HostingServiceError::RemoteUnsupported(message) => {
+            ApiError::bad_request(message, "HOSTING_REMOTE_UNSUPPORTED")
+        }
         HostingServiceError::PullRequestViewFailed(message) => {
             ApiError::bad_request(message, "HOSTING_PR_VIEW_FAILED")
         }
         HostingServiceError::PullRequestCreateFailed(message) => {
             ApiError::bad_request(message, "HOSTING_PR_CREATE_FAILED")
+        }
+    }
+}
+
+fn repo_pull_request_statuses_to_contract(
+    result: RepoPullRequestStatusesResult,
+) -> RepoPullRequestStatusesResponse {
+    RepoPullRequestStatusesResponse {
+        entries: result
+            .entries
+            .into_iter()
+            .map(branch_status_to_contract)
+            .collect(),
+        fetched_at: result.fetched_at,
+    }
+}
+
+fn branch_status_to_contract(
+    status: InternalBranchPullRequestStatus,
+) -> ContractBranchPullRequestStatus {
+    ContractBranchPullRequestStatus {
+        head_branch: status.head_branch,
+        pull_request: status
+            .pull_request
+            .map(branch_pull_request_summary_to_contract),
+    }
+}
+
+fn branch_pull_request_summary_to_contract(
+    summary: InternalPullRequestSummary,
+) -> ContractBranchPullRequestSummary {
+    ContractBranchPullRequestSummary {
+        number: summary.number,
+        title: summary.title,
+        url: summary.url,
+        state: pull_request_state_to_contract(summary.state),
+        draft: summary.draft,
+        head_branch: summary.head_branch,
+        base_branch: summary.base_branch,
+        checks: summary.checks.map(checks_state_to_contract),
+        review_decision: summary.review_decision.map(review_decision_to_contract),
+    }
+}
+
+fn checks_state_to_contract(
+    state: InternalPullRequestChecksState,
+) -> ContractPullRequestChecksState {
+    match state {
+        InternalPullRequestChecksState::None => ContractPullRequestChecksState::None,
+        InternalPullRequestChecksState::Pending => ContractPullRequestChecksState::Pending,
+        InternalPullRequestChecksState::Passing => ContractPullRequestChecksState::Passing,
+        InternalPullRequestChecksState::Failing => ContractPullRequestChecksState::Failing,
+    }
+}
+
+fn review_decision_to_contract(
+    decision: InternalPullRequestReviewDecision,
+) -> ContractPullRequestReviewDecision {
+    match decision {
+        InternalPullRequestReviewDecision::None => ContractPullRequestReviewDecision::None,
+        InternalPullRequestReviewDecision::Approved => ContractPullRequestReviewDecision::Approved,
+        InternalPullRequestReviewDecision::ChangesRequested => {
+            ContractPullRequestReviewDecision::ChangesRequested
         }
     }
 }

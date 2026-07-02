@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { CLOUD_SETUP_DOCS_URL } from "@/config/capabilities";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
@@ -15,17 +15,10 @@ export function CloudAuthUnavailablePane() {
         description={CAPABILITY_COPY.cloudAuthUnavailableDescription}
       />
 
-      <SettingsCard>
-        <div className="space-y-4 p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">
-              GitHub sign-in is unavailable.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {CAPABILITY_COPY.cloudAuthUnavailableDetails}
-            </p>
-          </div>
-
+      <SettingsEmptyState
+        title="GitHub sign-in is unavailable"
+        description={CAPABILITY_COPY.cloudAuthUnavailableDetails}
+        action={
           <Button
             type="button"
             variant="secondary"
@@ -34,8 +27,8 @@ export function CloudAuthUnavailablePane() {
           >
             {CAPABILITY_COPY.cloudDocsLabel}
           </Button>
-        </div>
-      </SettingsCard>
+        }
+      />
     </section>
   );
 }

@@ -17,12 +17,13 @@ that ships UI. Feature specs own page *content*; this spec owns the
 
 In scope:
 
-- Sidebar groups, nav order, page ids, and routing for desktop Settings.
+- Scope tabs, sidebar groups, nav order, page ids, and routing for
+  desktop Settings.
 - Which spec owns which settings page (ownership boundary).
 - Reusable UI primitives every feature spec consumes:
   `CredentialPicker`, `AgentRunConfigSelector`, `RuntimeReadinessPanel`,
   `PublicCapabilityList`, `WhereUsedDrawer`. Existing primitives
-  (`SettingsCard`, `SettingsCardRow`, `SettingsPageHeader`) are
+  (`SettingsPageHeader`, `SettingsSection`, `SettingsRow`) are
   preserved.
 - Shared product vocabulary: workspace type, origin, exposure, access,
   sandbox type. Every spec that mentions these uses the same names.
@@ -49,13 +50,15 @@ Out of scope:
 
 ## 2. Mental Model
 
-Settings is a flat sidebar over a single content pane. Each nav item
-maps to one pane component. The shell is dumb — it routes, the panes
-own their data.
+Settings is a scope-tabbed shell: four horizontal scope tabs
+(User · Org · Repo · Agents), each owning a short section sidebar, over
+a single content pane. Each nav item maps to one pane component. The
+shell is dumb — it routes, the panes own their data.
 
 ```text
 SettingsScreen
-  ├── SettingsSidebar          (groups + items + active state)
+  ├── header: back row + SettingsScopeTabs   (User · Org · Repo · Agents)
+  ├── SettingsSidebar          (active scope's groups + help footer)
   └── SettingsContentArea
         └── one pane component, selected by ?section= search param
 ```
@@ -70,8 +73,9 @@ Three rules every settings page follows:
    No raw client construction inside settings panes.
    (frontend/guides/access.md)
 
-3. Page chrome uses SettingsPageHeader + SettingsCard + SettingsCardRow.
-   New pages do not invent new wrappers.
+3. Page chrome uses SettingsPageHeader + SettingsSection + SettingsRow
+   (from @proliferate/product-ui/settings). New pages do not invent
+   new wrappers.
 ```
 
 Ownership rule:
@@ -109,129 +113,177 @@ Soft:
 
 ## 4. Current Repo State
 
-Verified against the current repository worktree on 2026-06-22.
+Verified against the current repository worktree on 2026-07-01.
 
 ### 4.1 What exists
 
 **Entry point**: `apps/desktop/src/pages/SettingsPage.tsx` renders
-`<SettingsScreen />`. `SettingsScreen` composes
-`SettingsSidebar` (300px fixed) + a scrollable content area.
+`<SettingsScreen />`. `SettingsScreen` renders a two-row header — a back
+row, then a 46px row of horizontal scope tabs (`SettingsScopeTabs` from
+`@proliferate/product-ui/settings`) — over `SettingsSidebar` (240px
+fixed rail) + a scrollable content area.
+
+**Scope-tab IA**: navigation is split into four top-level scopes,
+surfaced as underline tabs (User · Org · Repo · Agents). Each scope owns
+a short section sidebar; selecting a tab lands on the scope's first
+section. Defined in
+`apps/desktop/src/lib/domain/settings/navigation-presentation.ts`:
+
+```text
+SETTINGS_SCOPE_ORDER / SETTINGS_SCOPE_LABELS   tab order + labels
+SETTINGS_SCOPES                                per-scope SettingsNavGroup[]
+                                               (icon id, label, id per item)
+SETTINGS_HELP_ITEMS                            support + checkForUpdates
+                                               actions, rendered at the
+                                               sidebar footer in every scope
+getSettingsScopeNav(scope)                     sidebar groups for a scope
+getSettingsScopeForSection(section)            keeps the right tab
+                                               highlighted per section
+getFirstSectionForScope(scope)                 landing section per tab
+PARKED_SECTION_SCOPES                          unregistered sections
+                                               (organization-limits,
+                                               slack-bot) still map to a
+                                               scope for deep links
+isSettingsAdminOnlySection(section)            derived from adminOnly flags
+```
+
+**Current scope contents**:
+
+```text
+User      general, appearance, keyboard, account, personal-secrets,
+          worktrees ("Pruning"), archived-chats (tbr)
+Org       organization, organization-members, billing,
+          organization-secrets                      (all adminOnly)
+          Policies:        organization-integrations,
+                           organization-model-policy
+          Authentication:  organization-sso
+Repo      environments, compute ("Personal compute")
+Agents    agent-defaults, agent-authentication
+```
 
 **Routing**: URL search param `?section=<id>`. Active section is
-managed by `useSettingsNavigation()`. Sections are defined in
+managed by `useSettingsNavigation()`; the active scope tab is derived
+from the section. Sections are defined in
 `apps/desktop/src/config/settings.ts`:
 
 ```typescript
 SETTINGS_CONTENT_SECTIONS = [
-  "organization", "billing", "organization-integrations",
-  "organization-model-policy", "organization-limits",
-  "general", "appearance", "keyboard", "account",
-  "environments", "compute", "worktrees", "archived-chats",
-  "shared-environments", "agent-authentication", "agent-defaults",
-  "review"
+  "general", "appearance", "keyboard", "account", "personal-secrets",
+  "organization", "organization-secrets", "organization-members",
+  "billing", "organization-sso", "organization-integrations",
+  "organization-model-policy", "environments", "compute",
+  "worktrees", "archived-chats", "agent-authentication",
+  "agent-defaults",
+  // parked (kept in code, unregistered): "organization-limits", "slack-bot"
 ]
 ```
 
-**Sidebar navigation presentation**:
-`apps/desktop/src/lib/domain/settings/navigation-presentation.ts` exports
-`SETTINGS_NAV_GROUPS` (icon id, label, id per item). **Current
-groups (6)**:
-
-```text
-Admin                  organization, organization-members, billing,
-                       organization-integrations, organization-model-policy,
-                       organization-limits
-Settings               general, appearance, keyboard, account
-Workspaces             environments, compute, worktrees, archived-chats,
-                       shared-environments
-Agents                 agent-authentication, agent-defaults, review
-Help                   support (action), checkForUpdates (action)
-```
+**Shortcuts**: Cmd-digit section shortcuts are per-scope.
+`SETTINGS_SHORTCUT_SECTION_ORDER` is filtered to the sections visible in
+the active scope's sidebar, so Cmd-1…N always maps to the rows currently
+on screen.
 
 **Panes** (in `apps/desktop/src/components/settings/panes/`):
 
 ```text
-AccountPane.tsx              AgentDefaultsPane.tsx
-AgentAuthenticationPane.tsx  AppearancePane.tsx
-BillingPane.tsx              CloudAuthUnavailablePane.tsx
-CloudSignInRequiredPane.tsx  CloudUnavailablePane.tsx
-ComputePane.tsx              EnvironmentsPane.tsx
-GeneralPane.tsx              KeyboardShortcutsPane.tsx
-ModelRegistryPane.tsx        OrganizationPane.tsx
-ReviewSettingsPane.tsx       SettingsScaffoldPane.tsx
-SharedEnvironmentsPane.tsx   WorktreesPane.tsx
-ArchivedChatsPane.tsx
+AccountPane.tsx              AgentAuthenticationPane.tsx
+AgentDefaultsPane.tsx        AppearancePane.tsx
+ArchivedChatsPane.tsx        BillingPane.tsx
+CloudAuthUnavailablePane.tsx CloudSignInRequiredPane.tsx
+CloudUnavailablePane.tsx     ComputePane.tsx
+EnvironmentsPane.tsx         GeneralPane.tsx
+KeyboardShortcutsPane.tsx    ModelRegistryPane.tsx
+OrganizationBudgetsPane.tsx  (parked)
+OrganizationIntegrationsPane.tsx
+OrganizationMembersPane.tsx  OrganizationPane.tsx
+OrganizationSecretsPane.tsx  OrganizationSsoPane.tsx
+PersonalSecretsPane.tsx      SettingsScaffoldPane.tsx
+SlackBotPane.tsx             (parked)
+WorktreesPane.tsx
 
 subfolders:
   agent-authentication/          CloudAgentAuthLibrary.tsx,
-                                 CloudAgentAuthCredentialForm.tsx
+                                 CloudAgentAuthCredentialForm.tsx,
+                                 authentication-method sections
   compute/                       AddSshTargetDialog.tsx,
                                  ComputeTargetAgentAuthCard.tsx,
                                  ComputeTargetDetails.tsx,
                                  ComputeTargetList.tsx,
                                  ComputeTargetReadiness.tsx,
                                  EnrollmentCommandBlock.tsx
-  organization/                  Members/Invitations/Logo/etc.
+  organization/                  Members/Invitations/Logo/budget rows
   repo/                          CloudRepoSection.tsx, LocalRepoSection.tsx
-  review/                        Review defaults/personality/etc.
 ```
 
-**Existing shared primitives**:
+**Existing shared primitives**: page chrome lives in
+`apps/packages/product-ui/src/settings/`:
 
 ```text
-apps/desktop/src/components/settings/shared/
-  SettingsCard.tsx          re-export of @proliferate/product-ui/settings/SettingsCard
-  SettingsCardRow.tsx       re-export
-  SettingsPageHeader.tsx    title + description + action slot
-  RunCommandHelp.tsx
+SettingsPageHeader.tsx    title + description + action slot
+SettingsSection.tsx       grouped rows with heading
+SettingsRow.tsx           label + control row
+SettingsEyebrow.tsx       group heading style (sidebar + panes)
+SettingsScopeTabs.tsx     horizontal underline scope switcher
+SettingsEmptyState.tsx / SettingsShell.tsx
 ```
 
-General UI primitives in `apps/desktop/src/components/ui/`: `Button`,
-`Input`, `Switch`, `Select`, `Label`, `Textarea`, `Badge`, `Checkbox`,
-`ModalShell`, `ConfirmationDialog`. Layout helpers: `AutoHideScrollArea`,
-`SidebarNavRow`, `EnvironmentLayout` (EnvironmentPanel, ...Row, ...Section).
+Desktop-local `apps/desktop/src/components/settings/shared/` keeps
+`AdminOnlyPlaceholder`, `AgentHarnessConfigComposer`, `RunCommandHelp`.
+Layout helpers come from `@proliferate/ui` (`AutoHideScrollArea`,
+`SidebarNavRow`) and general primitives from
+`@proliferate/ui/primitives` (`Button`, `Input`, `Switch`, ...).
 
-**Admin gating**: Settings sidebar admin-only rows consume
-`useIsAdmin(activeOrganizationId)` and remain visible but disabled for
-non-admins. Pane bodies still own their detailed read/write states.
+**Admin gating**: unchanged model. All Org-scope rows are marked
+`adminOnly`; `SettingsSidebar` hides them for non-admins via
+`useIsAdmin(activeOrganizationId)`, and `SettingsScreen` redirects a
+non-admin deep link at an admin-only section to the default section once
+the role check resolves. `TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION`
+(currently `false`) can force-show admin rows during UI iteration. Pane
+bodies still own their detailed read/write states.
 
 **Plugins page**: `apps/desktop/src/pages/PluginsPage.tsx` is a top-level
 page, not under Settings. Renders `<PluginsScreen />` from
 `apps/desktop/src/components/plugins/catalog/PluginsScreen.tsx`.
 
-### 4.2 What remains scaffolded
+### 4.2 What remains scaffolded / parked
 
-The Admin information architecture is visible in the Desktop
-settings shell. Connected panes keep their existing feature-owned content:
-organization membership/invitations, billing, environments, personal compute,
-worktrees, agent authentication, agent defaults, and review settings.
+Connected panes keep their existing feature-owned content: organization
+profile/members/invitations, billing, secrets (personal + org), SSO,
+org integrations, environments, personal compute, worktree pruning,
+agent authentication, and agent defaults.
 
-The following pages are intentionally scaffolded with `SettingsScaffoldPane`
-until their owning feature specs provide connected bodies:
+One page is intentionally scaffolded with `SettingsScaffoldPane`
+(registered in `copy/settings/settings-scaffold-copy.ts`) until its
+owning feature spec provides a connected body:
 
 ```text
-organization-integrations
 organization-model-policy
-organization-limits
 ```
 
-The scaffold establishes the route, sidebar placement, page title, and content
-ownership boundary without adding duplicate or fake integration/model/limit
-backends.
+The scaffold establishes the route, sidebar placement, page title, and
+content ownership boundary without adding a fake model-policy backend.
+`organization-integrations` graduated to a connected pane
+(`OrganizationIntegrationsPane`).
+
+Parked (pane kept in code, section not registered in navigation or
+routing; `PARKED_SECTION_SCOPES` keeps their deep links on the right
+scope tab):
+
+```text
+organization-limits    OrganizationBudgetsPane — until real budget
+                       data/enforcement replaces the mocked UI
+slack-bot              SlackBotPane — entry points commented out
+```
 
 Personal Integrations and Workflows are top-level app pages rather than
-Settings sections. Existing legacy top-level Plugins and Automations rows
-remain visible for now but are marked `tbr` because they are outside this target
-IA. Support is not `tbr`.
-
-Rows outside the target list are marked with a small `tbr` status pill until
-they are removed or explicitly re-scoped:
+Settings sections. Rows outside the target list are marked with a small
+`tbr` status pill until they are removed or explicitly re-scoped:
 
 ```text
-Main sidebar            Plugins, Automations
-Settings / Workspaces   Archived chats, Shared sandbox
-Settings / Agents       Review
+Settings / User         Archived chats
 ```
+
+Support and Desktop updates are not `tbr`.
 
 ## 5. Target Model
 
@@ -371,42 +423,46 @@ Ownership enforcement
     actions must fail closed server-side for non-admins.
 ```
 
-### 5.1 Sidebar groups + pages
+### 5.1 Scope tabs + pages
 
-Target visible `SETTINGS_NAV_GROUPS` after the owning panes ship:
+Target `SETTINGS_SCOPES` (the shipped scope-tab IA):
 
 ```text
-Admin
-  organization             OrganizationPane               org profile and Team setup
-  organization-members     OrganizationMembersPane        members, invitation emails,
-                                                           invite link
-  billing                  BillingPane                    billing as an org,
-                                                           including auto top up option
-  organization-integrations SettingsScaffoldPane           org-owned integrations
-  organization-model-policy SettingsScaffoldPane           allowed/default models
-  # PARKED until budget backend exists:
-  # organization-limits    OrganizationBudgetsPane         usage over time,
-  #                                                        usage by person,
-  #                                                        budget controls
-
-Settings
+User
   general                  GeneralPane                    general settings,
                                                            including worktree defaults
   appearance               AppearancePane                 theme and display
   keyboard                 KeyboardShortcutsPane          bindings
   account                  AccountPane                    login / logout
+  personal-secrets         PersonalSecretsPane            personal secrets
+  worktrees                WorktreesPane                  "Pruning" — all-environment
+                                                           worktree cleanup
+  archived-chats           ArchivedChatsPane              hidden chats (tbr)
 
-Workspaces
+Org (all adminOnly)
+  organization             OrganizationPane               org profile
+  organization-members     OrganizationMembersPane        members, invitation emails,
+                                                           invite link
+  billing                  BillingPane                    billing as an org,
+                                                           including auto top up option
+  organization-secrets     OrganizationSecretsPane        org-wide secrets
+  Policies
+    organization-integrations OrganizationIntegrationsPane org-owned integrations
+    organization-model-policy SettingsScaffoldPane         allowed/default models
+  Authentication
+    organization-sso       OrganizationSsoPane            single sign-on
+  # PARKED until budget backend exists:
+  # organization-limits    OrganizationBudgetsPane         usage over time,
+  #                                                        usage by person,
+  #                                                        budget controls
+
+Repo
   environments             EnvironmentsPane               environments
   compute                  ComputePane                    personal compute / SSH targets
-  worktrees                WorktreesPane                  all-environment worktree cleanup
-  archived-chats           ArchivedChatsPane              hidden chats
-  shared-environments      SharedEnvironmentsPane         org shared sandbox, admin-tagged
 
 Agents
-  agent-authentication     AgentAuthenticationPane        local + cloud auth by person
   agent-defaults           AgentDefaultsPane              per-person agent defaults
-  review                   ReviewSettingsPane             review defaults
+  agent-authentication     AgentAuthenticationPane        local + cloud auth by person
 
 Slack bot                  SlackBotPane                   (parked/disabled;
                                                            spec 07 logic is
@@ -414,7 +470,7 @@ Slack bot                  SlackBotPane                   (parked/disabled;
                                                            points are commented
                                                            out)
 
-Help
+Help (sidebar footer, every scope)
   support                  action (existing)
   check-for-updates        action (existing)
 ```
@@ -429,12 +485,12 @@ does not mean visible.
 
 ```typescript
 SETTINGS_CONTENT_SECTIONS = [
-  "organization", "billing", "organization-integrations",
-  "organization-model-policy", "organization-limits",
-  "general", "appearance", "keyboard", "account",
-  "environments", "compute", "worktrees", "archived-chats",
-  "shared-environments", "agent-authentication", "agent-defaults",
-  "review",
+  "general", "appearance", "keyboard", "account", "personal-secrets",
+  "organization", "organization-secrets", "organization-members",
+  "billing", "organization-sso", "organization-integrations",
+  "organization-model-policy", "environments", "compute",
+  "worktrees", "archived-chats", "agent-authentication",
+  "agent-defaults",
 ]
 ```
 
@@ -461,11 +517,12 @@ Preserved id:
 ```
 
 The `?section=<id>` URL scheme is preserved. Old urls that point at
-`?section=repo` redirect to `?section=environments`. Old `?section=cloud`
-redirects by focus when available:
-credential/auth focus -> `agent-authentication`, repo/env focus ->
-`environments`, billing/credits focus -> `billing`, target/readiness focus ->
-`compute`, and no focus -> `agent-authentication`.
+`?section=repo` or `?section=cloudRepo` redirect to
+`?section=environments`; `?section=cloud` redirects to
+`?section=agent-authentication`; removed `shared-environments` and
+parked `slack-bot` redirect to the default section
+(`normalizeSettingsSection` in
+`apps/desktop/src/lib/domain/settings/navigation.ts`).
 
 ### 5.2 Per-page ownership
 
@@ -473,32 +530,36 @@ Each pane is owned by one spec for content; spec 03 owns the shell
 and shared primitives the pane consumes.
 
 ```text
-Admin
-  organization              spec 03 + 05  members, invitation emails,
-                                       invite link, org profile
-  billing                   spec 09   current plan, PCUs, add credits,
-                                       auto top up, Stripe portal, plan changes
-  organization-integrations future org integrations spec
-  organization-model-policy future model policy spec
-  # PARKED until budget backend exists:
-  # organization-limits     spec 09   usage over time, usage by person,
-  #                                    and budget controls
-
-Settings
+User
   general                   spec 03   product feature flags, telemetry opt-in,
                                        editor preferences, worktree defaults
   appearance                spec 03   theme, density
   keyboard                  spec 03   bindings
   account                   spec 03   user identity, linked OAuth, email,
                                        sign-out
+  personal-secrets          spec 03 (shell) + secrets story (content)
+  worktrees                 spec 03   "Pruning" — all-environment worktree
+                                       cleanup
+  archived-chats            spec 03   hidden chats (tbr)
 
-Workspaces
+Org
+  organization              spec 03 + 05  org profile, billing cross-link
+  organization-members      spec 03 + 05  members, invitation emails,
+                                       invite link
+  billing                   spec 09   current plan, PCUs, add credits,
+                                       auto top up, Stripe portal, plan changes
+  organization-secrets      spec 03 (shell) + secrets story (content)
+  organization-integrations org integrations spec
+  organization-model-policy future model policy spec
+  organization-sso          spec 03 (shell) + enterprise SSO story (content)
+  # PARKED until budget backend exists:
+  # organization-limits     spec 09   usage over time, usage by person,
+  #                                    and budget controls
+
+Repo
   environments              spec 03 (shell) + per-repo content owned by
                             the broader env config story; existing
-                            LocalRepoSection / CloudRepoSection move here.
-  shared-environments       spec 06 / spec 07   surfaces shared repo
-                                       defaults used by team automations
-                                       and Slack. Admin-tagged.
+                            LocalRepoSection / CloudRepoSection live here.
   compute                   spec 00 (sandbox foundation), labeled
                             Personal compute:
                                        target list, sandbox profile state,
@@ -517,9 +578,8 @@ Agents
                                        same pane is sandbox-aware:
                                        admins see selection for shared
                                        sandbox; everyone sees personal.
-  review                    spec 03   review-feature defaults
 
-Slack bot                   spec 07   install/reconnect, repo routing,
+Slack bot (parked)          spec 07   install/reconnect, repo routing,
                                        default agent_run_config, shared
                                        readiness summary
 
@@ -656,9 +716,11 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsCard                apps/desktop/src/components/settings/shared/SettingsCard.tsx
-SettingsCardRow             apps/desktop/src/components/settings/shared/SettingsCardRow.tsx
-SettingsPageHeader          apps/desktop/src/components/settings/shared/SettingsPageHeader.tsx
+SettingsPageHeader          apps/packages/product-ui/src/settings/SettingsPageHeader.tsx
+SettingsSection             apps/packages/product-ui/src/settings/SettingsSection.tsx
+SettingsRow                 apps/packages/product-ui/src/settings/SettingsRow.tsx
+SettingsEyebrow / SettingsScopeTabs / SettingsEmptyState / SettingsShell
+                            same directory
 ```
 
 New (spec 03 introduces; feature specs consume):
@@ -761,8 +823,8 @@ apps/desktop/src/components/settings/shared/StatusBadge.tsx   (new wrapper
   variant + label + tooltip)
 ```
 
-**Form-card / list-detail pattern**: all panes use
-`SettingsCard` + `SettingsCardRow` for primary content. List-detail
+**Form / list-detail pattern**: all panes use
+`SettingsSection` + `SettingsRow` for primary content. List-detail
 flows (e.g. Compute targets) open a detail panel inside the same
 content area, not a modal, unless the action is destructive. Modals
 use `ModalShell`; destructive actions use `ConfirmationDialog`.
@@ -797,15 +859,14 @@ apps/desktop/src/components/settings/shared/AdminOnlyPlaceholder.tsx
   links to the Organization pane.
 ```
 
-Admin-tagged nav items:
+Admin-only nav items:
 
 ```text
-shared-environments    admin-only
-slack-bot              admin-only
+all Org-scope sections carry adminOnly in SETTINGS_SCOPES.
 
-sidebar shows a small "Admin" tag next to the label when the active
-organization role is admin/owner; non-admins see the items as
-disabled with a tooltip.
+the sidebar hides adminOnly rows for non-admins; SettingsScreen
+redirects a deep link at an admin-only section to the default section
+once the role check resolves.
 ```
 
 `useIsAdmin` reuses the existing `useOrganizationMembers()` hook
@@ -892,7 +953,7 @@ Desktop:
 
 ```text
 apps/desktop/src/config/settings.ts
-  - register Admin, Settings, Workspaces, and Agents section ids
+  - register the User/Org/Repo/Agents section ids
   - keep general as the default settings section
 
 apps/desktop/src/lib/domain/settings/navigation.ts
@@ -900,17 +961,23 @@ apps/desktop/src/lib/domain/settings/navigation.ts
   - keep legacy repo/cloud/cloudRepo redirect behavior
 
 apps/desktop/src/lib/domain/settings/navigation-presentation.ts
-  - groups: Admin | Settings | Workspaces | Agents | Help
-  - Admin items: organization, organization-members, billing,
-    organization-integrations, organization-model-policy, organization-limits
-  - admin tag metadata on Admin rows and shared-environments
+  - scopes: user | org | repo | agents (SETTINGS_SCOPES), plus
+    SETTINGS_SCOPE_ORDER/LABELS, SETTINGS_HELP_ITEMS,
+    scope<->section mapping, PARKED_SECTION_SCOPES
+  - adminOnly metadata on Org-scope rows
+
+apps/packages/product-ui/src/settings/SettingsScopeTabs.tsx
+  - horizontal underline scope switcher consumed by SettingsScreen
 
 apps/desktop/src/components/settings/sidebar/SettingsSidebar.tsx
-  - render admin tag pill when item.adminOnly is true
-  - disable + tooltip for non-admin user
+  - 240px rail rendering the active scope's groups + help footer
+  - hide adminOnly rows for non-admins
+  - per-scope Cmd-digit shortcut labels
 
 apps/desktop/src/components/settings/screen/SettingsScreen.tsx
-  - render SettingsScaffoldPane for scaffolded Admin pages
+  - scope-tab header row; scope change selects the scope's first section
+  - render SettingsScaffoldPane for scaffolded pages
+  - redirect non-admins away from admin-only sections
   - thread focus param to active pane
 
 apps/desktop/src/components/settings/panes/
@@ -948,21 +1015,21 @@ apps/desktop/src/lib/domain/telemetry/events.ts
 
 ## 8. Acceptance Criteria
 
-1. Registered `SETTINGS_NAV_GROUPS` matches §5.1 exactly, but visible nav rows
-   are filtered by owner-spec readiness. Group labels read `Admin`,
-   `Settings`, `Workspaces`, `Agents`, and `Help`.
+1. Registered `SETTINGS_SCOPES` matches §5.1 exactly, but visible nav rows
+   are filtered by admin access. Scope tabs read `User`, `Org`, `Repo`,
+   and `Agents`; help actions render in the sidebar footer of every scope.
 2. `SETTINGS_CONTENT_SECTIONS` is the new id list. Old ids `repo`,
    `cloud`, and `cloudRepo` keep redirecting to their supported homes.
-   `worktrees` remains a first-class Workspaces section.
+   `worktrees` remains a first-class User section ("Pruning").
 3. `SettingsScaffoldPane.tsx` renders the scaffolded pages listed in §4.2.
    Scaffolded pages establish route, placement, title, and ownership copy only.
 4. Admin rows are marked `adminOnly`; non-admin users do not see those rows.
 5. `BillingSettingsSurface` is labeled `Billing` and shows the current plan,
    organization credits, add credits, auto top up, and Stripe portal controls.
 6. `ComputePane` is labeled `Personal compute`.
-7. Integrations and Workflows pages are top-level. Still-visible Plugins,
-   Automations, Archived chats, Shared sandbox, and Review rows are marked
-   `tbr`. Support and Desktop updates are not `tbr`.
+7. Integrations and Workflows pages are top-level. Still-visible rows
+   outside the target IA are marked `tbr` (currently: Archived chats).
+   Support and Desktop updates are not `tbr`.
 8. Deep-link params (`?section=…&target=…`, `&credential=…`,
    `&kind=…`, `&repo=…`) work: opening a deep link scrolls the focus
    element into view and opens the relevant detail card.
@@ -986,14 +1053,14 @@ Targeted tests:
 
 ```text
 apps/desktop/src/components/settings/sidebar/SettingsSidebar.test.tsx
-  - renders the new groups in order
-  - admin-tag pill renders when item.adminOnly + user is admin
-  - admin-only items are disabled with tooltip when user is non-admin
+  - renders the active scope's groups in order
+  - adminOnly rows render for admins
+  - adminOnly rows are hidden for non-admins
 
 apps/desktop/src/components/settings/SettingsScreen.test.tsx
   - ?section=repo redirects to ?section=environments
-  - ?section=cloud redirects by focus param, defaulting to agent-authentication
-  - ?section=worktrees resolves to Worktrees
+  - ?section=cloud redirects to ?section=agent-authentication
+  - ?section=worktrees resolves to Pruning (User scope)
 
 apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.test.ts
   - returns role from useOrganizationMembers
@@ -1011,28 +1078,26 @@ Manual smoke:
 
 ```text
 1. Open Settings as a non-admin org member.
-     -> Admin rows are hidden.
-     -> Workspaces > Shared sandbox is disabled with tooltip.
-     -> Agents > Agent Authentication is enabled (personal selection
+     -> Org-scope admin rows are hidden.
+     -> Deep-linking an admin-only section redirects to General.
+     -> Agents > Authentication is enabled (personal selection
         still allowed).
 
 2. Open Settings as an org owner.
-     -> Admin rows are enabled with "Admin" pill.
-     -> Workspaces > Shared sandbox is enabled with "Admin" pill.
+     -> Org scope tab shows all admin rows, enabled.
 
 3. Open Settings with ?section=cloud.
-     -> redirects to the focused replacement pane when a focus param exists;
-        otherwise redirects to ?section=agent-authentication.
+     -> redirects to ?section=agent-authentication.
 
-4. Open ?section=agent-authentication&target=t_abc&kind=claude.
-     -> AgentAuthenticationPane opens with target t_abc focused and
-        the Claude credential picker open.
+4. Open ?section=agent-authentication&kind=claude.
+     -> AgentAuthenticationPane opens with the Claude agent kind
+        preselected.
 
 5. Open Plugins (top-level page).
      -> Still works; not in Settings sidebar.
-     -> Workspace > Environments has a "Manage plugins" card linking
-        to it.
 
-6. Resize sidebar focus.
-     -> 300px fixed; no horizontal scroll inside nav.
+6. Check the shell frame.
+     -> Scope-tab header row is 46px; sidebar rail is 240px fixed;
+        no horizontal scroll inside nav.
+     -> Cmd-digit shortcuts map to the active scope's visible rows.
 ```

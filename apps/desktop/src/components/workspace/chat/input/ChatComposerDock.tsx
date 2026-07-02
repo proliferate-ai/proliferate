@@ -1,5 +1,5 @@
 import { forwardRef, memo, type HTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,
@@ -79,8 +79,13 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
                 }}
               />
             )}
+            {/* PERF: no backdrop-blur here. This layer covers the transcript,
+                and backdrop-blur forces WKWebView to re-blur everything behind
+                it on every keystroke/caret/stream frame — measured at
+                200-400ms/keystroke of frame_to_paint on long sessions. At 95%
+                opacity the blur was invisible anyway. */}
             <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 z-0 bg-background/88 backdrop-blur-xl"
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-0 bg-background/95"
               style={{ top: lowerBackdropTopPx == null ? 0 : `${lowerBackdropTopPx}px` }}
             />
           </>

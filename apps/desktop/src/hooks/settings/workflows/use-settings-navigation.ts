@@ -5,8 +5,10 @@ import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
+  isRepoScopeSection,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
+import { type RepoSettingsContext } from "@/lib/domain/settings/repo-scope-selection";
 
 interface UseSettingsNavigationArgs {
   repositories: SettingsRepositoryEntry[];
@@ -26,10 +28,12 @@ export function useSettingsNavigation({
   const rawCloudRepoName = searchParams.get("cloudRepoName");
   const rawFocus = searchParams.get("focus");
   const rawTarget = searchParams.get("target");
-  const rawCredential = searchParams.get("credential");
-  const rawKind = searchParams.get("kind");
   const rawCheckout = searchParams.get("checkout");
   const rawJoinOrganizationId = searchParams.get("joinOrganizationId");
+  const rawContext = searchParams.get("context");
+  const rawFlowId = searchParams.get("flowId");
+  const rawStatus = searchParams.get("status");
+  const rawFailureCode = searchParams.get("failureCode");
 
   const selection = useMemo(() => resolveSettingsSelection({
     rawSection,
@@ -38,21 +42,25 @@ export function useSettingsNavigation({
     rawCloudRepoName,
     rawFocus,
     rawTarget,
-    rawCredential,
-    rawKind,
     rawCheckout,
     rawJoinOrganizationId,
+    rawContext,
+    rawFlowId,
+    rawStatus,
+    rawFailureCode,
     repositories,
   }), [
     rawCloudRepoName,
     rawCloudRepoOwner,
-    rawCredential,
+    rawContext,
     rawCheckout,
+    rawFailureCode,
+    rawFlowId,
     rawFocus,
     rawJoinOrganizationId,
-    rawKind,
     rawRepo,
     rawSection,
+    rawStatus,
     rawTarget,
     repositories,
   ]);
@@ -78,23 +86,39 @@ export function useSettingsNavigation({
     selection.joinOrganizationId,
   ]);
 
-  const navigateTo = useCallback((next: {
-    section: SettingsSection;
-    repo?: string | null;
-  }) => {
-    navigate(buildSettingsHref(next));
-  }, [navigate]);
+  const activeSection = selection.activeSection;
+  const activeRepoSourceRoot = selection.activeRepoSourceRoot;
+  const activeContext = selection.focus.context;
 
   const selectSection = useCallback((section: SettingsSection) => {
-    navigateTo({ section });
-  }, [navigateTo]);
+    // Moving between repo-scope sections keeps the picked repo + Cloud|Local
+    // context; every other move starts the target section clean.
+    if (isRepoScopeSection(activeSection) && isRepoScopeSection(section)) {
+      navigate(buildSettingsHref({
+        section,
+        repo: activeRepoSourceRoot,
+        focus: { context: activeContext },
+      }));
+      return;
+    }
+    navigate(buildSettingsHref({ section }));
+  }, [activeContext, activeRepoSourceRoot, activeSection, navigate]);
 
   const selectRepo = useCallback((sourceRoot: string) => {
-    navigateTo({
-      section: "environments",
+    navigate(buildSettingsHref({
+      section: isRepoScopeSection(activeSection) ? activeSection : "environments",
       repo: sourceRoot,
-    });
-  }, [navigateTo]);
+      focus: { context: activeContext },
+    }));
+  }, [activeContext, activeSection, navigate]);
+
+  const selectRepoContext = useCallback((context: RepoSettingsContext) => {
+    navigate(buildSettingsHref({
+      section: isRepoScopeSection(activeSection) ? activeSection : "environments",
+      repo: activeRepoSourceRoot,
+      focus: { context },
+    }));
+  }, [activeRepoSourceRoot, activeSection, navigate]);
 
   const selectCloudEnvironment = useCallback((gitOwner: string, gitRepoName: string) => {
     navigate(buildCloudRepoSettingsHref(gitOwner, gitRepoName));
@@ -104,6 +128,7 @@ export function useSettingsNavigation({
     ...selection,
     selectSection,
     selectRepo,
+    selectRepoContext,
     selectCloudEnvironment,
   };
 }

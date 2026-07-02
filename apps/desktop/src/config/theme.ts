@@ -13,20 +13,11 @@ import {
 } from "@/lib/domain/preferences/appearance";
 
 // ---------------------------------------------------------------------------
-// Preset definitions
+// Color mode (the app ships a single Mono theme; mode is the only switch)
 // ---------------------------------------------------------------------------
-
-export const THEME_PRESETS = ["mono", "ship", "tbpn", "original"] as const;
-export type ThemePreset = (typeof THEME_PRESETS)[number];
 
 export const COLOR_MODES = ["dark", "light", "system"] as const;
 export type ColorMode = (typeof COLOR_MODES)[number];
-
-const MODE_LOCKED_PRESETS = new Set<ThemePreset>(["tbpn"]);
-
-export function isModeLockedPreset(preset: ThemePreset): boolean {
-  return MODE_LOCKED_PRESETS.has(preset);
-}
 
 function isValidMode(v: string | null | undefined): v is ColorMode {
   return COLOR_MODES.includes(v as ColorMode);
@@ -45,33 +36,13 @@ function resolveMode(mode: ColorMode): "dark" | "light" {
   return mode;
 }
 
-function resolveAppliedMode(
-  mode: ColorMode,
-  preset: ThemePreset,
-): "dark" | "light" {
-  if (isModeLockedPreset(preset)) {
-    return "dark";
-  }
-  return resolveMode(mode);
-}
-
-function applyMode(mode: ColorMode, preset: ThemePreset) {
-  const resolved = resolveAppliedMode(mode, preset);
+function applyMode(mode: ColorMode) {
+  const resolved = resolveMode(mode);
   document.documentElement.dataset.mode = resolved;
   document.documentElement.style.colorScheme = resolved;
 }
 
-export function applyThemePreference(
-  preset: ThemePreset,
-  mode: ColorMode,
-) {
-  document.documentElement.dataset.theme = preset;
-  applyMode(mode, preset);
-  notify();
-}
-
 export interface AppearancePreference {
-  themePreset: ThemePreset;
   colorMode: ColorMode;
   uiFontSizeId: UiFontSizeId;
   readableCodeFontSizeId: ReadableCodeFontSizeId;
@@ -79,7 +50,6 @@ export interface AppearancePreference {
 }
 
 export function applyAppearancePreference({
-  themePreset,
   colorMode,
   uiFontSizeId,
   readableCodeFontSizeId,
@@ -93,11 +63,10 @@ export function applyAppearancePreference({
   const readableCodeScale = resolveReadableCodeFontScale(resolvedReadableCodeFontSizeId);
   const windowZoomScale = resolveWindowZoomScale(resolvedWindowZoomId);
 
-  root.dataset.theme = themePreset;
   root.dataset.uiFontSize = resolvedUiFontSizeId;
   root.dataset.readableCodeFontSize = resolvedReadableCodeFontSizeId;
   root.dataset.windowZoom = resolvedWindowZoomId;
-  applyMode(colorMode, themePreset);
+  applyMode(colorMode);
 
   for (const [property, value] of Object.entries(buildUiTextScaleCssVariables(uiScale))) {
     root.style.setProperty(property, value);
@@ -112,12 +81,8 @@ export function applyAppearancePreference({
   notify();
 }
 
-export function initializeTheme(
-  preset: ThemePreset = "mono",
-  mode: ColorMode = "dark",
-) {
-  document.documentElement.dataset.theme = preset;
-  applyMode(mode, preset);
+export function initializeTheme(mode: ColorMode = "dark") {
+  applyMode(mode);
   document.documentElement.dataset.uiFontSize = DEFAULT_APPEARANCE_SIZE_ID;
   document.documentElement.dataset.readableCodeFontSize = DEFAULT_APPEARANCE_SIZE_ID;
   document.documentElement.dataset.windowZoom = DEFAULT_WINDOW_ZOOM_ID;
@@ -139,7 +104,7 @@ export function subscribe(cb: () => void) {
   const observer = new MutationObserver(notify);
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-theme", "data-mode"],
+    attributeFilter: ["data-mode"],
   });
 
   return () => {
@@ -149,14 +114,14 @@ export function subscribe(cb: () => void) {
 }
 
 // ---------------------------------------------------------------------------
-// Theme change observer (for non-React consumers like xterm)
+// Mode change observer (for non-React consumers like xterm)
 // ---------------------------------------------------------------------------
 
 export function onThemeChange(callback: () => void): () => void {
   const observer = new MutationObserver(callback);
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-theme", "data-mode"],
+    attributeFilter: ["data-mode"],
   });
   return () => observer.disconnect();
 }

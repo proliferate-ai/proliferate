@@ -14,16 +14,61 @@ export function controlPlaneHealthKey(apiBaseUrl: string) {
   return [...cloudRootKey(), "control-plane-health", apiBaseUrl] as const;
 }
 
-export function agentAuthRootKey() {
-  return [...cloudRootKey(), "agent-auth"] as const;
-}
-
-export function cloudCapabilitiesKey() {
-  return [...cloudRootKey(), "capabilities"] as const;
-}
-
 export function cloudAgentCatalogKey() {
   return [...cloudRootKey(), "agent-catalog", "v1"] as const;
+}
+
+export function agentGatewayRootKey() {
+  return [...cloudRootKey(), "agent-gateway"] as const;
+}
+
+export function agentApiKeysKey() {
+  return [...agentGatewayRootKey(), "api-keys"] as const;
+}
+
+export function agentRouteSelectionsKey() {
+  return [...agentGatewayRootKey(), "route-selections"] as const;
+}
+
+export function agentAuthStateRootKey() {
+  return [...agentGatewayRootKey(), "state"] as const;
+}
+
+export function agentAuthStateKey(surface: string) {
+  return [...agentAuthStateRootKey(), surface] as const;
+}
+
+export function agentGatewayCapabilitiesKey() {
+  return [...agentGatewayRootKey(), "capabilities"] as const;
+}
+
+export function agentGatewayEnrollmentKey() {
+  return [...agentGatewayRootKey(), "enrollment"] as const;
+}
+
+export function agentGatewayCatalogRootKey() {
+  return [...agentGatewayRootKey(), "catalog"] as const;
+}
+
+export function agentGatewayCatalogKey(
+  harnessKind: string,
+  surface: string,
+  route: string,
+) {
+  return [...agentGatewayCatalogRootKey(), harnessKind, surface, route] as const;
+}
+
+export function orgAgentPolicyKey(organizationId: string) {
+  return [...agentGatewayRootKey(), "org-policy", organizationId] as const;
+}
+
+export function orgAgentPolicyViolationsKey(organizationId: string) {
+  return [
+    ...agentGatewayRootKey(),
+    "org-policy",
+    organizationId,
+    "violations",
+  ] as const;
 }
 
 export function cloudPluginInventoryRootKey() {
@@ -42,6 +87,26 @@ export function cloudOrganizationIntegrationPolicyKey(
     "organization-integration-policy",
     organizationId,
   ] as const;
+}
+
+export function cloudIntegrationsRootKey() {
+  return [...cloudRootKey(), "integrations"] as const;
+}
+
+export function cloudIntegrationsCatalogKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "catalog", organizationId] as const;
+}
+
+export function cloudIntegrationsHealthKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "health", organizationId] as const;
+}
+
+export function cloudIntegrationOauthFlowKey(flowId: string | null) {
+  return [...cloudIntegrationsRootKey(), "oauth-flow", flowId] as const;
+}
+
+export function cloudIntegrationAdminDefinitionsKey(organizationId: string | null) {
+  return [...cloudIntegrationsRootKey(), "admin-definitions", organizationId] as const;
 }
 
 export function organizationSsoConnectionsKey(organizationId: string | null) {
@@ -64,40 +129,12 @@ export function cloudConfiguredSkillsKey() {
   return [...cloudPluginInventoryRootKey(), "configured-skills"] as const;
 }
 
-export function agentAuthCredentialsKey(
-  organizationId: string | null = null,
-  credentialProviderId: string | null = null,
-) {
-  return [
-    ...agentAuthRootKey(),
-    "credentials",
-    organizationId,
-    credentialProviderId,
-  ] as const;
-}
-
 export function sandboxProfileKey(sandboxProfileId: string | null) {
-  return [...agentAuthRootKey(), "sandbox-profile", sandboxProfileId] as const;
-}
-
-export function sandboxAgentAuthSelectionsKey(sandboxProfileId: string | null) {
-  return [...sandboxProfileKey(sandboxProfileId), "selections"] as const;
-}
-
-export function sandboxAgentAuthTargetStatesKey(sandboxProfileId: string | null) {
-  return [...sandboxProfileKey(sandboxProfileId), "target-states"] as const;
-}
-
-export function sandboxProfileTargetStateKey(sandboxProfileId: string | null) {
-  return [...sandboxProfileKey(sandboxProfileId), "target-state"] as const;
+  return [...cloudRootKey(), "sandbox-profile", sandboxProfileId] as const;
 }
 
 export function sandboxProfileRuntimeConfigKey(sandboxProfileId: string | null) {
   return [...sandboxProfileKey(sandboxProfileId), "runtime-config"] as const;
-}
-
-export function agentAuthManagedCreditsKey(organizationId: string | null) {
-  return [...agentAuthRootKey(), "managed-credits", organizationId] as const;
 }
 
 export type CloudOwnerScope = "personal" | "organization";

@@ -59,6 +59,12 @@ server/deploy/
   wait-for-health.sh
 ```
 
+Every `server-v*` GitHub release also publishes this directory as a
+standalone bundle, `proliferate-deploy.tar.gz` (checksummed in
+`self-hosted-assets.SHA256SUMS`), so operators do not need to clone the
+monorepo. The bundle extracts to a `proliferate-deploy/` directory with the
+files above plus a `VERSION` file stamped with the release version.
+
 Services:
 
 - `caddy`: public HTTPS endpoint
@@ -101,8 +107,23 @@ The Proliferate API talks to the protected Bifrost management API through
 
 1. Provision a Linux host with Docker and Docker Compose v2.
 2. Point DNS for `api.company.com` at that host.
-3. Copy `server/deploy/.env.production.example` to `server/deploy/.env.static`.
-4. Fill in the required values:
+3. Fetch the deploy bundle for the release you want to run and create your
+   env file (no repo clone needed):
+
+```bash
+curl -fsSL https://github.com/proliferate-ai/proliferate/releases/download/server-vX.Y.Z/proliferate-deploy.tar.gz | tar xz
+cd proliferate-deploy
+cp .env.production.example .env.static
+```
+
+To verify the download first, fetch `self-hosted-assets.SHA256SUMS` from the
+same release and run `sha256sum -c --ignore-missing` against it before
+extracting. The sums file also covers the runtime binaries and the AWS
+template, so without `--ignore-missing` the check always fails on this
+bundle-only download. Working from a monorepo checkout instead?
+`server/deploy/` is the same directory; run the steps below from there.
+
+4. Fill in the required values in `.env.static`:
    - `SITE_ADDRESS`
    - `PROLIFERATE_TELEMETRY_MODE`
    - `PROLIFERATE_HOST_BIN_DIR`
@@ -126,9 +147,9 @@ The Proliferate API talks to the protected Bifrost management API through
      overrides, add the extra env vars manually from
      [env-secrets-matrix.md](../reference/env-secrets-matrix.md)
 5. Leave `POSTGRES_PASSWORD`, `JWT_SECRET`, and `CLOUD_SECRET_KEY` blank if you
-   want `bootstrap.sh` to generate and persist them in
-   `server/deploy/.env.generated` on first startup.
-6. Optionally put host-local overrides in `server/deploy/.env.local`.
+   want `bootstrap.sh` to generate and persist them in `.env.generated`
+   (next to `.env.static`) on first startup.
+6. Optionally put host-local overrides in `.env.local` in the same directory.
    `ensure-secrets.sh` merges `.env.static` with `.env.local` into
    `.env.runtime`, and `.env.local` wins for non-secret operator settings. This
    is mainly useful for generated/self-hosted stacks where `.env.static` may be
@@ -160,10 +181,10 @@ after the local API passes health, also set:
 PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://api.company.com/health
 ```
 
-8. Run:
+8. Run, from the deploy directory:
 
 ```bash
-./server/deploy/bootstrap.sh
+./bootstrap.sh
 ```
 
 9. Give desktop users this config:
@@ -176,10 +197,10 @@ PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://api.company.com/health
 
 ## Update Flow
 
-The canonical self-hosted update flow is:
+The canonical self-hosted update flow is, from the deploy directory:
 
 ```bash
-./server/deploy/update.sh
+./update.sh
 ```
 
 That script runs:

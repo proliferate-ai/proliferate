@@ -7,6 +7,10 @@ import {
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
+import {
+  WorkspaceActionsMenuContainer,
+  type WorkspaceActionsMenuContainerProps,
+} from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
@@ -34,6 +38,7 @@ interface GlobalHeaderProps {
   runLoading?: boolean;
   runLabel?: string;
   runTitle?: string;
+  workspaceActions: WorkspaceActionsMenuContainerProps;
   onRun: () => void;
   onTogglePanel: () => void;
 }
@@ -46,6 +51,7 @@ export const GlobalHeader = memo(function GlobalHeader({
   runLoading = false,
   runLabel = "Run",
   runTitle = "Run workspace command",
+  workspaceActions,
   onRun,
   onTogglePanel,
 }: GlobalHeaderProps) {
@@ -80,14 +86,16 @@ export const GlobalHeader = memo(function GlobalHeader({
 
   return (
     <DebugProfiler id="global-header">
-      <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-4">
+      <div className="flex h-full min-w-0 flex-1 items-center gap-1 px-2">
         <div
-          className="min-w-0 max-w-[220px] shrink-0 truncate px-1 text-sm font-medium leading-5 text-muted-foreground"
+          className="min-w-0 max-w-[220px] shrink-0 truncate px-1.5 text-ui font-medium text-foreground"
           title={title}
           data-telemetry-mask="true"
         >
           {title}
         </div>
+
+        <WorkspaceActionsMenuContainer {...workspaceActions} />
 
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <HeaderTabs />
@@ -110,7 +118,7 @@ export const GlobalHeader = memo(function GlobalHeader({
             </Button>
             {workspacePath && (
               <SplitButton
-                icon={<FilePen className="size-3.5" />}
+                icon={<FilePen className="size-4" />}
                 label={preferredTarget?.label ?? "Open"}
                 showLabel={false}
                 onClick={handleDefaultOpen}
@@ -124,8 +132,8 @@ export const GlobalHeader = memo(function GlobalHeader({
                 variant="ghost"
                 size="sm"
                 onClick={onTogglePanel}
-                aria-label="Show side panel"
-                title="Show side panel"
+                aria-label="Toggle side panel"
+                title="Toggle side panel"
                 className={HEADER_ICON_BUTTON_CLASS}
               >
                 <SplitPanel className="size-3.5" />

@@ -2,8 +2,8 @@ import { Building2, Cloud, CreditCard, Gauge, Server } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 
-import { SettingsCard } from "../settings/SettingsCard";
-import { SettingsCardRow } from "../settings/SettingsCardRow";
+import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsRow } from "../settings/SettingsRow";
 import type { BillingOwnerCardView } from "./billing-types";
 import { CreditGrantBreakdown } from "./BillingCreditGrantBreakdown";
 import {
@@ -25,27 +25,27 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
 
   if (view.loading && !plan) {
     return (
-      <SettingsCard>
-        <SettingsCardRow label={view.title} description="Loading billing state..." />
-      </SettingsCard>
+      <SettingsSection>
+        <SettingsRow label={view.title} description="Loading billing state..." />
+      </SettingsSection>
     );
   }
 
   if (view.error) {
     return (
-      <SettingsCard>
-        <SettingsCardRow label={view.title} description={view.error}>
+      <SettingsSection>
+        <SettingsRow label={view.title} description={view.error}>
           {view.retryAction ? <BillingButton action={view.retryAction} variant="secondary" /> : null}
-        </SettingsCardRow>
-      </SettingsCard>
+        </SettingsRow>
+      </SettingsSection>
     );
   }
 
   if (!plan) {
     return (
-      <SettingsCard>
-        <SettingsCardRow label={view.title} description="Billing details are not available." />
-      </SettingsCard>
+      <SettingsSection>
+        <SettingsRow label={view.title} description="Billing details are not available." />
+      </SettingsSection>
     );
   }
 
@@ -56,7 +56,7 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
   const Icon = view.iconKind === "organization" ? Building2 : CreditCard;
 
   return (
-    <SettingsCard>
+    <SettingsSection>
       <div className="space-y-5 p-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3">
@@ -180,6 +180,6 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
           />
         ) : null}
       </div>
-    </SettingsCard>
+    </SettingsSection>
   );
 }

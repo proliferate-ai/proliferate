@@ -6,11 +6,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store.organization_records import InvitationRecord
 from proliferate.integrations import resend
-from proliferate.server.organizations.join_links import organization_join_url
+from proliferate.server.organizations.join_links import (
+    invitation_registration_url,
+    organization_join_url,
+)
 
 
 @dataclass(frozen=True)
@@ -47,11 +51,21 @@ async def _send_durable_invitation_email(
     inviter_email: str,
 ) -> DurableInvitationEmailResult:
     try:
+        if settings.single_org_mode:
+            # Self-hosted servers do not serve the hosted web app's /join
+            # route; their invite emails link to the server-rendered
+            # registration page with the invitation token prefilled.
+            invite_url = invitation_registration_url(
+                invitation_id=invitation.id,
+                email=invitation.email,
+            )
+        else:
+            invite_url = organization_join_url(invitation.organization_id)
         result = await resend.send_organization_invitation_email(
             to_email=invitation.email,
             organization_name=organization_name,
             inviter_email=inviter_email,
-            invite_url=organization_join_url(invitation.organization_id),
+            invite_url=invite_url,
         )
     except resend.ResendEmailError as error:
         updated = await _mark_delivery(

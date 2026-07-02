@@ -3,6 +3,25 @@
 @source "../../../product-ui/src";
 @import "../theme.css";
 
+/* -- Semantic UI type-scale tokens (shared by web + desktop; desktop.css
+      imports this file). Values are the desktop "UI font size" default
+      preset: applyAppearancePreference() re-writes every --text-* token on
+      :root at boot from UI_FONT_SCALES (appearance.ts), so these build-time
+      defaults MUST match that table's default preset — drift-locked by
+      appearance-css-drift.test.ts in apps/desktop. -- */
+@theme {
+  --text-ui: 13px;                    /* rows, pills, controls, popover items, menus, card titles */
+  --text-ui--line-height: 18px;       /* font size + 5px */
+  --text-ui-sm: 12px;                 /* descriptions, secondary labels, notices, meta */
+  --text-ui-sm--line-height: 16px;    /* font size + 4px */
+  --text-composer: 14px;              /* composer input text only */
+  --text-composer--line-height: 22px; /* font size + 8px */
+  --text-title: 20px;                 /* page/settings titles (SettingsPageHeader pairing) */
+  --text-title--line-height: 24px;    /* 1.2 × font size */
+  --text-hero: 28px;                  /* home hero heading */
+  --text-hero--line-height: 36px;     /* font size + 8px */
+}
+
 :root {
   color-scheme: dark;
   font-family:
@@ -101,13 +120,57 @@ body {
   );
 }
 
+/* Codex composer chrome (UX_SPEC §5): no border — a 0.5px stroke painted in
+   the shadow stack plus the elevation shadow. */
 .chat-composer-surface {
   background-color: var(--color-composer-background);
   box-shadow:
-    0 0 0 1px var(--color-composer-border),
+    0 0 0 0.5px var(--color-composer-border),
     var(--color-composer-shadow);
   -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
   backdrop-filter: var(--color-composer-backdrop-filter);
+}
+
+/* ---- Skeleton shimmer (codex block shimmer) ----
+   Loading blocks share one motion family with the thinking-text sweep in
+   desktop.css: a soft gradient band travelling left→right via transform
+   (compositor-only — never background-position). Stagger sibling rows by
+   setting the --shimmer-delay custom property per row. */
+@keyframes skeleton-shimmer-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-muted-foreground) 16%, transparent) 50%,
+    transparent 100%
+  );
+  will-change: transform;
+  transform: translateX(-100%);
+  animation: skeleton-shimmer-sweep 3s linear infinite;
+  animation-delay: var(--shimmer-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::before {
+    animation: none;
+  }
 }
 
 /* ---- Proliferate icon: one-shot resolve animation ---- */

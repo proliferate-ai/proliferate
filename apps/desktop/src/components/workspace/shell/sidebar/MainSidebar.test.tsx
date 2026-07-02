@@ -16,8 +16,8 @@ vi.mock("@/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock("./SidebarFooter", () => ({
-  SidebarFooter: () => <div data-testid="sidebar-footer" />,
+vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
+  SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
 vi.mock("@proliferate/ui/layout/SidebarRowSurface", () => ({
@@ -171,8 +171,8 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
     handleCreateLocalWorkspace: vi.fn(),
     handleCreateWorktreeWorkspace: vi.fn(),
     handleGoHome: vi.fn(),
-    handleGoIntegrations: vi.fn(),
     handleGoWorkflows: vi.fn(),
+    handleGoWorkspaces: vi.fn(),
     handleMarkWorkspaceDone: vi.fn(),
     handleRetryWorkspaceCleanup: vi.fn(),
     handleSelectWorkspace: vi.fn(),
@@ -253,12 +253,6 @@ function renderMainSidebar() {
 }
 
 describe("MainSidebar support window", () => {
-  it("does not mark Support as tbr", () => {
-    renderMainSidebar();
-
-    expect(screen.queryByText("tbr")).toBeNull();
-  });
-
   it("opens the support report window from Support", async () => {
     renderMainSidebar();
 

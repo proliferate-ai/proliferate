@@ -1,21 +1,21 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import type {
   ModelSelectorGroup as ModelSelectorGroupData,
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
-import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { POPOVER_FRAME_CLASS, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
+import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   Check,
   ChevronDown,
   Plus,
-  Search,
 } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { useModelSelectorMenu } from "@/hooks/chat/ui/use-model-selector-menu";
@@ -29,13 +29,11 @@ export function ModelSelector({
   groups,
   hasAgents,
   isLoading,
-  notReadyAgents,
   onSelect,
 }: ModelSelectorProps) {
+  const navigate = useNavigate();
   const {
     open,
-    addProviderOpen,
-    setupAgent,
     search,
     triggerRef,
     menuPos,
@@ -43,9 +41,6 @@ export function ModelSelector({
     setSearch,
     handleOpen,
     handleClose,
-    toggleAddProvider,
-    openSetupAgent,
-    closeSetupAgent,
   } = useModelSelectorMenu({ groups });
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
   useNativeOverlayRegistration(selectorEnabled && open && menuPos !== null);
@@ -60,7 +55,6 @@ export function ModelSelector({
     return (
       <ComposerControlButton
         disabled
-        tone="quiet"
         label={
           connectionState === "connecting"
             ? "Connecting…"
@@ -109,20 +103,12 @@ export function ModelSelector({
             position={{ bottom: menuPos.bottom, left: menuPos.left }}
           >
             <div className={`flex w-72 flex-col overflow-hidden ${POPOVER_FRAME_CLASS}`}>
-              <div className="border-b border-border px-2 pb-2 pt-2">
-                <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5">
-                  <Search className="size-3.5 shrink-0 text-muted-foreground/60" />
-                  <Input
-                    variant="unstyled"
-                    type="text"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={CHAT_MODEL_SELECTOR_LABELS.searchPlaceholder}
-                    autoFocus
-                    className="h-auto w-full border-none bg-transparent px-0 py-0 text-sm text-foreground placeholder:text-muted-foreground outline-none"
-                  />
-                </div>
-              </div>
+              <PopoverSearchField
+                value={search}
+                onChange={setSearch}
+                placeholder={CHAT_MODEL_SELECTOR_LABELS.searchPlaceholder}
+                autoFocus
+              />
 
               <div className="max-h-96 overflow-y-auto p-1">
                 {filteredGroups.map((group, index) => (
@@ -139,13 +125,13 @@ export function ModelSelector({
                 ))}
 
                 {filteredGroups.length === 0 && groups.length > 0 && (
-                  <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                  <p className="px-3 py-4 text-center text-ui text-muted-foreground">
                     {CHAT_MODEL_SELECTOR_LABELS.noMatchPrefix} "{search}"
                   </p>
                 )}
 
                 {groups.length === 0 && (
-                  <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                  <p className="px-3 py-4 text-center text-ui text-muted-foreground">
                     {CHAT_MODEL_SELECTOR_LABELS.noProviders}
                   </p>
                 )}
@@ -154,40 +140,20 @@ export function ModelSelector({
               <div className="border-t border-border p-1">
                 <PopoverMenuItem
                   density="compact"
-                  onClick={toggleAddProvider}
+                  onClick={() => {
+                    handleClose();
+                    // UX_SPEC §5: add-harness routes to Settings → Agents.
+                    navigate(buildSettingsHref({ section: "agent-defaults" }));
+                  }}
                   icon={<Plus className="size-3.5 shrink-0" />}
-                  label={CHAT_MODEL_SELECTOR_LABELS.addProvider}
+                  label={CHAT_MODEL_SELECTOR_LABELS.addHarness}
                   className="px-2.5 text-muted-foreground hover:text-popover-foreground"
                 />
               </div>
             </div>
-
-            {addProviderOpen && notReadyAgents.length > 0 && (
-              <div className={`absolute bottom-0 left-[calc(18rem+8px)] w-56 ${POPOVER_SURFACE_CLASS}`}>
-                {notReadyAgents.map((agent) => (
-                  <PopoverMenuItem
-                    key={agent.kind}
-                    onClick={() => openSetupAgent(agent)}
-                    density="compact"
-                    icon={<ProviderIcon kind={agent.kind} className="size-3.5 shrink-0 text-muted-foreground" />}
-                    label={agent.displayName}
-                    trailing={<span className="shrink-0 text-xs text-muted-foreground/60">Setup</span>}
-                    className="px-2.5 leading-[18px]"
-                    trailingClassName="size-auto opacity-100"
-                  />
-                ))}
-              </div>
-            )}
           </FixedPositionLayer>
         </>,
         document.body,
-      )}
-
-      {setupAgent && (
-        <AgentSetupModal
-          agent={setupAgent}
-          onClose={closeSetupAgent}
-        />
       )}
     </div>
   );
@@ -209,7 +175,7 @@ function ProviderModelGroup({
   return (
     <>
       {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
-      <div className="min-h-5 truncate px-2 py-0.5 text-sm font-[430] leading-4 text-muted-foreground/70">
+      <div className="min-h-5 truncate px-2.5 py-0.5 text-ui-sm font-[430] text-muted-foreground/70">
         {group.providerDisplayName}
       </div>
       {group.models.map((model) => (
@@ -251,11 +217,11 @@ function ModelRow({
       icon={<ProviderIcon kind={kind} className="size-3.5 shrink-0 text-muted-foreground" />}
       label={displayName}
       trailing={showNewChatBadge ? (
-        <span className="shrink-0 text-xs text-muted-foreground/60">
+        <span className="shrink-0 text-ui-sm text-muted-foreground/60">
           {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
         </span>
       ) : isSelected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
-      className="px-2.5 leading-[18px]"
+      className="px-2.5"
       trailingClassName="size-auto opacity-100"
     />
   );

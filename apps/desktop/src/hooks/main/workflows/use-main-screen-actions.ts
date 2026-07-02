@@ -157,6 +157,18 @@ export function useMainScreenActions({
     setPublishDialog(CLOSED_PUBLISH_DIALOG_STATE);
   }, [setPublishDialog]);
 
+  const handleCommitOpen = useCallback(() => {
+    openPublishDialog("commit");
+  }, [openPublishDialog]);
+
+  const handlePushOpen = useCallback(() => {
+    openPublishDialog("publish");
+  }, [openPublishDialog]);
+
+  const handlePrOpen = useCallback(() => {
+    openPublishDialog("pull_request");
+  }, [openPublishDialog]);
+
   const renameBranch = useCallback(async (newName: string) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
     if (blockedReason) {
@@ -184,9 +196,9 @@ export function useMainScreenActions({
     toggleRightPanel,
     openTerminalPanel,
     onSetRightPanelTool: openRightPanelTool,
-    handleCommitOpen: () => openPublishDialog("commit"),
-    handlePushOpen: () => openPublishDialog("publish"),
-    handlePrOpen: () => openPublishDialog("pull_request"),
+    handleCommitOpen,
+    handlePushOpen,
+    handlePrOpen,
     handleCommandPaletteOpen,
     handleViewPr,
     handlePublishDialogViewPr,

@@ -21,7 +21,6 @@ tool_suggest = false
 pub(super) fn build_session_launch_env(
     resolved_agent: &ResolvedAgent,
     runtime_home: &Path,
-    protected_agent_auth_env: &BTreeMap<String, String>,
     requested_model_id: Option<&str>,
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match resolved_agent.descriptor.kind {
@@ -34,9 +33,6 @@ pub(super) fn build_session_launch_env(
             .map(|model_id| BTreeMap::from([("GEMINI_MODEL".to_string(), model_id.to_string())]))
             .unwrap_or_default()),
         AgentKind::Codex => {
-            if protected_agent_auth_env.contains_key("CODEX_HOME") {
-                return Ok(BTreeMap::new());
-            }
             let codex_home = prepare_local_codex_home(runtime_home)?;
             Ok(BTreeMap::from([(
                 "CODEX_HOME".to_string(),

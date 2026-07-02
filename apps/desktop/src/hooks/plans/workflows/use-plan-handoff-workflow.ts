@@ -56,7 +56,7 @@ export function usePlanHandoffWorkflow({
   const launchCatalog = useChatLaunchCatalog({
     activeSelection: selection ?? configuredLaunch.selection,
   });
-  const { hasAgents, isLoading: agentsLoading, notReadyAgents } = useAgentCatalog();
+  const { hasAgents, isLoading: agentsLoading } = useAgentCatalog();
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
   const { dismissSession } = useSessionDismissActions();
   const { activateChatTab } = useWorkspaceShellActivation();
@@ -98,7 +98,6 @@ export function usePlanHandoffWorkflow({
     groups: launchCatalog.groups,
     hasAgents,
     isLoading: agentsLoading || launchCatalog.isLoading,
-    notReadyAgents,
     onSelect: setSelection,
   }), [
     agentsLoading,
@@ -106,7 +105,6 @@ export function usePlanHandoffWorkflow({
     hasAgents,
     launchCatalog.groups,
     launchCatalog.isLoading,
-    notReadyAgents,
     resolvedConnectionState,
   ]);
 

@@ -25,6 +25,7 @@ impl WorkerProcessLock {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&lock_path)
             .map_err(|source| WorkerError::AcquireProcessLock {
                 path: lock_path.clone(),

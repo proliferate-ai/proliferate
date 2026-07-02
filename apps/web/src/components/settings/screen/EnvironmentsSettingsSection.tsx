@@ -16,7 +16,6 @@ export function EnvironmentsSettingsSection() {
 
   return (
     <CloudEnvironmentsSettingsSurface
-      mode="cloud-only"
       selectedCloudRepo={selectedCloudRepo}
       organizationId={team?.id ?? null}
       canManageGitHubAppInstallation={canManageGitHubAppInstallation}

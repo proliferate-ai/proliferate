@@ -33,9 +33,9 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
 use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, PermissionOutcome};
+use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::persistence::Db;
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
@@ -70,8 +70,6 @@ async fn actor_exit_test_context(
             workspace_id: "workspace-1".to_string(),
             agent_kind: "claude".to_string(),
             native_session_id: Some("native-1".to_string()),
-            agent_auth_scope: None,
-            required_agent_auth_revision: None,
             agent_auth_contexts: None,
             requested_model_id: None,
             current_model_id: None,

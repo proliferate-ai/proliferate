@@ -4,9 +4,9 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { OrganizationMemberLlmBudgets } from "@/components/settings/panes/organization/OrganizationMemberLlmBudgets";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import {
@@ -33,84 +33,70 @@ export function OrganizationBudgetsPane() {
   const llmPercentAvailable = Math.round((AVAILABLE_LLM_CREDITS / TOTAL_LLM_CREDITS) * 100);
 
   return (
-    <section className="max-w-[980px] space-y-6">
+    <section className="space-y-6">
       <SettingsPageHeader
         title="Budgets"
         description="Track compute units and LLM credits as separate organization budgets."
       />
 
       {!activeOrganization && organizationsQuery.isLoading ? (
-        <div className="text-sm text-muted-foreground">Loading organization...</div>
+        <div className="text-ui-sm text-muted-foreground">Loading organization…</div>
       ) : null}
 
-      <SettingsCard>
-        <div className="space-y-5 p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold text-foreground">Balances remaining</h2>
-                <Badge tone="neutral">Mocked UI</Badge>
-              </div>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Compute units and LLM credits have separate balances, budgets, and top-up rules.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <BudgetBalanceCard
-              label="Compute units"
-              available={`${AVAILABLE_COMPUTE_PCUS} PCUs`}
-              total={`${TOTAL_COMPUTE_PCUS} purchased`}
-              used={`${USED_COMPUTE_PCUS} PCUs used`}
-              percentAvailable={computePercentAvailable}
-            />
-            <BudgetBalanceCard
-              label="LLM credits"
-              available={`${AVAILABLE_LLM_CREDITS.toLocaleString()} LLM credits`}
-              total={`${TOTAL_LLM_CREDITS.toLocaleString()} purchased`}
-              used={`${USED_LLM_CREDITS.toLocaleString()} LLM credits used`}
-              percentAvailable={llmPercentAvailable}
-            />
-          </div>
+      <SettingsSection
+        title={(
+          <span className="flex flex-wrap items-center gap-2">
+            Balances remaining
+            <Badge tone="neutral">Mocked UI</Badge>
+          </span>
+        )}
+        description="Compute units and LLM credits have separate balances, budgets, and top-up rules."
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <BudgetBalanceCard
+            label="Compute units"
+            available={`${AVAILABLE_COMPUTE_PCUS} PCUs`}
+            total={`${TOTAL_COMPUTE_PCUS} purchased`}
+            used={`${USED_COMPUTE_PCUS} PCUs used`}
+            percentAvailable={computePercentAvailable}
+          />
+          <BudgetBalanceCard
+            label="LLM credits"
+            available={`${AVAILABLE_LLM_CREDITS.toLocaleString()} LLM credits`}
+            total={`${TOTAL_LLM_CREDITS.toLocaleString()} purchased`}
+            used={`${USED_LLM_CREDITS.toLocaleString()} LLM credits used`}
+            percentAvailable={llmPercentAvailable}
+          />
         </div>
-      </SettingsCard>
+      </SettingsSection>
 
-      <SettingsCard>
-        <div className="space-y-5 p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-1.5">
-              <h2 className="text-lg font-semibold text-foreground">Total usage</h2>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                {USED_COMPUTE_PCUS} PCUs and {USED_LLM_CREDITS.toLocaleString()} LLM credits used in the last 7 days.
-              </p>
+      <SettingsSection
+        title="Total usage"
+        description={`${USED_COMPUTE_PCUS} PCUs and ${USED_LLM_CREDITS.toLocaleString()} LLM credits used in the last 7 days.`}
+        action={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="w-full sm:w-44">
+              <Select aria-label="Usage range" defaultValue="7d">
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+              </Select>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="w-full sm:w-44">
-                <Select aria-label="Usage range" defaultValue="7d">
-                  <option value="7d">Last 7 days</option>
-                  <option value="30d">Last 30 days</option>
-                  <option value="90d">Last 90 days</option>
-                </Select>
-              </div>
-              <Button type="button" variant="secondary" disabled>
-                Forecast
-              </Button>
-            </div>
+            <Button type="button" variant="secondary" disabled>
+              Forecast
+            </Button>
           </div>
-          <UsageAreaChart points={USAGE_POINTS} />
-        </div>
-      </SettingsCard>
+        )}
+      >
+        <UsageAreaChart points={USAGE_POINTS} />
+      </SettingsSection>
 
-      <SettingsCard>
-        <div className="border-b border-border-light px-5 py-4">
-          <div className="text-lg font-semibold text-foreground">Usage by source</div>
-          <div className="mt-1 text-sm text-muted-foreground">
-            Mocked split of credit consumption until usage rollups are wired.
-          </div>
-        </div>
+      <SettingsSection
+        title="Usage by source"
+        description="Mocked split of credit consumption until usage rollups are wired."
+      >
         {USAGE_BY_SOURCE.map((source) => (
-          <SettingsCardRow
+          <SettingsRow
             key={source.label}
             label={source.label}
             description={source.description}
@@ -121,59 +107,56 @@ export function OrganizationBudgetsPane() {
                 className="h-1.5 w-24 overflow-hidden rounded-full bg-foreground/10"
                 indicatorClassName="h-full rounded-full bg-foreground/50"
               />
-              <span className="w-16 text-right text-sm font-medium text-foreground">
+              <span className="w-16 text-right text-ui font-medium text-foreground">
                 {source.value}
               </span>
             </div>
-          </SettingsCardRow>
+          </SettingsRow>
         ))}
-      </SettingsCard>
+      </SettingsSection>
 
       <OrganizationBudgetPeople people={people} />
 
       <OrganizationMemberLlmBudgets people={people} />
 
-      <SettingsCard>
-        <SettingsCardRow
+      <SettingsSection title="Limits">
+        <SettingsRow
           label="Monthly compute budget"
           description="Alert owners before runtime and agent-session consumption crosses this amount."
         >
-          <div className="text-sm font-medium text-foreground">{COMPUTE_BUDGET_PCUS} PCUs</div>
-        </SettingsCardRow>
-        <SettingsCardRow
+          <div className="text-ui font-medium text-foreground">{COMPUTE_BUDGET_PCUS} PCUs</div>
+        </SettingsRow>
+        <SettingsRow
           label="LLM and model budget"
           description="Track gateway, model, and inference-backed tool usage separately from runtime."
         >
-          <div className="text-sm font-medium text-foreground">{LLM_BUDGET_CREDITS.toLocaleString()} LLM credits</div>
-        </SettingsCardRow>
-        <SettingsCardRow
+          <div className="text-ui font-medium text-foreground">{LLM_BUDGET_CREDITS.toLocaleString()} LLM credits</div>
+        </SettingsRow>
+        <SettingsRow
           label="Compute auto top-up"
           description="Purchase more compute units when runtime capacity drops below the configured threshold."
         >
           <Switch checked={false} onChange={() => {}} disabled aria-label="Compute auto top-up" />
-        </SettingsCardRow>
-        <SettingsCardRow
+        </SettingsRow>
+        <SettingsRow
           label="LLM credit auto top-up"
           description="Purchase more LLM credits when model usage balance drops below the configured threshold."
         >
           <Switch checked={false} onChange={() => {}} disabled aria-label="LLM credit auto top-up" />
-        </SettingsCardRow>
-      </SettingsCard>
+        </SettingsRow>
+      </SettingsSection>
     </section>
   );
 }
 
 function OrganizationBudgetPeople({ people }: { people: BudgetPerson[] }) {
   return (
-    <SettingsCard>
-      <div className="border-b border-border-light px-5 py-4">
-        <div className="text-lg font-semibold text-foreground">Usage by person</div>
-        <div className="mt-1 text-sm text-muted-foreground">
-          Mocked compute and LLM usage mapped onto current members.
-        </div>
-      </div>
+    <SettingsSection
+      title="Usage by person"
+      description="Mocked compute and LLM usage mapped onto current members."
+    >
       {people.map((person) => (
-        <SettingsCardRow
+        <SettingsRow
           key={person.email}
           label={person.name}
           description={person.email}
@@ -184,13 +167,13 @@ function OrganizationBudgetPeople({ people }: { people: BudgetPerson[] }) {
               className="h-1.5 w-24 overflow-hidden rounded-full bg-foreground/10"
               indicatorClassName="h-full rounded-full bg-foreground/50"
             />
-            <span className="w-32 text-right text-sm font-medium text-foreground">
+            <span className="w-32 text-right text-ui font-medium text-foreground">
               {person.usedPcus} PCUs · {person.usedLlmCredits.toLocaleString()} LLM
             </span>
           </div>
-        </SettingsCardRow>
+        </SettingsRow>
       ))}
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -210,9 +193,9 @@ function BudgetBalanceCard({
   return (
     <div className="space-y-3 rounded-lg border border-border-light bg-foreground/[0.02] p-4">
       <div className="space-y-1">
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        <div className="text-2xl font-semibold tracking-tight text-foreground">{available}</div>
-        <div className="text-sm text-muted-foreground">available of {total}</div>
+        <div className="text-ui font-medium text-foreground">{label}</div>
+        <div className="text-title font-semibold tracking-tight text-foreground">{available}</div>
+        <div className="text-ui-sm text-muted-foreground">available of {total}</div>
       </div>
       <ProgressBar
         value={percentAvailable}
@@ -220,7 +203,7 @@ function BudgetBalanceCard({
         indicatorClassName="h-full rounded-full bg-primary/70"
         aria-label={`${label} available`}
       />
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="flex items-center justify-between text-ui-sm text-muted-foreground">
         <span>{used}</span>
         <span>{percentAvailable}% remaining</span>
       </div>
@@ -256,7 +239,7 @@ function UsageAreaChart({ points }: { points: UsagePoint[] }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-border-light bg-foreground/[0.02] px-2 py-3">
-      <div className="flex flex-wrap items-center gap-4 px-3 pb-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-4 px-3 pb-2 text-ui-sm text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <span className="size-2 rounded-full bg-primary" />
           Compute units
@@ -333,7 +316,7 @@ function UsageAreaChart({ points }: { points: UsagePoint[] }) {
             y={height - 10}
             textAnchor="middle"
             fill="currentColor"
-            className="text-[10px] text-muted-foreground"
+            className="text-ui-sm text-muted-foreground"
           >
             {point.label}
           </text>

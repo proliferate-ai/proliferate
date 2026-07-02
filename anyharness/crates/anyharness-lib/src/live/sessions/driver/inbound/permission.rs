@@ -88,8 +88,7 @@ impl InboundDoor {
                 PermissionAdvice::Park {
                     pending_interaction,
                 } => {
-                    linked_plan_id =
-                        pending_interaction.and_then(|link| link.linked_plan_id);
+                    linked_plan_id = pending_interaction.and_then(|link| link.linked_plan_id);
                 }
                 PermissionAdvice::Predecided {
                     selected_option_id,
@@ -158,9 +157,11 @@ impl InboundDoor {
         let outcome = pending_wait.wait().await;
 
         let acp_outcome = match outcome {
-            PermissionOutcome::Selected { option_id } => acp::schema::RequestPermissionOutcome::Selected(
-                acp::schema::SelectedPermissionOutcome::new(option_id),
-            ),
+            PermissionOutcome::Selected { option_id } => {
+                acp::schema::RequestPermissionOutcome::Selected(
+                    acp::schema::SelectedPermissionOutcome::new(option_id),
+                )
+            }
             PermissionOutcome::Cancelled | PermissionOutcome::Dismissed => {
                 acp::schema::RequestPermissionOutcome::Cancelled
             }
@@ -168,5 +169,4 @@ impl InboundDoor {
 
         Ok(acp::schema::RequestPermissionResponse::new(acp_outcome))
     }
-
 }

@@ -1,7 +1,7 @@
 import type { FormEvent } from "react";
 
-import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
-import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -24,13 +24,13 @@ export function OrganizationSettingsSection() {
         description="Create or join one team for shared work, members, invites, and organization billing."
       />
       {organization.actionError ? (
-        <SettingsCard>
-          <SettingsCardRow label="Action failed" description={organization.actionError} />
-        </SettingsCard>
+        <SettingsSection>
+          <SettingsRow label="Action failed" description={organization.actionError} />
+        </SettingsSection>
       ) : null}
       {organization.pendingCheckoutIntent && !organization.currentTeam ? (
-        <SettingsCard>
-          <SettingsCardRow
+        <SettingsSection>
+          <SettingsRow
             label={organization.pendingCheckoutIntent.teamName}
             description="Team checkout is pending. Continue checkout or cancel setup."
           >
@@ -53,14 +53,14 @@ export function OrganizationSettingsSection() {
                 Cancel
               </Button>
             </div>
-          </SettingsCardRow>
-        </SettingsCard>
+          </SettingsRow>
+        </SettingsSection>
       ) : null}
-      <SettingsCard>
+      <SettingsSection>
         {organization.currentTeamLoading ? (
-          <SettingsCardRow label="Organization" description="Loading team..." />
+          <SettingsRow label="Organization" description="Loading team..." />
         ) : organization.currentTeamError ? (
-          <SettingsCardRow
+          <SettingsRow
             label="Organization"
             description="Team could not be loaded."
           >
@@ -72,10 +72,10 @@ export function OrganizationSettingsSection() {
             >
               Retry
             </Button>
-          </SettingsCardRow>
+          </SettingsRow>
         ) : organization.currentTeam ? (
           <>
-            <SettingsCardRow
+            <SettingsRow
               label={organization.currentTeam.name}
               description={organization.currentTeam.membership
                 ? `${membershipRoleLabel(organization.currentTeam.membership.role)} - ${membershipStatusLabel(organization.currentTeam.membership.status)}`
@@ -84,8 +84,8 @@ export function OrganizationSettingsSection() {
               <Badge tone={organization.currentTeam.status === "active" ? "success" : "warning"}>
                 {organization.currentTeam.status === "suspended" ? "Billing repair" : "Active"}
               </Badge>
-            </SettingsCardRow>
-            <SettingsCardRow
+            </SettingsRow>
+            <SettingsRow
               label="GitHub App"
               description={githubAppInstallationDescription({
                 installed: organization.githubAppInstallation?.installed === true,
@@ -120,10 +120,10 @@ export function OrganizationSettingsSection() {
                   </Button>
                 ) : null}
               </div>
-            </SettingsCardRow>
+            </SettingsRow>
           </>
         ) : (
-          <div className="space-y-4 p-4">
+          <div className="space-y-4 py-3">
             <div className="space-y-1">
               <h2 className="text-sm font-medium text-foreground">You are not in a team yet.</h2>
               <p className="text-sm leading-6 text-muted-foreground">
@@ -153,7 +153,7 @@ export function OrganizationSettingsSection() {
             </form>
           </div>
         )}
-      </SettingsCard>
+      </SettingsSection>
     </section>
   );
 }

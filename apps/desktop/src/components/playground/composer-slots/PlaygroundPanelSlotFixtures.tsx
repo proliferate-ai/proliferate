@@ -1,8 +1,12 @@
 import type { ReactNode } from "react";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
-import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
+import {
+  TodoTrackerPanel,
+  TodoTrackerStrip,
+} from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
+import { PlaygroundInteractionMotionFixture } from "@/components/playground/composer-slots/PlaygroundInteractionMotionFixture";
 import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalAttachedPanelView } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
 import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
@@ -56,6 +60,47 @@ export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null 
       return <TodoTrackerPanel entries={TODOS_MID} />;
     case "todos-long":
       return <TodoTrackerPanel entries={TODOS_LONG} />;
+    // Mirrors the production active-slot composition (use-composer-dock-slots):
+    // while an interaction holds the slot, plan progress collapses to the slim
+    // one-line strip directly below the card instead of being evicted.
+    case "todo-strip-with-approval":
+      return (
+        <>
+          <ApprovalCard
+            title="pnpm exec vitest run --reporter=dot"
+            actions={EXECUTE_OPTIONS}
+            onSelectOption={noop}
+            onAllow={noop}
+            onDeny={noop}
+          />
+          <TodoTrackerStrip entries={TODOS_MID} />
+        </>
+      );
+    // Auto-cycling pending→resolved loop for the dock-card mount/exit motion.
+    case "interaction-motion":
+      return <PlaygroundInteractionMotionFixture />;
+    // Docked counterparts of the transcript pending-interaction markers
+    // (PlaygroundStatusTranscript renders the marker rows for these keys).
+    case "interaction-marker-permission":
+      return (
+        <ApprovalCard
+          title="git push origin feature/interaction-markers"
+          actions={EXECUTE_OPTIONS}
+          onSelectOption={noop}
+          onAllow={noop}
+          onDeny={noop}
+        />
+      );
+    case "interaction-marker-question":
+      return (
+        <UserInputCard
+          key="interaction-marker-question"
+          title="Choose provider"
+          questions={USER_INPUT_SINGLE_OPTION}
+          onSubmit={noop}
+          onCancel={noop}
+        />
+      );
     case "execute-approval":
       return (
         <ApprovalCard

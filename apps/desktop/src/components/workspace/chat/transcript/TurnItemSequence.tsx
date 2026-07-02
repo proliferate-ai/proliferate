@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type {
   ToolCallItem,
   TranscriptState,
@@ -13,14 +12,12 @@ import {
 } from "@proliferate/product-domain/chats/tools/cowork-artifact-tool-presentation";
 import {
   blockBelongsToCompletedHistory,
-  collectToolCallIdsWithProposedPlanForBlocks,
 } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import type { TurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
   TurnDisplayBlockNode,
 } from "./ScopedTranscriptBlocks";
-import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
 import { TranscriptTreeNode } from "./TranscriptTreeNode";
 import {
   buildCollapsedSummaryIcons,
@@ -57,18 +54,14 @@ export function TurnItemSequence({
     ? artifactToolCalls.filter((item) => item.status === "completed")
     : [];
   const completedHistoryRootIdSet = new Set(presentation.completedHistoryRootIds);
-  const toolCallIdsWithProposedPlan = useMemo(
-    () => collectToolCallIdsWithProposedPlanForBlocks(
-      presentation.displayBlocks,
-      transcript,
-      presentation.childrenByParentId,
-    ),
-    [presentation.childrenByParentId, presentation.displayBlocks, transcript],
-  );
+  // The ExitPlanMode suppression index is derived transcript-wide once (see
+  // MessageList → ProposedPlanToolCallIdsProvider) so a proposed_plan landing in
+  // a different turn than its ExitPlanMode tool call still suppresses the
+  // footerless fallback card. This sequence only consumes that index.
   let hasRenderedCompletedHistory = false;
 
   return (
-    <ProposedPlanToolCallIdsProvider value={toolCallIdsWithProposedPlan}>
+    <>
       {presentation.displayBlocks.map((block) => {
         if (
           presentation.completedHistorySummary
@@ -152,7 +145,7 @@ export function TurnItemSequence({
           ))}
         </div>
       )}
-    </ProposedPlanToolCallIdsProvider>
+    </>
   );
 }
 

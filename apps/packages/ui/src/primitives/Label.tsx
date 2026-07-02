@@ -1,5 +1,5 @@
 import { type LabelHTMLAttributes } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 type LabelProps = LabelHTMLAttributes<HTMLLabelElement>;
 

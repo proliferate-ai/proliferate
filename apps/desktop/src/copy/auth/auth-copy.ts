@@ -24,6 +24,14 @@ export const AUTH_LOGIN_LABELS = {
   cancelSignIn: "Cancel sign-in",
   continueLocally: "Start locally",
   continueLocallyInline: "start locally",
+  // Email/password sign-in (default surface when GitHub OAuth is not
+  // configured on the connected server, e.g. self-hosted instances).
+  emailFieldLabel: "Email",
+  emailFieldPlaceholder: "you@company.com",
+  passwordFieldLabel: "Password",
+  passwordFieldPlaceholder: "Password",
+  passwordSignIn: "Sign in",
+  passwordWaiting: "Signing in...",
 } as const;
 
 export const AUTH_ACCOUNT_LABELS = {
@@ -39,17 +47,17 @@ export const AUTH_ACCOUNT_LABELS = {
     "Local workspaces are available without an account. Sign in to use cloud workspaces and credential sync.",
   localPill: "Local",
   signIn: "Sign in",
-  checkingSignIn: "Checking GitHub...",
-  signingIn: "Waiting for GitHub...",
+  checkingSignIn: "Checking GitHub…",
+  signingIn: "Waiting for GitHub…",
   connectGitHub: "Connect GitHub",
-  connectingGitHub: "Waiting for GitHub...",
+  connectingGitHub: "Waiting for GitHub…",
   reconnect: "Reconnect",
-  reconnecting: "Reconnecting...",
+  reconnecting: "Reconnecting…",
   manageAccess: "Manage access",
   signOut: "Sign out",
-  signingOut: "Signing out...",
+  signingOut: "Signing out…",
   sync: "Sync",
-  syncing: "Syncing...",
+  syncing: "Syncing…",
   clear: "Clear",
-  clearing: "Clearing...",
+  clearing: "Clearing…",
 } as const;

@@ -3,9 +3,9 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
-import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
@@ -73,7 +73,7 @@ export function OrganizationMembersPane() {
       joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
       showToast(`Joined ${response.organization.name}.`, "info");
     } catch {
-      joinFlow.setStatusMessage("Invitation could not be accepted.");
+      joinFlow.setStatusMessage("Could not accept invitation.");
     }
   }
 
@@ -89,7 +89,7 @@ export function OrganizationMembersPane() {
       await copyText(link.url);
       showToast("Invite link copied.", "info");
     } catch {
-      showToast("Invite link could not be copied.");
+      showToast("Could not copy invite link.");
     }
   }
 
@@ -125,26 +125,21 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowSignInState ? (
-        <OrganizationSection title="Members" description="Organization access is tied to your signed-in account.">
-          <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
-              Sign in to view organization members.
-            </div>
-          </SettingsCard>
-        </OrganizationSection>
+        <SettingsSection title="Members" description="Organization access is tied to your signed-in account.">
+          <SettingsEmptyState size="compact" title="Sign in to view organization members" />
+        </SettingsSection>
       ) : null}
 
       {shouldShowLoadingState ? (
-        <div className="text-sm text-muted-foreground">Loading members...</div>
+        <div className="text-ui-sm text-muted-foreground">Loading members…</div>
       ) : null}
 
       {shouldShowErrorState ? (
-        <OrganizationSection title="Members">
-          <SettingsCard>
-            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
-                Organization members could not be loaded.
-              </div>
+        <SettingsSection title="Members">
+          <SettingsEmptyState
+            size="compact"
+            title="Could not load organization members"
+            action={
               <Button
                 type="button"
                 variant="secondary"
@@ -154,9 +149,9 @@ export function OrganizationMembersPane() {
               >
                 Retry
               </Button>
-            </div>
-          </SettingsCard>
-        </OrganizationSection>
+            }
+          />
+        </SettingsSection>
       ) : null}
 
       {shouldShowPendingInvitations ? (
@@ -171,13 +166,13 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowEmptyState ? (
-        <OrganizationSection title="Members">
-          <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
-              No organization yet.
-            </div>
-          </SettingsCard>
-        </OrganizationSection>
+        <SettingsSection title="Members">
+          <SettingsEmptyState
+            size="compact"
+            title="No organization yet"
+            description="Create or join an organization to manage members."
+          />
+        </SettingsSection>
       ) : null}
 
       {activeOrganization ? (
@@ -220,7 +215,7 @@ export function OrganizationMembersPane() {
 
 function OrganizationNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border-light bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
       {children}
     </div>
   );

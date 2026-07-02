@@ -140,7 +140,7 @@ function AutomationSummaryPanel({
     >
       {prompt ? (
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase leading-4 tracking-normal text-muted-foreground">
+          <p className="text-base font-medium uppercase tracking-normal text-muted-foreground">
             Prompt
           </p>
           <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-foreground">
@@ -152,7 +152,7 @@ function AutomationSummaryPanel({
         <dl className={`grid gap-3 ${prompt ? "mt-3 border-t border-border/60 pt-3" : ""} sm:grid-cols-3`}>
           {details.map((item) => (
             <div key={item.label} className="min-w-0">
-              <dt className="text-[11px] font-medium uppercase leading-4 tracking-normal text-muted-foreground">
+              <dt className="text-base font-medium uppercase tracking-normal text-muted-foreground">
                 {item.label}
               </dt>
               <dd className="mt-0.5 truncate text-sm leading-5 text-foreground" title={item.value}>

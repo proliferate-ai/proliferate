@@ -11,6 +11,8 @@ type TrackChatPromptSubmitted = (
 
 interface CompleteChatPromptSubmitSideEffectsInput {
   workspaceId: string;
+  logicalWorkspaceId: string | null;
+  repoRootId: string | null;
   getWorkspaceArrivalEvent: () => WorkspaceArrivalEvent | null;
   getCachedWorkspaceSetupStatus: (workspaceId: string) => CachedWorkspaceSetupStatus;
   agentKind: string;
@@ -20,18 +22,31 @@ interface CompleteChatPromptSubmitSideEffectsInput {
 
 interface CompleteChatPromptSubmitSideEffectsDeps {
   trackProductEvent: TrackChatPromptSubmitted;
+  /** Writes the current composed git status into the persisted snapshot. */
+  captureGitStatusSnapshot: (logicalWorkspaceId: string, at: string) => void;
+  /** Stamps lastPromptAt on the persisted snapshot. */
+  stampGitPrompt: (logicalWorkspaceId: string, at: string) => void;
+  /** Kicks a refresh=1 PR status fetch for the workspace's repo root. */
+  refreshPrStatuses: (repoRootId: string) => void;
 }
 
 export function completeChatPromptSubmitSideEffects(
   {
     workspaceId,
+    logicalWorkspaceId,
+    repoRootId,
     getWorkspaceArrivalEvent,
     getCachedWorkspaceSetupStatus,
     agentKind,
     reuseSession,
     setWorkspaceArrivalEvent,
   }: CompleteChatPromptSubmitSideEffectsInput,
-  { trackProductEvent }: CompleteChatPromptSubmitSideEffectsDeps,
+  {
+    trackProductEvent,
+    captureGitStatusSnapshot,
+    stampGitPrompt,
+    refreshPrStatuses,
+  }: CompleteChatPromptSubmitSideEffectsDeps,
 ): void {
   if (!isWorkspaceSetupActive({
     workspaceArrivalEvent: getWorkspaceArrivalEvent(),
@@ -45,4 +60,16 @@ export function completeChatPromptSubmitSideEffects(
     agent_kind: agentKind,
     reuse_session: reuseSession,
   });
+
+  // "Last status at message send": capture latest-known truth anchored to the
+  // prompt, then kick a refresh=1 fetch so the true at-send state lands
+  // within seconds (10s daemon floor).
+  const promptedAt = new Date().toISOString();
+  if (logicalWorkspaceId) {
+    captureGitStatusSnapshot(logicalWorkspaceId, promptedAt);
+    stampGitPrompt(logicalWorkspaceId, promptedAt);
+  }
+  if (repoRootId) {
+    refreshPrStatuses(repoRootId);
+  }
 }

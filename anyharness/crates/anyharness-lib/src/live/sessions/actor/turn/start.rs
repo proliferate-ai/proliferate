@@ -1,12 +1,12 @@
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{PendingPromptRemovalReason, PendingPromptRemovedPayload};
 
+use crate::domains::agents::model::AgentKind;
 use crate::domains::sessions::model::PromptAttachmentState;
 use crate::domains::sessions::prompt::render::{render, TurnPromptExtras};
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActor;
-use crate::domains::agents::model::AgentKind;
 
 pub(in crate::live::sessions::actor) struct StartedPromptTurn {
     pub acp_blocks: Vec<acp::schema::ContentBlock>,

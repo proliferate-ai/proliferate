@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 import { Button } from "../primitives/Button";
 
 interface PaneOptionsMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {

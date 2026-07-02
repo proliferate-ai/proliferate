@@ -1,4 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
+import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
+import { isMainThreadMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@proliferate/product-domain/sessions/activity";
 import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
@@ -41,10 +43,6 @@ export type SidebarStatusIndicator =
   }
   | {
     kind: "queued_prompt";
-    tooltip: string;
-  }
-  | {
-    kind: "needs_review";
     tooltip: string;
   };
 
@@ -107,13 +105,11 @@ export function logicalWorkspaceSshTargetId(workspace: LogicalWorkspace): string
 
 export function sidebarStatusIndicatorFromActivity(args: {
   activity: SidebarSessionActivityState;
-  needsReview?: boolean;
   pendingPromptCount?: number;
   errorAction?: SidebarIndicatorAction | null;
 }): SidebarStatusIndicator | null {
   const {
     activity,
-    needsReview = false,
     pendingPromptCount = 0,
     errorAction = null,
   } = args;
@@ -154,12 +150,7 @@ export function sidebarStatusIndicatorFromActivity(args: {
     };
   }
 
-  return needsReview
-    ? {
-      kind: "needs_review",
-      tooltip: "Needs review",
-    }
-    : null;
+  return null;
 }
 
 export function activeWorkspaceActivity(
@@ -212,6 +203,21 @@ function mergeLocalWorkspaceActivity(
     (mountedActivity === "idle" || mountedActivity === "closed")
     && workspaceSummaryHasRunningSession(executionSummary)
   ) {
+    // SUSPECT for "sidebar spinner runs long after the agent finished": live
+    // (mounted) session state says idle, but the server-side executionSummary
+    // — which only refreshes on workspace-collections sync — still claims a
+    // running session, and it wins here. The override exists for genuinely
+    // running UNMOUNTED sessions, so it can't just be removed; this diagnostic
+    // captures every occurrence (summary phase + runningCount) so dumps show
+    // exactly how long stale summaries pin the spinner after live idle.
+    if (isMainThreadMeasurementEnabled()) {
+      recordMeasurementMetric({
+        type: "diagnostic",
+        category: "sidebar_activity",
+        label: `summary_override.${executionSummary?.phase ?? "unknown"}`,
+        count: executionSummary?.runningCount ?? 0,
+      });
+    }
     return "iterating";
   }
 

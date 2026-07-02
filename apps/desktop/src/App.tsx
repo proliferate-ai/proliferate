@@ -3,9 +3,11 @@ import { Navigate, Route, useLocation } from "react-router-dom"
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
+import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { ToastContainer } from "@/components/feedback/Toast"
-import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
+import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
+import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
@@ -17,9 +19,10 @@ import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions"
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
+import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-auth-adoption"
+import { useLocalAuthStateSync } from "@/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
-import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/lifecycle/use-runtime-input-sync-runtime"
 import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
@@ -30,6 +33,7 @@ import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-
 import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue"
 import { useTurnEndSound } from "@/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
+import { useWorkspaceGitStatusPersistence } from "@/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
 import {
   elapsedStartupMs,
@@ -43,6 +47,7 @@ import {
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
+import { AddRepoFlowHost } from "@/components/workspace/repo-setup/AddRepoFlowHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
@@ -71,6 +76,14 @@ const UpdatePlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/UpdatePlaygroundPage").then((m) => ({
         default: m.UpdatePlaygroundPage,
+      })),
+    )
+  : null
+
+const WorkspaceStatusPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/WorkspaceStatusPlaygroundPage").then((m) => ({
+        default: m.WorkspaceStatusPlaygroundPage,
       })),
     )
   : null
@@ -192,6 +205,12 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_agent_auto_reconcile")
   useAgentAutoReconcile()
   recordBootDiagnosticOnce("app_runtime.render.after.use_agent_auto_reconcile")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_first_run_auth_adoption")
+  useFirstRunAuthAdoption()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_first_run_auth_adoption")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
+  useLocalAuthStateSync()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
@@ -210,6 +229,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_ui_lifecycle")
   useWorkspaceUiLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_ui_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_git_status_persistence")
+  useWorkspaceGitStatusPersistence()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_git_status_persistence")
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_intent_dispatcher")
   useSessionIntentDispatcher()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_intent_dispatcher")
@@ -265,7 +287,6 @@ function AppRuntime() {
           <MacWindowControlsSafeArea />
           <UpdateRestartDialog />
           <WorkspaceActivityIndicatorMount />
-          <RuntimeInputSyncGate />
           <WorktreeCleanupPolicySyncGate />
           <InstrumentedRoutes>
             <Route path="/index.html" element={<Navigate to="/" replace />} />
@@ -303,6 +324,16 @@ function AppRuntime() {
                 }
               />
             )}
+            {import.meta.env.DEV && WorkspaceStatusPlaygroundPage && (
+              <Route
+                path="/playground/workspace-status"
+                element={
+                  <Suspense fallback={null}>
+                    <WorkspaceStatusPlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
             {import.meta.env.DEV && AuthPlaygroundPage && (
               <Route
                 path="/playground/auth"
@@ -316,8 +347,14 @@ function AppRuntime() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </InstrumentedRoutes>
           <RepoSetupModalHost />
+          <AddRepoFlowHost />
+          {/* Legacy toast store container (non-update toasts) — kept until all
+              toast call sites migrate to Sonner. */}
           <ToastContainer />
-          <TurnEndCelebration />
+          {/* Kit Sonner toaster + update lifecycle toasts (UX spec §12). */}
+          <Toaster />
+          <UpdateToastPresenter />
+          <KeyboardShortcutsDialog />
         </ShortcutRevealProvider>
       </AppCommandActionsProvider>
     </>
@@ -328,24 +365,6 @@ function WorkspaceActivityIndicatorMount() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_activity_indicator")
   useWorkspaceActivityIndicator()
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_activity_indicator")
-  return null
-}
-
-function RuntimeInputSyncGate() {
-  const preferencesHydrated = useUserPreferencesStore((s) => s._hydrated)
-  const cloudRuntimeInputSyncEnabled = useUserPreferencesStore(
-    (s) => s.cloudRuntimeInputSyncEnabled,
-  )
-
-  if (!preferencesHydrated || !cloudRuntimeInputSyncEnabled) {
-    return null
-  }
-
-  return <RuntimeInputSyncRuntimeMount />
-}
-
-function RuntimeInputSyncRuntimeMount() {
-  useRuntimeInputSyncRuntime()
   return null
 }
 

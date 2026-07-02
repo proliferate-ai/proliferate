@@ -51,7 +51,7 @@ export function GitPanelHeader({
 
   return (
     <div
-      className="z-20 grid min-h-9 shrink-0 [container-name:review-header] [container-type:inline-size] grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
+      className="z-20 grid min-h-10 shrink-0 [container-name:review-header] [container-type:inline-size] grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b border-sidebar-border/70 bg-sidebar-background px-2 py-1 text-sidebar-muted-foreground"
     >
       <div className="flex w-full min-w-0 flex-col overflow-hidden text-base">
         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
@@ -109,7 +109,7 @@ function GitPanelAggregateStats({
 }) {
   return (
     <div
-      className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-none tabular-nums"
+      className="flex shrink-0 items-center gap-1 text-sm font-medium leading-none tabular-nums"
       aria-label={`${additions} additions, ${deletions} deletions`}
     >
       <span className={additions > 0 ? "text-git-green" : "text-sidebar-muted-foreground/70"}>

@@ -98,58 +98,6 @@ export function hasProposedPlanForToolCallItem(
   );
 }
 
-export function collectToolCallIdsWithProposedPlanForBlocks(
-  displayBlocks: readonly TurnDisplayBlock[],
-  transcript: TranscriptState,
-  childrenByParentId: Map<string, string[]>,
-): Set<string> {
-  const toolCallIds = new Set<string>();
-  for (const block of displayBlocks) {
-    if (
-      block.kind === "collapsed_actions"
-      || block.kind === "inline_tools"
-      || block.kind === "subagent_creations"
-    ) {
-      for (const itemId of block.itemIds) {
-        collectToolCallIdsWithProposedPlanFromItem(
-          itemId,
-          transcript,
-          childrenByParentId,
-          toolCallIds,
-        );
-      }
-      continue;
-    }
-    collectToolCallIdsWithProposedPlanFromItem(
-      block.itemId,
-      transcript,
-      childrenByParentId,
-      toolCallIds,
-    );
-  }
-  return toolCallIds;
-}
-
-function collectToolCallIdsWithProposedPlanFromItem(
-  itemId: string,
-  transcript: TranscriptState,
-  childrenByParentId: Map<string, string[]>,
-  output: Set<string>,
-): void {
-  const item = transcript.itemsById[itemId];
-  if (item?.kind === "proposed_plan") {
-    addProposedPlanSourceIds(item.plan, output);
-  }
-  for (const childId of childrenByParentId.get(itemId) ?? []) {
-    collectToolCallIdsWithProposedPlanFromItem(
-      childId,
-      transcript,
-      childrenByParentId,
-      output,
-    );
-  }
-}
-
 function addProposedPlanSourceIds(
   plan: Extract<TranscriptItem, { kind: "proposed_plan" }>["plan"],
   output: Set<string>,

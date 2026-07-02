@@ -1,23 +1,22 @@
-pub mod model;
 mod actor;
 mod background_work;
 mod driver;
-mod sink;
 pub mod handle;
-mod rendezvous;
 mod manager;
+pub mod model;
 pub mod probe;
+mod rendezvous;
 mod replay;
+mod sink;
 
 pub use actor::spawn::ActorReadyResult;
 pub use actor::turn::types::SessionTurnFinishResult;
-pub use model::SessionStartupStrategy;
 pub use handle::{
-    ForkSessionCommandError, ForkSessionCommandResult, Resolution,
-    LiveSessionCommandError, LiveSessionExecutionSnapshot, LiveSessionHandle, PromptAcceptError,
-    PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
-    SetConfigOptionCommandError,
+    ForkSessionCommandError, ForkSessionCommandResult, LiveSessionCommandError,
+    LiveSessionExecutionSnapshot, LiveSessionHandle, PromptAcceptError, PromptAcceptance,
+    QueueMutationError, Resolution, ResolveInteractionCommandError, SetConfigOptionCommandError,
 };
-pub use rendezvous::broker::PermissionDecision;
 pub use manager::LiveSessionManager;
 pub(crate) use manager::RevealMcpElicitationUrlError;
+pub use model::SessionStartupStrategy;
+pub use rendezvous::broker::PermissionDecision;

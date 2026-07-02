@@ -251,7 +251,7 @@ function SupportDebugSection({
             </Button>
           </div>
         </div>
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        <p className="mt-2 text-base leading-5 text-muted-foreground">
           Event exports include prompts, raw notifications, tool output, file paths, and
           runtime metadata. Nothing is sent automatically.
         </p>

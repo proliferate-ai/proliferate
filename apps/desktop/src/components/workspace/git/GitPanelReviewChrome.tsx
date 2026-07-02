@@ -98,6 +98,8 @@ export function GitReviewSectionHeader({
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  // Codex section-toggle recipe (UX_SPEC §8): faint label, chevron fades in
+  // on hover, right-aligned tabular count.
   return (
     <Button
       type="button"
@@ -105,14 +107,15 @@ export function GitReviewSectionHeader({
       size="unstyled"
       aria-expanded={!collapsed}
       onClick={onToggle}
-      className="flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[10px] font-medium uppercase tracking-wide text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+      className="group/section-toggle flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-sm font-medium text-faint hover:bg-sidebar-accent hover:text-sidebar-foreground"
     >
-      <ChevronRight
-        className={`size-3 shrink-0 transition-transform ${collapsed ? "" : "rotate-90"}`}
-      />
-      <span className="min-w-0 flex-1 truncate">
+      <span className="min-w-0 truncate">
         {section.label}
       </span>
+      <ChevronRight
+        className={`size-3 shrink-0 transition-[opacity,transform] duration-200 ${collapsed ? "opacity-100" : "rotate-90 opacity-0 group-hover/section-toggle:opacity-100"}`}
+      />
+      <span className="flex-1" />
       <span className="tabular-nums">{section.files.length}</span>
     </Button>
   );

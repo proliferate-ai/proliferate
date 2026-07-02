@@ -1,7 +1,17 @@
 export const CHAT_COMPOSER_LABELS = {
   placeholder: "Describe a task",
+  followUpPlaceholder: "Ask for a follow-up",
   send: "Send message",
   stop: "Stop run",
+} as const;
+
+// Context-appropriate labels for the animated streaming/status indicator. The
+// same shimmer used to say "Thinking" everywhere; callers now thread the label
+// that matches their context ("Thinking" is agent work only).
+export const CHAT_STREAMING_STATUS_LABELS = {
+  thinking: "Thinking",
+  sending: "Sending…",
+  restoringSession: "Restoring session…",
 } as const;
 
 export const CHAT_MODE_CONTROL_LABELS = {
@@ -27,6 +37,6 @@ export const CHAT_MODEL_SELECTOR_LABELS = {
   newChatHint: "Opens a new chat in this workspace",
   searchPlaceholder: "Search models",
   noMatchPrefix: "No models matching",
-  noProviders: "No configured providers. Add one to get started.",
-  addProvider: "Add provider",
+  noProviders: "No harnesses yet. Add one to get started.",
+  addHarness: "Add harness",
 } as const;

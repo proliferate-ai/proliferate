@@ -1,12 +1,21 @@
 import type { WorktreeInventoryRow } from "@anyharness/sdk";
 import { Check, ListFilter, SlidersHorizontal, Trash } from "@proliferate/ui/icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   worktreeGitStatusView,
   worktreeRowLabel,
 } from "@/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
+
+/** Shared column template — header and rows are separate grids, so the
+ * template must stay identical for the columns to align. Name flexes; the
+ * Status/Chats/Checkout/Logs columns are sized to their content and the
+ * trailing actions column reserves exactly one Delete button's width so the
+ * hover-revealed control never shifts the row or leaves a wide gutter. */
+const WORKTREE_GRID_CLASS =
+  "grid min-w-[640px] grid-cols-[minmax(0,1fr)_84px_48px_76px_60px_76px] items-center gap-3 px-5";
 
 export type WorktreeStatusFilter = "all" | "clean" | "changes" | "conflicts" | "unknown";
 export type WorktreeSortKey = "size" | "name" | "sessions";
@@ -43,9 +52,9 @@ export function WorktreeFilterMenu({
   return (
     <PopoverButton
       align="end"
-      className="w-52 rounded-lg border border-border/80 bg-popover/95 p-1 shadow-popover"
+      className={`w-52 ${POPOVER_FRAME_CLASS} p-1`}
       trigger={(
-        <Button type="button" variant="outline" size="sm" className={active ? "border-border/90 text-foreground" : ""}>
+        <Button type="button" variant="ghost" size="sm" className={active ? "text-foreground" : ""}>
           <ListFilter className="size-3.5" />
           Filter
         </Button>
@@ -108,9 +117,9 @@ export function WorktreeSortMenu({
   return (
     <PopoverButton
       align="end"
-      className="w-44 rounded-lg border border-border/80 bg-popover/95 p-1 shadow-popover"
+      className={`w-44 ${POPOVER_FRAME_CLASS} p-1`}
       trigger={(
-        <Button type="button" variant="outline" size="sm">
+        <Button type="button" variant="ghost" size="sm">
           <SlidersHorizontal className="size-3.5" />
           {activeLabel}
         </Button>
@@ -137,7 +146,7 @@ export function WorktreeSortMenu({
 
 export function WorktreeTableHeader() {
   return (
-    <div className="grid h-7 min-w-[700px] grid-cols-[minmax(0,1fr)_74px_52px_82px_68px_136px] items-center gap-4 px-5 text-[10px] uppercase tracking-[0.04em] text-muted-foreground/60">
+    <div className={`${WORKTREE_GRID_CLASS} h-8 border-b border-border/60 text-ui-sm text-muted-foreground`}>
       <span>Worktree</span>
       <span>Status</span>
       <span className="text-right">Chats</span>
@@ -162,58 +171,72 @@ export function RuntimeWorktreeRow({
   const primaryWorkspace = row.associatedWorkspaces[0] ?? null;
   const branchLabel = row.branch ?? primaryWorkspace?.branch ?? "";
   const repoLabel = row.repoRootName ?? repoLabelFromPath(row.path);
+  const branchLine = branchLabel ? `${repoLabel} / ${branchLabel}` : repoLabel;
+  const isClean = row.gitStatus?.state === "clean";
   const canDeleteOrphan = row.state === "orphan_checkout"
     && row.availableActions.includes("delete_orphan_checkout");
   const canDeleteHistory = row.state !== "conflict"
     && row.availableActions.includes("delete_workspace_history");
 
   return (
-    <div className="group grid min-h-10 min-w-[700px] grid-cols-[minmax(0,1fr)_74px_52px_82px_68px_136px] items-center gap-4 px-5 text-xs transition-colors hover:bg-foreground/[0.04]">
-      <div className="flex min-w-0 items-baseline gap-2.5">
-        <span className="min-w-0 truncate text-[13px] font-medium text-foreground">{label}</span>
-        <span className="min-w-0 truncate text-xs text-muted-foreground/60">
-          {branchLabel ? `${repoLabel} / ${branchLabel}` : repoLabel}
-        </span>
+    <div className={`group ${WORKTREE_GRID_CLASS} min-h-12 py-2 text-ui transition-colors hover:bg-foreground/[0.04]`}>
+      <div className="min-w-0">
+        <div className="truncate text-ui font-medium leading-5 text-foreground" title={label}>{label}</div>
+        <div className="truncate text-ui-sm leading-4 text-muted-foreground" title={branchLine}>
+          {branchLine}
+        </div>
       </div>
-      <span className="truncate text-xs text-muted-foreground/70">{status.label}</span>
-      <span className="text-right text-xs tabular-nums text-muted-foreground/70">{row.totalSessionCount}</span>
-      <span className="text-right text-xs tabular-nums text-muted-foreground/80">
+      <span className="min-w-0">
+        {isClean ? (
+          <span className="block truncate text-ui-sm text-muted-foreground">{status.label}</span>
+        ) : (
+          <Badge tone={status.tone} className="truncate">{status.label}</Badge>
+        )}
+      </span>
+      <span className="text-right text-ui tabular-nums text-muted-foreground">
+        {row.totalSessionCount > 0 ? row.totalSessionCount : <span className="text-muted-foreground/50">—</span>}
+      </span>
+      <span className="text-right text-ui tabular-nums text-foreground">
         {formatByteEstimate(row.storage?.worktreeBytes)}
       </span>
-      <span className="text-right text-xs tabular-nums text-muted-foreground/70">
+      <span className="text-right text-ui tabular-nums text-muted-foreground">
         {formatByteEstimate(row.storage?.sqliteBytes)}
       </span>
-      <div className="flex justify-end gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+      <div className="flex flex-wrap justify-end gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         {canDeleteOrphan ? (
-          <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => onDeleteOrphan(row.path)}>
-            <Trash className="size-3.5" />
-            Delete
-          </Button>
+          <WorktreeDeleteButton onClick={() => onDeleteOrphan(row.path)} />
         ) : null}
         {row.associatedWorkspaces.map((workspace) => (
-          <div key={workspace.id} className="flex items-center gap-1.5">
-            {canDeleteHistory ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                onClick={() => onPurgeWorkspace(workspace.id, workspace.displayName ?? label)}
-              >
-                <Trash className="size-3.5" />
-                Delete
-              </Button>
-            ) : null}
-          </div>
+          canDeleteHistory ? (
+            <WorktreeDeleteButton
+              key={workspace.id}
+              onClick={() => onPurgeWorkspace(workspace.id, workspace.displayName ?? label)}
+            />
+          ) : null
         ))}
       </div>
     </div>
   );
 }
 
+function WorktreeDeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-6 px-1.5 text-ui-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+      onClick={onClick}
+    >
+      <Trash className="size-3" />
+      Delete
+    </Button>
+  );
+}
+
 export function EmptyWorktreeState({ label }: { label: string }) {
   return (
-    <div className="flex min-h-32 items-center justify-center px-4 py-8 text-center text-sm text-muted-foreground">
+    <div className="flex min-h-32 items-center justify-center px-4 py-8 text-center text-ui-sm text-muted-foreground">
       {label}
     </div>
   );
@@ -280,13 +303,22 @@ export function repoLabelFromPath(path: string): string {
   return parts[parts.length - 1] ?? "Unknown repo";
 }
 
-export function formatByteEstimate(value: number | null | undefined): string {
+/**
+ * Sizes are always estimates, so table cells render them plain ("33 MB") and
+ * only the footer totals carry the "~" (pass `approximate`) — repeating the
+ * tilde on every cell was pure noise.
+ */
+export function formatByteEstimate(
+  value: number | null | undefined,
+  approximate = false,
+): string {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return "--";
   }
+  const prefix = approximate ? "~" : "";
   const abs = Math.abs(value);
   if (abs < 1024) {
-    return `~${Math.round(value)} B`;
+    return `${prefix}${Math.round(value)} B`;
   }
   const units = ["KB", "MB", "GB", "TB"];
   let scaled = value / 1024;
@@ -296,12 +328,12 @@ export function formatByteEstimate(value: number | null | undefined): string {
     unitIndex += 1;
   }
   const digits = Math.abs(scaled) >= 10 ? 0 : 1;
-  return `~${scaled.toFixed(digits)} ${units[unitIndex]}`;
+  return `${prefix}${scaled.toFixed(digits)} ${units[unitIndex]}`;
 }
 
 function MenuLabel({ label }: { label: string }) {
   return (
-    <div className="px-2 py-1.5 text-[11px] text-muted-foreground/70">
+    <div className="px-2 py-1.5 text-base text-muted-foreground/70">
       {label}
     </div>
   );

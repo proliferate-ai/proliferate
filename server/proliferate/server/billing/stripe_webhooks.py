@@ -318,20 +318,7 @@ async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscriptio
         ),
     )
     record = await reconcile_initial_org_subscription_seats(record)
-    await _sync_managed_credit_budget_for_subscription_subject(subject)
     return record
-
-
-async def _sync_managed_credit_budget_for_subscription_subject(
-    subject: BillingSubject,
-) -> None:
-    if subject.organization_id is None:
-        return
-    from proliferate.server.cloud.agent_auth.service import (
-        sync_managed_credit_budget_for_organization,
-    )
-
-    await sync_managed_credit_budget_for_organization(subject.organization_id)
 
 
 async def _sync_subscription_for_billing_notifications(

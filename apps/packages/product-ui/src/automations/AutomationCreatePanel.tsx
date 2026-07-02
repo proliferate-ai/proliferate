@@ -6,8 +6,8 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
-import { SettingsCard } from "../settings/SettingsCard";
-import { SettingsCardRow } from "../settings/SettingsCardRow";
+import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsRow } from "../settings/SettingsRow";
 import {
   CloudChatComposerControlStrip,
   type CloudChatComposerControlView,
@@ -74,9 +74,9 @@ export function AutomationCreatePanel({
   };
 
   return (
-    <SettingsCard>
+    <SettingsSection>
       <form onSubmit={handleSubmit}>
-        <div className="flex items-start justify-between gap-4 border-b border-border-light px-4 py-3">
+        <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
           <div className="min-w-0 space-y-1">
             <div className="text-sm font-medium text-foreground">New workflow</div>
             <p className="max-w-2xl text-xs leading-4 text-muted-foreground">
@@ -96,12 +96,12 @@ export function AutomationCreatePanel({
         </div>
 
         {error ? (
-          <div className="border-b border-border-light px-4 py-3 text-sm text-destructive">
+          <div className="border-b border-border py-3 text-sm text-destructive">
             {error}
           </div>
         ) : null}
 
-        <div className="grid gap-4 px-4 py-4">
+        <div className="grid gap-4 py-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field title="Title">
               <Input
@@ -215,7 +215,7 @@ export function AutomationCreatePanel({
           </div>
         </div>
 
-        <SettingsCardRow
+        <SettingsRow
           label="Create scheduled run"
           description="Web supports cloud-backed workflow creation and basic management. Local Desktop-only targets stay out of this flow."
         >
@@ -227,9 +227,9 @@ export function AutomationCreatePanel({
               Create
             </Button>
           </div>
-        </SettingsCardRow>
+        </SettingsRow>
       </form>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 

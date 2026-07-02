@@ -1,7 +1,7 @@
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
 import { AUTH_GATE_LABELS } from "@/copy/auth/auth-copy";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 interface SessionCheckScreenProps {
   className?: string;

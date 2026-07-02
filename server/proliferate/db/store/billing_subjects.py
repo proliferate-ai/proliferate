@@ -205,6 +205,16 @@ async def ensure_agent_gateway_free_credit_allocation(
     user_id: UUID,
     period_key: str,
 ) -> bool:
+    """Reserve the one-time agent-gateway free-credit allocation for a user.
+
+    Deduped through ``free_cloud_allocation`` on (allocation_kind, github
+    identity, period_key) — the same anti-abuse guard the compute free trial
+    uses. Returns True only when this call owns the allocation (either it
+    created the row, or an existing row already belongs to this subject), so
+    the caller can grant credits exactly once per GitHub identity. Returns
+    False when the user has no linked GitHub identity or the allocation
+    belongs to a different subject.
+    """
     github_provider_user_id = await _linked_github_provider_user_id(db, user_id)
     if github_provider_user_id is None:
         return False

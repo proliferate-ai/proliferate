@@ -24,6 +24,44 @@ class Settings(BaseSettings):
         default="local_dev",
         validation_alias=AliasChoices("PROLIFERATE_TELEMETRY_MODE", "TELEMETRY_MODE"),
     )
+    # Org membership mode. When single-org mode is on, every new identity joins
+    # the one instance organization instead of getting a personal default org.
+    # The default is derived (hosted production stays multi-org; every other
+    # deployment posture defaults to single-org); an explicit env value wins.
+    single_org_mode_override: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SINGLE_ORG_MODE", "PROLIFERATE_SINGLE_ORG_MODE"),
+    )
+    # First-run claim (single-org mode only). While the user table is empty the
+    # API mints a setup token, persists its hash in the database, and writes the
+    # plaintext to this local file so deploy tooling can print it. The file is
+    # never served over HTTP; only someone with shell access can read it.
+    setup_token_file: str = Field(
+        default="/var/lib/proliferate/setup/setup-token",
+        validation_alias=AliasChoices("PROLIFERATE_SETUP_TOKEN_FILE", "SETUP_TOKEN_FILE"),
+    )
+    # Instance admin floor (single-org mode only). Comma-separated emails that
+    # must always hold at least the admin role in the instance organization.
+    # Asserted at account creation and at every login; removing an email from
+    # the list never demotes anyone. Inert in hosted mode; see
+    # proliferate.server.organizations.admin_emails for the rationale.
+    admin_emails: str = Field(
+        default="",
+        validation_alias=AliasChoices("ADMIN_EMAILS", "PROLIFERATE_ADMIN_EMAILS"),
+    )
+    # Self-registration domain gate (single-org mode only). When set, invited
+    # emails may self-register only if their domain is listed. Comma-separated,
+    # e.g. "corp.example.com". Strictly a gate, never a grant: it restricts who
+    # can register but assigns no roles and admits nobody without an invitation.
+    # Empty (the default) means no domain restriction. SSO just-in-time
+    # provisioning is governed by SSO_ALLOWED_DOMAINS instead.
+    allowed_email_domains: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ALLOWED_EMAIL_DOMAINS",
+            "PROLIFERATE_ALLOWED_EMAIL_DOMAINS",
+        ),
+    )
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"
@@ -324,38 +362,27 @@ class Settings(BaseSettings):
     cloud_mcp_google_workspace_enabled: bool = False
     cloud_mcp_google_workspace_oauth_client_id: str = ""
     cloud_mcp_google_workspace_oauth_client_secret: str = ""
+    # Agent LLM gateway (LiteLLM proxy)
     agent_gateway_enabled: bool = False
-    agent_gateway_bifrost_base_url: str = "http://127.0.0.1:8080"
-    agent_gateway_bifrost_public_base_url: str = ""
-    agent_gateway_bifrost_admin_token: str = ""
-    agent_gateway_bifrost_request_timeout_seconds: float = 30.0
-    agent_gateway_bifrost_isolation_verified: bool = False
-    agent_gateway_managed_anthropic_api_key: str = ""
-    agent_gateway_managed_openai_api_key: str = ""
-    agent_gateway_managed_gemini_api_key: str = ""
-    agent_gateway_managed_bedrock_region: str = ""
-    agent_gateway_managed_bedrock_role_arn: str = ""
-    agent_gateway_managed_bedrock_external_id: str = ""
-    agent_gateway_managed_budget_free_usd: str = "0"
-    agent_gateway_managed_budget_pro_usd: str = "0"
-    agent_gateway_managed_budget_unlimited_usd: str = "0"
-    agent_gateway_user_free_credit_enabled: bool = False
-    agent_gateway_user_free_credit_usd: str = "0"
-    agent_gateway_user_free_credit_period: str = "registration"
-    agent_gateway_managed_credit_agent_kinds: str = "claude"
-    agent_gateway_max_request_bytes: int = 4_194_304
-    agent_gateway_request_timeout_seconds: float = 120.0
-    agent_gateway_byok_enabled: bool = False
-    agent_gateway_personal_byok_enabled: bool = False
-    agent_gateway_anthropic_byok_enabled: bool = False
-    agent_gateway_openai_byok_enabled: bool = False
-    agent_gateway_bedrock_byok_enabled: bool = False
-    agent_gateway_gemini_byok_enabled: bool = False
-    agent_gateway_openai_compatible_byok_enabled: bool = False
-    agent_gateway_opencode_enabled: bool = False
-    agent_gateway_reconciler_enabled: bool = False
-    agent_gateway_reconciler_interval_seconds: float = 300.0
-    agent_gateway_reconciler_batch_size: int = 50
+    agent_gateway_litellm_base_url: str = "http://127.0.0.1:14000"
+    agent_gateway_litellm_public_base_url: str = ""
+    agent_gateway_litellm_master_key: str = ""
+    agent_gateway_litellm_timeout_seconds: float = 30.0
+    agent_gateway_default_user_budget_usd: str = "5"
+    agent_gateway_default_org_budget_usd: str = "0"
+    agent_gateway_backfill_interval_seconds: float = 300.0
+    agent_gateway_free_credit_usd: str = "5"
+    agent_gateway_usage_import_interval_seconds: float = 60.0
+    agent_gateway_usage_import_overlap_seconds: float = 300.0
+    agent_gateway_topup_interval_seconds: float = 300.0
+    agent_gateway_topup_threshold_usd: str = "2"
+    agent_gateway_topup_amount_usd: str = "10"
+    # Stripe price for one auto top-up charge; empty disables auto top-ups.
+    agent_gateway_llm_topup_price_id: str = ""
+    # Minimum org plan required to edit the org agent policy: "free" (no
+    # gate) or "pro" (org needs a healthy paid cloud subscription or an
+    # active unlimited-cloud entitlement). Reading is never plan-gated.
+    agent_gateway_policy_min_plan: str = "pro"
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
@@ -364,6 +391,30 @@ class Settings(BaseSettings):
         "install/proliferate-target-install.sh"
     )
     proliferate_target_artifact_base_url: str = ""
+
+    @property
+    def single_org_mode(self) -> bool:
+        if self.single_org_mode_override is not None:
+            return self.single_org_mode_override
+        return self.telemetry_mode != "hosted_product"
+
+    @property
+    def admin_email_set(self) -> frozenset[str]:
+        """ADMIN_EMAILS parsed into normalized (stripped, lowercased) emails."""
+        return frozenset(
+            normalized
+            for raw in self.admin_emails.split(",")
+            if (normalized := raw.strip().lower())
+        )
+
+    @property
+    def allowed_email_domain_set(self) -> frozenset[str]:
+        """ALLOWED_EMAIL_DOMAINS parsed into normalized (stripped, lowercased) domains."""
+        return frozenset(
+            normalized
+            for raw in self.allowed_email_domains.split(",")
+            if (normalized := raw.strip().lower().lstrip("@"))
+        )
 
     @model_validator(mode="after")
     def validate_secrets_in_production(self) -> "Settings":

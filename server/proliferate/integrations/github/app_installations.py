@@ -146,6 +146,52 @@ async def list_github_app_installations() -> tuple[GitHubAppInstallationInfo, ..
     return tuple(installations)
 
 
+async def list_github_app_user_installations(
+    *,
+    user_access_token: str,
+) -> tuple[GitHubAppInstallationInfo, ...]:
+    """List the app installations the authenticated user can access.
+
+    Uses the user-to-server OAuth token (NOT the app JWT), so the result is
+    scoped to installations the user actually controls/belongs to. This is the
+    basis for proving that a caller controls a given installation before we bind
+    it to their organization.
+    """
+    installations: list[GitHubAppInstallationInfo] = []
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            page = 1
+            while True:
+                response = await client.get(
+                    "https://api.github.com/user/installations",
+                    headers=_user_headers(user_access_token),
+                    params={"per_page": 100, "page": page},
+                )
+                if response.status_code >= 300:
+                    raise GitHubIntegrationError(
+                        "Could not list GitHub App installations for the user."
+                    )
+                payload = response.json()
+                items = payload.get("installations") if isinstance(payload, dict) else None
+                if not isinstance(items, list):
+                    raise GitHubIntegrationError(
+                        "Could not list GitHub App installations for the user."
+                    )
+                for item in items:
+                    if isinstance(item, dict):
+                        installation = _installation_from_payload(item)
+                        if installation is not None:
+                            installations.append(installation)
+                if len(items) < 100:
+                    break
+                page += 1
+    except httpx.HTTPError as exc:
+        raise GitHubIntegrationError(
+            "Could not list GitHub App installations for the user."
+        ) from exc
+    return tuple(installations)
+
+
 async def get_github_app_installation(
     *,
     installation_id: str,

@@ -18,17 +18,11 @@ from proliferate.auth.identity.service import (
     hash_secret,
     validate_redirect_uri,
 )
-from proliferate.auth.identity.store import (
-    create_auth_user,
-    get_user_by_email,
-    get_user_by_id,
-)
 from proliferate.auth.identity.web_beta import ensure_web_beta_email_allowed
 from proliferate.auth.sso.deployment_config import deployment_sso_connection
 from proliferate.auth.sso.policy import (
     email_domain,
     normalize_domains,
-    require_email_domain_allowed,
 )
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
@@ -38,16 +32,13 @@ from proliferate.auth.sso.types import (
     SsoProtocol,
     SsoScope,
     SsoStatus,
-    VerifiedSsoIdentity,
     sso_connection_key,
 )
+from proliferate.auth.sso.user_resolution import resolve_sso_user
 from proliferate.config import settings
 from proliferate.constants.auth import SUPPORTED_CODE_CHALLENGE_METHODS
-from proliferate.constants.organizations import ORGANIZATION_ROLE_MEMBER
 from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
-from proliferate.db.store import organization_invitations as invitation_store
-from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth import create_auth_code
 from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import (
@@ -56,10 +47,7 @@ from proliferate.integrations.sso.oidc import (
     resolve_oidc_metadata,
     verify_oidc_identity,
 )
-from proliferate.server.billing.seat_reconciliation import (
-    maybe_create_organization_seat_adjustment,
-)
-from proliferate.server.organizations.registration import ensure_default_organization_for_account
+from proliferate.server.cloud.agent_gateway import signup_hook
 
 
 @dataclass(frozen=True)
@@ -254,75 +242,8 @@ async def complete_oidc_sso_callback(
         state=challenge.client_state,
         redirect_uri=challenge.redirect_uri,
     )
+    signup_hook.schedule_agent_gateway_user_enrollment(user.id, db=db)
     return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
-
-
-async def resolve_sso_user(
-    db: AsyncSession,
-    *,
-    connection: SsoConnectionSnapshot,
-    verified: VerifiedSsoIdentity,
-) -> User:
-    _require_verified_allowed_email(connection=connection, verified=verified)
-    existing_identity = await sso_store.get_sso_identity_by_connection_subject(
-        db,
-        connection_key=connection.connection_key,
-        provider_subject=verified.provider_subject,
-    )
-    if existing_identity is not None:
-        user = await get_user_by_id(db, existing_identity.user_id)
-        if user is None:
-            raise HTTPException(status_code=400, detail="Linked SSO user not found.")
-        _ensure_active_user(user)
-        if connection.scope == SsoScope.ORGANIZATION:
-            user = await _resolve_organization_sso_user(
-                db,
-                connection=connection,
-                verified=verified,
-                user=user,
-            )
-        await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
-        return user
-
-    user = await get_user_by_email(db, verified.email)
-    if connection.scope == SsoScope.ORGANIZATION:
-        if connection.organization_id is None:
-            raise HTTPException(status_code=400, detail="SSO organization is missing.")
-        user = await _resolve_organization_sso_user(
-            db,
-            connection=connection,
-            verified=verified,
-            user=user,
-        )
-    else:
-        if user is None:
-            if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
-                raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
-            user = await create_auth_user(
-                db,
-                email=verified.email,
-                display_name=verified.display_name,
-                avatar_url=verified.avatar_url,
-            )
-        elif connection.jit_policy == SsoJitPolicy.DISABLED:
-            raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
-        _ensure_active_user(user)
-        await ensure_default_organization_for_account(db, user)
-
-    await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
-    return user
-
-
-def _require_verified_allowed_email(
-    *,
-    connection: SsoConnectionSnapshot,
-    verified: VerifiedSsoIdentity,
-) -> None:
-    if not verified.email:
-        raise HTTPException(status_code=400, detail="SSO did not return an email address.")
-    if not verified.email_verified:
-        raise HTTPException(status_code=403, detail="SSO email address is not verified.")
-    require_email_domain_allowed(verified.email, connection.allowed_domains)
 
 
 async def test_oidc_connection(
@@ -344,96 +265,6 @@ async def test_oidc_connection(
         "jwks_uri": metadata.jwks_uri,
         "userinfo_endpoint": metadata.userinfo_endpoint,
     }
-
-
-async def _resolve_organization_sso_user(
-    db: AsyncSession,
-    *,
-    connection: SsoConnectionSnapshot,
-    verified: VerifiedSsoIdentity,
-    user: User | None,
-) -> User:
-    if connection.organization_id is None:
-        raise HTTPException(status_code=400, detail="SSO organization is missing.")
-    has_pending_invitation = (
-        await invitation_store.has_live_pending_invitation_for_organization_email(
-            db,
-            organization_id=connection.organization_id,
-            email=verified.email or "",
-        )
-    )
-    if user is None:
-        if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER and not has_pending_invitation:
-            raise HTTPException(status_code=403, detail="SSO user is not a team member.")
-        user = await create_auth_user(
-            db,
-            email=verified.email or "",
-            display_name=verified.display_name,
-            avatar_url=verified.avatar_url,
-        )
-        await ensure_default_organization_for_account(db, user)
-    _ensure_active_user(user)
-    membership = await organization_store.get_active_membership(
-        db,
-        organization_id=connection.organization_id,
-        user_id=user.id,
-    )
-    if membership is not None:
-        return user
-    if has_pending_invitation:
-        accepted, _error = await invitation_store.accept_pending_invitation_for_organization_email(
-            db,
-            organization_id=connection.organization_id,
-            authenticated_user_id=user.id,
-            authenticated_email=verified.email or "",
-        )
-        if accepted is not None:
-            await maybe_create_organization_seat_adjustment(
-                db,
-                organization_id=accepted.organization.id,
-                membership_id=accepted.membership.id,
-            )
-            return user
-    if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
-        raise HTTPException(status_code=403, detail="SSO user is not a team member.")
-    membership = await sso_store.ensure_sso_organization_membership(
-        db,
-        organization_id=connection.organization_id,
-        user_id=user.id,
-        role=connection.default_role or ORGANIZATION_ROLE_MEMBER,
-    )
-    await maybe_create_organization_seat_adjustment(
-        db,
-        organization_id=connection.organization_id,
-        membership_id=membership.id,
-    )
-    return user
-
-
-async def _attach_sso_identity(
-    db: AsyncSession,
-    *,
-    user: User,
-    connection: SsoConnectionSnapshot,
-    verified: VerifiedSsoIdentity,
-) -> None:
-    await sso_store.upsert_sso_identity_for_user(
-        db,
-        user_id=user.id,
-        organization_id=connection.organization_id,
-        connection_id=connection.id,
-        connection_key=connection.connection_key,
-        protocol=connection.protocol.value,
-        provider_subject=verified.provider_subject,
-        email=verified.email,
-        email_verified=verified.email_verified,
-        display_name=verified.display_name,
-    )
-    if verified.display_name and not user.display_name:
-        user.display_name = verified.display_name
-    if verified.avatar_url and not user.avatar_url:
-        user.avatar_url = verified.avatar_url
-    await db.flush()
 
 
 async def _connection_for_start(
@@ -573,11 +404,6 @@ def _email_hint_allowed_for_discovery(email: str, allowed_domains: tuple[str, ..
     if not allowed_domains:
         return True
     return email_domain(email) in {domain.lower() for domain in allowed_domains}
-
-
-def _ensure_active_user(user: User) -> None:
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="User is inactive.")
 
 
 def _raise_sso_integration_error(exc: SsoIntegrationError) -> NoReturn:

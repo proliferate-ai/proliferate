@@ -44,7 +44,7 @@ export const PillControlButton = forwardRef<
   );
   const baseClassName = iconOnly
     ? "h-7 w-7 shrink-0 rounded-full px-0 py-0 text-[color:var(--color-muted-foreground)] hover:bg-accent hover:text-[color:var(--color-foreground)] data-[state=open]:bg-accent data-[state=open]:text-[color:var(--color-foreground)]"
-    : "h-7 min-w-0 max-w-full justify-start gap-1 rounded-full px-2 py-0 text-sm leading-[18px] text-[color:var(--color-muted-foreground)] hover:bg-accent hover:text-[color:var(--color-foreground)] data-[state=open]:bg-accent data-[state=open]:text-[color:var(--color-foreground)]";
+    : "h-7 min-w-0 max-w-full justify-start gap-1 rounded-full px-2 py-0 text-ui text-[color:var(--color-muted-foreground)] hover:bg-accent hover:text-[color:var(--color-foreground)] data-[state=open]:bg-accent data-[state=open]:text-[color:var(--color-foreground)]";
 
   return (
     <Button

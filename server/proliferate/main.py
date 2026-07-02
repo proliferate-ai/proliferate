@@ -4,6 +4,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -47,34 +49,34 @@ from proliferate.server.billing.api import router as billing_router
 #     stop_billing_reconciler,
 # )
 from proliferate.server.catalogs.api import router as catalogs_router
-
-# AGENT AUTH PARKED: retarget away from sandbox_profile/cloud_targets before remounting.
-# from proliferate.server.cloud.agent_auth.reconciler import (
-#     start_agent_gateway_reconciler,
-#     stop_agent_gateway_reconciler,
-# )
+from proliferate.server.cloud.agent_gateway.worker import (
+    start_agent_gateway_enrollment_backfill,
+    start_agent_gateway_llm_topups,
+    start_agent_gateway_usage_import,
+    stop_agent_gateway_enrollment_backfill,
+    stop_agent_gateway_llm_topups,
+    stop_agent_gateway_usage_import,
+)
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.cloud.github_app.api import callback_router as github_app_callback_router
 from proliferate.server.cloud.github_app.api import (
     setup_callback_router as github_app_setup_callback_router,
 )
-
-# MOBILITY PARKED: old exposure/handoff cleanup imports deleted models.
-# from proliferate.server.cloud.mobility.reconciler import (
-#     start_mobility_cleanup_reconciler,
-#     stop_mobility_cleanup_reconciler,
-# )
-# SETUP MONITOR PARKED: old cloud_workspace_setup_run table was removed.
-# from proliferate.server.cloud.runtime.setup_monitor import (
-#     start_cloud_setup_monitor,
-#     stop_cloud_setup_monitor,
-# )
+from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
+from proliferate.server.meta import router as meta_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
+from proliferate.server.organizations.registration_api import router as self_registration_router
+from proliferate.server.organizations.registration_pages import (
+    router as registration_pages_router,
+)
 from proliferate.server.organizations.sso.api import router as organization_sso_router
+from proliferate.server.setup.api import router as first_run_setup_router
+from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
+from proliferate.server.version import server_version
 
 # SUPPORT PARKED: diagnostics imports deleted target runtime access models.
 # from proliferate.server.support.api import router as support_router
@@ -136,6 +138,55 @@ def _validate_support_tracker_configuration() -> None:
         )
 
 
+# Fragments that mark a request-body field as secret-bearing. FastAPI's default
+# 422 handler echoes the offending input verbatim, so a single unrelated invalid
+# field (e.g. a missing displayName) would otherwise reflect the whole body —
+# including a plaintext API-key secret — back to the caller.
+_SENSITIVE_INPUT_FRAGMENTS = ("secret", "password", "token", "payload", "ciphertext")
+_REDACTED_INPUT = "[redacted]"
+
+
+def _is_sensitive_field(key: object) -> bool:
+    return isinstance(key, str) and any(
+        fragment in key.lower() for fragment in _SENSITIVE_INPUT_FRAGMENTS
+    )
+
+
+def _redact_validation_input(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: (_REDACTED_INPUT if _is_sensitive_field(key) else _redact_validation_input(child))
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_validation_input(child) for child in value]
+    return value
+
+
+def _redacts_entire_body(request: Request) -> bool:
+    # The agent-gateway key-create endpoint accepts a raw secret in the body;
+    # redact its echoed input wholesale so no malformed shape can leak it.
+    return request.method == "POST" and request.url.path.endswith("/agent-gateway/api-keys")
+
+
+async def _validation_error_handler(
+    request: Request,
+    error: RequestValidationError,
+) -> JSONResponse:
+    redact_all = _redacts_entire_body(request)
+    errors: list[dict[str, object]] = []
+    for raw in error.errors():
+        item = dict(raw)
+        if "input" in item:
+            loc = item.get("loc") or ()
+            if redact_all or (loc and _is_sensitive_field(loc[-1])):
+                item["input"] = _REDACTED_INPUT
+            else:
+                item["input"] = _redact_validation_input(item["input"])
+        errors.append(item)
+    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": errors}))
+
+
 async def _proliferate_error_handler(
     _request: Request,
     error: ProliferateError,
@@ -170,27 +221,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Start the local Postgres container with `make server-db-up` and run "
             "`make server-migrate` before starting the API."
         ) from exc
+    # Single-org mode only (no-op otherwise): mint the first-run setup token
+    # while the user table is empty, or clean it up once the instance is
+    # claimed.
+    await ensure_first_run_setup_token()
+    # Reconcile the built-in integration seed definitions into the database.
+    async with db_engine.async_session_factory() as db, db.begin():
+        await sync_seed_definitions(db)
     if settings.cloud_billing_mode in {"observe", "enforce"}:
         # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
         # start_billing_reconciler()
         pass
-    # AGENT AUTH PARKED.
-    # start_agent_gateway_reconciler()
-    # MOBILITY PARKED.
-    # start_mobility_cleanup_reconciler()
-    # SETUP MONITOR PARKED.
-    # start_cloud_setup_monitor()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
+    agent_gateway_backfill_task = await start_agent_gateway_enrollment_backfill()
+    agent_gateway_usage_import_task = await start_agent_gateway_usage_import()
+    agent_gateway_topup_task = await start_agent_gateway_llm_topups()
     try:
         yield
     finally:
+        await stop_agent_gateway_llm_topups(agent_gateway_topup_task)
+        await stop_agent_gateway_usage_import(agent_gateway_usage_import_task)
+        await stop_agent_gateway_enrollment_backfill(agent_gateway_backfill_task)
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        # SETUP MONITOR PARKED.
-        # await stop_cloud_setup_monitor()
-        # MOBILITY PARKED.
-        # await stop_mobility_cleanup_reconciler()
-        # AGENT AUTH PARKED.
-        # await stop_agent_gateway_reconciler()
         # BILLING RECONCILER PARKED.
         # await stop_billing_reconciler()
         flush_server_sentry()
@@ -203,7 +255,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=APP_NAME,
-        version="0.1.0",
+        version=server_version(),
         lifespan=lifespan,
     )
 
@@ -216,6 +268,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestTelemetryMiddleware)
     app.add_middleware(RequestContextMiddleware)
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(ProliferateError, _proliferate_error_handler)
 
     # ── Auth: users/me (read-only profile) ──
@@ -234,6 +287,17 @@ def create_app() -> FastAPI:
 
     # ── Domain routes ──
     app.include_router(health_router, prefix=api_prefix, tags=["health"])
+    app.include_router(meta_router, prefix=api_prefix, tags=["meta"])
+    if settings.single_org_mode:
+        # First-run claim page. Exists only in single-org deployments; hosted
+        # production never mounts it, and it 404s once the instance is claimed.
+        app.include_router(first_run_setup_router, prefix=api_prefix, tags=["setup"])
+        # Invited self-registration (invite-as-allowlist). Single-org only:
+        # hosted deployments never expose password registration.
+        app.include_router(self_registration_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+        # Server-rendered /register page: the HTML sibling of the registration
+        # route above, for the invite link an admin shares with a teammate.
+        app.include_router(registration_pages_router, prefix=api_prefix, tags=["auth"])
     app.include_router(organization_join_router, prefix=api_prefix, tags=["organizations"])
     app.include_router(artifact_runtime_router, prefix=api_prefix, tags=["artifact_runtime"])
     app.include_router(

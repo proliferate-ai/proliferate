@@ -66,7 +66,7 @@ export function TurnMetadata({
             type="button"
             variant="unstyled"
             size="unstyled"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-base font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <FileIcon className="size-3" />
             <span>{badge.filename}</span>

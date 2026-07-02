@@ -184,11 +184,11 @@ function WorkspaceCommandPaletteRow({ entry }: { entry: CommandPaletteEntry }) {
         )}
       </span>
       {entry.disabledReason ? (
-        <span className="shrink-0 truncate text-[11px] text-muted-foreground">
+        <span className="shrink-0 truncate text-base text-muted-foreground">
           {entry.disabledReason}
         </span>
       ) : entry.shortcut ? (
-        <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-[11px] leading-3 text-muted-foreground">
+        <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-base leading-3 text-muted-foreground">
           {entry.shortcut}
         </span>
       ) : null}

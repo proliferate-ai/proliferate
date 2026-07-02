@@ -2,6 +2,7 @@ import type {
   CreatePullRequestRequest,
   CreatePullRequestResponse,
   CurrentPullRequestResponse,
+  RepoPullRequestStatusesResponse,
 } from "../types/hosting.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
@@ -25,6 +26,18 @@ export class PullRequestsClient {
     return this.transport.post<CreatePullRequestResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/hosting/pull-requests`,
       input,
+    );
+  }
+
+  async listForRepoRoot(
+    repoRootId: string,
+    params?: { refresh?: boolean },
+    options?: AnyHarnessRequestOptions,
+  ): Promise<RepoPullRequestStatusesResponse> {
+    const refresh = params?.refresh ? "1" : "0";
+    return this.transport.get<RepoPullRequestStatusesResponse>(
+      `/v1/repo-roots/${encodeURIComponent(repoRootId)}/hosting/pull-requests?refresh=${refresh}`,
+      options,
     );
   }
 }

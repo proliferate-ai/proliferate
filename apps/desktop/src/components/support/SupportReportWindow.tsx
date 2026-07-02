@@ -3,6 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { CloudUpload, FileText, Folder, LifeBuoy, X } from "@proliferate/ui/icons";
 import {
@@ -122,7 +123,7 @@ export function SupportReportWindow() {
                     <FileText className="size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium leading-5">{attachment.fileName}</div>
-                      <div className="text-[11px] leading-4 text-muted-foreground">
+                      <div className="text-base text-muted-foreground">
                         {attachment.contentType || "file"} · {formatBytes(attachment.sizeBytes)}
                       </div>
                     </div>
@@ -171,7 +172,7 @@ export function SupportReportWindow() {
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium leading-5">{option.label}</span>
                       {description ? (
-                        <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                        <span className="block truncate text-base text-muted-foreground">
                           {description}
                         </span>
                       ) : null}
@@ -182,11 +183,11 @@ export function SupportReportWindow() {
             </div>
 
             {scopeKind === "choose_workspace" && snapshot?.workspaceOptions.length ? (
-              <div className="space-y-1 rounded-xl border border-border/70 bg-popover p-1 shadow-popover">
+              <div className={`space-y-1 ${POPOVER_FRAME_CLASS} p-1`}>
                 {snapshot.workspaceOptions.map((workspace) => (
                   <Label
                     key={workspace.id}
-                    className="mb-0 flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-popover-accent"
+                    className="mb-0 flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-list-hover"
                   >
                     <Checkbox
                       name="support-workspace"
@@ -196,7 +197,7 @@ export function SupportReportWindow() {
                     <Folder className="size-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium leading-5">{workspace.label}</span>
-                      <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                      <span className="block truncate text-base text-muted-foreground">
                         {[workspace.location, workspace.branch, workspace.status]
                           .filter(Boolean)
                           .join(" · ")}
@@ -218,7 +219,7 @@ export function SupportReportWindow() {
               <span className="block font-medium leading-5">
                 Include my message in the public issue
               </span>
-              <span className="block text-[11px] leading-4 text-muted-foreground">
+              <span className="block text-base text-muted-foreground">
                 Your message may appear on GitHub. Do not include secrets or API keys.
                 Diagnostics and files stay private.
               </span>

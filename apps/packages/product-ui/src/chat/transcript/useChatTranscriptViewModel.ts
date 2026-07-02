@@ -97,9 +97,16 @@ export function useChatTranscriptViewModel({
         forceWorking: true,
       }) ?? null
     : null;
+  const visibleOptimisticPromptId = visibleOptimisticPrompt?.promptId ?? null;
   const visibleOutboxEntries = useMemo(
-    () => renderableOutboxEntriesForTranscript(outboxEntries, transcript),
-    [outboxEntries, transcript],
+    () => renderableOutboxEntriesForTranscript(outboxEntries, transcript)
+      // The same prompt must render exactly once: if the session-level
+      // optimistic prompt already shows it, skip its outbox row.
+      .filter((entry) =>
+        visibleOptimisticPromptId === null
+        || entry.clientPromptId !== visibleOptimisticPromptId,
+      ),
+    [outboxEntries, transcript, visibleOptimisticPromptId],
   );
   const outboxStartedAtByPromptId = useMemo(
     () => buildOutboxStartedAtByPromptId(outboxEntries),

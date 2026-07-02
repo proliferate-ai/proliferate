@@ -14,8 +14,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
-use crate::domains::agents::auth::{AgentAuthSelectionRequired, AgentAuthService};
-use crate::domains::runtime_config::service::RuntimeConfigService;
+use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -32,9 +31,9 @@ mod pending_prompts;
 mod prompt;
 mod replay;
 mod startup;
-pub(crate) mod view;
 #[cfg(test)]
 mod tests;
+pub(crate) mod view;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
@@ -45,11 +44,9 @@ pub struct SessionRuntime {
     session_data_cipher: Option<SessionDataCipher>,
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
-    runtime_config_service: Arc<RuntimeConfigService>,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-    agent_auth_service: Arc<AgentAuthService>,
 }
 
 impl SessionRuntime {
@@ -69,12 +66,15 @@ pub enum CreateAndStartSessionError {
         agent_kind: String,
         mode_id: String,
     },
-    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     WorkspaceNotFound,
     WorkspaceSingleSession {
         session_id: String,
     },
     MissingDataKey,
+    /// Agent-auth route resolution refused the launch (fail-closed selection
+    /// missing, malformed state file, unsupported route, ...). Typed so the
+    /// API layer surfaces the stable machine code (`AGENT_ROUTE_*`).
+    RouteAuth(RouteAuthError),
     StartFailed(anyhow::Error),
     Internal(anyhow::Error),
 }
@@ -84,9 +84,10 @@ pub enum EnsureLiveSessionError {
     SessionNotFound(String),
     SessionClosed,
     RestartRequired(String),
-    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     Invalid(String),
     MissingDataKey,
+    /// See [`CreateAndStartSessionError::RouteAuth`].
+    RouteAuth(RouteAuthError),
     Internal(anyhow::Error),
 }
 
@@ -248,7 +249,8 @@ pub(super) enum StartSessionError {
     Closed,
     MissingDataKey,
     RestartRequired(String),
-    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
+    /// Agent-auth route resolution refused the launch (fail-closed, spec §3).
+    RouteAuth(RouteAuthError),
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
 }
@@ -263,11 +265,9 @@ impl SessionRuntime {
         session_data_cipher: Option<SessionDataCipher>,
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
-        runtime_config_service: Arc<RuntimeConfigService>,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-        agent_auth_service: Arc<AgentAuthService>,
     ) -> Self {
         Self {
             session_service,
@@ -278,11 +278,9 @@ impl SessionRuntime {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
-            runtime_config_service,
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
-            agent_auth_service,
         }
     }
 

@@ -3,8 +3,6 @@ import { configuredAgentEnvVarsKey } from "./query-keys";
 import {
   useTauriCredentialsActions,
 } from "@/hooks/access/tauri/use-credentials-actions";
-import { credentialProviderForEnvVar } from "@/lib/domain/cloud/runtime-input-sync";
-import { emitRuntimeInputSyncEvent } from "@/hooks/cloud/lifecycle/runtime-input-sync-events";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
 
 const EMPTY_CONFIGURED_ENV_VARS: string[] = [];
@@ -44,16 +42,9 @@ export function useLocalAgentCredentials() {
     mutationFn: async ({ name, value }: { name: string; value: string }) => {
       await setEnvVarSecret(name, value);
     },
-    onSuccess: async (_result, variables) => {
+    onSuccess: async () => {
       await invalidateConfiguredEnvVars();
       markRestartRequired();
-      const provider = credentialProviderForEnvVar(variables.name);
-      if (provider) {
-        emitRuntimeInputSyncEvent({
-          trigger: "credential_mutation",
-          descriptors: [{ kind: "credential", provider }],
-        });
-      }
     },
   });
 
@@ -61,16 +52,9 @@ export function useLocalAgentCredentials() {
     mutationFn: async (name: string) => {
       await deleteEnvVarSecret(name);
     },
-    onSuccess: async (_result, name) => {
+    onSuccess: async () => {
       await invalidateConfiguredEnvVars();
       markRestartRequired();
-      const provider = credentialProviderForEnvVar(name);
-      if (provider) {
-        emitRuntimeInputSyncEvent({
-          trigger: "credential_mutation",
-          descriptors: [{ kind: "credential", provider }],
-        });
-      }
     },
   });
 

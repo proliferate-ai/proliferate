@@ -12,9 +12,9 @@ mod telemetry_file_logging;
 mod workspace_activity_indicator;
 
 use commands::{
-    anonymous_telemetry, cloud_worker, config, diagnostics as diagnostics_commands,
-    google_workspace_mcp, keychain, process, runtime, shell, ssh_tunnel, support, window_chrome,
-    workspace_scratch,
+    anonymous_telemetry, cloud_worker, config, desktop_identity,
+    diagnostics as diagnostics_commands, google_workspace_mcp, keychain, process, runtime, shell,
+    ssh_tunnel, support, window_chrome, workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -229,6 +229,7 @@ pub fn run() {
             runtime::get_runtime_info,
             runtime::restart_runtime,
             cloud_worker::ensure_desktop_dispatch_worker,
+            desktop_identity::get_desktop_install_id,
             workspace_scratch::read_workspace_scratch_pad,
             workspace_scratch::write_workspace_scratch_pad,
             quit_flow::set_running_agent_count,
@@ -262,8 +263,6 @@ pub fn run() {
             ssh_tunnel::probe_ssh_target_connection,
             ssh_tunnel::ensure_ssh_anyharness_tunnel,
             keychain::list_configured_env_var_names,
-            keychain::list_syncable_agent_auth_credentials,
-            keychain::export_syncable_agent_auth_credential,
             keychain::set_env_var_secret,
             keychain::delete_env_var_secret,
             keychain::get_auth_session,

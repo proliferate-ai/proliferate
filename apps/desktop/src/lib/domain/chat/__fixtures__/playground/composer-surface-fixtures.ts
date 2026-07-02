@@ -89,7 +89,6 @@ export function createPlaygroundModelSelectorProps(): ModelSelectorProps {
     ],
     hasAgents: true,
     isLoading: false,
-    notReadyAgents: [],
     onSelect: () => undefined,
   };
 }

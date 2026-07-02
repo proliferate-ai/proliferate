@@ -57,7 +57,7 @@ copy_unmanaged_env_values() {
     return 0
   fi
 
-  managed_pattern="^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|SITE_ADDRESS|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)$"
+  managed_pattern="^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|SITE_ADDRESS|API_BASE_URL|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)$"
 
   if [[ -n "$override_file" && -f "$override_file" ]]; then
     awk -F= -v managed_pattern="$managed_pattern" '
@@ -118,6 +118,26 @@ resolve_instance_public_ip() {
   exit 1
 }
 
+# Compose a URL from SITE_ADDRESS. Operators may set SITE_ADDRESS with or
+# without a scheme (Caddy accepts both); Caddy serves https unless the
+# operator configured an explicit http:// site.
+site_url_from_address() {
+  local address="$1"
+  local path="$2"
+  local scheme="https"
+  local host="$address"
+
+  if [[ "$host" == http://* ]]; then
+    scheme="http"
+    host="${host#http://}"
+  elif [[ "$host" == https://* ]]; then
+    host="${host#https://}"
+  fi
+  host="${host%/}"
+
+  printf '%s://%s%s' "$scheme" "$host" "$path"
+}
+
 random_hex() {
   local bytes="$1"
 
@@ -171,7 +191,15 @@ if [[ -z "$SITE_ADDRESS" ]]; then
 fi
 
 if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
-  PUBLIC_HEALTHCHECK_URL="https://${SITE_ADDRESS}/health"
+  PUBLIC_HEALTHCHECK_URL="$(site_url_from_address "$SITE_ADDRESS" /health)"
+fi
+
+# The server embeds API_BASE_URL in configuration it pushes to workspaces.
+# Operators can set it explicitly; otherwise derive it from SITE_ADDRESS so
+# the sslip fallback (where SITE_ADDRESS is resolved at runtime) works too.
+API_BASE_URL="$(read_config_env_value API_BASE_URL)"
+if [[ -z "$API_BASE_URL" ]]; then
+  API_BASE_URL="$(site_url_from_address "$SITE_ADDRESS" "")"
 fi
 
 POSTGRES_PASSWORD="$(resolve_value \
@@ -201,6 +229,7 @@ EOF
   copy_unmanaged_env_values "$STATIC_ENV_FILE" "$LOCAL_ENV_FILE"
   copy_unmanaged_env_values "$LOCAL_ENV_FILE"
   printf 'SITE_ADDRESS=%s\n' "$SITE_ADDRESS"
+  printf 'API_BASE_URL=%s\n' "$API_BASE_URL"
   printf 'PROLIFERATE_PUBLIC_HEALTHCHECK_URL=%s\n' "$PUBLIC_HEALTHCHECK_URL"
   printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
   printf 'DATABASE_URL=postgresql+asyncpg://%s:%s@db:5432/%s\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB"

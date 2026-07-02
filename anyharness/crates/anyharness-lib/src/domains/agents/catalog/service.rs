@@ -18,9 +18,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use super::schema::{
-    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource, AgentCatalogAuthContext,
-    AgentCatalogDocument, AgentCatalogHarnessPins, AgentCatalogModel, AgentCatalogModelControl,
-    AgentCatalogPinTarget,
+    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource,
+    AgentCatalogAuthContext, AgentCatalogDocument, AgentCatalogHarnessPins, AgentCatalogModel,
+    AgentCatalogModelControl, AgentCatalogPinTarget,
 };
 use super::sync::CatalogSyncService;
 use crate::domains::agents::auth::context::ActiveAuthContexts;
@@ -84,9 +84,9 @@ fn project_source(pin: &AgentCatalogArtifactPin) -> Option<ResolvedPinSource> {
             .collect()
     };
     Some(match pin.source.as_ref()? {
-        AgentCatalogArtifactSource::Binary { targets: t } => {
-            ResolvedPinSource::Binary { targets: targets(t) }
-        }
+        AgentCatalogArtifactSource::Binary { targets: t } => ResolvedPinSource::Binary {
+            targets: targets(t),
+        },
         AgentCatalogArtifactSource::Archive { targets: t, args } => ResolvedPinSource::Archive {
             targets: targets(t),
             args: args.clone(),

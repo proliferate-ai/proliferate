@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
@@ -17,10 +17,20 @@ const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:disableTranscript
 export function VirtualTranscriptRowList(props: TranscriptRowListBaseProps) {
   const { activeSessionId, rows, selectedWorkspaceId } = props;
   const [virtualizationMode] = useState(readTranscriptVirtualizationMode);
-  const virtualizationEnabled = resolveTranscriptVirtualizationEnabled({
-    mode: virtualizationMode,
-    rowCount: rows.length,
-  });
+  // Latch the auto decision per session: swapping list implementations
+  // mid-session remounts the whole transcript DOM, which reads as a full-page
+  // jump right as a chat crosses the row threshold. A session that starts
+  // small stays on the full list until re-entered; the full list stays
+  // correct (just less efficient) at larger row counts.
+  const latchedSessionRef = useRef<{ sessionId: string; enabled: boolean } | null>(null);
+  const latched = latchedSessionRef.current;
+  const virtualizationEnabled = latched?.sessionId === activeSessionId
+    ? latched.enabled
+    : resolveTranscriptVirtualizationEnabled({
+        mode: virtualizationMode,
+        rowCount: rows.length,
+      });
+  latchedSessionRef.current = { sessionId: activeSessionId, enabled: virtualizationEnabled };
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   useLayoutEffect(() => {
     setFallbackReason(null);

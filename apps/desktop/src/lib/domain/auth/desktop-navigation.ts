@@ -66,7 +66,12 @@ export function desktopNavigationTarget(url: string): string | null {
     (parsed.hostname === "integrations" || parsed.hostname === "plugins" || parsed.hostname === "powers")
     && (parsed.pathname === "" || parsed.pathname === "/")
   ) {
-    return parsed.search ? `/integrations${parsed.search}` : "/integrations";
+    // Integration OAuth browser returns (and legacy plugins/powers links) land on
+    // the user Integrations pane, carrying flowId/status/failureCode so the pane
+    // can toast the flow outcome on arrival.
+    const params = new URLSearchParams(parsed.search);
+    params.set("section", "integrations");
+    return `/settings?${params.toString()}`;
   }
 
   if (parsed.hostname === "workspaces") {

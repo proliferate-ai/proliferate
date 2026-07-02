@@ -18,7 +18,52 @@ export type HomeOnboardingIcon = "github" | "settings" | "sliders";
 export interface HomeOnboardingCardModel {
   id: HomeOnboardingActionId;
   title: string;
+  description: string;
   icon: HomeOnboardingIcon;
+}
+
+/**
+ * Model-probe onboarding card state (UX spec §10). "probing" while the
+ * harness reconcile/model discovery runs, "done" once launchable models are
+ * known, "none" when no provider is connected, "hidden" when dismissed or
+ * still loading.
+ */
+export type HomeModelProbeCardState =
+  | { kind: "probing"; harnessKinds: string[] }
+  | { kind: "done"; modelCount: number; harnessKinds: string[] }
+  | { kind: "none" }
+  | { kind: "hidden" };
+
+export function resolveHomeModelProbeCardState(args: {
+  dismissed: boolean;
+  agentsLoading: boolean;
+  isReconciling: boolean;
+  harnessKinds: readonly string[];
+  modelCount: number;
+  /** When the "set up agents" card is already shown, the probe card's
+   * "none" state would duplicate it — suppress it. */
+  agentSetupCardVisible: boolean;
+}): HomeModelProbeCardState {
+  if (args.dismissed) {
+    return { kind: "hidden" };
+  }
+  if (args.isReconciling) {
+    return { kind: "probing", harnessKinds: [...args.harnessKinds] };
+  }
+  if (args.agentsLoading) {
+    return { kind: "hidden" };
+  }
+  if (args.modelCount > 0) {
+    return {
+      kind: "done",
+      modelCount: args.modelCount,
+      harnessKinds: [...args.harnessKinds],
+    };
+  }
+  if (args.agentSetupCardVisible) {
+    return { kind: "hidden" };
+  }
+  return { kind: "none" };
 }
 
 export interface HomeRepositoryIdentity {
@@ -93,6 +138,7 @@ export function buildHomeOnboardingCards(args: {
     cards.push({
       id: "add-repository",
       title: HOME_SCREEN_LABELS.addGitHubRepositoryTitle,
+      description: HOME_SCREEN_LABELS.addGitHubRepositoryDescription,
       icon: "github",
     });
   }
@@ -101,6 +147,7 @@ export function buildHomeOnboardingCards(args: {
     cards.push({
       id: "agent-defaults",
       title: HOME_SCREEN_LABELS.configureDefaultHarnessesTitle,
+      description: HOME_SCREEN_LABELS.configureDefaultHarnessesDescription,
       icon: "sliders",
     });
   }
@@ -109,6 +156,7 @@ export function buildHomeOnboardingCards(args: {
     cards.push({
       id: "repository-settings",
       title: HOME_SCREEN_LABELS.configureRepositoryTitle,
+      description: HOME_SCREEN_LABELS.configureRepositoryDescription,
       icon: "settings",
     });
   }

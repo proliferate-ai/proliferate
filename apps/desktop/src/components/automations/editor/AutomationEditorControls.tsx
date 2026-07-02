@@ -15,7 +15,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
@@ -63,7 +63,7 @@ interface AutomationTemplatePopoverProps {
 
 type AutomationTemplateOption = (typeof AUTOMATION_TEMPLATE_OPTIONS)[number];
 
-const POPOVER_CLASS = "w-72 rounded-xl border border-border bg-popover p-1 shadow-floating";
+const POPOVER_CLASS = `w-72 ${POPOVER_FRAME_CLASS} p-1`;
 
 export function AutomationSelectPopover({
   label,
@@ -155,7 +155,7 @@ export function AutomationSchedulePopover({
         />
       )}
       side="top"
-      className="w-80 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      className={`w-80 ${POPOVER_FRAME_CLASS} p-1`}
     >
       {() => (
         <div className="space-y-2">
@@ -241,7 +241,7 @@ export function AutomationTemplatePopover({ onSelectTemplate }: AutomationTempla
       )}
       side="bottom"
       align="end"
-      className="w-96 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      className={`w-96 ${POPOVER_FRAME_CLASS} p-1`}
     >
       {(close) => (
         <div className="max-h-80 overflow-y-auto">

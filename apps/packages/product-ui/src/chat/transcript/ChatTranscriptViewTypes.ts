@@ -53,7 +53,7 @@ export interface ChatTranscriptTurnStatusInput {
 export interface ChatTranscriptViewProps {
   state: ChatTranscriptState;
   outboxActions?: ChatTranscriptOutboxActions;
-  onScrollSample?: () => void;
+  onScrollSample?: (sample?: import("./useTranscriptStickToBottom").TranscriptScrollSample) => void;
   renderPendingPromptRow: (input: ChatTranscriptPendingPromptRenderInput) => ReactNode;
   renderTurnRow: (input: ChatTranscriptTurnRowRenderInput) => ReactNode;
   renderPendingPromptTrailingStatus?: (input: ChatTranscriptPendingStatusInput) => ReactNode;

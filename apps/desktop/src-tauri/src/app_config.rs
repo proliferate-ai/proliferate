@@ -86,8 +86,40 @@ pub fn default_anyharness_runtime_home_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("anyharness"))
 }
 
+/// The runtime home the local AnyHarness instance is actually using.
+///
+/// Dev profiles launch the harness with `--runtime-home
+/// ~/.proliferate-local/runtimes/<profile>`, which the dev tooling also
+/// exports as `ANYHARNESS_DEV_RUNTIME_HOME` so anything the app writes for the
+/// harness (for example the worker's integration gateway dotfile) lands where
+/// the harness actually looks. Falls back to the packaged default.
+pub fn anyharness_runtime_home_path() -> Result<PathBuf, String> {
+    if let Some(path) = dev_runtime_home_override() {
+        return Ok(path);
+    }
+    default_anyharness_runtime_home_path()
+}
+
+fn dev_runtime_home_override() -> Option<PathBuf> {
+    if !native_dev_profile() {
+        return None;
+    }
+    dev_runtime_home_override_from(std::env::var("ANYHARNESS_DEV_RUNTIME_HOME").ok())
+}
+
+fn dev_runtime_home_override_from(value: Option<String>) -> Option<PathBuf> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
 pub fn anonymous_telemetry_install_id_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("install_id"))
+}
+
+pub fn desktop_install_id_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("desktop_install_id"))
 }
 
 pub fn anonymous_telemetry_state_path() -> Result<PathBuf, String> {
@@ -198,6 +230,26 @@ mod tests {
         std::env::temp_dir()
             .join(format!("proliferate-app-config-{unique}"))
             .join(file_name)
+    }
+
+    #[test]
+    fn dev_runtime_home_override_prefers_non_empty_env_value() {
+        assert_eq!(
+            dev_runtime_home_override_from(Some(
+                "/Users/dev/.proliferate-local/runtimes/main".to_string()
+            )),
+            Some(PathBuf::from("/Users/dev/.proliferate-local/runtimes/main"))
+        );
+        assert_eq!(
+            dev_runtime_home_override_from(Some("  /trimmed/home  ".to_string())),
+            Some(PathBuf::from("/trimmed/home"))
+        );
+        assert_eq!(
+            dev_runtime_home_override_from(Some("   ".to_string())),
+            None
+        );
+        assert_eq!(dev_runtime_home_override_from(Some(String::new())), None);
+        assert_eq!(dev_runtime_home_override_from(None), None);
     }
 
     #[test]

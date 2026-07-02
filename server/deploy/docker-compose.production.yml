@@ -49,6 +49,9 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}:/opt/proliferate/bin:ro
+      # First-run setup token plaintext lives here until the instance is
+      # claimed. A named volume so restarts and image updates do not rotate it.
+      - setup_state:/var/lib/proliferate/setup
     depends_on:
       db:
         condition: service_healthy
@@ -69,3 +72,4 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  setup_state:

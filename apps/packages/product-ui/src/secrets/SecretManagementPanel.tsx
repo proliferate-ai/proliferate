@@ -3,8 +3,8 @@ import { KeyRound, Plus } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsCard } from "../settings/SettingsCard";
-import { SettingsCardRow } from "../settings/SettingsCardRow";
+import { SettingsSection } from "../settings/SettingsSection";
+import { SettingsRow } from "../settings/SettingsRow";
 import { SecretDeleteDialog, type SecretDeleteDialogState } from "./SecretDeleteDialog";
 import {
   SecretEditorDialog,
@@ -98,8 +98,8 @@ export function SecretManagementPanel({
   }
 
   return (
-    <SettingsCard>
-      <SettingsCardRow
+    <SettingsSection>
+      <SettingsRow
         label={(
           <span className="flex items-center gap-2">
             <KeyRound size={14} className="text-muted-foreground" />
@@ -124,9 +124,9 @@ export function SecretManagementPanel({
             </Button>
           ) : null}
         </div>
-      </SettingsCardRow>
+      </SettingsRow>
 
-      <SettingsCardRow label="Environment variables" className="sm:items-start">
+      <SettingsRow label="Environment variables" className="sm:items-start">
         <div className="w-full max-w-xl">
           <SecretList
             emptyLabel="No environment variables yet."
@@ -136,9 +136,9 @@ export function SecretManagementPanel({
             onDelete={(item) => setDeleteState({ kind: "env", nameOrPath: item.label })}
           />
         </div>
-      </SettingsCardRow>
+      </SettingsRow>
 
-      <SettingsCardRow label="Files" className="sm:items-start">
+      <SettingsRow label="Files" className="sm:items-start">
         <div className="w-full max-w-xl">
           <SecretList
             emptyLabel="No file secrets yet."
@@ -148,14 +148,14 @@ export function SecretManagementPanel({
             onDelete={(item) => setDeleteState({ kind: "file", nameOrPath: item.label })}
           />
         </div>
-      </SettingsCardRow>
+      </SettingsRow>
 
       {materialization?.lastError || error ? (
-        <SettingsCardRow label="Status">
+        <SettingsRow label="Status">
           <div className="max-w-xl text-sm text-destructive">
             {error ?? materialization?.lastError}
           </div>
-        </SettingsCardRow>
+        </SettingsRow>
       ) : null}
 
       <SecretEditorDialog
@@ -174,7 +174,7 @@ export function SecretManagementPanel({
         onClose={() => setDeleteState(null)}
         onConfirm={handleDeleteConfirm}
       />
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 

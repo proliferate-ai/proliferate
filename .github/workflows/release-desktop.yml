@@ -638,6 +638,7 @@ jobs:
             version="${GITHUB_REF_NAME#desktop-v}"
           fi
           : "${version:?Missing desktop release version.}"
+          echo "DESKTOP_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
           node scripts/generate-updater-manifest.mjs \
             --version "$version" \
             --artifacts-dir all-artifacts \
@@ -674,14 +675,32 @@ jobs:
 
       - name: Upload manifest to S3
         run: |
+          set -euo pipefail
+          BUCKET="${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
           aws s3 cp latest.json \
-            "s3://${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}/desktop/stable/latest.json" \
+            "s3://${BUCKET}/desktop/stable/latest.json" \
             --content-type "application/json" \
             --cache-control "max-age=300"
           aws s3 cp installers.json \
-            "s3://${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}/desktop/stable/installers.json" \
+            "s3://${BUCKET}/desktop/stable/installers.json" \
             --content-type "application/json" \
             --cache-control "max-age=300"
+          # Versioned snapshot the self-hosted server's /desktop/updater/latest.json
+          # 302-redirects to (desktop/stable/<version>/latest.json). Immutable, so
+          # cache it long and skip CloudFront invalidation. Because edges may hold
+          # it for up to a year, never overwrite an existing key: a same-version
+          # pipeline re-run would leave edges serving stale signatures. Skip the
+          # upload instead so re-runs stay idempotent.
+          : "${DESKTOP_RELEASE_VERSION:?Missing desktop release version.}"
+          VERSIONED_KEY="desktop/stable/${DESKTOP_RELEASE_VERSION}/latest.json"
+          if aws s3api head-object --bucket "${BUCKET}" --key "${VERSIONED_KEY}" >/dev/null 2>&1; then
+            echo "::warning::s3://${BUCKET}/${VERSIONED_KEY} already exists; skipping the immutable versioned manifest upload (idempotent re-run). If ${DESKTOP_RELEASE_VERSION} was re-signed, delete the key and re-run, then wait out edge caches."
+          else
+            aws s3 cp latest.json \
+              "s3://${BUCKET}/${VERSIONED_KEY}" \
+              --content-type "application/json" \
+              --cache-control "max-age=31536000, immutable"
+          fi
 
       - name: Invalidate CloudFront cache
         run: |

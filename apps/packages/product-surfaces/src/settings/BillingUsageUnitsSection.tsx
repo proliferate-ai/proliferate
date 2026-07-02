@@ -1,4 +1,4 @@
-import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 
@@ -26,7 +26,7 @@ export function BillingUsageUnitsSection({
   addCreditsDisabled: boolean;
 }) {
   return (
-    <SettingsCard>
+    <SettingsSection>
       <div className="space-y-6 p-5">
         <div className="space-y-1.5">
           <h2 className="text-lg font-semibold text-foreground">Usage units</h2>
@@ -46,7 +46,7 @@ export function BillingUsageUnitsSection({
           ))}
         </div>
       </div>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 

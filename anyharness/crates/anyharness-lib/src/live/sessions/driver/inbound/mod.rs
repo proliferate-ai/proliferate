@@ -5,10 +5,10 @@ use serde::Serialize;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::live::sessions::model::PermissionAdvisor;
-use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::PermissionAdvisor;
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
+use crate::live::sessions::sink::SessionEventSink;
 
 mod mcp_elicitation;
 mod permission;

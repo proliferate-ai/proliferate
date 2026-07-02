@@ -1,14 +1,16 @@
-import type { ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import {
   POPOVER_SURFACE_CLASS,
 } from "@proliferate/ui/primitives/PopoverButton";
 import {
+  ChevronDown,
   CloudIcon,
   Monitor,
-  Search,
   Terminal,
   Tree,
 } from "@proliferate/ui/icons";
@@ -19,7 +21,7 @@ export const TARGET_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE
 export const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
 
 const TARGET_PICKER_SECTION_CLASS =
-  "flex min-h-6 items-center truncate px-2 py-1 text-sm leading-4 text-muted-foreground";
+  "flex min-h-6 items-center truncate px-2.5 py-1 text-ui-sm text-muted-foreground";
 const TARGET_PICKER_TRIGGER_ICON_CLASS = "size-3.5";
 const TARGET_PICKER_MENU_ICON_CLASS = "size-full";
 
@@ -91,6 +93,48 @@ export function TargetPickerMenuItem({
   );
 }
 
+interface HomeTargetRowItemProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+  icon?: ReactNode;
+  /** Value ("proliferate", "New worktree") — 13px weight 400 muted. */
+  value: string;
+  disclosure?: boolean;
+}
+
+/**
+ * Codex home footer item (UX spec §1.3, anchor `_externalFooterItem`):
+ * inline "value ▾" trigger — 13px text, value weight 400 truncated,
+ * 12px `--faint` chevron, pill hover fill.
+ */
+export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItemProps>(
+  function HomeTargetRowItem(
+    { icon, value, disclosure = true, className, type = "button", ...props },
+    ref,
+  ) {
+    return (
+      <Button
+        ref={ref}
+        type={type}
+        variant="unstyled"
+        size="unstyled"
+        className={twMerge(
+          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-accent data-[state=open]:text-foreground",
+          className,
+        )}
+        {...props}
+      >
+        {icon ? <span className="inline-flex shrink-0 items-center">{icon}</span> : null}
+        <span className="inline-flex min-w-0 items-baseline gap-1 text-left">
+          <span className="min-w-0 max-w-60 truncate font-normal">{value}</span>
+        </span>
+        {disclosure ? (
+          <ChevronDown className="size-3 shrink-0 text-faint" />
+        ) : null}
+      </Button>
+    );
+  },
+);
+
 export function ProjectSearchField({
   value,
   onChange,
@@ -98,19 +142,7 @@ export function ProjectSearchField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  return (
-    <div className="p-2 pb-1.5">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search projects"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-        />
-      </div>
-    </div>
-  );
+  return <PopoverSearchField value={value} onChange={onChange} placeholder="Search projects" />;
 }
 
 export function BranchSearchField({
@@ -120,17 +152,5 @@ export function BranchSearchField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  return (
-    <div className="px-1 pb-1">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search branches"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-        />
-      </div>
-    </div>
-  );
+  return <PopoverSearchField value={value} onChange={onChange} placeholder="Search branches" />;
 }

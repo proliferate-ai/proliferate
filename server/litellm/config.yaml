@@ -1,0 +1,85 @@
+# LiteLLM proxy config for the Proliferate agent gateway.
+#
+# Used both by the local docker-compose `litellm` service (bind-mounted) and
+# by the deployed image (server/litellm/Dockerfile layers this file onto
+# ghcr.io/berriai/litellm). Model names must be explicitly listed: unknown
+# names return 400 from the proxy.
+#
+# Both the bare alias and the dated/versioned model_name map to the same
+# upstream model so harnesses that pin dated ids (e.g. Claude Code) resolve.
+#
+# Provider keys come from the container environment:
+#   ANTHROPIC_API_KEY  (deploy: from AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY)
+#   OPENAI_API_KEY     (deploy: from AGENT_GATEWAY_MANAGED_OPENAI_API_KEY)
+#   GEMINI_API_KEY     (optional; gemini entries 401 upstream until it is set)
+
+model_list:
+  # Anthropic
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-sonnet-4-5-20250929
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-haiku-4-5-20251001
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-opus-4-6
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-opus-4-6-20260205
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # OpenAI
+  - model_name: gpt-5.2
+    litellm_params:
+      model: openai/gpt-5.2
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: gpt-5.2-2025-12-11
+    litellm_params:
+      model: openai/gpt-5.2
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: gpt-5-mini
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: gpt-5-mini-2025-08-07
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # Grok CLI aliases. The grok CLI discovers models via GET /v1/models and
+  # speaks plain chat/completions, so grok-named entries can point at any
+  # upstream; we alias them to Anthropic Haiku (see HARNESS-MATRIX.md).
+  # grok-build is the CLI's interactive/title-gen model — cheap to keep.
+  - model_name: grok-4-fast
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: grok-build
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Google (genai facade at the ROOT /v1beta path). Gemini model names MUST
+  # map to a real Google upstream: LiteLLM's genai->anthropic translation
+  # sends temperature+top_p together, which Anthropic rejects (see
+  # HARNESS-MATRIX.md). These entries return upstream auth errors until
+  # GEMINI_API_KEY is provided to the proxy environment.
+  - model_name: gemini-3.5-flash
+    litellm_params:
+      model: gemini/gemini-3.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

@@ -11,8 +11,8 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth_config, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
-    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, runtime_config, sessions,
+    agent_auth, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
+    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
     sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
     workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
@@ -54,21 +54,11 @@ pub fn build_router(state: AppState) -> Router {
             "/agents/{kind}/login/terminal",
             post(agents::start_agent_login_terminal),
         )
-        .route(
-            "/agents/auth-config",
-            put(agent_auth_config::apply_agent_auth_config),
-        )
-        .route(
-            "/agents/auth-config/status",
-            get(agent_auth_config::get_agent_auth_config_status),
-        )
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
+        // Agent-auth state (desktop-pushed local-surface state.json)
+        .route("/agent-auth/state", put(agent_auth::put_agent_auth_state))
         // Catalogs (worker-pushed agent catalog document)
         .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
-        .route(
-            "/runtime-config",
-            get(runtime_config::get_runtime_config).put(runtime_config::apply_runtime_config),
-        )
         // Workspaces
         .route(
             "/workspaces",
@@ -313,6 +303,11 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/hosting/pull-requests",
             post(hosting::create_pull_request),
+        )
+        // Hosting (repo-root-scoped, branch PR statuses via gh GraphQL)
+        .route(
+            "/repo-roots/{repo_root_id}/hosting/pull-requests",
+            get(hosting::get_repo_pull_request_statuses),
         )
         // Terminals (workspace-scoped, interactive PTY shells)
         .route(

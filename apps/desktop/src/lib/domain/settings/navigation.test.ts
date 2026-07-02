@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCloudRepoSettingsHref,
-  buildCloudSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
+import { resolveRepoScopeSelection } from "@/lib/domain/settings/repo-scope-selection";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
 function repo(overrides: Partial<SettingsRepositoryEntry>): SettingsRepositoryEntry {
@@ -31,6 +31,18 @@ describe("settings navigation", () => {
       repositories: [],
     })).toEqual({
       activeSection: "general",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
+  it("redirects the legacy agent-authentication section to agent api keys", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "agent-authentication",
+      repositories: [],
+    })).toEqual({
+      activeSection: "agent-api-keys",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -95,6 +107,18 @@ describe("settings navigation", () => {
     });
   });
 
+  it("falls retired keyboard settings links back to general", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "keyboard",
+      repositories: [],
+    })).toEqual({
+      activeSection: "general",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
   it("falls removed review settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "review",
@@ -109,7 +133,6 @@ describe("settings navigation", () => {
 
   it("resolves the Admin settings sections", () => {
     for (const section of [
-      "organization-integrations",
       "organization-members",
       "organization-model-policy",
     ]) {
@@ -136,6 +159,35 @@ describe("settings navigation", () => {
       focus: { checkout: "success" },
       joinOrganizationId: null,
     });
+  });
+
+  it("preserves OAuth return focus only on the integrations section", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "integrations",
+      rawFlowId: "flow-1",
+      rawStatus: "completed",
+      rawFailureCode: null,
+      repositories: [],
+    })).toEqual({
+      activeSection: "integrations",
+      activeRepoSourceRoot: null,
+      focus: { flowId: "flow-1", status: "completed" },
+      joinOrganizationId: null,
+    });
+
+    expect(resolveSettingsSelection({
+      rawSection: "integrations",
+      rawStatus: "failed",
+      rawFailureCode: "access_denied",
+      repositories: [],
+    }).focus).toEqual({ status: "failed", failureCode: "access_denied" });
+
+    expect(resolveSettingsSelection({
+      rawSection: "general",
+      rawFlowId: "flow-1",
+      rawStatus: "completed",
+      repositories: [],
+    }).focus).toEqual({});
   });
 
   it("resolves a valid repo settings link", () => {
@@ -193,7 +245,7 @@ describe("settings navigation", () => {
     });
   });
 
-  it("keeps modern cloud repo settings links keyed by owner and repo", () => {
+  it("resolves modern cloud repo settings links to the matching repo entry", () => {
     expect(resolveSettingsSelection({
       rawSection: "environments",
       rawCloudRepoOwner: "owner",
@@ -201,7 +253,30 @@ describe("settings navigation", () => {
       repositories: [repo({ sourceRoot: "/repo-a" })],
     })).toEqual({
       activeSection: "environments",
-      activeRepoSourceRoot: null,
+      activeRepoSourceRoot: "/repo-a",
+      focus: {
+        cloudRepoOwner: "owner",
+        cloudRepoName: "name",
+      },
+      joinOrganizationId: null,
+    });
+  });
+
+  it("resolves cloud repo settings links to cloud-only repo entries", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "environments",
+      rawCloudRepoOwner: "owner",
+      rawCloudRepoName: "name",
+      repositories: [repo({
+        sourceRoot: "cloud:owner/name",
+        repoRootId: "",
+        localWorkspaceId: null,
+        cloudConfigured: true,
+        availability: "cloud",
+      })],
+    })).toEqual({
+      activeSection: "environments",
+      activeRepoSourceRoot: "cloud:owner/name",
       focus: {
         cloudRepoOwner: "owner",
         cloudRepoName: "name",
@@ -228,7 +303,7 @@ describe("settings navigation", () => {
     });
   });
 
-  it("falls legacy cloudRepo links back to environments when multiple local repos match", () => {
+  it("resolves ambiguous legacy cloudRepo links to the first matching repo", () => {
     expect(resolveSettingsSelection({
       rawSection: "cloudRepo",
       rawCloudRepoOwner: "owner",
@@ -239,7 +314,7 @@ describe("settings navigation", () => {
       ],
     })).toEqual({
       activeSection: "environments",
-      activeRepoSourceRoot: null,
+      activeRepoSourceRoot: "/repo-a",
       focus: {
         cloudRepoOwner: "owner",
         cloudRepoName: "name",
@@ -253,7 +328,7 @@ describe("settings navigation", () => {
       rawSection: "cloud",
       repositories: [],
     })).toEqual({
-      activeSection: "agent-authentication",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -264,21 +339,9 @@ describe("settings navigation", () => {
       rawTarget: "target-1",
       repositories: [],
     })).toEqual({
-      activeSection: "compute",
-      activeRepoSourceRoot: null,
-      focus: { target: "target-1" },
-      joinOrganizationId: null,
-    });
-
-    expect(resolveSettingsSelection({
-      rawSection: "cloud",
-      rawCredential: "credential-1",
-      rawKind: "claude",
-      repositories: [],
-    })).toEqual({
       activeSection: "agent-authentication",
       activeRepoSourceRoot: null,
-      focus: { credential: "credential-1", kind: "claude" },
+      focus: { target: "target-1" },
       joinOrganizationId: null,
     });
   });
@@ -295,12 +358,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("resolves the archived chats settings section", () => {
+  it("falls retired archived-chats settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "archived-chats",
       repositories: [],
     })).toEqual({
-      activeSection: "archived-chats",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -341,14 +404,13 @@ describe("settings navigation", () => {
     })).toBe("/settings?section=organization-members&joinOrganizationId=org-1");
   });
 
-  it("builds new settings links for cloud and cloud repo helpers", () => {
-    expect(buildCloudSettingsHref()).toBe("/settings?section=agent-authentication");
+  it("builds new settings links for cloud repo helpers", () => {
     expect(buildCloudRepoSettingsHref("owner", "name")).toBe(
       "/settings?section=environments&cloudRepoOwner=owner&cloudRepoName=name",
     );
   });
 
-  it("builds environment and agent-authentication focus links", () => {
+  it("builds environment focus links", () => {
     expect(buildSettingsHref({
       section: "environments",
       repo: "/repo-a",
@@ -358,11 +420,114 @@ describe("settings navigation", () => {
       section: "repo",
       repo: "/repo-a",
     })).toBe("/settings?section=environments&repo=%2Frepo-a");
+  });
 
-    expect(buildSettingsHref({
-      section: "agent-authentication",
-      target: "target-1",
-      kind: "claude",
-    })).toBe("/settings?section=agent-authentication&target=target-1&kind=claude");
+  it("round-trips the repo context through href building and resolution", () => {
+    const href = buildSettingsHref({
+      section: "environments",
+      repo: "/repo-a",
+      focus: { context: "local" },
+    });
+    expect(href).toBe("/settings?section=environments&repo=%2Frepo-a&context=local");
+
+    expect(resolveSettingsSelection({
+      rawSection: "environments",
+      rawRepo: "/repo-a",
+      rawContext: "local",
+      repositories: [repo({ sourceRoot: "/repo-a" })],
+    })).toEqual({
+      activeSection: "environments",
+      activeRepoSourceRoot: "/repo-a",
+      focus: { context: "local" },
+      joinOrganizationId: null,
+    });
+  });
+
+  it("drops invalid repo context values", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "environments",
+      rawRepo: "/repo-a",
+      rawContext: "hybrid",
+      repositories: [repo({ sourceRoot: "/repo-a" })],
+    })).toEqual({
+      activeSection: "environments",
+      activeRepoSourceRoot: "/repo-a",
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
+  it("drops the repo context outside repo-scope sections", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "general",
+      rawContext: "cloud",
+      repositories: [],
+    })).toEqual({
+      activeSection: "general",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+});
+
+describe("resolveRepoScopeSelection", () => {
+  const repositories = [
+    repo({ sourceRoot: "/repo-a", repoRootId: "repo-a" }),
+    repo({
+      sourceRoot: "cloud:owner/name",
+      repoRootId: "",
+      localWorkspaceId: null,
+      cloudConfigured: true,
+      availability: "cloud",
+    }),
+  ];
+
+  it("selects the matching repo, defaulting to the first entry", () => {
+    expect(resolveRepoScopeSelection({
+      repositories,
+      activeRepoSourceRoot: "cloud:owner/name",
+      focus: {},
+    }).repository?.sourceRoot).toBe("cloud:owner/name");
+
+    expect(resolveRepoScopeSelection({
+      repositories,
+      activeRepoSourceRoot: null,
+      focus: {},
+    }).repository?.sourceRoot).toBe("/repo-a");
+
+    expect(resolveRepoScopeSelection({
+      repositories: [],
+      activeRepoSourceRoot: null,
+      focus: {},
+    }).repository).toBeNull();
+  });
+
+  it("prefers an explicit context focus", () => {
+    expect(resolveRepoScopeSelection({
+      repositories,
+      activeRepoSourceRoot: "cloud:owner/name",
+      focus: { context: "local" },
+    }).context).toBe("local");
+  });
+
+  it("defaults to cloud for cloud deep links and cloud-only repos, else local", () => {
+    expect(resolveRepoScopeSelection({
+      repositories,
+      activeRepoSourceRoot: "/repo-a",
+      focus: { cloudRepoOwner: "owner", cloudRepoName: "name" },
+    }).context).toBe("cloud");
+
+    expect(resolveRepoScopeSelection({
+      repositories,
+      activeRepoSourceRoot: "cloud:owner/name",
+      focus: {},
+    }).context).toBe("cloud");
+
+    expect(resolveRepoScopeSelection({
+      repositories,
+      activeRepoSourceRoot: "/repo-a",
+      focus: {},
+    }).context).toBe("local");
   });
 });

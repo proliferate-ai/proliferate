@@ -315,6 +315,72 @@ async def test_org_default_allows_system_config(
     assert upserted["organization_id"] == default_org_id
 
 
+@pytest.mark.asyncio
+async def test_list_requires_org_membership_when_organization_id_without_owner_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """IDOR guard: passing organizationId (no ownerScope) must assert membership."""
+    user_id = uuid.uuid4()
+    victim_org_id = uuid.uuid4()
+
+    async def fake_get_active_membership(*args: object, **kwargs: object) -> None:
+        # Actor is not a member of the requested organization.
+        return None
+
+    async def fail_list_configs(*args: object, **kwargs: object) -> tuple[object, ...]:
+        raise AssertionError("store must not be reached for a non-member")
+
+    monkeypatch.setattr(
+        service.organization_store, "get_active_membership", fake_get_active_membership
+    )
+    monkeypatch.setattr(service.config_store, "list_configs", fail_list_configs)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await service.list_agent_run_configs(
+            None,  # type: ignore[arg-type]
+            SimpleNamespace(id=user_id),  # type: ignore[arg-type]
+            owner_scope=None,
+            organization_id=victim_org_id,
+        )
+
+    assert exc_info.value.code == "organization_not_found"
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_allows_org_member_scoped_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A member passing organizationId reaches the store exactly once."""
+    user_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+    calls: dict[str, int] = {"membership": 0, "list": 0}
+
+    async def fake_get_active_membership(*args: object, **kwargs: object) -> SimpleNamespace:
+        calls["membership"] += 1
+        return SimpleNamespace(role="member")
+
+    async def fake_list_configs(*args: object, **kwargs: object) -> tuple[object, ...]:
+        calls["list"] += 1
+        assert kwargs["organization_id"] == org_id
+        return ()
+
+    monkeypatch.setattr(
+        service.organization_store, "get_active_membership", fake_get_active_membership
+    )
+    monkeypatch.setattr(service.config_store, "list_configs", fake_list_configs)
+
+    result = await service.list_agent_run_configs(
+        None,  # type: ignore[arg-type]
+        SimpleNamespace(id=user_id),  # type: ignore[arg-type]
+        owner_scope=CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
+        organization_id=org_id,
+    )
+
+    assert result == []
+    assert calls == {"membership": 1, "list": 1}
+
+
 def test_execution_scope_rejects_archived_config() -> None:
     issue = validate_config_execution_scope(
         _config(status="archived"),

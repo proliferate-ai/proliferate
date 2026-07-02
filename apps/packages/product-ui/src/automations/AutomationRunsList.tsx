@@ -1,5 +1,5 @@
 import { ExternalLink } from "lucide-react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { AutomationRunInventoryItemView } from "@proliferate/product-domain/automations/inventory";
 import { AutomationStatusGlyph } from "./AutomationStatusGlyph";

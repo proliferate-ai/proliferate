@@ -19,7 +19,7 @@ from proliferate.auth.authorization import (
     PolicyVerdict,
     require_org_role,
 )
-from proliferate.auth.dependencies import current_product_user
+from proliferate.auth.dependencies import current_organization_actor, current_product_user
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.engine import apply_rls_context_to_session, get_async_session
@@ -99,7 +99,9 @@ def require_owner_role(*roles: str) -> Callable[[OwnerContext], Awaitable[OwnerC
 
 async def current_path_org_member(
     organization_id: UUID = Path(...),
-    user: User = Depends(current_product_user),
+    # Org-membership management admits password-only accounts in single-org
+    # mode (hosted keeps the product-readiness gate; see the dependency).
+    user: User = Depends(current_organization_actor),
     db: AsyncSession = Depends(get_async_session),
 ) -> CurrentOrgUser:
     return await _resolve_current_org_user(db, user=user, organization_id=organization_id)

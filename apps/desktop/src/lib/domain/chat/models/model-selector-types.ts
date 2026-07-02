@@ -1,4 +1,3 @@
-import type { AgentSummary } from "@anyharness/sdk";
 import type { PendingSessionConfigChangeStatus } from "@proliferate/product-domain/sessions/pending-config";
 import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
 
@@ -53,6 +52,5 @@ export interface ModelSelectorProps {
   groups: ModelSelectorGroup[];
   hasAgents: boolean;
   isLoading: boolean;
-  notReadyAgents: AgentSummary[];
   onSelect: (selection: ModelSelectorSelection) => void;
 }

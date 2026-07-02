@@ -155,7 +155,7 @@ describe("HomeTargetPicker", () => {
     expect(screen.getByRole("button", { name: /Proliferate/i })).toBeTruthy();
     expect(screen.queryByText(keystoneRepository.sourceRoot)).toBeNull();
 
-    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Escape" }); // Radix dismissable layer listens on document (old hand-rolled listener was on window)
     fireEvent.click(screen.getByRole("button", { name: /Branch: main/i }));
     fireEvent.change(screen.getByPlaceholderText("Search branches"), {
       target: { value: "stag" },

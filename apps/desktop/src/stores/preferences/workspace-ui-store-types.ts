@@ -1,5 +1,6 @@
 import type { SetStateAction } from "react";
 import type { PersistedWorkspaceUiState } from "@/lib/domain/preferences/workspace-ui/model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import type { RightPanelDurableState, RightPanelMaterializedState, RightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-model";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { ManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
@@ -34,6 +35,7 @@ export interface WorkspaceUiState {
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
   manualChatGroupsByWorkspace: Record<string, ManualChatGroup[]>;
+  gitStatusSnapshotByWorkspace: Record<string, PersistedWorkspaceGitStatusSnapshot>;
   hydrate: (state: PersistedWorkspaceUiState) => void;
   archiveWorkspace: (id: string) => void;
   archiveWorkspaces: (ids: string[]) => void;
@@ -138,6 +140,12 @@ export interface WorkspaceUiState {
     sessionIds: string[],
   ) => void;
   clearWorkspaceChatTabState: (workspaceId: string) => void;
+  recordWorkspaceGitStatusSnapshot: (
+    logicalWorkspaceId: string,
+    snapshot: PersistedWorkspaceGitStatusSnapshot,
+  ) => void;
+  stampWorkspaceGitPrompt: (logicalWorkspaceId: string, at: string) => void;
+  pruneWorkspaceGitStatusSnapshots: (liveLogicalWorkspaceIds: string[]) => void;
 }
 
 export interface ShellIntentResult {

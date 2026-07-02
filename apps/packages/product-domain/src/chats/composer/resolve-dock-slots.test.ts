@@ -19,6 +19,28 @@ describe("resolveComposerDockSlots", () => {
     }).activeSlot).toEqual({ kind: "permission" });
   });
 
+  it("keeps todo progress as a strip companion while an interaction holds the slot", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      primaryPendingInteractionKind: "permission",
+      hasActiveTodoTracker: true,
+    }).activeSlotCompanion).toEqual({ kind: "todo_strip" });
+  });
+
+  it("omits the strip companion when there is no active todo tracker", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      primaryPendingInteractionKind: "permission",
+    }).activeSlotCompanion).toBeNull();
+  });
+
+  it("omits the strip companion when the tracker owns the slot itself", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      hasActiveTodoTracker: true,
+    }).activeSlotCompanion).toBeNull();
+  });
+
   it("uses todo state only when no blocking interaction exists", () => {
     expect(resolveComposerDockSlots({
       ...BASE_INPUT,
@@ -38,6 +60,7 @@ describe("resolveComposerDockSlots", () => {
     })).toEqual({
       outboundSlot: null,
       activeSlot: null,
+      activeSlotCompanion: null,
       attachedSlot: {
         ambientSlot: { kind: "workspace_status" },
         delegatedWork: false,

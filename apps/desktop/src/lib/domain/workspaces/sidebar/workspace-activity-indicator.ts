@@ -39,13 +39,15 @@ export interface BuildWorkspaceActivityIndicatorSnapshotArgs {
   sessionLastViewedAt?: Readonly<Record<string, string>>;
 }
 
+// needs_review is no longer a status-indicator kind (it renders as the
+// trailing unread dot); the attention count keeps consuming `needsReview`
+// directly below, independent of the indicator.
 const ATTENTION_STATUS_KINDS: ReadonlySet<SidebarStatusIndicator["kind"]> = new Set([
   "error",
   "iterating",
   "waiting_input",
   "waiting_plan",
   "queued_prompt",
-  "needs_review",
 ]);
 
 const ATTENTION_SESSION_ACTIVITY_STATES: ReadonlySet<SidebarSessionActivityState> = new Set([
@@ -83,7 +85,6 @@ export function buildWorkspaceActivityIndicatorSnapshot(
     });
     const statusIndicator = sidebarStatusIndicatorFromActivity({
       activity: activeWorkspaceActivity(workspace, args.workspaceActivities),
-      needsReview,
       pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, workspace),
     });
 

@@ -30,6 +30,57 @@
         }
       }
     },
+    "/v1/agent-auth/state": {
+      "put": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "put_agent_auth_state",
+        "requestBody": {
+          "description": "Agent-auth state document (the state.json contract)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "State persisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyAgentAuthStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Payload rejected; persisted state unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale revision; persisted state unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents": {
       "get": {
         "tags": [
@@ -46,56 +97,6 @@
                   "items": {
                     "$ref": "#/components/schemas/AgentSummary"
                   }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/agents/auth-config": {
-      "put": {
-        "tags": [
-          "agents"
-        ],
-        "operationId": "apply_agent_auth_config",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplyAgentAuthConfigRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Agent auth config applied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplyAgentAuthConfigResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/agents/auth-config/status": {
-      "get": {
-        "tags": [
-          "agents"
-        ],
-        "operationId": "get_agent_auth_config_status",
-        "responses": {
-          "200": {
-            "description": "Redacted agent auth config status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentAuthConfigStatusResponse"
                 }
               }
             }
@@ -1160,6 +1161,66 @@
         }
       }
     },
+    "/v1/repo-roots/{repo_root_id}/hosting/pull-requests": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "operationId": "get_repo_pull_request_statuses",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "description": "Set to 1 to request a refresh (10s floor); default 0 serves the 60s throttle window",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch-scoped pull request statuses for the repo root's active workspace branches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoPullRequestStatusesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Hosting error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repo-roots/{repo_root_id}/mobility/prepare-destination": {
       "post": {
         "tags": [
@@ -1473,64 +1534,6 @@
           },
           "404": {
             "description": "Review run not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/runtime-config": {
-      "get": {
-        "tags": [
-          "runtime-config"
-        ],
-        "operationId": "get_runtime_config",
-        "responses": {
-          "200": {
-            "description": "Current runtime config",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuntimeConfigStatusResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "runtime-config"
-        ],
-        "operationId": "apply_runtime_config",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplyRuntimeConfigRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Applied runtime config",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplyRuntimeConfigResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid runtime config",
             "content": {
               "application/json": {
                 "schema": {
@@ -5801,225 +5804,6 @@
           }
         }
       },
-      "AgentAuthConfigStatusResponse": {
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "properties": {
-          "externalAuthScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
-          "revision": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "selections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentAuthSelectionStatus"
-            }
-          },
-          "status": {
-            "type": "string"
-          }
-        }
-      },
-      "AgentAuthExternalScope": {
-        "type": "object",
-        "required": [
-          "provider",
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "targetId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "AgentAuthSelectionConfig": {
-        "type": "object",
-        "required": [
-          "agentKind",
-          "materializationMode",
-          "credentialId",
-          "credentialRevision"
-        ],
-        "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "authSlotId": {
-            "type": "string"
-          },
-          "credentialId": {
-            "type": "string"
-          },
-          "credentialRevision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "credentialShareId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "expiresAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "materializationMode": {
-            "type": "string"
-          },
-          "protectedConfig": {
-            "type": "object",
-            "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "protectedEnv": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "supportConfig": {
-            "type": "object",
-            "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "supportEnv": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "syncedFilePaths": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "AgentAuthSelectionStatus": {
-        "type": "object",
-        "required": [
-          "agentKind",
-          "authSlotId",
-          "materializationMode",
-          "credentialId",
-          "credentialRevision",
-          "protectedEnvKeys",
-          "supportEnvKeys",
-          "protectedConfigKeys",
-          "supportConfigKeys",
-          "syncedFilePaths"
-        ],
-        "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "authSlotId": {
-            "type": "string"
-          },
-          "credentialId": {
-            "type": "string"
-          },
-          "credentialRevision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "credentialShareId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "expiresAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "materializationMode": {
-            "type": "string"
-          },
-          "protectedConfigKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "protectedEnvKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "supportConfigKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "supportEnvKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "syncedFilePaths": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "AgentCredentialState": {
         "type": "string",
         "enum": [
@@ -6411,62 +6195,22 @@
           }
         }
       },
-      "ApplyAgentAuthConfigRequest": {
+      "ApplyAgentAuthStateResponse": {
         "type": "object",
+        "description": "Outcome of pushing an agent-auth state document into the runtime.",
         "required": [
+          "applied",
           "revision"
         ],
         "properties": {
-          "externalAuthScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
-          "revision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "selections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentAuthSelectionConfig"
-            }
-          }
-        }
-      },
-      "ApplyAgentAuthConfigResponse": {
-        "type": "object",
-        "required": [
-          "applied",
-          "revision",
-          "selectionCount",
-          "status"
-        ],
-        "properties": {
           "applied": {
-            "type": "boolean"
-          },
-          "noSelectionKinds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "type": "boolean",
+            "description": "True when the document was persisted to the runtime's state file."
           },
           "revision": {
             "type": "integer",
-            "format": "int64"
-          },
-          "selectionCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "status": {
-            "type": "string"
+            "format": "int64",
+            "description": "The persisted document's revision."
           }
         }
       },
@@ -6492,56 +6236,6 @@
               "string",
               "null"
             ]
-          }
-        }
-      },
-      "ApplyRuntimeConfigRequest": {
-        "type": "object",
-        "required": [
-          "revision",
-          "manifest",
-          "source"
-        ],
-        "properties": {
-          "artifactPayloads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactPayload"
-            }
-          },
-          "credentialValues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeCredentialValue"
-            }
-          },
-          "manifest": {
-            "$ref": "#/components/schemas/RuntimeConfigManifest"
-          },
-          "revision": {
-            "$ref": "#/components/schemas/RuntimeConfigRevision"
-          },
-          "source": {
-            "$ref": "#/components/schemas/RuntimeConfigSource"
-          }
-        }
-      },
-      "ApplyRuntimeConfigResponse": {
-        "type": "object",
-        "required": [
-          "applied",
-          "revision",
-          "status"
-        ],
-        "properties": {
-          "applied": {
-            "type": "boolean"
-          },
-          "revision": {
-            "$ref": "#/components/schemas/RuntimeConfigRevision"
-          },
-          "status": {
-            "type": "string"
           }
         }
       },
@@ -6593,6 +6287,86 @@
           "availableCommands": {
             "type": "array",
             "items": {}
+          }
+        }
+      },
+      "BranchPullRequestStatus": {
+        "type": "object",
+        "description": "One queried head branch. `pullRequest` null/absent means the branch WAS\nqueried and has no PR (authoritative none). Branches missing from\n[`RepoPullRequestStatusesResponse::entries`] were not queried (unknown).",
+        "required": [
+          "headBranch"
+        ],
+        "properties": {
+          "headBranch": {
+            "type": "string"
+          },
+          "pullRequest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BranchPullRequestSummary"
+              }
+            ]
+          }
+        }
+      },
+      "BranchPullRequestSummary": {
+        "type": "object",
+        "description": "[`PullRequestSummary`] plus reduced check-rollup and review-decision\nfields. Both are optional so new clients deserialize old daemons (and\nvice versa); absent maps to \"none\" at the domain layer.",
+        "required": [
+          "number",
+          "title",
+          "url",
+          "state",
+          "draft",
+          "headBranch",
+          "baseBranch"
+        ],
+        "properties": {
+          "baseBranch": {
+            "type": "string"
+          },
+          "checks": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PullRequestChecksState"
+              }
+            ]
+          },
+          "draft": {
+            "type": "boolean"
+          },
+          "headBranch": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "reviewDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PullRequestReviewDecision"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/PullRequestState"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
           }
         }
       },
@@ -8006,28 +7780,8 @@
           "agentKind"
         ],
         "properties": {
-          "agentAuthScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
           "agentKind": {
             "type": "string"
-          },
-          "expectedRuntimeConfigRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
-              }
-            ]
           },
           "modeId": {
             "type": [
@@ -8050,13 +7804,6 @@
                 "$ref": "#/components/schemas/OriginContext"
               }
             ]
-          },
-          "requiredAgentAuthRevision": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
           },
           "subagentsEnabled": {
             "type": [
@@ -11529,12 +11276,6 @@
           "status"
         ],
         "properties": {
-          "agentKind": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "code": {
             "type": [
               "string",
@@ -11548,22 +11289,6 @@
             ]
           },
           "instance": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "resolutionScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
-          "selectionStatus": {
             "type": [
               "string",
               "null"
@@ -11965,16 +11690,6 @@
               "$ref": "#/components/schemas/PromptInputBlock"
             }
           },
-          "expectedRuntimeConfigRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
-              }
-            ]
-          },
           "promptId": {
             "type": [
               "string",
@@ -12168,6 +11883,25 @@
             "type": "string"
           }
         }
+      },
+      "PullRequestChecksState": {
+        "type": "string",
+        "description": "Reduced CI-check rollup state for a pull request's head commit.",
+        "enum": [
+          "none",
+          "pending",
+          "passing",
+          "failing"
+        ]
+      },
+      "PullRequestReviewDecision": {
+        "type": "string",
+        "description": "Reduced review decision for a pull request.",
+        "enum": [
+          "none",
+          "approved",
+          "changes_requested"
+        ]
       },
       "PullRequestState": {
         "type": "string",
@@ -12570,6 +12304,24 @@
           }
         }
       },
+      "RepoPullRequestStatusesResponse": {
+        "type": "object",
+        "required": [
+          "entries",
+          "fetchedAt"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BranchPullRequestStatus"
+            }
+          },
+          "fetchedAt": {
+            "type": "string"
+          }
+        }
+      },
       "RepoRoot": {
         "type": "object",
         "required": [
@@ -12842,18 +12594,6 @@
       },
       "ResumeSessionRequest": {
         "type": "object",
-        "properties": {
-          "expectedRuntimeConfigRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
-              }
-            ]
-          }
-        },
         "additionalProperties": false
       },
       "RetryReviewAssignmentRequest": {
@@ -13533,128 +13273,6 @@
           }
         }
       },
-      "RuntimeArtifactPayload": {
-        "type": "object",
-        "required": [
-          "hash",
-          "contentType",
-          "byteSize",
-          "content"
-        ],
-        "properties": {
-          "byteSize": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "content": {
-            "type": "string"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hash": {
-            "type": "string"
-          },
-          "resourceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sourceRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "RuntimeArtifactRef": {
-        "type": "object",
-        "required": [
-          "hash",
-          "contentType",
-          "byteSize"
-        ],
-        "properties": {
-          "byteSize": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hash": {
-            "type": "string"
-          },
-          "resourceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sourceRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "RuntimeArtifactStatus": {
-        "type": "object",
-        "required": [
-          "hash",
-          "contentType",
-          "byteSize",
-          "cached"
-        ],
-        "properties": {
-          "byteSize": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "cached": {
-            "type": "boolean"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hash": {
-            "type": "string"
-          },
-          "resourceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sourceRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "RuntimeCapabilities": {
         "type": "object",
         "required": [
@@ -13663,171 +13281,6 @@
         "properties": {
           "replay": {
             "type": "boolean"
-          }
-        }
-      },
-      "RuntimeConfigExternalScope": {
-        "type": "object",
-        "required": [
-          "provider",
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "targetId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "RuntimeConfigManifest": {
-        "type": "object",
-        "properties": {
-          "artifacts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactRef"
-            }
-          },
-          "directAttachAuth": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeDirectAttachAuthConfig"
-              }
-            ]
-          },
-          "mcpBindingSummaries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpBindingSummary"
-            }
-          },
-          "mcpServers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeMcpServer"
-            }
-          },
-          "skills": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeSkill"
-            }
-          },
-          "warnings": {
-            "type": "array",
-            "items": {}
-          }
-        }
-      },
-      "RuntimeConfigRevision": {
-        "type": "object",
-        "required": [
-          "id",
-          "sequence",
-          "contentHash"
-        ],
-        "properties": {
-          "contentHash": {
-            "type": "string"
-          },
-          "externalScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigExternalScope"
-              }
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "sequence": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "RuntimeConfigRevisionExpectation": {
-        "type": "object",
-        "required": [
-          "revisionId",
-          "contentHash"
-        ],
-        "properties": {
-          "contentHash": {
-            "type": "string"
-          },
-          "externalScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigExternalScope"
-              }
-            ]
-          },
-          "revisionId": {
-            "type": "string"
-          },
-          "sequence": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          }
-        }
-      },
-      "RuntimeConfigSource": {
-        "type": "string",
-        "enum": [
-          "desktop",
-          "worker",
-          "test"
-        ]
-      },
-      "RuntimeConfigStatusResponse": {
-        "type": "object",
-        "properties": {
-          "artifacts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactStatus"
-            }
-          },
-          "currentRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevision"
-              }
-            ]
-          },
-          "manifest": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigManifest"
-              }
-            ]
           }
         }
       },
@@ -13858,329 +13311,6 @@
             "format": "double"
           }
         }
-      },
-      "RuntimeCredentialRef": {
-        "type": "object",
-        "required": [
-          "credentialRef",
-          "usedIn",
-          "fieldName"
-        ],
-        "properties": {
-          "credentialRef": {
-            "type": "string"
-          },
-          "fieldName": {
-            "type": "string"
-          },
-          "mcpServerId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "usedIn": {
-            "$ref": "#/components/schemas/RuntimeCredentialUse"
-          }
-        }
-      },
-      "RuntimeCredentialUse": {
-        "type": "string",
-        "enum": [
-          "mcp_launch",
-          "mcp_launch_header",
-          "mcp_launch_query",
-          "mcp_launch_arg",
-          "mcp_launch_env",
-          "skill_binding"
-        ]
-      },
-      "RuntimeCredentialValue": {
-        "type": "object",
-        "required": [
-          "credentialRef",
-          "value"
-        ],
-        "properties": {
-          "credentialRef": {
-            "type": "string"
-          },
-          "value": {
-            "type": "string"
-          }
-        }
-      },
-      "RuntimeDirectAttachAuthConfig": {
-        "type": "object",
-        "required": [
-          "issuer",
-          "audience"
-        ],
-        "properties": {
-          "audience": {
-            "type": "string"
-          },
-          "issuer": {
-            "type": "string"
-          },
-          "targetId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "verificationKeys": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeJwtVerificationKey"
-            }
-          }
-        }
-      },
-      "RuntimeJwtVerificationKey": {
-        "type": "object",
-        "required": [
-          "kid",
-          "algorithm",
-          "publicKeyPem"
-        ],
-        "properties": {
-          "algorithm": {
-            "type": "string"
-          },
-          "kid": {
-            "type": "string"
-          },
-          "publicKeyPem": {
-            "type": "string"
-          }
-        }
-      },
-      "RuntimeMcpLaunch": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "url",
-              "kind"
-            ],
-            "properties": {
-              "headers": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpNamedValue"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "http"
-                ]
-              },
-              "query": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpNamedValue"
-                }
-              },
-              "url": {
-                "$ref": "#/components/schemas/RuntimeMcpValue"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "command",
-              "kind"
-            ],
-            "properties": {
-              "args": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpValue"
-                }
-              },
-              "command": {
-                "$ref": "#/components/schemas/RuntimeMcpValue"
-              },
-              "env": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpNamedValue"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "stdio"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "RuntimeMcpNamedValue": {
-        "type": "object",
-        "required": [
-          "name",
-          "value"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "value": {
-            "$ref": "#/components/schemas/RuntimeMcpValue"
-          }
-        }
-      },
-      "RuntimeMcpServer": {
-        "type": "object",
-        "required": [
-          "id",
-          "connectionId",
-          "serverName",
-          "transport",
-          "launch"
-        ],
-        "properties": {
-          "catalogEntryId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "connectionId": {
-            "type": "string"
-          },
-          "credentialRefs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeCredentialRef"
-            }
-          },
-          "id": {
-            "type": "string"
-          },
-          "launch": {
-            "$ref": "#/components/schemas/RuntimeMcpLaunch"
-          },
-          "serverName": {
-            "type": "string"
-          },
-          "transport": {
-            "$ref": "#/components/schemas/RuntimeMcpTransport"
-          }
-        }
-      },
-      "RuntimeMcpTemplatePart": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "value",
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "literal"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "credentialRef",
-              "kind"
-            ],
-            "properties": {
-              "credentialRef": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "credential"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "RuntimeMcpTransport": {
-        "type": "string",
-        "enum": [
-          "http",
-          "stdio"
-        ]
-      },
-      "RuntimeMcpValue": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "value",
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "literal"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "credentialRef",
-              "kind"
-            ],
-            "properties": {
-              "credentialRef": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "credential"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "parts",
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "template"
-                ]
-              },
-              "parts": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpTemplatePart"
-                }
-              }
-            }
-          }
-        ]
       },
       "RuntimeMemoryPressure": {
         "type": "object",
@@ -14267,59 +13397,6 @@
             "format": "double"
           }
         }
-      },
-      "RuntimeSkill": {
-        "type": "object",
-        "required": [
-          "id",
-          "sourceKind",
-          "displayName",
-          "description",
-          "instructionArtifact"
-        ],
-        "properties": {
-          "credentialRefs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "description": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "instructionArtifact": {
-            "$ref": "#/components/schemas/RuntimeArtifactRef"
-          },
-          "requiredMcpServerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "resources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactRef"
-            }
-          },
-          "sourceKind": {
-            "$ref": "#/components/schemas/RuntimeSkillSourceKind"
-          }
-        }
-      },
-      "RuntimeSkillSourceKind": {
-        "type": "string",
-        "enum": [
-          "catalog",
-          "plugin",
-          "user"
-        ]
       },
       "ScheduleSubagentWakeRequest": {
         "type": "object"

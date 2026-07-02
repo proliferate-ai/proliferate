@@ -73,7 +73,7 @@ export function ViewerHeaderButton({
             <span className="ui-tab-system-tab__label-primary">{label}</span>
           </span>
           {isDiff && target.kind !== "allChanges" && (
-            <span className="shrink-0 text-[10px] font-medium text-git-green">DIFF</span>
+            <span className="shrink-0 text-sm font-medium text-git-green">DIFF</span>
           )}
           <span
             className="ui-tab-system-tab__dirty-indicator"

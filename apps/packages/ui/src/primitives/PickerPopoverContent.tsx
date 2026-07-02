@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { Search } from "../icons/core";
-import { Input } from "./Input";
+import { PopoverSearchField } from "./PopoverSearchField";
 
 interface PickerPopoverContentProps {
   searchValue?: string;
@@ -24,17 +23,11 @@ export function PickerPopoverContent({
   return (
     <div className={`flex max-h-80 min-h-0 flex-col ${className}`}>
       {onSearchChange ? (
-        <div className="border-b border-border/70 p-1 pb-2">
-          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
-            <Search className="size-3.5 shrink-0 text-muted-foreground" />
-            <Input
-              value={searchValue ?? ""}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-            />
-          </div>
-        </div>
+        <PopoverSearchField
+          value={searchValue ?? ""}
+          onChange={onSearchChange}
+          placeholder={searchPlaceholder}
+        />
       ) : null}
       <div className={`min-h-0 overflow-y-auto py-1 ${bodyClassName}`}>
         {children ?? (emptyLabel ? <PickerEmptyRow label={emptyLabel} /> : null)}
@@ -45,7 +38,7 @@ export function PickerPopoverContent({
 
 export function PickerEmptyRow({ label }: { label: string }) {
   return (
-    <div className="px-2.5 py-2 text-sm text-muted-foreground">
+    <div className="px-2.5 py-[5px] text-ui text-muted-foreground">
       {label}
     </div>
   );

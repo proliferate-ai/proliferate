@@ -1,0 +1,408 @@
+//! The declarative agent-auth state file contract.
+//!
+//! Both delivery surfaces (the cloud materialization worker and the desktop
+//! dispatch worker) write the SAME file at `<anyharness home>/agent-auth/
+//! state.json` (mode 0600); AnyHarness reads it fresh at every session launch
+//! and renders per-harness launch profiles from it (spec §5). There is no
+//! watch/refresh — the render plane re-reads on demand.
+//!
+//! Tolerance model:
+//! - file absent          -> `None` (legacy / native behavior; local desktop
+//!   without cloud state keeps working)
+//! - file present, valid  -> `Some(AgentAuthState)`
+//! - file present, broken -> typed [`RouteAuthError::MalformedStateFile`]
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use super::RouteAuthError;
+
+/// Well-known relative path of the state file under the AnyHarness home.
+pub const STATE_FILE_RELATIVE_PATH: &[&str] = &["agent-auth", "state.json"];
+
+/// Resolve the absolute path of the agent-auth state file for a given
+/// AnyHarness runtime home. Single source of truth for the layout so delivery
+/// (worker/desktop) and the render plane agree.
+pub fn state_file_path(runtime_home: &Path) -> PathBuf {
+    let mut path = runtime_home.to_path_buf();
+    for segment in STATE_FILE_RELATIVE_PATH {
+        path.push(segment);
+    }
+    path
+}
+
+/// Which route pays for a harness's LLM calls (spec §1). `native` is local-only
+/// (the harness's own auth; we detect + leave alone) and carries no rendered
+/// credentials.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthRoute {
+    Native,
+    ApiKey,
+    Gateway,
+}
+
+impl AuthRoute {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::ApiKey => "api_key",
+            Self::Gateway => "gateway",
+        }
+    }
+}
+
+/// The default slot: the one selection of a single-source harness.
+pub const SLOT_PRIMARY: &str = "primary";
+
+fn default_slot() -> String {
+    SLOT_PRIMARY.to_string()
+}
+
+/// A single (harness, slot) selection materialized by the control plane. The
+/// optional fields carry only what a route needs: `key`/`base_url`/`provider`
+/// for api_key/gateway, `model_catalog` for OpenCode's explicit models map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthSelection {
+    /// Harness kind string, e.g. `"claude"`, `"codex"` (matches
+    /// [`AgentKind::as_str`](crate::domains::agents::model::AgentKind::as_str)).
+    pub harness: String,
+    pub route: AuthRoute,
+    /// Composition axis (spec §3.3): single-source harnesses carry exactly one
+    /// `"primary"` entry; OpenCode carries one entry per slot (`"gateway"` +
+    /// direct provider slots), merged into one additive launch profile.
+    /// Defaults keep pre-slot state files parsing.
+    #[serde(default = "default_slot")]
+    pub slot: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    /// The rendered credential (virtual key for gateway, raw provider key for
+    /// api_key). Never logged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// Explicit model ids for adapters that require them in-config (OpenCode).
+    /// Populated by the catalog (PR 7); absent means the adapter falls back to
+    /// a static minimal list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_catalog: Option<Vec<String>>,
+}
+
+/// The whole declarative state file (spec §5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentAuthState {
+    /// Monotonic revision. `0` means "no scoped selections yet" (legacy /
+    /// native behavior); `> 0` engages fail-closed semantics for harnesses
+    /// without a selection.
+    pub revision: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub selections: Vec<AuthSelection>,
+}
+
+impl AgentAuthState {
+    /// The selection for a harness kind, if any (first match; use
+    /// [`Self::selections_for`] where multiple slots are legal).
+    pub fn selection_for(&self, harness_kind: &str) -> Option<&AuthSelection> {
+        self.selections
+            .iter()
+            .find(|selection| selection.harness == harness_kind)
+    }
+
+    /// Every selection for a harness kind, in state-file order. OpenCode may
+    /// carry several (one per slot); single-source harnesses must not.
+    pub fn selections_for(&self, harness_kind: &str) -> Vec<&AuthSelection> {
+        self.selections
+            .iter()
+            .filter(|selection| selection.harness == harness_kind)
+            .collect()
+    }
+
+    /// Whether the state engages fail-closed semantics (a scoped launch, spec
+    /// §3): the file exists with a real revision, so a harness with no
+    /// selection must error rather than fall through to ambient credentials.
+    pub fn is_scoped(&self) -> bool {
+        self.revision > 0
+    }
+}
+
+/// Read + parse the state file on demand. Returns:
+/// - `Ok(None)` when the file is absent (legacy behavior),
+/// - `Ok(Some(state))` when present and valid,
+/// - `Err(RouteAuthError::MalformedStateFile)` when present but unparseable.
+pub fn load_state_file(runtime_home: &Path) -> Result<Option<AgentAuthState>, RouteAuthError> {
+    let path = state_file_path(runtime_home);
+    load_state_from_path(&path)
+}
+
+/// Persist a state document pushed by a delivery surface (the desktop local
+/// writer, mirroring what the cloud materialization worker writes into
+/// sandboxes). The write is atomic and 0600 via the shared route-auth private
+/// file helper.
+///
+/// Stale-write protection: a payload whose revision is BELOW the persisted
+/// file's revision is rejected (a delayed push must never roll live
+/// selections back). Equal revisions are accepted — content is authoritative
+/// (e.g. a virtual-key rotation changes the file without a revision bump). A
+/// malformed on-disk file carries no trustworthy revision and is healed by
+/// any valid push.
+pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(), RouteAuthError> {
+    let path = state_file_path(runtime_home);
+    let persisted_revision = match load_state_from_path(&path) {
+        Ok(existing) => existing.map(|existing| existing.revision),
+        Err(RouteAuthError::MalformedStateFile { .. }) => None,
+        Err(error) => return Err(error),
+    };
+    if let Some(current) = persisted_revision {
+        if state.revision < current {
+            return Err(RouteAuthError::StaleStateRevision {
+                incoming: state.revision,
+                current,
+            });
+        }
+    }
+    let parent = path.parent().expect("state file path has a parent");
+    fs::create_dir_all(parent).map_err(|error| RouteAuthError::Materialize {
+        detail: format!("failed to create {}: {error}", parent.display()),
+    })?;
+    let mut serialized =
+        serde_json::to_vec_pretty(state).map_err(|error| RouteAuthError::Materialize {
+            detail: format!("failed to serialize agent-auth state: {error}"),
+        })?;
+    serialized.push(b'\n');
+    super::materialize::write_private_file(&path, &serialized)
+}
+
+pub(super) fn load_state_from_path(path: &Path) -> Result<Option<AgentAuthState>, RouteAuthError> {
+    let contents = match fs::read(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(RouteAuthError::MalformedStateFile {
+                path: path.to_path_buf(),
+                detail: format!("failed to read state file: {error}"),
+            })
+        }
+    };
+    let state: AgentAuthState =
+        serde_json::from_slice(&contents).map_err(|error| RouteAuthError::MalformedStateFile {
+            path: path.to_path_buf(),
+            detail: format!("failed to parse state file JSON: {error}"),
+        })?;
+    Ok(Some(state))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::agents::route_auth::test_support::TempHome;
+
+    #[test]
+    fn state_file_path_uses_well_known_layout() {
+        let path = state_file_path(Path::new("/home/x/.proliferate/anyharness"));
+        assert!(path.ends_with("agent-auth/state.json"));
+    }
+
+    #[test]
+    fn missing_file_is_legacy_none() {
+        let home = TempHome::new("state-missing");
+        let state = load_state_file(home.path()).expect("load");
+        assert!(state.is_none());
+    }
+
+    #[test]
+    fn malformed_file_is_typed_error() {
+        let home = TempHome::new("state-malformed");
+        home.write_state_raw(b"{ not json");
+        let error = load_state_file(home.path()).expect_err("malformed");
+        assert!(matches!(error, RouteAuthError::MalformedStateFile { .. }));
+    }
+
+    #[test]
+    fn round_trip_serde_preserves_selection_fields() {
+        let state = AgentAuthState {
+            revision: 42,
+            user_id: Some("user-1".into()),
+            selections: vec![
+                AuthSelection {
+                    harness: "claude".into(),
+                    route: AuthRoute::Gateway,
+                    slot: SLOT_PRIMARY.into(),
+                    provider: None,
+                    base_url: Some("https://llm.proliferate.ai".into()),
+                    key: Some("sk-virtual".into()),
+                    model_catalog: None,
+                },
+                AuthSelection {
+                    harness: "opencode".into(),
+                    route: AuthRoute::Gateway,
+                    slot: "gateway".into(),
+                    provider: None,
+                    base_url: Some("https://llm.proliferate.ai".into()),
+                    key: Some("sk-virtual".into()),
+                    model_catalog: Some(vec!["claude-haiku-4-5-20251001".into()]),
+                },
+            ],
+        };
+        let json = serde_json::to_string(&state).expect("serialize");
+        let parsed: AgentAuthState = serde_json::from_str(&json).expect("parse");
+        assert_eq!(state, parsed);
+        // camelCase-insensitive: routes serialize snake_case.
+        assert!(json.contains("\"gateway\""));
+    }
+
+    #[test]
+    fn selection_lookup_and_scoping() {
+        let state = AgentAuthState {
+            revision: 5,
+            user_id: None,
+            selections: vec![AuthSelection {
+                harness: "codex".into(),
+                route: AuthRoute::ApiKey,
+                slot: SLOT_PRIMARY.into(),
+                provider: Some("openai".into()),
+                base_url: None,
+                key: Some("sk-raw".into()),
+                model_catalog: None,
+            }],
+        };
+        assert!(state.is_scoped());
+        assert_eq!(
+            state.selection_for("codex").unwrap().route,
+            AuthRoute::ApiKey
+        );
+        assert!(state.selection_for("claude").is_none());
+
+        let legacy = AgentAuthState {
+            revision: 0,
+            user_id: None,
+            selections: vec![],
+        };
+        assert!(!legacy.is_scoped());
+    }
+
+    #[test]
+    fn tolerates_minimal_native_selection() {
+        let json =
+            r#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
+        let selection = state.selection_for("claude").expect("selection");
+        assert_eq!(selection.route, AuthRoute::Native);
+        assert!(selection.key.is_none());
+    }
+
+    #[test]
+    fn missing_slot_defaults_to_primary_and_round_trips() {
+        // Pre-slot state files (no "slot" key) parse with the primary default.
+        let json = r#"{
+            "revision": 4,
+            "selections": [
+                { "harness": "claude", "route": "gateway",
+                  "base_url": "https://gw", "key": "sk-vk" }
+            ]
+        }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
+        assert_eq!(state.selection_for("claude").unwrap().slot, SLOT_PRIMARY);
+
+        // And the default survives a serialize→parse round trip.
+        let serialized = serde_json::to_string(&state).expect("serialize");
+        let parsed: AgentAuthState = serde_json::from_str(&serialized).expect("reparse");
+        assert_eq!(state, parsed);
+    }
+
+    fn state_with_revision(revision: i64) -> AgentAuthState {
+        AgentAuthState {
+            revision,
+            user_id: Some("user-1".into()),
+            selections: vec![AuthSelection {
+                harness: "claude".into(),
+                route: AuthRoute::Native,
+                slot: SLOT_PRIMARY.into(),
+                provider: None,
+                base_url: None,
+                key: None,
+                model_catalog: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn apply_state_file_writes_private_and_round_trips() {
+        let home = TempHome::new("apply-write");
+        let state = state_with_revision(7);
+        apply_state_file(home.path(), &state).expect("apply");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded, state);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(state_file_path(home.path()))
+                .expect("metadata")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+    }
+
+    #[test]
+    fn apply_state_file_rejects_lower_revision_and_keeps_file() {
+        let home = TempHome::new("apply-stale");
+        apply_state_file(home.path(), &state_with_revision(5)).expect("apply");
+        let error = apply_state_file(home.path(), &state_with_revision(4)).expect_err("stale");
+        assert!(matches!(
+            error,
+            RouteAuthError::StaleStateRevision {
+                incoming: 4,
+                current: 5
+            }
+        ));
+        assert_eq!(error.code(), "AGENT_ROUTE_STATE_STALE");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded.revision, 5);
+    }
+
+    #[test]
+    fn apply_state_file_accepts_equal_and_higher_revisions() {
+        let home = TempHome::new("apply-monotonic");
+        apply_state_file(home.path(), &state_with_revision(5)).expect("apply");
+        // Equal revision: content is authoritative (vkey rotation case).
+        let mut rotated = state_with_revision(5);
+        rotated.selections[0].harness = "codex".into();
+        apply_state_file(home.path(), &rotated).expect("equal revision");
+        apply_state_file(home.path(), &state_with_revision(6)).expect("higher revision");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded.revision, 6);
+    }
+
+    #[test]
+    fn apply_state_file_heals_a_malformed_file() {
+        let home = TempHome::new("apply-heal");
+        home.write_state_raw(b"{ not json");
+        apply_state_file(home.path(), &state_with_revision(3)).expect("heal");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded.revision, 3);
+    }
+
+    #[test]
+    fn multiple_entries_per_harness_are_representable() {
+        let json = r#"{
+            "revision": 9,
+            "selections": [
+                { "harness": "opencode", "route": "gateway", "slot": "gateway",
+                  "base_url": "https://gw", "key": "sk-vk" },
+                { "harness": "opencode", "route": "api_key", "slot": "anthropic",
+                  "provider": "anthropic", "key": "sk-ant" }
+            ]
+        }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
+        let selections = state.selections_for("opencode");
+        assert_eq!(selections.len(), 2);
+        assert_eq!(selections[0].slot, "gateway");
+        assert_eq!(selections[1].slot, "anthropic");
+        assert!(state.selections_for("claude").is_empty());
+    }
+}

@@ -63,6 +63,7 @@ async function readWorkspaceUiState(): Promise<{
         WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace,
       collapsedChatGroupsByWorkspace: WORKSPACE_UI_DEFAULTS.collapsedChatGroupsByWorkspace,
       manualChatGroupsByWorkspace: WORKSPACE_UI_DEFAULTS.manualChatGroupsByWorkspace,
+      gitStatusSnapshotByWorkspace: WORKSPACE_UI_DEFAULTS.gitStatusSnapshotByWorkspace,
     };
   }
 

@@ -69,16 +69,8 @@ impl SessionService {
                 continue;
             };
 
-            // Same env composition as create_session; an overlay that needs
-            // an explicit selection contributes nothing to the menu env.
-            let mut readiness_env = workspace_env.clone();
-            if let Ok(overlay) = self
-                .agent_auth_service
-                .launch_overlay(&agent.kind, None, None)
-            {
-                readiness_env.extend(overlay.support_env);
-                readiness_env.extend(overlay.protected_env);
-            }
+            // Same env composition as create_session.
+            let readiness_env = workspace_env.clone();
 
             let resolved = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
             if resolved.status != ResolvedAgentStatus::Ready {

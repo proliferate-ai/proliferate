@@ -157,7 +157,7 @@ function MetadataPill({ children }: { children: string }) {
   return (
     <span
       title={children}
-      className="max-w-[260px] truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 font-mono text-[0.625rem] leading-none text-muted-foreground"
+      className="max-w-[260px] truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 text-sm leading-none text-muted-foreground"
     >
       {children}
     </span>

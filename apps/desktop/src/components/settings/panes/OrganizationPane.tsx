@@ -10,15 +10,17 @@ import {
   useGitHubAppInstallationStatus,
   useStartGitHubAppInstallation,
 } from "@proliferate/cloud-sdk-react";
-import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
-import { Badge } from "@proliferate/ui/primitives/Badge";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
+import { OrganizationAgentPolicySection } from "@/components/settings/panes/organization/OrganizationAgentPolicySection";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
-import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import {
+  GitHubAppInstallationSection,
+  isOrganizationAdminRole,
+} from "@/components/settings/panes/organization/GitHubAppInstallationSection";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import {
   useCurrentTeamCheckout,
@@ -62,9 +64,8 @@ export function OrganizationPane() {
     authStatus === "authenticated" && activeOrganizationId !== null,
   );
   const githubAppInstallationStart = useStartGitHubAppInstallation();
-  const canManageGitHubAppInstallation = isOrganizationAdminRole(
-    activeOrganization?.membership?.role,
-  );
+  const isOrgAdmin = isOrganizationAdminRole(activeOrganization?.membership?.role);
+  const canManageGitHubAppInstallation = isOrgAdmin;
 
   useEffect(() => {
     setSettingsName(activeOrganization?.name ?? "");
@@ -141,7 +142,7 @@ export function OrganizationPane() {
       await openExternal(response.installationUrl);
     } catch (error) {
       setStatusMessage(
-        error instanceof Error ? error.message : "GitHub App installation could not start.",
+        error instanceof Error ? error.message : "Could not start GitHub App installation.",
       );
     }
   }
@@ -161,7 +162,7 @@ export function OrganizationPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Organization"
-        description="Organization profile, Team setup, and billing."
+        description="Profile, Team plan setup, and billing."
       />
 
       {statusMessage ? (
@@ -169,26 +170,21 @@ export function OrganizationPane() {
       ) : null}
 
       {shouldShowSignInState ? (
-        <OrganizationSection title="Organization" description="Organization access is tied to your signed-in account.">
-          <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
-              Sign in to view your organization.
-            </div>
-          </SettingsCard>
-        </OrganizationSection>
+        <SettingsSection title="Organization" description="Organization access is tied to your signed-in account.">
+          <SettingsEmptyState size="compact" title="Sign in to view your organization" />
+        </SettingsSection>
       ) : null}
 
       {shouldShowLoadingState ? (
-        <div className="text-sm text-muted-foreground">Loading organizations...</div>
+        <div className="text-ui-sm text-muted-foreground">Loading organizations…</div>
       ) : null}
 
       {shouldShowErrorState ? (
-        <OrganizationSection title="Organization">
-          <SettingsCard>
-            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
-                Organization settings could not be loaded.
-              </div>
+        <SettingsSection title="Organization">
+          <SettingsEmptyState
+            size="compact"
+            title="Could not load organization settings"
+            action={
               <Button
                 type="button"
                 variant="secondary"
@@ -198,20 +194,19 @@ export function OrganizationPane() {
               >
                 Retry
               </Button>
-            </div>
-          </SettingsCard>
-        </OrganizationSection>
+            }
+          />
+        </SettingsSection>
       ) : null}
 
       {shouldShowEmptyState ? (
-        <OrganizationSection title="Team">
-          <SettingsCard>
-            {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
-              <SettingsCardRow
-                label={teamCheckoutQuery.data.intent.teamName}
-                description="Team checkout is pending. Continue checkout or cancel setup."
-              >
-                <div className="flex flex-wrap justify-end gap-2">
+        <SettingsSection title="Team">
+          {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
+            <SettingsEmptyState
+              title={teamCheckoutQuery.data.intent.teamName}
+              description="Team checkout is pending. Continue checkout or cancel setup."
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
                   <Button
                     type="button"
                     variant="secondary"
@@ -232,14 +227,18 @@ export function OrganizationPane() {
                     Cancel setup
                   </Button>
                 </div>
-              </SettingsCardRow>
-            ) : (
-              <form onSubmit={(event) => { void handleCreateTeamCheckout(event); }}>
-                <SettingsCardRow
-                  label="Create a Team"
-                  description="Choose a Team name, review what Team unlocks, then continue to checkout."
+              }
+            />
+          ) : (
+            <SettingsEmptyState
+              title="Create a Team"
+              description="Choose a Team name, review what Team unlocks, then continue to checkout."
+              action={
+                <form
+                  className="flex flex-col items-center gap-2"
+                  onSubmit={(event) => { void handleCreateTeamCheckout(event); }}
                 >
-                  <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-end">
+                  <div className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:justify-center">
                     <Input
                       value={newTeamName}
                       onChange={(event) => setNewTeamName(event.currentTarget.value)}
@@ -254,18 +253,18 @@ export function OrganizationPane() {
                       Create Team
                     </Button>
                   </div>
-                </SettingsCardRow>
-                {teamCheckoutActions.createTeamCheckoutError && !teamUpgradeGateOpen ? (
-                  <div className="border-t border-border-light p-4 text-sm text-destructive">
-                    {teamCheckoutActions.createTeamCheckoutError instanceof Error
-                      ? teamCheckoutActions.createTeamCheckoutError.message
-                      : "Team checkout could not start."}
-                  </div>
-                ) : null}
-              </form>
-            )}
-          </SettingsCard>
-        </OrganizationSection>
+                  {teamCheckoutActions.createTeamCheckoutError && !teamUpgradeGateOpen ? (
+                    <div className="mt-2 text-sm text-destructive">
+                      {teamCheckoutActions.createTeamCheckoutError instanceof Error
+                        ? teamCheckoutActions.createTeamCheckoutError.message
+                        : "Could not start Team checkout."}
+                    </div>
+                  ) : null}
+                </form>
+              }
+            />
+          )}
+        </SettingsSection>
       ) : null}
 
       <UpgradeGateDialog
@@ -278,7 +277,7 @@ export function OrganizationPane() {
           teamCheckoutActions.createTeamCheckoutError instanceof Error
             ? teamCheckoutActions.createTeamCheckoutError.message
             : teamCheckoutActions.createTeamCheckoutError
-              ? "Team checkout could not start."
+              ? "Could not start Team checkout."
               : null
         }
         onClose={() => setTeamUpgradeGateOpen(false)}
@@ -311,6 +310,10 @@ export function OrganizationPane() {
             onManage={handleManageGitHubAppInstallation}
           />
 
+          {isOrgAdmin ? (
+            <OrganizationAgentPolicySection organizationId={activeOrganizationId} />
+          ) : null}
+
           <OrganizationBillingLinkSection />
         </>
       ) : null}
@@ -318,86 +321,9 @@ export function OrganizationPane() {
   );
 }
 
-function GitHubAppInstallationSection({
-  loading,
-  installing,
-  canManage,
-  status,
-  onInstall,
-  onManage,
-}: {
-  loading: boolean;
-  installing: boolean;
-  canManage: boolean;
-  status: {
-    installed: boolean;
-    accountLogin?: string | null;
-    repositorySelection?: string | null;
-    suspendedAt?: string | null;
-  } | undefined;
-  onInstall: () => void | Promise<void>;
-  onManage: () => void | Promise<void>;
-}) {
-  const installed = status?.installed === true;
-  const repositorySelection = formatRepositorySelection(status?.repositorySelection ?? null);
-  const statusLabel = loading
-    ? "Checking"
-    : installed
-      ? "Installed"
-      : "Not installed";
-  const description = installed
-    ? `Installed on ${status?.accountLogin ? `@${status.accountLogin}` : "this GitHub account"}${repositorySelection ? ` with ${repositorySelection}` : ""}.`
-    : canManage
-      ? "Install the Proliferate GitHub App for this organization before members can enable cloud repositories."
-      : "Ask an organization admin to install the Proliferate GitHub App before you enable cloud repositories.";
-
-  return (
-    <OrganizationSection title="GitHub App" description="Repository access for organization cloud environments.">
-      <SettingsCard>
-        <SettingsCardRow
-          label="Organization installation"
-          description={description}
-        >
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge tone={installed ? "success" : "warning"}>{statusLabel}</Badge>
-            {canManage ? (
-              <Button
-                type="button"
-                variant="secondary"
-                loading={installing}
-                disabled={installing}
-                onClick={() => {
-                  void (installed ? onManage() : onInstall());
-                }}
-              >
-                {!installing ? <ProviderBrandIcon provider="github" className="size-[13px]" /> : null}
-                {installed ? "Manage in GitHub" : "Install GitHub App"}
-              </Button>
-            ) : null}
-          </div>
-        </SettingsCardRow>
-      </SettingsCard>
-    </OrganizationSection>
-  );
-}
-
-function isOrganizationAdminRole(role: string | null | undefined): boolean {
-  return role === "owner" || role === "admin";
-}
-
-function formatRepositorySelection(repositorySelection: string | null): string | null {
-  if (repositorySelection === "all") {
-    return "all repositories";
-  }
-  if (repositorySelection === "selected") {
-    return "selected repositories";
-  }
-  return null;
-}
-
 function OrganizationNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border-light bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
       {children}
     </div>
   );

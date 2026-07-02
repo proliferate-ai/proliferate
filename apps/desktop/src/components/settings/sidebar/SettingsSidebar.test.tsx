@@ -9,6 +9,7 @@ import {
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
 } from "@/config/settings";
+import { type SettingsScope } from "@/lib/domain/settings/navigation-presentation";
 import {
   clearShortcutHandlerRegistryForTests,
   getShortcutHandler,
@@ -22,8 +23,8 @@ vi.mock("@/lib/access/tauri/support", () => ({
   openSupportReportWindow,
 }));
 
-vi.mock("@/components/app/sidebar/AppSidebarFooter", () => ({
-  AppSidebarFooter: () => <div data-testid="app-sidebar-footer" />,
+vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
+  SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
 }));
 
 vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
@@ -49,21 +50,21 @@ afterEach(() => {
 });
 
 function renderSettingsSidebar({
+  activeScope = "user",
+  activeSection = "general",
   adminAccess = { isAdmin: true, isLoading: false },
   disabledSections,
-  onNavigateHome = vi.fn(),
   onSelectSection = vi.fn(),
   onCheckForUpdates = vi.fn(),
   updateActionState,
 }: {
+  activeScope?: SettingsScope;
+  activeSection?: SettingsSection;
   adminAccess?: { isAdmin: boolean; isLoading?: boolean };
   disabledSections?: Partial<Record<SettingsSection, boolean>>;
-  onNavigateHome?: () => void;
   onSelectSection?: (section: SettingsSection) => void;
   onCheckForUpdates?: () => void;
   updateActionState?: Partial<{
-    isChecking: boolean;
-    hasAvailableUpdate: boolean;
     phase: "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error";
     updatesSupported: boolean;
   }>;
@@ -79,15 +80,13 @@ function renderSettingsSidebar({
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={["/settings?section=general"]}>
         <SettingsSidebar
-          activeSection="general"
+          activeScope={activeScope}
+          activeSection={activeSection}
           adminAccess={adminAccess}
           disabledSections={disabledSections}
-          onNavigateHome={onNavigateHome}
           onSelectSection={onSelectSection}
           onCheckForUpdates={onCheckForUpdates}
           updateActionState={{
-            isChecking: false,
-            hasAvailableUpdate: false,
             phase: "idle",
             updatesSupported: true,
             ...updateActionState,
@@ -123,34 +122,18 @@ describe("SettingsSidebar support window", () => {
 });
 
 describe("SettingsSidebar layout and shortcuts", () => {
-  it("renders the settings IA from the mock in order", () => {
-    renderSettingsSidebar();
+  it("renders the active scope's sections plus the global help footer in order", () => {
+    renderSettingsSidebar({ activeScope: "user" });
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
-      "Settings",
+      "Account",
       "General",
       "Appearance",
-      "Keyboard shortcuts",
-      "Account",
       "Personal secrets",
-      "Admin",
-      "Organization settings",
-      "Organization secrets",
-      "Members",
-      "Billing",
-      "Integrations",
-      "Model policy",
-      "Workspaces",
-      "Environments",
-      "Personal compute",
       "Pruning",
-      "Archived chats",
-      "Agents",
-      "Authentication",
-      "Defaults",
-      "Help",
       "Support",
+      "Desktop updates",
     ];
     let previousIndex = -1;
     for (const label of expectedOrder) {
@@ -159,87 +142,64 @@ describe("SettingsSidebar layout and shortcuts", () => {
       previousIndex = nextIndex;
     }
 
-    expect(screen.queryByText("Organization & Account")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Cloud" })).toBeNull();
+    // Sections from other scopes are not present in the User scope sidebar.
+    expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Defaults/ })).toBeNull();
   });
 
-  it("does not render admin tags for admin-only settings rows", () => {
-    renderSettingsSidebar();
+  it("renders the Org scope's admin sections for admins", () => {
+    renderSettingsSidebar({ activeScope: "org", activeSection: "organization" });
 
-    const adminPills = screen.getAllByText("Admin").filter((element) => element.tagName === "SPAN");
-    expect(adminPills).toHaveLength(0);
-    expect(screen.queryByRole("button", { name: /Slack bot/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Organization settings/ })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /Members/ })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
+    expect(screen.getByText("Policies")).toBeTruthy();
+    expect(screen.getByText("Authentication")).toBeTruthy();
   });
 
-  it("marks visible settings rows outside the target IA as tbr", () => {
-    renderSettingsSidebar();
+  it("gives every harness its own entry in the Agents scope, in order", () => {
+    renderSettingsSidebar({ activeScope: "agents", activeSection: "agents" });
 
-    expect(screen.getAllByText("tbr")).toHaveLength(1);
+    const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
+    const expectedOrder = [
+      "Overview",
+      "Claude Code",
+      "Codex",
+      "OpenCode",
+      "Grok",
+      "Gemini",
+      "API keys",
+      "Defaults",
+    ];
+    let previousIndex = -1;
+    for (const label of expectedOrder) {
+      const nextIndex = navText.indexOf(label, previousIndex + 1);
+      expect(nextIndex).toBeGreaterThan(previousIndex);
+      previousIndex = nextIndex;
+    }
   });
 
-  it("honors admin-only row visibility for non-admins", () => {
-    const onSelectSection = vi.fn();
+  it("hides Org admin sections from non-admins", () => {
     renderSettingsSidebar({
+      activeScope: "org",
+      activeSection: "organization",
       adminAccess: { isAdmin: false, isLoading: false },
-      onSelectSection,
     });
 
     if (TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION) {
-      expect(screen.queryByText("Admin")).not.toBeNull();
-      expect(screen.queryByRole("button", { name: /Members/ })).not.toBeNull();
       expect(screen.queryByRole("button", { name: /Organization settings/ })).not.toBeNull();
-      expect(screen.queryByRole("button", { name: /Organization secrets/ })).not.toBeNull();
-      expect(screen.queryByRole("button", { name: /Billing/ })).not.toBeNull();
-      expect(screen.queryByRole("button", { name: /Integrations/ })).not.toBeNull();
-      expect(screen.queryByRole("button", { name: /Model policy/ })).not.toBeNull();
-      expect(screen.queryByRole("button", { name: /Budgets/ })).toBeNull();
       return;
     }
 
-    expect(screen.queryByText("Admin")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Members/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Organization settings/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Organization secrets/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Members/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Billing/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Integrations/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Model policy/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Budgets/ })).toBeNull();
-  });
-
-  it("uses visible settings rows for non-admin shortcut numbering", async () => {
-    vi.stubGlobal("navigator", {
-      platform: "MacIntel",
-      userAgent: "Mac OS X",
-    });
-
-    const onSelectSection = vi.fn();
-    renderSettingsSidebar({
-      adminAccess: { isAdmin: false, isLoading: false },
-      onSelectSection,
-    });
-
-    await waitFor(() => {
-      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
-    });
-
-    expect(screen.getByText("⌘1")).toBeTruthy();
-    expect(runShortcutHandler("settings.section-by-index", {
-      source: "keyboard",
-      digit: 1,
-    })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("general");
-  });
-
-  it("keeps the back row full width", () => {
-    renderSettingsSidebar();
-
-    const backRow = screen.getByRole("button", { name: "Back to app" });
-    expect(backRow.className).toContain("w-full");
-    expect(backRow.className).not.toContain("w-fit");
+    // The global help footer is still reachable.
+    expect(screen.queryByRole("button", { name: "Support" })).not.toBeNull();
   });
 
   it("does not bold the active settings row", () => {
-    renderSettingsSidebar();
+    renderSettingsSidebar({ activeScope: "user", activeSection: "general" });
 
     const activeRow = screen.getByRole("button", { name: /General/ });
     expect(activeRow.className).not.toContain("font-semibold");
@@ -250,70 +210,95 @@ describe("SettingsSidebar layout and shortcuts", () => {
     renderSettingsSidebar({
       onCheckForUpdates,
       updateActionState: {
-        hasAvailableUpdate: true,
         phase: "ready",
       },
     });
 
     const desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
-    expect(desktopUpdates.textContent).toContain("Available");
-    expect(screen.queryByRole("button", { name: /Restart to update/ })).toBeNull();
+    expect(desktopUpdates.textContent).toContain("Restart to update");
     expect(screen.queryByRole("button", { name: /Download update/ })).toBeNull();
 
     fireEvent.click(desktopUpdates);
     expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the product sidebar rail width", () => {
-    const { container } = renderSettingsSidebar();
+  it("shows Available only for the available phase and Restart to update for ready", () => {
+    renderSettingsSidebar({ updateActionState: { phase: "available" } });
+    let desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Available");
+    expect(desktopUpdates.textContent).not.toContain("Restart to update");
 
-    expect(container.firstElementChild?.className).toContain("w-[280px]");
+    cleanup();
+
+    renderSettingsSidebar({ updateActionState: { phase: "ready" } });
+    desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Restart to update");
+    expect(desktopUpdates.textContent).not.toContain("Available");
   });
 
-  it("renders Cmd number labels with the sidebar reveal treatment", () => {
+  it("shows the checking and downloading statuses", () => {
+    renderSettingsSidebar({ updateActionState: { phase: "checking" } });
+    expect(
+      screen.getByRole("button", { name: /Desktop updates/ }).textContent,
+    ).toContain("Checking…");
+
+    cleanup();
+
+    renderSettingsSidebar({ updateActionState: { phase: "downloading" } });
+    expect(
+      screen.getByRole("button", { name: /Desktop updates/ }).textContent,
+    ).toContain("Downloading");
+  });
+
+  it("disables the update row outside packaged builds with the packaged-only status", () => {
+    const onCheckForUpdates = vi.fn();
+    renderSettingsSidebar({
+      onCheckForUpdates,
+      updateActionState: { phase: "idle", updatesSupported: false },
+    });
+
+    const desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Packaged app only");
+    expect(desktopUpdates.getAttribute("title")).toBe(
+      "Updates only work in the packaged app.",
+    );
+
+    fireEvent.click(desktopUpdates);
+    expect(onCheckForUpdates).not.toHaveBeenCalled();
+  });
+
+  it("uses the settings sidebar rail width", () => {
+    const { container } = renderSettingsSidebar();
+
+    expect(container.firstElementChild?.className).toContain("w-[240px]");
+  });
+
+  it("numbers the active scope's sections for Cmd shortcuts", async () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
     });
 
-    renderSettingsSidebar();
-
-    const shortcutLabel = screen.getByText("⌘6");
-    expect(shortcutLabel.className).toContain("opacity-0");
-    expect(shortcutLabel.className).toContain("group-hover:opacity-100");
-  });
-
-  it("selects settings sections from Cmd number shortcuts", async () => {
     const onSelectSection = vi.fn();
-    renderSettingsSidebar({ onSelectSection });
+    renderSettingsSidebar({ activeScope: "user", onSelectSection });
 
     await waitFor(() => {
       expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
     });
 
+    expect(screen.getByText("⌘1")).toBeTruthy();
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 1,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("account");
+
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
-
-    expect(runShortcutHandler("settings.section-by-index", {
-      source: "keyboard",
-      digit: 6,
-    })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("organization");
-
-    expect(runShortcutHandler("settings.section-by-index", {
-      source: "keyboard",
-      digit: 8,
-    })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
-
-    expect(runShortcutHandler("settings.section-by-index", {
-      source: "keyboard",
-      digit: 9,
-    })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("agent-defaults");
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {
@@ -324,7 +309,8 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     const onSelectSection = vi.fn();
     renderSettingsSidebar({
-      disabledSections: { general: true },
+      activeScope: "user",
+      disabledSections: { account: true },
       onSelectSection,
     });
 
@@ -344,6 +330,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 });

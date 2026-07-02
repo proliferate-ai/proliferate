@@ -1,9 +1,9 @@
 export const SETTINGS_CONTENT_SECTIONS = [
+  "account",
   "general",
   "appearance",
-  "keyboard",
-  "account",
   "personal-secrets",
+  "integrations",
   "organization",
   "organization-secrets",
   "organization-members",
@@ -12,10 +12,16 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "organization-integrations",
   "organization-model-policy",
   "environments",
-  "compute",
+  "repo-actions",
+  "repo-environment",
   "worktrees",
-  "archived-chats",
-  "agent-authentication",
+  "agents",
+  "agent-claude",
+  "agent-codex",
+  "agent-opencode",
+  "agent-grok",
+  "agent-gemini",
+  "agent-api-keys",
   "agent-defaults",
   // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
   // the page until real budget data/enforcement replaces mocked UI.
@@ -30,12 +36,14 @@ export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 
 export const TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION = false;
 
+// User scope numbering: ⌘1 account, ⌘2 general, ⌘3 appearance,
+// ⌘4 personal secrets, ⌘5 pruning (worktrees).
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
+  "account",
   "general",
   "appearance",
-  "keyboard",
-  "account",
   "personal-secrets",
+  "integrations",
   "organization",
   "organization-secrets",
   "organization-members",
@@ -44,10 +52,16 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "organization-integrations",
   "organization-model-policy",
   "environments",
-  "compute",
+  "repo-actions",
+  "repo-environment",
   "worktrees",
-  "archived-chats",
-  "agent-authentication",
+  "agents",
+  "agent-claude",
+  "agent-codex",
+  "agent-opencode",
+  "agent-grok",
+  "agent-gemini",
+  "agent-api-keys",
   "agent-defaults",
   // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "organization-limits",

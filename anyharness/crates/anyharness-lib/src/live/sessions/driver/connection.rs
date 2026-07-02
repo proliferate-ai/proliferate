@@ -38,28 +38,35 @@ pub(in crate::live::sessions) async fn establish_connection(
             acp::on_receive_notification!(),
         )
         .on_receive_request(
-            async move |req: acp::schema::RequestPermissionRequest, responder: acp::Responder<acp::schema::RequestPermissionResponse>, _cx| {
+            async move |req: acp::schema::RequestPermissionRequest,
+                        responder: acp::Responder<acp::schema::RequestPermissionResponse>,
+                        _cx| {
                 let result = client_for_perm.handle_request_permission(req).await;
                 responder.respond_with_result(result)
             },
             acp::on_receive_request!(),
         )
         .on_receive_request(
-            async move |req: acp::schema::CreateElicitationRequest, responder: acp::Responder<acp::schema::CreateElicitationResponse>, _cx| {
+            async move |req: acp::schema::CreateElicitationRequest,
+                        responder: acp::Responder<acp::schema::CreateElicitationResponse>,
+                        _cx| {
                 let result = client_for_elicitation.standard_mcp_elicitation(req).await;
                 responder.respond_with_result(result)
             },
             acp::on_receive_request!(),
         )
         .on_receive_request(
-            async move |req: acp::AgentRequest, responder: acp::Responder<serde_json::Value>, _cx| {
+            async move |req: acp::AgentRequest,
+                        responder: acp::Responder<serde_json::Value>,
+                        _cx| {
                 match req {
                     acp::AgentRequest::ExtMethodRequest(ext_req) => {
                         let result = client_for_ext.handle_ext_request(ext_req).await;
                         match result {
                             Ok(ext_resp) => {
-                                let json = serde_json::to_value(&ext_resp.0)
-                                    .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
+                                let json = serde_json::to_value(&ext_resp.0).map_err(|e| {
+                                    acp::Error::internal_error().data(e.to_string())
+                                })?;
                                 responder.respond(json)
                             }
                             Err(e) => Err(e),
@@ -70,12 +77,15 @@ pub(in crate::live::sessions) async fn establish_connection(
             },
             acp::on_receive_request!(),
         )
-        .connect_with(transport, move |cx: acp::ConnectionTo<acp::Agent>| async move {
-            let _ = cx_tx.send(cx);
-            // Keep the connection alive until the actor shuts down (shutdown_tx dropped).
-            let _ = shutdown_rx.await;
-            Ok(())
-        });
+        .connect_with(
+            transport,
+            move |cx: acp::ConnectionTo<acp::Agent>| async move {
+                let _ = cx_tx.send(cx);
+                // Keep the connection alive until the actor shuts down (shutdown_tx dropped).
+                let _ = shutdown_rx.await;
+                Ok(())
+            },
+        );
 
     tokio::task::spawn_local(async move {
         if let Err(e) = connect_future.await {

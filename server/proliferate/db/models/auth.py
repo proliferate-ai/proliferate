@@ -36,6 +36,16 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # Monotonic session/token generation. Every access and refresh token embeds
+    # the value that was current at mint time; a mismatch on use means the token
+    # predates a logout or password change and must be rejected. Bumping this is
+    # the server-side "log out everywhere" / "revoke all sessions" primitive.
+    token_generation: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
     oauth_accounts: Mapped[list[OAuthAccount]] = relationship("OAuthAccount", lazy="selectin")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -362,6 +372,29 @@ class SsoIdentity(Base):
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
+class InstanceSetupToken(Base):
+    """Hashed first-run setup token for single-org-mode deployments.
+
+    Minted at API boot while the user table is empty. Only the SHA-256 hash is
+    persisted; the plaintext is written to a local file
+    (``settings.setup_token_file``) so it is never readable remotely. At most
+    one row exists (singleton id=1) and the row is deleted once the instance
+    is claimed.
+    """
+
+    __tablename__ = "instance_setup_token"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_instance_setup_token_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    token_hash: Mapped[str] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

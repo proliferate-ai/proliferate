@@ -114,7 +114,11 @@ pub fn install_agent_with_pins(
         let source = require_source(catalog_pins, descriptor, &ArtifactRole::NativeCli)?;
         if let Some(result) = install_pinned_role(
             &source,
-            super::install_policy::effective_pin(catalog_pins, descriptor, &ArtifactRole::NativeCli),
+            super::install_policy::effective_pin(
+                catalog_pins,
+                descriptor,
+                &ArtifactRole::NativeCli,
+            ),
             &native_options,
             &descriptor.kind,
             &ArtifactRole::NativeCli,

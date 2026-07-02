@@ -47,11 +47,13 @@ function readLegacyThemeRecord(): LegacyThemeRecord {
   const colorModeRaw = window.localStorage.getItem(LEGACY_MODE_KEY);
 
   return {
+    // Any legacy preset choice collapses to the single Mono theme; a valid
+    // value still counts as "has legacy preferences" for backfill defaults.
     themePreset: themePresetRaw === "ship"
       || themePresetRaw === "mono"
       || themePresetRaw === "tbpn"
       || themePresetRaw === "original"
-      ? themePresetRaw
+      ? "mono"
       : undefined,
     colorMode: colorModeRaw === "dark"
       || colorModeRaw === "light"
@@ -101,7 +103,6 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     transparentChromeEnabled: defaults.transparentChromeEnabled,
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
-    cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
     worktreeAutoDeleteLimit: defaults.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: defaults.pasteAttachmentsEnabled,
     reviewDefaultsByKind: defaults.reviewDefaultsByKind,

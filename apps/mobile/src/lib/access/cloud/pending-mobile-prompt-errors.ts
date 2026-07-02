@@ -6,9 +6,7 @@ const RETRYABLE_READINESS_ERROR_CODES = new Set([
   "cloud_command_target_config_required",
   "cloud_command_runtime_config_missing",
   "cloud_command_runtime_config_not_ready",
-  "cloud_command_agent_auth_not_ready",
   "runtime_config_not_ready",
-  "agent_auth_not_ready",
 ]);
 
 const RETRYABLE_FAILURE_PATTERNS = [

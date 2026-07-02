@@ -4,29 +4,31 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import {
+  SETTINGS_EYEBROW_CLASS,
+  SettingsEyebrow,
+} from "@proliferate/product-ui/settings/SettingsEyebrow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import type { BudgetPerson } from "@/lib/domain/settings/organization-budgets-presentation";
 
 export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[] }) {
   return (
-    <SettingsCard>
-      <div className="border-b border-border-light px-5 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold text-foreground">Monthly LLM budgets</div>
+    <SettingsSection
+      title={(
+        <span className="flex flex-wrap items-center gap-2">
+          Monthly LLM budgets
           <Badge tone="info">Enterprise</Badge>
           <Badge tone="neutral">Mocked UI</Badge>
-        </div>
-        <div className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Set the maximum model and gateway credits each member can use per month.
-        </div>
-      </div>
-
-      <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] gap-4 border-b border-border-light px-5 py-3 text-xs font-medium uppercase text-muted-foreground md:grid">
+        </span>
+      )}
+      description="Set the maximum model and gateway credits each member can use per month."
+    >
+      <SettingsEyebrow className="hidden grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] gap-4 border-b border-border py-3 md:grid">
         <div>Member</div>
         <div>Current month</div>
         <div>Monthly max</div>
         <div>Alert at</div>
-      </div>
+      </SettingsEyebrow>
 
       {people.map((person) => {
         const budgetInputId = `llm-budget-${toBudgetFieldId(person.email)}-monthly-max`;
@@ -35,15 +37,15 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
         return (
           <div
             key={person.email}
-            className="grid gap-3 border-b border-border-light px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] md:items-center md:gap-4"
+            className="grid gap-3 border-b border-border py-4 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.9fr)_minmax(9rem,0.7fr)_minmax(8rem,0.6fr)] md:items-center md:gap-4"
           >
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-foreground">{person.name}</div>
-              <div className="truncate text-sm text-muted-foreground">{person.email}</div>
+              <div className="truncate text-ui font-medium text-foreground">{person.name}</div>
+              <div className="truncate text-ui-sm text-muted-foreground">{person.email}</div>
             </div>
 
             <div className="min-w-0 space-y-1.5">
-              <div className="flex items-center justify-between gap-3 text-sm">
+              <div className="flex items-center justify-between gap-3 text-ui">
                 <span className="text-muted-foreground md:hidden">Current month</span>
                 <span className="font-medium text-foreground">
                   {person.usedLlmCredits.toLocaleString()} / {person.monthlyLlmBudgetCredits.toLocaleString()}
@@ -58,10 +60,7 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
             </div>
 
             <div className="min-w-0">
-              <Label
-                htmlFor={budgetInputId}
-                className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden"
-              >
+              <Label htmlFor={budgetInputId} className={`${SETTINGS_EYEBROW_CLASS} mb-1 block md:hidden`}>
                 Monthly max
               </Label>
               <Input
@@ -75,10 +74,7 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
             </div>
 
             <div className="min-w-0">
-              <Label
-                htmlFor={thresholdInputId}
-                className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden"
-              >
+              <Label htmlFor={thresholdInputId} className={`${SETTINGS_EYEBROW_CLASS} mb-1 block md:hidden`}>
                 Alert at
               </Label>
               <Select
@@ -97,15 +93,15 @@ export function OrganizationMemberLlmBudgets({ people }: { people: BudgetPerson[
         );
       })}
 
-      <div className="flex flex-col gap-3 border-t border-border-light px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="max-w-2xl text-sm leading-6 text-muted-foreground">
+      <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="max-w-2xl text-ui-sm leading-[1.45] text-muted-foreground">
           Enforcement will pause new LLM-backed work for a member once their monthly max is reached.
         </div>
         <Button type="button" variant="secondary" disabled className="w-full sm:w-auto">
           Save budgets
         </Button>
       </div>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 

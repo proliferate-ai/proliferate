@@ -75,6 +75,7 @@ export interface BatchedStreamSideEffectPlan {
   persistReconciledModePreferences: ReconciledStreamConfigIntent[];
   invalidateWorkspaceCollections: boolean;
   invalidateGitStatus: boolean;
+  invalidatePrStatus: boolean;
   lastActivityTimestamp: string | null;
   invalidateSessionSubagents: boolean;
   invalidateCowork: boolean;
@@ -92,6 +93,7 @@ export function planBatchedStreamSideEffects(input: {
 }): BatchedStreamSideEffectPlan {
   let invalidateWorkspaceCollections = false;
   let invalidateGitStatus = false;
+  let invalidatePrStatus = false;
   let lastActivityTimestamp: string | null = null;
   let invalidateSessionSubagents = false;
   let invalidateCowork = false;
@@ -136,6 +138,7 @@ export function planBatchedStreamSideEffects(input: {
     }
     if (event.type === "turn_ended" || event.type === "error") {
       invalidateGitStatus = !!input.workspaceId;
+      invalidatePrStatus = invalidateGitStatus;
       orderedEffects.push({
         kind: "notify_turn_end",
         eventType: event.type,
@@ -243,6 +246,7 @@ export function planBatchedStreamSideEffects(input: {
     persistReconciledModePreferences: input.reconciledIntents,
     invalidateWorkspaceCollections,
     invalidateGitStatus,
+    invalidatePrStatus,
     lastActivityTimestamp,
     invalidateSessionSubagents,
     invalidateCowork,

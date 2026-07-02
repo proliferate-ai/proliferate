@@ -11,10 +11,7 @@ from tests.e2e.cloud.helpers import (
     create_user_and_login,
     delete_cloud_workspace_quietly,
     get_cloud_connection,
-    require_local_auth,
     seed_linked_github_account,
-    status_for_provider,
-    sync_agent_auth_credential,
     workspace_status,
 )
 
@@ -28,9 +25,8 @@ async def test_provisioned_workspace_is_sane(
     cloud_test_config,
     provider_kind: str,
 ) -> None:
-    # Seed the exact user prerequisites the product relies on: local agent auth
-    # plus a linked GitHub token that can access the test repo.
-    require_local_auth(cloud_test_config, "claude")
+    # Seed the exact user prerequisites the product relies on: a linked GitHub
+    # token that can access the test repo.
     assert cloud_test_config.github_token is not None
 
     auth = await create_user_and_login(
@@ -54,11 +50,6 @@ async def test_provisioned_workspace_is_sane(
         },
     )
     repo_config_response.raise_for_status()
-
-    # Sync Claude into the control plane before provisioning so the cloud
-    # runtime should come up with at least one ready agent.
-    statuses = await sync_agent_auth_credential(cloud_client, auth, cloud_test_config, "claude")
-    assert status_for_provider(statuses, "claude")["synced"] is True
 
     # Create the workspace through the normal API, wait for the control plane to
     # finish provisioning, then fetch the runtime connection metadata.

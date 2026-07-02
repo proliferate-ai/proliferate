@@ -49,7 +49,7 @@ export function ProductSidebarSectionHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground">
+    <div className="pl-2 pt-3 pb-1 text-ui leading-5 text-sidebar-muted-foreground">
       <div className="flex items-center justify-between gap-2">
         <span className="opacity-75">{label}</span>
         {actions ? (

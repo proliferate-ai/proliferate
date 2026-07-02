@@ -78,7 +78,9 @@ impl SessionRuntime {
         records: &[SessionRecord],
     ) -> anyhow::Result<Vec<SessionView>> {
         let session_ids: Vec<String> = records.iter().map(|record| record.id.clone()).collect();
-        let mut live_configs = self.session_service.get_live_config_snapshots(&session_ids)?;
+        let mut live_configs = self
+            .session_service
+            .get_live_config_snapshots(&session_ids)?;
         let mut pending_prompts = self
             .session_service
             .store()

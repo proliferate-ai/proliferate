@@ -11,13 +11,11 @@ import {
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 
 import { routes } from "../../../config/routes";
-import { ensurePersonalAgentAuthLaunchReady } from "../../../lib/access/cloud/agent-auth-launch-readiness";
 import { createCloudWorkspaceWithTransientRecovery } from "../../../lib/access/cloud/create-workspace-with-transient-recovery";
 import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 import {
   buildBranchName,
   buildWorkspaceDisplayName,
-  normalizeAgentAuthAgentKind,
   type RepoOption,
   type RuntimeOption,
 } from "../../../lib/domain/home/cloud-home-launch-model";
@@ -82,11 +80,6 @@ export function useWebHomeSubmitWorkflow(input: {
         sessionConfigUpdates,
         createdAt: Date.now(),
       };
-      await ensurePersonalAgentAuthLaunchReady({
-        client,
-        agentKind: normalizeAgentAuthAgentKind(input.resolvedLaunchSelection.agentKind),
-        modelId: input.resolvedLaunchSelection.modelId,
-      });
       const workspaceRequest: CreateCloudWorkspaceRequest = {
         gitProvider: "github",
         gitOwner: input.selectedRepo.gitOwner,

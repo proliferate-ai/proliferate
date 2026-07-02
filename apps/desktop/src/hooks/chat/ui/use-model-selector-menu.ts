@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { AgentSummary } from "@anyharness/sdk";
 import {
   filterModelSelectorGroups,
 } from "@/lib/domain/chat/models/model-selector-filtering";
@@ -15,8 +14,6 @@ export function useModelSelectorMenu({
   groups,
 }: UseModelSelectorMenuArgs) {
   const [open, setOpen] = useState(false);
-  const [addProviderOpen, setAddProviderOpen] = useState(false);
-  const [setupAgent, setSetupAgent] = useState<AgentSummary | null>(null);
   const [search, setSearch] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ bottom: number; left: number } | null>(null);
@@ -28,7 +25,6 @@ export function useModelSelectorMenu({
 
   const handleClose = useCallback(() => {
     setOpen(false);
-    setAddProviderOpen(false);
     setSearch("");
   }, []);
 
@@ -42,27 +38,11 @@ export function useModelSelectorMenu({
     }
 
     setOpen((value) => !value);
-    setAddProviderOpen(false);
     setSearch("");
   }, [open]);
 
-  const toggleAddProvider = useCallback(() => {
-    setAddProviderOpen((value) => !value);
-  }, []);
-
-  const openSetupAgent = useCallback((agent: AgentSummary) => {
-    handleClose();
-    setSetupAgent(agent);
-  }, [handleClose]);
-
-  const closeSetupAgent = useCallback(() => {
-    setSetupAgent(null);
-  }, []);
-
   return {
     open,
-    addProviderOpen,
-    setupAgent,
     search,
     triggerRef,
     menuPos,
@@ -70,8 +50,5 @@ export function useModelSelectorMenu({
     setSearch,
     handleOpen,
     handleClose,
-    toggleAddProvider,
-    openSetupAgent,
-    closeSetupAgent,
   };
 }

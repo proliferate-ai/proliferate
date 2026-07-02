@@ -29,11 +29,6 @@ pub enum WorkerError {
         status: reqwest::StatusCode,
         body: String,
     },
-    #[error("anyharness rejected request: {status}")]
-    AnyHarness {
-        status: reqwest::StatusCode,
-        body: String,
-    },
     #[error("worker enrollment token is missing")]
     MissingEnrollmentToken,
     #[error("failed to create parent directory for {path}")]
@@ -46,10 +41,6 @@ pub enum WorkerError {
     WriteConfig { path: PathBuf, source: io::Error },
     #[error("failed to set private permissions on {path}")]
     SetPrivatePermissions { path: PathBuf, source: io::Error },
-    #[error("target materialization failed: {0}")]
-    Materialization(String),
-    #[error("runtime config credentials are missing")]
-    MissingRuntimeConfigCredentials(Vec<String>),
-    #[error("worker update failed: {0}")]
-    Update(String),
+    #[error("failed to write integration-gateway dotfile at {path}")]
+    WriteIntegrationGateway { path: PathBuf, source: io::Error },
 }

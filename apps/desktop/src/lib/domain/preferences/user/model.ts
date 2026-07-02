@@ -1,4 +1,4 @@
-import type { ColorMode, ThemePreset } from "@/config/theme";
+import type { ColorMode } from "@/config/theme";
 import type {
   ReadableCodeFontSizeId,
   UiFontSizeId,
@@ -16,8 +16,15 @@ import type {
 import { DEFAULT_OPEN_IN_TARGET_ID } from "@/config/open-target-defaults";
 
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
-export type TurnEndSoundId = "ding" | "gong";
+export type TurnEndSoundId = "ding";
 export type DefaultNewWorkspaceMode = "worktree" | "local";
+
+/**
+ * The app ships a single Mono theme. The persisted key survives (pinned to
+ * "mono") so migration can silently flip records saved by older builds that
+ * still offered ship/tbpn/original.
+ */
+export type ThemePreset = "mono";
 
 export interface UserPreferences {
   themePreset: ThemePreset;
@@ -38,7 +45,6 @@ export interface UserPreferences {
   transparentChromeEnabled: boolean;
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
-  cloudRuntimeInputSyncEnabled: boolean;
   worktreeAutoDeleteLimit: number;
   pasteAttachmentsEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
@@ -64,7 +70,6 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   transparentChromeEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
-  cloudRuntimeInputSyncEnabled: false,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
@@ -72,7 +77,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
 };
 
 export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
-  themePreset: "ship",
+  themePreset: "mono",
   colorMode: "dark",
   uiFontSizeId: "default",
   readableCodeFontSizeId: "default",
@@ -92,7 +97,6 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   transparentChromeEnabled: true,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
-  cloudRuntimeInputSyncEnabled: false,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },

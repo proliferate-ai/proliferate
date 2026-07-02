@@ -8,8 +8,8 @@ use std::collections::HashSet;
 use chrono::DateTime;
 
 use super::schema::{
-    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource, AgentCatalogAuthContext,
-    AgentCatalogAuthSignal, AgentCatalogDocument, AgentCatalogModel,
+    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource,
+    AgentCatalogAuthContext, AgentCatalogAuthSignal, AgentCatalogDocument, AgentCatalogModel,
 };
 use crate::domains::agents::model::AgentKind;
 
@@ -86,7 +86,11 @@ fn validate_agent(
 /// A resolved pin source is the lockfile's executable truth, so its fields must
 /// be materializable: per-target downloads need a url and the trust-anchor
 /// sha256; npm/git need a package/ref. A pin with no source is fine (legacy).
-fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) -> anyhow::Result<()> {
+fn validate_artifact_pin(
+    kind: &str,
+    role: &str,
+    pin: &AgentCatalogArtifactPin,
+) -> anyhow::Result<()> {
     let Some(source) = &pin.source else {
         return Ok(());
     };
@@ -105,7 +109,9 @@ fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) 
                 }
             }
         }
-        AgentCatalogArtifactSource::Npm { package, sha256, .. } => {
+        AgentCatalogArtifactSource::Npm {
+            package, sha256, ..
+        } => {
             if package.trim().is_empty() {
                 anyhow::bail!("agent '{kind}' {role} npm source has empty package");
             }
@@ -126,8 +132,8 @@ fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) 
             }
             // A mutable ref (branch/tag) is not a trust anchor — only a full
             // commit SHA is content-addressed.
-            let is_commit_sha = matches!(git_ref.len(), 40 | 64)
-                && git_ref.bytes().all(|b| b.is_ascii_hexdigit());
+            let is_commit_sha =
+                matches!(git_ref.len(), 40 | 64) && git_ref.bytes().all(|b| b.is_ascii_hexdigit());
             if !is_commit_sha {
                 anyhow::bail!(
                     "agent '{kind}' {role} git source ref must be a full commit SHA, got '{git_ref}'"

@@ -14,6 +14,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
 
@@ -204,7 +205,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
               data-telemetry-mask
               data-chat-transcript-ignore
               style={{ top: position.top, left: position.left, width: CARD_WIDTH }}
-              className={`fixed z-[70] block whitespace-normal rounded-lg border border-border/70 bg-popover/96 p-2.5 text-left text-xs text-popover-foreground shadow-floating backdrop-blur-lg hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`fixed z-[70] block whitespace-normal ${POPOVER_FRAME_CLASS} p-2.5 text-left text-xs hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring ${
                 measured ? "opacity-100" : "opacity-0"
               }`}
               aria-label={cardAriaLabel ?? `Open ${agent.identity.displayName}`}
@@ -233,7 +234,7 @@ export const DelegatedAgentHoverCard = forwardRef<HTMLDivElement, DelegatedAgent
               role="tooltip"
               data-telemetry-mask
               style={{ top: position.top, left: position.left, width: CARD_WIDTH }}
-              className={`pointer-events-none fixed z-[70] rounded-lg border border-border/70 bg-popover/96 p-2.5 text-xs text-popover-foreground shadow-floating backdrop-blur-lg ${
+              className={`pointer-events-none fixed z-[70] ${POPOVER_FRAME_CLASS} p-2.5 text-xs ${
                 measured ? "opacity-100" : "opacity-0"
               }`}
             >

@@ -1,5 +1,5 @@
 pub mod access;
-pub mod agent_auth_config;
+pub mod agent_auth;
 pub mod agents;
 mod agents_contract;
 mod agents_errors;
@@ -24,7 +24,6 @@ pub mod product_mcp;
 pub mod replay;
 pub mod repo_roots;
 pub mod reviews;
-pub mod runtime_config;
 pub mod sessions;
 pub mod sessions_config;
 mod sessions_contract;

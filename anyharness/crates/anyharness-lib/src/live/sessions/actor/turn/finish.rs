@@ -138,7 +138,10 @@ impl SessionActor {
                 self.handle
                     .set_execution_phase(SessionExecutionPhase::Idle)
                     .await;
-                let _ = self.caps.state.update_status(&self.session_id, "idle", &now);
+                let _ = self
+                    .caps
+                    .state
+                    .update_status(&self.session_id, "idle", &now);
                 tracing::info!(
                     session_id = %self.session_id,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
