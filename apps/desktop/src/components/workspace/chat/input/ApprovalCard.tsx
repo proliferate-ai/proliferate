@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Shield } from "@proliferate/ui/icons";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 import {
   ComposerOptionRow,
@@ -9,15 +10,18 @@ import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-car
 import { useChatPermissionActions } from "@/hooks/chat/workflows/use-chat-permission-actions";
 import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
 
-// Codex's approval header is just the title as medium-weight text — no
-// icon, no label chip, no uppercase prefix. The title itself is
-// self-describing (a command, a file path, or a question) so the extra
-// chrome just added visual noise. Header/type grammar comes from
-// ComposerAttachedPanel (text-ui title, shared with the other cards).
+// The header carries a fixed kind identity — a shield glyph + "Permission
+// request" — so every approval reads as the same kind of prompt no matter what
+// is being requested (header grammar from ComposerAttachedPanel: 16px icon +
+// text-ui title). The request payload itself (a shell command, a file path, an
+// MCP tool call) renders as a wrapping mono snippet in the body instead of a
+// truncating one-line title, so long commands stay fully readable.
 //
 // Options follow the codex popover-row anatomy (ComposerOptionRow): rounded
-// hover rows without hairlines, leading number-key badges, 1–9 selects.
-// Destructive options (deny/reject/cancel) render in --danger text.
+// hover rows without hairlines, leading number-key badges, 1–9 selects. The
+// harness-provided options and the fallback Allow/Deny path render through the
+// exact same rows so the two paths are visually identical; destructive kinds
+// (deny/reject/cancel) render in --danger text.
 
 export interface ApprovalCardProps {
   title: string;
@@ -66,17 +70,22 @@ export function ApprovalCard({
   });
 
   return (
-    <ComposerAttachedPanel title={title}>
-      <div className="max-h-[300px] overflow-y-auto px-2 pb-2">
-        {options.map((option, index) => (
-          <ComposerOptionRow
-            key={option.key}
-            index={index}
-            label={option.label}
-            destructive={option.destructive}
-            onSelect={option.onSelect}
-          />
-        ))}
+    <ComposerAttachedPanel icon={<Shield />} title="Permission request">
+      <div className="flex flex-col gap-1 px-2 pb-2">
+        <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-control px-2.5 py-2 font-mono text-ui-sm text-foreground">
+          {title}
+        </div>
+        <div className="max-h-[240px] overflow-y-auto">
+          {options.map((option, index) => (
+            <ComposerOptionRow
+              key={option.key}
+              index={index}
+              label={option.label}
+              destructive={option.destructive}
+              onSelect={option.onSelect}
+            />
+          ))}
+        </div>
       </div>
     </ComposerAttachedPanel>
   );

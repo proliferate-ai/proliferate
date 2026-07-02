@@ -2,6 +2,7 @@ import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sd
 import { useMemo, useState } from "react";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
@@ -10,6 +11,7 @@ import {
   ComposerCardFooter,
 } from "./ComposerAttachedPanel";
 import {
+  ComposerOptionKeyBadge,
   ComposerOptionRow,
   useComposerOptionNumberKeys,
 } from "./ComposerOptionRow";
@@ -19,6 +21,13 @@ import {
 // context), codex-style option rows with number-key badges (1–9 selects), an
 // inset free-text row on --control with an inset ring, and the shared
 // ComposerCardFooter (secondary chips left, primary chip right).
+//
+// Selecting a real (agent-provided) option auto-advances to the next question
+// — or submits on the last one — so single-select questions resolve in one
+// click like the approval card; Back is still available in the footer. The
+// synthetic "None of the above" row is the exception: it opens the free-text
+// field instead of advancing, and renders under a hairline separator with a
+// muted tone so it never reads like one of the agent's real options.
 
 const OTHER_OPTION_LABEL = "None of the above";
 
@@ -98,6 +107,8 @@ export function UserInputCard({
     selectedOptionLabel: null,
     text: "",
   };
+  const isFirst = questionIndex === 0;
+  const isLast = questionIndex >= questions.length - 1;
 
   const updateDraft = (patch: Partial<UserInputDraft>) => {
     if (!currentQuestion) return;
@@ -113,18 +124,43 @@ export function UserInputCard({
     }));
   };
 
-  const selectOptionAtIndex = (index: number) => {
-    const option = options[index];
-    if (!option) return;
-    updateDraft({
-      selectedOptionLabel: option.label,
-      text: option.label === OTHER_OPTION_LABEL ? draft.text : "",
+  // Answers with an override draft for the current question, so an auto-advance
+  // click can submit the just-selected option without waiting for the drafts
+  // state update to flush.
+  const answersWithCurrentDraft = (nextDraft: UserInputDraft): UserInputSubmittedAnswer[] =>
+    questions.map((question) => {
+      const source = currentQuestion && question.questionId === currentQuestion.questionId
+        ? nextDraft
+        : drafts[question.questionId] ?? { selectedOptionLabel: null, text: "" };
+      return buildSubmittedAnswer(question, source);
     });
+
+  const chooseOption = (index: number) => {
+    const option = options[index];
+    if (!option || !currentQuestion) return;
+    const isSynthetic = option.label === OTHER_OPTION_LABEL;
+    const nextDraft: UserInputDraft = {
+      selectedOptionLabel: option.label,
+      text: isSynthetic ? draft.text : "",
+    };
+    updateDraft(nextDraft);
+    if (isSynthetic) {
+      // Synthetic "None of the above" opens the free-text field instead of
+      // advancing — the user still has to type a custom answer.
+      return;
+    }
+    // A concrete agent option is a complete answer: advance to the next
+    // question, or submit when this is the last one.
+    if (isLast) {
+      onSubmit(answersWithCurrentDraft(nextDraft));
+    } else {
+      setQuestionIndex((current) => Math.min(questions.length - 1, current + 1));
+    }
   };
 
   useComposerOptionNumberKeys(
     options.length,
-    selectOptionAtIndex,
+    chooseOption,
     !!currentQuestion,
   );
 
@@ -138,9 +174,10 @@ export function UserInputCard({
     );
   }
 
+  const agentOptionCount = currentQuestion.options?.length ?? 0;
+  const hasSyntheticOption = currentQuestion.isOther;
+  const syntheticIndex = agentOptionCount;
   const showTextInput = allowsDraftText(currentQuestion, draft);
-  const isFirst = questionIndex === 0;
-  const isLast = questionIndex >= questions.length - 1;
   const handleAdvance = () => {
     if (isLast) {
       onSubmit(answers);
@@ -167,16 +204,25 @@ export function UserInputCard({
               </div>
             ) : null}
 
-          {options.map((option, index) => (
+          {(currentQuestion.options ?? []).map((option, index) => (
             <ComposerOptionRow
               key={option.label}
               index={index}
               label={option.label}
               description={option.description}
               selected={draft.selectedOptionLabel === option.label}
-              onSelect={() => selectOptionAtIndex(index)}
+              onSelect={() => chooseOption(index)}
             />
           ))}
+
+          {hasSyntheticOption && (
+            <SyntheticOptionRow
+              index={syntheticIndex}
+              hasAgentOptions={agentOptionCount > 0}
+              selected={draft.selectedOptionLabel === OTHER_OPTION_LABEL}
+              onSelect={() => chooseOption(syntheticIndex)}
+            />
+          )}
         </div>
 
         {showTextInput && (
@@ -243,6 +289,52 @@ export function UserInputCard({
         />
       </div>
     </ComposerAttachedPanel>
+  );
+}
+
+/**
+ * The synthetic "None of the above" row. Shares the option-row anatomy (same
+ * number-key badge, hover fill, and paddings) but sits under a hairline
+ * separator and renders in a muted --faint tone so it reads as an escape hatch
+ * rather than one of the agent's real answers.
+ */
+function SyntheticOptionRow({
+  index,
+  hasAgentOptions,
+  selected,
+  onSelect,
+}: {
+  index: number;
+  hasAgentOptions: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <div className={hasAgentOptions ? "mt-1 border-t border-border/60 pt-1" : ""}>
+      <button
+        type="button"
+        onClick={onSelect}
+        className={twMerge(
+          "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent",
+          selected ? "bg-accent" : "",
+        )}
+      >
+        <ComposerOptionKeyBadge>{index + 1}</ComposerOptionKeyBadge>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span
+            className={twMerge(
+              "text-ui transition-colors",
+              selected
+                ? "text-muted-foreground"
+                : "text-faint group-hover/option:text-muted-foreground",
+            )}
+          >
+            {OTHER_OPTION_LABEL}
+          </span>
+          <span className="text-ui-sm text-faint">Write a custom answer</span>
+        </span>
+      </button>
+    </div>
   );
 }
 
