@@ -127,9 +127,9 @@ describe("SettingsSidebar layout and shortcuts", () => {
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
+      "Account",
       "General",
       "Appearance",
-      "Account",
       "Personal secrets",
       "Pruning",
       "Archived chats",
@@ -277,13 +277,13 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 1,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("general");
+    expect(onSelectSection).toHaveBeenLastCalledWith("account");
 
     expect(runShortcutHandler("settings.section-by-index", {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {
@@ -295,7 +295,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
     const onSelectSection = vi.fn();
     renderSettingsSidebar({
       activeScope: "user",
-      disabledSections: { general: true },
+      disabledSections: { account: true },
       onSelectSection,
     });
 
@@ -315,6 +315,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 2,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("appearance");
+    expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 });

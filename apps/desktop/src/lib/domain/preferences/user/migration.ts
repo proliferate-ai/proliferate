@@ -76,6 +76,19 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     }
   }
 
+  // The app ships a single Mono theme: silently flip records persisted by
+  // older builds that still offered ship/tbpn/original.
+  if (next.themePreset !== "mono") {
+    next.themePreset = "mono";
+    changed = true;
+  }
+
+  // "gong" was the tbpn-only turn-end easter egg; it retired with the preset.
+  if (next.turnEndSoundId !== "ding") {
+    next.turnEndSoundId = "ding";
+    changed = true;
+  }
+
   if (
     next.branchPrefixType !== "none"
     && next.branchPrefixType !== "proliferate"

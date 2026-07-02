@@ -19,22 +19,9 @@ import {
   stepWindowZoomId,
   WINDOW_ZOOM_IDS,
 } from "@/lib/domain/preferences/appearance";
-import {
-  COLOR_MODES,
-  isModeLockedPreset,
-  THEME_PRESETS,
-  type ColorMode,
-  type ThemePreset,
-} from "@/config/theme";
-import { useColorMode, useThemePreset } from "@/hooks/theme/workflows/use-theme-preferences";
+import { COLOR_MODES, type ColorMode } from "@/config/theme";
+import { useColorMode } from "@/hooks/theme/workflows/use-theme-preferences";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-
-const PRESET_LABELS: Record<ThemePreset, string> = {
-  ship: "Dominic",
-  mono: "Mono",
-  tbpn: "TBPN",
-  original: "Original",
-};
 
 const MODE_LABELS: Record<ColorMode, string> = {
   dark: "Dark",
@@ -56,15 +43,12 @@ const PREVIEW_DIFF = `@@ -1,5 +1,5 @@
  };`;
 
 export function AppearancePane() {
-  const [preset, setPreset] = useThemePreset();
   const [mode, setMode] = useColorMode();
   const transparentChromeEnabled = useUserPreferencesStore((state) => state.transparentChromeEnabled);
   const uiFontSizeId = useUserPreferencesStore((state) => state.uiFontSizeId);
   const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
   const windowZoomId = useUserPreferencesStore((state) => state.windowZoomId);
   const setPreference = useUserPreferencesStore((state) => state.set);
-  const modeLocked = isModeLockedPreset(preset);
-  const displayedMode: ColorMode = modeLocked ? "dark" : mode;
   const canDecreaseZoom = windowZoomId !== WINDOW_ZOOM_IDS[0];
   const canIncreaseZoom = windowZoomId !== WINDOW_ZOOM_IDS[WINDOW_ZOOM_IDS.length - 1];
 
@@ -77,11 +61,7 @@ export function AppearancePane() {
 
           <SettingsRow
             label="Mode"
-            description={
-              modeLocked
-                ? "This theme always uses the same appearance"
-                : "Light, dark, or follow the system setting"
-            }
+            description="Light, dark, or follow the system setting"
           >
             <div className="flex gap-1.5">
               {COLOR_MODES.map((candidateMode) => {
@@ -90,15 +70,10 @@ export function AppearancePane() {
                   <Button
                     key={candidateMode}
                     type="button"
-                    variant={displayedMode === candidateMode ? "secondary" : "ghost"}
+                    variant={mode === candidateMode ? "secondary" : "ghost"}
                     size="sm"
-                    disabled={modeLocked}
                     className="px-2.5 text-xs"
-                    onClick={() => {
-                      if (!modeLocked) {
-                        setMode(candidateMode);
-                      }
-                    }}
+                    onClick={() => setMode(candidateMode)}
                   >
                     <Icon className="size-3.5" />
                     {MODE_LABELS[candidateMode]}
@@ -109,27 +84,8 @@ export function AppearancePane() {
           </SettingsRow>
 
           <SettingsRow
-            label="Theme"
-          >
-            <SettingsMenu
-              label={PRESET_LABELS[preset]}
-              className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
-              groups={[{
-                id: "theme-presets",
-                options: THEME_PRESETS.map((themePreset) => ({
-                  id: themePreset,
-                  label: PRESET_LABELS[themePreset],
-                  selected: themePreset === preset,
-                  onSelect: () => setPreset(themePreset),
-                })),
-              }]}
-            />
-          </SettingsRow>
-
-          <SettingsRow
             label="Window zoom"
-            description="Scale the app window without changing saved font sizes"
+            description="Zoom everything in the window, like browser zoom. Font size settings are unaffected."
           >
             <div
               className={`grid h-8 ${SETTINGS_CONTROL_WIDTH_CLASS} grid-cols-[2rem_minmax(0,1fr)_2rem] items-center overflow-hidden rounded-lg border border-transparent bg-foreground/5 text-foreground`}

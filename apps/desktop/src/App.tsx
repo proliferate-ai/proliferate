@@ -5,7 +5,6 @@ import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
 import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { ToastContainer } from "@/components/feedback/Toast"
-import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
@@ -328,7 +327,6 @@ function AppRuntime() {
           <Toaster />
           <UpdateToastPresenter />
           <KeyboardShortcutsDialog />
-          <TurnEndCelebration />
         </ShortcutRevealProvider>
       </AppCommandActionsProvider>
     </>
