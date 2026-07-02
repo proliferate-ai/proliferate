@@ -19,6 +19,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_TOPUP
 from proliferate.db.models.cloud.agent_gateway import (
     AgentLlmUsageEvent,
     LlmCreditGrant,
@@ -90,6 +91,26 @@ async def create_llm_credit_grant(
     db.add(row)
     await db.flush()
     return llm_credit_grant_record(row)
+
+
+async def count_topup_grants(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> int:
+    """Number of top-up grants a subject holds.
+
+    The auto top-up worker derives its Stripe idempotency key from this count
+    (the "top-up epoch"): a tick that crashed between charging and granting
+    replays with the same key, so Stripe returns the same invoice and the
+    grant's ``source_ref`` dedupe closes the loop.
+    """
+    total = await db.scalar(
+        select(func.count()).where(
+            LlmCreditGrant.billing_subject_id == billing_subject_id,
+            LlmCreditGrant.source == LLM_CREDIT_SOURCE_TOPUP,
+        )
+    )
+    return int(total or 0)
 
 
 async def sum_active_grants_usd(

@@ -174,6 +174,10 @@ lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 | `AGENT_GATEWAY_FREE_CREDIT_USD` | No | No | One-time free LLM credit (USD) granted at enrollment; "0" disables |
 | `AGENT_GATEWAY_USAGE_IMPORT_INTERVAL_SECONDS` | No | No | Usage-import worker interval (spend-log paging + exhaustion) |
 | `AGENT_GATEWAY_USAGE_IMPORT_OVERLAP_SECONDS` | No | No | Overlap window re-read each usage-import tick (dedupe on request id) |
+| `AGENT_GATEWAY_TOPUP_INTERVAL_SECONDS` | No | No | LLM auto top-up worker interval |
+| `AGENT_GATEWAY_TOPUP_THRESHOLD_USD` | No | No | Remaining LLM credit (USD) that triggers an auto top-up for overage-enabled subjects |
+| `AGENT_GATEWAY_TOPUP_AMOUNT_USD` | No | No | LLM credit (USD) granted per top-up; must match the Stripe top-up price |
+| `AGENT_GATEWAY_LLM_TOPUP_PRICE_ID` | No | No | Stripe price id for one LLM top-up charge; empty disables auto top-ups |
 
 The LiteLLM service itself (a separate ECS service / docker-compose pair) is
 configured with `LITELLM_MASTER_KEY`, its own `DATABASE_URL`, and the managed

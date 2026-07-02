@@ -557,6 +557,30 @@
   description: Overlap window (seconds) re-read on each usage-import tick; dedupe on litellm_request_id makes overlapping windows safe
   tags: [local-dev, self-hosted, production]
 
+- name: AGENT_GATEWAY_TOPUP_INTERVAL_SECONDS
+  secret: false
+  default: "300.0"
+  description: Interval for the LLM auto top-up worker that charges overage-enabled subjects below the credit threshold
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_TOPUP_THRESHOLD_USD
+  secret: false
+  default: "2"
+  description: Remaining LLM credit (USD) below which an overage-enabled subject is auto-topped-up
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_TOPUP_AMOUNT_USD
+  secret: false
+  default: "10"
+  description: LLM credit (USD) granted per auto top-up charge; must match the configured Stripe top-up price
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_LLM_TOPUP_PRICE_ID
+  secret: false
+  default: ""
+  description: Stripe price id charged once per LLM auto top-up (distinct from the compute overage meter/price); empty disables auto top-ups entirely
+  tags: [production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud MCP
 # ═══════════════════════════════════════════════════════════════════════
