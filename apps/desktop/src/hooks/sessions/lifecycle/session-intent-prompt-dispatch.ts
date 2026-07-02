@@ -23,9 +23,6 @@ import {
   getSessionClientAndWorkspace,
 } from "@/lib/access/anyharness/session-runtime";
 import {
-  prepareLocalRuntimeConfigForTarget,
-} from "@/lib/access/anyharness/session-runtime-config";
-import {
   waitForSessionMaterialization,
 } from "@/lib/workflows/sessions/session-materialization";
 import {
@@ -128,17 +125,11 @@ export async function dispatchPromptIntent(
     }
     const {
       connection,
-      target,
       workspaceId,
       materializedSessionId: resolvedSessionId,
     } = await getSessionClientAndWorkspace(entry.clientSessionId);
     requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
     const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
-    await prepareLocalRuntimeConfigForTarget(
-      target,
-      connection,
-      requestOptions,
-    );
 
     useSessionIntentStore.getState().patchIntent(entry.intentId, {
       status: "dispatching",
