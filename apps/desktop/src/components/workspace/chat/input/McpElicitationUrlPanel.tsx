@@ -38,7 +38,7 @@ export function McpElicitationUrlPanel({
               value={revealedUrl}
               readOnly
               data-telemetry-mask="true"
-              className="font-mono text-ui-sm"
+              className="text-ui-sm"
             />
           )}
           {error && <McpElicitationInlineError message={error} />}

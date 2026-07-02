@@ -11,7 +11,7 @@ import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 export function ComposerOptionKeyBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-surface-control font-mono text-ui-sm leading-none text-faint">
+    <span className="flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-surface-control text-ui-sm leading-none text-faint">
       {children}
     </span>
   );

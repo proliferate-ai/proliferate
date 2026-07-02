@@ -16,7 +16,7 @@ describe("ApprovalCard", () => {
     cleanup();
   });
 
-  it("shows a fixed permission-request identity and renders the payload as a mono snippet", () => {
+  it("shows a fixed permission-request identity and renders the payload as a snippet block", () => {
     render(
       <ApprovalCard
         title="git push --force origin main"
@@ -32,7 +32,7 @@ describe("ApprovalCard", () => {
 
     // The payload renders as a wrapping mono snippet in the body.
     const snippet = screen.getByText("git push --force origin main");
-    expect(snippet.className).toContain("font-mono");
+    expect(snippet.className).not.toContain("font-mono");
   });
 
   it("routes harness option clicks through onSelectOption by optionId", () => {

@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import {
   CircleQuestion,
   MessageCircleQuestion,
-  Shield,
   Sparkles,
 } from "@proliferate/ui/icons";
 import type { PendingInteraction } from "@anyharness/sdk";
@@ -201,7 +200,7 @@ export function PendingInteractionMarkerView({
 }): ReactNode {
   const { Icon, label } =
     kind === "permission"
-      ? { Icon: Shield, label: "Permission" }
+      ? { Icon: MessageCircleQuestion, label: "Permission" }
       : kind === "question"
         ? { Icon: MessageCircleQuestion, label: "Question" }
         : { Icon: CircleQuestion, label: null };

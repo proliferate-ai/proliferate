@@ -90,7 +90,7 @@ export function WorkspaceArrivalAttachedPanelView({
             <span className="group/setup-error relative min-w-0 truncate text-muted-foreground">
               {viewModel.setupSummary}
               {viewModel.setupDetail && (
-                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 font-mono text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
+                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
                   {viewModel.setupDetail}
                 </span>
               )}
@@ -187,7 +187,7 @@ export function WorkspaceArrivalAttachedPanel() {
             <span className="group/setup-error relative min-w-0 truncate text-sm text-muted-foreground">
               {panelState.summary}
               {panelState.detail && (
-                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 font-mono text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
+                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
                   {panelState.detail}
                 </span>
               )}

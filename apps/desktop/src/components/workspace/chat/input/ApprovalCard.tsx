@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { Shield } from "@proliferate/ui/icons";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 import {
   ComposerOptionRow,
@@ -70,9 +69,9 @@ export function ApprovalCard({
   });
 
   return (
-    <ComposerAttachedPanel icon={<Shield />} title="Permission request">
+    <ComposerAttachedPanel title="Permission request">
       <div className="flex flex-col gap-1 px-2 pb-2">
-        <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-control px-2.5 py-2 font-mono text-ui-sm text-foreground">
+        <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-control px-2.5 py-2 text-ui-sm text-foreground">
           {title}
         </div>
         <div className="max-h-[240px] overflow-y-auto">
