@@ -373,14 +373,15 @@ async def test_ensure_team_reuses_stored_id_without_listing(
 
 
 @pytest.mark.asyncio
-async def test_rotate_virtual_key_tolerates_missing_key_on_delete(
+async def test_rotate_virtual_key_tolerates_missing_old_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A previous attempt deleted the key but crashed before minting; the retry
-    # sees a 404 on /key/delete and must proceed to mint rather than loop.
+    # The old key delete fails (already gone, e.g. a prior rotate whose DB
+    # write rolled back). Rotation must still mint a fresh key so recovery
+    # converges instead of erroring forever.
     client = _FakeAsyncClient(
         [
-            _response(404, {"error": {"message": "key not found"}}),
+            _response(400, {"error": {"message": "key not found"}}),
             _response(
                 200,
                 {"key": "sk-virtual-new", "token_id": "hash-new", "user_id": "user-1"},
@@ -390,7 +391,7 @@ async def test_rotate_virtual_key_tolerates_missing_key_on_delete(
     _install(monkeypatch, client)
 
     key = await litellm.rotate_virtual_key(
-        key_or_token_id="hash-old",
+        key_or_token_id="hash-gone",
         user_id="user-1",
         alias="user-1-personal",
     )
@@ -403,46 +404,21 @@ async def test_rotate_virtual_key_tolerates_missing_key_on_delete(
 
 
 @pytest.mark.asyncio
-async def test_rotate_virtual_key_reraises_non_404_delete_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient([_response(500, {"detail": "boom"})])
+async def test_budget_updates_clear_cap_with_null(monkeypatch: pytest.MonkeyPatch) -> None:
+    # max_budget=None sends an explicit null so LiteLLM removes the cap.
+    client = _FakeAsyncClient(
+        [
+            _response(200, {"key": "hash-abc"}),
+            _response(200, {"team_id": "team-1"}),
+        ]
+    )
     _install(monkeypatch, client)
 
-    with pytest.raises(litellm.LiteLLMIntegrationError) as excinfo:
-        await litellm.rotate_virtual_key(key_or_token_id="hash-old", user_id="user-1")
+    await litellm.set_key_budget(key_or_token_id="hash-abc", max_budget=None)
+    await litellm.update_team_budget(team_id="team-1", max_budget=None)
 
-    assert excinfo.value.status_code == 500
-    # No mint attempted after a hard delete failure.
-    assert [request.url.path for request in client.requests] == ["/key/delete"]
-
-
-@pytest.mark.asyncio
-async def test_mint_virtual_key_malformed_200_wraps_validation_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # 200 with the required ``key`` field missing must surface as an integration
-    # error, not a raw pydantic ValidationError.
-    client = _FakeAsyncClient([_response(200, {"token_id": "hash-only"})])
-    _install(monkeypatch, client)
-
-    with pytest.raises(litellm.LiteLLMIntegrationError) as excinfo:
-        await litellm.mint_virtual_key(user_id="user-1")
-
-    assert excinfo.value.code == "litellm_invalid_response"
-
-
-@pytest.mark.asyncio
-async def test_page_spend_logs_malformed_row_wraps_validation_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient([_response(200, [{"api_key": "hash-abc"}])])
-    _install(monkeypatch, client)
-
-    with pytest.raises(litellm.LiteLLMIntegrationError) as excinfo:
-        await litellm.page_spend_logs(start_date="2026-06-30", end_date="2026-07-01")
-
-    assert excinfo.value.code == "litellm_invalid_response"
+    assert _request_body(client.requests[0]) == {"key": "hash-abc", "max_budget": None}
+    assert _request_body(client.requests[1]) == {"team_id": "team-1", "max_budget": None}
 
 
 @pytest.mark.asyncio

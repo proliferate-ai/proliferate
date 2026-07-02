@@ -25,6 +25,7 @@ Verified against ghcr.io/berriai/litellm:main-stable:
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
@@ -33,6 +34,8 @@ from pydantic import BaseModel, ValidationError
 from proliferate.config import settings
 from proliferate.integrations.litellm.errors import LiteLLMIntegrationError
 from proliferate.integrations.litellm.models import LiteLLMSpendLogEntry, LiteLLMVirtualKey
+
+logger = logging.getLogger(__name__)
 
 
 def _base_url() -> str:
@@ -234,15 +237,18 @@ async def rotate_virtual_key(
     alias for reuse by the replacement key. The old key stops working the
     moment the delete lands.
 
-    A 404 on the delete means the key is already gone (e.g. a previous attempt
-    deleted it but failed before minting). Treat that as success so a retry is
-    idempotent and proceeds to mint instead of looping on the delete forever.
+    A missing old key is tolerated: rotation exists to hand back a fresh
+    working key, and the old id may already be gone (e.g. a prior rotate whose
+    DB write later rolled back). Failing the delete would wedge recovery
+    forever, so we log and mint regardless.
     """
     try:
         await _admin_request("POST", "/key/delete", json_body={"keys": [key_or_token_id]})
-    except LiteLLMIntegrationError as exc:
-        if exc.status_code != 404:
-            raise
+    except LiteLLMIntegrationError as error:
+        logger.warning(
+            "LiteLLM key delete during rotate failed; re-minting anyway",
+            extra={"error_code": error.code, "status_code": error.status_code},
+        )
     return await mint_virtual_key(
         user_id=user_id,
         team_id=team_id,
@@ -257,8 +263,24 @@ async def disable_virtual_key(*, key_or_token_id: str) -> None:
     await _admin_request("POST", "/key/block", json_body={"key": key_or_token_id})
 
 
-async def set_key_budget(*, key_or_token_id: str, max_budget: float) -> None:
-    """Set the max budget (USD) on a virtual key."""
+async def enable_virtual_key(*, key_or_token_id: str) -> None:
+    """Unblock a previously blocked virtual key (``/key/unblock``).
+
+    Mirrors :func:`disable_virtual_key`; the raw key value is preserved so
+    clients that already hold it keep working. Callers fall back to
+    :func:`rotate_virtual_key` (delete + mint) when unblock fails on the
+    running proxy build.
+    """
+    await _admin_request("POST", "/key/unblock", json_body={"key": key_or_token_id})
+
+
+async def set_key_budget(*, key_or_token_id: str, max_budget: float | None) -> None:
+    """Set (or clear) a virtual key's budget.
+
+    ``max_budget=None`` sends an explicit ``null`` so LiteLLM removes the cap —
+    this is how an overage-enabled subject that was previously hard-capped gets
+    uncapped when its top-up lands.
+    """
     await _admin_request(
         "POST",
         "/key/update",
@@ -266,8 +288,8 @@ async def set_key_budget(*, key_or_token_id: str, max_budget: float) -> None:
     )
 
 
-async def update_team_budget(*, team_id: str, max_budget: float) -> None:
-    """Set the max budget (USD) on a team."""
+async def update_team_budget(*, team_id: str, max_budget: float | None) -> None:
+    """Set (or clear, with ``max_budget=None``) a team's budget."""
     await _admin_request(
         "POST",
         "/team/update",

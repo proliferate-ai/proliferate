@@ -51,8 +51,10 @@ from proliferate.server.billing.api import router as billing_router
 from proliferate.server.catalogs.api import router as catalogs_router
 from proliferate.server.cloud.agent_gateway.worker import (
     start_agent_gateway_enrollment_backfill,
+    start_agent_gateway_llm_topups,
     start_agent_gateway_usage_import,
     stop_agent_gateway_enrollment_backfill,
+    stop_agent_gateway_llm_topups,
     stop_agent_gateway_usage_import,
 )
 from proliferate.server.cloud.api import router as cloud_router
@@ -221,9 +223,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     agent_gateway_backfill_task = await start_agent_gateway_enrollment_backfill()
     agent_gateway_usage_import_task = await start_agent_gateway_usage_import()
+    agent_gateway_topup_task = await start_agent_gateway_llm_topups()
     try:
         yield
     finally:
+        await stop_agent_gateway_llm_topups(agent_gateway_topup_task)
         await stop_agent_gateway_usage_import(agent_gateway_usage_import_task)
         await stop_agent_gateway_enrollment_backfill(agent_gateway_backfill_task)
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)

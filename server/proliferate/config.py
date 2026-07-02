@@ -336,6 +336,11 @@ class Settings(BaseSettings):
     agent_gateway_free_credit_usd: str = "5"
     agent_gateway_usage_import_interval_seconds: float = 60.0
     agent_gateway_usage_import_overlap_seconds: float = 300.0
+    agent_gateway_topup_interval_seconds: float = 300.0
+    agent_gateway_topup_threshold_usd: str = "2"
+    agent_gateway_topup_amount_usd: str = "10"
+    # Stripe price for one auto top-up charge; empty disables auto top-ups.
+    agent_gateway_llm_topup_price_id: str = ""
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
