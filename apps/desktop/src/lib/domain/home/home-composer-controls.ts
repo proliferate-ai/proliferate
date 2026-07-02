@@ -53,7 +53,6 @@ export function buildHomeModelSelectorProps({
     })),
     hasAgents: groups.length > 0,
     isLoading: availabilityState === "loading",
-    notReadyAgents: [],
     onSelect,
   };
 }
