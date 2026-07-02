@@ -115,6 +115,15 @@ class PasswordCredentialResponse(BaseModel):
 
     enabled: bool
     set_at: str | None = Field(default=None, serialization_alias="setAt")
+    # Populated only when a password *change* re-mints the acting session. The
+    # change revokes every previously issued token; these let the caller adopt a
+    # fresh one instead of being logged out. Absent on first-time set. The
+    # refresh token is returned only to non-web (bearer) callers — web callers
+    # receive it as an httpOnly cookie instead.
+    access_token: str | None = Field(default=None, serialization_alias="accessToken")
+    refresh_token: str | None = Field(default=None, serialization_alias="refreshToken")
+    expires_in: int | None = Field(default=None, serialization_alias="expiresIn")
+    token_type: Literal["bearer"] | None = Field(default=None, serialization_alias="tokenType")
 
 
 class AccountReadinessResponse(BaseModel):

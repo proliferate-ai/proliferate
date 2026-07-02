@@ -31,6 +31,11 @@ from proliferate.auth.sso.branding import (
     sso_brand_label_from_subject,
 )
 from proliferate.auth.sso.deployment_config import deployment_sso_connection
+from proliferate.auth.tokens import (
+    REFRESH_TOKEN_AUDIENCE,
+    claimed_token_generation,
+    user_token_generation,
+)
 from proliferate.config import settings
 from proliferate.constants.auth import (
     AUTH_CODE_LIFETIME_SECONDS,
@@ -41,6 +46,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
 from proliferate.db.store.auth import consume_auth_code
 from proliferate.db.store.auth_sso_records import SsoIdentityRecord
+from proliferate.db.store.users import bump_user_token_generation
 
 WEB_REFRESH_COOKIE = "proliferate_web_refresh"
 WEB_CSRF_COOKIE = "proliferate_web_csrf"
@@ -84,7 +90,11 @@ async def mint_auth_session(db: AsyncSession, *, user: User) -> AuthSession:
     _ensure_active_user(user)
     access_token = await get_jwt_strategy().write_token(user)
     refresh_token = generate_jwt(
-        data={"sub": str(user.id), "aud": "proliferate:refresh"},
+        data={
+            "sub": str(user.id),
+            "aud": REFRESH_TOKEN_AUDIENCE,
+            "token_generation": user_token_generation(user),
+        },
         secret=settings.jwt_secret,
         lifetime_seconds=REFRESH_TOKEN_LIFETIME_SECONDS,
     )
@@ -110,7 +120,7 @@ async def refresh_auth_session(db: AsyncSession, *, refresh_token: str) -> AuthS
         payload = decode_jwt(
             refresh_token,
             secret=settings.jwt_secret,
-            audience=["proliferate:refresh"],
+            audience=[REFRESH_TOKEN_AUDIENCE],
         )
     except Exception as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token.") from exc
@@ -120,7 +130,41 @@ async def refresh_auth_session(db: AsyncSession, *, refresh_token: str) -> AuthS
     user = await get_user_by_id(db, UUID(user_id))
     if user is None:
         raise HTTPException(status_code=401, detail="User not found.")
+    if claimed_token_generation(payload) != user_token_generation(user):
+        raise HTTPException(status_code=401, detail="Refresh token has been revoked.")
     return await mint_auth_session(db, user=user)
+
+
+async def revoke_sessions_for_refresh_token(
+    db: AsyncSession,
+    *,
+    refresh_token: str | None,
+) -> None:
+    """Best-effort "log out everywhere" for the user owning ``refresh_token``.
+
+    Bumps the user's ``token_generation`` so every previously issued access and
+    refresh token (all surfaces) stops authenticating. Any decode/lookup failure
+    is swallowed: logout must still clear client cookies even for an already
+    stale, invalid, or expired refresh token.
+    """
+    if not refresh_token:
+        return
+    try:
+        payload = decode_jwt(
+            refresh_token,
+            secret=settings.jwt_secret,
+            audience=[REFRESH_TOKEN_AUDIENCE],
+        )
+    except Exception:
+        return
+    user_id = payload.get("sub")
+    if not isinstance(user_id, str):
+        return
+    try:
+        parsed_user_id = UUID(user_id)
+    except ValueError:
+        return
+    await bump_user_token_generation(db, parsed_user_id)
 
 
 async def auth_viewer_payload(

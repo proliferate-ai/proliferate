@@ -48,6 +48,11 @@ from proliferate.auth.identity.types import VerifiedProviderIdentity
 from proliferate.auth.jwt import get_jwt_strategy
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.auth.pkce import build_code_challenge, verify_pkce
+from proliferate.auth.tokens import (
+    REFRESH_TOKEN_AUDIENCE,
+    claimed_token_generation,
+    user_token_generation,
+)
 from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
@@ -194,7 +199,11 @@ async def mint_desktop_tokens(user: User) -> TokenResponse:
     strategy = get_jwt_strategy()
     access_token = await strategy.write_token(user)
     refresh_token = generate_jwt(
-        data={"sub": str(user.id), "aud": "proliferate:refresh"},
+        data={
+            "sub": str(user.id),
+            "aud": REFRESH_TOKEN_AUDIENCE,
+            "token_generation": user_token_generation(user),
+        },
         secret=settings.jwt_secret,
         lifetime_seconds=REFRESH_TOKEN_LIFETIME_SECONDS,
     )
@@ -566,7 +575,7 @@ async def refresh_desktop_access_token(
         payload = decode_jwt(
             body.refresh_token,
             secret=settings.jwt_secret,
-            audience=["proliferate:refresh"],
+            audience=[REFRESH_TOKEN_AUDIENCE],
         )
     except Exception as exc:
         raise HTTPException(
@@ -590,4 +599,9 @@ async def refresh_desktop_access_token(
         ) from None
 
     user = await get_active_user_or_400(db, user_id)
+    if claimed_token_generation(payload) != user_token_generation(user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+        )
     return await mint_desktop_tokens(user)

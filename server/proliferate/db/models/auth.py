@@ -36,6 +36,16 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # Monotonic session/token generation. Every access and refresh token embeds
+    # the value that was current at mint time; a mismatch on use means the token
+    # predates a logout or password change and must be rejected. Bumping this is
+    # the server-side "log out everywhere" / "revoke all sessions" primitive.
+    token_generation: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
     oauth_accounts: Mapped[list[OAuthAccount]] = relationship("OAuthAccount", lazy="selectin")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
