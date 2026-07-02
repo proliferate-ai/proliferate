@@ -27,6 +27,11 @@ export type ComposerDockActiveSlotCompanion = { kind: "todo_strip" };
 export interface ComposerDockAttachedSlot {
   ambientSlot: ComposerDockAmbientSlot | null;
   delegatedWork: boolean;
+  /**
+   * Session goal bar — ever-present ambient context while goal state is
+   * live, rendered last so it docks directly against the composer surface.
+   */
+  sessionGoal: boolean;
 }
 
 export interface ComposerDockSlotResolution {
@@ -43,6 +48,7 @@ export interface ResolveComposerDockSlotsInput {
   primaryPendingInteractionKind: ComposerDockInteractionKind | null;
   hasActiveTodoTracker: boolean;
   hasDelegatedWork: boolean;
+  hasSessionGoal: boolean;
   hasWorkspaceStatusPanel: boolean;
   hasCloudRuntimePanel: boolean;
 }
@@ -54,6 +60,7 @@ export function resolveComposerDockSlots({
   primaryPendingInteractionKind,
   hasActiveTodoTracker,
   hasDelegatedWork,
+  hasSessionGoal,
   hasWorkspaceStatusPanel,
   hasCloudRuntimePanel,
 }: ResolveComposerDockSlotsInput): ComposerDockSlotResolution {
@@ -72,11 +79,13 @@ export function resolveComposerDockSlots({
     ? resolveAmbientSlot(hasWorkspaceStatusPanel, hasCloudRuntimePanel)
     : null;
   const attachedDelegatedWork = !suppressSessionSlots && hasDelegatedWork;
+  const attachedSessionGoal = !suppressSessionSlots && hasSessionGoal;
   const attachedSlot =
-    ambientSlot || attachedDelegatedWork
+    ambientSlot || attachedDelegatedWork || attachedSessionGoal
       ? {
         ambientSlot,
         delegatedWork: attachedDelegatedWork,
+        sessionGoal: attachedSessionGoal,
       }
       : null;
 

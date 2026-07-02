@@ -8,8 +8,12 @@ import {
   FilePlus,
   Plus,
 } from "@proliferate/ui/icons";
+import { Target } from "lucide-react";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";
+import { useSessionGoal } from "@/hooks/activity/derived/use-session-goal";
+import { useGoalBarStore } from "@/stores/activity/goal-bar-store";
 import { PlanPickerContentBody } from "./PlanPickerContentBody";
 
 interface ComposerAddActionPopoverProps {
@@ -34,6 +38,13 @@ export function ComposerAddActionPopover({
   onAttachFile,
 }: ComposerAddActionPopoverProps) {
   const [view, setView] = useState<AddActionView>("menu");
+  const sessionGoal = useSessionGoal();
+  const beginComposingGoal = useGoalBarStore((state) => state.beginComposing);
+  // The empty-state goal affordance: offered only when the session supports
+  // goals and none is live (the bar itself owns edit once a goal exists).
+  const canSetGoal = !!sessionGoal
+    && sessionGoal.capabilities.supported
+    && deriveGoalBarState(sessionGoal.goal).kind !== "live";
 
   return (
     <PopoverButton
@@ -106,6 +117,18 @@ export function ComposerAddActionPopover({
                 disabled={!canAttachPlan}
                 onClick={() => setView("plans")}
               />
+              {canSetGoal && (
+                <ComposerActionRow
+                  icon={<Target className="size-4 text-muted-foreground" />}
+                  label="Set a goal"
+                  detail="Give the agent an objective to keep pursuing."
+                  disabled={false}
+                  onClick={() => {
+                    beginComposingGoal();
+                    close();
+                  }}
+                />
+              )}
             </div>
           )}
         </ComposerPopoverSurface>

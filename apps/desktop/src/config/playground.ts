@@ -75,6 +75,16 @@ export type ScenarioKey =
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagent-wake-card"
+  | "goal-active-short"
+  | "goal-active-long"
+  | "goal-active-pause-disabled"
+  | "goal-paused"
+  | "goal-editing"
+  | "goal-composing"
+  | "goal-met-sticky"
+  | "goal-blocked-sticky"
+  | "goal-failed-budget"
+  | "goal-empty"
   | "loading-states";
 
 interface Scenario {
@@ -158,6 +168,16 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
+  "goal-active-short": { label: "Goal active (codex)" },
+  "goal-active-long": { label: "Goal long objective" },
+  "goal-active-pause-disabled": { label: "Goal active (claude)" },
+  "goal-paused": { label: "Goal paused" },
+  "goal-editing": { label: "Goal editing" },
+  "goal-composing": { label: "Goal composing" },
+  "goal-met-sticky": { label: "Goal met" },
+  "goal-blocked-sticky": { label: "Goal blocked" },
+  "goal-failed-budget": { label: "Goal failed (budget)" },
+  "goal-empty": { label: "Goal empty" },
   "loading-states": { label: "Loading states" },
 };
 

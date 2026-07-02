@@ -7,6 +7,10 @@
     "dist"
   ],
   "exports": {
+    "./activity/goal": {
+      "types": "./dist/activity/goal.d.ts",
+      "import": "./dist/activity/goal.js"
+    },
     "./auth/model": {
       "types": "./dist/auth/model.d.ts",
       "import": "./dist/auth/model.js"

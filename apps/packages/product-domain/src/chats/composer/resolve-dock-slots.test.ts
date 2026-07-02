@@ -6,6 +6,7 @@ const BASE_INPUT = {
   primaryPendingInteractionKind: null,
   hasActiveTodoTracker: false,
   hasDelegatedWork: false,
+  hasSessionGoal: false,
   hasWorkspaceStatusPanel: false,
   hasCloudRuntimePanel: false,
 } as const;
@@ -56,6 +57,7 @@ describe("resolveComposerDockSlots", () => {
       primaryPendingInteractionKind: "user_input",
       hasActiveTodoTracker: true,
       hasDelegatedWork: true,
+      hasSessionGoal: true,
       hasWorkspaceStatusPanel: true,
     })).toEqual({
       outboundSlot: null,
@@ -64,7 +66,19 @@ describe("resolveComposerDockSlots", () => {
       attachedSlot: {
         ambientSlot: { kind: "workspace_status" },
         delegatedWork: false,
+        sessionGoal: false,
       },
+    });
+  });
+
+  it("attaches the session goal bar on its own", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      hasSessionGoal: true,
+    }).attachedSlot).toEqual({
+      ambientSlot: null,
+      delegatedWork: false,
+      sessionGoal: true,
     });
   });
 
@@ -77,6 +91,7 @@ describe("resolveComposerDockSlots", () => {
     }).attachedSlot).toEqual({
       ambientSlot: { kind: "workspace_status" },
       delegatedWork: true,
+      sessionGoal: false,
     });
   });
 
@@ -90,6 +105,7 @@ describe("resolveComposerDockSlots", () => {
     }).attachedSlot).toEqual({
       ambientSlot: null,
       delegatedWork: true,
+      sessionGoal: false,
     });
   });
 });
