@@ -14,6 +14,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
+use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
@@ -31,9 +32,9 @@ mod pending_prompts;
 mod prompt;
 mod replay;
 mod startup;
-pub(crate) mod view;
 #[cfg(test)]
 mod tests;
+pub(crate) mod view;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
@@ -72,6 +73,10 @@ pub enum CreateAndStartSessionError {
         session_id: String,
     },
     MissingDataKey,
+    /// Agent-auth route resolution refused the launch (fail-closed selection
+    /// missing, malformed state file, unsupported route, ...). Typed so the
+    /// API layer surfaces the stable machine code (`AGENT_ROUTE_*`).
+    RouteAuth(RouteAuthError),
     StartFailed(anyhow::Error),
     Internal(anyhow::Error),
 }
@@ -83,6 +88,8 @@ pub enum EnsureLiveSessionError {
     RestartRequired(String),
     Invalid(String),
     MissingDataKey,
+    /// See [`CreateAndStartSessionError::RouteAuth`].
+    RouteAuth(RouteAuthError),
     Internal(anyhow::Error),
 }
 
@@ -244,6 +251,8 @@ pub(super) enum StartSessionError {
     Closed,
     MissingDataKey,
     RestartRequired(String),
+    /// Agent-auth route resolution refused the launch (fail-closed, spec §3).
+    RouteAuth(RouteAuthError),
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
 }

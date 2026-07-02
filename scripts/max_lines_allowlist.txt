@@ -19,7 +19,7 @@ anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs 1057 exis
 anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 704 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 653 catalog probe with per-harness model-source fallbacks and tests
+anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 654 catalog probe with per-harness model-source fallbacks and tests
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1112 custom migration with legacy schema coverage
 anyharness/crates/proliferate-worker/src/control/commands/executor.rs 1435 existing Proliferate worker oversized command executor
 anyharness/crates/proliferate-worker/src/control/commands/mapping.rs 861 existing Proliferate worker oversized command mapper

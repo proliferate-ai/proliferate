@@ -3,6 +3,7 @@ use std::path::Path;
 
 use super::*;
 use crate::live::sessions::driver::stderr::{spawn_agent_stderr_logger, AgentStderrTail};
+use crate::live::sessions::model::LaunchEnv;
 use crate::process_env::remove_runtime_private_env;
 
 pub(in crate::live::sessions) struct SpawnedAgentProcess {
@@ -15,12 +16,14 @@ pub(in crate::live::sessions) struct SpawnedAgentProcess {
 }
 
 pub(in crate::live::sessions) fn merge_spawn_env(
-    workspace_env: &BTreeMap<String, String>,
-    session_launch_env: &BTreeMap<String, String>,
+    launch_env: &LaunchEnv,
     override_env: Option<&HashMap<String, String>>,
 ) -> BTreeMap<String, String> {
-    let mut merged = workspace_env.clone();
-    for (key, value) in session_launch_env {
+    let mut merged = launch_env.workspace.clone();
+    for (key, value) in &launch_env.session {
+        merged.insert(key.clone(), value.clone());
+    }
+    for (key, value) in &launch_env.route_auth {
         merged.insert(key.clone(), value.clone());
     }
     if let Some(override_env) = override_env {
@@ -28,14 +31,18 @@ pub(in crate::live::sessions) fn merge_spawn_env(
             merged.insert(key.clone(), value.clone());
         }
     }
+    // Route-auth removals win over every set layer. The ambient (inherited)
+    // copies are stripped separately via `Command::env_remove` at spawn.
+    for key in &launch_env.route_auth_remove {
+        merged.remove(key);
+    }
     merged
 }
 
 pub(in crate::live::sessions) fn spawn_agent_process(
     agent: &ResolvedAgent,
     workspace_path: &Path,
-    workspace_env: &BTreeMap<String, String>,
-    session_launch_env: &BTreeMap<String, String>,
+    launch_env: &LaunchEnv,
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
@@ -59,11 +66,7 @@ pub(in crate::live::sessions) fn spawn_agent_process(
         .map_or((workspace_path, "workspace"), |path| {
             (path.as_path(), "agent_override")
         });
-    let spawn_env = merge_spawn_env(
-        workspace_env,
-        session_launch_env,
-        spawn_spec.map(|spec| &spec.env),
-    );
+    let spawn_env = merge_spawn_env(launch_env, spawn_spec.map(|spec| &spec.env));
     if let Err(error) = validate_spawn_cwd(spawn_cwd, spawn_cwd_source) {
         tracing::warn!(
             session_id = %session_id,
@@ -91,6 +94,12 @@ pub(in crate::live::sessions) fn spawn_agent_process(
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
     remove_runtime_private_env(&mut command);
+    // Agent-auth sanitization: removal wins over the inherited ambient env
+    // (e.g. a developer shell exporting CLAUDE_CODE_USE_BEDROCK would silently
+    // reroute the Claude CLI away from the configured gateway).
+    for key in &launch_env.route_auth_remove {
+        command.env_remove(key);
+    }
     let mut child = command.spawn().map_err(|e| {
         tracing::warn!(
             session_id = %session_id,
@@ -216,8 +225,7 @@ mod tests {
         let result = spawn_agent_process(
             &agent,
             &missing_workspace,
-            &BTreeMap::new(),
-            &BTreeMap::new(),
+            &LaunchEnv::default(),
             "session-1",
             "workspace-1",
             AgentKind::Codex.as_str(),
@@ -243,19 +251,22 @@ mod tests {
 
     #[test]
     fn merge_spawn_env_prefers_session_launch_over_workspace_env() {
-        let workspace_env = BTreeMap::from([
-            (
+        let launch_env = LaunchEnv {
+            workspace: BTreeMap::from([
+                (
+                    "CLAUDE_CODE_EXECUTABLE".to_string(),
+                    "/workspace/bin/claude".to_string(),
+                ),
+                ("PATH".to_string(), "/usr/bin".to_string()),
+            ]),
+            session: BTreeMap::from([(
                 "CLAUDE_CODE_EXECUTABLE".to_string(),
-                "/workspace/bin/claude".to_string(),
-            ),
-            ("PATH".to_string(), "/usr/bin".to_string()),
-        ]);
-        let session_launch_env = BTreeMap::from([(
-            "CLAUDE_CODE_EXECUTABLE".to_string(),
-            "/managed/bin/claude".to_string(),
-        )]);
+                "/managed/bin/claude".to_string(),
+            )]),
+            ..Default::default()
+        };
 
-        let merged = merge_spawn_env(&workspace_env, &session_launch_env, None);
+        let merged = merge_spawn_env(&launch_env, None);
 
         assert_eq!(
             merged.get("CLAUDE_CODE_EXECUTABLE").map(String::as_str),
@@ -266,17 +277,80 @@ mod tests {
 
     #[test]
     fn merge_spawn_env_prefers_explicit_override_env_over_session_env() {
-        let workspace_env = BTreeMap::from([("PATH".to_string(), "/usr/bin".to_string())]);
-        let session_launch_env = BTreeMap::from([("DEBUG".to_string(), "0".to_string())]);
+        let launch_env = LaunchEnv {
+            workspace: BTreeMap::from([("PATH".to_string(), "/usr/bin".to_string())]),
+            session: BTreeMap::from([("DEBUG".to_string(), "0".to_string())]),
+            ..Default::default()
+        };
         let override_env = std::collections::HashMap::from([
             ("DEBUG".to_string(), "1".to_string()),
             ("FOO".to_string(), "bar".to_string()),
         ]);
 
-        let merged = merge_spawn_env(&workspace_env, &session_launch_env, Some(&override_env));
+        let merged = merge_spawn_env(&launch_env, Some(&override_env));
 
         assert_eq!(merged.get("PATH").map(String::as_str), Some("/usr/bin"));
         assert_eq!(merged.get("DEBUG").map(String::as_str), Some("1"));
         assert_eq!(merged.get("FOO").map(String::as_str), Some("bar"));
+    }
+
+    #[test]
+    fn merge_spawn_env_route_auth_layer_wins_over_session_layer() {
+        let launch_env = LaunchEnv {
+            session: BTreeMap::from([(
+                "CODEX_HOME".to_string(),
+                "/runtime/agent-auth/codex-local".to_string(),
+            )]),
+            route_auth: BTreeMap::from([
+                (
+                    "CODEX_HOME".to_string(),
+                    "/runtime/agent-auth/codex-home-42".to_string(),
+                ),
+                (
+                    "PROLIFERATE_GATEWAY_KEY".to_string(),
+                    "sk-virtual".to_string(),
+                ),
+            ]),
+            ..Default::default()
+        };
+
+        let merged = merge_spawn_env(&launch_env, None);
+
+        assert_eq!(
+            merged.get("CODEX_HOME").map(String::as_str),
+            Some("/runtime/agent-auth/codex-home-42")
+        );
+        assert_eq!(
+            merged.get("PROLIFERATE_GATEWAY_KEY").map(String::as_str),
+            Some("sk-virtual")
+        );
+    }
+
+    #[test]
+    fn merge_spawn_env_route_auth_removals_strip_every_set_layer() {
+        let launch_env = LaunchEnv {
+            workspace: BTreeMap::from([(
+                "ANTHROPIC_API_KEY".to_string(),
+                "sk-workspace-stale".to_string(),
+            )]),
+            session: BTreeMap::from([("CLAUDE_CODE_USE_BEDROCK".to_string(), "1".to_string())]),
+            route_auth: BTreeMap::from([(
+                "ANTHROPIC_AUTH_TOKEN".to_string(),
+                "sk-virtual".to_string(),
+            )]),
+            route_auth_remove: vec![
+                "ANTHROPIC_API_KEY".to_string(),
+                "CLAUDE_CODE_USE_BEDROCK".to_string(),
+            ],
+        };
+
+        let merged = merge_spawn_env(&launch_env, None);
+
+        assert!(!merged.contains_key("ANTHROPIC_API_KEY"));
+        assert!(!merged.contains_key("CLAUDE_CODE_USE_BEDROCK"));
+        assert_eq!(
+            merged.get("ANTHROPIC_AUTH_TOKEN").map(String::as_str),
+            Some("sk-virtual")
+        );
     }
 }

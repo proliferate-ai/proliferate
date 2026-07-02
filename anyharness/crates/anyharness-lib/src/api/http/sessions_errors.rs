@@ -1,5 +1,6 @@
 use super::access::map_access_error;
 use super::error::ApiError;
+use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
@@ -99,10 +100,30 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
         CreateAndStartSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
+        CreateAndStartSessionError::RouteAuth(error) => map_route_auth_error(&error),
         CreateAndStartSessionError::StartFailed(error) => {
             ApiError::internal(format!("ACP session start failed: {error}"))
         }
         CreateAndStartSessionError::Internal(error) => ApiError::internal(error.to_string()),
+    }
+}
+
+/// Typed agent-auth launch refusals, keyed by the stable `AGENT_ROUTE_*` code
+/// (see `RouteAuthError::code`). Fail-closed / route-shape problems are 409s
+/// (the session request was fine; the launch precondition is not satisfied
+/// until a selection changes); state-file corruption and materialization IO
+/// are 500s.
+pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
+    match error {
+        RouteAuthError::SelectionMissing { .. }
+        | RouteAuthError::SelectionIncomplete { .. }
+        | RouteAuthError::UnsupportedRoute { .. }
+        | RouteAuthError::UnknownHarness { .. } => {
+            ApiError::conflict(error.to_string(), error.code())
+        }
+        RouteAuthError::MalformedStateFile { .. } | RouteAuthError::Materialize { .. } => {
+            ApiError::internal(error.to_string())
+        }
     }
 }
 
@@ -124,6 +145,7 @@ pub(super) fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> Ap
         EnsureLiveSessionError::MissingDataKey => {
             ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
         }
+        EnsureLiveSessionError::RouteAuth(error) => map_route_auth_error(&error),
         EnsureLiveSessionError::Internal(error) => {
             ApiError::internal(format!("resume failed: {error}"))
         }

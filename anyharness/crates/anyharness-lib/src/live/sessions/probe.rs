@@ -175,22 +175,23 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
     }
 
     let (ready_tx, _ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
-    let empty = BTreeMap::new();
     // Credential env vars are merged into the session layer (after the
     // workspace layer); the probe passes no other layer that could shadow
     // them, so they reach the agent process unchanged.
-    let mut session_launch_env = session_launch_env;
     session_launch_env.extend(
         options
             .auth_env
             .iter()
             .map(|(key, value)| (key.clone(), value.clone())),
     );
+    let launch_env = crate::live::sessions::model::LaunchEnv {
+        session: session_launch_env,
+        ..Default::default()
+    };
     let spawned = spawn_agent_process(
         &resolved,
         &workspace,
-        &empty,
-        &session_launch_env,
+        &launch_env,
         PROBE_SESSION_ID,
         PROBE_WORKSPACE_ID,
         options.agent_kind.as_str(),
