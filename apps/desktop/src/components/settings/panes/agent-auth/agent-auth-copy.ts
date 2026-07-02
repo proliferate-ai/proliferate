@@ -18,5 +18,5 @@ export function gatewaySubtitle(
   if (enrollment?.syncStatus === "pending") {
     return "Enrollment pending";
   }
-  return "Proliferate-managed model access. No setup required.";
+  return "Proliferate-managed model access. Free credits included, no setup required.";
 }

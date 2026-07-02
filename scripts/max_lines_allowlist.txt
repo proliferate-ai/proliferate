@@ -35,7 +35,7 @@ apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing de
 apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
-server/tests/integration/test_agent_gateway_store.py 702 agent-auth slot composition store tests pending split
+server/tests/integration/test_agent_gateway_store.py 742 agent-auth slot composition + credits store tests pending split
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test
