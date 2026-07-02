@@ -66,10 +66,11 @@ export function desktopNavigationTarget(url: string): string | null {
     (parsed.hostname === "integrations" || parsed.hostname === "plugins" || parsed.hostname === "powers")
     && (parsed.pathname === "" || parsed.pathname === "/")
   ) {
-    // INTEGRATIONS PARKED: land on Settings (user scope default section) until a
-    // later PR points these deep links at the rebuilt integrations pane.
+    // Integration OAuth browser returns (and legacy plugins/powers links) land on
+    // the user Integrations pane, carrying flowId/status/failureCode so the pane
+    // can toast the flow outcome on arrival.
     const params = new URLSearchParams(parsed.search);
-    params.set("section", "general");
+    params.set("section", "integrations");
     return `/settings?${params.toString()}`;
   }
 

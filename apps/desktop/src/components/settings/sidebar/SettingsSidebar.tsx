@@ -1,5 +1,6 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import {
+  Blocks,
   Brain,
   Building2,
   CircleUser,
@@ -13,7 +14,6 @@ import {
   RefreshCw,
   Scissors,
   Settings2,
-  Shield,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
@@ -74,14 +74,15 @@ const SETTINGS_ROW_DISABLED_CLASS =
 
 const SETTINGS_NAV_ICONS = {
   account: CircleUser,
-  "agent-authentication": Shield,
   "agent-defaults": SlidersHorizontal,
   appearance: Palette,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
   environments: SlidersHorizontal,
   general: Settings2,
+  integrations: Blocks,
   organization: Building2,
+  "organization-integrations": Blocks,
   "organization-limits": Gauge,
   "organization-members": Users,
   "organization-model-policy": Brain,

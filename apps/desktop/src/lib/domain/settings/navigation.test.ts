@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCloudRepoSettingsHref,
-  buildCloudSettingsHref,
   buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
@@ -150,6 +149,35 @@ describe("settings navigation", () => {
     });
   });
 
+  it("preserves OAuth return focus only on the integrations section", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "integrations",
+      rawFlowId: "flow-1",
+      rawStatus: "completed",
+      rawFailureCode: null,
+      repositories: [],
+    })).toEqual({
+      activeSection: "integrations",
+      activeRepoSourceRoot: null,
+      focus: { flowId: "flow-1", status: "completed" },
+      joinOrganizationId: null,
+    });
+
+    expect(resolveSettingsSelection({
+      rawSection: "integrations",
+      rawStatus: "failed",
+      rawFailureCode: "access_denied",
+      repositories: [],
+    }).focus).toEqual({ status: "failed", failureCode: "access_denied" });
+
+    expect(resolveSettingsSelection({
+      rawSection: "general",
+      rawFlowId: "flow-1",
+      rawStatus: "completed",
+      repositories: [],
+    }).focus).toEqual({});
+  });
+
   it("resolves a valid repo settings link", () => {
     expect(resolveSettingsSelection({
       rawSection: "repo",
@@ -288,7 +316,7 @@ describe("settings navigation", () => {
       rawSection: "cloud",
       repositories: [],
     })).toEqual({
-      activeSection: "agent-authentication",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -302,18 +330,6 @@ describe("settings navigation", () => {
       activeSection: "agent-authentication",
       activeRepoSourceRoot: null,
       focus: { target: "target-1" },
-      joinOrganizationId: null,
-    });
-
-    expect(resolveSettingsSelection({
-      rawSection: "cloud",
-      rawCredential: "credential-1",
-      rawKind: "claude",
-      repositories: [],
-    })).toEqual({
-      activeSection: "agent-authentication",
-      activeRepoSourceRoot: null,
-      focus: { credential: "credential-1", kind: "claude" },
       joinOrganizationId: null,
     });
   });
@@ -376,14 +392,13 @@ describe("settings navigation", () => {
     })).toBe("/settings?section=organization-members&joinOrganizationId=org-1");
   });
 
-  it("builds new settings links for cloud and cloud repo helpers", () => {
-    expect(buildCloudSettingsHref()).toBe("/settings?section=agent-authentication");
+  it("builds new settings links for cloud repo helpers", () => {
     expect(buildCloudRepoSettingsHref("owner", "name")).toBe(
       "/settings?section=environments&cloudRepoOwner=owner&cloudRepoName=name",
     );
   });
 
-  it("builds environment and agent-authentication focus links", () => {
+  it("builds environment focus links", () => {
     expect(buildSettingsHref({
       section: "environments",
       repo: "/repo-a",
@@ -393,12 +408,6 @@ describe("settings navigation", () => {
       section: "repo",
       repo: "/repo-a",
     })).toBe("/settings?section=environments&repo=%2Frepo-a");
-
-    expect(buildSettingsHref({
-      section: "agent-authentication",
-      target: "target-1",
-      kind: "claude",
-    })).toBe("/settings?section=agent-authentication&target=target-1&kind=claude");
   });
 
   it("round-trips the repo context through href building and resolution", () => {

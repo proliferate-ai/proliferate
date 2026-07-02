@@ -107,8 +107,6 @@ impl SessionRuntime {
             native_session_id: forked
                 .as_ref()
                 .map(|forked| forked.native_session_id.clone()),
-            agent_auth_scope: parent.agent_auth_scope.clone(),
-            required_agent_auth_revision: parent.required_agent_auth_revision,
             // Forks inherit the parent's launch selection wholesale; the
             // classified-context provenance rides along with it.
             agent_auth_contexts: parent.agent_auth_contexts.clone(),
@@ -261,9 +259,7 @@ fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
         StartSessionError::Closed => ForkSessionError::Invalid("session is closed".to_string()),
         StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),
-        StartSessionError::AgentAuthSelectionRequired(required) => {
-            ForkSessionError::Invalid(required.detail)
-        }
+        StartSessionError::RouteAuth(error) => ForkSessionError::Invalid(error.to_string()),
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             ForkSessionError::Internal(error)
         }

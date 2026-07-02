@@ -83,8 +83,6 @@ pub async fn create_session(
                 Vec::new(),
                 None,
                 req.subagents_enabled.unwrap_or(true),
-                req.agent_auth_scope,
-                req.required_agent_auth_revision,
                 origin,
             )
             .await

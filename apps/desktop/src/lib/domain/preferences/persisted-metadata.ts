@@ -65,7 +65,6 @@ export function selectPersistedUserPreferencesSlice(
     transparentChromeEnabled: preferences.transparentChromeEnabled,
     subagentsEnabled: preferences.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
-    cloudRuntimeInputSyncEnabled: preferences.cloudRuntimeInputSyncEnabled,
     worktreeAutoDeleteLimit: preferences.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: preferences.pasteAttachmentsEnabled,
     reviewDefaultsByKind: preferences.reviewDefaultsByKind,

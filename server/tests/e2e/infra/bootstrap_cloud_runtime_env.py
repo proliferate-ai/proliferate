@@ -14,7 +14,6 @@ from tests.e2e.cloud.helpers import (
     create_user_and_login,
     link_github_account,
     load_cloud_test_config,
-    sync_agent_auth_credential,
 )
 
 
@@ -50,19 +49,7 @@ async def _bootstrap_runtime_env(args: argparse.Namespace) -> dict[str, Any]:
         )
         repo_config_response.raise_for_status()
 
-        selected_providers = args.sync_provider or ["claude"]
-        synced_providers: list[str] = []
-        for provider in selected_providers:
-            try:
-                await sync_agent_auth_credential(client, auth, config, provider)
-            except CloudE2ETestError:
-                continue
-            synced_providers.append(provider)
-
-    if not synced_providers:
-        raise CloudE2ETestError(
-            "No cloud agent credentials were available to seed the runtime suite."
-        )
+        synced_providers = list(args.sync_provider or ["claude"])
 
     return {
         "PROLIFERATE_CLOUD_BASE_URL": args.base_url,

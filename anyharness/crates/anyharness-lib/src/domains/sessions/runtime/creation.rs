@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use anyharness_contract::v1::{AgentAuthExternalScope, SessionMcpBindingSummary};
+use anyharness_contract::v1::SessionMcpBindingSummary;
 
 use crate::domains::sessions::mcp_bindings::assembly::join_system_prompt_append;
 use crate::domains::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
@@ -25,8 +25,6 @@ impl SessionRuntime {
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
         subagents_enabled: bool,
-        agent_auth_scope: Option<AgentAuthExternalScope>,
-        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         self.access_gate
@@ -56,8 +54,6 @@ impl SessionRuntime {
             mcp_binding_summaries,
             SessionMcpBindingPolicy::InheritWorkspace,
             subagents_enabled,
-            agent_auth_scope,
-            required_agent_auth_revision,
             origin,
         )?;
         tracing::info!(
@@ -89,8 +85,6 @@ impl SessionRuntime {
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
         mcp_binding_policy: SessionMcpBindingPolicy,
         subagents_enabled: bool,
-        agent_auth_scope: Option<AgentAuthExternalScope>,
-        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let system_prompt_append = join_system_prompt_append(system_prompt_append);
@@ -110,8 +104,6 @@ impl SessionRuntime {
                 mcp_binding_policy,
                 system_prompt_append,
                 subagents_enabled,
-                agent_auth_scope,
-                required_agent_auth_revision,
                 origin,
             )
             .map_err(map_create_session_service_error)
@@ -165,9 +157,6 @@ fn map_create_session_service_error(
             agent_kind,
             mode_id,
         },
-        crate::domains::sessions::service::CreateSessionError::AgentAuthSelectionRequired(
-            required,
-        ) => CreateAndStartSessionError::AgentAuthSelectionRequired(required),
         crate::domains::sessions::service::CreateSessionError::Invalid(detail) => {
             CreateAndStartSessionError::Invalid(detail)
         }

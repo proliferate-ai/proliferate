@@ -1171,15 +1171,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/capabilities": {
+    "/v1/cloud/agent-gateway/api-keys": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Cloud Capabilities Endpoint */
-        get: operations["cloud_capabilities_endpoint_v1_cloud_capabilities_get"];
+        /** List Agent Api Keys Endpoint */
+        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get"];
+        put?: never;
+        /** Create Agent Api Key Endpoint */
+        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/api-keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Agent Api Key Endpoint */
+        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/route-selections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agent Route Selections Endpoint */
+        get: operations["list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/route-selections/{harness_kind}/{surface}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Agent Route Selection Endpoint */
+        put: operations["upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put"];
+        post?: never;
+        /** Clear Agent Route Selection Endpoint */
+        delete: operations["clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Catalog Endpoint */
+        get: operations["get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Agent Catalog Endpoint */
+        post: operations["refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Agent Catalog Override Endpoint */
+        put: operations["upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put"];
+        post?: never;
+        /** Delete Agent Catalog Override Endpoint */
+        delete: operations["delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Gateway Capabilities Endpoint */
+        get: operations["get_agent_gateway_capabilities_endpoint_v1_cloud_agent_gateway_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Gateway Enrollment Endpoint */
+        get: operations["get_agent_gateway_enrollment_endpoint_v1_cloud_agent_gateway_enrollment_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2105,22 +2244,76 @@ export interface components {
             /** Effectiveenabled */
             effectiveEnabled: boolean;
         };
-        /** AgentAuthSlotCapability */
-        AgentAuthSlotCapability: {
-            /** Agentkind */
-            agentKind: string;
-            /** Authslotid */
-            authSlotId: string;
-            /** Label */
-            label: string;
-            /** Shortlabel */
-            shortLabel: string;
-            /** Credentialproviderids */
-            credentialProviderIds: string[];
-            /** Localprovider */
-            localProvider: string | null;
-            /** Primary */
-            primary: boolean;
+        /** AgentApiKeyCreateRequest */
+        AgentApiKeyCreateRequest: {
+            /** Provider */
+            provider: string;
+            /** Displayname */
+            displayName: string;
+            /** Secret */
+            secret: string;
+        };
+        /** AgentApiKeyListResponse */
+        AgentApiKeyListResponse: {
+            /** Keys */
+            keys: components["schemas"]["AgentApiKeyResponse"][];
+        };
+        /** AgentApiKeyResponse */
+        AgentApiKeyResponse: {
+            /** Id */
+            id: string;
+            /** Provider */
+            provider: string;
+            /** Displayname */
+            displayName: string;
+            /** Redactedhint */
+            redactedHint: string;
+            /** Status */
+            status: string;
+            /** Lastvalidatedat */
+            lastValidatedAt: string | null;
+            /** Createdat */
+            createdAt: string;
+        };
+        /** AgentAuthRouteSelectionListResponse */
+        AgentAuthRouteSelectionListResponse: {
+            /** Selections */
+            selections: components["schemas"]["AgentAuthRouteSelectionResponse"][];
+        };
+        /** AgentAuthRouteSelectionResponse */
+        AgentAuthRouteSelectionResponse: {
+            /** Id */
+            id: string;
+            /** Harnesskind */
+            harnessKind: string;
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Apikeyid */
+            apiKeyId: string | null;
+            /** Revision */
+            revision: number;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AgentAuthRouteSelectionUpsertRequest */
+        AgentAuthRouteSelectionUpsertRequest: {
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Apikeyid */
+            apiKeyId?: string | null;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
@@ -2391,50 +2584,94 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** AgentGatewayByokProviderCapabilities */
-        AgentGatewayByokProviderCapabilities: {
-            /** Anthropicapikey */
-            anthropicApiKey: boolean;
-            /** Openaiapikey */
-            openaiApiKey: boolean;
-            /** Geminiapikey */
-            geminiApiKey: boolean;
-            /** Bedrockassumerole */
-            bedrockAssumeRole: boolean;
-            /** Openaicompatible */
-            openaiCompatible: boolean;
+        /** AgentGatewayCapabilitiesResponse */
+        AgentGatewayCapabilitiesResponse: {
+            /** Gatewayenabled */
+            gatewayEnabled: boolean;
+            /** Publicbaseurl */
+            publicBaseUrl: string | null;
+            /** Enrollmentstatus */
+            enrollmentStatus: string;
         };
-        /** AgentGatewayCapabilities */
-        AgentGatewayCapabilities: {
-            /** Enabled */
-            enabled: boolean;
-            /** Managedcreditspersonalenabled */
-            managedCreditsPersonalEnabled: boolean;
-            /** Managedcreditsorganizationenabled */
-            managedCreditsOrganizationEnabled: boolean;
-            /** Defaultmanagedbudgetusd */
-            defaultManagedBudgetUsd: string | null;
-            /** Managedcreditagentkinds */
-            managedCreditAgentKinds: string[];
-            /** Topology */
-            topology: string;
-            /** Routeisolation */
-            routeIsolation: string;
-            /** Liveproofstatus */
-            liveProofStatus: string;
-            /** Byokenabled */
-            byokEnabled: boolean;
-            /** Byokpersonalenabled */
-            byokPersonalEnabled: boolean;
-            /** Byokorganizationenabled */
-            byokOrganizationEnabled: boolean;
-            /** Byokorganizationdisabledreason */
-            byokOrganizationDisabledReason: string | null;
-            byokProviders: components["schemas"]["AgentGatewayByokProviderCapabilities"];
-            /** Opencodegatewayenabled */
-            opencodeGatewayEnabled: boolean;
-            /** Agentauthslots */
-            agentAuthSlots: components["schemas"]["AgentAuthSlotCapability"][];
+        /** AgentGatewayCatalogOverrideResponse */
+        AgentGatewayCatalogOverrideResponse: {
+            /** Id */
+            id: string;
+            /** Harnesskind */
+            harnessKind: string;
+            /** Patchjson */
+            patchJson: string;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AgentGatewayCatalogOverrideUpsertRequest */
+        AgentGatewayCatalogOverrideUpsertRequest: {
+            /** Patchjson */
+            patchJson: string;
+        };
+        /** AgentGatewayCatalogRefreshRequest */
+        AgentGatewayCatalogRefreshRequest: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Modelsjson */
+            modelsJson?: string | null;
+        };
+        /**
+         * AgentGatewayCatalogResponse
+         * @description Layered catalog: latest snapshot (owner else seed) + caller override.
+         */
+        AgentGatewayCatalogResponse: {
+            /** Harnesskind */
+            harnessKind: string;
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Models */
+            models: {
+                [key: string]: unknown;
+            }[];
+            /** Snapshotid */
+            snapshotId: string | null;
+            /** Probedat */
+            probedAt: string | null;
+            /** Source */
+            source: string | null;
+            /** Overrideapplied */
+            overrideApplied: boolean;
+        };
+        /** AgentGatewayEnrollmentResponse */
+        AgentGatewayEnrollmentResponse: {
+            /** Id */
+            id: string;
+            /** Subjectkind */
+            subjectKind: string;
+            /** Litellmteamid */
+            litellmTeamId: string | null;
+            /** Syncstatus */
+            syncStatus: string;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -2941,10 +3178,6 @@ export interface components {
             platform?: string | null;
             /** Routeorscreen */
             routeOrScreen?: string | null;
-        };
-        /** CloudCapabilitiesResponse */
-        CloudCapabilitiesResponse: {
-            agentGateway: components["schemas"]["AgentGatewayCapabilities"];
         };
         /** CloudGitRepositoriesResponse */
         CloudGitRepositoriesResponse: {
@@ -7112,7 +7345,7 @@ export interface operations {
             };
         };
     };
-    cloud_capabilities_endpoint_v1_cloud_capabilities_get: {
+    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -7127,7 +7360,330 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CloudCapabilitiesResponse"];
+                    "application/json": components["schemas"]["AgentApiKeyListResponse"];
+                };
+            };
+        };
+    };
+    create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentApiKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKeyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKeyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthRouteSelectionListResponse"];
+                };
+            };
+        };
+    };
+    upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+                surface: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAuthRouteSelectionUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthRouteSelectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+                surface: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get: {
+        parameters: {
+            query: {
+                surface: "local" | "cloud";
+                route?: "native" | "api_key" | "gateway";
+            };
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentGatewayCatalogRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentGatewayCatalogOverrideUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogOverrideResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_gateway_capabilities_endpoint_v1_cloud_agent_gateway_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCapabilitiesResponse"];
+                };
+            };
+        };
+    };
+    get_agent_gateway_enrollment_endpoint_v1_cloud_agent_gateway_enrollment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayEnrollmentResponse"];
                 };
             };
         };

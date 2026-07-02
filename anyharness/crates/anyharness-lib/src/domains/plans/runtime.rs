@@ -183,8 +183,6 @@ impl PlanRuntime {
                     Vec::new(),
                     None,
                     true,
-                    None,
-                    None,
                     origin,
                 )
                 .await

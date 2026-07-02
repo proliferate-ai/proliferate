@@ -40,6 +40,9 @@ from proliferate.server.billing.subjects import (
     ensure_organization_billing_subject_state,
     ensure_personal_billing_subject_state,
 )
+from proliferate.server.cloud.agent_gateway.signup_hook import (
+    schedule_agent_gateway_org_enrollment,
+)
 from proliferate.server.organizations import invitation_delivery
 from proliferate.server.organizations.admin_emails import is_admin_listed_email
 from proliferate.server.organizations.domain.policy import (
@@ -491,6 +494,7 @@ async def accept_current_user_invitation(
         organization_id=accepted.organization.id,
         membership_id=accepted.membership.id,
     )
+    schedule_agent_gateway_org_enrollment(accepted.organization.id, actor_user.id, db=db)
     return OrganizationWithMembershipRecord(
         organization=accepted.organization,
         membership=accepted.membership,
@@ -551,6 +555,7 @@ async def accept_invitation(
         organization_id=accepted.organization.id,
         membership_id=accepted.membership.id,
     )
+    schedule_agent_gateway_org_enrollment(accepted.organization.id, actor_user.id, db=db)
     return OrganizationWithMembershipRecord(
         organization=accepted.organization,
         membership=accepted.membership,

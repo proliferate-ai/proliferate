@@ -47,6 +47,7 @@ from proliferate.integrations.sso.oidc import (
     resolve_oidc_metadata,
     verify_oidc_identity,
 )
+from proliferate.server.cloud.agent_gateway import signup_hook
 
 
 @dataclass(frozen=True)
@@ -241,6 +242,7 @@ async def complete_oidc_sso_callback(
         state=challenge.client_state,
         redirect_uri=challenge.redirect_uri,
     )
+    signup_hook.schedule_agent_gateway_user_enrollment(user.id, db=db)
     return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
 
 

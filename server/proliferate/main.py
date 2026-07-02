@@ -4,6 +4,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -47,12 +49,10 @@ from proliferate.server.billing.api import router as billing_router
 #     stop_billing_reconciler,
 # )
 from proliferate.server.catalogs.api import router as catalogs_router
-
-# AGENT AUTH PARKED: retarget away from sandbox_profile/cloud_targets before remounting.
-# from proliferate.server.cloud.agent_auth.reconciler import (
-#     start_agent_gateway_reconciler,
-#     stop_agent_gateway_reconciler,
-# )
+from proliferate.server.cloud.agent_gateway.worker import (
+    start_agent_gateway_enrollment_backfill,
+    stop_agent_gateway_enrollment_backfill,
+)
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.cloud.github_app.api import callback_router as github_app_callback_router
@@ -134,6 +134,55 @@ def _validate_support_tracker_configuration() -> None:
         )
 
 
+# Fragments that mark a request-body field as secret-bearing. FastAPI's default
+# 422 handler echoes the offending input verbatim, so a single unrelated invalid
+# field (e.g. a missing displayName) would otherwise reflect the whole body —
+# including a plaintext API-key secret — back to the caller.
+_SENSITIVE_INPUT_FRAGMENTS = ("secret", "password", "token", "payload", "ciphertext")
+_REDACTED_INPUT = "[redacted]"
+
+
+def _is_sensitive_field(key: object) -> bool:
+    return isinstance(key, str) and any(
+        fragment in key.lower() for fragment in _SENSITIVE_INPUT_FRAGMENTS
+    )
+
+
+def _redact_validation_input(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: (_REDACTED_INPUT if _is_sensitive_field(key) else _redact_validation_input(child))
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_validation_input(child) for child in value]
+    return value
+
+
+def _redacts_entire_body(request: Request) -> bool:
+    # The agent-gateway key-create endpoint accepts a raw secret in the body;
+    # redact its echoed input wholesale so no malformed shape can leak it.
+    return request.method == "POST" and request.url.path.endswith("/agent-gateway/api-keys")
+
+
+async def _validation_error_handler(
+    request: Request,
+    error: RequestValidationError,
+) -> JSONResponse:
+    redact_all = _redacts_entire_body(request)
+    errors: list[dict[str, object]] = []
+    for raw in error.errors():
+        item = dict(raw)
+        if "input" in item:
+            loc = item.get("loc") or ()
+            if redact_all or (loc and _is_sensitive_field(loc[-1])):
+                item["input"] = _REDACTED_INPUT
+            else:
+                item["input"] = _redact_validation_input(item["input"])
+        errors.append(item)
+    return JSONResponse(status_code=422, content=jsonable_encoder({"detail": errors}))
+
+
 async def _proliferate_error_handler(
     _request: Request,
     error: ProliferateError,
@@ -179,15 +228,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
         # start_billing_reconciler()
         pass
-    # AGENT AUTH PARKED.
-    # start_agent_gateway_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
+    agent_gateway_backfill_task = await start_agent_gateway_enrollment_backfill()
     try:
         yield
     finally:
+        await stop_agent_gateway_enrollment_backfill(agent_gateway_backfill_task)
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        # AGENT AUTH PARKED.
-        # await stop_agent_gateway_reconciler()
         # BILLING RECONCILER PARKED.
         # await stop_billing_reconciler()
         flush_server_sentry()
@@ -213,6 +260,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestTelemetryMiddleware)
     app.add_middleware(RequestContextMiddleware)
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(ProliferateError, _proliferate_error_handler)
 
     # ── Auth: users/me (read-only profile) ──

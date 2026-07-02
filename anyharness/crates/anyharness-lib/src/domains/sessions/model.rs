@@ -1,4 +1,4 @@
-use anyharness_contract::v1::{self, AgentAuthExternalScope};
+use anyharness_contract::v1;
 
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::origin::OriginContext;
@@ -38,8 +38,6 @@ pub struct SessionRecord {
     pub workspace_id: String,
     pub agent_kind: String,
     pub native_session_id: Option<String>,
-    pub agent_auth_scope: Option<AgentAuthExternalScope>,
-    pub required_agent_auth_revision: Option<i64>,
     /// Catalog v2 auth-context ids active when the session was created, as
     /// a JSON array (provenance: "why this menu"). `None` for sessions
     /// created in the v1-catalog era. Context ids only — never facts or

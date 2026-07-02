@@ -1,6 +1,5 @@
 import type {
   CloudConnectionInfo,
-  CloudRuntimeAuthState,
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
 import {
@@ -9,13 +8,6 @@ import {
   isCloudAgentKind,
   ProliferateClientError,
 } from "@/lib/access/cloud/client";
-
-const CURRENT_RUNTIME_AUTH: CloudRuntimeAuthState = {
-  status: "current",
-  configCurrent: true,
-  targetCurrent: true,
-  requiresRestart: false,
-};
 
 export type AnyHarnessRuntimeAccessKind = "direct" | "proliferate-gateway";
 
@@ -51,7 +43,6 @@ export function resolveCloudSandboxGatewayConnectionForWorkspace(
     anyharnessWorkspaceId: workspace.anyharnessWorkspaceId ?? null,
     allowedAgentKinds: workspace.allowedAgentKinds,
     readyAgentKinds: workspace.readyAgentKinds,
-    runtimeAuth: workspace.runtime?.runtimeAuth ?? null,
     runtimeGeneration: workspace.runtime?.generation ?? 0,
   });
 }
@@ -60,7 +51,6 @@ export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(inpu
   anyharnessWorkspaceId: string | null;
   allowedAgentKinds?: string[];
   readyAgentKinds?: string[];
-  runtimeAuth?: CloudRuntimeAuthState | null;
   runtimeGeneration?: number;
 }): Promise<CloudSandboxGatewayConnectionInfo> {
   if (!input.anyharnessWorkspaceId) {
@@ -78,7 +68,6 @@ export async function resolveCloudSandboxGatewayConnectionForCloudWorkspace(inpu
     runtimeGeneration: input.runtimeGeneration ?? 0,
     allowedAgentKinds: (input.allowedAgentKinds ?? []).filter(isCloudAgentKind),
     readyAgentKinds: input.readyAgentKinds ?? [],
-    runtimeAuth: input.runtimeAuth ?? CURRENT_RUNTIME_AUTH,
     runtimeAccessKind: "proliferate-gateway",
     webSocketAuthTransport: "protocol",
     anyharnessRepoRootId: null,

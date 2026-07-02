@@ -8,17 +8,18 @@ import {
 } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
-import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
+import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { OrganizationSecretsPane } from "@/components/settings/panes/OrganizationSecretsPane";
 import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
 import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
+import { UserIntegrationsPane } from "@/components/settings/panes/UserIntegrationsPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
@@ -121,6 +122,21 @@ function renderSettingsSection(
   if (activeSection === "personal-secrets") {
     return renderCloudGatedPane(cloudGate, () => <PersonalSecretsPane />);
   }
+  if (activeSection === "integrations") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <UserIntegrationsPane focus={focus} />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
   if (activeSection === "billing") {
     return <BillingPane />;
   }
@@ -133,6 +149,21 @@ function renderSettingsSection(
   if (activeSection === "organization-secrets") {
     return renderCloudGatedPane(cloudGate, () => <OrganizationSecretsPane />);
   }
+  if (activeSection === "organization-integrations") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <OrganizationIntegrationsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
   // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
   // if (activeSection === "organization-limits") {
   //   return <OrganizationBudgetsPane />;
@@ -142,12 +173,6 @@ function renderSettingsSection(
   }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
-  }
-  if (activeSection === "agent-authentication") {
-    return renderCloudGatedPane(
-      cloudGate,
-      () => <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />,
-    );
   }
   if (activeSection === "worktrees") {
     return <WorktreesPane />;
@@ -306,7 +331,8 @@ export function SettingsScreen({
           }}
           onSelectSection={onSelectSection}
           disabledSections={{
-            "agent-authentication": !cloudEnabled,
+            integrations: !cloudEnabled,
+            "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,
             "personal-secrets": !cloudEnabled,

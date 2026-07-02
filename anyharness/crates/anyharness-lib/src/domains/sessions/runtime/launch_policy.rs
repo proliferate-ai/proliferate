@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
+use crate::domains::agents::route_auth::RenderedRouteAuth;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::SessionRecord;
 use crate::live::sessions::model::{LaunchEnv, SessionLaunch, SystemPromptAppends};
@@ -171,9 +172,9 @@ pub(super) struct SessionLaunchContext {
     pub workspace_path: PathBuf,
     pub workspace_env: BTreeMap<String, String>,
     pub session_env: BTreeMap<String, String>,
-    pub auth_support_env: BTreeMap<String, String>,
-    /// Secrets — never logged.
-    pub auth_protected_env: BTreeMap<String, String>,
+    /// Rendered agent-auth route layer for this launch (empty for
+    /// native/legacy). See `domains::agents::route_auth`.
+    pub route_auth: RenderedRouteAuth,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup: SessionStartupStrategy,
     pub every_prompt_append: Option<String>,
@@ -189,8 +190,8 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
         env: LaunchEnv {
             workspace: ctx.workspace_env,
             session: ctx.session_env,
-            auth_support: ctx.auth_support_env,
-            auth_protected: ctx.auth_protected_env,
+            route_auth: ctx.route_auth.set,
+            route_auth_remove: ctx.route_auth.remove,
         },
         mcp_servers: ctx.mcp_servers,
         startup: ctx.startup,
