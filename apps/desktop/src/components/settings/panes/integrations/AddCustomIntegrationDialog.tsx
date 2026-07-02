@@ -10,7 +10,7 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { integrationApiErrorMessage } from "@/hooks/access/cloud/integrations/use-admin-integration-definitions";
 import {
   customIntegrationSubmitError,
   validateCustomIntegrationForm,
@@ -75,7 +75,7 @@ export function AddCustomIntegrationDialog({
     } catch (error) {
       setSubmitError(
         customIntegrationSubmitError(
-          error instanceof ProliferateClientError && error.message ? error.message : null,
+          integrationApiErrorMessage(error),
         ),
       );
     }

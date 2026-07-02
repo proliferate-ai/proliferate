@@ -54,14 +54,26 @@ export function IntegrationRow({
       <div className="min-w-0 truncate text-sm text-muted-foreground">
         {toolCountLabel}
       </div>
+      {/*
+        Layout stability: every pending state renders inline in this same
+        right-aligned cell, and every action button carries the same fixed
+        min-width, so Connect / Connecting... / Reconnect / Cancel swap labels
+        in place instead of resizing and bumping the badge (and anything left
+        of it) sideways. The connecting state deliberately swaps the label
+        rather than using the Button loading spinner, which would widen the
+        button.
+      */}
       <div className="flex flex-wrap items-center justify-end gap-2">
         {oauthPending ? (
           <>
-            <span className="text-sm text-muted-foreground">Waiting for browser...</span>
+            <span className="min-w-0 truncate text-sm text-muted-foreground">
+              Waiting for browser...
+            </span>
             <Button
               type="button"
               variant="ghost"
               size="sm"
+              className="min-w-24"
               loading={cancellingOauth}
               onClick={onCancelOauth}
             >
@@ -71,26 +83,20 @@ export function IntegrationRow({
         ) : (
           <>
             <Badge tone={badge.tone}>{badge.label}</Badge>
-            {actions.connect ? (
+            {actions.connect || actions.reconnect ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                loading={connecting}
+                className="min-w-24"
+                disabled={connecting}
                 onClick={() => onConnect(integration)}
               >
-                Connect
-              </Button>
-            ) : null}
-            {actions.reconnect ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                loading={connecting}
-                onClick={() => onConnect(integration)}
-              >
-                Reconnect
+                {connecting
+                  ? "Connecting..."
+                  : actions.connect
+                    ? "Connect"
+                    : "Reconnect"}
               </Button>
             ) : null}
             {actions.disconnect ? (
@@ -98,6 +104,8 @@ export function IntegrationRow({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="min-w-24"
+                disabled={connecting}
                 onClick={() => onRequestDisconnect(integration)}
               >
                 Disconnect

@@ -5,6 +5,7 @@ import {
   setAdminIntegrationEnabled,
   type CreateAdminIntegrationDefinitionRequest,
 } from "@proliferate/cloud-sdk/client/integrations";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { cloudIntegrationAdminDefinitionsKey } from "./query-keys";
 import { useInvalidateCloudIntegrations } from "./use-integration-health";
@@ -49,4 +50,13 @@ export function useAdminIntegrationDefinitionActions(organizationId: string | nu
     setEnabled: setEnabledMutation.mutateAsync,
     settingEnabled: setEnabledMutation.isPending,
   };
+}
+
+/**
+ * Human-readable message from an integrations API error, or null when the
+ * failure carries none (network faults, unexpected shapes). Lives here so
+ * pure presentation modules never touch the access client.
+ */
+export function integrationApiErrorMessage(error: unknown): string | null {
+  return error instanceof ProliferateClientError && error.message ? error.message : null;
 }
