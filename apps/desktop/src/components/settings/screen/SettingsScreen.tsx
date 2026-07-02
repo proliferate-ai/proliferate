@@ -44,14 +44,11 @@ import {
 } from "@/lib/domain/settings/navigation-presentation";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
 import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScopeTabs";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "lucide-react";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { useToastStore } from "@/stores/toast/toast-store";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { isSettingsScaffoldPageId } from "@/copy/settings/settings-scaffold-copy";
 
@@ -251,8 +248,6 @@ export function SettingsScreen({
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
   const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
-  const { revealInFinder } = useTauriShellActions();
-  const showToast = useToastStore((state) => state.show);
   const {
     phase,
     checkNow,
@@ -296,15 +291,6 @@ export function SettingsScreen({
     }
     onSelectSection(getFirstSectionForScope(scope));
   };
-  const handleEditSettingsToml = async () => {
-    try {
-      const { appConfigDir } = await import("@tauri-apps/api/path");
-      await revealInFinder(await appConfigDir());
-    } catch {
-      showToast("Couldn't open the config folder.");
-    }
-  };
-
   return (
     <div className="flex h-screen flex-col bg-background text-foreground" data-telemetry-block>
       <header className="shrink-0 border-b border-border">
@@ -330,16 +316,6 @@ export function SettingsScreen({
             value={activeScope}
             onChange={handleScopeChange}
           />
-          <div className="ml-auto flex shrink-0 items-center">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => { void handleEditSettingsToml(); }}
-            >
-              Open config folder
-            </Button>
-          </div>
         </div>
       </header>
 
