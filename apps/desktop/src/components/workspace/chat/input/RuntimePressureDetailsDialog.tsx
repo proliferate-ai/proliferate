@@ -84,8 +84,7 @@ export function RuntimePressureDetailsDialog({
           </div>
         )}
         sizeClassName="max-w-[760px] max-h-[84vh]"
-        panelClassName="border-border/80 bg-[#181818] shadow-2xl"
-        overlayClassName="bg-black/70 backdrop-blur-[1px]"
+        panelClassName="border-0 ring-[0.5px] ring-popover-ring shadow-popover"
         bodyClassName="flex min-h-0 flex-col px-0 pb-0 pt-0"
         footerClassName="flex shrink-0 flex-col gap-2 border-t border-border/60 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
         footer={(
