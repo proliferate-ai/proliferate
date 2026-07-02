@@ -13,7 +13,11 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.integrations import CloudIntegrationAccount
+from proliferate.db.models.cloud.integrations import (
+    CloudIntegrationAccount,
+    CloudIntegrationDefinition,
+)
+from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.utils.time import utcnow
 
 
@@ -122,6 +126,36 @@ async def list_ready_accounts_for_user(
         .all()
     )
     return tuple(_record(account) for account in accounts)
+
+
+async def get_ready_account_for_provider(
+    db: AsyncSession,
+    user_id: UUID,
+    namespace: str,
+) -> tuple[IntegrationAccountRecord, definitions_store.IntegrationDefinitionRecord] | None:
+    """The user's enabled, ready account whose non-archived definition matches ``namespace``."""
+    row = (
+        await db.execute(
+            select(CloudIntegrationAccount, CloudIntegrationDefinition)
+            .join(
+                CloudIntegrationDefinition,
+                CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
+            )
+            .where(
+                CloudIntegrationAccount.owner_user_id == user_id,
+                CloudIntegrationAccount.enabled.is_(True),
+                CloudIntegrationAccount.status == "ready",
+                CloudIntegrationDefinition.namespace == namespace,
+                CloudIntegrationDefinition.archived_at.is_(None),
+            )
+            .order_by(CloudIntegrationAccount.created_at.asc())
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None
+    account, definition = row
+    return _record(account), definitions_store._record(definition)
 
 
 async def upsert_account(
