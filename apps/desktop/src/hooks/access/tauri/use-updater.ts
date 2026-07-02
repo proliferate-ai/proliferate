@@ -4,7 +4,7 @@ import {
   persistValue,
   readPersistedValue,
 } from "@/lib/infra/persistence/preferences-persistence";
-import type { UpdaterPhase } from "@/stores/updater/updater-store";
+import type { UpdaterErrorSource, UpdaterPhase } from "@/stores/updater/updater-store";
 import {
   checkForUpdate,
   downloadAndInstall,
@@ -55,7 +55,7 @@ async function loadLastCheckedAt(): Promise<string | null> {
   return (await readPersistedValue<string>(LEGACY_LAST_CHECKED_KEY)) ?? null;
 }
 
-async function runUpdateCheck(): Promise<void> {
+async function runUpdateCheck(options: { userInitiated?: boolean } = {}): Promise<void> {
   const store = useUpdaterStore.getState();
   if (store.phase === "downloading" || checkInFlight) {
     return;
@@ -76,8 +76,13 @@ async function runUpdateCheck(): Promise<void> {
       trackProductEvent("app_update_available", { version: result.version });
     } else if (result.kind === "current") {
       useUpdaterStore.getState().setPhase("current");
+      if (options.userInitiated) {
+        // One-shot "you're up to date" signal. Only manual checks raise it —
+        // background checks that find nothing stay silent by design.
+        useUpdaterStore.getState().setManualCheckCompleted(Date.now());
+      }
     } else {
-      useUpdaterStore.getState().setError(result.message);
+      useUpdaterStore.getState().setError(result.message, "check");
       captureTelemetryException(new Error(result.message), {
         tags: {
           action: "check_for_update",
@@ -88,7 +93,7 @@ async function runUpdateCheck(): Promise<void> {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    useUpdaterStore.getState().setError(message);
+    useUpdaterStore.getState().setError(message, "check");
     captureTelemetryException(error, {
       tags: {
         action: "check_for_update",
@@ -127,7 +132,7 @@ async function runDownloadAndPrepareRestart(): Promise<void> {
     trackProductEvent("app_update_install_succeeded", { version });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    useUpdaterStore.getState().setError(message);
+    useUpdaterStore.getState().setError(message, "download");
     trackProductEvent("app_update_install_failed", {
       failure_kind: classifyTelemetryFailure(error),
       version,
@@ -183,9 +188,11 @@ export function useUpdater() {
   const storeAvailableVersion = useUpdaterStore((s) => s.availableVersion);
   const storeLastCheckedAt = useUpdaterStore((s) => s.lastCheckedAt);
   const storeErrorMessage = useUpdaterStore((s) => s.errorMessage);
+  const storeErrorSource = useUpdaterStore((s) => s.errorSource);
   const storeDownloadProgress = useUpdaterStore((s) => s.downloadProgress);
   const storeRestartPromptOpen = useUpdaterStore((s) => s.restartPromptOpen);
   const storeRestartWhenIdle = useUpdaterStore((s) => s.restartWhenIdle);
+  const storeManualCheckCompletedAt = useUpdaterStore((s) => s.manualCheckCompletedAt);
   const isPackaged = isTauriPackaged();
   const [devMock, setDevMock] = useState<DevUpdaterMockState | null>(() => readDevUpdaterMock());
 
@@ -193,9 +200,13 @@ export function useUpdater() {
   const availableVersion = devMock?.version ?? storeAvailableVersion;
   const lastCheckedAt = devMock?.lastCheckedAt ?? storeLastCheckedAt;
   const errorMessage = devMock?.errorMessage ?? storeErrorMessage;
+  const errorSource = devMock ? devMock.errorSource : storeErrorSource;
   const downloadProgress = devMock?.downloadProgress ?? storeDownloadProgress;
   const restartPromptOpen = devMock?.restartPromptOpen ?? storeRestartPromptOpen;
-  const restartWhenIdle = devMock ? false : storeRestartWhenIdle;
+  const restartWhenIdle = devMock ? devMock.restartWhenIdle : storeRestartWhenIdle;
+  const manualCheckCompletedAt = devMock
+    ? devMock.manualCheckCompletedAt
+    : storeManualCheckCompletedAt;
   const updatesSupported = isPackaged || devMock !== null;
 
   useEffect(() => {
@@ -222,8 +233,18 @@ export function useUpdater() {
   const checkNow = useCallback(async () => {
     if (devMock) {
       const timestamp = new Date().toISOString();
+      const completedAt = Date.now();
       updateDevUpdaterMock((current) =>
-        current ? { ...current, lastCheckedAt: timestamp } : current,
+        current
+          ? {
+              ...current,
+              lastCheckedAt: timestamp,
+              // Mirror the real flow: a manual check that finds no update raises
+              // the one-shot "up to date" signal.
+              manualCheckCompletedAt:
+                current.phase === "current" ? completedAt : current.manualCheckCompletedAt,
+            }
+          : current,
       );
       return;
     }
@@ -231,8 +252,18 @@ export function useUpdater() {
     if (!isPackaged) {
       return;
     }
-    await runUpdateCheck();
+    await runUpdateCheck({ userInitiated: true });
   }, [devMock, isPackaged]);
+
+  const clearManualCheckCompleted = useCallback(() => {
+    if (devMock) {
+      updateDevUpdaterMock((current) =>
+        current ? { ...current, manualCheckCompletedAt: null } : current,
+      );
+      return;
+    }
+    useUpdaterStore.getState().clearManualCheckCompleted();
+  }, [devMock]);
 
   const downloadUpdate = useCallback(async () => {
     if (devMock) {
@@ -269,7 +300,7 @@ export function useUpdater() {
   const scheduleRestartWhenIdle = useCallback(() => {
     if (devMock) {
       updateDevUpdaterMock((current) =>
-        current ? { ...current, restartPromptOpen: false } : current,
+        current ? { ...current, restartWhenIdle: true, restartPromptOpen: false } : current,
       );
       return;
     }
@@ -315,11 +346,14 @@ export function useUpdater() {
     availableVersion,
     lastCheckedAt,
     errorMessage,
+    errorSource,
     downloadProgress,
     restartPromptOpen,
     restartWhenIdle,
+    manualCheckCompletedAt,
     updatesSupported,
     checkNow,
+    clearManualCheckCompleted,
     downloadUpdate,
     openRestartPrompt,
     closeRestartPrompt,
@@ -328,4 +362,4 @@ export function useUpdater() {
   };
 }
 
-export type { UpdaterPhase };
+export type { UpdaterErrorSource, UpdaterPhase };

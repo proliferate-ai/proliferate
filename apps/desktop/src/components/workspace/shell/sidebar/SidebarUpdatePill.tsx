@@ -7,6 +7,9 @@ interface SidebarUpdatePillProps {
   // Accepted for compatibility with the shells that render the pill; the pill itself no
   // longer surfaces a percentage (the spinner conveys progress).
   downloadProgress?: number | null;
+  // True when "restart when they finish" is armed. The shells thread the state today;
+  // the pill's armed visuals ship separately. Omitted reads as false.
+  restartWhenIdle?: boolean;
   onDownloadUpdate: () => void | Promise<void>;
   onOpenRestartPrompt: () => void;
 }

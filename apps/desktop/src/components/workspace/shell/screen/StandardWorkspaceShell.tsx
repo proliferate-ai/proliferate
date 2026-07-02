@@ -110,6 +110,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const {
     phase: updaterPhase,
     downloadProgress,
+    restartWhenIdle,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -234,6 +235,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 width={sidebarWidth}
                 updaterPhase={updaterPhase}
                 downloadProgress={downloadProgress}
+                restartWhenIdle={restartWhenIdle}
                 onToggleSidebar={actions.onToggleSidebar}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}
@@ -264,6 +266,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             toggleTitle="Show sidebar"
                             phase={updaterPhase}
                             downloadProgress={downloadProgress}
+                            restartWhenIdle={restartWhenIdle}
                             onToggleSidebar={actions.onToggleSidebar}
                             onDownloadUpdate={downloadUpdate}
                             onOpenRestartPrompt={openRestartPrompt}

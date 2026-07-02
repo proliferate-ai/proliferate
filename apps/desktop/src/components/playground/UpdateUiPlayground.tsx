@@ -10,21 +10,18 @@ import {
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { setDevRunningAgentCount } from "@/hooks/app/lifecycle/use-running-agent-count";
+// Typed against the real dev mock so the playground always writes complete states.
+import type { DevUpdaterMockState } from "@/hooks/access/tauri/updater-dev-mock";
 
 type ProductionSurfacePreview =
   | "available"
   | "downloading"
   | "ready-reminder"
-  | "restart-dialog";
-
-interface DevUpdaterMockState {
-  phase: "available" | "downloading" | "ready";
-  version: string;
-  downloadProgress: number | null;
-  restartPromptOpen: boolean;
-  lastCheckedAt: string | null;
-  errorMessage: string | null;
-}
+  | "restart-dialog"
+  | "ready-armed"
+  | "manual-check-current"
+  | "check-error"
+  | "download-error";
 
 const DEV_UPDATER_MOCK_KEY = "proliferate.dev.updaterMock";
 const DEV_UPDATER_MOCK_EVENT = "proliferate:dev-updater-mock";
@@ -37,6 +34,10 @@ const PRODUCTION_SURFACE_PREVIEWS: {
   { id: "downloading", label: "Downloading" },
   { id: "ready-reminder", label: "Ready reminder" },
   { id: "restart-dialog", label: "Restart dialog" },
+  { id: "ready-armed", label: "Restart armed" },
+  { id: "manual-check-current", label: "Up to date" },
+  { id: "check-error", label: "Check failed" },
+  { id: "download-error", label: "Download failed" },
 ];
 
 export function UpdateUiPlayground() {
@@ -229,16 +230,20 @@ export function UpdateUiPlayground() {
 function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdaterMockState {
   const baseState = {
     version: PREVIEW_VERSION,
+    downloadProgress: null,
+    restartPromptOpen: false,
+    restartWhenIdle: false,
     lastCheckedAt: new Date().toISOString(),
     errorMessage: null,
-  };
+    errorSource: null,
+    manualCheckCompletedAt: null,
+  } satisfies Omit<DevUpdaterMockState, "phase">;
 
   if (preview === "downloading") {
     return {
       ...baseState,
       phase: "downloading",
       downloadProgress: 68,
-      restartPromptOpen: false,
     };
   }
 
@@ -246,8 +251,6 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
     return {
       ...baseState,
       phase: "ready",
-      downloadProgress: null,
-      restartPromptOpen: false,
     };
   }
 
@@ -255,16 +258,47 @@ function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdat
     return {
       ...baseState,
       phase: "ready",
-      downloadProgress: null,
       restartPromptOpen: true,
+    };
+  }
+
+  if (preview === "ready-armed") {
+    return {
+      ...baseState,
+      phase: "ready",
+      restartWhenIdle: true,
+    };
+  }
+
+  if (preview === "manual-check-current") {
+    return {
+      ...baseState,
+      phase: "current",
+      manualCheckCompletedAt: Date.now(),
+    };
+  }
+
+  if (preview === "check-error") {
+    return {
+      ...baseState,
+      phase: "error",
+      errorMessage: "Could not reach the update service.",
+      errorSource: "check",
+    };
+  }
+
+  if (preview === "download-error") {
+    return {
+      ...baseState,
+      phase: "error",
+      errorMessage: "The update could not be downloaded.",
+      errorSource: "download",
     };
   }
 
   return {
     ...baseState,
     phase: "available",
-    downloadProgress: null,
-    restartPromptOpen: false,
   };
 }
 

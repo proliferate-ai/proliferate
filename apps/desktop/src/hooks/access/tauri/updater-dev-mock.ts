@@ -1,20 +1,27 @@
-import type { UpdaterPhase } from "@/stores/updater/updater-store";
+import type { UpdaterErrorSource, UpdaterPhase } from "@/stores/updater/updater-store";
 
 const DEV_UPDATER_MOCK_KEY = "proliferate.dev.updaterMock";
 export const DEV_UPDATER_MOCK_EVENT = "proliferate:dev-updater-mock";
 const DEV_UPDATER_MOCK_VERSION = "0.1.3";
+const DEV_UPDATER_MOCK_ERROR_MESSAGE = "Simulated updater failure";
 const DEV_UPDATER_MOCK_DOWNLOAD_DELAYS_MS = [200, 450, 700];
 const DEV_UPDATER_MOCK_DOWNLOAD_PROGRESS = [32, 68, 100];
 
-type DevUpdaterMockPhase = Extract<UpdaterPhase, "available" | "downloading" | "ready">;
+type DevUpdaterMockPhase = Extract<
+  UpdaterPhase,
+  "current" | "available" | "downloading" | "ready" | "error"
+>;
 
 export interface DevUpdaterMockState {
   phase: DevUpdaterMockPhase;
   version: string;
   downloadProgress: number | null;
   restartPromptOpen: boolean;
+  restartWhenIdle: boolean;
   lastCheckedAt: string | null;
   errorMessage: string | null;
+  errorSource: UpdaterErrorSource | null;
+  manualCheckCompletedAt: number | null;
 }
 
 let mockDownloadTimeouts: number[] = [];
@@ -26,9 +33,9 @@ export function isDevUpdaterMockSupported(): boolean {
 let envSeedApplied = false;
 
 // Dev convenience: boot straight into a forced updater phase via
-// `VITE_PROLIFERATE_UPDATER_MOCK=available|downloading|ready` (e.g. when running `pdev`),
-// so the real pill / toast / confirm can be exercised without the playground. Runs once and
-// never clobbers an existing mock (e.g. one the playground set).
+// `VITE_PROLIFERATE_UPDATER_MOCK=current|available|downloading|ready|error` (e.g. when
+// running `pdev`), so the real pill / toast / confirm can be exercised without the
+// playground. Runs once and never clobbers an existing mock (e.g. one the playground set).
 export function seedDevUpdaterMockFromEnv(): void {
   if (!isDevUpdaterMockSupported() || envSeedApplied) {
     return;
@@ -110,7 +117,9 @@ export function startDevUpdaterMockDownload(): void {
     phase: "downloading",
     downloadProgress: 0,
     restartPromptOpen: false,
+    restartWhenIdle: false,
     errorMessage: null,
+    errorSource: null,
   });
 
   for (let index = 0; index < DEV_UPDATER_MOCK_DOWNLOAD_PROGRESS.length; index += 1) {
@@ -127,6 +136,7 @@ export function startDevUpdaterMockDownload(): void {
           downloadProgress: null,
           restartPromptOpen: true,
           errorMessage: null,
+          errorSource: null,
         });
         clearDevUpdaterMockDownload();
         return;
@@ -138,6 +148,7 @@ export function startDevUpdaterMockDownload(): void {
         downloadProgress: DEV_UPDATER_MOCK_DOWNLOAD_PROGRESS[index],
         restartPromptOpen: false,
         errorMessage: null,
+        errorSource: null,
       });
     }, DEV_UPDATER_MOCK_DOWNLOAD_DELAYS_MS[index]);
 
@@ -146,7 +157,17 @@ export function startDevUpdaterMockDownload(): void {
 }
 
 function isDevUpdaterMockPhase(value: unknown): value is DevUpdaterMockPhase {
-  return value === "available" || value === "downloading" || value === "ready";
+  return (
+    value === "current" ||
+    value === "available" ||
+    value === "downloading" ||
+    value === "ready" ||
+    value === "error"
+  );
+}
+
+function isUpdaterErrorSource(value: unknown): value is UpdaterErrorSource {
+  return value === "check" || value === "download";
 }
 
 function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
@@ -156,8 +177,11 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
       version: DEV_UPDATER_MOCK_VERSION,
       downloadProgress: raw === "downloading" ? 0 : null,
       restartPromptOpen: raw === "ready",
+      restartWhenIdle: false,
       lastCheckedAt: null,
-      errorMessage: null,
+      errorMessage: raw === "error" ? DEV_UPDATER_MOCK_ERROR_MESSAGE : null,
+      errorSource: raw === "error" ? "check" : null,
+      manualCheckCompletedAt: null,
     };
   }
 
@@ -181,10 +205,26 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
       typeof candidate.restartPromptOpen === "boolean"
         ? candidate.restartPromptOpen
         : candidate.phase === "ready",
+    // Only a downloaded ("ready") update can have an armed restart.
+    restartWhenIdle: candidate.phase === "ready" && candidate.restartWhenIdle === true,
     lastCheckedAt:
       typeof candidate.lastCheckedAt === "string" ? candidate.lastCheckedAt : null,
     errorMessage:
-      typeof candidate.errorMessage === "string" ? candidate.errorMessage : null,
+      typeof candidate.errorMessage === "string"
+        ? candidate.errorMessage
+        : candidate.phase === "error"
+          ? DEV_UPDATER_MOCK_ERROR_MESSAGE
+          : null,
+    errorSource:
+      candidate.phase === "error"
+        ? isUpdaterErrorSource(candidate.errorSource)
+          ? candidate.errorSource
+          : "check"
+        : null,
+    manualCheckCompletedAt:
+      typeof candidate.manualCheckCompletedAt === "number"
+        ? candidate.manualCheckCompletedAt
+        : null,
   };
 }
 
