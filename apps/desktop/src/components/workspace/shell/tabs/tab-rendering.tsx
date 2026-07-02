@@ -4,10 +4,10 @@ import {
   CircleAlert,
   Clock,
   MessageSquare,
-  Robot,
   Spinner,
 } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
 import type {
   HeaderChatMenuEntry,
@@ -60,7 +60,7 @@ function renderDelegatedAgentIcon(agent: DelegatedWorkTabIdentity): ReactNode {
       className={`relative flex size-4 shrink-0 items-center justify-center ${agent.identity.textColorClassName}`}
       title={agent.hoverTitle}
     >
-      <Robot className="size-3.5" aria-hidden="true" />
+      <DelegatedAgentIdenticon identity={agent.identity} className="size-3.5" />
       {badgeClassName && (
         <span
           aria-hidden="true"

@@ -29,6 +29,9 @@ export interface DelegatedAgentIdentity {
   textColorClassName: string;
   borderColorClassName: string;
   colorVar: string;
+  // Seed for the identicon cells. Derived from the same seed as name/color so
+  // the same subagent draws the same shape on every surface.
+  iconSeedHash: number;
   openTarget: DelegatedAgentOpenTarget | null;
 }
 

@@ -3,6 +3,7 @@ import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
+import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import {
   parseSubagentLaunchResult,
   parseSubagentProvisioningStatus,
@@ -118,7 +119,10 @@ function SubagentCreationRow({
   };
   const identityContent = (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
-      <Robot className={`size-3 shrink-0 ${identity.textColorClassName}`} />
+      <DelegatedAgentIdenticon
+        identity={identity}
+        className={`size-3 shrink-0 ${identity.textColorClassName}`}
+      />
       <span className={`truncate font-medium ${identity.textColorClassName}`}>
         {identity.displayName}
       </span>
