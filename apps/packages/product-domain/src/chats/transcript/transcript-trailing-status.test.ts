@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createTranscriptState, type TranscriptState, type TurnRecord } from "@anyharness/sdk";
 import {
   lastTopLevelItemIsAssistantProseWithText,
-  lastTopLevelItemIsStreamingAssistantProse,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "./transcript-trailing-status";
@@ -14,7 +13,6 @@ describe("transcript trailing status", () => {
     ]);
 
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
-    expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(true);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
@@ -27,7 +25,6 @@ describe("transcript trailing status", () => {
     // must be the last thing in the turn. No "Thinking…" lingering under an
     // already-finished answer while turn_ended trails the final tokens.
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
-    expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(false);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
@@ -82,7 +79,6 @@ describe("transcript trailing status", () => {
     ]);
 
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(false);
-    expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(false);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,

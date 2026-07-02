@@ -1294,40 +1294,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/webhooks/e2b": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** E2B Webhook Endpoint */
-        post: operations["e2b_webhook_endpoint_v1_cloud_webhooks_e2b_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/webhooks/github-app": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Github App Webhook Endpoint */
-        post: operations["github_app_webhook_endpoint_v1_cloud_webhooks_github_app_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/catalogs/agents": {
         parameters: {
             query?: never;
@@ -3209,14 +3175,6 @@ export interface components {
         DevDesktopHandoffRequest: {
             /** Url */
             url: string;
-        };
-        /** E2BWebhookReceipt */
-        E2BWebhookReceipt: {
-            /**
-             * Received
-             * @default true
-             */
-            received: boolean;
         };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
@@ -7342,67 +7300,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectorCatalogResponse"];
-                };
-            };
-        };
-    };
-    e2b_webhook_endpoint_v1_cloud_webhooks_e2b_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "e2b-signature"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["E2BWebhookReceipt"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    github_app_webhook_endpoint_v1_cloud_webhooks_github_app_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-github-event"?: string | null;
-                "x-hub-signature-256"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

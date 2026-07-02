@@ -30,14 +30,6 @@ export function lastTopLevelItemIsAssistantProseWithText(
   return item?.kind === "assistant_prose" && !!item.text;
 }
 
-export function lastTopLevelItemIsStreamingAssistantProse(
-  turn: { itemOrder: readonly string[] },
-  transcript: TranscriptState,
-): boolean {
-  const item = findLastTopLevelItem(turn, transcript);
-  return item?.kind === "assistant_prose" && !!item.text && item.isStreaming;
-}
-
 export function latestTransientStatusText(
   turn: { itemOrder: readonly string[] },
   transcript: TranscriptState,
