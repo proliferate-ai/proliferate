@@ -177,7 +177,25 @@ jobs:
             echo "tags<<EOF"
             printf '%s\n' "${TAGS[@]}"
             echo "EOF"
+            echo "version=${VERSION}"
           } >> "$GITHUB_OUTPUT"
+
+      # Version pins stamped into the image and reported by /health and /meta.
+      # serverVersion is the release version (server-v tag / input). The desktop
+      # and runtime pins are read from their tracked package manifests at this
+      # commit; minDesktopVersion defaults to the pinned desktop version.
+      - name: Resolve version pins
+        id: pins
+        run: |
+          set -euo pipefail
+          desktop_version="$(jq -r '.version' apps/desktop/package.json)"
+          runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
+          {
+            echo "desktop_version=${desktop_version}"
+            echo "runtime_version=${runtime_version}"
+            echo "min_desktop_version=${desktop_version}"
+          } >> "$GITHUB_OUTPUT"
+        working-directory: .
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -186,6 +204,11 @@ jobs:
           file: server/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            SERVER_VERSION=${{ steps.tags.outputs.version }}
+            DESKTOP_VERSION=${{ steps.pins.outputs.desktop_version }}
+            RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
+            MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
 
   self-hosted-release-assets:
     runs-on: ubuntu-latest
