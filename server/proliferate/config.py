@@ -40,6 +40,15 @@ class Settings(BaseSettings):
         default="/var/lib/proliferate/setup/setup-token",
         validation_alias=AliasChoices("PROLIFERATE_SETUP_TOKEN_FILE", "SETUP_TOKEN_FILE"),
     )
+    # Instance admin floor (single-org mode only). Comma-separated emails that
+    # must always hold at least the admin role in the instance organization.
+    # Asserted at account creation and at every login; removing an email from
+    # the list never demotes anyone. Inert in hosted mode; see
+    # proliferate.server.organizations.admin_emails for the rationale.
+    admin_emails: str = Field(
+        default="",
+        validation_alias=AliasChoices("ADMIN_EMAILS", "PROLIFERATE_ADMIN_EMAILS"),
+    )
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"
@@ -386,6 +395,15 @@ class Settings(BaseSettings):
         if self.single_org_mode_override is not None:
             return self.single_org_mode_override
         return self.telemetry_mode != "hosted_product"
+
+    @property
+    def admin_email_set(self) -> frozenset[str]:
+        """ADMIN_EMAILS parsed into normalized (stripped, lowercased) emails."""
+        return frozenset(
+            normalized
+            for raw in self.admin_emails.split(",")
+            if (normalized := raw.strip().lower())
+        )
 
     @model_validator(mode="after")
     def validate_secrets_in_production(self) -> "Settings":
