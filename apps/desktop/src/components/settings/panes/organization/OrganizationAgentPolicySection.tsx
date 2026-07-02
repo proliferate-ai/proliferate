@@ -6,6 +6,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 
 const ROUTE_OPTIONS = [
@@ -222,7 +223,7 @@ function PolicyChecklist({
     <fieldset className="space-y-2">
       <legend className="text-sm font-semibold text-foreground">{legend}</legend>
       {options.map((option) => (
-        <label
+        <Label
           key={option.value}
           className="flex items-center gap-2 text-sm text-foreground"
         >
@@ -232,7 +233,7 @@ function PolicyChecklist({
             onChange={() => onToggle(option.value)}
           />
           {option.label}
-        </label>
+        </Label>
       ))}
     </fieldset>
   );
