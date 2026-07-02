@@ -39,6 +39,7 @@ from proliferate.db.store.agent_gateway.records import (
     OrgAgentPolicyRecord,
 )
 from proliferate.db.store.agent_gateway.route_selections import (
+    delete_route_selection,
     get_route_selection,
     list_route_selections,
     upsert_route_selection,
@@ -62,6 +63,7 @@ __all__ = [
     "build_redacted_hint",
     "create_agent_api_key",
     "create_catalog_snapshot",
+    "delete_route_selection",
     "ensure_enrollment_row",
     "get_agent_api_key_decrypted",
     "get_catalog_override",

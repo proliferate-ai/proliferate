@@ -143,6 +143,91 @@ async def test_route_selection_upsert_bumps_revision(db_session: AsyncSession) -
 
 
 @pytest.mark.asyncio
+async def test_route_selection_upsert_resolves_conflicting_row(
+    db_session: AsyncSession,
+) -> None:
+    """A row inserted out-of-band (as a racing first writer would) must be
+    resolved by the ON CONFLICT upsert rather than raising IntegrityError."""
+    from proliferate.db.models.cloud.agent_gateway import AgentAuthRouteSelection
+
+    user_id = await _create_user(db_session)
+    # Simulate the row a concurrent first PUT committed just before us.
+    db_session.add(
+        AgentAuthRouteSelection(
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+            route="native",
+            revision=1,
+        )
+    )
+    await db_session.flush()
+
+    resolved = await store.upsert_route_selection(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        route="gateway",
+    )
+    assert resolved.route == "gateway"
+    assert resolved.revision == 2
+
+    listed = await store.list_route_selections(db_session, user_id=user_id)
+    assert len(listed) == 1
+
+
+@pytest.mark.asyncio
+async def test_route_selection_rejects_unknown_harness(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    with pytest.raises(ValueError, match="harness kind"):
+        await store.upsert_route_selection(
+            db_session,
+            user_id=user_id,
+            harness_kind="x" * 200,
+            surface="local",
+            route="native",
+        )
+
+
+@pytest.mark.asyncio
+async def test_route_selection_delete(db_session: AsyncSession) -> None:
+    user_id = await _create_user(db_session)
+    await store.upsert_route_selection(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+        route="native",
+    )
+
+    deleted = await store.delete_route_selection(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+    )
+    assert deleted is True
+    assert (
+        await store.get_route_selection(
+            db_session,
+            user_id=user_id,
+            harness_kind="claude",
+            surface="local",
+        )
+        is None
+    )
+
+    again = await store.delete_route_selection(
+        db_session,
+        user_id=user_id,
+        harness_kind="claude",
+        surface="local",
+    )
+    assert again is False
+
+
+@pytest.mark.asyncio
 async def test_route_selection_rejects_cloud_native(db_session: AsyncSession) -> None:
     user_id = await _create_user(db_session)
     with pytest.raises(ValueError, match="native route"):

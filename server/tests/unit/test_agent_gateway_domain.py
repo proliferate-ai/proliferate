@@ -39,6 +39,22 @@ class TestRouteSelectionLegality:
         with pytest.raises(ValueError, match="route"):
             validate_route_selection(surface="local", route="magic", api_key_id=None)
 
+    def test_unknown_harness_kind_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="harness kind"):
+            validate_route_selection(
+                surface="local",
+                route="native",
+                api_key_id=None,
+                harness_kind="bogus",
+            )
+        # A known harness passes the same check.
+        validate_route_selection(
+            surface="local",
+            route="native",
+            api_key_id=None,
+            harness_kind="claude",
+        )
+
 
 class TestRedactedHint:
     def test_prefixed_key_keeps_prefix_and_tail(self) -> None:
