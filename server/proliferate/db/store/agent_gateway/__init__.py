@@ -9,6 +9,7 @@ from proliferate.db.store.agent_gateway.api_keys import (
 )
 from proliferate.db.store.agent_gateway.catalog import (
     create_catalog_snapshot,
+    delete_catalog_override,
     get_catalog_override,
     get_latest_catalog_snapshot,
     upsert_catalog_override,
@@ -63,6 +64,7 @@ __all__ = [
     "build_redacted_hint",
     "create_agent_api_key",
     "create_catalog_snapshot",
+    "delete_catalog_override",
     "delete_route_selection",
     "ensure_enrollment_row",
     "get_agent_api_key_decrypted",

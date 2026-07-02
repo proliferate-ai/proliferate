@@ -31,6 +31,12 @@ AGENT_GATEWAY_SYNC_STATUS_FAILED = "failed"
 
 AGENT_CATALOG_SNAPSHOT_SOURCES = ("probe", "seed", "override")
 AGENT_CATALOG_SNAPSHOT_STATUS_ACTIVE = "active"
+AGENT_CATALOG_SNAPSHOT_STATUS_INACTIVE = "inactive"
+
+# harness_kind is a free-form slug (route selections accept arbitrary kinds),
+# but it is bounded to keep snapshot cardinality sane and to stay within the
+# String(64) column (an over-long value would otherwise 500 on insert).
+AGENT_HARNESS_KIND_MAX_LENGTH = 64
 
 AGENT_USAGE_IMPORT_CURSOR_ID = "default"
 
