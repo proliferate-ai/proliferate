@@ -121,11 +121,6 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
-  if (typeof next.cloudRuntimeInputSyncEnabled !== "boolean") {
-    next.cloudRuntimeInputSyncEnabled = PERSISTED_RECORD_BACKFILL.cloudRuntimeInputSyncEnabled;
-    changed = true;
-  }
-
   if (!isValidWorktreeAutoDeleteLimit(next.worktreeAutoDeleteLimit)) {
     next.worktreeAutoDeleteLimit = PERSISTED_RECORD_BACKFILL.worktreeAutoDeleteLimit;
     changed = true;

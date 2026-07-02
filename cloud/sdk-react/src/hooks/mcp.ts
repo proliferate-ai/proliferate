@@ -48,7 +48,6 @@ import {
   cloudPluginInventoryRootKey,
   cloudTargetsKey,
   sandboxProfileRuntimeConfigKey,
-  sandboxProfileTargetStateKey,
 } from "../lib/query-keys.js";
 
 export type { CloudMcpOAuthFlowStatusResponse } from "@proliferate/cloud-sdk";
@@ -284,9 +283,6 @@ async function invalidatePluginInventory(
       ? [
           queryClient.invalidateQueries({
             queryKey: sandboxProfileRuntimeConfigKey(options.sandboxProfileId),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: sandboxProfileTargetStateKey(options.sandboxProfileId),
           }),
         ]
       : []),

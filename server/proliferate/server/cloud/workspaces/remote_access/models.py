@@ -5,7 +5,6 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from proliferate.constants.cloud import CloudAgentKind
-from proliferate.server.cloud.workspaces.models import WorkspaceRuntimeAuthState
 
 
 class RemoteAccessRepoRef(BaseModel):
@@ -31,6 +30,3 @@ class WorkspaceConnection(BaseModel):
     runtime_generation: int = Field(serialization_alias="runtimeGeneration")
     allowed_agent_kinds: list[CloudAgentKind] = Field(serialization_alias="allowedAgentKinds")
     ready_agent_kinds: list[str] = Field(serialization_alias="readyAgentKinds")
-    runtime_auth: WorkspaceRuntimeAuthState = Field(
-        serialization_alias="runtimeAuth",
-    )

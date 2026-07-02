@@ -6,7 +6,6 @@ from uuid import UUID
 
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.db import engine as db_engine
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_environments import (
     attach_target_to_runtime_environment,
     ensure_runtime_environment_for_workspace_id,
@@ -16,9 +15,6 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime.credentials.auth_status import (
-    selected_agent_auth_agent_kinds,
-)
 from proliferate.server.cloud.runtime.models import CloudProvisionInput
 from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
 from proliferate.utils.crypto import decrypt_text, encrypt_text
@@ -93,63 +89,19 @@ async def load_provision_input(
     git_user_name, git_user_email = resolve_git_identity(user, github_grant)
 
     async with db_engine.async_session_factory() as db, db.begin():
-        if workspace.sandbox_profile_id is not None and workspace.target_id is not None:
-            profile = await agent_auth_store.get_sandbox_profile(db, workspace.sandbox_profile_id)
-            target = await targets_store.get_target_by_id(db, workspace.target_id)
-            if profile is None or target is None:
-                raise CloudApiError(
-                    "sandbox_profile_not_found",
-                    "Cloud sandbox profile could not be prepared.",
-                    status_code=500,
-                )
-            if target.sandbox_profile_id != profile.id:
-                raise CloudApiError(
-                    "cloud_target_profile_mismatch",
-                    "Cloud target is not attached to the workspace sandbox profile.",
-                    status_code=409,
-                )
-        elif workspace.owner_scope == "organization":
-            if workspace.organization_id is None:
-                raise CloudApiError(
-                    "organization_required",
-                    "Organization cloud workspaces require an organization.",
-                    status_code=400,
-                )
-            profile = await agent_auth_store.ensure_organization_sandbox_profile(
-                db,
-                organization_id=workspace.organization_id,
-                created_by_user_id=workspace.user_id,
+        if workspace.sandbox_profile_id is None or workspace.target_id is None:
+            raise CloudApiError(
+                "cloud_target_not_found",
+                "Cloud workspace is missing its sandbox profile or target.",
+                status_code=409,
             )
-            target = await targets_store.ensure_primary_profile_target(
-                db,
-                sandbox_profile_id=profile.id,
-                created_by_user_id=workspace.user_id,
+        target = await targets_store.get_target_by_id(db, workspace.target_id)
+        if target is None or target.sandbox_profile_id != workspace.sandbox_profile_id:
+            raise CloudApiError(
+                "cloud_target_profile_mismatch",
+                "Cloud target is not attached to the workspace sandbox profile.",
+                status_code=409,
             )
-            profile = await agent_auth_store.get_sandbox_profile(db, profile.id)
-            if profile is None:
-                raise CloudApiError(
-                    "sandbox_profile_not_found",
-                    "Cloud sandbox profile could not be prepared.",
-                    status_code=500,
-                )
-        else:
-            profile = await agent_auth_store.ensure_personal_sandbox_profile(
-                db,
-                user_id=workspace.user_id,
-                created_by_user_id=workspace.user_id,
-            )
-            target = await targets_store.ensure_primary_profile_target(
-                db,
-                sandbox_profile_id=profile.id,
-                created_by_user_id=workspace.user_id,
-            )
-            profile = await agent_auth_store.get_sandbox_profile(db, profile.id)
-            if profile is None:
-                raise CloudApiError(
-                    "sandbox_profile_not_found",
-                    "Cloud sandbox profile could not be prepared.",
-                    status_code=500,
-                )
         await attach_target_to_runtime_environment(
             db,
             runtime_environment_id=runtime_environment.id,
@@ -157,21 +109,8 @@ async def load_provision_input(
         )
         workspace_row = await db.get(type(workspace), workspace.id)
         if workspace_row is not None:
-            workspace_row.sandbox_profile_id = profile.id
             workspace_row.target_id = target.id
-            workspace_row.billing_subject_id = profile.billing_subject_id
             workspace_row.updated_at = utcnow()
-        agent_auth_agent_kinds = await selected_agent_auth_agent_kinds(
-            db,
-            sandbox_profile_id=profile.id,
-        )
-
-    if not agent_auth_agent_kinds:
-        raise CloudApiError(
-            "missing_supported_credentials",
-            "No agent authentication credentials were selected for this user.",
-            status_code=400,
-        )
 
     repo_env_vars = {}
     repo_env_version = 0
@@ -188,10 +127,8 @@ async def load_provision_input(
         git_user_name=git_user_name,
         git_user_email=git_user_email,
         anyharness_data_key=decrypt_text(anyharness_data_key_ciphertext),
-        sandbox_profile_id=profile.id,
+        sandbox_profile_id=workspace.sandbox_profile_id,
         target_id=target.id,
-        required_agent_auth_revision=profile.agent_auth_revision,
-        agent_auth_agent_kinds=agent_auth_agent_kinds,
         repo_env_vars=repo_env_vars,
         repo_env_version=repo_env_version,
         requested_base_sha=requested_base_sha,

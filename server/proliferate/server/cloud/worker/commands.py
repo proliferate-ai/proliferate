@@ -10,7 +10,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sync import command_leases as command_leases_store
 from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import command_results as command_results_store
@@ -269,91 +268,6 @@ async def record_command_delivery(
     )
 
 
-async def _record_agent_auth_state_from_command_result(
-    db: AsyncSession,
-    *,
-    auth: WorkerAuthContext,
-    command: command_records.CloudCommandSnapshot,
-    body: WorkerCommandResultRequest,
-    status: str,
-) -> None:
-    """Accept refresh command results as a compatibility materialization signal.
-
-    New workers report the detailed status endpoint during materialization.
-    Older deployed worker bundles may only return an accepted command result;
-    the command result is still target-scoped and worker-authenticated, so it is
-    sufficient to mark the target current for the reported revision.
-    """
-
-    if command.kind != CloudCommandKind.refresh_agent_auth_config.value:
-        return
-    if status not in {
-        CloudCommandStatus.accepted.value,
-        CloudCommandStatus.accepted_but_queued.value,
-    }:
-        return
-    try:
-        payload = json.loads(command.payload_json or "{}")
-    except ValueError:
-        return
-    if not isinstance(payload, dict):
-        return
-    try:
-        sandbox_profile_id = UUID(str(payload.get("sandboxProfileId") or ""))
-        revision = int(payload.get("revision"))
-    except (TypeError, ValueError):
-        return
-    result = body.result or {}
-    if not isinstance(result, dict):
-        return
-    current_revision = _optional_int_result_field(result.get("currentRevision"))
-    existing = await agent_auth_store.get_target_state(
-        db,
-        sandbox_profile_id=sandbox_profile_id,
-        target_id=auth.target_id,
-    )
-    if existing is not None and existing.desired_revision > revision:
-        return
-    if (
-        existing is not None
-        and existing.last_command_id is not None
-        and existing.last_command_id != command.id
-        and existing.desired_revision >= revision
-    ):
-        return
-    applied_revision = existing.applied_revision if existing is not None else None
-    desired_revision = max(revision, current_revision or revision)
-    state_status = "superseded"
-    if result.get("applied") is True and desired_revision <= revision:
-        applied_revision = revision
-        desired_revision = revision
-        state_status = "applied"
-    elif current_revision is None and result.get("reason") != "superseded":
-        return
-    force_restart_required = existing.force_restart_required if existing is not None else False
-    if state_status == "applied":
-        force_restart_required = False
-    await agent_auth_store.upsert_target_state(
-        db,
-        sandbox_profile_id=sandbox_profile_id,
-        target_id=auth.target_id,
-        desired_revision=desired_revision,
-        applied_revision=applied_revision,
-        status=state_status,
-        force_restart_required=force_restart_required,
-        last_command_id=command.id,
-        last_worker_id=auth.worker_id,
-        last_error_code=None,
-        last_error_message=None,
-    )
-
-
-def _optional_int_result_field(value: object) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, int):
-        return None
-    return value
-
-
 async def record_command_result(
     db: AsyncSession,
     *,
@@ -395,13 +309,6 @@ async def record_command_result(
         workspace_id=command.workspace_id,
         session_id=command.session_id,
         cloud_workspace_id=command.cloud_workspace_id,
-    )
-    await _record_agent_auth_state_from_command_result(
-        db,
-        auth=auth,
-        command=command,
-        body=body,
-        status=command.status,
     )
     if _command_result_should_fail_pending_prompt(command):
         await mark_pending_prompt_interaction_failed_for_command(db, command)

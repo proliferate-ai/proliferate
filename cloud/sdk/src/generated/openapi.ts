@@ -1171,23 +1171,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Cloud Capabilities Endpoint */
-        get: operations["cloud_capabilities_endpoint_v1_cloud_capabilities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/agent-run-configs": {
         parameters: {
             query?: never;
@@ -1910,23 +1893,6 @@ export interface components {
             /** Githubgrantstatus */
             githubGrantStatus: string | null;
         };
-        /** AgentAuthSlotCapability */
-        AgentAuthSlotCapability: {
-            /** Agentkind */
-            agentKind: string;
-            /** Authslotid */
-            authSlotId: string;
-            /** Label */
-            label: string;
-            /** Shortlabel */
-            shortLabel: string;
-            /** Credentialproviderids */
-            credentialProviderIds: string[];
-            /** Localprovider */
-            localProvider: string | null;
-            /** Primary */
-            primary: boolean;
-        };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
             /**
@@ -2195,51 +2161,6 @@ export interface components {
             mapping?: components["schemas"]["AgentCatalogControlMapping"] | null;
         } & {
             [key: string]: unknown;
-        };
-        /** AgentGatewayByokProviderCapabilities */
-        AgentGatewayByokProviderCapabilities: {
-            /** Anthropicapikey */
-            anthropicApiKey: boolean;
-            /** Openaiapikey */
-            openaiApiKey: boolean;
-            /** Geminiapikey */
-            geminiApiKey: boolean;
-            /** Bedrockassumerole */
-            bedrockAssumeRole: boolean;
-            /** Openaicompatible */
-            openaiCompatible: boolean;
-        };
-        /** AgentGatewayCapabilities */
-        AgentGatewayCapabilities: {
-            /** Enabled */
-            enabled: boolean;
-            /** Managedcreditspersonalenabled */
-            managedCreditsPersonalEnabled: boolean;
-            /** Managedcreditsorganizationenabled */
-            managedCreditsOrganizationEnabled: boolean;
-            /** Defaultmanagedbudgetusd */
-            defaultManagedBudgetUsd: string | null;
-            /** Managedcreditagentkinds */
-            managedCreditAgentKinds: string[];
-            /** Topology */
-            topology: string;
-            /** Routeisolation */
-            routeIsolation: string;
-            /** Liveproofstatus */
-            liveProofStatus: string;
-            /** Byokenabled */
-            byokEnabled: boolean;
-            /** Byokpersonalenabled */
-            byokPersonalEnabled: boolean;
-            /** Byokorganizationenabled */
-            byokOrganizationEnabled: boolean;
-            /** Byokorganizationdisabledreason */
-            byokOrganizationDisabledReason: string | null;
-            byokProviders: components["schemas"]["AgentGatewayByokProviderCapabilities"];
-            /** Opencodegatewayenabled */
-            opencodeGatewayEnabled: boolean;
-            /** Agentauthslots */
-            agentAuthSlots: components["schemas"]["AgentAuthSlotCapability"][];
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -2711,10 +2632,6 @@ export interface components {
             platform?: string | null;
             /** Routeorscreen */
             routeOrScreen?: string | null;
-        };
-        /** CloudCapabilitiesResponse */
-        CloudCapabilitiesResponse: {
-            agentGateway: components["schemas"]["AgentGatewayCapabilities"];
         };
         /** CloudGitRepositoriesResponse */
         CloudGitRepositoriesResponse: {
@@ -7001,26 +6918,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cloud_capabilities_endpoint_v1_cloud_capabilities_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudCapabilitiesResponse"];
                 };
             };
         };

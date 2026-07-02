@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
+from typing import NoReturn
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,6 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store import cloud_sandbox_profiles as profile_store
 from proliferate.db.store import users as users_store
 from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
@@ -68,6 +68,27 @@ SLACK_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
 GENERATED_SLACK_WORKSPACE_CREATE_MAX_ATTEMPTS = 5
 
 
+async def _ensure_organization_sandbox_profile(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    created_by_user_id: UUID,
+) -> NoReturn:
+    """Stand-in for the removed cloud_sandbox_profiles store helper.
+
+    SLACK BOT PARKED: sandbox profiles were removed with the Bifrost gateway
+    teardown (specs/codebase/primitives/agent-auth-litellm.md), so
+    Slack-triggered managed workspaces cannot be provisioned until the flow
+    is rebuilt.
+    """
+    del db, organization_id, created_by_user_id
+    raise CloudApiError(
+        "sandbox_profiles_removed",
+        "Slack-triggered cloud workspaces are unavailable.",
+        status_code=410,
+    )
+
+
 async def create_and_materialize_workspace(
     db: AsyncSession,
     *,
@@ -101,7 +122,7 @@ async def create_and_materialize_workspace(
     proposed_branch_name = _slack_branch_name(job_id=job_id)
     extra_taken_branch_names: set[str] = set()
     for attempt in range(GENERATED_SLACK_WORKSPACE_CREATE_MAX_ATTEMPTS):
-        profile = await profile_store.ensure_organization_sandbox_profile(
+        profile = await _ensure_organization_sandbox_profile(
             db,
             organization_id=organization_id,
             created_by_user_id=created_by_user_id,

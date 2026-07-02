@@ -17,7 +17,6 @@ from proliferate.constants.cloud import CLOUD_TARGET_HEARTBEAT_STALE_SECONDS, Cl
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_sandbox_profiles import load_sandbox_profile_by_id
 from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import command_results as command_results_store
 from proliferate.db.store.cloud_sync import commands as commands_store
@@ -83,6 +82,17 @@ async def _run_wake_task(target_id: UUID, command_id: UUID | None) -> None:
         _wake_tasks.pop(key, None)
 
 
+def _profile_billing_subject_id(sandbox_profile_id: UUID) -> UUID | None:
+    """Resolve the billing subject for a profile-backed managed target.
+
+    Sandbox profiles were removed with the Bifrost gateway teardown
+    (specs/codebase/primitives/agent-auth-litellm.md), so the lookup always
+    misses; callers treat ``None`` as "nothing to wake".
+    """
+    del sandbox_profile_id
+    return None
+
+
 async def run_managed_target_wake_job(target_id: UUID, command_id: UUID | None = None) -> None:
     """Gate managed target wake on billing before provider resume work."""
 
@@ -90,11 +100,10 @@ async def run_managed_target_wake_job(target_id: UUID, command_id: UUID | None =
         target = await targets_store.get_target_by_id(db, target_id)
         if target is None or target.sandbox_profile_id is None:
             return
-        profile = await load_sandbox_profile_by_id(db, target.sandbox_profile_id)
-        if profile is None:
+        billing_subject_id = _profile_billing_subject_id(target.sandbox_profile_id)
+        if billing_subject_id is None:
             return
         actor_user_id = target.created_by_user_id
-        billing_subject_id = profile.billing_subject_id
 
     authorization = await authorize_sandbox_start_for_billing_subject(
         actor_user_id=actor_user_id,

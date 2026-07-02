@@ -79,60 +79,6 @@ export function fallbackLaunchComposerControls(input: {
   ];
 }
 
-export function unavailableLaunchComposerControls(): CloudChatComposerControlView[] {
-  return [
-    {
-      id: "launch-agent-unavailable",
-      key: "model",
-      label: "Agent",
-      detail: "Unavailable",
-      icon: "bot",
-      placement: "trailing",
-      disabled: true,
-      active: false,
-      groups: [
-        {
-          id: "agents",
-          label: "Cloud agents",
-          options: [
-            {
-              id: "unavailable",
-              label: "No cloud agents ready",
-              description: "Configure agent auth or managed credits before starting a session.",
-              disabled: true,
-              selected: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "launch-mode-unavailable",
-      key: "mode",
-      label: "Cloud task",
-      detail: "Waiting",
-      icon: "sparkles",
-      placement: "leading",
-      disabled: true,
-      active: false,
-      groups: [
-        {
-          id: "mode",
-          options: [
-            {
-              id: "cloud-task",
-              label: "Cloud task",
-              description: "Start a session in this workspace",
-              selected: true,
-              disabled: true,
-            },
-          ],
-        },
-      ],
-    },
-  ];
-}
-
 export function buildLaunchAgentModelControl(input: {
   agents: readonly CloudAgentCatalogAgent[];
   selectedAgentKind: string;

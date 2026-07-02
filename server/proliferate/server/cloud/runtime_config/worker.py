@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import artifacts as artifact_store
 from proliferate.db.store.cloud_runtime_config import revisions as revision_store
 from proliferate.db.store.cloud_runtime_config.revisions import (
@@ -153,30 +151,6 @@ async def record_worker_runtime_config_status(
             status="stale",
             updated=False,
         )
-    error_message = body.error_message
-    if body.status == "failed":
-        details = {
-            "missingArtifacts": body.missing_artifacts,
-            "missingCredentials": body.missing_credentials,
-            "errorMessage": body.error_message,
-        }
-        error_message = json.dumps(
-            details,
-            ensure_ascii=True,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-    state = await agent_auth_store.record_runtime_config_worker_status(
-        db,
-        sandbox_profile_id=revision.sandbox_profile_id,
-        target_id=auth.target_id,
-        sequence=revision.sequence,
-        revision_id=revision.id,
-        worker_id=auth.worker_id,
-        status=body.status,
-        error_code=body.error_code,
-        error_message=error_message,
-    )
     await worker_control_store.bump_control_revision(db, target_id=auth.target_id)
     await publish_worker_control_after_commit(
         db,
@@ -185,7 +159,7 @@ async def record_worker_runtime_config_status(
     )
     return WorkerRuntimeConfigStatusResponse(
         revision_id=str(revision.id),
-        status=state.runtime_config_status,
+        status=body.status,
         updated=True,
     )
 

@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  useAgentAuthCredentials,
   useCloudAgentCatalog,
-  useCloudCapabilities,
   useCloudRepoBranches,
   useRepositories,
   useVisibleCloudWorkspaces,
@@ -17,7 +15,6 @@ import {
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 import { normalizeGitRepoId } from "@proliferate/product-domain/repos/repo-id";
 import {
-  readyCloudAgentKinds,
   resolveCloudHarnessAvailability,
 } from "@proliferate/product-domain/chats/cloud/harness-availability";
 import type { RecentWorkItemView } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
@@ -62,8 +59,6 @@ export function useWebHomeScreen() {
   const [pendingPrompt, setPendingPrompt] = useState<HomePendingPrompt | null>(null);
   const repoConfigs = useRepositories();
   const agentCatalog = useCloudAgentCatalog();
-  const cloudCapabilities = useCloudCapabilities();
-  const agentAuthCredentials = useAgentAuthCredentials();
   const visibleWorkspaces = useVisibleCloudWorkspaces(false);
   const configuredCloudRepos = useMemo(
     () => (repoConfigs.data?.repositories ?? []).flatMap((repo) => {
@@ -116,34 +111,11 @@ export function useWebHomeScreen() {
     ?? repoBranches.data?.defaultBranch
     ?? branchOptions[0]
     ?? null;
-  const agentGateway = cloudCapabilities.data?.agentGateway;
-  const readyAgentKinds = useMemo(
-    () => readyCloudAgentKinds({
-      credentials: agentAuthCredentials.data,
-      agentGateway,
-    }),
-    [agentAuthCredentials.data, agentGateway],
-  );
-  const readyAgentKindsKey = readyAgentKinds.join("\0");
-  const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
-  const agentGatewayAuthSlotsKey = agentGateway?.agentAuthSlots
-    .map((slot) => `${slot.agentKind}:${slot.authSlotId}:${slot.credentialProviderIds.join(",")}`)
-    .join("\0") ?? "";
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
-    readyAgentKinds,
-    agentGateway,
-    assumeFallbackAgentKindsLaunchable: false,
   }), [
     agentCatalog.data,
-    readyAgentKindsKey,
-    agentGateway?.enabled,
-    agentGateway?.managedCreditsOrganizationEnabled,
-    agentGateway?.managedCreditsPersonalEnabled,
-    agentGateway?.opencodeGatewayEnabled,
-    agentGatewayAuthSlotsKey,
-    agentGatewayManagedCreditKindsKey,
     catalogAgentKindsKey,
   ]);
   const launchableAgentKinds = harnessAvailability.launchableAgentKinds;

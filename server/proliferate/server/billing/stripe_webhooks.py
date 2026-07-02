@@ -318,10 +318,6 @@ async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscriptio
         ),
     )
     record = await reconcile_initial_org_subscription_seats(record)
-    # AGENT AUTH PARKED: managed credit budget sync for organization subjects
-    # lazily imported the parked agent-auth service, whose models were deleted
-    # by the #803/#809 cutover (the import raised ModuleNotFoundError for every
-    # org subscription webhook). Restore the sync when agent auth is remounted.
     return record
 
 

@@ -22,7 +22,6 @@ import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
-import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/lifecycle/use-runtime-input-sync-runtime"
 import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
@@ -269,7 +268,6 @@ function AppRuntime() {
           <MacWindowControlsSafeArea />
           <UpdateRestartDialog />
           <WorkspaceActivityIndicatorMount />
-          <RuntimeInputSyncGate />
           <WorktreeCleanupPolicySyncGate />
           <InstrumentedRoutes>
             <Route path="/index.html" element={<Navigate to="/" replace />} />
@@ -339,24 +337,6 @@ function WorkspaceActivityIndicatorMount() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_activity_indicator")
   useWorkspaceActivityIndicator()
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_activity_indicator")
-  return null
-}
-
-function RuntimeInputSyncGate() {
-  const preferencesHydrated = useUserPreferencesStore((s) => s._hydrated)
-  const cloudRuntimeInputSyncEnabled = useUserPreferencesStore(
-    (s) => s.cloudRuntimeInputSyncEnabled,
-  )
-
-  if (!preferencesHydrated || !cloudRuntimeInputSyncEnabled) {
-    return null
-  }
-
-  return <RuntimeInputSyncRuntimeMount />
-}
-
-function RuntimeInputSyncRuntimeMount() {
-  useRuntimeInputSyncRuntime()
   return null
 }
 

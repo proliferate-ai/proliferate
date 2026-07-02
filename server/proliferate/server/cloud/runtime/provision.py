@@ -11,7 +11,6 @@ from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.constants.cloud import WorkspaceStatus as LegacyWorkspaceStatus
 from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_sandboxes
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
     update_sandbox_status,
@@ -54,9 +53,6 @@ from proliferate.server.cloud.runtime.provisioning.launch import (
 )
 from proliferate.server.cloud.runtime.provisioning.launch import (
     refresh_runtime_config_and_apply as _refresh_runtime_config_and_apply,
-)
-from proliferate.server.cloud.runtime.provisioning.launch import (
-    request_agent_auth_refresh_and_wait as _request_agent_auth_refresh_and_wait,
 )
 from proliferate.server.cloud.runtime.provisioning.launch import (
     wait_for_worker_target_online as _wait_for_worker_target_online,
@@ -239,18 +235,10 @@ async def provision_workspace(
                 detail="Allocating sandbox",
             )
             async with db_engine.async_session_factory() as db, db.begin():
-                profile = await agent_auth_store.get_sandbox_profile(db, ctx.sandbox_profile_id)
-                if profile is None:
-                    raise CloudApiError(
-                        "sandbox_profile_not_found",
-                        "Cloud sandbox profile could not be prepared.",
-                        status_code=500,
-                    )
                 sandbox_record = await cloud_sandboxes.ensure_cloud_sandbox_for_target(
                     db,
                     sandbox_profile_id=ctx.sandbox_profile_id,
                     target_id=ctx.target_id,
-                    billing_subject_id=profile.billing_subject_id,
                     provider=provider.kind.value,
                     template_version=provider.template_version,
                     status="creating",
@@ -353,13 +341,6 @@ async def provision_workspace(
                 target_id=str(ctx.target_id),
                 reused_runtime=True,
                 worker_wake_ran=worker_wake_ran,
-            )
-            await _request_agent_auth_refresh_and_wait(
-                tracker,
-                ctx,
-                reason="workspace_reuse",
-                force_restart=False,
-                set_workspace_status=_set_workspace_status,
             )
             await _refresh_runtime_config_and_apply(
                 tracker,

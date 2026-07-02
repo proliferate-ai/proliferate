@@ -249,7 +249,7 @@ async def record_command_result(
     row.status = effective_status
     row.error_code = effective_error_code
     row.error_message = effective_error_message
-    row.result_json = _safe_result_json(kind=row.kind, result_json=result_json)
+    row.result_json = result_json
     if materialized_workspace_id is not None:
         row.workspace_id = materialized_workspace_id
     if anyharness_workspace_id is not None:
@@ -636,28 +636,6 @@ def _started_session_id(result_json: str | None) -> str | None:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
     return None
-
-
-def _safe_result_json(*, kind: str, result_json: str | None) -> str | None:
-    if kind != CloudCommandKind.refresh_agent_auth_config.value:
-        return result_json
-    try:
-        result = json.loads(result_json or "{}")
-    except ValueError:
-        return None
-    if not isinstance(result, dict):
-        return None
-    safe: dict[str, object] = {}
-    if isinstance(result.get("applied"), bool):
-        safe["applied"] = result["applied"]
-    if isinstance(result.get("reason"), str):
-        safe["reason"] = str(result["reason"])[:128]
-    if isinstance(result.get("currentRevision"), int) and not isinstance(
-        result.get("currentRevision"),
-        bool,
-    ):
-        safe["currentRevision"] = result["currentRevision"]
-    return json.dumps(safe, separators=(",", ":"), sort_keys=True) if safe else None
 
 
 async def _get_worker_leased_command(

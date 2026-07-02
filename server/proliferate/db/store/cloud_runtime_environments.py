@@ -18,7 +18,6 @@ from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnviron
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
-from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.utils.time import utcnow
 
 _UNSET = object()
@@ -189,15 +188,10 @@ async def reserve_sandbox_for_environment(
 
     billing_subject_id: UUID | None = None
     if sandbox_profile_id is not None or target_id is not None:
-        if sandbox_profile_id is None or target_id is None:
-            raise RuntimeError("Managed cloud sandboxes require profile and target ids.")
-        profile, _target = await require_primary_managed_profile_target(
-            db,
-            sandbox_profile_id=sandbox_profile_id,
-            target_id=target_id,
-            lock_rows=True,
-        )
-        billing_subject_id = profile.billing_subject_id
+        # Sandbox profiles were removed with the Bifrost gateway teardown
+        # (specs/codebase/primitives/agent-auth-litellm.md); profile-backed
+        # managed sandboxes can no longer be reserved.
+        raise RuntimeError("Sandbox profile targets have been removed.")
 
     now = utcnow()
     sandbox = CloudSandbox(

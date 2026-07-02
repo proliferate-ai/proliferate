@@ -15,8 +15,6 @@ fn session_record(id: &str) -> SessionRecord {
         workspace_id: "workspace-1".to_string(),
         agent_kind: "claude".to_string(),
         native_session_id: None,
-        agent_auth_scope: None,
-        required_agent_auth_revision: None,
         agent_auth_contexts: None,
         requested_model_id: None,
         current_model_id: None,
