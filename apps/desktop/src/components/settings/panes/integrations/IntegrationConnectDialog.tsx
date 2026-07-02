@@ -127,7 +127,7 @@ export function IntegrationConnectDialog({
                 }}
               />
               {field.helperText ? (
-                <p className="mt-1 text-[12px] leading-[1.45] text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {field.helperText}
                 </p>
               ) : null}
