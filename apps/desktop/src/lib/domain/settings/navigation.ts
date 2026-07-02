@@ -21,6 +21,9 @@ const FOCUS_PARAM_NAMES = [
   "checkout",
   "joinOrganizationId",
   "context",
+  "flowId",
+  "status",
+  "failureCode",
 ] as const;
 
 type SettingsFocusParam = (typeof FOCUS_PARAM_NAMES)[number];
@@ -170,6 +173,9 @@ export interface SettingsSelectionInput {
   rawCheckout?: string | null;
   rawJoinOrganizationId?: string | null;
   rawContext?: string | null;
+  rawFlowId?: string | null;
+  rawStatus?: string | null;
+  rawFailureCode?: string | null;
   repositories: SettingsRepositoryEntry[];
 }
 
@@ -192,6 +198,9 @@ export function resolveSettingsSelection({
   rawCheckout = null,
   rawJoinOrganizationId = null,
   rawContext = null,
+  rawFlowId = null,
+  rawStatus = null,
+  rawFailureCode = null,
   repositories,
 }: SettingsSelectionInput): SettingsSelection {
   const repositoryRoots = new Set(repositories.map((repository) => repository.sourceRoot));
@@ -220,6 +229,9 @@ export function resolveSettingsSelection({
     cloudRepoOwner: rawCloudRepoOwner,
     cloudRepoName: rawCloudRepoName,
     context: rawContext,
+    flowId: rawFlowId,
+    status: rawStatus,
+    failureCode: rawFailureCode,
   });
   let repoSourceRoot: string | null = isRepoScopeSection(section) ? rawRepo : null;
 
@@ -315,6 +327,15 @@ function sanitizeFocusForSection(
   }
   if (section === "organization-members") {
     return pickFocus({ joinOrganizationId: focus.joinOrganizationId });
+  }
+  if (section === "integrations") {
+    // OAuth browser-return deep links carry the flow outcome for the pane's
+    // arrival toast.
+    return pickFocus({
+      flowId: focus.flowId,
+      status: focus.status,
+      failureCode: focus.failureCode,
+    });
   }
   return {};
 }

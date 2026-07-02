@@ -9,6 +9,7 @@ export type SettingsNavIconId =
   | "check-for-updates"
   | "environments"
   | "general"
+  | "integrations"
   | "organization"
   | "organization-limits"
   | "organization-members"
@@ -75,6 +76,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "general", label: "General", iconId: "general" },
           { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
           { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
+          { kind: "section", id: "integrations", label: "Integrations", iconId: "integrations" },
           { kind: "section", id: "worktrees", label: "Pruning", iconId: "worktrees" },
         ],
       },
