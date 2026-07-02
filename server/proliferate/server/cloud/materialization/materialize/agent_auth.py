@@ -25,8 +25,13 @@ Multiple entries per harness are allowed (spec §3.3 slot semantics): OpenCode
 composes one entry per slot; AnyHarness merges them into a single additive
 launch profile and rejects multi-entry state for single-source harnesses.
 
-Only ``surface='cloud'`` selections are materialized. ``revision`` is the max
-revision across the user's cloud route-selection rows; it is informational
+Rendering is surface-parametric: this module materializes the ``cloud``
+surface into sandboxes, while the same render path serves the ``local``
+surface over ``GET /agent-gateway/state`` (the desktop pushes that payload to
+its local AnyHarness runtime). The local surface additionally renders
+``native`` selections — route choice only, never credentials — which the
+cloud surface cannot hold by schema constraint. ``revision`` is the max
+revision across the user's route-selection rows for the surface; it is informational
 for AnyHarness (content is authoritative — a virtual-key rotation changes the
 file without bumping any selection revision). Change detection uses a sha256
 fingerprint of the canonical state JSON, tracked in a server-owned manifest
@@ -67,6 +72,7 @@ from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_AUTH_ROUTE_API_KEY,
     AGENT_AUTH_ROUTE_GATEWAY,
+    AGENT_AUTH_ROUTE_NATIVE,
     AGENT_AUTH_SURFACE_CLOUD,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
 )
@@ -93,31 +99,35 @@ class AgentAuthStateInputs:
 
 def render_agent_auth_state(
     inputs: AgentAuthStateInputs,
+    *,
+    surface: str = AGENT_AUTH_SURFACE_CLOUD,
 ) -> tuple[dict[str, object] | None, str]:
-    """Render (state, fingerprint) from inputs.
+    """Render (state, fingerprint) for one surface from inputs.
 
-    Returns ``(None, "")`` only when the user has **no cloud selections at
-    all** — the state file is then deleted and the reader may fall through to
-    native. When cloud selections exist but none currently resolve (revoked
+    Returns ``(None, "")`` only when the user has **no selections for the
+    surface at all** — the state file is then deleted (cloud) or served as a
+    revision-0 legacy marker (local) and the reader may fall through to
+    native. When surface selections exist but none currently resolve (revoked
     ``api_key``, unsynced gateway, missing config), a fail-closed marker with
     an empty ``selections`` list is returned so the file is still written and
     the reader refuses per-harness instead of falling through.
+
+    ``native`` selections (local surface only, by schema constraint) render as
+    route-choice-only entries — no key material exists for them anywhere.
 
     Never raises for an unsatisfiable selection: it is skipped (and logged) so
     a single bad selection can never abort the reconcile and leave stale key
     material behind.
     """
-    cloud_selections = [
-        selection
-        for selection in inputs.selections
-        if selection.surface == AGENT_AUTH_SURFACE_CLOUD
+    surface_selections = [
+        selection for selection in inputs.selections if selection.surface == surface
     ]
-    if not cloud_selections:
+    if not surface_selections:
         return None, ""
 
     rendered: list[dict[str, object]] = []
     for selection in sorted(
-        cloud_selections,
+        surface_selections,
         key=lambda item: (item.harness_kind, item.slot),
     ):
         entry: dict[str, object] | None = None
@@ -125,14 +135,17 @@ def render_agent_auth_state(
             entry = _render_gateway_selection(inputs, selection)
         elif selection.route == AGENT_AUTH_ROUTE_API_KEY:
             entry = _render_api_key_selection(inputs, selection)
+        elif selection.route == AGENT_AUTH_ROUTE_NATIVE:
+            entry = _render_native_selection(selection)
         if entry is not None:
             rendered.append(entry)
 
-    # Cloud selections exist: always emit a state file. An empty ``selections``
-    # list is a deliberate fail-closed marker (not a deletion) so revoked/stale
-    # secret material is purged and the reader refuses per-harness.
+    # Surface selections exist: always emit a state file. An empty
+    # ``selections`` list is a deliberate fail-closed marker (not a deletion)
+    # so revoked/stale secret material is purged and the reader refuses
+    # per-harness.
     state: dict[str, object] = {
-        "revision": max(selection.revision for selection in cloud_selections),
+        "revision": max(selection.revision for selection in surface_selections),
         "user_id": str(inputs.user_id),
         "selections": rendered,
     }
@@ -200,23 +213,41 @@ def _render_api_key_selection(
     }
 
 
+def _render_native_selection(
+    selection: AgentAuthRouteSelectionRecord,
+) -> dict[str, object]:
+    """Render a native selection: the route choice only, never credentials."""
+    return {
+        "harness": selection.harness_kind,
+        "route": AGENT_AUTH_ROUTE_NATIVE,
+        "slot": selection.slot,
+    }
+
+
 async def build_agent_auth_state(
     db: AsyncSession,
     user_id: UUID,
+    *,
+    surface: str = AGENT_AUTH_SURFACE_CLOUD,
 ) -> tuple[dict[str, object] | None, str]:
-    """Load the user's cloud auth material and render (state, fingerprint)."""
-    inputs = await _load_state_inputs(db, user_id=user_id)
-    return render_agent_auth_state(inputs)
+    """Load the user's auth material for a surface and render (state, fingerprint)."""
+    inputs = await _load_state_inputs(db, user_id=user_id, surface=surface)
+    return render_agent_auth_state(inputs, surface=surface)
 
 
-async def _load_state_inputs(db: AsyncSession, *, user_id: UUID) -> AgentAuthStateInputs:
+async def _load_state_inputs(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str = AGENT_AUTH_SURFACE_CLOUD,
+) -> AgentAuthStateInputs:
     selections = tuple(await agent_gateway_store.list_route_selections(db, user_id=user_id))
-    cloud_selections = [
-        selection for selection in selections if selection.surface == AGENT_AUTH_SURFACE_CLOUD
+    surface_selections = [
+        selection for selection in selections if selection.surface == surface
     ]
 
     api_key_secrets: dict[UUID, tuple[str, str]] = {}
-    for selection in cloud_selections:
+    for selection in surface_selections:
         if selection.route != AGENT_AUTH_ROUTE_API_KEY or selection.api_key_id is None:
             continue
         resolved = await agent_gateway_store.get_agent_api_key_decrypted(
@@ -231,7 +262,7 @@ async def _load_state_inputs(db: AsyncSession, *, user_id: UUID) -> AgentAuthSta
     enrollment_sync_status: str | None = None
     gateway_virtual_key: str | None = None
     needs_gateway = any(
-        selection.route == AGENT_AUTH_ROUTE_GATEWAY for selection in cloud_selections
+        selection.route == AGENT_AUTH_ROUTE_GATEWAY for selection in surface_selections
     )
     if needs_gateway:
         enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)

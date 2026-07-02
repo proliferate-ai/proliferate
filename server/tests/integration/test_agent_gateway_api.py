@@ -528,3 +528,67 @@ class TestAgentGatewayEnrollment:
         response = await client.get("/v1/cloud/agent-gateway/enrollment", headers=headers)
         assert response.status_code == 404
         assert response.json()["detail"]["code"] == "agent_gateway_enrollment_not_found"
+
+
+async def _get_state(client: AsyncClient, headers: dict[str, str], surface: str) -> Response:
+    return await client.get(
+        "/v1/cloud/agent-gateway/state",
+        headers=headers,
+        params={"surface": surface},
+    )
+
+
+class TestAgentAuthState:
+    @pytest.mark.asyncio
+    async def test_local_state_matches_contract_shape(self, client: AsyncClient) -> None:
+        user_id, headers = await _authed_user(client)
+
+        # No selections yet: the revision-0 legacy marker.
+        empty = await _get_state(client, headers, "local")
+        assert empty.status_code == 200, empty.text
+        assert empty.json() == {"revision": 0, "user_id": user_id, "selections": []}
+
+        created = await _create_key(client, headers)
+        native = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/claude/local",
+            headers=headers,
+            json={"route": "native"},
+        )
+        assert native.status_code == 200, native.text
+        keyed = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/opencode/local",
+            headers=headers,
+            json={"route": "api_key", "apiKeyId": created["id"], "slot": "anthropic"},
+        )
+        assert keyed.status_code == 200, keyed.text
+
+        response = await _get_state(client, headers, "local")
+        assert response.status_code == 200, response.text
+        # The state document is the AnyHarness contract: snake_case fields,
+        # absent (not null) optionals, and the caller's OWN decrypted key.
+        assert response.json() == {
+            "revision": 1,
+            "user_id": user_id,
+            "selections": [
+                {"harness": "claude", "route": "native", "slot": "primary"},
+                {
+                    "harness": "opencode",
+                    "route": "api_key",
+                    "slot": "anthropic",
+                    "provider": "anthropic",
+                    "key": SECRET,
+                },
+            ],
+        }
+
+        cloud = await _get_state(client, headers, "cloud")
+        assert cloud.status_code == 200
+        assert cloud.json() == {"revision": 0, "user_id": user_id, "selections": []}
+
+    @pytest.mark.asyncio
+    async def test_requires_authentication(self, client: AsyncClient) -> None:
+        response = await client.get(
+            "/v1/cloud/agent-gateway/state",
+            params={"surface": "local"},
+        )
+        assert response.status_code == 401

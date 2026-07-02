@@ -274,6 +274,80 @@ class TestRenderAgentAuthState:
         assert fingerprint == agent_auth.agent_auth_state_fingerprint(state)
 
 
+class TestRenderLocalSurface:
+    def test_local_surface_renders_native_api_key_and_gateway(self) -> None:
+        key_id = uuid.uuid4()
+        state, fingerprint = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="claude", surface="local", route="native", revision=2),
+                    _selection(
+                        harness="codex",
+                        surface="local",
+                        route="api_key",
+                        api_key_id=key_id,
+                        revision=6,
+                    ),
+                    _selection(harness="grok", surface="local", route="gateway", revision=4),
+                ),
+                api_key_secrets={key_id: ("openai", "sk-openai-raw")},
+            ),
+            surface="local",
+        )
+        assert state == {
+            "revision": 6,
+            "user_id": str(USER_ID),
+            "selections": [
+                {
+                    "harness": "claude",
+                    "route": "native",
+                    "slot": "primary",
+                },
+                {
+                    "harness": "codex",
+                    "route": "api_key",
+                    "slot": "primary",
+                    "provider": "openai",
+                    "key": "sk-openai-raw",
+                },
+                {
+                    "harness": "grok",
+                    "route": "gateway",
+                    "slot": "primary",
+                    "base_url": "https://llm.proliferate.ai",
+                    "key": "sk-litellm-vk",
+                },
+            ],
+        }
+        assert fingerprint == agent_auth.agent_auth_state_fingerprint(state)
+
+    def test_cloud_selections_are_ignored_on_local_surface(self) -> None:
+        state, fingerprint = agent_auth.render_agent_auth_state(
+            _inputs((_selection(harness="claude", surface="cloud", route="gateway"),)),
+            surface="local",
+        )
+        assert state is None
+        assert fingerprint == ""
+
+    def test_native_selection_never_carries_key_material(self) -> None:
+        state, _ = agent_auth.render_agent_auth_state(
+            _inputs(
+                (_selection(harness="claude", surface="local", route="native", revision=3),)
+            ),
+            surface="local",
+        )
+        assert state is not None
+        serialized = json.dumps(state)
+        assert "sk-litellm-vk" not in serialized
+        assert "key" not in state["selections"][0]  # type: ignore[index]
+
+    def test_default_surface_stays_cloud(self) -> None:
+        selections = (_selection(harness="claude", route="gateway", revision=2),)
+        explicit = agent_auth.render_agent_auth_state(_inputs(selections), surface="cloud")
+        implicit = agent_auth.render_agent_auth_state(_inputs(selections))
+        assert explicit == implicit
+
+
 class _SandboxIOSpy:
     def __init__(self, previous_manifest: dict[str, object] | None) -> None:
         self.previous_manifest = previous_manifest
@@ -349,7 +423,7 @@ class TestMaterializeAgentAuth:
         selections = (_selection(harness="claude", route="gateway", revision=4),)
         inputs = _inputs(selections)
 
-        async def fake_load(db: object, *, user_id: uuid.UUID) -> Any:
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -377,7 +451,7 @@ class TestMaterializeAgentAuth:
         inputs = _inputs(selections)
         _, fingerprint = agent_auth.render_agent_auth_state(inputs)
 
-        async def fake_load(db: object, *, user_id: uuid.UUID) -> Any:
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -395,7 +469,7 @@ class TestMaterializeAgentAuth:
     ) -> None:
         inputs = _inputs((_selection(harness="claude", surface="local", route="native"),))
 
-        async def fake_load(db: object, *, user_id: uuid.UUID) -> Any:
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -429,7 +503,7 @@ class TestMaterializeAgentAuth:
             gateway_virtual_key=None,
         )
 
-        async def fake_load(db: object, *, user_id: uuid.UUID) -> Any:
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -465,7 +539,7 @@ class TestMaterializeAgentAuth:
             gateway_virtual_key=None,
         )
 
-        async def fake_load(db: object, *, user_id: uuid.UUID) -> Any:
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)

@@ -247,7 +247,7 @@ fn trim_trailing_slash(url: &str) -> &str {
     url.trim_end_matches('/')
 }
 
-fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), RouteAuthError> {
+pub(super) fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), RouteAuthError> {
     let tmp_path = path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
     fs::write(&tmp_path, contents).map_err(|error| RouteAuthError::Materialize {
         detail: format!("failed to write {}: {error}", tmp_path.display()),

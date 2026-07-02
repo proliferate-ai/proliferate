@@ -1,4 +1,5 @@
 import type { ProblemDetails } from "../types/runtime.js";
+import { AgentAuthClient } from "./agent-auth.js";
 import { AgentsClient } from "./agents.js";
 import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
@@ -366,6 +367,7 @@ export class AnyHarnessClient {
   readonly runtime: RuntimeClient;
   readonly runtimeConfig: RuntimeConfigClient;
   readonly agents: AgentsClient;
+  readonly agentAuth: AgentAuthClient;
   readonly mobility: MobilityClient;
   readonly plans: PlansClient;
   readonly repoRoots: RepoRootsClient;
@@ -386,6 +388,7 @@ export class AnyHarnessClient {
     this.runtime = new RuntimeClient(transport);
     this.runtimeConfig = new RuntimeConfigClient(transport);
     this.agents = new AgentsClient(transport);
+    this.agentAuth = new AgentAuthClient(transport);
     this.mobility = new MobilityClient(transport);
     this.plans = new PlansClient(transport);
     this.repoRoots = new RepoRootsClient(transport);

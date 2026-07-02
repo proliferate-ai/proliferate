@@ -20,6 +20,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     AgentAuthRouteSelectionListResponse,
     AgentAuthRouteSelectionResponse,
     AgentAuthRouteSelectionUpsertRequest,
+    AgentAuthStateResponse,
     AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
     AgentGatewayCatalogOverrideResponse,
@@ -27,6 +28,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     AgentGatewayCatalogRefreshRequest,
     AgentGatewayCatalogResponse,
     AgentGatewayEnrollmentResponse,
+    agent_auth_state_payload,
     api_key_payload,
     catalog_override_payload,
     catalog_payload,
@@ -150,6 +152,32 @@ async def clear_agent_route_selection_endpoint(
         )
     except CloudApiError as error:
         raise_cloud_error(error)
+
+
+@router.get(
+    "/state",
+    response_model=AgentAuthStateResponse,
+    response_model_exclude_none=True,
+)
+async def get_agent_auth_state_endpoint(
+    surface: AgentAuthSurface = Query(...),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentAuthStateResponse:
+    """Serve the caller's rendered state.json document for one surface.
+
+    This is the local-surface twin of the cloud materializer: the desktop
+    fetches ``surface=local`` and pushes the payload verbatim to its local
+    AnyHarness runtime (``PUT /v1/agent-auth/state``), which persists it at
+    ``<runtime_home>/agent-auth/state.json``.
+
+    Trust model: the response carries the current user's OWN decrypted key
+    material (pool keys, gateway virtual key) — the same secrets the cloud
+    materializer writes into the user's own sandbox. Auth is the current
+    product user; nothing here crosses a user boundary.
+    """
+    state = await service.get_auth_state(db, user_id=user.id, surface=surface)
+    return agent_auth_state_payload(state, user_id=str(user.id))
 
 
 @router.get("/catalog/{harness_kind}", response_model=AgentGatewayCatalogResponse)

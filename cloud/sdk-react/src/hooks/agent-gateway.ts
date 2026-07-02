@@ -3,6 +3,7 @@ import {
   clearAgentRouteSelection,
   createAgentApiKey,
   deleteAgentCatalogOverride,
+  getAgentAuthState,
   getAgentCatalog,
   getAgentGatewayCapabilities,
   getAgentGatewayEnrollment,
@@ -17,6 +18,7 @@ import {
   type AgentAuthRoute,
   type AgentAuthRouteSelection,
   type AgentAuthRouteSelectionListResponse,
+  type AgentAuthState,
   type AgentAuthSurface,
   type AgentGatewayCapabilities,
   type AgentGatewayCatalog,
@@ -30,6 +32,8 @@ import {
 import { useCloudClient } from "../context/CloudClientProvider.js";
 import {
   agentApiKeysKey,
+  agentAuthStateKey,
+  agentAuthStateRootKey,
   agentGatewayCapabilitiesKey,
   agentGatewayCatalogKey,
   agentGatewayCatalogRootKey,
@@ -95,6 +99,7 @@ export function useRevokeAgentApiKey() {
       void queryClient.invalidateQueries({ queryKey: agentApiKeysKey() });
       // Revoking a key can invalidate api_key route selections downstream.
       void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });
 }
@@ -108,6 +113,20 @@ export function useRouteSelections(enabled = true) {
   });
 }
 
+/**
+ * The caller's rendered state.json document for one surface. The payload
+ * carries the user's OWN decrypted key material (state.json contract), so it
+ * exists for the local-writer sync path — not for display surfaces.
+ */
+export function useAgentAuthState(surface: AgentAuthSurface, enabled = true) {
+  const client = useCloudClient();
+  return useQuery<AgentAuthState>({
+    queryKey: agentAuthStateKey(surface),
+    queryFn: () => getAgentAuthState(surface, client),
+    enabled,
+  });
+}
+
 export function useUpsertRouteSelection() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
@@ -116,6 +135,7 @@ export function useUpsertRouteSelection() {
       upsertAgentRouteSelection(harnessKind, surface, body, client),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });
 }
@@ -128,6 +148,7 @@ export function useClearRouteSelection() {
       clearAgentRouteSelection(harnessKind, surface, slot ?? "primary", client),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });
 }
