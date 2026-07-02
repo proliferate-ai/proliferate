@@ -20,6 +20,7 @@ import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { OrganizationSecretsPane } from "@/components/settings/panes/OrganizationSecretsPane";
 import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
 import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
+import { UserIntegrationsPane } from "@/components/settings/panes/UserIntegrationsPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
@@ -91,6 +92,21 @@ function renderSettingsSection(
 
     if (cloudActive) {
       return <PersonalSecretsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
+  if (activeSection === "integrations") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <UserIntegrationsPane focus={focus} />;
     }
 
     if (cloudSignInChecking) {
@@ -279,6 +295,7 @@ export function SettingsScreen({
           onSelectSection={onSelectSection}
           disabledSections={{
             "agent-authentication": !cloudEnabled,
+            integrations: !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,
             "personal-secrets": !cloudEnabled,

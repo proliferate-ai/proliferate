@@ -149,6 +149,35 @@ describe("settings navigation", () => {
     });
   });
 
+  it("preserves OAuth return focus only on the integrations section", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "integrations",
+      rawFlowId: "flow-1",
+      rawStatus: "completed",
+      rawFailureCode: null,
+      repositories: [],
+    })).toEqual({
+      activeSection: "integrations",
+      activeRepoSourceRoot: null,
+      focus: { flowId: "flow-1", status: "completed" },
+      joinOrganizationId: null,
+    });
+
+    expect(resolveSettingsSelection({
+      rawSection: "integrations",
+      rawStatus: "failed",
+      rawFailureCode: "access_denied",
+      repositories: [],
+    }).focus).toEqual({ status: "failed", failureCode: "access_denied" });
+
+    expect(resolveSettingsSelection({
+      rawSection: "general",
+      rawFlowId: "flow-1",
+      rawStatus: "completed",
+      repositories: [],
+    }).focus).toEqual({});
+  });
+
   it("resolves a valid repo settings link", () => {
     expect(resolveSettingsSelection({
       rawSection: "repo",
