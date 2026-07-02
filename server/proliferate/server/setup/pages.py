@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import html
 
+from proliferate.server.organizations.domain.profile import default_organization_name
+
 _PAGE_STYLE = """
   :root { color-scheme: light dark; }
   body {
@@ -91,8 +93,21 @@ def _page(title: str, body: str) -> str:
     )
 
 
-def render_setup_form(*, error: str | None = None, email: str = "") -> str:
+def _organization_name_placeholder(email: str) -> str:
+    """The derived default the organization name falls back to when blank."""
+    if email.strip():
+        return default_organization_name(email=email, display_name=None)
+    return "Derived from your email domain"
+
+
+def render_setup_form(
+    *,
+    error: str | None = None,
+    email: str = "",
+    organization_name: str = "",
+) -> str:
     error_html = f'<p class="error">{html.escape(error)}</p>\n' if error else ""
+    name_placeholder = _organization_name_placeholder(email)
     body = (
         "<h1>Set up Proliferate</h1>\n"
         '<p class="sub">Create the first account for this instance. '
@@ -105,6 +120,13 @@ def render_setup_form(*, error: str | None = None, email: str = "") -> str:
         '<label for="password">Password</label>\n'
         '<input id="password" name="password" type="password" '
         'autocomplete="new-password" required>\n'
+        '<label for="organization_name">Organization name</label>\n'
+        '<input id="organization_name" name="organization_name" type="text" '
+        'autocomplete="organization" '
+        f'placeholder="{html.escape(name_placeholder, quote=True)}" '
+        f'value="{html.escape(organization_name, quote=True)}">\n'
+        '<p class="hint">Optional. Leave blank to use a name derived from '
+        "your email domain.</p>\n"
         '<label for="setup_token">Setup token</label>\n'
         '<input id="setup_token" name="setup_token" type="text" '
         'autocomplete="off" spellcheck="false" required>\n'

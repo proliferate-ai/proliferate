@@ -36,6 +36,7 @@ async def first_run_setup_claim(
     email: Annotated[str, Form()] = "",
     password: Annotated[str, Form()] = "",
     setup_token: Annotated[str, Form()] = "",
+    organization_name: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     try:
         claim = await service.claim_first_run(
@@ -43,12 +44,17 @@ async def first_run_setup_claim(
             email=email,
             password=password,
             setup_token=setup_token,
+            organization_name=organization_name,
         )
     except FirstRunSetupError as error:
         if error.status_code == 404:
             return HTMLResponse(render_setup_not_found(), status_code=404)
         return HTMLResponse(
-            render_setup_form(error=error.message, email=email),
+            render_setup_form(
+                error=error.message,
+                email=email,
+                organization_name=organization_name,
+            ),
             status_code=error.status_code,
         )
     return HTMLResponse(render_setup_success(claim.email))

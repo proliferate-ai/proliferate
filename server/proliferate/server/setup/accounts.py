@@ -25,6 +25,7 @@ from proliferate.auth.passwords import (
     normalize_password_email,
     validate_new_password,
 )
+from proliferate.constants.auth import PASSWORD_EMAIL_MAX_LENGTH
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth_passwords import update_user_password_hash
 
@@ -40,9 +41,16 @@ class AccountValidationError(Exception):
 
 
 def normalize_account_email(email: str) -> str:
-    """Normalize and validate an email for account creation."""
+    """Normalize and validate an email for account creation.
+
+    The length cap matches the users email column (String(320)) so an
+    oversized value fails validation here instead of blowing up on the insert.
+    Shared by the first-run claim and invited self-registration.
+    """
     normalized_email = normalize_password_email(email)
-    if not _EMAIL_PATTERN.fullmatch(normalized_email):
+    if len(normalized_email) > PASSWORD_EMAIL_MAX_LENGTH or not _EMAIL_PATTERN.fullmatch(
+        normalized_email
+    ):
         raise AccountValidationError("Enter a valid email address.")
     return normalized_email
 

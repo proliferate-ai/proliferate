@@ -28,6 +28,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db.store import instance_setup as instance_setup_store
+from proliferate.server.organizations.domain.profile import (
+    clean_organization_name,
+    organization_name_issue,
+)
 from proliferate.server.organizations.membership_policy import claim_instance_organization
 from proliferate.server.setup.accounts import (
     AccountValidationError,
@@ -121,8 +125,13 @@ async def claim_first_run(
     email: str,
     password: str,
     setup_token: str,
+    organization_name: str = "",
 ) -> FirstRunClaim:
-    """Create the owner account and THE instance organization, exactly once."""
+    """Create the owner account and THE instance organization, exactly once.
+
+    ``organization_name`` is optional: blank falls back to the name derived
+    from the claimer's email domain.
+    """
     if not await is_setup_open(db):
         raise SetupClosedError()
 
@@ -140,6 +149,12 @@ async def claim_first_run(
     except AccountValidationError as exc:
         raise SetupValidationError(exc.reason) from exc
 
+    requested_organization_name = clean_organization_name(organization_name)
+    if requested_organization_name:
+        issue = organization_name_issue(requested_organization_name)
+        if issue is not None:
+            raise SetupValidationError(issue.message)
+
     # Serialize concurrent claims; the lock is held until this transaction
     # commits, so the user-count check below is race-free.
     await instance_setup_store.acquire_first_run_claim_lock(db)
@@ -147,7 +162,11 @@ async def claim_first_run(
         raise SetupClosedError()
 
     user = await create_password_account(db, email=normalized_email, password=password)
-    organization = await claim_instance_organization(db, user)
+    organization = await claim_instance_organization(
+        db,
+        user,
+        name=requested_organization_name or None,
+    )
     await instance_setup_store.delete_setup_token(db)
     await db_engine.run_after_commit(db, _remove_token_file_after_commit)
 

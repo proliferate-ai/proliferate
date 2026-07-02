@@ -21,6 +21,7 @@ from proliferate.constants.organizations import (
 from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import instance_setup as instance_setup_store
+from proliferate.server.organizations.domain.profile import default_organization_name
 from proliferate.server.setup.domain.tokens import (
     hash_setup_token,
     mint_setup_token,
@@ -166,6 +167,9 @@ async def test_setup_page_renders_while_unclaimed(single_org_client):
     assert 'name="setup_token"' in response.text
     assert 'name="email"' in response.text
     assert 'name="password"' in response.text
+    # Optional organization name with the derived default as its placeholder.
+    assert 'name="organization_name"' in response.text
+    assert 'placeholder="Derived from your email domain"' in response.text
 
 
 async def test_setup_routes_close_after_claim(single_org_client, test_engine, tmp_path):
@@ -225,6 +229,38 @@ async def test_claim_validates_password(single_org_client, test_engine, tmp_path
         assert await instance_setup_store.count_users(session) == 0
 
 
+async def test_claim_rejects_oversized_email(single_org_client, test_engine, tmp_path):
+    """An email longer than the users column (320) is a 400, not a 500."""
+    token = await _seed_setup_token(test_engine, tmp_path)
+    oversized_email = f"{'a' * 320}@acme.test"
+    response = await single_org_client.post(
+        "/setup",
+        data={"email": oversized_email, "password": CLAIM_PASSWORD, "setup_token": token},
+    )
+    assert response.status_code == 400
+    assert "valid email" in response.text
+
+    async with _factory(test_engine)() as session:
+        assert await instance_setup_store.count_users(session) == 0
+
+
+async def test_claim_rejects_oversized_organization_name(single_org_client, test_engine, tmp_path):
+    token = await _seed_setup_token(test_engine, tmp_path)
+    response = await single_org_client.post(
+        "/setup",
+        data={
+            "email": CLAIM_EMAIL,
+            "password": CLAIM_PASSWORD,
+            "setup_token": token,
+            "organization_name": "x" * 500,
+        },
+    )
+    assert response.status_code == 400
+
+    async with _factory(test_engine)() as session:
+        assert await instance_setup_store.count_users(session) == 0
+
+
 # ---------------------------------------------------------------------------
 # The claim itself
 # ---------------------------------------------------------------------------
@@ -263,6 +299,60 @@ async def test_claim_creates_owner_and_instance_org(single_org_client, test_engi
             break
         await asyncio.sleep(0.02)
     assert not _token_file(tmp_path).exists()
+
+
+async def test_claim_honors_custom_organization_name(single_org_client, test_engine, tmp_path):
+    token = await _seed_setup_token(test_engine, tmp_path)
+
+    response = await single_org_client.post(
+        "/setup",
+        data={
+            "email": CLAIM_EMAIL,
+            "password": CLAIM_PASSWORD,
+            "setup_token": token,
+            "organization_name": "  Wayne Enterprises  ",
+        },
+    )
+    assert response.status_code == 200
+
+    async with _factory(test_engine)() as session:
+        organization = (await session.execute(select(Organization))).scalar_one()
+        assert organization.name == "Wayne Enterprises"
+
+
+async def test_claim_blank_organization_name_uses_derived_default(
+    single_org_client, test_engine, tmp_path
+):
+    token = await _seed_setup_token(test_engine, tmp_path)
+
+    response = await single_org_client.post(
+        "/setup",
+        data={
+            "email": CLAIM_EMAIL,
+            "password": CLAIM_PASSWORD,
+            "setup_token": token,
+            "organization_name": "   ",
+        },
+    )
+    assert response.status_code == 200
+
+    async with _factory(test_engine)() as session:
+        organization = (await session.execute(select(Organization))).scalar_one()
+        assert organization.name == default_organization_name(email=CLAIM_EMAIL, display_name=None)
+
+
+async def test_claim_error_rerender_shows_derived_name_placeholder(
+    single_org_client, test_engine, tmp_path
+):
+    """The error re-render derives the placeholder from the submitted email."""
+    await _seed_setup_token(test_engine, tmp_path)
+    response = await single_org_client.post(
+        "/setup",
+        data={"email": CLAIM_EMAIL, "password": CLAIM_PASSWORD, "setup_token": "wrong-token"},
+    )
+    assert response.status_code == 403
+    derived = default_organization_name(email=CLAIM_EMAIL, display_name=None)
+    assert f'placeholder="{derived}"' in response.text
 
 
 async def test_concurrent_double_claim_yields_exactly_one_owner(
