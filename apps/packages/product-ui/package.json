@@ -187,6 +187,14 @@
       "types": "./dist/plugins/OrganizationIntegrationsPolicySurface.d.ts",
       "import": "./dist/plugins/OrganizationIntegrationsPolicySurface.js"
     },
+    "./settings/InstallGate": {
+      "types": "./dist/settings/InstallGate.d.ts",
+      "import": "./dist/settings/InstallGate.js"
+    },
+    "./settings/ModelConfigGrid": {
+      "types": "./dist/settings/ModelConfigGrid.d.ts",
+      "import": "./dist/settings/ModelConfigGrid.js"
+    },
     "./settings/SettingsPageHeader": {
       "types": "./dist/settings/SettingsPageHeader.d.ts",
       "import": "./dist/settings/SettingsPageHeader.js"

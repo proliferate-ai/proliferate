@@ -7,8 +7,10 @@ import {
 } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
-import { AgentApiKeysPane } from "@/components/settings/panes/AgentApiKeysPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
+import { AgentsOverviewPane } from "@/components/settings/panes/agents/overview/AgentsOverviewPane";
+import { ApiKeysPane } from "@/components/settings/panes/agents/api-keys/ApiKeysPane";
+import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
 import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
@@ -38,8 +40,10 @@ import {
   SETTINGS_SCOPE_LABELS,
   SETTINGS_SCOPE_ORDER,
   getFirstSectionForScope,
+  getHarnessKindForSettingsSection,
   getSettingsScopeForSection,
   isSettingsAdminOnlySection,
+  isSettingsHarnessSection,
 } from "@/lib/domain/settings/navigation-presentation";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
 import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScopeTabs";
@@ -75,6 +79,12 @@ function renderSettingsSection(
   onSelectRepo: (sourceRoot: string) => void,
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void,
 ): ReactNode {
+  if (activeSection === "agents") {
+    return <AgentsOverviewPane onSelectSection={onSelectSection} />;
+  }
+  if (isSettingsHarnessSection(activeSection)) {
+    return <HarnessPane harnessKind={getHarnessKindForSettingsSection(activeSection)} />;
+  }
   if (activeSection === "agent-defaults") {
     return <AgentDefaultsPane />;
   }
@@ -84,7 +94,7 @@ function renderSettingsSection(
     }
 
     if (cloudActive) {
-      return <AgentApiKeysPane />;
+      return <ApiKeysPane />;
     }
 
     if (cloudSignInChecking) {

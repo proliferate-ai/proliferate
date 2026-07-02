@@ -3,7 +3,13 @@ import type { SettingsSection } from "@/config/settings";
 export type SettingsNavIconId =
   | "account"
   | "agent-api-keys"
+  | "agent-claude"
+  | "agent-codex"
   | "agent-defaults"
+  | "agent-gemini"
+  | "agent-grok"
+  | "agent-opencode"
+  | "agents"
   | "appearance"
   | "archived-chats"
   | "billing"
@@ -134,13 +140,57 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "agents_main",
         heading: null,
         items: [
-          { kind: "section", id: "agent-defaults", label: "Defaults", iconId: "agent-defaults" },
+          { kind: "section", id: "agents", label: "Overview", iconId: "agents" },
+          { kind: "section", id: "agent-claude", label: "Claude Code", iconId: "agent-claude" },
+          { kind: "section", id: "agent-codex", label: "Codex", iconId: "agent-codex" },
+          { kind: "section", id: "agent-opencode", label: "OpenCode", iconId: "agent-opencode" },
+          { kind: "section", id: "agent-grok", label: "Grok", iconId: "agent-grok" },
+          { kind: "section", id: "agent-gemini", label: "Gemini", iconId: "agent-gemini" },
           { kind: "section", id: "agent-api-keys", label: "API keys", iconId: "agent-api-keys" },
+          { kind: "section", id: "agent-defaults", label: "Defaults", iconId: "agent-defaults" },
         ],
       },
     ],
   },
 ];
+
+/**
+ * Per-harness settings pages — every supported agent gets its own top-level
+ * sidebar entry in the Agents scope (SETTINGS_IA.md: "Each model its own page").
+ * Maps the section id to the harness kind its page configures.
+ */
+export const SETTINGS_HARNESS_SECTIONS = {
+  "agent-claude": "claude",
+  "agent-codex": "codex",
+  "agent-opencode": "opencode",
+  "agent-grok": "grok",
+  "agent-gemini": "gemini",
+} as const satisfies Partial<Record<SettingsSection, string>>;
+
+export type SettingsHarnessSection = keyof typeof SETTINGS_HARNESS_SECTIONS;
+
+export function isSettingsHarnessSection(
+  section: SettingsSection,
+): section is SettingsHarnessSection {
+  return section in SETTINGS_HARNESS_SECTIONS;
+}
+
+export function getHarnessKindForSettingsSection(
+  section: SettingsHarnessSection,
+): string {
+  return SETTINGS_HARNESS_SECTIONS[section];
+}
+
+export function getSettingsSectionForHarnessKind(
+  harnessKind: string,
+): SettingsSection | null {
+  for (const [section, kind] of Object.entries(SETTINGS_HARNESS_SECTIONS)) {
+    if (kind === harnessKind) {
+      return section as SettingsHarnessSection;
+    }
+  }
+  return null;
+}
 
 /** Global help actions — shown at the sidebar footer regardless of scope. */
 export const SETTINGS_HELP_ITEMS: SettingsNavItem[] = [
