@@ -140,9 +140,11 @@ export function ComposerCardFooter({
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 pb-3 pt-1.5">
       <div className="flex flex-wrap items-center gap-2">
         {secondaryActions.map((action) => (
-          <button
+          <Button
             key={action.label}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             disabled={action.disabled}
             onClick={action.onSelect}
             className={twMerge(
@@ -151,12 +153,14 @@ export function ComposerCardFooter({
             )}
           >
             {action.label}
-          </button>
+          </Button>
         ))}
       </div>
       {primaryAction && (
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           disabled={primaryAction.disabled}
           onClick={primaryAction.onSelect}
           className={twMerge(
@@ -165,7 +169,7 @@ export function ComposerCardFooter({
           )}
         >
           {primaryAction.label}
-        </button>
+        </Button>
       )}
     </div>
   );
