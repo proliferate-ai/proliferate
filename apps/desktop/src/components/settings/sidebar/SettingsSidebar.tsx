@@ -1,6 +1,7 @@
 import { Fragment, useMemo, type ReactNode } from "react";
 import {
   Archive,
+  Blocks,
   Brain,
   Building2,
   CircleUser,
@@ -85,7 +86,9 @@ const SETTINGS_NAV_ICONS = {
   "check-for-updates": RefreshCw,
   environments: FolderTree,
   general: Settings2,
+  integrations: Blocks,
   organization: Building2,
+  "organization-integrations": Blocks,
   "organization-limits": Gauge,
   "organization-members": Users,
   "organization-model-policy": Brain,

@@ -44,6 +44,26 @@ export function cloudOrganizationIntegrationPolicyKey(
   ] as const;
 }
 
+export function cloudIntegrationsRootKey() {
+  return [...cloudRootKey(), "integrations"] as const;
+}
+
+export function cloudIntegrationsCatalogKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "catalog", organizationId] as const;
+}
+
+export function cloudIntegrationsHealthKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "health", organizationId] as const;
+}
+
+export function cloudIntegrationOauthFlowKey(flowId: string | null) {
+  return [...cloudIntegrationsRootKey(), "oauth-flow", flowId] as const;
+}
+
+export function cloudIntegrationAdminDefinitionsKey(organizationId: string | null) {
+  return [...cloudIntegrationsRootKey(), "admin-definitions", organizationId] as const;
+}
+
 export function organizationSsoConnectionsKey(organizationId: string | null) {
   return [...cloudRootKey(), "organizations", organizationId, "sso-connections"] as const;
 }

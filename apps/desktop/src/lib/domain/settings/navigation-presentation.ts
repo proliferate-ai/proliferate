@@ -10,7 +10,9 @@ export type SettingsNavIconId =
   | "check-for-updates"
   | "environments"
   | "general"
+  | "integrations"
   | "organization"
+  | "organization-integrations"
   | "organization-limits"
   | "organization-members"
   | "organization-model-policy"
@@ -76,6 +78,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
           { kind: "section", id: "account", label: "Account", iconId: "account" },
           { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
+          { kind: "section", id: "integrations", label: "Integrations", iconId: "integrations" },
           { kind: "section", id: "worktrees", label: "Pruning", iconId: "worktrees" },
           { kind: "section", id: "archived-chats", label: "Archived chats", iconId: "archived-chats", tbr: true },
         ],
@@ -93,6 +96,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "organization-members", label: "Members", iconId: "organization-members", adminOnly: true },
           { kind: "section", id: "billing", label: "Billing", iconId: "billing", adminOnly: true },
           { kind: "section", id: "organization-secrets", label: "Organization secrets", iconId: "organization-secrets", adminOnly: true },
+          { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
         ],
       },
       {
