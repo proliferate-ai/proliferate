@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
-import { CheckCircleFilled, Circle, ClipboardList, Spinner } from "@proliferate/ui/icons";
+import { ListChecks } from "lucide-react";
+import { CheckCircleFilled, Circle, Spinner } from "@proliferate/ui/icons";
 import type { PlanEntry } from "@anyharness/sdk";
 
 interface TodoTrackerPanelProps {
@@ -50,7 +51,7 @@ export function TodoTrackerPanel({ entries }: TodoTrackerPanelProps) {
 
   return (
     <ComposerAttachedPanel
-      icon={<ClipboardList />}
+      icon={<ListChecks />}
       title="Tasks"
       context={context}
       expanded={expanded}
@@ -120,7 +121,7 @@ export function TodoTrackerStrip({ entries }: TodoTrackerPanelProps) {
       data-todo-tracker-strip
       className="flex min-w-0 items-center gap-1.5 border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] px-3 py-1.5 text-ui-sm text-muted-foreground"
     >
-      <ClipboardList className="size-3.5 shrink-0" />
+      <ListChecks className="size-3.5 shrink-0" />
       <span className="shrink-0 tabular-nums">
         {completedCount}/{entries.length}
       </span>
