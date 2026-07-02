@@ -7,9 +7,10 @@ import type {
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { automationWorkspaceDefaultDisplayNameFromBranch } from "@/lib/domain/workspaces/display/workspace-display";
 import type { SidebarCloudWorkspaceSummary } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
-import type {
-  SidebarDetailIndicator,
-  SidebarWorkspaceVariant,
+import {
+  logicalWorkspaceSshTargetId,
+  type SidebarDetailIndicator,
+  type SidebarWorkspaceVariant,
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 
 type SidebarCreatorContext =
@@ -61,6 +62,7 @@ export function detailIndicatorsForWorkspace(
       variant,
       tooltip: materializationTooltip(variant, targetAppearance),
       targetAppearance: variant === "ssh" ? targetAppearance ?? null : null,
+      directTargetId: variant === "ssh" ? logicalWorkspaceSshTargetId(workspace) : null,
     },
   ];
 }

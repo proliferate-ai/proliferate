@@ -45,12 +45,15 @@ import {
   agentGatewayCatalogRootKey,
   agentGatewayEnrollmentKey,
   agentRouteSelectionsKey,
+  agentRouteSelectionsRootKey,
 } from "../lib/query-keys.js";
 
 export interface UpsertRouteSelectionInput {
   harnessKind: string;
   surface: string;
   body: UpsertAgentAuthRouteSelectionRequest;
+  /** Write a per-runtime override row instead of the inherited default. */
+  targetId?: string | null;
 }
 
 export interface ClearRouteSelectionInput {
@@ -58,6 +61,8 @@ export interface ClearRouteSelectionInput {
   surface: string;
   /** Slot to clear; defaults to 'primary' (single-source harnesses). */
   slot?: string;
+  /** Clear a per-runtime override row (reverts that runtime to defaults). */
+  targetId?: string | null;
 }
 
 export interface AgentCatalogScope {
@@ -104,17 +109,29 @@ export function useRevokeAgentApiKey() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: agentApiKeysKey() });
       // Revoking a key can invalidate api_key route selections downstream.
-      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsRootKey() });
       void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });
 }
 
-export function useRouteSelections(enabled = true) {
+export interface RouteSelectionsOptions {
+  /**
+   * Fetch one enrolled direct runtime's override rows instead of the
+   * default rows (target_id NULL) every direct runtime inherits.
+   */
+  targetId?: string | null;
+}
+
+export function useRouteSelections(
+  enabled = true,
+  options: RouteSelectionsOptions = {},
+) {
   const client = useCloudClient();
+  const targetId = options.targetId ?? null;
   return useQuery<AgentAuthRouteSelectionListResponse>({
-    queryKey: agentRouteSelectionsKey(),
-    queryFn: () => listAgentRouteSelections(client),
+    queryKey: agentRouteSelectionsKey(targetId),
+    queryFn: () => listAgentRouteSelections({ targetId }, client),
     enabled,
   });
 }
@@ -172,10 +189,16 @@ export function useUpsertRouteSelection() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
   return useMutation<AgentAuthRouteSelection, Error, UpsertRouteSelectionInput>({
-    mutationFn: ({ harnessKind, surface, body }) =>
-      upsertAgentRouteSelection(harnessKind, surface, body, client),
+    mutationFn: ({ harnessKind, surface, body, targetId }) =>
+      upsertAgentRouteSelection(
+        harnessKind,
+        surface,
+        body,
+        { targetId: targetId ?? null },
+        client,
+      ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsRootKey() });
       void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });
@@ -185,10 +208,16 @@ export function useClearRouteSelection() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
   return useMutation<void, Error, ClearRouteSelectionInput>({
-    mutationFn: ({ harnessKind, surface, slot }) =>
-      clearAgentRouteSelection(harnessKind, surface, slot ?? "primary", client),
+    mutationFn: ({ harnessKind, surface, slot, targetId }) =>
+      clearAgentRouteSelection(
+        harnessKind,
+        surface,
+        slot ?? "primary",
+        { targetId: targetId ?? null },
+        client,
+      ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
+      void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsRootKey() });
       void queryClient.invalidateQueries({ queryKey: agentAuthStateRootKey() });
     },
   });

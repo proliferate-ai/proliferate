@@ -10,6 +10,7 @@ import {
   ProjectNotebook,
   GitBranchIcon,
 } from "@proliferate/ui/icons";
+import { DirectRuntimeAttachDot } from "@/components/compute/DirectRuntimeAttachChip";
 import { matchesPickerSearch } from "@proliferate/ui/utils/search";
 import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
 import type {
@@ -182,6 +183,9 @@ export function HomeTargetPicker({
               ) : filteredSshTargetOptions.length > 0 ? (
                 filteredSshTargetOptions.map((target) => {
                   const isSelected = repoLaunchKind === "ssh" && selectedSshTargetId === target.id;
+                  const attachDot = target.attachState
+                    ? <DirectRuntimeAttachDot state={target.attachState} />
+                    : null;
                   return (
                     <TargetPickerMenuItem
                       key={`ssh:${target.id}`}
@@ -189,7 +193,12 @@ export function HomeTargetPicker({
                       label={target.label}
                       disabled={target.disabledReason !== null}
                       title={target.disabledReason ?? undefined}
-                      trailing={isSelected ? <Check className="size-3.5" /> : null}
+                      trailing={attachDot || isSelected ? (
+                        <span className="flex items-center gap-1.5">
+                          {attachDot}
+                          {isSelected ? <Check className="size-3.5" /> : null}
+                        </span>
+                      ) : null}
                       onClick={() => {
                         onSelectRuntime("ssh", target.id);
                         clearSearch();

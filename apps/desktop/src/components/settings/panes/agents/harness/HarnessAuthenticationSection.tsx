@@ -12,6 +12,7 @@ import {
   useRouteSelections,
   useUpsertRouteSelection,
 } from "@proliferate/cloud-sdk-react";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { RadioCardGroup, type RadioCardOption } from "@proliferate/ui/primitives/RadioCardGroup";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
@@ -24,18 +25,22 @@ import { useAgentLoginTerminalWorkflow } from "@/hooks/agents/workflows/use-agen
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { isReadyAgent } from "@/lib/domain/agents/status";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { resolveTargetScopedSelection } from "@/lib/domain/settings/agents-runtime-scope";
 import { defaultRouteForSurface } from "@/lib/domain/settings/harness-catalog";
 
 interface HarnessAuthenticationSectionProps {
   harnessKind: string;
   displayName: string;
   surface: AgentAuthSurface;
+  /** Non-null scopes this page to one enrolled direct runtime (overrides). */
+  targetId: string | null;
 }
 
 export function HarnessAuthenticationSection({
   harnessKind,
   displayName,
   surface,
+  targetId,
 }: HarnessAuthenticationSectionProps) {
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
@@ -48,6 +53,7 @@ export function HarnessAuthenticationSection({
   // in the gap between mutation success and refetch resolution.
   const [optimisticSelection, setOptimisticSelection] = useState<{
     surface: AgentAuthSurface;
+    targetId: string | null;
     route: AgentAuthRoute;
     apiKeyId: string | null;
   } | null>(null);
@@ -55,6 +61,10 @@ export function HarnessAuthenticationSection({
   const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
   const enrollmentQuery = useAgentGatewayEnrollment(cloudActive);
   const selectionsQuery = useRouteSelections(cloudActive);
+  // A target scope layers its sparse override rows over the defaults.
+  const overridesQuery = useRouteSelections(cloudActive && targetId !== null, {
+    targetId,
+  });
   const apiKeysQuery = useAgentApiKeys(cloudActive);
   const upsertSelection = useUpsertRouteSelection();
   const clearSelection = useClearRouteSelection();
@@ -63,7 +73,7 @@ export function HarnessAuthenticationSection({
 
   useEffect(() => {
     setDraftApiKeyRoute(false);
-  }, [surface]);
+  }, [surface, targetId]);
 
   const localAgent = agentsByKind.get(harnessKind) ?? null;
   const loginSession = loginWorkflow.sessionsByKind[harnessKind] ?? null;
@@ -89,7 +99,10 @@ export function HarnessAuthenticationSection({
     if (!optimisticSelection) {
       return;
     }
-    const match = selectionsQuery.data?.selections.find(
+    const source = optimisticSelection.targetId === null
+      ? selectionsQuery.data?.selections
+      : overridesQuery.data?.selections;
+    const match = source?.find(
       (entry) =>
         entry.harnessKind === harnessKind &&
         entry.surface === optimisticSelection.surface &&
@@ -102,7 +115,7 @@ export function HarnessAuthenticationSection({
     ) {
       setOptimisticSelection(null);
     }
-  }, [selectionsQuery.data, optimisticSelection, harnessKind]);
+  }, [selectionsQuery.data, overridesQuery.data, optimisticSelection, harnessKind]);
 
   if (!cloudActive) {
     return (
@@ -128,20 +141,32 @@ export function HarnessAuthenticationSection({
   const directProvider = (capabilities?.providers ?? []).find(
     (provider) => provider.harnesses.includes(harnessKind),
   );
+  const resolvedSelection = resolveTargetScopedSelection({
+    defaults: selectionsQuery.data?.selections ?? [],
+    overrides: overridesQuery.data?.selections ?? [],
+    targetId,
+    harnessKind,
+    surface,
+    slot: "primary",
+  });
   const serverSelection: AgentAuthRouteSelection | null =
-    selectionsQuery.data?.selections.find(
-      (entry) =>
-        entry.harnessKind === harnessKind
-        && entry.surface === surface
-        && entry.slot === "primary",
-    ) ?? null;
-  const optimisticForSurface =
-    optimisticSelection?.surface === surface ? optimisticSelection : null;
+    resolvedSelection?.selection ?? null;
+  const optimisticForScope =
+    optimisticSelection?.surface === surface
+    && optimisticSelection.targetId === targetId
+      ? optimisticSelection
+      : null;
   const effectiveRoute: AgentAuthRoute | null =
-    optimisticForSurface?.route ?? serverSelection?.route ?? null;
+    optimisticForScope?.route ?? serverSelection?.route ?? null;
   const effectiveApiKeyId =
-    optimisticForSurface?.apiKeyId ?? serverSelection?.apiKeyId ?? null;
-  const selection = optimisticForSurface ?? serverSelection;
+    optimisticForScope?.apiKeyId ?? serverSelection?.apiKeyId ?? null;
+  const selection = optimisticForScope ?? serverSelection;
+  // On a target scope, the value is an override only when a per-target row
+  // (or a just-written optimistic one) backs it; anything else is inherited.
+  const isTargetOverride =
+    targetId !== null
+    && (optimisticForScope !== null
+      || (serverSelection !== null && resolvedSelection?.inherited === false));
   const selectedRoute: AgentAuthRoute = draftApiKeyRoute
     ? "api_key"
     : effectiveRoute ?? defaultRouteForSurface(surface);
@@ -172,8 +197,11 @@ export function HarnessAuthenticationSection({
       : []),
   ];
 
+  // Login round-trips run against this Desktop's own runtime; a remote
+  // direct runtime's vendor login happens on that box, not here.
   const canRunLogin =
     surface === "local"
+    && targetId === null
     && selectedRoute === "native"
     && localAgent !== null
     && !isReadyAgent(localAgent)
@@ -181,6 +209,7 @@ export function HarnessAuthenticationSection({
     && localAgent.supportsLogin;
   const showLoginTerminal =
     surface === "local"
+    && targetId === null
     && selectedRoute === "native"
     && loginSession !== null
     && (loginSession.isStarting
@@ -192,6 +221,7 @@ export function HarnessAuthenticationSection({
       {
         harnessKind,
         surface,
+        targetId,
         body: route === "api_key"
           ? { route, apiKeyId: apiKeyId ?? null, slot: "primary" }
           : { route, slot: "primary" },
@@ -201,6 +231,7 @@ export function HarnessAuthenticationSection({
           setDraftApiKeyRoute(false);
           setOptimisticSelection({
             surface,
+            targetId,
             route,
             apiKeyId: route === "api_key" ? apiKeyId ?? null : null,
           });
@@ -226,13 +257,17 @@ export function HarnessAuthenticationSection({
   }
 
   function handleReset() {
+    // On a target scope this deletes the override row, reverting the runtime
+    // to the inherited default; on the default scope it clears the default.
     clearSelection.mutate(
-      { harnessKind, surface },
+      { harnessKind, surface, targetId },
       {
         onSuccess: () => {
           setDraftApiKeyRoute(false);
           setOptimisticSelection((current) =>
-            current?.surface === surface ? null : current,
+            current?.surface === surface && current.targetId === targetId
+              ? null
+              : current,
           );
         },
         onError: (error) => {
@@ -247,10 +282,19 @@ export function HarnessAuthenticationSection({
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
-      {selectionsQuery.isLoading ? (
+      {selectionsQuery.isLoading || (targetId !== null && overridesQuery.isLoading) ? (
         <p className="py-3 text-sm text-muted-foreground">Loading route selection...</p>
       ) : (
         <div className="space-y-3 py-3">
+          {targetId !== null ? (
+            <div>
+              <Badge tone={isTargetOverride ? "accent" : "neutral"}>
+                {isTargetOverride
+                  ? HARNESS_PANE_COPY.overrideBadge
+                  : HARNESS_PANE_COPY.inheritedBadge}
+              </Badge>
+            </div>
+          ) : null}
           <RadioCardGroup
             value={selectedRoute}
             options={routeOptions}
@@ -309,7 +353,21 @@ export function HarnessAuthenticationSection({
             />
           ) : null}
 
-          {selection ? (
+          {targetId !== null ? (
+            isTargetOverride ? (
+              <div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={clearSelection.isPending}
+                  onClick={handleReset}
+                >
+                  {HARNESS_PANE_COPY.clearOverride}
+                </Button>
+              </div>
+            ) : null
+          ) : selection ? (
             <div>
               <Button
                 type="button"

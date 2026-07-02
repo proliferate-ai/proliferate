@@ -26,8 +26,12 @@ export function agentApiKeysKey() {
   return [...agentGatewayRootKey(), "api-keys"] as const;
 }
 
-export function agentRouteSelectionsKey() {
+export function agentRouteSelectionsRootKey() {
   return [...agentGatewayRootKey(), "route-selections"] as const;
+}
+
+export function agentRouteSelectionsKey(targetId: string | null = null) {
+  return [...agentRouteSelectionsRootKey(), targetId] as const;
 }
 
 export function agentAuthStateRootKey() {

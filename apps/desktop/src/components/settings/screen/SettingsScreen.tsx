@@ -83,7 +83,12 @@ function renderSettingsSection(
     return <AgentsOverviewPane onSelectSection={onSelectSection} />;
   }
   if (isSettingsHarnessSection(activeSection)) {
-    return <HarnessPane harnessKind={getHarnessKindForSettingsSection(activeSection)} />;
+    return (
+      <HarnessPane
+        harnessKind={getHarnessKindForSettingsSection(activeSection)}
+        initialTargetId={focus.target ?? null}
+      />
+    );
   }
   if (activeSection === "agent-defaults") {
     return <AgentDefaultsPane />;

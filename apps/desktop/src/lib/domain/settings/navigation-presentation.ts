@@ -181,6 +181,11 @@ export function getHarnessKindForSettingsSection(
   return SETTINGS_HARNESS_SECTIONS[section];
 }
 
+/** Landing page for "manage agent auth" affordances that scope to a runtime. */
+export function getFirstHarnessSettingsSection(): SettingsHarnessSection {
+  return Object.keys(SETTINGS_HARNESS_SECTIONS)[0] as SettingsHarnessSection;
+}
+
 export function getSettingsSectionForHarnessKind(
   harnessKind: string,
 ): SettingsSection | null {

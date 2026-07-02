@@ -1,5 +1,5 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { ChevronRight, Server } from "@proliferate/ui/icons";
+import { ChevronRight, Monitor, Server } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import {
@@ -14,24 +14,32 @@ import {
   resolveComputeTargetAppearance,
   type ComputeTargetAppearancePreference,
 } from "@/lib/domain/compute/target-appearance";
+import type { DirectRuntimeConnectionState } from "@/lib/domain/compute/direct-runtime";
 import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { DirectRuntimeAttachChip } from "@/components/compute/DirectRuntimeAttachChip";
 
 interface ComputeTargetListProps {
   targets: ComputeTargetSummary[];
+  cloudTargets?: ComputeTargetSummary[];
   appearancePreferences: Record<string, ComputeTargetAppearancePreference>;
   selectedTargetId: string | null;
   loading: boolean;
+  loopbackDisplayName: string;
+  getAttachState: (targetId: string | null) => DirectRuntimeConnectionState;
   onSelectTarget: (targetId: string) => void;
   onAddSshTarget: () => void;
 }
 
 export function ComputeTargetList({
   targets,
+  cloudTargets = [],
   appearancePreferences,
   selectedTargetId,
   loading,
+  loopbackDisplayName,
+  getAttachState,
   onSelectTarget,
   onAddSshTarget,
 }: ComputeTargetListProps) {
@@ -46,13 +54,15 @@ export function ComputeTargetList({
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-medium text-foreground">SSH Targets</h3>
+              <h3 className="text-sm font-medium text-foreground">
+                {COMPUTE_COPY.machinesTitle}
+              </h3>
               {!loading && targets.length > 0 ? (
                 <Badge tone="neutral">{targetCountLabel(targets.length)}</Badge>
               ) : null}
             </div>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              Select an SSH target to inspect setup, readiness, local access, and auth.
+              {COMPUTE_COPY.machinesDescription}
             </p>
           </div>
         </div>
@@ -61,6 +71,12 @@ export function ComputeTargetList({
             {COMPUTE_COPY.addSshTarget}
           </Button>
         ) : null}
+      </div>
+      <div className="pt-4">
+        <ThisMacRow
+          displayName={loopbackDisplayName}
+          attachState={getAttachState(null)}
+        />
       </div>
       {loading ? (
         <div className="space-y-2 pt-4">
@@ -87,11 +103,68 @@ export function ComputeTargetList({
               group={group}
               appearancePreferences={appearancePreferences}
               selectedTargetId={selectedTargetId}
+              getAttachState={getAttachState}
               onSelectTarget={onSelectTarget}
             />
           ))}
         </div>
       )}
+      {cloudTargets.length > 0 ? (
+        <div className="pt-4">
+          <SettingsSection
+            title={COMPUTE_COPY.cloudSectionTitle}
+            description={COMPUTE_COPY.cloudSectionDescription}
+          >
+            <div className="space-y-2">
+              {cloudTargets.map((target) => (
+                <TargetRow
+                  key={target.id}
+                  target={target}
+                  appearancePreferences={appearancePreferences}
+                  selected={selectedTargetId === target.id}
+                  attachState={null}
+                  onSelectTarget={onSelectTarget}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The loopback runtime: always first, always present — it is not an enrolled
+ * target, so it carries an attach chip instead of an enrollment status and
+ * has no detail page to navigate to.
+ */
+function ThisMacRow({
+  displayName,
+  attachState,
+}: {
+  displayName: string;
+  attachState: DirectRuntimeConnectionState;
+}) {
+  return (
+    <div
+      data-testid="this-mac-row"
+      className="flex min-h-[74px] w-full items-center gap-3 rounded-md border border-border/50 bg-foreground/5 px-3 py-3"
+    >
+      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground/10 text-muted-foreground">
+        <Monitor className="size-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+          <span className="truncate">{displayName}</span>
+          <DirectRuntimeAttachChip state={attachState} />
+        </span>
+        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>{COMPUTE_COPY.thisMacKindLabel}</span>
+          <span aria-hidden="true">·</span>
+          <span>{COMPUTE_COPY.thisMacDetail}</span>
+        </span>
+      </span>
     </div>
   );
 }
@@ -100,11 +173,13 @@ function TargetGroup({
   group,
   appearancePreferences,
   selectedTargetId,
+  getAttachState,
   onSelectTarget,
 }: {
   group: ComputeTargetOwnerGroup;
   appearancePreferences: Record<string, ComputeTargetAppearancePreference>;
   selectedTargetId: string | null;
+  getAttachState: (targetId: string | null) => DirectRuntimeConnectionState;
   onSelectTarget: (targetId: string) => void;
 }) {
   return (
@@ -116,6 +191,7 @@ function TargetGroup({
             target={target}
             appearancePreferences={appearancePreferences}
             selected={selectedTargetId === target.id}
+            attachState={getAttachState(target.id)}
             onSelectTarget={onSelectTarget}
           />
         ))}
@@ -128,11 +204,13 @@ function TargetRow({
   target,
   appearancePreferences,
   selected,
+  attachState,
   onSelectTarget,
 }: {
   target: ComputeTargetSummary;
   appearancePreferences: Record<string, ComputeTargetAppearancePreference>;
   selected: boolean;
+  attachState: DirectRuntimeConnectionState | null;
   onSelectTarget: (targetId: string) => void;
 }) {
   const appearance = resolveComputeTargetAppearance({
@@ -162,6 +240,9 @@ function TargetRow({
           <Badge tone={computeTargetStatusTone(target.status)}>
             {computeTargetStatusLabel(target.status)}
           </Badge>
+          {attachState !== null ? (
+            <DirectRuntimeAttachChip state={attachState} />
+          ) : null}
         </span>
         <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span>{computeTargetKindLabel(target.kind)}</span>
@@ -195,5 +276,5 @@ function TargetRowSkeleton() {
 }
 
 function targetCountLabel(count: number) {
-  return count === 1 ? "1 target" : `${count} targets`;
+  return count === 1 ? "1 connected" : `${count} connected`;
 }

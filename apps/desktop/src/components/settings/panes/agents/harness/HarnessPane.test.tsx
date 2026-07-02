@@ -58,6 +58,16 @@ const state = vi.hoisted(() => ({
       | undefined,
     isLoading: false,
   },
+  overrides: {
+    data: { selections: [] as Array<Record<string, unknown>> } as
+      | { selections: Array<Record<string, unknown>> }
+      | undefined,
+    isLoading: false,
+  },
+  targets: {
+    data: [] as Array<Record<string, unknown>> | undefined,
+  },
+  attachStates: {} as Record<string, string>,
   apiKeys: {
     data: { keys: [] as Array<Record<string, unknown>> } as
       | { keys: Array<Record<string, unknown>> }
@@ -100,7 +110,8 @@ const handleTerminalExit = vi.hoisted(() => vi.fn());
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentGatewayCapabilities: () => state.capabilities,
   useAgentGatewayEnrollment: () => state.enrollment,
-  useRouteSelections: () => state.selections,
+  useRouteSelections: (_enabled?: boolean, options?: { targetId?: string | null }) =>
+    options?.targetId ? state.overrides : state.selections,
   useAgentApiKeys: () => state.apiKeys,
   useAgentCatalog: () => state.catalog,
   useUpsertRouteSelection: () => ({ mutate: upsertMutate, isPending: false }),
@@ -108,6 +119,31 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
   useRefreshAgentCatalog: () => ({ mutate: refreshMutate, isPending: false }),
   useUpsertCatalogOverride: () => ({ mutate: overrideMutate, isPending: false }),
+}));
+
+vi.mock("@/hooks/access/cloud/targets/use-cloud-targets", () => ({
+  useCloudTargets: () => state.targets,
+  useCloudTarget: () => ({ data: undefined }),
+}));
+
+vi.mock("@/hooks/settings/workflows/use-ssh-direct-target-profile", () => ({
+  useComputeTargetAppearancePreferences: () => ({
+    preferences: {},
+    loading: false,
+    reload: vi.fn(),
+    savePreference: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/compute/derived/use-direct-runtime-attach-states", () => ({
+  useDirectRuntimeAttachStateResolver: () => (targetId: string | null) =>
+    targetId === null ? "attached" : state.attachStates[targetId] ?? "detached",
+  useDirectRuntimeAttachState: (targetId: string | null) =>
+    targetId === null ? "attached" : state.attachStates[targetId] ?? "detached",
+}));
+
+vi.mock("@/hooks/compute/derived/use-loopback-runtime-name", () => ({
+  useLoopbackRuntimeDisplayName: () => "This Mac",
 }));
 
 vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
@@ -153,6 +189,10 @@ afterEach(() => {
   state.enrollment.data = undefined;
   state.selections.data = { selections: [] };
   state.selections.isLoading = false;
+  state.overrides.data = { selections: [] };
+  state.overrides.isLoading = false;
+  state.targets.data = [];
+  state.attachStates = {};
   state.apiKeys.data = { keys: [] };
   state.catalog.data = undefined;
   state.catalog.isLoading = false;
@@ -197,6 +237,7 @@ describe("HarnessPane", () => {
       {
         harnessKind: "claude",
         surface: "cloud",
+        targetId: null,
         body: { route: "gateway", slot: "primary" },
       },
       expect.anything(),
@@ -227,6 +268,7 @@ describe("HarnessPane", () => {
       {
         harnessKind: "claude",
         surface: "local",
+        targetId: null,
         body: { route: "api_key", apiKeyId: "key-1", slot: "primary" },
       },
       expect.anything(),
@@ -396,6 +438,7 @@ describe("HarnessPane", () => {
       {
         harnessKind: "opencode",
         surface: "local",
+        targetId: null,
         body: { route: "gateway", slot: "gateway" },
       },
       expect.anything(),

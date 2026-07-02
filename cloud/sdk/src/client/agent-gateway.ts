@@ -55,12 +55,23 @@ export async function revokeAgentApiKey(
   });
 }
 
+export interface RouteSelectionScopeOptions {
+  /**
+   * Scope the operation to one enrolled direct runtime's override rows
+   * (local surface only). Null/absent addresses the default rows
+   * (target_id NULL) that every direct runtime inherits.
+   */
+  targetId?: string | null;
+}
+
 export async function listAgentRouteSelections(
+  options: RouteSelectionScopeOptions = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AgentAuthRouteSelectionListResponse> {
   return client.requestJson<AgentAuthRouteSelectionListResponse>({
     method: "GET",
     path: "/v1/cloud/agent-gateway/route-selections",
+    query: { targetId: options.targetId ?? undefined },
   });
 }
 
@@ -68,12 +79,14 @@ export async function upsertAgentRouteSelection(
   harnessKind: string,
   surface: string,
   input: UpsertAgentAuthRouteSelectionRequest,
+  options: RouteSelectionScopeOptions = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AgentAuthRouteSelection> {
   return client.requestJson<AgentAuthRouteSelection>({
     method: "PUT",
     path: routeSelectionPath(harnessKind, surface),
     body: input,
+    query: { targetId: options.targetId ?? undefined },
   });
 }
 
@@ -81,12 +94,13 @@ export async function clearAgentRouteSelection(
   harnessKind: string,
   surface: string,
   slot: string = "primary",
+  options: RouteSelectionScopeOptions = {},
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<void> {
   await client.requestJson<void>({
     method: "DELETE",
     path: routeSelectionPath(harnessKind, surface),
-    query: { slot },
+    query: { slot, targetId: options.targetId ?? undefined },
   });
 }
 

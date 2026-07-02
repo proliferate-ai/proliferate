@@ -23,6 +23,10 @@ import { KeyPicker } from "@/components/settings/panes/agent-auth/KeyPicker";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import {
+  resolveTargetScopedSelection,
+  type TargetScopedSelection,
+} from "@/lib/domain/settings/agents-runtime-scope";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const OPENCODE_HARNESS = "opencode";
@@ -31,6 +35,8 @@ const GATEWAY_SLOT = "gateway";
 interface OpenCodeHarnessAuthSectionProps {
   displayName: string;
   surface: AgentAuthSurface;
+  /** Non-null scopes the slots to one enrolled direct runtime (overrides). */
+  targetId: string | null;
 }
 
 /**
@@ -43,6 +49,7 @@ interface OpenCodeHarnessAuthSectionProps {
 export function OpenCodeHarnessAuthSection({
   displayName,
   surface,
+  targetId,
 }: OpenCodeHarnessAuthSectionProps) {
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
@@ -54,13 +61,17 @@ export function OpenCodeHarnessAuthSection({
   const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
   const enrollmentQuery = useAgentGatewayEnrollment(cloudActive);
   const selectionsQuery = useRouteSelections(cloudActive);
+  // A target scope layers its sparse override rows over the defaults.
+  const overridesQuery = useRouteSelections(cloudActive && targetId !== null, {
+    targetId,
+  });
   const apiKeysQuery = useAgentApiKeys(cloudActive);
   const upsertSelection = useUpsertRouteSelection();
   const clearSelection = useClearRouteSelection();
 
   useEffect(() => {
     setDraftSlots({});
-  }, [surface]);
+  }, [surface, targetId]);
 
   if (!cloudActive) {
     return (
@@ -83,15 +94,19 @@ export function OpenCodeHarnessAuthSection({
   const apiKeys = apiKeysQuery.data?.keys ?? [];
   const busy = upsertSelection.isPending || clearSelection.isPending;
 
+  function resolvedForSlot(slot: string): TargetScopedSelection | null {
+    return resolveTargetScopedSelection({
+      defaults: selectionsQuery.data?.selections ?? [],
+      overrides: overridesQuery.data?.selections ?? [],
+      targetId,
+      harnessKind: OPENCODE_HARNESS,
+      surface,
+      slot,
+    });
+  }
+
   function selectionForSlot(slot: string): AgentAuthRouteSelection | null {
-    return (
-      selectionsQuery.data?.selections.find(
-        (entry) =>
-          entry.harnessKind === OPENCODE_HARNESS
-          && entry.surface === surface
-          && entry.slot === slot,
-      ) ?? null
-    );
+    return resolvedForSlot(slot)?.selection ?? null;
   }
 
   function setDraft(slot: string, active: boolean) {
@@ -107,6 +122,7 @@ export function OpenCodeHarnessAuthSection({
       {
         harnessKind: OPENCODE_HARNESS,
         surface,
+        targetId,
         body: route === "api_key"
           ? { route, apiKeyId: apiKeyId ?? null, slot }
           : { route, slot },
@@ -122,7 +138,7 @@ export function OpenCodeHarnessAuthSection({
 
   function clearSlot(slot: string) {
     clearSelection.mutate(
-      { harnessKind: OPENCODE_HARNESS, surface, slot },
+      { harnessKind: OPENCODE_HARNESS, surface, slot, targetId },
       {
         onError: (error) => {
           showToast(error.message || HARNESS_PANE_COPY.sourcesUpdateError(displayName));
@@ -131,11 +147,26 @@ export function OpenCodeHarnessAuthSection({
     );
   }
 
+  /**
+   * Sparse overrides cannot express "off despite the default being on":
+   * clearing only deletes this runtime's own row. Disabling an inherited
+   * slot therefore points the user at the defaults instead of silently
+   * doing nothing.
+   */
+  function clearOrExplainInherited(slot: string) {
+    const resolved = resolvedForSlot(slot);
+    if (targetId !== null && resolved !== null && resolved.inherited) {
+      showToast(HARNESS_PANE_COPY.inheritedSourceToast);
+      return;
+    }
+    clearSlot(slot);
+  }
+
   function handleGatewayToggle(next: boolean) {
     if (next) {
       upsertSlot(GATEWAY_SLOT, "gateway");
     } else {
-      clearSlot(GATEWAY_SLOT);
+      clearOrExplainInherited(GATEWAY_SLOT);
     }
   }
 
@@ -144,12 +175,29 @@ export function OpenCodeHarnessAuthSection({
     if (!next) {
       setDraft(provider.id, false);
       if (selection) {
-        clearSlot(provider.id);
+        clearOrExplainInherited(provider.id);
       }
       return;
     }
     // Enabling a provider needs a key; wait for an explicit pick.
     setDraft(provider.id, true);
+  }
+
+  function scopeBadgeForSlot(slot: string) {
+    if (targetId === null) {
+      return null;
+    }
+    const resolved = resolvedForSlot(slot);
+    if (resolved === null) {
+      return null;
+    }
+    return (
+      <Badge tone={resolved.inherited ? "neutral" : "accent"}>
+        {resolved.inherited
+          ? HARNESS_PANE_COPY.inheritedBadge
+          : HARNESS_PANE_COPY.overrideBadge}
+      </Badge>
+    );
   }
 
   function providerRow(provider: AgentGatewayProviderInfo) {
@@ -166,6 +214,7 @@ export function OpenCodeHarnessAuthSection({
               {provider.recommendedFor.includes(OPENCODE_HARNESS) ? (
                 <Badge tone="neutral">{HARNESS_PANE_COPY.recommendedBadge}</Badge>
               ) : null}
+              {scopeBadgeForSlot(provider.id)}
             </span>
           }
           description={
@@ -210,12 +259,19 @@ export function OpenCodeHarnessAuthSection({
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.openCodeDescription(displayName)}
     >
-      {selectionsQuery.isLoading || capabilitiesQuery.isLoading ? (
+      {selectionsQuery.isLoading
+        || capabilitiesQuery.isLoading
+        || (targetId !== null && overridesQuery.isLoading) ? (
         <p className="py-3 text-sm text-muted-foreground">Loading model sources...</p>
       ) : (
         <>
           <SettingsRow
-            label={HARNESS_PANE_COPY.gatewayLabel}
+            label={
+              <span className="flex items-center gap-2">
+                {HARNESS_PANE_COPY.gatewayLabel}
+                {scopeBadgeForSlot(GATEWAY_SLOT)}
+              </span>
+            }
             description={gatewaySubtitle(capabilities, enrollment)}
           >
             <Switch

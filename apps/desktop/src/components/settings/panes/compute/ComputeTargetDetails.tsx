@@ -17,6 +17,7 @@ import type {
   ComputeTargetSummary,
 } from "@/lib/domain/compute/target-types";
 import { EnrollmentCommandBlock } from "./EnrollmentCommandBlock";
+import { ComputeTargetAgentAuthCard } from "./ComputeTargetAgentAuthCard";
 import { ComputeTargetReadiness } from "./ComputeTargetReadiness";
 import { ComputeTargetDetailsHeader } from "@/components/settings/panes/compute/ComputeTargetDetailsHeader";
 import { ComputeTargetAppearanceSection } from "@/components/settings/panes/compute/ComputeTargetAppearanceSection";
@@ -250,6 +251,13 @@ export function ComputeTargetDetails({
           runtimeConfigStatus={runtimeConfigQuery.data ?? null}
           loadingRuntimeConfig={runtimeConfigQuery.isLoading}
         />
+
+        {target.kind === "ssh" ? (
+          <>
+            <Divider />
+            <ComputeTargetAgentAuthCard targetId={target.id} />
+          </>
+        ) : null}
 
         <Divider />
 

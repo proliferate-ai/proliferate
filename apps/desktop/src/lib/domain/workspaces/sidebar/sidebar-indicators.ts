@@ -66,6 +66,8 @@ export type SidebarDetailIndicator =
     variant: SidebarWorkspaceVariant;
     tooltip: string;
     targetAppearance?: ComputeTargetAppearance | null;
+    /** Set for ssh variants so the view can show live attach state. */
+    directTargetId?: string | null;
   }
   | {
     kind: "cloud_access";

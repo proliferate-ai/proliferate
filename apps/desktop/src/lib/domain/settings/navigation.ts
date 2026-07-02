@@ -3,6 +3,7 @@ import {
   SETTINGS_DEFAULT_SECTION,
   type SettingsSection,
 } from "@/config/settings";
+import { isSettingsHarnessSection } from "@/lib/domain/settings/navigation-presentation";
 import {
   cloudRepositoryKey,
   isCloudRepository,
@@ -222,6 +223,11 @@ function sanitizeFocusForSection(
   focus: SettingsFocus,
 ): SettingsFocus {
   if (section === "compute") {
+    return pickFocus({ target: focus.target });
+  }
+  // Per-harness pages accept a runtime deep link ("Manage agent auth" from a
+  // compute target) that preselects that runtime's scope.
+  if (isSettingsHarnessSection(section)) {
     return pickFocus({ target: focus.target });
   }
   if (section === "environments") {

@@ -3,6 +3,7 @@ import {
   type ComputeTargetAppearance,
   type ComputeTargetAppearancePreference,
 } from "@/lib/domain/compute/target-appearance";
+import type { DirectRuntimeConnectionState } from "@/lib/domain/compute/direct-runtime";
 import {
   computeTargetOwnerLabel,
   computeTargetStatusLabel,
@@ -17,6 +18,8 @@ export interface ComputeLaunchTargetOption {
   status: ComputeTargetSummary["status"];
   appearance: ComputeTargetAppearance;
   disabledReason: string | null;
+  /** Desktop-plane attach state; null when the caller has no attach data. */
+  attachState?: DirectRuntimeConnectionState | null;
   target: ComputeTargetSummary;
 }
 
@@ -40,6 +43,7 @@ export function buildSshTargetOptions(input: {
   targets: readonly ComputeTargetSummary[];
   appearancePreferences: Record<string, ComputeTargetAppearancePreference>;
   ownerScope?: ComputeTargetSummary["ownerScope"] | null;
+  attachStates?: Record<string, DirectRuntimeConnectionState>;
 }): ComputeLaunchTargetOption[] {
   return input.targets
     .filter((target) =>
@@ -66,6 +70,7 @@ export function buildSshTargetOptions(input: {
         status: target.status,
         appearance,
         disabledReason: sshTargetDisabledReason(target),
+        attachState: input.attachStates?.[target.id] ?? null,
         target,
       };
     })

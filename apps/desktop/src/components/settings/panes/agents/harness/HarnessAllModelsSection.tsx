@@ -15,6 +15,7 @@ import { agentApiKeyProviderLabel } from "@/components/settings/panes/agent-auth
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { mergeRouteSelectionsForTarget } from "@/lib/domain/settings/agents-runtime-scope";
 import {
   buildEnabledOverridePatchJson,
   catalogRouteForSurface,
@@ -25,23 +26,33 @@ interface HarnessAllModelsSectionProps {
   harnessKind: string;
   displayName: string;
   surface: AgentAuthSurface;
+  /** Non-null resolves the catalog route from that runtime's effective selections. */
+  targetId: string | null;
 }
 
 export function HarnessAllModelsSection({
   harnessKind,
   displayName,
   surface,
+  targetId,
 }: HarnessAllModelsSectionProps) {
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
 
   const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
   const selectionsQuery = useRouteSelections(cloudActive);
-  const route = catalogRouteForSurface(
-    harnessKind,
-    surface,
-    selectionsQuery.data?.selections ?? [],
-  );
+  const overridesQuery = useRouteSelections(cloudActive && targetId !== null, {
+    targetId,
+  });
+  // The catalog itself is per (surface, route); a target scope only changes
+  // WHICH route is effective (its overrides over the inherited defaults).
+  const effectiveSelections = targetId === null
+    ? selectionsQuery.data?.selections ?? []
+    : mergeRouteSelectionsForTarget(
+      selectionsQuery.data?.selections ?? [],
+      overridesQuery.data?.selections ?? [],
+    );
+  const route = catalogRouteForSurface(harnessKind, surface, effectiveSelections);
   const catalogQuery = useAgentCatalog({ harnessKind, surface, route }, cloudActive);
   const refreshCatalog = useRefreshAgentCatalog();
   const upsertOverride = useUpsertCatalogOverride();

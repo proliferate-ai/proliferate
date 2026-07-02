@@ -1,6 +1,4 @@
 export const HARNESS_PANE_COPY = {
-  surfaceCloud: "Cloud",
-  surfaceLocal: "Local",
   tabAuthentication: "Authentication",
   tabAllModels: "All Models",
   authenticationTitle: "Authentication",
@@ -12,6 +10,13 @@ export const HARNESS_PANE_COPY = {
   runLogin: "Run login",
   runLoginOpening: "Opening...",
   resetToDefault: "Reset to default",
+  inheritedBadge: "Inherited from defaults",
+  overrideBadge: "Override",
+  clearOverride: "Use default",
+  editsDeferredNote:
+    "Not attached right now. Changes are saved and apply when this machine attaches.",
+  inheritedSourceToast:
+    "This source comes from your defaults. Change it there, or override it here.",
   harnessSettingsTitle: "Harness settings",
   harnessSettingsPlaceholderLabel: "Harness-specific settings",
   harnessSettingsPlaceholderDescription:

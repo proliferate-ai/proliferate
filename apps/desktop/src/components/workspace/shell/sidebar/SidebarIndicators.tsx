@@ -11,6 +11,9 @@ import {
 } from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { DirectRuntimeAttachDot } from "@/components/compute/DirectRuntimeAttachChip";
+import { useDirectRuntimeAttachState } from "@/hooks/compute/derived/use-direct-runtime-attach-states";
+import { directRuntimeAttachStateLabel } from "@/lib/domain/compute/direct-runtime-presentation";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,
@@ -121,13 +124,10 @@ function SidebarDetailIndicatorView({
 }) {
   if (indicator.kind === "materialization") {
     return (
-      <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
-        <SidebarWorkspaceVariantIcon
-          variant={indicator.variant}
-          targetAppearance={indicator.targetAppearance ?? null}
-          className={`size-3 ${className}`}
-        />
-      </Tooltip>
+      <SidebarMaterializationIndicatorView
+        indicator={indicator}
+        className={className}
+      />
     );
   }
 
@@ -169,6 +169,37 @@ function SidebarDetailIndicatorView({
       ) : (
         <span className={className}>{glyph}</span>
       )}
+    </Tooltip>
+  );
+}
+
+function SidebarMaterializationIndicatorView({
+  indicator,
+  className,
+}: {
+  indicator: Extract<SidebarDetailIndicator, { kind: "materialization" }>;
+  className: string;
+}) {
+  const directTargetId =
+    indicator.variant === "ssh" ? indicator.directTargetId ?? null : null;
+  // Loopback (null) subscription is unused for non-ssh variants; hooks must
+  // stay unconditional.
+  const attachState = useDirectRuntimeAttachState(directTargetId);
+  const showAttachState = indicator.variant === "ssh" && directTargetId !== null;
+  const tooltip = showAttachState
+    ? `${indicator.tooltip} · ${directRuntimeAttachStateLabel(attachState)}`
+    : indicator.tooltip;
+
+  return (
+    <Tooltip content={tooltip} className="inline-flex shrink-0 items-center justify-center">
+      <span className="inline-flex items-center gap-1">
+        <SidebarWorkspaceVariantIcon
+          variant={indicator.variant}
+          targetAppearance={indicator.targetAppearance ?? null}
+          className={`size-3 ${className}`}
+        />
+        {showAttachState ? <DirectRuntimeAttachDot state={attachState} /> : null}
+      </span>
     </Tooltip>
   );
 }

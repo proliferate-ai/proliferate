@@ -1,6 +1,8 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { ReactNode } from "react";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { DirectRuntimeAttachDot } from "@/components/compute/DirectRuntimeAttachChip";
+import type { DirectRuntimeConnectionState } from "@/lib/domain/compute/direct-runtime";
 import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
@@ -94,6 +96,7 @@ function MobilityMenuItem({
   onClick,
   selected = false,
   title,
+  attachState = null,
 }: {
   disabled?: boolean;
   icon?: ReactNode;
@@ -101,7 +104,11 @@ function MobilityMenuItem({
   onClick: () => void;
   selected?: boolean;
   title?: string;
+  attachState?: DirectRuntimeConnectionState | null;
 }) {
+  const attachDot = attachState
+    ? <DirectRuntimeAttachDot state={attachState} />
+    : null;
   return (
     <PopoverMenuItem
       density="compact"
@@ -109,7 +116,12 @@ function MobilityMenuItem({
       title={title}
       icon={icon}
       label={label}
-      trailing={selected ? <Check className="size-3.5" /> : null}
+      trailing={attachDot || selected ? (
+        <span className="flex items-center gap-1.5">
+          {attachDot}
+          {selected ? <Check className="size-3.5" /> : null}
+        </span>
+      ) : null}
       onClick={() => {
         onClick();
       }}
@@ -145,6 +157,7 @@ function DestinationPicker({
             label={option.label}
             disabled={Boolean(option.disabledReason)}
             title={option.disabledReason ?? option.detail}
+            attachState={option.targetOption?.attachState ?? null}
             onClick={() => onSelectDestination(option)}
           />
         ))

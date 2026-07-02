@@ -11,8 +11,12 @@ import {
   useCloudTarget,
   useCloudTargets,
 } from "@/hooks/access/cloud/targets/use-cloud-targets";
+import { useDirectRuntimeAttachStateResolver } from "@/hooks/compute/derived/use-direct-runtime-attach-states";
+import { useLoopbackRuntimeDisplayName } from "@/hooks/compute/derived/use-loopback-runtime-name";
 import { useComputeTargetAppearancePreferences } from "@/hooks/settings/workflows/use-ssh-direct-target-profile";
 import type { ComputeTargetSummary } from "@/lib/domain/compute/target-types";
+
+const CLOUD_TARGET_KINDS = new Set(["managed_cloud", "self_hosted_cloud"]);
 
 const EMPTY_TARGETS: ComputeTargetSummary[] = [];
 
@@ -29,15 +33,25 @@ export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
     () => targets.filter((target) => target.kind === "ssh"),
     [targets],
   );
+  const cloudTargets = useMemo(
+    () => targets.filter((target) => CLOUD_TARGET_KINDS.has(target.kind)),
+    [targets],
+  );
+  const selectableTargets = useMemo(
+    () => [...sshTargets, ...cloudTargets],
+    [cloudTargets, sshTargets],
+  );
+  const loopbackDisplayName = useLoopbackRuntimeDisplayName();
+  const getAttachState = useDirectRuntimeAttachStateResolver();
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const consumedInitialTargetIdRef = useRef<string | null>(null);
   const selectedTargetExists = selectedTargetId
-    ? sshTargets.some((target) => target.id === selectedTargetId)
+    ? selectableTargets.some((target) => target.id === selectedTargetId)
     : false;
   const effectiveTargetId = selectedTargetExists ? selectedTargetId : null;
   const selectedSummary = useMemo(
-    () => sshTargets.find((target) => target.id === effectiveTargetId) ?? null,
-    [effectiveTargetId, sshTargets],
+    () => selectableTargets.find((target) => target.id === effectiveTargetId) ?? null,
+    [effectiveTargetId, selectableTargets],
   );
   const { data: selectedDetail, isLoading: detailLoading } = useCloudTarget(
     effectiveTargetId,
@@ -50,18 +64,21 @@ export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
     if (
       initialTargetId
       && consumedInitialTargetIdRef.current !== initialTargetId
-      && sshTargets.some((target) => target.id === initialTargetId)
+      && selectableTargets.some((target) => target.id === initialTargetId)
     ) {
       consumedInitialTargetIdRef.current = initialTargetId;
       setSelectedTargetId(initialTargetId);
     }
-  }, [initialTargetId, sshTargets]);
+  }, [initialTargetId, selectableTargets]);
 
   useEffect(() => {
-    if (selectedTargetId && !sshTargets.some((target) => target.id === selectedTargetId)) {
+    if (
+      selectedTargetId
+      && !selectableTargets.some((target) => target.id === selectedTargetId)
+    ) {
       setSelectedTargetId(null);
     }
-  }, [selectedTargetId, sshTargets]);
+  }, [selectedTargetId, selectableTargets]);
 
   const commonDialog = (
     <AddSshTargetDialog
@@ -130,9 +147,12 @@ export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
 
       <ComputeTargetList
         targets={sshTargets}
+        cloudTargets={cloudTargets}
         appearancePreferences={appearancePreferences.preferences}
         loading={isLoading || appearancePreferences.loading}
         selectedTargetId={effectiveTargetId}
+        loopbackDisplayName={loopbackDisplayName}
+        getAttachState={getAttachState}
         onSelectTarget={setSelectedTargetId}
         onAddSshTarget={() => setDialogOpen(true)}
       />
