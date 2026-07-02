@@ -33,7 +33,9 @@ use std::path::{Path, PathBuf};
 
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile, OpenCodeCompositeProfile};
 pub use render::{render_profile, RenderedRouteAuth};
-pub use state::{load_state_file, state_file_path, AgentAuthState, AuthRoute, AuthSelection};
+pub use state::{
+    apply_state_file, load_state_file, state_file_path, AgentAuthState, AuthRoute, AuthSelection,
+};
 
 use state::AuthRoute as RouteKind;
 
@@ -44,6 +46,11 @@ use state::AuthRoute as RouteKind;
 pub enum RouteAuthError {
     #[error("agent-auth state file is malformed ({path}): {detail}")]
     MalformedStateFile { path: PathBuf, detail: String },
+    #[error(
+        "stale agent-auth state push: incoming revision {incoming} is below \
+         the persisted revision {current}"
+    )]
+    StaleStateRevision { incoming: i64, current: i64 },
     #[error("no agent-auth route selection for harness '{harness_kind}' at revision {revision}")]
     SelectionMissing { harness_kind: String, revision: i64 },
     #[error(
@@ -74,6 +81,7 @@ impl RouteAuthError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::MalformedStateFile { .. } => "AGENT_ROUTE_STATE_MALFORMED",
+            Self::StaleStateRevision { .. } => "AGENT_ROUTE_STATE_STALE",
             Self::SelectionMissing { .. } => "AGENT_ROUTE_SELECTION_MISSING",
             Self::SelectionConflict { .. } => "AGENT_ROUTE_SELECTION_CONFLICT",
             Self::SelectionIncomplete { .. } => "AGENT_ROUTE_SELECTION_INCOMPLETE",

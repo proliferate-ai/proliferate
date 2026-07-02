@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent-auth/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["put_agent_auth_state"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents": {
         parameters: {
             query?: never;
@@ -1831,6 +1847,16 @@ export interface components {
             nativeRequired: boolean;
             readiness: components["schemas"]["AgentReadinessState"];
             supportsLogin: boolean;
+        };
+        /** @description Outcome of pushing an agent-auth state document into the runtime. */
+        ApplyAgentAuthStateResponse: {
+            /** @description True when the document was persisted to the runtime's state file. */
+            applied: boolean;
+            /**
+             * Format: int64
+             * @description The persisted document's revision.
+             */
+            revision: number;
         };
         /** @description Outcome of pushing an agent catalog document into the runtime. */
         ApplyAgentCatalogResponse: {
@@ -4442,6 +4468,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    put_agent_auth_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Agent-auth state document (the state.json contract) */
+        requestBody: {
+            content: {
+                "application/json": string;
+            };
+        };
+        responses: {
+            /** @description State persisted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyAgentAuthStateResponse"];
+                };
+            };
+            /** @description Payload rejected; persisted state unchanged */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Stale revision; persisted state unchanged */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

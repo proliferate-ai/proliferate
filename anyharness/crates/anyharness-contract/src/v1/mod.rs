@@ -1,3 +1,4 @@
+pub mod agent_auth;
 pub mod agents;
 pub mod auth;
 pub mod catalogs;
@@ -24,6 +25,7 @@ pub mod terminals;
 pub mod workspaces;
 pub mod worktrees;
 
+pub use agent_auth::*;
 pub use agents::*;
 pub use auth::*;
 pub use catalogs::*;

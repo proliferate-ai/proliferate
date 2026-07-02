@@ -30,6 +30,57 @@
         }
       }
     },
+    "/v1/agent-auth/state": {
+      "put": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "put_agent_auth_state",
+        "requestBody": {
+          "description": "Agent-auth state document (the state.json contract)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "State persisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyAgentAuthStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Payload rejected; persisted state unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale revision; persisted state unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents": {
       "get": {
         "tags": [
@@ -6139,6 +6190,25 @@
           },
           "supportsLogin": {
             "type": "boolean"
+          }
+        }
+      },
+      "ApplyAgentAuthStateResponse": {
+        "type": "object",
+        "description": "Outcome of pushing an agent-auth state document into the runtime.",
+        "required": [
+          "applied",
+          "revision"
+        ],
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "description": "True when the document was persisted to the runtime's state file."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The persisted document's revision."
           }
         }
       },
