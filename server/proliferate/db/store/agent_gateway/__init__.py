@@ -26,7 +26,9 @@ from proliferate.db.store.agent_gateway.enrollments import (
     revoke_enrollment,
 )
 from proliferate.db.store.agent_gateway.policy import (
+    OrgMemberRouteSelectionRecord,
     get_org_agent_policy,
+    list_org_member_route_selections,
     set_org_agent_policy,
 )
 from proliferate.db.store.agent_gateway.records import (
@@ -59,6 +61,7 @@ __all__ = [
     "AgentGatewayEnrollmentRecord",
     "AgentLlmUsageImportCursorRecord",
     "OrgAgentPolicyRecord",
+    "OrgMemberRouteSelectionRecord",
     "advance_usage_import_cursor",
     "build_redacted_hint",
     "create_agent_api_key",
@@ -77,6 +80,7 @@ __all__ = [
     "insert_usage_event_once",
     "list_agent_api_keys",
     "list_enrollments_needing_sync",
+    "list_org_member_route_selections",
     "list_org_memberships_missing_enrollment",
     "list_route_selections",
     "list_user_ids_missing_enrollment",

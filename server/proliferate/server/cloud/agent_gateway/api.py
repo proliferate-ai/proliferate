@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.permissions import CurrentOrgUser, current_path_org_admin
 from proliferate.server.cloud.agent_gateway import service
 from proliferate.server.cloud.agent_gateway.models import (
     AgentApiKeyCreateRequest,
@@ -20,13 +21,23 @@ from proliferate.server.cloud.agent_gateway.models import (
     AgentAuthRouteSelectionUpsertRequest,
     AgentGatewayCapabilitiesResponse,
     AgentGatewayEnrollmentResponse,
+    OrgAgentPolicyResponse,
+    OrgAgentPolicyUpdateRequest,
+    OrgAgentPolicyViolationListResponse,
     api_key_payload,
     enrollment_payload,
+    org_agent_policy_payload,
+    org_agent_policy_violation_payload,
     route_selection_payload,
 )
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
 router = APIRouter(prefix="/agent-gateway", tags=["cloud-agent-gateway"])
+
+organization_router = APIRouter(
+    prefix="/organizations/{organization_id}/agent-gateway",
+    tags=["cloud-agent-gateway"],
+)
 
 
 def _parse_uuid(value: str, *, code: str, message: str, status_code: int) -> UUID:
@@ -165,3 +176,51 @@ async def get_agent_gateway_enrollment_endpoint(
     except CloudApiError as error:
         raise_cloud_error(error)
     return enrollment_payload(record)
+
+
+@organization_router.get("/policy", response_model=OrgAgentPolicyResponse)
+async def get_org_agent_policy_endpoint(
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
+    db: AsyncSession = Depends(get_async_session),
+) -> OrgAgentPolicyResponse:
+    snapshot = await service.get_org_policy(
+        db,
+        organization_id=org_admin.organization_id,
+    )
+    return org_agent_policy_payload(snapshot)
+
+
+@organization_router.put("/policy", response_model=OrgAgentPolicyResponse)
+async def put_org_agent_policy_endpoint(
+    body: OrgAgentPolicyUpdateRequest,
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
+    db: AsyncSession = Depends(get_async_session),
+) -> OrgAgentPolicyResponse:
+    try:
+        snapshot = await service.update_org_policy(
+            db,
+            organization_id=org_admin.organization_id,
+            updated_by_user_id=org_admin.actor_user_id,
+            allowed_routes=body.allowed_routes,
+            allowed_harnesses=body.allowed_harnesses,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return org_agent_policy_payload(snapshot)
+
+
+@organization_router.get(
+    "/policy/violations",
+    response_model=OrgAgentPolicyViolationListResponse,
+)
+async def list_org_agent_policy_violations_endpoint(
+    org_admin: CurrentOrgUser = Depends(current_path_org_admin),
+    db: AsyncSession = Depends(get_async_session),
+) -> OrgAgentPolicyViolationListResponse:
+    violations = await service.list_org_policy_violations(
+        db,
+        organization_id=org_admin.organization_id,
+    )
+    return OrgAgentPolicyViolationListResponse(
+        violations=[org_agent_policy_violation_payload(record) for record in violations],
+    )

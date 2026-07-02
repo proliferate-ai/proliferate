@@ -12,6 +12,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
 import { GitHubAppInstallationSection } from "@/components/settings/panes/organization/GitHubAppInstallationSection";
+import { OrganizationAgentPolicySection } from "@/components/settings/panes/organization/OrganizationAgentPolicySection";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
@@ -60,9 +61,8 @@ export function OrganizationPane() {
     authStatus === "authenticated" && activeOrganizationId !== null,
   );
   const githubAppInstallationStart = useStartGitHubAppInstallation();
-  const canManageGitHubAppInstallation = isOrganizationAdminRole(
-    activeOrganization?.membership?.role,
-  );
+  const isOrgAdmin = isOrganizationAdminRole(activeOrganization?.membership?.role);
+  const canManageGitHubAppInstallation = isOrgAdmin;
 
   useEffect(() => {
     setSettingsName(activeOrganization?.name ?? "");
@@ -305,6 +305,10 @@ export function OrganizationPane() {
             onInstall={handleInstallGitHubApp}
             onManage={handleManageGitHubAppInstallation}
           />
+
+          {isOrgAdmin ? (
+            <OrganizationAgentPolicySection organizationId={activeOrganizationId} />
+          ) : null}
 
           <OrganizationBillingLinkSection />
         </>
