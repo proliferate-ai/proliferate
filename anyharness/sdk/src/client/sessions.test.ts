@@ -89,25 +89,13 @@ describe("SessionsClient.resume", () => {
 
     await client.resume(
       "session-1",
-      {
-        expectedRuntimeConfigRevision: {
-          revisionId: "rev_1",
-          sequence: 1,
-          contentHash: "sha256:test",
-        },
-      },
+      {},
       { headers: { "x-trace": "trace-2" } },
     );
 
     expect(calls).toEqual([{
       path: "/v1/sessions/session-1/resume",
-      body: {
-        expectedRuntimeConfigRevision: {
-          revisionId: "rev_1",
-          sequence: 1,
-          contentHash: "sha256:test",
-        },
-      },
+      body: {},
       options: { headers: { "x-trace": "trace-2" } },
     }]);
   });

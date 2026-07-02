@@ -104,6 +104,36 @@ async fn app_state_rejects_invalid_data_key() {
     );
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn app_state_wires_integration_gateway_extension_to_served_runtime_home() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let _data_key_guard = test_support::set_data_key_env(None);
+
+    // Regression: the extension used to be constructed with
+    // default_runtime_home(), so serving with --runtime-home never picked up
+    // the worker-written integration-gateway.json dotfile.
+    let runtime_home = PathBuf::from("/tmp/anyharness-app-state-gateway-home");
+    let state = AppState::new(
+        runtime_home.clone(),
+        "http://127.0.0.1:8457".to_string(),
+        Db::open_in_memory().expect("expected in-memory db"),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("expected app state");
+
+    assert_eq!(
+        state
+            .integration_gateway_session_launch_extension
+            .runtime_home(),
+        runtime_home.as_path()
+    );
+}
+
 #[test]
 fn proliferate_home_dir_name_uses_local_dir_for_debug_builds() {
     let _lock = test_support::ENV_MUTEX

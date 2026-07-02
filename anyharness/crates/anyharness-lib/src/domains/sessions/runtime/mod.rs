@@ -15,7 +15,6 @@ use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
 use crate::domains::agents::auth::{AgentAuthSelectionRequired, AgentAuthService};
-use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -45,7 +44,6 @@ pub struct SessionRuntime {
     session_data_cipher: Option<SessionDataCipher>,
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
-    runtime_config_service: Arc<RuntimeConfigService>,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
@@ -263,7 +261,6 @@ impl SessionRuntime {
         session_data_cipher: Option<SessionDataCipher>,
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
-        runtime_config_service: Arc<RuntimeConfigService>,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
@@ -278,7 +275,6 @@ impl SessionRuntime {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
-            runtime_config_service,
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
