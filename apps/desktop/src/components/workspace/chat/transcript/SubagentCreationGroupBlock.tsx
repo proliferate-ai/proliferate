@@ -3,6 +3,7 @@ import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
+import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
 import {
   parseSubagentLaunchResult,
   parseSubagentProvisioningStatus,
@@ -12,7 +13,8 @@ import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identit
 import {
   delegatedWorkStatusCategoryFromLabel,
 } from "@/lib/domain/delegated-work/presentation";
-import { useTranscriptOpenSession } from "./TranscriptContexts";
+import { useDelegatedAgentVisualAssignment } from "@/hooks/chat/derived/use-delegated-agent-visual-assignment";
+import { useTranscriptOpenSession, useTranscriptSessionId } from "./TranscriptContexts";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
@@ -85,11 +87,18 @@ function SubagentCreationRow({
   const launchDisplay = resolveSubagentLaunchDisplay(item);
   const launchResult = parseSubagentLaunchResult(item);
   const provisioningStatus = parseSubagentProvisioningStatus(item);
+  const transcriptSessionId = useTranscriptSessionId();
+  const visualAssignment = useDelegatedAgentVisualAssignment({
+    parentSessionId: transcriptSessionId,
+    sessionLinkId: launchResult?.sessionLinkId ?? null,
+  });
   const identity = buildDelegatedAgentIdentity({
     id: item.toolCallId ?? item.itemId,
     title: launchDisplay.title,
     sessionId: launchResult?.childSessionId ?? null,
     sessionLinkId: launchResult?.sessionLinkId ?? item.toolCallId ?? item.itemId,
+    colorIndex: visualAssignment.colorIndex,
+    shapeSalt: visualAssignment.shapeSalt,
   });
   const promptPreview = formatPromptPreview(launchDisplay.prompt);
   const canOpenChild = !!launchResult?.childSessionId && !!onOpenChild;
@@ -118,7 +127,10 @@ function SubagentCreationRow({
   };
   const identityContent = (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
-      <Robot className={`size-3 shrink-0 ${identity.textColorClassName}`} />
+      <DelegatedAgentIdenticon
+        identity={identity}
+        className={`size-3 shrink-0 ${identity.textColorClassName}`}
+      />
       <span className={`truncate font-medium ${identity.textColorClassName}`}>
         {identity.displayName}
       </span>

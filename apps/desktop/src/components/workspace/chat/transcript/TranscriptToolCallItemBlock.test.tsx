@@ -12,6 +12,13 @@ vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
 }));
 
+// The sibling color/shape lookup reads the runtime subagents query, which
+// needs the AnyHarness workspace provider; receipts fall back to the hashed
+// identity when the assignment is empty, which is what these tests assert.
+vi.mock("@/hooks/chat/derived/use-delegated-agent-visual-assignment", () => ({
+  useDelegatedAgentVisualAssignment: () => ({}),
+}));
+
 vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: vi.fn(),
