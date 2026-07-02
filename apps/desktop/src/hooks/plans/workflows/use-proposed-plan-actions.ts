@@ -13,6 +13,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
+import { useGitPromptSnapshotEffects } from "@/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
 import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
 import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
@@ -179,6 +180,7 @@ function usePlanImplementationActions() {
   const availability = useChatAvailabilityState();
   const { setActiveSessionConfigOption } = useSessionConfigActions();
   const { promptActiveSession } = useSessionPromptActions();
+  const gitPromptEffects = useGitPromptSnapshotEffects();
 
   const implementPlanHere = useCallback((plan: PromptPlanAttachmentDescriptor) => {
     if (!claimPlanImplementationRun(isImplementingPlanRef)) {
@@ -195,16 +197,26 @@ function usePlanImplementationActions() {
         failLatencyFlow: failPromptLatencyFlow,
         isChatDisabled: availability.isDisabled,
         chatDisabledReason: availability.disabledReason,
-        onPromptSubmitted: ({ workspaceId, agentKind, reuseSession }) =>
+        onPromptSubmitted: ({ workspaceId, agentKind, reuseSession }) => {
+          const logicalWorkspaceId =
+            useSessionSelectionStore.getState().selectedLogicalWorkspaceId;
           completeChatPromptSubmitSideEffects({
             workspaceId,
+            logicalWorkspaceId,
+            repoRootId: gitPromptEffects.repoRootIdForLogicalWorkspace(logicalWorkspaceId),
             getWorkspaceArrivalEvent: () =>
               useSessionSelectionStore.getState().workspaceArrivalEvent,
             getCachedWorkspaceSetupStatus,
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }, { trackProductEvent }),
+          }, {
+            trackProductEvent,
+            captureGitStatusSnapshot: gitPromptEffects.captureGitStatusSnapshot,
+            stampGitPrompt: gitPromptEffects.stampGitPrompt,
+            refreshPrStatuses: gitPromptEffects.refreshPrStatuses,
+          });
+        },
         showToast,
       });
     })().finally(() => {
@@ -216,6 +228,7 @@ function usePlanImplementationActions() {
     availability.disabledReason,
     availability.isDisabled,
     getCachedWorkspaceSetupStatus,
+    gitPromptEffects,
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,

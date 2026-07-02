@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { WORKSPACE_UI_DEFAULTS } from "@/lib/domain/preferences/workspace-ui/model";
+import type { PersistedWorkspaceGitStatusSnapshot } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { createWorkspaceUiActivityActions } from "@/stores/preferences/workspace-ui-activity-actions";
 import { createWorkspaceUiChatTabActions } from "@/stores/preferences/workspace-ui-chat-tab-actions";
 import { createWorkspaceUiDismissalActions } from "@/stores/preferences/workspace-ui-dismissal-actions";
+import { createWorkspaceUiGitStatusActions } from "@/stores/preferences/workspace-ui-git-status-actions";
 import { createWorkspaceUiRightPanelActions } from "@/stores/preferences/workspace-ui-right-panel-actions";
 import { createWorkspaceUiShellActions } from "@/stores/preferences/workspace-ui-shell-actions";
 import { createWorkspaceUiSidebarActions } from "@/stores/preferences/workspace-ui-sidebar-actions";
@@ -30,6 +32,7 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   ...createWorkspaceUiActivityActions(set, get),
   ...createWorkspaceUiDismissalActions(set, get),
   ...createWorkspaceUiChatTabActions(set, get),
+  ...createWorkspaceUiGitStatusActions(set, get),
 }));
 
 export function trackWorkspaceInteraction(workspaceId: string, timestamp: string) {
@@ -66,4 +69,19 @@ export function clearViewedSessionErrors(sessionIds: string[]) {
 
 export function ensureRepoGroupExpanded(repoKey: string) {
   useWorkspaceUiStore.getState().ensureRepoGroupExpanded(repoKey);
+}
+
+export function recordWorkspaceGitStatusSnapshot(
+  logicalWorkspaceId: string,
+  snapshot: PersistedWorkspaceGitStatusSnapshot,
+) {
+  useWorkspaceUiStore.getState().recordWorkspaceGitStatusSnapshot(logicalWorkspaceId, snapshot);
+}
+
+export function stampWorkspaceGitPrompt(logicalWorkspaceId: string, at: string) {
+  useWorkspaceUiStore.getState().stampWorkspaceGitPrompt(logicalWorkspaceId, at);
+}
+
+export function pruneWorkspaceGitStatusSnapshots(liveLogicalWorkspaceIds: string[]) {
+  useWorkspaceUiStore.getState().pruneWorkspaceGitStatusSnapshots(liveLogicalWorkspaceIds);
 }

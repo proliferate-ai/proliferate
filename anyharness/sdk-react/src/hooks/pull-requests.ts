@@ -4,9 +4,15 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import {
+  useAnyHarnessRuntimeContext,
+  resolveRuntimeConnection,
+} from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
-import { anyHarnessPullRequestKey } from "../lib/query-keys.js";
+import {
+  anyHarnessPullRequestKey,
+  anyHarnessRepoRootPullRequestsKey,
+} from "../lib/query-keys.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 
 interface WorkspaceQueryOptions {
@@ -33,6 +39,35 @@ export function useCurrentPullRequestQuery(options?: WorkspaceQueryOptions) {
       const client = getAnyHarnessClient(resolved.connection);
       return client.pullRequests.getCurrent(
         resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(undefined, signal),
+      );
+    },
+  });
+}
+
+export function useRepoPullRequestStatusesQuery(options: {
+  repoRootId?: string | null;
+  enabled?: boolean;
+  staleTime?: number;
+  refetchInterval?: number | false;
+  refetchOnWindowFocus?: boolean;
+}) {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const repoRootId = options.repoRootId ?? null;
+
+  return useQuery({
+    queryKey: anyHarnessRepoRootPullRequestsKey(runtimeUrl, repoRootId),
+    enabled: (options.enabled ?? true) && runtimeUrl.length > 0 && !!repoRootId,
+    retry: false,
+    staleTime: options.staleTime,
+    refetchInterval: options.refetchInterval,
+    refetchOnWindowFocus: options.refetchOnWindowFocus,
+    queryFn: async ({ signal }) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.pullRequests.listForRepoRoot(
+        repoRootId!,
+        undefined,
         requestOptionsWithSignal(undefined, signal),
       );
     },

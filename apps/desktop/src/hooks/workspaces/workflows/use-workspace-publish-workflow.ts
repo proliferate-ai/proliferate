@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CreatePullRequestResponse } from "@anyharness/sdk";
 import {
   useCommitGitMutation,
   useCreatePullRequestMutation,
@@ -16,7 +17,14 @@ import type {
   PublishIntent,
   PublishPullRequestDraft,
 } from "@/lib/domain/workspaces/creation/publish-workflow-model";
+import { persistedSnapshotFromPullRequestSummary } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 import { runWorkspacePublishWorkflow } from "@/lib/workflows/workspaces/run-workspace-publish-workflow";
+import { useRefreshPrStatuses } from "@/hooks/workspaces/cache/use-pr-status-refresh";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
+import {
+  recordWorkspaceGitStatusSnapshot,
+  useWorkspaceUiStore,
+} from "@/stores/preferences/workspace-ui-store";
 
 export interface UseWorkspacePublishWorkflowOptions {
   workspaceId: string | null;
@@ -48,6 +56,8 @@ export function useWorkspacePublishWorkflow({
   const [error, setError] = useState<string | null>(null);
   const draftWorkspaceIdRef = useRef<string | null>(workspaceId);
   const runtimeReadyRef = useRef(runtimeBlockedReason === null);
+  const { logicalWorkspaces } = useLogicalWorkspaces();
+  const refreshPrStatuses = useRefreshPrStatuses();
 
   const gitStatusQuery = useGitStatusQuery({ workspaceId, enabled });
   const currentPullRequestEnabled = enabled && Boolean(gitStatusQuery.data?.currentBranch?.trim());
@@ -126,12 +136,41 @@ export function useWorkspacePublishWorkflow({
     }
     setError(null);
     try {
+      let createdPullRequest: CreatePullRequestResponse["pullRequest"] | null = null;
       await runWorkspacePublishWorkflow(viewState.workflowSteps, {
         stagePaths: (paths) => stageMutation.mutateAsync(paths),
         commit: (input) => commitMutation.mutateAsync(input),
         push: () => pushMutation.mutateAsync({}),
-        createPullRequest: (input) => createPullRequestMutation.mutateAsync(input),
+        createPullRequest: async (input) => {
+          const response = await createPullRequestMutation.mutateAsync(input);
+          createdPullRequest = response.pullRequest;
+          return response;
+        },
       });
+      if (workspaceId && createdPullRequest) {
+        // The daemon already upserted its PR cache on create; persist the
+        // created PR's identity so publish never flaps, then refresh.
+        const logicalWorkspace = logicalWorkspaces.find((entry) =>
+          entry.localWorkspace?.id === workspaceId
+          || entry.aliasIds?.includes(workspaceId));
+        if (logicalWorkspace) {
+          const previous = useWorkspaceUiStore.getState()
+            .gitStatusSnapshotByWorkspace[logicalWorkspace.id] ?? null;
+          recordWorkspaceGitStatusSnapshot(
+            logicalWorkspace.id,
+            persistedSnapshotFromPullRequestSummary({
+              summary: createdPullRequest,
+              previous,
+              capturedAt: new Date().toISOString(),
+            }),
+          );
+          const repoRootId = logicalWorkspace.repoRoot?.id
+            ?? logicalWorkspace.localWorkspace?.repoRootId;
+          if (repoRootId?.trim()) {
+            refreshPrStatuses(repoRootId.trim());
+          }
+        }
+      }
       await Promise.all([
         gitStatusQuery.refetch(),
         currentPullRequestEnabled
@@ -150,11 +189,14 @@ export function useWorkspacePublishWorkflow({
     currentPrQuery,
     currentPullRequestEnabled,
     gitStatusQuery,
+    logicalWorkspaces,
     pushMutation,
+    refreshPrStatuses,
     resetDrafts,
     stageMutation,
     viewState.disabledReason,
     viewState.workflowSteps,
+    workspaceId,
   ]);
 
   return {

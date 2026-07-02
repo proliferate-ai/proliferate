@@ -65,6 +65,13 @@ export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
 }
 
+export function anyHarnessRepoRootPullRequestsKey(
+  runtimeUrl: string | null | undefined,
+  repoRootId: string | null | undefined,
+) {
+  return [...anyHarnessRepoRootsKey(runtimeUrl), repoRootId ?? null, "pull-requests"] as const;
+}
+
 export function anyHarnessRepoRootGitBranchesKey(
   runtimeUrl: string | null | undefined,
   repoRootId: string | null | undefined,

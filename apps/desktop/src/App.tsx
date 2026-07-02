@@ -32,6 +32,7 @@ import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-
 import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue"
 import { useTurnEndSound } from "@/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
+import { useWorkspaceGitStatusPersistence } from "@/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
 import {
   elapsedStartupMs,
@@ -213,6 +214,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_ui_lifecycle")
   useWorkspaceUiLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_ui_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_git_status_persistence")
+  useWorkspaceGitStatusPersistence()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_git_status_persistence")
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_intent_dispatcher")
   useSessionIntentDispatcher()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_intent_dispatcher")

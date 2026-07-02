@@ -23,6 +23,7 @@ describe("planBatchedStreamSideEffects", () => {
 
     expect(plan.invalidateWorkspaceCollections).toBe(true);
     expect(plan.invalidateGitStatus).toBe(true);
+    expect(plan.invalidatePrStatus).toBe(true);
     expect(plan.lastActivityTimestamp).toBe("2026-04-04T00:00:03Z");
     expect(plan.orderedEffects).toEqual([
       { kind: "clear_active_summary_refresh" },
@@ -30,6 +31,30 @@ describe("planBatchedStreamSideEffects", () => {
       { kind: "clear_pending_config_rollback" },
       { kind: "schedule_active_summary_refresh" },
     ]);
+  });
+
+  it("plans invalidatePrStatus exactly when invalidateGitStatus is planned", () => {
+    const turnEndPlan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [turnEnded(2)],
+    });
+    expect(turnEndPlan.invalidatePrStatus).toBe(turnEndPlan.invalidateGitStatus);
+    expect(turnEndPlan.invalidatePrStatus).toBe(true);
+
+    const noTurnEndPlan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [turnStarted(2)],
+    });
+    expect(noTurnEndPlan.invalidatePrStatus).toBe(noTurnEndPlan.invalidateGitStatus);
+    expect(noTurnEndPlan.invalidatePrStatus).toBe(false);
+
+    const noWorkspacePlan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      workspaceId: null,
+      envelopes: [turnEnded(2)],
+    });
+    expect(noWorkspacePlan.invalidatePrStatus).toBe(noWorkspacePlan.invalidateGitStatus);
+    expect(noWorkspacePlan.invalidatePrStatus).toBe(false);
   });
 
   it("plans final rollback clearing when no queued config changes remain", () => {

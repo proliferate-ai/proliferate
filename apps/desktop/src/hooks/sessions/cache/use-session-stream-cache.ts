@@ -7,7 +7,12 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
+import {
+  getWorkspaceCollectionsFromCache,
+  workspaceCollectionsScopeKey,
+} from "@/hooks/workspaces/cache/query-keys";
+import { scheduleRepoPrStatusRefresh } from "@/hooks/workspaces/cache/use-pr-status-refresh";
+import { useAuthStore } from "@/stores/auth/auth-store";
 
 export interface SessionStreamCache {
   invalidateWorkspaceCollections(runtimeUrl: string): void;
@@ -26,6 +31,10 @@ export interface SessionStreamCache {
     parentSessionId: string;
   }): void;
   invalidateGitStatus(input: {
+    runtimeUrl: string;
+    workspaceId: string;
+  }): void;
+  refreshPrStatuses(input: {
     runtimeUrl: string;
     workspaceId: string;
   }): void;
@@ -64,6 +73,23 @@ export function useSessionStreamCache(): SessionStreamCache {
       void queryClient.invalidateQueries({
         queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
       });
+    },
+    refreshPrStatuses({ runtimeUrl, workspaceId }) {
+      // Resolve the workspace's repo root from the cached collections; a
+      // miss (e.g. cloud runtime, collections not loaded) degrades to a
+      // no-op — the interval/focus refetch still covers it.
+      const collections = getWorkspaceCollectionsFromCache(
+        queryClient,
+        runtimeUrl,
+        useAuthStore.getState().user?.id ?? null,
+      );
+      const repoRootId = collections?.allWorkspaces
+        .find((workspace) => workspace.id === workspaceId)
+        ?.repoRootId?.trim();
+      if (!repoRootId) {
+        return;
+      }
+      scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl, repoRootId });
     },
   }), [queryClient]);
 }
