@@ -77,7 +77,7 @@ export function useSessionStreamCache(): SessionStreamCache {
     refreshPrStatuses({ runtimeUrl, workspaceId }) {
       // Resolve the workspace's repo root from the cached collections; a
       // miss (e.g. cloud runtime, collections not loaded) degrades to a
-      // no-op — the interval/focus refetch still covers it.
+      // no-op — the next turn end or message send retries.
       const collections = getWorkspaceCollectionsFromCache(
         queryClient,
         runtimeUrl,

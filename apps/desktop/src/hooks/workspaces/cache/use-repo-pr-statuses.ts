@@ -10,7 +10,6 @@ import type { WorkspacePrStatusAvailability } from "@/lib/domain/workspaces/git-
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 const PR_STATUS_STALE_MS = 60_000;
-const PR_STATUS_REFETCH_INTERVAL_MS = 120_000;
 
 export interface RepoPrStatusesState {
   entriesByRepoRootId: Record<string, BranchPullRequestStatus[]>;
@@ -35,9 +34,11 @@ export function useRepoPrStatuses(repoRootIds: string[]): RepoPrStatusesState {
       queryKey: anyHarnessRepoRootPullRequestsKey(trimmedRuntimeUrl, repoRootId),
       enabled: trimmedRuntimeUrl.length > 0,
       staleTime: PR_STATUS_STALE_MS,
-      refetchInterval: PR_STATUS_REFETCH_INTERVAL_MS,
-      // Per-key opt-in: the desktop QueryClient default is false.
-      refetchOnWindowFocus: true,
+      // No interval/focus polling (owner decision 2026-07-02): PR status
+      // updates on session turn end (stream side effects), message send, and
+      // publish — plus this initial mount fetch. The daemon throttle makes
+      // extra polling pointless anyway.
+      refetchOnWindowFocus: false,
       retry: false as const,
       queryFn: async ({ signal }: { signal: AbortSignal }) =>
         listRepoRootPullRequestStatuses(
