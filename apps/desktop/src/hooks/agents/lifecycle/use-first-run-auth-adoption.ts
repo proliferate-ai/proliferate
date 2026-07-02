@@ -68,7 +68,7 @@ export function useFirstRunAuthAdoption() {
         {
           harnessKind: action.harnessKind,
           surface: action.surface,
-          body: { route: action.route },
+          body: { route: action.route, slot: "primary" },
         },
         {
           onError: (error) => {

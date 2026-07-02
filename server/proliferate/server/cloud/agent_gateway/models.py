@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from proliferate.constants.agent_gateway import AGENT_PROVIDER_REGISTRY
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
     AgentAuthRouteSelectionRecord,
@@ -55,6 +56,7 @@ class AgentAuthRouteSelectionResponse(AgentGatewayBaseModel):
     id: str
     harness_kind: str = Field(alias="harnessKind")
     surface: AgentAuthSurface
+    slot: str
     route: AgentAuthRoute
     api_key_id: str | None = Field(alias="apiKeyId")
     revision: int
@@ -69,12 +71,27 @@ class AgentAuthRouteSelectionListResponse(AgentGatewayBaseModel):
 class AgentAuthRouteSelectionUpsertRequest(AgentGatewayBaseModel):
     route: AgentAuthRoute
     api_key_id: str | None = Field(default=None, alias="apiKeyId")
+    # Composition axis (spec §3.3): 'primary' for single-source harnesses;
+    # opencode uses per-source slots. Defaults keep pre-slot callers working.
+    slot: str = "primary"
+
+
+class AgentGatewayProviderInfo(AgentGatewayBaseModel):
+    """One PROVIDER_REGISTRY entry; the UI never hardcodes provider metadata."""
+
+    id: str
+    label: str
+    env_key: str = Field(alias="envKey")
+    key_url: str = Field(alias="keyUrl")
+    harnesses: list[str]
+    recommended_for: list[str] = Field(alias="recommendedFor")
 
 
 class AgentGatewayCapabilitiesResponse(AgentGatewayBaseModel):
     gateway_enabled: bool = Field(alias="gatewayEnabled")
     public_base_url: str | None = Field(alias="publicBaseUrl")
     enrollment_status: str = Field(alias="enrollmentStatus")
+    providers: list[AgentGatewayProviderInfo] = Field(default_factory=list)
 
 
 class AgentGatewayCatalogResponse(AgentGatewayBaseModel):
@@ -173,12 +190,27 @@ def route_selection_payload(
         id=str(record.id),
         harness_kind=record.harness_kind,
         surface=record.surface,  # type: ignore[arg-type]
+        slot=record.slot,
         route=record.route,  # type: ignore[arg-type]
         api_key_id=str(record.api_key_id) if record.api_key_id is not None else None,
         revision=record.revision,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
     )
+
+
+def provider_registry_payload() -> list[AgentGatewayProviderInfo]:
+    return [
+        AgentGatewayProviderInfo(
+            id=entry.id,
+            label=entry.label,
+            env_key=entry.env_key,
+            key_url=entry.key_url,
+            harnesses=list(entry.harnesses),
+            recommended_for=list(entry.recommended_for),
+        )
+        for entry in AGENT_PROVIDER_REGISTRY
+    ]
 
 
 def catalog_payload(

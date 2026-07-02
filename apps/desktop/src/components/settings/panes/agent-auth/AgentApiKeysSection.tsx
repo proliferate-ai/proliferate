@@ -9,6 +9,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -16,7 +17,7 @@ import {
   AGENT_API_KEY_PROVIDERS,
   agentApiKeyProviderLabel,
   type AgentApiKeyProviderId,
-} from "./agent-api-key-providers";
+} from "@/config/agent-api-key-providers";
 
 export function AgentApiKeysSection() {
   const keysQuery = useAgentApiKeys();
@@ -129,9 +130,12 @@ export function AgentApiKeysSection() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <label className="sm:w-44">
-              <span className="sr-only">Provider</span>
+            <div className="sm:w-44">
+              <Label htmlFor="agent-api-key-add-provider" className="sr-only">
+                Provider
+              </Label>
               <Select
+                id="agent-api-key-add-provider"
                 aria-label="Provider"
                 value={provider}
                 onChange={(event) =>
@@ -143,7 +147,7 @@ export function AgentApiKeysSection() {
                   </option>
                 ))}
               </Select>
-            </label>
+            </div>
             <Input
               aria-label="Key name"
               placeholder="Key name"

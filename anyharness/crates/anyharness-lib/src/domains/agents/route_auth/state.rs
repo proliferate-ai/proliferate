@@ -54,7 +54,14 @@ impl AuthRoute {
     }
 }
 
-/// A single (harness, route) selection materialized by the control plane. The
+/// The default slot: the one selection of a single-source harness.
+pub const SLOT_PRIMARY: &str = "primary";
+
+fn default_slot() -> String {
+    SLOT_PRIMARY.to_string()
+}
+
+/// A single (harness, slot) selection materialized by the control plane. The
 /// optional fields carry only what a route needs: `key`/`base_url`/`provider`
 /// for api_key/gateway, `model_catalog` for OpenCode's explicit models map.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,6 +70,12 @@ pub struct AuthSelection {
     /// [`AgentKind::as_str`](crate::domains::agents::model::AgentKind::as_str)).
     pub harness: String,
     pub route: AuthRoute,
+    /// Composition axis (spec §3.3): single-source harnesses carry exactly one
+    /// `"primary"` entry; OpenCode carries one entry per slot (`"gateway"` +
+    /// direct provider slots), merged into one additive launch profile.
+    /// Defaults keep pre-slot state files parsing.
+    #[serde(default = "default_slot")]
+    pub slot: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -92,11 +105,21 @@ pub struct AgentAuthState {
 }
 
 impl AgentAuthState {
-    /// The selection for a harness kind, if any.
+    /// The selection for a harness kind, if any (first match; use
+    /// [`Self::selections_for`] where multiple slots are legal).
     pub fn selection_for(&self, harness_kind: &str) -> Option<&AuthSelection> {
         self.selections
             .iter()
             .find(|selection| selection.harness == harness_kind)
+    }
+
+    /// Every selection for a harness kind, in state-file order. OpenCode may
+    /// carry several (one per slot); single-source harnesses must not.
+    pub fn selections_for(&self, harness_kind: &str) -> Vec<&AuthSelection> {
+        self.selections
+            .iter()
+            .filter(|selection| selection.harness == harness_kind)
+            .collect()
     }
 
     /// Whether the state engages fail-closed semantics (a scoped launch, spec
@@ -170,6 +193,7 @@ mod tests {
                 AuthSelection {
                     harness: "claude".into(),
                     route: AuthRoute::Gateway,
+                    slot: SLOT_PRIMARY.into(),
                     provider: None,
                     base_url: Some("https://llm.proliferate.ai".into()),
                     key: Some("sk-virtual".into()),
@@ -178,6 +202,7 @@ mod tests {
                 AuthSelection {
                     harness: "opencode".into(),
                     route: AuthRoute::Gateway,
+                    slot: "gateway".into(),
                     provider: None,
                     base_url: Some("https://llm.proliferate.ai".into()),
                     key: Some("sk-virtual".into()),
@@ -200,6 +225,7 @@ mod tests {
             selections: vec![AuthSelection {
                 harness: "codex".into(),
                 route: AuthRoute::ApiKey,
+                slot: SLOT_PRIMARY.into(),
                 provider: Some("openai".into()),
                 base_url: None,
                 key: Some("sk-raw".into()),
@@ -229,5 +255,43 @@ mod tests {
         let selection = state.selection_for("claude").expect("selection");
         assert_eq!(selection.route, AuthRoute::Native);
         assert!(selection.key.is_none());
+    }
+
+    #[test]
+    fn missing_slot_defaults_to_primary_and_round_trips() {
+        // Pre-slot state files (no "slot" key) parse with the primary default.
+        let json = r#"{
+            "revision": 4,
+            "selections": [
+                { "harness": "claude", "route": "gateway",
+                  "base_url": "https://gw", "key": "sk-vk" }
+            ]
+        }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
+        assert_eq!(state.selection_for("claude").unwrap().slot, SLOT_PRIMARY);
+
+        // And the default survives a serialize→parse round trip.
+        let serialized = serde_json::to_string(&state).expect("serialize");
+        let parsed: AgentAuthState = serde_json::from_str(&serialized).expect("reparse");
+        assert_eq!(state, parsed);
+    }
+
+    #[test]
+    fn multiple_entries_per_harness_are_representable() {
+        let json = r#"{
+            "revision": 9,
+            "selections": [
+                { "harness": "opencode", "route": "gateway", "slot": "gateway",
+                  "base_url": "https://gw", "key": "sk-vk" },
+                { "harness": "opencode", "route": "api_key", "slot": "anthropic",
+                  "provider": "anthropic", "key": "sk-ant" }
+            ]
+        }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
+        let selections = state.selections_for("opencode");
+        assert_eq!(selections.len(), 2);
+        assert_eq!(selections[0].slot, "gateway");
+        assert_eq!(selections[1].slot, "anthropic");
+        assert!(state.selections_for("claude").is_empty());
     }
 }
