@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 /**
@@ -36,8 +37,10 @@ export function ComposerOptionRow({
 }) {
   return (
     <div className="border-t border-border/60">
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         disabled={disabled}
         onClick={onSelect}
         className={twMerge(
@@ -65,7 +68,7 @@ export function ComposerOptionRow({
             </span>
           ) : null}
         </span>
-      </button>
+      </Button>
     </div>
   );
 }
