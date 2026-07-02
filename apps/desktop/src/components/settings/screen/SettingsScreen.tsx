@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   SETTINGS_DEFAULT_SECTION,
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
@@ -294,14 +295,16 @@ export function SettingsScreen({
           className="flex h-10 items-center gap-2 pl-[82px] pr-3"
           data-tauri-drag-region="true"
         >
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={onNavigateHome}
             className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
             {SETTINGS_COPY.back}
-          </button>
+          </Button>
         </div>
         <div className="flex h-[46px] items-center gap-4 px-4">
           <SettingsScopeTabs

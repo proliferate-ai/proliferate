@@ -1,6 +1,7 @@
 import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { useMemo, useState } from "react";
 import { ArrowUp } from "@proliferate/ui/icons";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
@@ -142,9 +143,9 @@ export function UserInputCard({
     return (
       <ComposerAttachedPanel header={header}>
         <div className="flex items-center justify-end gap-2 px-3 pb-3">
-          <button type="button" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
+          <Button type="button" variant="unstyled" size="unstyled" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         </div>
       </ComposerAttachedPanel>
     );
@@ -238,28 +239,32 @@ export function UserInputCard({
         )}
 
         <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-3 pt-1">
-          <button type="button" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
+          <Button type="button" variant="unstyled" size="unstyled" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
           <div className="flex items-center gap-2">
             {!isFirst && (
-              <button
+              <Button
                 type="button"
+                variant="unstyled"
+                size="unstyled"
                 className={CHIP_BUTTON_CLASSNAME}
                 onClick={() =>
                   setQuestionIndex((index) => Math.max(0, index - 1))}
               >
                 Back
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               aria-label={isLast ? "Submit" : "Next"}
               onClick={handleAdvance}
               className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80"
             >
               <ArrowUp className="size-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>

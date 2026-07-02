@@ -1,6 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import {
@@ -111,9 +112,11 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
     ref,
   ) {
     return (
-      <button
+      <Button
         ref={ref}
         type={type}
+        variant="unstyled"
+        size="unstyled"
         className={twMerge(
           "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-accent data-[state=open]:text-foreground",
           className,
@@ -127,7 +130,7 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
         {disclosure ? (
           <ChevronDown className="size-3 shrink-0 text-faint" />
         ) : null}
-      </button>
+      </Button>
     );
   },
 );
