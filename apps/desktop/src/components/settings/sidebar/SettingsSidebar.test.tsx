@@ -65,8 +65,6 @@ function renderSettingsSidebar({
   onSelectSection?: (section: SettingsSection) => void;
   onCheckForUpdates?: () => void;
   updateActionState?: Partial<{
-    isChecking: boolean;
-    hasAvailableUpdate: boolean;
     phase: "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error";
     updatesSupported: boolean;
   }>;
@@ -89,8 +87,6 @@ function renderSettingsSidebar({
           onSelectSection={onSelectSection}
           onCheckForUpdates={onCheckForUpdates}
           updateActionState={{
-            isChecking: false,
-            hasAvailableUpdate: false,
             phase: "idle",
             updatesSupported: true,
             ...updateActionState,
@@ -199,18 +195,61 @@ describe("SettingsSidebar layout and shortcuts", () => {
     renderSettingsSidebar({
       onCheckForUpdates,
       updateActionState: {
-        hasAvailableUpdate: true,
         phase: "ready",
       },
     });
 
     const desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
-    expect(desktopUpdates.textContent).toContain("Available");
-    expect(screen.queryByRole("button", { name: /Restart to update/ })).toBeNull();
+    expect(desktopUpdates.textContent).toContain("Restart to update");
     expect(screen.queryByRole("button", { name: /Download update/ })).toBeNull();
 
     fireEvent.click(desktopUpdates);
     expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows Available only for the available phase and Restart to update for ready", () => {
+    renderSettingsSidebar({ updateActionState: { phase: "available" } });
+    let desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Available");
+    expect(desktopUpdates.textContent).not.toContain("Restart to update");
+
+    cleanup();
+
+    renderSettingsSidebar({ updateActionState: { phase: "ready" } });
+    desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Restart to update");
+    expect(desktopUpdates.textContent).not.toContain("Available");
+  });
+
+  it("shows the checking and downloading statuses", () => {
+    renderSettingsSidebar({ updateActionState: { phase: "checking" } });
+    expect(
+      screen.getByRole("button", { name: /Desktop updates/ }).textContent,
+    ).toContain("Checking…");
+
+    cleanup();
+
+    renderSettingsSidebar({ updateActionState: { phase: "downloading" } });
+    expect(
+      screen.getByRole("button", { name: /Desktop updates/ }).textContent,
+    ).toContain("Downloading");
+  });
+
+  it("disables the update row outside packaged builds with the packaged-only status", () => {
+    const onCheckForUpdates = vi.fn();
+    renderSettingsSidebar({
+      onCheckForUpdates,
+      updateActionState: { phase: "idle", updatesSupported: false },
+    });
+
+    const desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Packaged app only");
+    expect(desktopUpdates.getAttribute("title")).toBe(
+      "Updates only work in the packaged app.",
+    );
+
+    fireEvent.click(desktopUpdates);
+    expect(onCheckForUpdates).not.toHaveBeenCalled();
   });
 
   it("uses the settings sidebar rail width", () => {
