@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.identity.store import get_account_readiness
 from proliferate.auth.jwt import auth_backend
 from proliferate.auth.users import get_user_manager
+from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.errors import PermissionDenied
@@ -40,10 +41,7 @@ async def current_limited_user(
     return user
 
 
-async def current_product_user(
-    user: User = Depends(current_limited_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> User:
+async def _require_product_ready(db: AsyncSession, user: User) -> User:
     readiness = await get_account_readiness(db, user_id=user.id)
     if not readiness.product_ready:
         raise PermissionDenied(
@@ -51,6 +49,29 @@ async def current_product_user(
             code="github_link_required",
         )
     return user
+
+
+async def current_product_user(
+    user: User = Depends(current_limited_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> User:
+    return await _require_product_ready(db, user)
+
+
+async def current_organization_actor(
+    user: User = Depends(current_limited_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> User:
+    """Acting user for organization-membership surfaces.
+
+    Hosted keeps the GitHub product-readiness gate, byte-for-byte the same as
+    ``current_product_user``. Single-org (self-hosted) instances admit
+    password-only accounts: listing the org, inviting teammates, and accepting
+    invitations must all work with no GitHub OAuth app configured.
+    """
+    if settings.single_org_mode:
+        return user
+    return await _require_product_ready(db, user)
 
 
 async def optional_current_active_user(
