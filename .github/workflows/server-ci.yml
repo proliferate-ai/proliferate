@@ -245,9 +245,16 @@ jobs:
         working-directory: .
 
       - name: Prepare release assets
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
+          if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/server-v}"
+          else
+            VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
+          fi
           tar czf artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
             -C target/x86_64-unknown-linux-musl/release \
             anyharness \
@@ -260,10 +267,22 @@ jobs:
             proliferate-supervisor
           cp server/infra/self-hosted-aws/template.yaml \
             artifacts/proliferate-self-hosted-aws-template.yaml
-          sha256sum artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz \
-            artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz \
-            artifacts/proliferate-self-hosted-aws-template.yaml \
-            > artifacts/self-hosted-assets.SHA256SUMS
+          bundle_root="$(mktemp -d)"
+          mkdir -p "$bundle_root/proliferate-deploy"
+          cp -R server/deploy/. "$bundle_root/proliferate-deploy/"
+          rm -rf "$bundle_root/proliferate-deploy/smoke"
+          printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
+          tar czf artifacts/proliferate-deploy.tar.gz -C "$bundle_root" proliferate-deploy
+          rm -rf "$bundle_root"
+          (
+            cd artifacts
+            sha256sum \
+              anyharness-x86_64-unknown-linux-musl.tar.gz \
+              anyharness-aarch64-unknown-linux-musl.tar.gz \
+              proliferate-self-hosted-aws-template.yaml \
+              proliferate-deploy.tar.gz \
+              > self-hosted-assets.SHA256SUMS
+          )
         working-directory: .
 
       - name: Ensure server release tag exists
@@ -295,4 +314,5 @@ jobs:
             artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz
             artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz
             artifacts/proliferate-self-hosted-aws-template.yaml
+            artifacts/proliferate-deploy.tar.gz
             artifacts/self-hosted-assets.SHA256SUMS
