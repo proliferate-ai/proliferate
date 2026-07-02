@@ -10,12 +10,20 @@ lives at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
       "revision": 42,
       "user_id": "...",
       "selections": [
-        {"harness": "claude", "route": "gateway",
+        {"harness": "claude", "route": "gateway", "slot": "primary",
          "base_url": "https://llm.example/v1", "key": "<virtual key>"},
-        {"harness": "codex", "route": "api_key",
-         "provider": "openai", "key": "<raw key>"}
+        {"harness": "codex", "route": "api_key", "slot": "primary",
+         "provider": "openai", "key": "<raw key>"},
+        {"harness": "opencode", "route": "gateway", "slot": "gateway",
+         "base_url": "https://llm.example/v1", "key": "<virtual key>"},
+        {"harness": "opencode", "route": "api_key", "slot": "anthropic",
+         "provider": "anthropic", "key": "<raw key>"}
       ]
     }
+
+Multiple entries per harness are allowed (spec §3.3 slot semantics): OpenCode
+composes one entry per slot; AnyHarness merges them into a single additive
+launch profile and rejects multi-entry state for single-source harnesses.
 
 Only ``surface='cloud'`` selections are materialized. ``revision`` is the max
 revision across the user's cloud route-selection rows; it is informational
@@ -108,7 +116,10 @@ def render_agent_auth_state(
         return None, ""
 
     rendered: list[dict[str, object]] = []
-    for selection in sorted(cloud_selections, key=lambda item: item.harness_kind):
+    for selection in sorted(
+        cloud_selections,
+        key=lambda item: (item.harness_kind, item.slot),
+    ):
         entry: dict[str, object] | None = None
         if selection.route == AGENT_AUTH_ROUTE_GATEWAY:
             entry = _render_gateway_selection(inputs, selection)
@@ -162,6 +173,7 @@ def _render_gateway_selection(
     return {
         "harness": selection.harness_kind,
         "route": AGENT_AUTH_ROUTE_GATEWAY,
+        "slot": selection.slot,
         "base_url": inputs.gateway_base_url,
         "key": inputs.gateway_virtual_key,
     }
@@ -182,6 +194,7 @@ def _render_api_key_selection(
     return {
         "harness": selection.harness_kind,
         "route": AGENT_AUTH_ROUTE_API_KEY,
+        "slot": selection.slot,
         "provider": provider,
         "key": secret,
     }

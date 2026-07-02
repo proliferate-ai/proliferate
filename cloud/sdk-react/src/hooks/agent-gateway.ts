@@ -54,6 +54,8 @@ export interface UpsertRouteSelectionInput {
 export interface ClearRouteSelectionInput {
   harnessKind: string;
   surface: string;
+  /** Slot to clear; defaults to 'primary' (single-source harnesses). */
+  slot?: string;
 }
 
 export interface AgentCatalogScope {
@@ -130,8 +132,8 @@ export function useClearRouteSelection() {
   const client = useCloudClient();
   const queryClient = useQueryClient();
   return useMutation<void, Error, ClearRouteSelectionInput>({
-    mutationFn: ({ harnessKind, surface }) =>
-      clearAgentRouteSelection(harnessKind, surface, client),
+    mutationFn: ({ harnessKind, surface, slot }) =>
+      clearAgentRouteSelection(harnessKind, surface, slot ?? "primary", client),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: agentRouteSelectionsKey() });
     },

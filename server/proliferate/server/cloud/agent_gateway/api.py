@@ -37,6 +37,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     enrollment_payload,
     org_agent_policy_payload,
     org_agent_policy_violation_payload,
+    provider_registry_payload,
     route_selection_payload,
 )
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -135,6 +136,7 @@ async def upsert_agent_route_selection_endpoint(
             surface=surface,
             route=body.route,
             api_key_id=api_key_id,
+            slot=body.slot,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
@@ -145,6 +147,7 @@ async def upsert_agent_route_selection_endpoint(
 async def clear_agent_route_selection_endpoint(
     harness_kind: str,
     surface: str,
+    slot: str = Query("primary"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> None:
@@ -154,6 +157,7 @@ async def clear_agent_route_selection_endpoint(
             user_id=user.id,
             harness_kind=harness_kind,
             surface=surface,
+            slot=slot,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
@@ -260,6 +264,7 @@ async def get_agent_gateway_capabilities_endpoint(
         gateway_enabled=gateway_enabled,
         public_base_url=public_base_url,
         enrollment_status=enrollment_status,
+        providers=provider_registry_payload(),
     )
 
 

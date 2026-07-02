@@ -13,31 +13,130 @@ from proliferate.server.cloud.agent_gateway.enrollment import build_sync_fingerp
 
 class TestRouteSelectionLegality:
     def test_all_routes_are_legal_on_local(self) -> None:
-        validate_route_selection(surface="local", route="native", api_key_id=None)
-        validate_route_selection(surface="local", route="gateway", api_key_id=None)
-        validate_route_selection(surface="local", route="api_key", api_key_id=uuid.uuid4())
+        validate_route_selection(
+            harness_kind="claude", surface="local", route="native", api_key_id=None
+        )
+        validate_route_selection(
+            harness_kind="claude", surface="local", route="gateway", api_key_id=None
+        )
+        validate_route_selection(
+            harness_kind="claude", surface="local", route="api_key", api_key_id=uuid.uuid4()
+        )
 
     def test_cloud_allows_gateway_and_api_key(self) -> None:
-        validate_route_selection(surface="cloud", route="gateway", api_key_id=None)
-        validate_route_selection(surface="cloud", route="api_key", api_key_id=uuid.uuid4())
+        validate_route_selection(
+            harness_kind="claude", surface="cloud", route="gateway", api_key_id=None
+        )
+        validate_route_selection(
+            harness_kind="claude", surface="cloud", route="api_key", api_key_id=uuid.uuid4()
+        )
 
     def test_cloud_rejects_native(self) -> None:
         with pytest.raises(ValueError, match="native route"):
-            validate_route_selection(surface="cloud", route="native", api_key_id=None)
+            validate_route_selection(
+                harness_kind="claude", surface="cloud", route="native", api_key_id=None
+            )
 
     def test_api_key_route_requires_key_reference(self) -> None:
         with pytest.raises(ValueError, match="requires an api_key_id"):
-            validate_route_selection(surface="local", route="api_key", api_key_id=None)
+            validate_route_selection(
+                harness_kind="claude", surface="local", route="api_key", api_key_id=None
+            )
 
     def test_non_api_key_routes_reject_key_reference(self) -> None:
         with pytest.raises(ValueError, match="only valid for api_key"):
-            validate_route_selection(surface="local", route="gateway", api_key_id=uuid.uuid4())
+            validate_route_selection(
+                harness_kind="claude",
+                surface="local",
+                route="gateway",
+                api_key_id=uuid.uuid4(),
+            )
 
     def test_unknown_surface_and_route_are_rejected(self) -> None:
         with pytest.raises(ValueError, match="surface"):
-            validate_route_selection(surface="mobile", route="gateway", api_key_id=None)
+            validate_route_selection(
+                harness_kind="claude", surface="mobile", route="gateway", api_key_id=None
+            )
         with pytest.raises(ValueError, match="route"):
-            validate_route_selection(surface="local", route="magic", api_key_id=None)
+            validate_route_selection(
+                harness_kind="claude", surface="local", route="magic", api_key_id=None
+            )
+
+
+class TestSlotLegality:
+    def test_single_source_harnesses_only_use_primary(self) -> None:
+        for harness in ("claude", "codex", "grok", "gemini"):
+            validate_route_selection(
+                harness_kind=harness,
+                surface="local",
+                route="gateway",
+                api_key_id=None,
+                slot="primary",
+            )
+            with pytest.raises(ValueError, match="single-source"):
+                validate_route_selection(
+                    harness_kind=harness,
+                    surface="local",
+                    route="gateway",
+                    api_key_id=None,
+                    slot="gateway",
+                )
+
+    def test_unknown_harness_is_treated_as_single_source(self) -> None:
+        with pytest.raises(ValueError, match="single-source"):
+            validate_route_selection(
+                harness_kind="cursor",
+                surface="local",
+                route="gateway",
+                api_key_id=None,
+                slot="openai",
+            )
+
+    def test_opencode_rejects_primary_and_unknown_slots(self) -> None:
+        for slot in ("primary", "mistral", ""):
+            with pytest.raises(ValueError, match="slots"):
+                validate_route_selection(
+                    harness_kind="opencode",
+                    surface="local",
+                    route="gateway",
+                    api_key_id=None,
+                    slot=slot,
+                )
+
+    def test_opencode_gateway_slot_requires_gateway_route(self) -> None:
+        validate_route_selection(
+            harness_kind="opencode",
+            surface="cloud",
+            route="gateway",
+            api_key_id=None,
+            slot="gateway",
+        )
+        with pytest.raises(ValueError, match="gateway.*slot"):
+            validate_route_selection(
+                harness_kind="opencode",
+                surface="cloud",
+                route="api_key",
+                api_key_id=uuid.uuid4(),
+                slot="gateway",
+            )
+
+    def test_opencode_provider_slots_require_api_key_route(self) -> None:
+        for slot in ("openai", "anthropic", "xai", "google"):
+            validate_route_selection(
+                harness_kind="opencode",
+                surface="cloud",
+                route="api_key",
+                api_key_id=uuid.uuid4(),
+                slot=slot,
+            )
+            with pytest.raises(ValueError, match="api_key"):
+                validate_route_selection(
+                    harness_kind="opencode",
+                    surface="cloud",
+                    route="gateway",
+                    api_key_id=None,
+                    slot=slot,
+                )
 
     def test_unknown_harness_kind_is_rejected(self) -> None:
         with pytest.raises(ValueError, match="harness kind"):

@@ -33,6 +33,7 @@ class AgentAuthRouteSelectionRecord:
     revision: int
     created_at: datetime
     updated_at: datetime
+    slot: str = "primary"
 
 
 @dataclass(frozen=True)

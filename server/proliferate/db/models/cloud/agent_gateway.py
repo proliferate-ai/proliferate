@@ -69,7 +69,11 @@ class AgentApiKey(Base):
 
 
 class AgentAuthRouteSelection(Base):
-    """Server-side auth route per (user, harness, surface)."""
+    """Server-side auth route per (user, harness, surface, slot).
+
+    Single-source harnesses only ever use slot='primary'; OpenCode composes
+    one row per slot (gateway + direct provider keys, simultaneously).
+    """
 
     __tablename__ = "agent_auth_route_selection"
     __table_args__ = (
@@ -77,6 +81,7 @@ class AgentAuthRouteSelection(Base):
             "user_id",
             "harness_kind",
             "surface",
+            "slot",
             name="uq_agent_auth_route_selection_scope",
         ),
         CheckConstraint(
@@ -104,6 +109,7 @@ class AgentAuthRouteSelection(Base):
     )
     harness_kind: Mapped[str] = mapped_column(String(64))
     surface: Mapped[str] = mapped_column(String(16))
+    slot: Mapped[str] = mapped_column(String(32), default="primary", server_default="primary")
     route: Mapped[str] = mapped_column(String(16))
     api_key_id: Mapped[uuid.UUID | None] = mapped_column(
         # CASCADE (not SET NULL): the ck_..._api_key_ref check forbids a NULL

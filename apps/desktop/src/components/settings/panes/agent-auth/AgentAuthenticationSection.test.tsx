@@ -4,6 +4,32 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentAuthenticationSection } from "./AgentAuthenticationSection";
 
+const PROVIDERS = vi.hoisted(() => [
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    envKey: "ANTHROPIC_API_KEY",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    harnesses: ["claude", "opencode"],
+    recommendedFor: ["claude", "opencode"],
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    envKey: "OPENAI_API_KEY",
+    keyUrl: "https://platform.openai.com/api-keys",
+    harnesses: ["codex", "opencode"],
+    recommendedFor: ["codex"],
+  },
+]);
+
+type CapabilitiesData = {
+  gatewayEnabled: boolean;
+  publicBaseUrl: string | null;
+  enrollmentStatus: string;
+  providers?: typeof PROVIDERS;
+};
+
 const state = vi.hoisted(() => ({
   cloudActive: true,
   capabilities: {
@@ -11,7 +37,8 @@ const state = vi.hoisted(() => ({
       gatewayEnabled: true,
       publicBaseUrl: "https://gateway.example",
       enrollmentStatus: "synced",
-    } as { gatewayEnabled: boolean; publicBaseUrl: string | null; enrollmentStatus: string } | undefined,
+      providers: PROVIDERS,
+    } as CapabilitiesData | undefined,
   },
   enrollment: {
     data: undefined as
@@ -32,6 +59,7 @@ const state = vi.hoisted(() => ({
 }));
 const upsertMutate = vi.hoisted(() => vi.fn());
 const clearMutate = vi.hoisted(() => vi.fn());
+const createKeyMutate = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentGatewayCapabilities: () => state.capabilities,
@@ -40,10 +68,15 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentApiKeys: () => state.apiKeys,
   useUpsertRouteSelection: () => ({ mutate: upsertMutate, isPending: false }),
   useClearRouteSelection: () => ({ mutate: clearMutate, isPending: false }),
+  useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
 }));
 
 vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
+}));
+
+vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
+  useTauriShellActions: () => ({ openExternal: vi.fn() }),
 }));
 
 function selection(overrides: Partial<Record<string, unknown>> = {}) {
@@ -74,6 +107,7 @@ afterEach(() => {
     gatewayEnabled: true,
     publicBaseUrl: "https://gateway.example",
     enrollmentStatus: "synced",
+    providers: PROVIDERS,
   };
   state.enrollment.data = undefined;
   state.selections.data = { selections: [] };
@@ -130,7 +164,7 @@ describe("AgentAuthenticationSection", () => {
       {
         harnessKind: "claude",
         surface: "local",
-        body: { route: "gateway" },
+        body: { route: "gateway", slot: "primary" },
       },
       expect.anything(),
     );
@@ -171,15 +205,15 @@ describe("AgentAuthenticationSection", () => {
     fireEvent.click(screen.getByText("API key"));
     expect(upsertMutate).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText("API key"), {
-      target: { value: "key-1" },
-    });
+    // The KeyPicker replaced the raw select: open it and pick by name.
+    fireEvent.click(screen.getByRole("button", { name: /Select an API key/ }));
+    fireEvent.click(screen.getByText("Work key"));
 
     expect(upsertMutate).toHaveBeenCalledWith(
       {
         harnessKind: "claude",
         surface: "local",
-        body: { route: "api_key", apiKeyId: "key-1" },
+        body: { route: "api_key", apiKeyId: "key-1", slot: "primary" },
       },
       expect.anything(),
     );
@@ -200,9 +234,8 @@ describe("AgentAuthenticationSection", () => {
     renderSection();
 
     fireEvent.click(screen.getByText("API key"));
-    fireEvent.change(screen.getByLabelText("API key"), {
-      target: { value: "key-1" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: /Select an API key/ }));
+    fireEvent.click(screen.getByText("Work key"));
 
     // Mutation resolves, but the invalidated selections query has NOT refetched
     // yet (state.selections.data is still the stale empty list). The optimistic
@@ -214,8 +247,7 @@ describe("AgentAuthenticationSection", () => {
       onSuccess?.();
     });
 
-    const picker = screen.getByLabelText("API key") as HTMLSelectElement;
-    expect(picker.value).toBe("key-1");
+    expect(screen.queryByText("Work key (sk-...abcd)")).not.toBeNull();
     expect(
       screen.getByRole("radio", { name: /API key/ }).getAttribute("aria-checked"),
     ).toBe("true");
@@ -239,12 +271,46 @@ describe("AgentAuthenticationSection", () => {
     ).toBeNull();
   });
 
-  it("points at the key pool page when api_key is chosen with no keys", () => {
+  it("filters the key pool to the harness's direct provider", () => {
+    state.apiKeys.data = {
+      keys: [
+        {
+          id: "key-1",
+          provider: "anthropic",
+          displayName: "Anthropic key",
+          redactedHint: "sk-...abcd",
+          status: "active",
+          lastValidatedAt: null,
+          createdAt: "2026-07-01T00:00:00Z",
+        },
+        {
+          id: "key-2",
+          provider: "openai",
+          displayName: "OpenAI key",
+          redactedHint: "sk-...zzzz",
+          status: "active",
+          lastValidatedAt: null,
+          createdAt: "2026-07-01T00:00:00Z",
+        },
+      ],
+    };
     renderSection();
 
     fireEvent.click(screen.getByText("API key"));
+    fireEvent.click(screen.getByRole("button", { name: /Select an API key/ }));
 
-    expect(screen.queryByText(/No API keys available/)).not.toBeNull();
+    // Claude's direct provider is anthropic (from the capabilities registry).
+    expect(screen.queryByText("Anthropic key")).not.toBeNull();
+    expect(screen.queryByText("OpenAI key")).toBeNull();
+  });
+
+  it("offers inline key creation when the pool is empty", () => {
+    renderSection();
+
+    fireEvent.click(screen.getByText("API key"));
+    fireEvent.click(screen.getByRole("button", { name: /Select an API key/ }));
+
+    expect(screen.queryByText("+ Add new key")).not.toBeNull();
   });
 
   it("clears the selection from the reset button", () => {
@@ -268,7 +334,7 @@ describe("AgentAuthenticationSection", () => {
     state.apiKeys.data = {
       keys: [{
         id: "key-9",
-        provider: "openai",
+        provider: "anthropic",
         displayName: "Cloud key",
         redactedHint: "sk-...zzzz",
         status: "active",
@@ -280,7 +346,9 @@ describe("AgentAuthenticationSection", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Cloud" }));
 
-    const picker = screen.getByLabelText("API key") as HTMLSelectElement;
-    expect(picker.value).toBe("key-9");
+    // The picker trigger summarizes the attached key; the secret stays hidden.
+    expect(
+      screen.queryByRole("button", { name: /Cloud key \(sk-\.\.\.zzzz\)/ }),
+    ).not.toBeNull();
   });
 });

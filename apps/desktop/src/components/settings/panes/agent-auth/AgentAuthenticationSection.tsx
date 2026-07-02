@@ -3,8 +3,6 @@ import type {
   AgentAuthRoute,
   AgentAuthRouteSelection,
   AgentAuthSurface,
-  AgentGatewayCapabilities,
-  AgentGatewayEnrollment,
 } from "@proliferate/cloud-sdk";
 import {
   useAgentApiKeys,
@@ -15,13 +13,14 @@ import {
   useUpsertRouteSelection,
 } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { SelectionRow } from "@proliferate/ui/primitives/SelectionRow";
 import { Tabs } from "@proliferate/ui/primitives/Tabs";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { agentApiKeyProviderLabel } from "./agent-api-key-providers";
+import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
+import { KeyPicker } from "./KeyPicker";
+import { OpenCodeAuthSection } from "./OpenCodeAuthSection";
 
 const SURFACE_TABS = [
   { id: "local", label: "Local" },
@@ -37,25 +36,22 @@ function defaultRouteForSurface(surface: AgentAuthSurface): AgentAuthRoute {
   return surface === "cloud" ? "gateway" : "native";
 }
 
-function gatewaySubtitle(
-  capabilities: AgentGatewayCapabilities | undefined,
-  enrollment: AgentGatewayEnrollment | undefined,
-): string {
-  if (capabilities && !capabilities.gatewayEnabled) {
-    return "Unavailable for your account";
+export function AgentAuthenticationSection({
+  agentKind,
+  displayName,
+}: AgentAuthenticationSectionProps) {
+  // OpenCode composes sources (gateway + N provider keys) instead of picking
+  // one route; it gets per-source toggles rather than this radio group.
+  // `agentKind` is fixed per mount, so the branch is hook-safe.
+  if (agentKind === "opencode") {
+    return <OpenCodeAuthSection displayName={displayName} />;
   }
-  if (enrollment?.syncStatus === "failed") {
-    return enrollment.lastErrorCode
-      ? `Enrollment failed (${enrollment.lastErrorCode})`
-      : "Enrollment failed";
-  }
-  if (enrollment?.syncStatus === "pending") {
-    return "Enrollment pending";
-  }
-  return "Proliferate-managed model access. Free credits included, no setup required.";
+  return (
+    <SingleSourceAuthSection agentKind={agentKind} displayName={displayName} />
+  );
 }
 
-export function AgentAuthenticationSection({
+function SingleSourceAuthSection({
   agentKind,
   displayName,
 }: AgentAuthenticationSectionProps) {
@@ -106,6 +102,10 @@ export function AgentAuthenticationSection({
   const gatewayKnownUnavailable =
     capabilities !== undefined && !capabilities.gatewayEnabled;
   const apiKeys = apiKeysQuery.data?.keys ?? [];
+  // Which provider's keys can serve this harness directly (registry-driven).
+  const directProvider = (capabilities?.providers ?? []).find(
+    (provider) => provider.harnesses.includes(agentKind),
+  );
   const serverSelection: AgentAuthRouteSelection | null =
     selectionsQuery.data?.selections.find(
       (entry) => entry.harnessKind === agentKind && entry.surface === surface,
@@ -122,8 +122,8 @@ export function AgentAuthenticationSection({
     ? "api_key"
     : effectiveRoute ?? defaultRouteForSurface(surface);
   const selectedApiKeyId = !draftApiKeyRoute && effectiveRoute === "api_key"
-    ? effectiveApiKeyId ?? ""
-    : "";
+    ? effectiveApiKeyId ?? null
+    : null;
 
   // Drop the optimistic selection once the refetched server state matches it.
   useEffect(() => {
@@ -150,8 +150,8 @@ export function AgentAuthenticationSection({
         harnessKind: agentKind,
         surface,
         body: route === "api_key"
-          ? { route, apiKeyId: apiKeyId ?? null }
-          : { route },
+          ? { route, apiKeyId: apiKeyId ?? null, slot: "primary" }
+          : { route, slot: "primary" },
       },
       {
         onSuccess: () => {
@@ -263,34 +263,15 @@ export function AgentAuthenticationSection({
         ) : null}
 
         {selectedRoute === "api_key" ? (
-          apiKeys.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No API keys available. Add one under Agents → API Keys first.
-            </p>
-          ) : (
-            <label className="block sm:w-72">
-              <span className="sr-only">API key</span>
-              <Select
-                aria-label="API key"
-                value={selectedApiKeyId}
-                disabled={upsertSelection.isPending}
-                onChange={(event) => {
-                  if (event.target.value) {
-                    applyRoute("api_key", event.target.value);
-                  }
-                }}
-              >
-                <option value="" disabled>
-                  Select an API key
-                </option>
-                {apiKeys.map((key) => (
-                  <option key={key.id} value={key.id}>
-                    {agentApiKeyProviderLabel(key.provider)} — {key.displayName} ({key.redactedHint})
-                  </option>
-                ))}
-              </Select>
-            </label>
-          )
+          <div className="sm:w-80">
+            <KeyPicker
+              keys={apiKeys}
+              provider={directProvider?.id}
+              selectedKeyId={selectedApiKeyId}
+              disabled={upsertSelection.isPending}
+              onSelect={(keyId) => applyRoute("api_key", keyId)}
+            />
+          </div>
         ) : null}
 
         {selection ? (

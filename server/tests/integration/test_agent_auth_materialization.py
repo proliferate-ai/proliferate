@@ -171,6 +171,7 @@ class TestBuildAgentAuthStateSyncedGateway:
             {
                 "harness": "claude",
                 "route": "gateway",
+                "slot": "primary",
                 "base_url": "https://llm.proliferate.ai",
                 "key": "sk-litellm-vk",
             }

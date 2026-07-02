@@ -25,6 +25,7 @@ def _selection(
     route: str = "gateway",
     api_key_id: uuid.UUID | None = None,
     revision: int = 1,
+    slot: str = "primary",
 ) -> AgentAuthRouteSelectionRecord:
     return AgentAuthRouteSelectionRecord(
         id=uuid.uuid4(),
@@ -36,6 +37,7 @@ def _selection(
         revision=revision,
         created_at=NOW,
         updated_at=NOW,
+        slot=slot,
     )
 
 
@@ -81,14 +83,73 @@ class TestRenderAgentAuthState:
                 {
                     "harness": "claude",
                     "route": "gateway",
+                    "slot": "primary",
                     "base_url": "https://llm.proliferate.ai",
                     "key": "sk-litellm-vk",
                 },
                 {
                     "harness": "codex",
                     "route": "api_key",
+                    "slot": "primary",
                     "provider": "openai",
                     "key": "sk-openai-raw",
+                },
+            ],
+        }
+        assert fingerprint == agent_auth.agent_auth_state_fingerprint(state)
+
+    def test_opencode_multi_slot_selections_all_materialize(self) -> None:
+        anthropic_id = uuid.uuid4()
+        xai_id = uuid.uuid4()
+        state, fingerprint = agent_auth.render_agent_auth_state(
+            _inputs(
+                (
+                    _selection(harness="opencode", route="gateway", slot="gateway", revision=2),
+                    _selection(
+                        harness="opencode",
+                        route="api_key",
+                        api_key_id=anthropic_id,
+                        slot="anthropic",
+                        revision=5,
+                    ),
+                    _selection(
+                        harness="opencode",
+                        route="api_key",
+                        api_key_id=xai_id,
+                        slot="xai",
+                        revision=3,
+                    ),
+                ),
+                api_key_secrets={
+                    anthropic_id: ("anthropic", "sk-ant-raw"),
+                    xai_id: ("xai", "xai-raw"),
+                },
+            )
+        )
+        assert state == {
+            "revision": 5,
+            "user_id": str(USER_ID),
+            "selections": [
+                {
+                    "harness": "opencode",
+                    "route": "api_key",
+                    "slot": "anthropic",
+                    "provider": "anthropic",
+                    "key": "sk-ant-raw",
+                },
+                {
+                    "harness": "opencode",
+                    "route": "gateway",
+                    "slot": "gateway",
+                    "base_url": "https://llm.proliferate.ai",
+                    "key": "sk-litellm-vk",
+                },
+                {
+                    "harness": "opencode",
+                    "route": "api_key",
+                    "slot": "xai",
+                    "provider": "xai",
+                    "key": "xai-raw",
                 },
             ],
         }
