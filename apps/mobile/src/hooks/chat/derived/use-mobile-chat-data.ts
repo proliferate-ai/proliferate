@@ -32,12 +32,6 @@ import {
   optimisticPromptFromPending,
 } from "../../../lib/domain/chat/mobile-chat-transcript";
 import {
-  cloudPendingInteractionsFromExecutionSummary,
-  cloudPendingInteractionsFromReducer,
-  cloudSessionEventFromAnyHarness,
-  cloudSessionProjectionFromAnyHarness,
-} from "../../../lib/domain/chat/mobile-chat-anyharness-projection";
-import {
   compareSessions,
   effectiveWorkspaceStatus,
   sessionProjectionFromChat,
