@@ -1,9 +1,9 @@
 import {
   Blocks,
-  Home,
+  House,
   LifeBuoy,
   Zap,
-} from "@proliferate/ui/icons";
+} from "lucide-react";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
 import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
 
@@ -39,7 +39,7 @@ export function SidebarPrimaryNavigation({
     {
       id: "home",
       active: homeActive,
-      icon: <Home className="size-4" />,
+      icon: <House className="size-4" />,
       label: "Home",
       shortcutLabel: shortcutLabels.home,
     },

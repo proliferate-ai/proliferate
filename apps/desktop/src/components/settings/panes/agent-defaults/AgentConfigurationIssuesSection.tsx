@@ -4,7 +4,6 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { AgentAuthTerminalPanel } from "@/components/agents/AgentAuthTerminalPanel";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
 import type { AgentAuthTerminalSession } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
 import {
@@ -50,7 +49,7 @@ export function AgentConfigurationIssuesSection({
       title="Needs configuration"
       description="These harnesses are installed or known, but cannot be used as launch defaults yet."
     >
-      <SettingsCard>
+      <div>
         {agentsLoading ? (
           <div className="p-3">
             <LoadingState
@@ -129,7 +128,7 @@ export function AgentConfigurationIssuesSection({
             </div>
           );
         })}
-      </SettingsCard>
+      </div>
     </AgentDefaultsSection>
   );
 }

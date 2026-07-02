@@ -2,8 +2,8 @@ import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import type {
   SlackBotConfig,
   SlackRepoRoutingProfile,
@@ -39,15 +39,11 @@ export function RepoRoutingSection({
   const disabled = !canManage || !config || saving;
 
   return (
-    <section className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">Repo routing</h2>
-        <p className="text-sm text-muted-foreground">
-          Decide whether Slack always targets one repo or uses the bounded repo router.
-        </p>
-      </div>
-      <SettingsCard>
-        <SettingsCardRow
+    <SettingsSection
+      title="Repo routing"
+      description="Decide whether Slack always targets one repo or uses the bounded repo router."
+    >
+        <SettingsRow
           label="Routing mode"
           description="Fixed mode pins every Slack mention to one repo. Auto mode routes across the allowlist."
         >
@@ -71,10 +67,10 @@ export function RepoRoutingSection({
             <option value="auto">Auto</option>
             <option value="fixed">Fixed</option>
           </Select>
-        </SettingsCardRow>
+        </SettingsRow>
 
         {repoMode === "fixed" ? (
-          <SettingsCardRow
+          <SettingsRow
             label="Fixed repo"
             description={loadingProfiles
               ? "Loading organization repos..."
@@ -101,10 +97,10 @@ export function RepoRoutingSection({
                 </option>
               ))}
             </Select>
-          </SettingsCardRow>
+          </SettingsRow>
         ) : (
-          <div className="divide-y divide-border/60">
-            <div className="p-3">
+          <div className="divide-y divide-border border-t border-border">
+            <div className="py-3">
               <div className="text-sm font-medium text-foreground">Auto router allowlist</div>
               <div className="mt-0.5 text-sm text-muted-foreground">
                 {loadingProfiles
@@ -119,7 +115,7 @@ export function RepoRoutingSection({
             {profiles.map((profile) => {
               const selected = allowedRepoSet.has(profile.cloudRepoConfigId);
               return (
-                <div key={profile.id} className="space-y-3 p-3">
+                <div key={profile.id} className="space-y-3 py-3">
                   <Label className="mb-0 flex items-start gap-3">
                     <Checkbox
                       checked={selected}
@@ -165,8 +161,7 @@ export function RepoRoutingSection({
             })}
           </div>
         )}
-      </SettingsCard>
-    </section>
+    </SettingsSection>
   );
 }
 

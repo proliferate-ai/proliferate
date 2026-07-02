@@ -8,8 +8,8 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { agentAuthByokCapabilityLabel } from "@/lib/domain/agent-auth/agent-auth-gateway-capabilities";
 import {
   agentAuthGatewayCreatePayloadReady,
@@ -79,22 +79,24 @@ export function CloudAgentAuthCredentialForm({
   }
 
   return (
-    <SettingsCard>
-      <SettingsCardRow
-        label="Cloud API key credentials"
-        description={agentAuthByokCapabilityLabel(agentGatewayCapabilities, "personal")}
-      >
-        <Badge tone={gatewayByokEnabled ? "success" : "neutral"}>
-          {gatewayByokEnabled ? "Available" : "Unavailable"}
-        </Badge>
-      </SettingsCardRow>
+    <>
+      <SettingsSection>
+        <SettingsRow
+          label="Cloud API key credentials"
+          description={agentAuthByokCapabilityLabel(agentGatewayCapabilities, "personal")}
+        >
+          <Badge tone={gatewayByokEnabled ? "success" : "neutral"}>
+            {gatewayByokEnabled ? "Available" : "Unavailable"}
+          </Badge>
+        </SettingsRow>
+      </SettingsSection>
 
       {gatewayByokEnabled ? (
-        <div className="space-y-3 border-t border-border-light p-4">
+        <div className="space-y-3 border-t border-border py-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label>New credential owner</Label>
-              <div className="mt-1 rounded-md border border-border-light bg-foreground/5 px-3 py-2 text-sm text-foreground">
+              <div className="mt-1 rounded-md border border-border bg-foreground/5 px-3 py-2 text-sm text-foreground">
                 Personal
               </div>
             </div>
@@ -219,11 +221,11 @@ export function CloudAgentAuthCredentialForm({
           </div>
         </div>
       ) : (
-        <div className="border-t border-border-light px-4 py-3 text-sm leading-5 text-muted-foreground">
+        <div className="border-t border-border py-3 text-sm leading-5 text-muted-foreground">
           API key, OpenAI-compatible, and Bedrock credential forms appear here when
           this deployment enables provider BYOK support.
         </div>
       )}
-    </SettingsCard>
+    </>
   );
 }

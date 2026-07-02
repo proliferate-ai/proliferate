@@ -1,7 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Switch } from "@proliferate/ui/primitives/Switch";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import type {
   SlackBotConfig,
   SlackWorkspaceConnection,
@@ -34,15 +34,11 @@ export function BotStatusSection({
   const enabled = config?.enabled ?? false;
 
   return (
-    <section className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">Bot status</h2>
-        <p className="text-sm text-muted-foreground">
-          Control whether the bot responds to allowed Slack mentions.
-        </p>
-      </div>
-      <SettingsCard>
-        <SettingsCardRow
+    <SettingsSection
+      title="Bot status"
+      description="Control whether the bot responds to allowed Slack mentions."
+    >
+        <SettingsRow
           label="Connection health"
           description={connection?.lastValidatedAt
             ? `Last validated ${formatDate(connection.lastValidatedAt)}.`
@@ -62,8 +58,8 @@ export function BotStatusSection({
               Validate now
             </Button>
           </div>
-        </SettingsCardRow>
-        <SettingsCardRow
+        </SettingsRow>
+        <SettingsRow
           label="Respond to mentions"
           description={config
             ? "When enabled, Slack mentions can create shared unclaimed cloud work."
@@ -78,9 +74,8 @@ export function BotStatusSection({
               onChange={(nextEnabled) => onUpdateConfig({ enabled: nextEnabled })}
             />
           </div>
-        </SettingsCardRow>
-      </SettingsCard>
-    </section>
+        </SettingsRow>
+    </SettingsSection>
   );
 }
 

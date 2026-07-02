@@ -1,7 +1,7 @@
 import { useCurrentTeam } from "@proliferate/cloud-sdk-react";
 import { CloudOrganizationSsoSettingsSurface } from "@proliferate/product-surfaces/settings/CloudOrganizationSsoSettingsSurface";
-import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
-import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 
 export function SsoSettingsSection() {
@@ -19,12 +19,12 @@ export function SsoSettingsSection() {
           title="Single sign-on"
           description="Manage organization SSO configuration."
         />
-        <SettingsCard>
-          <SettingsCardRow
+        <SettingsSection>
+          <SettingsRow
             label="Admin access required"
             description="Team SSO is managed by owners and admins."
           />
-        </SettingsCard>
+        </SettingsSection>
       </div>
     );
   }

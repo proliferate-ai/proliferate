@@ -1,4 +1,4 @@
-import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { ExternalLink } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -28,7 +28,7 @@ export function BillingPlanCard({
   onManage: () => void;
 }) {
   return (
-    <SettingsCard>
+    <SettingsSection>
       <div className="space-y-4 p-5">
         <h2 className="text-lg font-semibold text-foreground">Plan</h2>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -59,7 +59,7 @@ export function BillingPlanCard({
           </Button>
         </div>
       </div>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -75,7 +75,7 @@ export function BillingAutoTopUpCard({
   onEnabledChange: (value: boolean) => void;
 }) {
   return (
-    <SettingsCard>
+    <SettingsSection>
       <div className="space-y-6 p-5">
         <div className="space-y-1.5">
           <h2 className="text-lg font-semibold text-foreground">Auto top-up</h2>
@@ -108,7 +108,7 @@ export function BillingAutoTopUpCard({
 
         <p className="text-sm text-muted-foreground">Last auto top-up: not yet run.</p>
       </div>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 
@@ -122,7 +122,7 @@ export function BillingPortalCard({
   onOpenPortal: () => void;
 }) {
   return (
-    <SettingsCard>
+    <SettingsSection>
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1.5">
           <h2 className="text-lg font-semibold text-foreground">Billing</h2>
@@ -142,7 +142,7 @@ export function BillingPortalCard({
           <ExternalLink className="size-3.5" />
         </Button>
       </div>
-    </SettingsCard>
+    </SettingsSection>
   );
 }
 

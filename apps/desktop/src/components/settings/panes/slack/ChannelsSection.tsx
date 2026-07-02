@@ -2,7 +2,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import type {
   SlackBotConfig,
   SlackChannel,
@@ -45,8 +44,8 @@ export function ChannelsSection({
             : `${allowedChannelIds.length.toLocaleString()} allowed`}
         </Badge>
       </div>
-      <SettingsCard>
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 p-3">
+      <div>
+        <div className="flex items-center justify-between gap-3 border-b border-border py-3">
           <div className="min-w-0">
             <div className="text-sm font-medium text-foreground">Allowed channels</div>
             <div className="mt-0.5 text-sm text-muted-foreground">
@@ -71,7 +70,7 @@ export function ChannelsSection({
           return (
             <Label
               key={channel.id}
-              className="mb-0 flex items-start gap-3 border-b border-border/60 p-3 last:border-b-0"
+              className="mb-0 flex items-start gap-3 border-b border-border py-3 last:border-b-0"
             >
               <Checkbox
                 checked={selected}
@@ -98,7 +97,7 @@ export function ChannelsSection({
             </Label>
           );
         })}
-      </SettingsCard>
+      </div>
     </section>
   );
 }

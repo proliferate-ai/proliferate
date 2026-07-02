@@ -44,7 +44,7 @@ export function SettingsMenu({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-8 justify-between rounded-lg border-transparent bg-foreground/5 px-2.5 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-foreground/10 data-[state=open]:bg-foreground/10 ${className}`}
+          className={`h-8 justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-foreground/5 data-[state=open]:bg-foreground/5 ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>

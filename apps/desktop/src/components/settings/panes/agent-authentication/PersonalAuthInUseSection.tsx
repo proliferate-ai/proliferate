@@ -8,9 +8,9 @@ import type {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
+import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import type {
   AgentAuthProvider,
   LocalAgentAuthSource,
@@ -95,19 +95,19 @@ export function PersonalAuthInUseSection({
         </Button>
       </div>
 
-      <SettingsCard>
-        <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-3 border-b border-border-light bg-foreground/5 px-4 py-2 text-base font-semibold uppercase tracking-wide text-muted-foreground">
+      <div>
+        <SettingsEyebrow className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-3 border-b border-border bg-foreground/5 py-2">
           <span>Harness</span>
           <span>Local sandbox</span>
           <span>Personal cloud</span>
-        </div>
+        </SettingsEyebrow>
         {slots.map((slot) => {
           const slotCredentials = credentialsForAgentAuthSlot(credentials, slot);
           return (
             <div
               key={`${slot.agentKind}-${slot.authSlotId}`}
               id={agentAuthSlotDomId(slot.agentKind, slot.authSlotId)}
-              className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-3 border-b border-border-light px-4 py-3 last:border-b-0"
+              className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-3 border-b border-border py-3 last:border-b-0"
             >
               <HarnessIdentity slot={slot} />
               <LocalAuthCell
@@ -135,7 +135,7 @@ export function PersonalAuthInUseSection({
             </div>
           );
         })}
-      </SettingsCard>
+      </div>
     </section>
   );
 }
@@ -143,7 +143,7 @@ export function PersonalAuthInUseSection({
 function HarnessIdentity({ slot }: { slot: AgentAuthSlotDefinition }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border-light bg-foreground/5 text-foreground">
+      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5 text-foreground">
         <ProviderIcon kind={slot.agentKind} className="size-4" />
       </span>
       <span className="min-w-0">

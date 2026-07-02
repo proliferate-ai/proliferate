@@ -44,7 +44,7 @@ export function ManagedFreeCreditsMethodRow({
     : ready ? "Ready" : enabled ? "Available" : "Unavailable";
   const statusTone = ready ? "success" : "neutral";
   return (
-    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] items-center gap-3 border-b border-border-light px-4 py-3">
+    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] items-center gap-3 border-b border-border py-3">
       <div className="min-w-0">
         <div className="truncate text-sm font-medium text-foreground">
           Proliferate Default Free credits
@@ -96,7 +96,7 @@ export function LocalMethodRow({
 }) {
   const detected = localSource?.detected === true;
   return (
-    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] items-center gap-3 border-b border-border-light px-4 py-3">
+    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] items-center gap-3 border-b border-border py-3">
       <div className="min-w-0 text-sm font-medium text-foreground">Local credential</div>
       <div className="min-w-0 text-sm text-muted-foreground">
         {agentAuthSlotLabel(slot)}
@@ -157,7 +157,7 @@ export function CredentialMethodRow({
     && credential.ownerUserId === currentUserId
     && !isProliferateManagedCreditsCredential(credential);
   return (
-    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] items-center gap-3 border-b border-border-light px-4 py-3 last:border-b-0">
+    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] items-center gap-3 border-b border-border py-3 last:border-b-0">
       <div className="min-w-0">
         <div className="truncate text-sm font-medium text-foreground">
           {credential.displayName}

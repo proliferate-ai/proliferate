@@ -3,7 +3,7 @@ import { ChevronRight } from "@proliferate/ui/icons";
 import { CloudEnvironmentsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudEnvironmentsSettingsSurface";
 
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import type { SettingsFocus } from "@/lib/domain/settings/navigation";
 import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";

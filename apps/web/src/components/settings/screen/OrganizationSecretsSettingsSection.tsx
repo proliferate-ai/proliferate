@@ -1,5 +1,5 @@
-import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
-import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
 
@@ -19,18 +19,18 @@ export function OrganizationSecretsSettingsSection() {
       />
 
       {organization.currentTeamLoading ? (
-        <SettingsCard>
-          <SettingsCardRow label="Organization secrets" description="Loading organization..." />
-        </SettingsCard>
+        <SettingsSection>
+          <SettingsRow label="Organization secrets" description="Loading organization..." />
+        </SettingsSection>
       ) : null}
 
       {!organization.currentTeamLoading && !currentTeam ? (
-        <SettingsCard>
-          <SettingsCardRow
+        <SettingsSection>
+          <SettingsRow
             label="No organization"
             description="Create or join an organization before configuring organization-wide secrets."
           />
-        </SettingsCard>
+        </SettingsSection>
       ) : null}
 
       {currentTeam ? (

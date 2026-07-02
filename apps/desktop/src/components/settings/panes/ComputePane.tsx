@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { AddSshTargetDialog } from "@/components/settings/panes/compute/AddSshTargetDialog";
 import { ComputeTargetDetails } from "@/components/settings/panes/compute/ComputeTargetDetails";
 import { ComputeTargetList } from "@/components/settings/panes/compute/ComputeTargetList";

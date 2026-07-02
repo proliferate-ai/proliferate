@@ -5,8 +5,8 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsCard } from "./SettingsCard";
-import { SettingsCardRow } from "./SettingsCardRow";
+import { SettingsSection } from "./SettingsSection";
+import { SettingsRow } from "./SettingsRow";
 import { SettingsPageHeader } from "./SettingsPageHeader";
 
 export interface OrganizationSsoConnectionView {
@@ -97,8 +97,8 @@ export function OrganizationSsoSettingsSurface({
           {error}
         </div>
       ) : null}
-      <SettingsCard>
-        <SettingsCardRow
+      <SettingsSection>
+        <SettingsRow
           label="Connection"
           description={connection ? connection.displayName : "No SSO connection has been saved."}
         >
@@ -108,16 +108,16 @@ export function OrganizationSsoSettingsSurface({
             </Badge>
             {connection?.testedAt ? <Badge tone="info">Tested</Badge> : null}
           </div>
-        </SettingsCardRow>
-        <SettingsCardRow label="Display name">
+        </SettingsRow>
+        <SettingsRow label="Display name">
           <Input
             className="w-full sm:w-[22rem]"
             value={form.displayName}
             onChange={(event) => updateForm(onFormChange, form, "displayName", event.target.value)}
             disabled={busy}
           />
-        </SettingsCardRow>
-        <SettingsCardRow
+        </SettingsRow>
+        <SettingsRow
           label="Allowed domains"
           description="Comma-separated email domains."
         >
@@ -130,8 +130,8 @@ export function OrganizationSsoSettingsSurface({
             placeholder="company.com"
             disabled={busy}
           />
-        </SettingsCardRow>
-        <SettingsCardRow label="OIDC issuer URL">
+        </SettingsRow>
+        <SettingsRow label="OIDC issuer URL">
           <Input
             className="w-full sm:w-[22rem]"
             value={form.oidcIssuerUrl}
@@ -141,8 +141,8 @@ export function OrganizationSsoSettingsSurface({
             placeholder="https://idp.example.com"
             disabled={busy}
           />
-        </SettingsCardRow>
-        <SettingsCardRow label="OIDC client ID">
+        </SettingsRow>
+        <SettingsRow label="OIDC client ID">
           <Input
             className="w-full sm:w-[22rem]"
             value={form.oidcClientId}
@@ -152,8 +152,8 @@ export function OrganizationSsoSettingsSurface({
             disabled={busy}
             data-telemetry-mask
           />
-        </SettingsCardRow>
-        <SettingsCardRow
+        </SettingsRow>
+        <SettingsRow
           label="OIDC client secret"
           description={connection?.oidcClientSecretConfigured ? "Leave blank to keep saved secret." : undefined}
         >
@@ -167,8 +167,8 @@ export function OrganizationSsoSettingsSurface({
             disabled={busy}
             data-telemetry-mask
           />
-        </SettingsCardRow>
-        <SettingsCardRow label="OIDC scopes">
+        </SettingsRow>
+        <SettingsRow label="OIDC scopes">
           <Input
             className="w-full sm:w-[22rem]"
             value={form.oidcScopes}
@@ -177,8 +177,8 @@ export function OrganizationSsoSettingsSurface({
             }
             disabled={busy}
           />
-        </SettingsCardRow>
-        <SettingsCardRow label="Token auth method">
+        </SettingsRow>
+        <SettingsRow label="Token auth method">
           <Select
             className="w-full sm:w-[22rem]"
             value={form.oidcTokenEndpointAuthMethod}
@@ -196,8 +196,8 @@ export function OrganizationSsoSettingsSurface({
             <option value="client_secret_post">Client secret post</option>
             <option value="none">None</option>
           </Select>
-        </SettingsCardRow>
-        <SettingsCardRow label="Redirect URI">
+        </SettingsRow>
+        <SettingsRow label="Redirect URI">
           <div className="flex w-full min-w-0 gap-2 sm:w-[22rem]">
             <Input
               className="min-w-0 flex-1 font-mono text-xs"
@@ -215,8 +215,8 @@ export function OrganizationSsoSettingsSurface({
               <Copy size={14} />
             </Button>
           </div>
-        </SettingsCardRow>
-      </SettingsCard>
+        </SettingsRow>
+      </SettingsSection>
       <div className="flex flex-wrap items-center justify-end gap-2">
         {connection ? (
           <Button

@@ -1,9 +1,9 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";
@@ -94,9 +94,8 @@ export function GeneralPane() {
     <section className="space-y-5">
       <SettingsPageHeader title="General" />
 
-      <GeneralSection title="Preferences">
-        <SettingsCard>
-          <SettingsCardRow
+      <SettingsSection title="Preferences">
+          <SettingsRow
             label="Default open in"
             description="Which app the Open in button uses"
           >
@@ -116,9 +115,9 @@ export function GeneralPane() {
                 })),
               }]}
             />
-          </SettingsCardRow>
+          </SettingsRow>
 
-          <SettingsCardRow
+          <SettingsRow
             label="Git branch prefix"
             description="Prefix for auto-generated branch names"
           >
@@ -136,9 +135,9 @@ export function GeneralPane() {
                 })),
               }]}
             />
-          </SettingsCardRow>
+          </SettingsRow>
 
-          <SettingsCardRow
+          <SettingsRow
             label="New workspace (⌘N)"
             description="What ⌘N creates by default"
           >
@@ -156,9 +155,9 @@ export function GeneralPane() {
                 })),
               }]}
             />
-          </SettingsCardRow>
+          </SettingsRow>
 
-          <SettingsCardRow
+          <SettingsRow
             label="Turn long pastes into attachments"
             description="Large text pastes in chat become text-resource attachments instead of inline draft text."
           >
@@ -166,13 +165,11 @@ export function GeneralPane() {
               checked={preferences.pasteAttachmentsEnabled}
               onChange={(value) => preferences.set("pasteAttachmentsEnabled", value)}
             />
-          </SettingsCardRow>
-        </SettingsCard>
-      </GeneralSection>
+          </SettingsRow>
+      </SettingsSection>
 
-      <GeneralSection title="Feedback">
-        <SettingsCard>
-          <SettingsCardRow
+      <SettingsSection title="Feedback">
+          <SettingsRow
             label="Turn end sound"
             description="Play a sound when an agent finishes its turn"
           >
@@ -211,13 +208,11 @@ export function GeneralPane() {
                 onChange={(value) => preferences.set("turnEndSoundEnabled", value)}
               />
             </div>
-          </SettingsCardRow>
-        </SettingsCard>
-      </GeneralSection>
+          </SettingsRow>
+      </SettingsSection>
 
-      <GeneralSection title="Session policy">
-        <SettingsCard>
-          <SettingsCardRow
+      <SettingsSection title="Session policy">
+          <SettingsRow
             label="Integrations setup"
             description="Configure cloud connectors and plugin packages."
           >
@@ -228,8 +223,8 @@ export function GeneralPane() {
             >
               Open Integrations
             </Button>
-          </SettingsCardRow>
-          <SettingsCardRow
+          </SettingsRow>
+          <SettingsRow
             label="Allow coding agents to spin up subagents"
             description="Applies to new sessions. Existing sessions keep their saved delegation policy."
           >
@@ -237,8 +232,8 @@ export function GeneralPane() {
               checked={preferences.subagentsEnabled}
               onChange={(value) => preferences.set("subagentsEnabled", value)}
             />
-          </SettingsCardRow>
-          <SettingsCardRow
+          </SettingsRow>
+          <SettingsRow
             label="Allow cowork agents to create coding workspaces"
             description="Applies to new cowork sessions. Existing cowork sessions keep their saved workspace policy."
           >
@@ -246,31 +241,8 @@ export function GeneralPane() {
               checked={preferences.coworkWorkspaceDelegationEnabled}
               onChange={(value) => preferences.set("coworkWorkspaceDelegationEnabled", value)}
             />
-          </SettingsCardRow>
-        </SettingsCard>
-      </GeneralSection>
+          </SettingsRow>
+      </SettingsSection>
     </section>
-  );
-}
-
-function GeneralSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-base font-medium text-foreground">{title}</h2>
-        {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      {children}
-    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 
 interface SharedReadinessSectionProps {
   loadingTargets: boolean;
@@ -15,15 +15,11 @@ export function SharedReadinessSection({
   onOpenCompute,
 }: SharedReadinessSectionProps) {
   return (
-    <section className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">Organization readiness</h2>
-        <p className="text-sm text-muted-foreground">
-          Slack-created work uses organization cloud runtime.
-        </p>
-      </div>
-      <SettingsCard>
-        <SettingsCardRow
+    <SettingsSection
+      title="Organization readiness"
+      description="Slack-created work uses organization cloud runtime."
+    >
+        <SettingsRow
           label="Compute targets"
           description={loadingTargets
             ? "Checking organization cloud target inventory..."
@@ -43,8 +39,7 @@ export function SharedReadinessSection({
               Open Compute
             </Button>
           </div>
-        </SettingsCardRow>
-      </SettingsCard>
-    </section>
+        </SettingsRow>
+    </SettingsSection>
   );
 }

@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 
 interface OrganizationSelectorProps {
   organizationId: string | null;
@@ -32,8 +33,8 @@ export function OrganizationSelector({
   }
 
   return (
-    <SettingsCard>
-      <SettingsCardRow
+    <SettingsSection>
+      <SettingsRow
         label="Active organization"
         description="Slack bot configuration is scoped to one organization."
       >
@@ -49,17 +50,15 @@ export function OrganizationSelector({
             </option>
           ))}
         </Select>
-      </SettingsCardRow>
-    </SettingsCard>
+      </SettingsRow>
+    </SettingsSection>
   );
 }
 
 export function SlackBotOrganizationsLoadingState() {
   return (
     <SlackBotShell>
-      <SettingsCard>
-        <div className="p-3 text-sm text-muted-foreground">Loading organizations...</div>
-      </SettingsCard>
+      <SettingsEmptyState size="compact" title="Loading organizations..." />
     </SlackBotShell>
   );
 }
@@ -67,11 +66,10 @@ export function SlackBotOrganizationsLoadingState() {
 export function SlackBotNoOrganizationState() {
   return (
     <SlackBotShell>
-      <SettingsCard>
-        <div className="p-3 text-sm text-muted-foreground">
-          Join or create an organization before configuring Slack.
-        </div>
-      </SettingsCard>
+      <SettingsEmptyState
+        size="compact"
+        title="Join or create an organization before configuring Slack."
+      />
     </SlackBotShell>
   );
 }
@@ -80,9 +78,7 @@ export function SlackBotAdminLoadingState(props: OrganizationSelectorProps) {
   return (
     <SlackBotShell>
       <OrganizationSelector {...props} />
-      <SettingsCard>
-        <div className="p-3 text-sm text-muted-foreground">Checking admin access...</div>
-      </SettingsCard>
+      <SettingsEmptyState size="compact" title="Checking admin access..." />
     </SlackBotShell>
   );
 }
@@ -91,14 +87,11 @@ export function SlackBotAdminRequiredState(props: OrganizationSelectorProps) {
   return (
     <SlackBotShell>
       <OrganizationSelector {...props} />
-      <SettingsCard>
-        <div className="space-y-1 p-3">
-          <p className="text-sm font-medium text-foreground">Admin access required</p>
-          <p className="text-sm text-muted-foreground">
-            Slack bot settings are available to organization owners and admins.
-          </p>
-        </div>
-      </SettingsCard>
+      <SettingsEmptyState
+        size="compact"
+        title="Admin access required"
+        description="Slack bot settings are available to organization owners and admins."
+      />
     </SlackBotShell>
   );
 }

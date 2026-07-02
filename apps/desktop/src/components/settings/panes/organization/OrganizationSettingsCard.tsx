@@ -6,12 +6,9 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { CloudUpload } from "@proliferate/ui/icons";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import {
-  OrganizationLogo,
-  OrganizationSection,
-} from "@/components/settings/panes/organization/OrganizationLogo";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { OrganizationLogo } from "@/components/settings/panes/organization/OrganizationLogo";
 import type { OrganizationRecord } from "@/lib/domain/organizations/organization-records";
 
 const ORGANIZATION_SETTINGS_HELPER_CLASS = "font-normal text-muted-foreground/70";
@@ -47,24 +44,19 @@ export function OrganizationSettingsCard({
   }
 
   return (
-    <OrganizationSection
+    <SettingsSection
       title="Organization settings"
-      description={(
-        <span className={ORGANIZATION_SETTINGS_HELPER_CLASS}>
-          Manage the organization name and logo used in switchers, settings, and shared workspaces.
-        </span>
-      )}
+      description="Manage the organization name and logo used in switchers, settings, and shared workspaces."
     >
-      <SettingsCard>
-        <form onSubmit={(event) => { void onSubmit(event); }}>
-          <SettingsCardRow
-            label="Logo"
-            description={(
-              <span className={ORGANIZATION_SETTINGS_HELPER_CLASS}>
-                Upload a square image for the clearest result.
-              </span>
-            )}
-          >
+      <form onSubmit={(event) => { void onSubmit(event); }}>
+        <SettingsRow
+          label="Logo"
+          description={(
+            <span className={ORGANIZATION_SETTINGS_HELPER_CLASS}>
+              Upload a square image for the clearest result.
+            </span>
+          )}
+        >
             <div className="flex flex-wrap items-center justify-end gap-2">
               <OrganizationLogo organization={organization} logoImage={settingsLogoImage} />
               <Input
@@ -102,8 +94,8 @@ export function OrganizationSettingsCard({
             {logoImageError ? (
               <div className="mt-2 text-xs text-destructive">{logoImageError}</div>
             ) : null}
-          </SettingsCardRow>
-          <SettingsCardRow
+          </SettingsRow>
+          <SettingsRow
             label="Organization name"
             description={(
               <span className={ORGANIZATION_SETTINGS_HELPER_CLASS}>
@@ -118,16 +110,15 @@ export function OrganizationSettingsCard({
               disabled={!canManage}
               className="w-64 max-w-full"
             />
-          </SettingsCardRow>
+          </SettingsRow>
           {canManage ? (
-            <div className="flex justify-end border-t border-border-light p-3">
+            <div className="flex justify-end border-t border-border p-3">
               <Button type="submit" loading={saving} disabled={!settingsName.trim()}>
                 Save
               </Button>
             </div>
           ) : null}
         </form>
-      </SettingsCard>
-    </OrganizationSection>
+    </SettingsSection>
   );
 }

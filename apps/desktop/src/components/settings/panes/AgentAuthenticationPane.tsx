@@ -1,5 +1,5 @@
 import type { AgentAuthAgentKind } from "@proliferate/cloud-sdk";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { CloudAgentAuthLibrary } from "@/components/settings/panes/agent-authentication/CloudAgentAuthLibrary";
 import { agentAuthenticationCopy } from "@/copy/settings/agent-authentication-copy";
 

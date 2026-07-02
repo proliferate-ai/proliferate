@@ -4,8 +4,8 @@ import { CurrentUserInvitationsSection } from "@/components/settings/panes/organ
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
 import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
@@ -126,25 +126,20 @@ export function OrganizationMembersPane() {
 
       {shouldShowSignInState ? (
         <OrganizationSection title="Members" description="Organization access is tied to your signed-in account.">
-          <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
-              Sign in to view organization members.
-            </div>
-          </SettingsCard>
+          <SettingsEmptyState size="compact" title="Sign in to view organization members." />
         </OrganizationSection>
       ) : null}
 
       {shouldShowLoadingState ? (
-        <div className="text-sm text-muted-foreground">Loading members...</div>
+        <div className="text-xs text-muted-foreground">Loading members...</div>
       ) : null}
 
       {shouldShowErrorState ? (
         <OrganizationSection title="Members">
-          <SettingsCard>
-            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
-                Organization members could not be loaded.
-              </div>
+          <SettingsEmptyState
+            size="compact"
+            title="Organization members could not be loaded."
+            action={
               <Button
                 type="button"
                 variant="secondary"
@@ -154,8 +149,8 @@ export function OrganizationMembersPane() {
               >
                 Retry
               </Button>
-            </div>
-          </SettingsCard>
+            }
+          />
         </OrganizationSection>
       ) : null}
 
@@ -172,11 +167,7 @@ export function OrganizationMembersPane() {
 
       {shouldShowEmptyState ? (
         <OrganizationSection title="Members">
-          <SettingsCard>
-            <div className="p-4 text-sm text-muted-foreground">
-              No organization yet.
-            </div>
-          </SettingsCard>
+          <SettingsEmptyState size="compact" title="No organization yet." />
         </OrganizationSection>
       ) : null}
 
@@ -220,7 +211,7 @@ export function OrganizationMembersPane() {
 
 function OrganizationNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border-light bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
       {children}
     </div>
   );
