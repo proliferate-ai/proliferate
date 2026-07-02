@@ -3,10 +3,10 @@
 #
 # Type-scale rule: semantic tokens (text-ui, text-ui-sm, text-composer,
 # text-title, text-hero, plus the base text-xs/sm/base/chat/lg/xl scale) are
-# the only legal spelling for font sizes and line heights. Arbitrary px
-# utilities — text-[13px], leading-[18px] — fail the build unless the file
-# carries a justified entry in TYPE_ALLOWLIST below (raw px is the exception,
-# never the default).
+# the only legal spelling for font sizes and line heights. Arbitrary length
+# utilities — text-[13px], leading-[18px], and rem/em spellings like
+# text-[0.8125rem] — fail the build unless the file carries a justified entry
+# in TYPE_ALLOWLIST below (a raw length is the exception, never the default).
 #
 # Settings-structure rule: pane/screen code expresses structure through
 # SettingsRow/SettingsSection/SettingsPageHeader/SettingsEmptyState instead of
@@ -67,7 +67,7 @@ check 'tracking-\[0.06em\]' "raw eyebrow tracking (use SettingsSection)"
 # ---------------------------------------------------------------------------
 
 TYPE_ROOTS=(src ../packages/ui/src ../packages/product-ui/src)
-ARBITRARY_TYPE_PATTERN='text-\[[0-9.]+px\]|leading-\[[0-9.]+px\]'
+ARBITRARY_TYPE_PATTERN='text-\[[0-9.]+(px|rem|em)\]|leading-\[[0-9.]+(px|rem|em)\]'
 
 # Justified raw-px survivors. Every entry states why it cannot ride a token
 # yet; anything not listed fails. "content scale, round 2" = will key off
@@ -90,6 +90,7 @@ TYPE_ALLOWLIST=(
   "../packages/product-ui/src/repos/AddRepoFlow.tsx"              # 15px dialog titles sit between text-lg (14) and text-title (20); no token
   "../packages/product-ui/src/sidebar/ProductSidebarShowToggleRow.tsx" # 18px leading on 10px toggle pill; no token pairs text-sm with 18px
   "../packages/ui/src/primitives/CommandPalette.tsx"              # palette input 21px leading on text-base; no token pairs 11px with 21px
+  "../packages/product-ui/src/chat/transcript/CloudTranscriptActionRow.tsx" # 9.6px (0.6rem) mono badge sits between text-xs (8px) and text-sm (10px); no token
 )
 
 type_token_allowed() {
@@ -111,9 +112,12 @@ done
 
 # tailwind-merge must be imported via the configured wrapper: the stock config
 # classifies our custom text-* size tokens as COLORS and silently deletes them
-# on merge. Only the wrapper module itself may import the library.
+# on merge. Only the wrapper module itself may import the library. This rule
+# scans apps/web too (every workspace that depends on tailwind-merge); web is
+# deliberately NOT in TYPE_ROOTS — its px conventions are untouched here.
+TW_MERGE_ROOTS=("${TYPE_ROOTS[@]}" ../web/src)
 TW_MERGE_MODULE="../packages/ui/src/utils/tw-merge.ts"
-RAW_TW_HITS=$(grep -rln 'from "tailwind-merge"' "${TYPE_ROOTS[@]}" 2>/dev/null || true)
+RAW_TW_HITS=$(grep -rln 'from "tailwind-merge"' "${TW_MERGE_ROOTS[@]}" 2>/dev/null || true)
 for f in $RAW_TW_HITS; do
   if [[ "$f" != "$TW_MERGE_MODULE" ]]; then
     echo "FAIL [raw tailwind-merge import — use @proliferate/ui/utils/tw-merge]: $f"

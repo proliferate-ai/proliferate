@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TEXT_SIZE_TOKEN_IDS, twMerge } from "@proliferate/ui/utils/tw-merge";
+import { typography } from "../../../../../packages/design/src/tokens";
 import { DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES } from "./appearance";
 
 /**
@@ -93,6 +94,34 @@ describe("design-package @theme --text-* tokens", () => {
       Object.assign(merged, tokens);
     }
     expect(merged).toEqual(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES);
+  });
+
+  it("matches the tokens.ts typography table that generates theme.css (no tokens↔table drift)", () => {
+    // dom.css line 4 imports theme.css, which scripts/generate-theme.mjs
+    // regenerates from tokens.ts (px ÷ 16 → rem) on every design build — that
+    // file is what apps/web renders, but it is gitignored build output, so we
+    // lock the SOURCE table instead. Every token in tokens.ts must equal the
+    // appearance default preset, normalized to px at the 16px root the
+    // generator assumes.
+    const toPx = (value: string): number => {
+      if (value.endsWith("rem")) return Number.parseFloat(value) * 16;
+      if (value.endsWith("px")) return Number.parseFloat(value);
+      throw new Error(`Unsupported CSS length in text-scale variable: ${value}`);
+    };
+    const defaults: Record<string, string> = DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES;
+    const tokenIds = Object.keys(typography.size) as Array<keyof typeof typography.size>;
+    for (const id of tokenIds) {
+      const fontVariable = `--text-${id}`;
+      const lineHeightVariable = `--text-${id}--line-height`;
+      expect(defaults[fontVariable], `${fontVariable} missing from appearance table`).toBeDefined();
+      expect(defaults[lineHeightVariable], `${lineHeightVariable} missing from appearance table`).toBeDefined();
+      expect(
+        { token: fontVariable, px: typography.size[id] },
+      ).toEqual({ token: fontVariable, px: toPx(defaults[fontVariable] as string) });
+      expect(
+        { token: lineHeightVariable, px: typography.lineHeight[id] },
+      ).toEqual({ token: lineHeightVariable, px: toPx(defaults[lineHeightVariable] as string) });
+    }
   });
 
   it("registers every custom size token with the configured twMerge (or merges drop it)", () => {

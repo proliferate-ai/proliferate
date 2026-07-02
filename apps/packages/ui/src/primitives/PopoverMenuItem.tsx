@@ -35,9 +35,10 @@ export function PopoverMenuItem({
     ? "hover:bg-sidebar-accent focus:bg-sidebar-accent"
     : "hover:bg-list-hover focus:bg-list-hover";
   const hasDescription = children !== undefined && children !== null && children !== false;
-  // Absolute px (codex desktop scale: rows 13px/18px, px 10 / py 5) — themed
-  // rem utilities drift under the app UI-font scale and made popovers render
-  // at a different size than everything else.
+  // Type rides the semantic UI scale (text-ui rows — 13px/18px at the default
+  // preset, text-ui-sm descriptions) so popover items track the app UI-font
+  // scale together with every other control; spacing stays fixed (px 10 / py 5
+  // at default density, matching the codex desktop rhythm).
   const outerClassName = density === "compact"
     ? "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col rounded-lg px-2 py-1 text-ui font-normal text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
     : "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col rounded-lg px-2.5 py-[5px] text-ui font-normal text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent";

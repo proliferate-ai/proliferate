@@ -19,8 +19,10 @@ export const TEXT_SIZE_TOKEN_IDS = [
 
 /**
  * The one true twMerge: knows the design-package font-size tokens. Import it
- * from here — never from "tailwind-merge" directly (check-design-system.sh
- * enforces this repo-wide).
+ * from here — never from "tailwind-merge" directly. check-design-system.sh
+ * enforces this across desktop, web, and the shared UI packages — every
+ * workspace that depends on tailwind-merge (mobile is React Native and has
+ * no tailwind-merge surface).
  */
 export const twMerge = extendTailwindMerge({
   extend: {

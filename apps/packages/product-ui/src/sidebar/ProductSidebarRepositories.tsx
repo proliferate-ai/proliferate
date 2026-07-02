@@ -55,7 +55,7 @@ export function ProductSidebarRepoGroupHeader({
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className={`absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
+          <span className={`absolute inset-0 flex items-center justify-center font-mono text-sm text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
             }`}>
             {count}
           </span>
