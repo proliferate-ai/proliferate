@@ -142,9 +142,13 @@ describe("playground scenarios", () => {
     expect(plainHtml).toContain("truncate");
     expect(plainHtml).toContain("min-w-0");
     expect(plainHtml).not.toContain("whitespace-pre-wrap");
+    // Head-of-queue entry is dispatching: it shows the "Sending…" shimmer
+    // state hint and drops the edit affordance while in flight.
+    expect(plainHtml).toContain("Sending…");
+    expect(plainHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(2);
 
     const editingHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-editing"));
-    expect(editingHtml).toContain("editing in composer");
+    expect(editingHtml).toContain("Editing…");
     expect(editingHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(1);
     expect(editingHtml.match(/aria-label="Delete queued message"/g)).toHaveLength(2);
   });

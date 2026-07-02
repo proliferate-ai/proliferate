@@ -5,7 +5,16 @@ export const PENDING_PROMPTS_SINGLE: PendingPromptQueueEntry[] = [
 ];
 
 export const PENDING_PROMPTS_MULTI: PendingPromptQueueEntry[] = [
-  { seq: 1, text: "now please make fixes!", contentParts: [], isBeingEdited: false },
+  // Head of the queue is in flight (outbox dispatching) — renders the
+  // "Sending…" shimmer state instead of the queued affordances.
+  {
+    seq: -1,
+    promptId: "prompt-sending",
+    text: "now please make fixes!",
+    contentParts: [],
+    isBeingEdited: false,
+    localOutboxDeliveryState: "dispatching",
+  },
   { seq: 2, text: "and rerun the server test suite after", contentParts: [], isBeingEdited: false },
   {
     seq: 3,

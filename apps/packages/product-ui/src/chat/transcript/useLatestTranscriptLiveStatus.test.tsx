@@ -41,6 +41,96 @@ describe("useLatestTranscriptLiveStatus — single-shimmer rule", () => {
   });
 });
 
+describe("useLatestTranscriptLiveStatus — needs-input marker", () => {
+  it("renders the trailing status immediately while a pending interaction blocks the turn", () => {
+    // A pending permission leaves its tool call non-completed, so the turn
+    // still counts as having active tool work — the marker must render anyway.
+    const { transcript, turn } = transcriptWithPendingTool();
+    const virtualRows = buildTranscriptVirtualRows({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: turn.turnId,
+      latestTurnHasAssistantRenderableContent: false,
+    });
+    const renderTurnTrailingStatus = vi.fn(() => "MARKER");
+
+    const { result } = renderHook(() =>
+      useLatestTranscriptLiveStatus({
+        latestTurnId: turn.turnId,
+        latestTurn: turn,
+        transcript,
+        virtualRows,
+        outboxStartedAtByPromptId: new Map(),
+        sessionViewState: "needs_input",
+        renderTurnTrailingStatus,
+      }),
+    );
+
+    // No grace timer for a blocking state: the marker shows on first render.
+    expect(result.current.latestLiveStatus).toBe("MARKER");
+    expect(renderTurnTrailingStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionViewState: "needs_input" }),
+    );
+  });
+
+  it("keeps the working-state shimmer gated while a tool owns the viewport", () => {
+    const { transcript, turn } = transcriptWithPendingTool();
+    const virtualRows = buildTranscriptVirtualRows({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: turn.turnId,
+      latestTurnHasAssistantRenderableContent: false,
+    });
+    const renderTurnTrailingStatus = vi.fn(() => "TAIL");
+
+    const { result } = renderHook(() =>
+      useLatestTranscriptLiveStatus({
+        latestTurnId: turn.turnId,
+        latestTurn: turn,
+        transcript,
+        virtualRows,
+        outboxStartedAtByPromptId: new Map(),
+        sessionViewState: "working",
+        renderTurnTrailingStatus,
+      }),
+    );
+
+    expect(result.current.latestLiveStatus).toBeNull();
+    expect(renderTurnTrailingStatus).not.toHaveBeenCalled();
+  });
+});
+
+function transcriptWithPendingTool(): {
+  transcript: TranscriptState;
+  turn: TurnRecord;
+} {
+  const base = transcriptWithReadActions();
+  const pendingTool = {
+    ...(readToolItem("bash-pending") as unknown as Record<string, unknown>),
+    status: "in_progress",
+    completedAt: null,
+    completedSeq: null,
+    toolKind: "execute",
+    semanticKind: "command_run",
+    approvalState: "pending",
+  } as unknown as TranscriptState["itemsById"][string];
+  const turn: TurnRecord = {
+    ...base.turn,
+    itemOrder: [...base.turn.itemOrder, "bash-pending"],
+  };
+  const transcript = {
+    ...(base.transcript as unknown as Record<string, unknown>),
+    turnsById: { [turn.turnId]: turn },
+    itemsById: {
+      ...base.transcript.itemsById,
+      "bash-pending": pendingTool,
+    },
+  } as unknown as TranscriptState;
+  return { transcript, turn };
+}
+
 function transcriptWithReadActions(): {
   transcript: TranscriptState;
   turn: TurnRecord;

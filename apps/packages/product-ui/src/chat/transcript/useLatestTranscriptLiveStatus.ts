@@ -161,15 +161,39 @@ export function useLatestTranscriptLiveStatus({
     !!latestLiveExplorationBlock
     || !!latestLiveWorkBlock
     || latestTurnHasActiveToolWork;
-  const latestLiveStatus = latestTurn
-    && !hasCompetingLiveShimmer
-    && (showDelayedLatestLiveStatus || shouldShowImmediateOutboxLiveStatus)
+  // NEEDS-INPUT MARKER: a pending interaction is a stable blocking state, not
+  // a transient stream gap, so it bypasses both the "working"-only shimmer
+  // eligibility (and its grace timers — show immediately, no strobe risk) AND
+  // the competing-shimmer suppression: the request that pauses a tool call
+  // leaves that call counted as active work, which would otherwise hide the
+  // marker for exactly the case it exists for. The marker is static (not a
+  // shimmer), so the single-shimmer rule is preserved. The owner's prose-tail
+  // rule still applies via shouldAllowTurnTrailingStatus.
+  const latestNeedsInputStatus =
+    !!latestTurn
+    && latestTurnInProgress
+    && sessionViewState === "needs_input"
+    && shouldAllowTurnTrailingStatus({
+        turn: latestTurn,
+        transcript,
+        isLatestTurnInProgress: true,
+      })
       ? renderTurnTrailingStatus?.({
           startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,
           sessionViewState,
           transientStatusText: latestTransientText,
         }) ?? null
       : null;
+  const latestLiveStatus = latestNeedsInputStatus
+    ?? (latestTurn
+      && !hasCompetingLiveShimmer
+      && (showDelayedLatestLiveStatus || shouldShowImmediateOutboxLiveStatus)
+        ? renderTurnTrailingStatus?.({
+            startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,
+            sessionViewState,
+            transientStatusText: latestTransientText,
+          }) ?? null
+        : null);
 
   return {
     latestLiveExplorationBlock,
