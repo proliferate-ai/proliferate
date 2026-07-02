@@ -12,9 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import OAuthAccount, User
-from proliferate.server.organizations.registration import (
-    ensure_default_organization_for_account,
-)
+from proliferate.server.organizations.membership_policy import place_new_identity
 
 
 async def get_user_db(
@@ -31,7 +29,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         # Customer.io lifecycle sync is owned by the desktop GitHub auth flow in v1.
         db = getattr(self.user_db, "session", None)
         if isinstance(db, AsyncSession):
-            await ensure_default_organization_for_account(db, user)
+            await place_new_identity(db, user)
 
     async def on_after_login(  # type: ignore[override]  # fastapi-users signature mismatch
         self,

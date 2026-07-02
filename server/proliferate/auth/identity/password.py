@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 from datetime import UTC, datetime
+from ipaddress import ip_address, ip_network
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.models import PasswordCredentialResponse
@@ -31,6 +32,7 @@ from proliferate.db.store.auth_passwords import (
     record_password_login_failure,
     update_user_password_hash,
 )
+from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 
 PASSWORD_BAD_CREDENTIALS_MESSAGE = "Email or password is incorrect."
 PASSWORD_RATE_LIMIT_MESSAGE = "Too many attempts. Wait a moment, then try again."
@@ -42,6 +44,42 @@ def hash_password_login_bucket(kind: str, value: str) -> str:
         f"{kind}:{value}".encode(),
         hashlib.sha256,
     ).hexdigest()
+
+
+def request_client_ip(request: Request) -> str | None:
+    """Client IP for password rate limiting; trusts x-forwarded-for selectively."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded and _request_from_trusted_proxy(request):
+        return forwarded.split(",", 1)[0].strip() or None
+    return request.client.host if request.client is not None else None
+
+
+def _request_from_trusted_proxy(request: Request) -> bool:
+    host = request.client.host if request.client is not None else None
+    if host in {"127.0.0.1", "::1", "localhost"}:
+        return True
+    if not host:
+        return False
+    try:
+        remote_ip = ip_address(host)
+    except ValueError:
+        return host in _trusted_proxy_entries()
+    for entry in _trusted_proxy_entries():
+        try:
+            if remote_ip in ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            if host == entry:
+                return True
+    return False
+
+
+def _trusted_proxy_entries() -> set[str]:
+    return {
+        entry.strip()
+        for entry in settings.password_auth_trusted_proxy_hosts.split(",")
+        if entry.strip()
+    }
 
 
 def _ensure_password_auth_enabled() -> None:
@@ -79,6 +117,32 @@ async def authenticate_password_login(
     password: str,
     client_ip: str | None,
 ) -> AuthSession:
+    """Authenticate email+password and mint a web/mobile auth session."""
+    user = await authenticate_password_user(
+        db,
+        email=email,
+        password=password,
+        client_ip=client_ip,
+    )
+    from proliferate.auth.identity.sessions import mint_auth_session
+
+    return await mint_auth_session(db, user=user)
+
+
+async def authenticate_password_user(
+    db: AsyncSession,
+    *,
+    email: str,
+    password: str,
+    client_ip: str | None,
+) -> User:
+    """Verify email+password and return the user, without minting any session.
+
+    Owns the full password-login policy: kill switch, rate-limit buckets,
+    constant-shape failure behavior, hash upgrades, and the ADMIN_EMAILS floor.
+    Surface transports (web, mobile, desktop) wrap this and mint their own
+    session shapes.
+    """
     _ensure_password_auth_enabled()
     normalized_email = normalize_password_email(email)
     buckets = password_login_buckets(email=normalized_email, client_ip=client_ip)
@@ -110,9 +174,9 @@ async def authenticate_password_login(
         db,
         buckets=password_login_buckets(email=normalized_email, client_ip=None),
     )
-    from proliferate.auth.identity.sessions import mint_auth_session
-
-    return await mint_auth_session(db, user=user)
+    # ADMIN_EMAILS floor: asserted at every login, not just account creation.
+    await ensure_admin_email_role(db, user)
+    return user
 
 
 async def set_password_credential(

@@ -59,7 +59,8 @@ from proliferate.integrations.sso.oidc import (
 from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment,
 )
-from proliferate.server.organizations.registration import ensure_default_organization_for_account
+from proliferate.server.organizations.admin_emails import ensure_admin_email_role
+from proliferate.server.organizations.membership_policy import place_new_identity
 
 
 @dataclass(frozen=True)
@@ -263,6 +264,19 @@ async def resolve_sso_user(
     connection: SsoConnectionSnapshot,
     verified: VerifiedSsoIdentity,
 ) -> User:
+    user = await _resolve_sso_user(db, connection=connection, verified=verified)
+    # ADMIN_EMAILS floor: asserted at every login. SSO callbacks are always
+    # logins, so this runs unconditionally once the user is resolved.
+    await ensure_admin_email_role(db, user)
+    return user
+
+
+async def _resolve_sso_user(
+    db: AsyncSession,
+    *,
+    connection: SsoConnectionSnapshot,
+    verified: VerifiedSsoIdentity,
+) -> User:
     _require_verified_allowed_email(connection=connection, verified=verified)
     existing_identity = await sso_store.get_sso_identity_by_connection_subject(
         db,
@@ -307,7 +321,7 @@ async def resolve_sso_user(
         elif connection.jit_policy == SsoJitPolicy.DISABLED:
             raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
         _ensure_active_user(user)
-        await ensure_default_organization_for_account(db, user)
+        await place_new_identity(db, user)
 
     await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
     return user
@@ -371,7 +385,7 @@ async def _resolve_organization_sso_user(
             display_name=verified.display_name,
             avatar_url=verified.avatar_url,
         )
-        await ensure_default_organization_for_account(db, user)
+        await place_new_identity(db, user)
     _ensure_active_user(user)
     membership = await organization_store.get_active_membership(
         db,

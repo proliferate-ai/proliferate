@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { usePasswordSignIn } from "@/hooks/auth/workflows/use-password-sign-in";
 import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
 import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -29,10 +30,16 @@ export function useLoginPage() {
     displayName: ssoDisplayName,
     cancelSignIn: cancelSsoSignIn,
   } = useSsoSignIn();
+  const {
+    signIn: signInWithPassword,
+    submitting: passwordSubmitting,
+    error: passwordError,
+    signInAvailable: passwordSignInAvailable,
+  } = usePasswordSignIn();
   const canContinueLocally = !isProductAuthRequired();
 
   const redirectTarget = getRedirectTarget(location.state);
-  const busy = submitting || ssoSubmitting || status === "bootstrapping";
+  const busy = submitting || ssoSubmitting || passwordSubmitting || status === "bootstrapping";
 
   async function handleGitHubSignIn() {
     try {
@@ -46,6 +53,15 @@ export function useLoginPage() {
   async function handleSsoSignIn() {
     try {
       await signInWithSso();
+      navigate(redirectTarget, { replace: true });
+    } catch {
+      // error is already surfaced via the hook's `error` state
+    }
+  }
+
+  async function handlePasswordSignIn(email: string, password: string) {
+    try {
+      await signInWithPassword(email, password);
       navigate(redirectTarget, { replace: true });
     } catch {
       // error is already surfaced via the hook's `error` state
@@ -68,7 +84,7 @@ export function useLoginPage() {
 
   return {
     submitting,
-    error: error ?? ssoError,
+    error: error ?? ssoError ?? passwordError,
     busy,
     githubSignInAvailable,
     githubSignInChecking,
@@ -78,8 +94,11 @@ export function useLoginPage() {
     ssoSignInChecking,
     ssoSignInUnavailableDescription,
     ssoDisplayName,
+    passwordSignInAvailable,
+    passwordSubmitting,
     handleGitHubSignIn,
     handleSsoSignIn,
+    handlePasswordSignIn,
     handleCancelSignIn,
     handleContinueLocally,
     canContinueLocally,

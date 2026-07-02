@@ -1,5 +1,6 @@
 import { AuthScreenLayout } from "@/components/auth/AuthScreenLayout";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
+import { usePasswordSignIn } from "@/hooks/auth/workflows/use-password-sign-in";
 import { useSsoSignIn } from "@/hooks/auth/workflows/use-sso-sign-in";
 
 // Persistent owner of the pre-app experience. BootstrappedRoute keeps a single
@@ -33,7 +34,13 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
     displayName: ssoDisplayName,
     cancelSignIn: cancelSsoSignIn,
   } = useSsoSignIn();
-  const busy = submitting || ssoSubmitting;
+  const {
+    signIn: signInWithPassword,
+    submitting: passwordSubmitting,
+    error: passwordError,
+    signInAvailable: passwordSignInAvailable,
+  } = usePasswordSignIn();
+  const busy = submitting || ssoSubmitting || passwordSubmitting;
   const handleCancelSignIn = ssoSubmitting ? cancelSsoSignIn : cancelSignIn;
 
   return (
@@ -43,7 +50,7 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       onMarkResolved={onMarkResolved}
       submitting={submitting}
       busy={busy}
-      error={error ?? ssoError}
+      error={error ?? ssoError ?? passwordError}
       githubSignInAvailable={signInAvailable}
       githubSignInChecking={signInChecking}
       githubSignInUnavailableDescription={signInUnavailableDescription}
@@ -52,11 +59,18 @@ export function AuthShell({ mode, markComplete, onMarkResolved }: AuthShellProps
       ssoSignInChecking={ssoSignInChecking}
       ssoSignInUnavailableDescription={ssoSignInUnavailableDescription}
       ssoDisplayName={ssoDisplayName}
+      passwordSignInAvailable={passwordSignInAvailable}
+      passwordSubmitting={passwordSubmitting}
       onGitHubSignIn={() => {
         void signIn();
       }}
       onSsoSignIn={() => {
         void signInWithSso();
+      }}
+      onPasswordSignIn={(email, password) => {
+        void signInWithPassword(email, password).catch(() => {
+          // error is already surfaced via the hook's `error` state
+        });
       }}
       onCancelSignIn={() => {
         void handleCancelSignIn();

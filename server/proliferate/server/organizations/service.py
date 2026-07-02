@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
     ORGANIZATION_INVITE_EXPIRES_DAYS,
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_OWNER,
 )
@@ -38,6 +39,7 @@ from proliferate.server.billing.subjects import (
     ensure_personal_billing_subject_state,
 )
 from proliferate.server.organizations import invitation_delivery
+from proliferate.server.organizations.admin_emails import is_admin_listed_email
 from proliferate.server.organizations.domain.policy import (
     is_membership_update_status,
     is_organization_role,
@@ -288,6 +290,13 @@ async def update_membership(
             "Invalid membership status.",
             status_code=400,
         )
+    await _enforce_instance_admin_invariants(
+        db,
+        org_user=org_user,
+        membership_id=membership_id,
+        role=role,
+        status=status,
+    )
     membership, error = await organization_store.update_organization_membership(
         db,
         organization_id=org_user.organization_id,
@@ -317,6 +326,57 @@ async def update_membership(
             membership_id=membership.id,
         )
     return membership
+
+
+async def _enforce_instance_admin_invariants(
+    db: AsyncSession,
+    *,
+    org_user: CurrentOrgUser,
+    membership_id: UUID,
+    role: str | None,
+    status: str | None,
+) -> None:
+    """Admin invariants for the instance organization (single-org mode).
+
+    Two rules, both scoped to THE instance org so hosted-mode organizations
+    are untouched:
+
+    - a user listed in ADMIN_EMAILS cannot be given a role below admin
+      (the env is a floor; see ``admin_emails`` module docstring)
+    - the instance org must always keep at least one active admin, so the
+      last admin cannot be demoted or removed
+    """
+    demotes_below_admin = role is not None and role not in organization_admin_roles()
+    removes_membership = status == ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
+    if not demotes_below_admin and not removes_membership:
+        return
+    instance_organization = await organization_store.get_instance_organization(db)
+    if instance_organization is None or instance_organization.id != org_user.organization_id:
+        return
+    member = await organization_store.get_organization_member(
+        db,
+        organization_id=org_user.organization_id,
+        membership_id=membership_id,
+    )
+    if member is None or member.membership.status != ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE:
+        return
+    if demotes_below_admin and is_admin_listed_email(member.email):
+        raise OrganizationServiceError(
+            "admin_email_role_floor",
+            "This user is listed in ADMIN_EMAILS and must keep at least the admin role.",
+            status_code=409,
+        )
+    if member.membership.role not in organization_admin_roles():
+        return
+    # Serialize with concurrent membership updates so two demotions cannot
+    # both observe a safe admin count and drop the org to zero admins.
+    await organization_store.acquire_organization_membership_lock(db, org_user.organization_id)
+    if await organization_store.count_active_admin_memberships(db, org_user.organization_id) <= 1:
+        raise OrganizationServiceError(
+            "last_admin_cannot_be_removed",
+            "The last admin of this instance cannot be demoted or removed.",
+            status_code=409,
+        )
 
 
 async def remove_membership(

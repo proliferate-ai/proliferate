@@ -24,6 +24,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_CURRENT_STATUSES,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+    ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
     ORGANIZATION_STATUS_ARCHIVED,
@@ -71,6 +72,22 @@ async def _active_owner_count(db: AsyncSession, organization_id: UUID) -> int:
             select(func.count(OrganizationMembership.id)).where(
                 OrganizationMembership.organization_id == organization_id,
                 OrganizationMembership.role == ORGANIZATION_ROLE_OWNER,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
+        )
+        or 0
+    )
+
+
+async def count_active_admin_memberships(db: AsyncSession, organization_id: UUID) -> int:
+    """Count active memberships holding an admin-capable role (owner or admin)."""
+    return int(
+        await db.scalar(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.role.in_(
+                    (ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN)
+                ),
                 OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
             )
         )
@@ -178,6 +195,111 @@ async def ensure_default_organization_for_user(
     db.add(membership)
     await db.flush()
     return await _list_organizations_for_user(db, user_id)
+
+
+async def get_instance_organization(db: AsyncSession) -> OrganizationRecord | None:
+    """Return the single instance organization, or None when unclaimed.
+
+    Single-org-mode deployments mark exactly one organization as the instance
+    org. A partial unique index guarantees at most one, so this can never match
+    more than one row.
+    """
+    organization = (
+        await db.execute(
+            select(Organization).where(
+                Organization.is_instance.is_(True),
+                Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
+            )
+        )
+    ).scalar_one_or_none()
+    return organization_record(organization) if organization is not None else None
+
+
+async def create_instance_organization(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    name: str,
+    logo_domain: str | None,
+) -> OrganizationRecord:
+    """Create THE instance organization with its first owner.
+
+    Only the first-run claim flow may call this. The partial unique index on
+    ``is_instance`` makes "at most one instance org" a database invariant, so a
+    duplicate claim fails loudly instead of minting a second org.
+    """
+    now = utcnow()
+    organization = Organization(
+        name=name,
+        logo_domain=logo_domain,
+        logo_image=None,
+        is_instance=True,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(organization)
+    await db.flush()
+    db.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=owner_user_id,
+            role=ORGANIZATION_ROLE_OWNER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            removed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db.flush()
+    return organization_record(organization)
+
+
+async def add_active_membership(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+    role: str,
+) -> MembershipRecord:
+    """Add or reactivate a user's active membership in an organization.
+
+    Idempotent: an already-active membership is returned unchanged (its role is
+    left intact); a removed membership is reactivated with the requested role.
+    """
+    await acquire_organization_membership_lock(db, organization_id)
+    now = utcnow()
+    membership = (
+        await db.execute(
+            select(OrganizationMembership)
+            .where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        membership = OrganizationMembership(
+            organization_id=organization_id,
+            user_id=user_id,
+            role=role,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            removed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(membership)
+    elif membership.status != ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE:
+        membership.status = ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+        membership.role = role
+        membership.removed_at = None
+        if membership.joined_at is None:
+            membership.joined_at = now
+        membership.updated_at = now
+    await db.flush()
+    return membership_record(membership)
 
 
 async def get_organization_with_membership(
@@ -526,6 +648,34 @@ async def list_organization_members(
         )
         for membership, user in rows
     ]
+
+
+async def get_organization_member(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    membership_id: UUID,
+) -> MemberRecord | None:
+    """Load one membership (any status) with its user's email, or None."""
+    row = (
+        await db.execute(
+            select(OrganizationMembership, User)
+            .join(User, User.id == OrganizationMembership.user_id)
+            .where(
+                OrganizationMembership.id == membership_id,
+                OrganizationMembership.organization_id == organization_id,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    membership, user = row
+    return MemberRecord(
+        membership=membership_record(membership),
+        email=user.email,
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+    )
 
 
 async def update_organization_membership(

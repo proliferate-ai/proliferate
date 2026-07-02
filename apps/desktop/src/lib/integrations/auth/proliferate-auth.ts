@@ -62,6 +62,16 @@ interface OAuthAvailabilityResponse {
   client_id?: string | null
 }
 
+interface AuthMethodsResponse {
+  password_login: boolean
+  github: boolean
+}
+
+export interface DesktopAuthMethods {
+  passwordLogin: boolean
+  github: boolean
+}
+
 interface StartAuthResponse {
   authorizationUrl?: string | null
 }
@@ -166,6 +176,44 @@ export async function getGitHubDesktopAuthAvailability(): Promise<GitHubDesktopA
 export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
   const availability = await getGitHubDesktopAuthAvailability()
   return availability.enabled
+}
+
+export async function getDesktopAuthMethods(): Promise<DesktopAuthMethods> {
+  const response = await fetchAuthResponse(buildUrl("/auth/desktop/methods"), {
+    headers: {
+      Accept: "application/json",
+    },
+  })
+
+  if (!response.ok) {
+    throw await parseAuthError(response)
+  }
+
+  const payload = (await response.json()) as AuthMethodsResponse
+  return {
+    passwordLogin: payload.password_login === true,
+    github: payload.github === true,
+  }
+}
+
+export async function signInWithDesktopPassword(
+  email: string,
+  password: string,
+): Promise<StoredAuthSession> {
+  const response = await fetchAuthResponse(buildUrl("/auth/desktop/password/login"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+  })
+
+  if (!response.ok) {
+    throw await parseAuthError(response)
+  }
+
+  return toStoredSession((await response.json()) as DesktopTokenResponse)
 }
 
 export async function beginGitHubDesktopSignIn(
