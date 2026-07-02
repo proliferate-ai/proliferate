@@ -112,6 +112,34 @@ export function buildCloudRepoSettingsHref(
   });
 }
 
+/**
+ * Repository settings link for a workspace: cloud repos deep-link into the
+ * cloud environment entry; local workspaces fall back to the repo root path
+ * (or the workspace path) and resolve to null when neither is known.
+ */
+export function resolveWorkspaceRepoSettingsHref(input: {
+  cloudRepoOwner?: string | null;
+  cloudRepoName?: string | null;
+  repoRootPath?: string | null;
+  workspacePath?: string | null;
+}): string | null {
+  const cloudOwner = input.cloudRepoOwner?.trim() ?? "";
+  const cloudName = input.cloudRepoName?.trim() ?? "";
+  if (cloudOwner && cloudName) {
+    return buildCloudRepoSettingsHref(cloudOwner, cloudName);
+  }
+  const localRepoPath = input.repoRootPath?.trim()
+    || input.workspacePath?.trim()
+    || "";
+  if (!localRepoPath) {
+    return null;
+  }
+  return buildSettingsHref({
+    section: "repo",
+    repo: localRepoPath,
+  });
+}
+
 export interface SettingsSelectionInput {
   rawSection: string | null;
   rawRepo?: string | null;
