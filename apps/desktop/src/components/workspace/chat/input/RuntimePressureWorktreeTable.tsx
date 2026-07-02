@@ -10,9 +10,12 @@ import {
 } from "@/lib/domain/workspaces/worktrees/worktree-inventory-presentation";
 
 /** Shared column template — header and rows are separate grids, so the
- * template must stay identical for the columns to align. */
+ * template must stay identical for the columns to align. Name flexes; the
+ * Status/Chats/Checkout/Logs columns are sized to their content and the
+ * trailing actions column reserves exactly one Delete button's width so the
+ * hover-revealed control never shifts the row or leaves a wide gutter. */
 const WORKTREE_GRID_CLASS =
-  "grid min-w-[700px] grid-cols-[minmax(0,1fr)_92px_52px_82px_68px_136px] items-center gap-3 px-5";
+  "grid min-w-[640px] grid-cols-[minmax(0,1fr)_84px_48px_76px_60px_76px] items-center gap-3 px-5";
 
 export type WorktreeStatusFilter = "all" | "clean" | "changes" | "conflicts" | "unknown";
 export type WorktreeSortKey = "size" | "name" | "sessions";
@@ -51,7 +54,7 @@ export function WorktreeFilterMenu({
       align="end"
       className="w-52 rounded-lg border border-border/80 bg-popover/95 p-1 shadow-popover"
       trigger={(
-        <Button type="button" variant="outline" size="sm" className={active ? "border-border/90 text-foreground" : ""}>
+        <Button type="button" variant="ghost" size="sm" className={active ? "text-foreground" : ""}>
           <ListFilter className="size-3.5" />
           Filter
         </Button>
@@ -116,7 +119,7 @@ export function WorktreeSortMenu({
       align="end"
       className="w-44 rounded-lg border border-border/80 bg-popover/95 p-1 shadow-popover"
       trigger={(
-        <Button type="button" variant="outline" size="sm">
+        <Button type="button" variant="ghost" size="sm">
           <SlidersHorizontal className="size-3.5" />
           {activeLabel}
         </Button>
@@ -168,6 +171,8 @@ export function RuntimeWorktreeRow({
   const primaryWorkspace = row.associatedWorkspaces[0] ?? null;
   const branchLabel = row.branch ?? primaryWorkspace?.branch ?? "";
   const repoLabel = row.repoRootName ?? repoLabelFromPath(row.path);
+  const branchLine = branchLabel ? `${repoLabel} / ${branchLabel}` : repoLabel;
+  const isClean = row.gitStatus?.state === "clean";
   const canDeleteOrphan = row.state === "orphan_checkout"
     && row.availableActions.includes("delete_orphan_checkout");
   const canDeleteHistory = row.state !== "conflict"
@@ -176,22 +181,28 @@ export function RuntimeWorktreeRow({
   return (
     <div className={`group ${WORKTREE_GRID_CLASS} min-h-12 py-2 text-ui transition-colors hover:bg-foreground/[0.04]`}>
       <div className="min-w-0">
-        <div className="truncate text-ui font-medium leading-5 text-foreground">{label}</div>
-        <div className="truncate text-ui-sm leading-4 text-muted-foreground">
-          {branchLabel ? `${repoLabel} / ${branchLabel}` : repoLabel}
+        <div className="truncate text-ui font-medium leading-5 text-foreground" title={label}>{label}</div>
+        <div className="truncate text-ui-sm leading-4 text-muted-foreground" title={branchLine}>
+          {branchLine}
         </div>
       </div>
       <span className="min-w-0">
-        <Badge tone={status.tone} className="truncate">{status.label}</Badge>
+        {isClean ? (
+          <span className="block truncate text-ui-sm text-muted-foreground">{status.label}</span>
+        ) : (
+          <Badge tone={status.tone} className="truncate">{status.label}</Badge>
+        )}
       </span>
-      <span className="text-right text-ui tabular-nums text-muted-foreground">{row.totalSessionCount}</span>
+      <span className="text-right text-ui tabular-nums text-muted-foreground">
+        {row.totalSessionCount > 0 ? row.totalSessionCount : <span className="text-muted-foreground/50">—</span>}
+      </span>
       <span className="text-right text-ui tabular-nums text-foreground">
         {formatByteEstimate(row.storage?.worktreeBytes)}
       </span>
       <span className="text-right text-ui tabular-nums text-muted-foreground">
         {formatByteEstimate(row.storage?.sqliteBytes)}
       </span>
-      <div className="flex justify-end gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+      <div className="flex flex-wrap justify-end gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         {canDeleteOrphan ? (
           <WorktreeDeleteButton onClick={() => onDeleteOrphan(row.path)} />
         ) : null}
@@ -292,13 +303,22 @@ export function repoLabelFromPath(path: string): string {
   return parts[parts.length - 1] ?? "Unknown repo";
 }
 
-export function formatByteEstimate(value: number | null | undefined): string {
+/**
+ * Sizes are always estimates, so table cells render them plain ("33 MB") and
+ * only the footer totals carry the "~" (pass `approximate`) — repeating the
+ * tilde on every cell was pure noise.
+ */
+export function formatByteEstimate(
+  value: number | null | undefined,
+  approximate = false,
+): string {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return "--";
   }
+  const prefix = approximate ? "~" : "";
   const abs = Math.abs(value);
   if (abs < 1024) {
-    return `~${Math.round(value)} B`;
+    return `${prefix}${Math.round(value)} B`;
   }
   const units = ["KB", "MB", "GB", "TB"];
   let scaled = value / 1024;
@@ -308,7 +328,7 @@ export function formatByteEstimate(value: number | null | undefined): string {
     unitIndex += 1;
   }
   const digits = Math.abs(scaled) >= 10 ? 0 : 1;
-  return `~${scaled.toFixed(digits)} ${units[unitIndex]}`;
+  return `${prefix}${scaled.toFixed(digits)} ${units[unitIndex]}`;
 }
 
 function MenuLabel({ label }: { label: string }) {

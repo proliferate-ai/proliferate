@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Minus, Plus } from "@proliferate/ui/icons";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
@@ -86,7 +88,8 @@ export function WorktreeStorageSection() {
 
 const WORKTREE_POLICY_COMMIT_DELAY_MS = 600;
 
-function WorktreePolicyRow({
+// Exported for tests only.
+export function WorktreePolicyRow({
   draftValue,
   currentValue,
   onDraftValueChange,
@@ -150,9 +153,15 @@ function WorktreePolicyRow({
           >
             <Minus className="size-3.5" />
           </Button>
-          <div className="flex h-8 min-w-16 items-center justify-center border-x border-border-light px-3 text-ui font-medium tabular-nums text-foreground">
-            {value} worktrees
-          </div>
+          <Label className="mb-0 flex h-8 min-w-16 cursor-text items-center justify-center gap-1.5 border-x border-border-light px-2">
+            <WorktreeCountInput
+              value={value}
+              min={WORKTREE_AUTO_DELETE_LIMIT_MIN}
+              max={WORKTREE_AUTO_DELETE_LIMIT_MAX}
+              onCommit={(next) => onDraftValueChange(String(next))}
+            />
+            <span className="select-none text-ui-sm text-muted-foreground">worktrees</span>
+          </Label>
           <Button
             type="button"
             variant="ghost"
@@ -172,6 +181,69 @@ function WorktreePolicyRow({
         ) : null}
       </div>
     </SettingsRow>
+  );
+}
+
+/**
+ * The stepper's number as a real inline input: borderless and transparent at
+ * rest (focus-visible ring only), width tracks the typed digits. Digits-only
+ * drafts commit on blur/Enter — clamped to [min, max] — through the same
+ * debounced apply path the −/+ buttons ride; empty drafts and Escape revert
+ * to the last committed value.
+ */
+function WorktreeCountInput({
+  value,
+  min,
+  max,
+  onCommit,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onCommit: (next: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = draft ?? String(value);
+
+  const commit = () => {
+    if (draft === null) {
+      return;
+    }
+    setDraft(null);
+    const parsed = Number.parseInt(draft, 10);
+    if (!Number.isInteger(parsed)) {
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, parsed));
+    if (clamped !== value) {
+      onCommit(clamped);
+    }
+  };
+
+  return (
+    <Input
+      variant="unstyled"
+      value={display}
+      inputMode="numeric"
+      aria-label="Ideal worktrees"
+      className="rounded-sm bg-transparent text-ui font-medium tabular-nums text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      style={{ width: `calc(${Math.max(display.length, 1)}ch + 2px)` }}
+      onChange={(event) => {
+        setDraft(event.target.value.replace(/\D/g, "").slice(0, String(max).length));
+      }}
+      onFocus={(event) => event.currentTarget.select()}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          commit();
+        } else if (event.key === "Escape" && draft !== null) {
+          // Revert the draft; keep the Escape from bubbling into
+          // settings-level close handlers while an edit is in flight.
+          event.stopPropagation();
+          setDraft(null);
+        }
+      }}
+    />
   );
 }
 

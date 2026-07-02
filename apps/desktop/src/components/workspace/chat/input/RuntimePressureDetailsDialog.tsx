@@ -68,18 +68,18 @@ export function RuntimePressureDetailsDialog({
   }, [filter, repoFilter, sort, statusFilter, targetState.inventory]);
 
   const storageSummary = summarizeStorage(visibleRows);
-  const summary = pruningSummary(targetState, repoFilter);
+  const summary = worktreesSummary(targetState, repoFilter);
 
   return (
     <>
       <ModalShell
         open={open}
         onClose={onClose}
-        title="Pruning"
+        title="Worktrees"
         description={summary}
         headerContent={(
           <div className="min-w-0 space-y-1">
-            <h2 className="text-lg font-medium tracking-tight text-foreground">Pruning</h2>
+            <h2 className="text-lg font-medium tracking-tight text-foreground">Worktrees</h2>
             <p className="truncate text-ui-sm text-muted-foreground">{summary}</p>
           </div>
         )}
@@ -94,7 +94,7 @@ export function RuntimePressureDetailsDialog({
               Delete removes the selected checkout and any attached runtime history.
             </p>
             <span className="shrink-0 text-ui-sm tabular-nums text-muted-foreground">
-              {formatByteEstimate(storageSummary.worktreeBytes)} checkout + {formatByteEstimate(storageSummary.sqliteBytes)} logs
+              {formatByteEstimate(storageSummary.worktreeBytes, true)} checkout + {formatByteEstimate(storageSummary.sqliteBytes, true)} logs
             </span>
           </>
         )}
@@ -163,7 +163,7 @@ export function RuntimePressureDetailsDialog({
  * header. Local: "Local runtime · repo — 5 of 20 worktrees" (count follows
  * the active repo filter). Cloud: "Cloud sandbox — CPU 42% · RAM 31%".
  */
-function pruningSummary(
+function worktreesSummary(
   targetState: RuntimePressureTargetState,
   repoFilter: string,
 ): string {
