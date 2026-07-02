@@ -32,7 +32,7 @@ apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sa
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
 server/tests/integration/test_agent_gateway_store.py 607 agent gateway store coverage grew past threshold after rebase onto LiteLLM usage tests
-server/tests/integration/test_auth_flow.py 2052 existing server oversized integration test
+server/tests/integration/test_auth_flow.py 2118 existing server oversized integration test plus session-token-revocation coverage
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test

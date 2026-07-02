@@ -17,10 +17,7 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi_users import exceptions as fastapi_users_exceptions
 from fastapi_users.jwt import decode_jwt, generate_jwt
-from fastapi_users.router.oauth import (
-    CSRF_TOKEN_KEY,
-    STATE_TOKEN_AUDIENCE,
-)
+from fastapi_users.router.oauth import CSRF_TOKEN_KEY, STATE_TOKEN_AUDIENCE
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.desktop.models import (
@@ -127,12 +124,10 @@ def build_github_callback_url(request: Request) -> str:
     api_parsed = urlparse(api_base_url)
     request_host = request.url.hostname
 
-    # When both the configured API base and the incoming request resolve to
-    # loopback but use different hostnames (e.g. ``localhost`` vs
-    # ``127.0.0.1``), the CSRF cookie set during ``/authorize`` won't be sent
-    # back on the ``/callback`` redirect because the browser treats them as
-    # different origins.  In that case, rewrite the callback URL to use the
-    # request's origin so the cookie domain stays consistent.
+    # When the configured API base and the incoming request both resolve to
+    # loopback but use different hostnames (e.g. ``localhost`` vs ``127.0.0.1``), the
+    # browser treats them as different origins and drops the ``/authorize`` CSRF cookie
+    # on the ``/callback`` redirect, so rewrite the callback URL to the request origin.
     if (
         request_host
         and api_parsed.hostname
@@ -241,14 +236,11 @@ async def sync_customerio_desktop_authenticated_user(user: User) -> None:
 async def _send_customerio_welcome_email_once(user: User) -> None:
     """Send the Customer.io welcome email exactly once per user.
 
-    Uses a DB-backed claim on ``user.customerio_welcome_sent_at`` to dedupe
-    across concurrent desktop auths. The claim is always cleared when the
-    send does not return success, including on any raised exception or
-    cancellation — otherwise a process crash between claim and send would
-    permanently flag the user as sent without ever delivering an email.
-
-    Gated on `customerio_welcome_email_enabled()` first so a missing-config
-    environment does not burn the claim slot and churn the row on every auth.
+    Uses a DB-backed claim on ``user.customerio_welcome_sent_at`` to dedupe across
+    concurrent auths, always cleared on any non-success (including exceptions or
+    cancellation) so a crash between claim and send can't permanently flag the user
+    as sent without delivering. Gated on ``customerio_welcome_email_enabled()`` first
+    so a missing-config environment does not burn the claim slot on every auth.
     """
     if not customerio_welcome_email_enabled():
         return
