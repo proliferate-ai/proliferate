@@ -1,0 +1,90 @@
+"""Request/response models for the integration management API.
+
+camelCase on the wire (``alias_generator=to_camel``); accept snake_case too
+(``populate_by_name=True``), mirroring the runtime_workers models.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
+
+AuthKind = Literal["oauth2", "api_key", "none"]
+Surface = Literal["desktop", "web"]
+
+
+class _CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+# --------------------------------------------------------------------------- #
+# User-facing authentication
+# --------------------------------------------------------------------------- #
+
+
+class AuthenticateIntegrationRequest(_CamelModel):
+    definition_id: UUID
+    auth_kind: AuthKind
+    api_key: str | None = None
+    settings: dict[str, Any] | None = None
+    callback_surface: Surface | None = None
+    final_surface: Surface | None = None
+    return_path: str | None = None
+
+
+class IntegrationAccountResponse(_CamelModel):
+    account_id: UUID
+    definition_id: UUID
+    namespace: str
+    display_name: str
+    auth_kind: str
+    status: str
+    enabled: bool
+
+
+class AuthenticateIntegrationResponse(_CamelModel):
+    account: IntegrationAccountResponse
+    oauth_flow_id: str | None = None
+    authorization_url: str | None = None
+    expires_at: datetime | None = None
+
+
+class IntegrationOAuthFlowStatusResponse(_CamelModel):
+    flow_id: UUID
+    status: str
+    authorization_url: str | None = None
+    expires_at: datetime
+    failure_code: str | None = None
+    callback_surface: str
+    final_surface: str
+
+
+# --------------------------------------------------------------------------- #
+# Org-admin definition management
+# --------------------------------------------------------------------------- #
+
+
+class AdminIntegrationDefinitionResponse(_CamelModel):
+    definition_id: UUID
+    namespace: str
+    display_name: str
+    source: str
+    organization_id: UUID | None = None
+    auth_kind: str
+    enabled_by_default: bool
+    policy_enabled: bool | None = None
+    effective_enabled: bool
+
+
+class CreateAdminIntegrationDefinitionRequest(_CamelModel):
+    display_name: str
+    namespace: str
+    mcp_url: str
+
+
+class SetIntegrationEnabledRequest(_CamelModel):
+    enabled: bool
