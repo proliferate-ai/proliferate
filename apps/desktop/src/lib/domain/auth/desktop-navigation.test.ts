@@ -2,27 +2,31 @@ import { describe, expect, it } from "vitest";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 
 describe("desktopNavigationTarget", () => {
-  it("routes parked integration deep links to settings while integrations are rebuilt", () => {
+  it("routes integration OAuth returns to the integrations pane with the flow outcome", () => {
     expect(
       desktopNavigationTarget(
-        "proliferate://integrations?source=mcp_oauth_callback&status=completed",
+        "proliferate://plugins?source=integration_oauth_callback&status=completed&flowId=flow-1",
       ),
-    ).toBe("/settings?source=mcp_oauth_callback&status=completed&section=general");
+    ).toBe(
+      "/settings?source=integration_oauth_callback&status=completed&flowId=flow-1&section=integrations",
+    );
     expect(
       desktopNavigationTarget(
-        "proliferate://plugins?source=mcp_oauth_callback&status=completed",
+        "proliferate://integrations?source=integration_oauth_callback&status=completed",
       ),
-    ).toBe("/settings?source=mcp_oauth_callback&status=completed&section=general");
+    ).toBe("/settings?source=integration_oauth_callback&status=completed&section=integrations");
     expect(
       desktopNavigationTarget(
-        "proliferate-local://plugins?source=mcp_oauth_callback&status=failed",
+        "proliferate-local://plugins?source=integration_oauth_callback&status=failed&flowId=flow-2&failureCode=access_denied",
       ),
-    ).toBe("/settings?source=mcp_oauth_callback&status=failed&section=general");
+    ).toBe(
+      "/settings?source=integration_oauth_callback&status=failed&flowId=flow-2&failureCode=access_denied&section=integrations",
+    );
   });
 
   it("accepts defensive integration and plugin slash forms", () => {
-    expect(desktopNavigationTarget("proliferate://integrations/")).toBe("/settings?section=general");
-    expect(desktopNavigationTarget("proliferate://plugins/")).toBe("/settings?section=general");
+    expect(desktopNavigationTarget("proliferate://integrations/")).toBe("/settings?section=integrations");
+    expect(desktopNavigationTarget("proliferate://plugins/")).toBe("/settings?section=integrations");
   });
 
   it("keeps legacy powers handoff deep links routed with integrations", () => {
@@ -30,7 +34,7 @@ describe("desktopNavigationTarget", () => {
       desktopNavigationTarget(
         "proliferate://powers?source=mcp_oauth_callback&status=completed",
       ),
-    ).toBe("/settings?source=mcp_oauth_callback&status=completed&section=general");
+    ).toBe("/settings?source=mcp_oauth_callback&status=completed&section=integrations");
   });
 
   it("routes workspace deep links to the desktop workspace opener", () => {
