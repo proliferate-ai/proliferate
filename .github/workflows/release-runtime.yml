@@ -63,7 +63,7 @@ jobs:
             runner: windows-latest
             archive: zip
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -119,7 +119,7 @@ jobs:
     name: Publish SDK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
@@ -167,7 +167,7 @@ jobs:
     needs: [build-binaries, publish-sdk]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha || github.ref }}
 
