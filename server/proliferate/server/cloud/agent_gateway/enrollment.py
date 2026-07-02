@@ -103,6 +103,29 @@ async def _mint_virtual_key_idempotent(
         )
 
 
+def enrollment_subject_label(enrollment: AgentGatewayEnrollmentRecord) -> str:
+    if enrollment.user_id is not None:
+        return f"user-{enrollment.user_id}"
+    return f"org-{enrollment.organization_id}"
+
+
+def enrollment_key_alias(enrollment: AgentGatewayEnrollmentRecord) -> str:
+    """The globally-unique LiteLLM key alias an enrollment's key was minted with."""
+    return _key_alias(enrollment.id, enrollment_subject_label(enrollment))
+
+
+def enrollment_key_metadata(enrollment: AgentGatewayEnrollmentRecord) -> dict[str, str]:
+    """Attribution metadata stamped on every virtual key we mint."""
+    metadata: dict[str, str] = {
+        "proliferate_billing_subject_id": str(enrollment.billing_subject_id),
+    }
+    if enrollment.user_id is not None:
+        metadata["proliferate_user_id"] = str(enrollment.user_id)
+    if enrollment.organization_id is not None:
+        metadata["proliferate_organization_id"] = str(enrollment.organization_id)
+    return metadata
+
+
 async def ensure_user_enrollment(
     db: AsyncSession,
     user_id: UUID,
@@ -183,13 +206,26 @@ async def ensure_org_enrollment(
         return enrollment
     if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
         return enrollment
+    # Org caps (spec section 7): overage-enabled orgs are effectively
+    # uncapped ("0" sends no LiteLLM budget) — the top-up worker keeps the
+    # ledger funded and the importer remains the reconciler. Otherwise the
+    # team budget is the remaining credit (hard cap), falling back to the
+    # default org budget when the org holds no grants.
+    if subject.overage_enabled:
+        budget_raw = "0"
+    else:
+        budget_raw = await _remaining_credit_budget_raw(
+            db,
+            billing_subject_id=subject.id,
+            fallback=settings.agent_gateway_default_org_budget_usd,
+        )
     return await _sync_enrollment(
         db,
         enrollment=enrollment,
         team_alias=f"org-{organization_id}",
-        litellm_user_id=f"user-{user_id}",
-        subject_label=f"org-{organization_id}-user-{user_id}",
-        budget_raw=settings.agent_gateway_default_org_budget_usd,
+        litellm_user_id=None,
+        subject_label=f"org-{organization_id}",
+        budget_raw=budget_raw,
     )
 
 
@@ -204,13 +240,7 @@ async def _sync_enrollment(
 ) -> AgentGatewayEnrollmentRecord:
     budget = _parse_budget(budget_raw)
     key_alias = _key_alias(enrollment.id, subject_label)
-    metadata: dict[str, str] = {
-        "proliferate_billing_subject_id": str(enrollment.billing_subject_id),
-    }
-    if enrollment.user_id is not None:
-        metadata["proliferate_user_id"] = str(enrollment.user_id)
-    if enrollment.organization_id is not None:
-        metadata["proliferate_organization_id"] = str(enrollment.organization_id)
+    metadata = enrollment_key_metadata(enrollment)
     try:
         team_id = await litellm.ensure_team(alias=team_alias, max_budget=budget)
         if litellm_user_id is not None:

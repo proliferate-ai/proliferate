@@ -5,6 +5,7 @@ from __future__ import annotations
 from proliferate.integrations.litellm.client import (
     delete_virtual_keys_by_alias,
     disable_virtual_key,
+    enable_virtual_key,
     ensure_team,
     ensure_user,
     health,
@@ -25,6 +26,7 @@ __all__ = [
     "LiteLLMVirtualKey",
     "delete_virtual_keys_by_alias",
     "disable_virtual_key",
+    "enable_virtual_key",
     "ensure_team",
     "ensure_user",
     "health",
