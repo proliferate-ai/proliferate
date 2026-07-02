@@ -157,6 +157,28 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(screen.getByText("Authentication")).toBeTruthy();
   });
 
+  it("gives every harness its own entry in the Agents scope, in order", () => {
+    renderSettingsSidebar({ activeScope: "agents", activeSection: "agents" });
+
+    const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
+    const expectedOrder = [
+      "Overview",
+      "Claude Code",
+      "Codex",
+      "OpenCode",
+      "Grok",
+      "Gemini",
+      "API keys",
+      "Defaults",
+    ];
+    let previousIndex = -1;
+    for (const label of expectedOrder) {
+      const nextIndex = navText.indexOf(label, previousIndex + 1);
+      expect(nextIndex).toBeGreaterThan(previousIndex);
+      previousIndex = nextIndex;
+    }
+  });
+
   it("hides Org admin sections from non-admins", () => {
     renderSettingsSidebar({
       activeScope: "org",

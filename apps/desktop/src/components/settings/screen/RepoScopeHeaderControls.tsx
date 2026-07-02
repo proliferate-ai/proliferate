@@ -71,9 +71,9 @@ export function RepoScopeHeaderControls({
       <SegmentedControl
         ariaLabel="Repository settings context"
         value={context}
-        options={[
-          { value: "cloud", label: "Cloud", icon: <Cloud /> },
-          { value: "local", label: "Local", icon: <Laptop /> },
+        items={[
+          { id: "cloud", label: "Cloud", icon: <Cloud /> },
+          { id: "local", label: "Local", icon: <Laptop /> },
         ]}
         onChange={onSelectRepoContext}
       />

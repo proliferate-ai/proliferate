@@ -147,6 +147,10 @@
       "types": "./dist/primitives/EnvironmentSearchSelect.d.ts",
       "import": "./dist/primitives/EnvironmentSearchSelect.js"
     },
+    "./primitives/GridTile": {
+      "types": "./dist/primitives/GridTile.d.ts",
+      "import": "./dist/primitives/GridTile.js"
+    },
     "./primitives/IconButton": {
       "types": "./dist/primitives/IconButton.d.ts",
       "import": "./dist/primitives/IconButton.js"
@@ -190,6 +194,10 @@
     "./primitives/RangeSlider": {
       "types": "./dist/primitives/RangeSlider.d.ts",
       "import": "./dist/primitives/RangeSlider.js"
+    },
+    "./primitives/RadioCardGroup": {
+      "types": "./dist/primitives/RadioCardGroup.d.ts",
+      "import": "./dist/primitives/RadioCardGroup.js"
     },
     "./primitives/SegmentedControl": {
       "types": "./dist/primitives/SegmentedControl.d.ts",
