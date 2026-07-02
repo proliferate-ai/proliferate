@@ -20,7 +20,7 @@ export function Tooltip({
   singleLine = false,
 }: TooltipProps) {
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={0}>
       <KitTooltip>
         <TooltipTrigger asChild>
           <span className={className}>{children}</span>

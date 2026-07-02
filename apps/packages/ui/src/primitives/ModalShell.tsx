@@ -29,6 +29,10 @@ export interface ModalShellProps {
   telemetryBlocked?: boolean;
 }
 
+// NOTE: ModalShell is modal (Radix Dialog): it traps focus and disables
+// pointer-events on the rest of the body while open. Non-Radix portal UI
+// (e.g. FixedPositionLayer consumers) must not be rendered inside it — it
+// would render outside the trap and be unreachable.
 export function ModalShell({
   open,
   onClose,
@@ -64,8 +68,12 @@ export function ModalShell({
         data-telemetry-block={telemetryBlocked ? true : undefined}
         {...(description ? {} : { "aria-describedby": undefined })}
         onEscapeKeyDown={(event) => {
-          if (disableClose) {
-            event.preventDefault();
+          // Always shield desktop-global Escape handlers (parity with the old
+          // hand-rolled shell, which preventDefault'ed every Escape while open).
+          // Radix's own close path is suppressed by this, so close explicitly.
+          event.preventDefault();
+          if (!disableClose) {
+            onClose();
           }
         }}
         onPointerDownOutside={(event) => {

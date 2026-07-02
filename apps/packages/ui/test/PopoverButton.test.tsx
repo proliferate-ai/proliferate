@@ -39,7 +39,9 @@ describe("PopoverButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Location" }));
     expect(screen.getByText("Workspace move details")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Force close" }));
+    // The popover is modal (outside-click shield), so content outside it is
+    // aria-hidden while open — query with hidden to reach the external button.
+    fireEvent.click(screen.getByRole("button", { name: "Force close", hidden: true }));
 
     await waitFor(() => {
       expect(screen.queryByText("Workspace move details")).toBeNull();

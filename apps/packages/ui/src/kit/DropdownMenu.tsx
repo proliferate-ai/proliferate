@@ -33,6 +33,7 @@ function DropdownMenuTrigger({
 function DropdownMenuContent({
   className,
   sideOffset = 4,
+  ref,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
@@ -40,6 +41,25 @@ function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
+        // Items may mark themselves `data-autofocus` to receive initial focus
+        // (e.g. programmatically-opened menus preselecting a default action).
+        // Radix owns open-focus for dropdown menus, so we hand focus to the
+        // marked item right after the content mounts.
+        ref={(node) => {
+          if (typeof ref === "function") {
+            ref(node);
+          } else if (ref) {
+            ref.current = node;
+          }
+          if (node) {
+            const target = node.querySelector<HTMLElement>("[data-autofocus]");
+            if (target) {
+              requestAnimationFrame(() => {
+                if (node.isConnected) target.focus();
+              });
+            }
+          }
+        }}
         className={cn(
           "z-50 min-w-[220px] overflow-hidden rounded-xl border border-border bg-popover p-1 text-foreground shadow-md",
           className,

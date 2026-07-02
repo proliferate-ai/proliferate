@@ -131,7 +131,10 @@ export function PopoverButton({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpenAndNotify}>
+    // modal: parity with the old fixed-inset shield — an outside click must
+    // ONLY dismiss (never also activate the element under the cursor, e.g.
+    // switching workspaces while closing a row's context menu).
+    <Popover open={open} onOpenChange={setOpenAndNotify} modal>
       {triggerMode === "click" ? (
         <PopoverTrigger
           asChild
@@ -163,6 +166,11 @@ export function PopoverButton({
           side={side === "auto" ? "bottom" : side}
           align={align}
           sideOffset={offset}
+          // Focus neutrality (parity with the pre-Radix implementation): opening
+          // must not blur the terminal/composer, and closing must not yank focus
+          // back to the trigger.
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
           className={`z-50 outline-none ${className}`}
         >
           {children(close)}
