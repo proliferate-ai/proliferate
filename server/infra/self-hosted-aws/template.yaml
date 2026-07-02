@@ -140,12 +140,20 @@ Rules:
       - Assert: !Not [!Equals [!Ref ExistingVpcId, ""]]
         AssertDescription: ExistingVpcId is required when ExistingSubnetId is provided.
 
-  E2BManagedSandboxConfigRequired:
+  # Cloud sandboxes are an optional add-on: the base install must launch with
+  # no E2B configuration at all. Only enforce that the two settings arrive as
+  # a pair when the operator opts in.
+  E2BTemplateRequiredWithApiKey:
+    RuleCondition: !Not [!Equals [!Ref E2BApiKey, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref E2BTemplateName, ""]]
+        AssertDescription: E2BTemplateName is required when E2BApiKey is set.
+
+  E2BApiKeyRequiredWithTemplate:
+    RuleCondition: !Not [!Equals [!Ref E2BTemplateName, ""]]
     Assertions:
       - Assert: !Not [!Equals [!Ref E2BApiKey, ""]]
-        AssertDescription: E2BApiKey is required for managed cloud sandboxes.
-      - Assert: !Not [!Equals [!Ref E2BTemplateName, ""]]
-        AssertDescription: E2BTemplateName is required for managed cloud sandboxes.
+        AssertDescription: E2BApiKey is required when E2BTemplateName is set.
 
 Conditions:
   UsesSslipFallback: !Equals [!Ref UseSslipFallback, "true"]
