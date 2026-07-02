@@ -8,6 +8,11 @@ AGENT_AUTH_SURFACE_LOCAL = "local"
 AGENT_AUTH_SURFACE_CLOUD = "cloud"
 AGENT_AUTH_SURFACES = (AGENT_AUTH_SURFACE_LOCAL, AGENT_AUTH_SURFACE_CLOUD)
 
+# Route selections are keyed by harness. The set mirrors the supported cloud
+# agent kinds; validating against it keeps unbounded/junk path params out of the
+# String(64) column (an over-length value would otherwise surface as a 500).
+AGENT_AUTH_HARNESS_KINDS = ("claude", "codex", "opencode", "gemini", "grok")
+
 AGENT_AUTH_ROUTE_NATIVE = "native"
 AGENT_AUTH_ROUTE_API_KEY = "api_key"
 AGENT_AUTH_ROUTE_GATEWAY = "gateway"
