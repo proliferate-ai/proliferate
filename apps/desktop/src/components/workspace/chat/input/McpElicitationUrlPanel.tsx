@@ -1,8 +1,6 @@
-import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { ComposerCardFooter } from "./ComposerAttachedPanel";
 import { McpElicitationInlineError } from "./McpElicitationInlineError";
-
-const BUTTON_CLASSNAME = "rounded-xl px-2.5 text-sm";
 
 interface McpElicitationUrlPanelProps {
   message: string;
@@ -29,9 +27,9 @@ export function McpElicitationUrlPanel({
     <div className="flex max-h-[min(40vh,360px)] flex-col">
       <div className="min-h-0 overflow-y-auto p-3 pb-2">
         <div className="flex flex-col gap-3">
-          <div className="space-y-1 text-sm">
-            <div className="text-muted-foreground">{message}</div>
-            <div className="text-xs text-muted-foreground">
+          <div className="space-y-1">
+            <div className="text-ui-sm text-muted-foreground">{message}</div>
+            <div className="text-ui-sm text-faint">
               Destination: {urlDisplay}
             </div>
           </div>
@@ -40,51 +38,21 @@ export function McpElicitationUrlPanel({
               value={revealedUrl}
               readOnly
               data-telemetry-mask="true"
-              className="font-mono text-xs"
+              className="text-ui-sm"
             />
           )}
           {error && <McpElicitationInlineError message={error} />}
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 pb-3 pt-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={BUTTON_CLASSNAME}
-          onClick={onReveal}
-        >
-          Reveal URL
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className={BUTTON_CLASSNAME}
-          onClick={onAccept}
-        >
-          Accept
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={BUTTON_CLASSNAME}
-          onClick={onDecline}
-        >
-          Decline
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={BUTTON_CLASSNAME}
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
-      </div>
+      <ComposerCardFooter
+        secondaryActions={[
+          { label: "Reveal URL", onSelect: onReveal },
+          { label: "Decline", onSelect: onDecline },
+          { label: "Cancel", onSelect: onCancel },
+        ]}
+        primaryAction={{ label: "Accept", onSelect: onAccept }}
+      />
     </div>
   );
 }

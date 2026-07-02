@@ -84,7 +84,10 @@ describe("playground scenarios", () => {
     expect(html).toContain("Checking your session");
     expect(html).toContain("Thinking");
     expect(html).toContain("Thinking timing lab");
-    expect(html).toContain("Gap between -&gt; and -&gt;");
+    expect(html).toContain("Sweep duration");
+    expect(html).toContain(
+      "--thinking-text-duration: 2200ms; --thinking-text-easing: linear;",
+    );
     expect(html).toContain("Restoring session");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
@@ -138,9 +141,13 @@ describe("playground scenarios", () => {
     expect(plainHtml).toContain("truncate");
     expect(plainHtml).toContain("min-w-0");
     expect(plainHtml).not.toContain("whitespace-pre-wrap");
+    // Head-of-queue entry is dispatching: it shows the "Sending…" shimmer
+    // state hint and drops the edit affordance while in flight.
+    expect(plainHtml).toContain("Sending…");
+    expect(plainHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(2);
 
     const editingHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-editing"));
-    expect(editingHtml).toContain("editing in composer");
+    expect(editingHtml).toContain("Editing…");
     expect(editingHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(1);
     expect(editingHtml.match(/aria-label="Delete queued message"/g)).toHaveLength(2);
   });

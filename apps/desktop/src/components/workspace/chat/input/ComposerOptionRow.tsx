@@ -3,15 +3,16 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 /**
- * Superset-style composer option anatomy (UX_SPEC §5):
- * full-width rows separated by 60% hairlines, leading number-key badge
- * (24px square, 3px radius, control bg, mono), hover accent fill that
- * promotes the label from muted to foreground. Pressing 1–9 selects.
+ * Codex popover-row anatomy for composer option lists: full-width rows with
+ * a rounded-lg hover fill and NO hairline separators (spacing does the
+ * separation, so the hover pill never overlaps a border), leading number-key
+ * badge (mono text-ui-sm on control bg, 4px radius), text-ui labels that
+ * promote from muted to foreground on hover. Pressing 1–9 selects.
  */
 
 export function ComposerOptionKeyBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-6 shrink-0 items-center justify-center rounded-[3px] bg-surface-control font-mono text-base leading-none text-faint">
+    <span className="flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-surface-control text-ui-sm leading-none text-faint">
       {children}
     </span>
   );
@@ -36,40 +37,38 @@ export function ComposerOptionRow({
   onSelect: () => void;
 }) {
   return (
-    <div className="border-t border-border/60">
-      <Button
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        disabled={disabled}
-        onClick={onSelect}
-        className={twMerge(
-          "group/option flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent",
-          selected ? "bg-accent" : "",
-        )}
-      >
-        <ComposerOptionKeyBadge>{index + 1}</ComposerOptionKeyBadge>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span
-            className={twMerge(
-              "text-chat leading-[var(--text-chat--line-height)] transition-colors",
-              destructive
-                ? "text-destructive"
-                : selected
-                  ? "text-foreground"
-                  : "text-muted-foreground group-hover/option:text-foreground",
-            )}
-          >
-            {label}
-          </span>
-          {description ? (
-            <span className="text-base leading-4 text-faint">
-              {description}
-            </span>
-          ) : null}
+    <Button
+      type="button"
+      variant="unstyled"
+      size="unstyled"
+      disabled={disabled}
+      onClick={onSelect}
+      className={twMerge(
+        "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent",
+        selected ? "bg-accent" : "",
+      )}
+    >
+      <ComposerOptionKeyBadge>{index + 1}</ComposerOptionKeyBadge>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span
+          className={twMerge(
+            "text-ui transition-colors",
+            destructive
+              ? "text-destructive"
+              : selected
+                ? "text-foreground"
+                : "text-muted-foreground group-hover/option:text-foreground",
+          )}
+        >
+          {label}
         </span>
-      </Button>
-    </div>
+        {description ? (
+          <span className="text-ui-sm text-faint">
+            {description}
+          </span>
+        ) : null}
+      </span>
+    </Button>
   );
 }
 

@@ -63,6 +63,55 @@ describe("TranscriptItemBlock", () => {
     expect(container.textContent).toContain("Fallback plan body");
   });
 
+  it("renders known mode tools as a phase divider with the mode transition", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("mode-1", "turn-1", 1, "mode_switch"),
+      nativeToolName: "switch_mode",
+      rawInput: { from_mode: "plan", mode: "default" },
+    };
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    expect(container.querySelector("[data-mode-transition-divider]")).toBeTruthy();
+    expect(container.textContent).toContain("Plan mode → Default");
+    expect(container.textContent).not.toContain("Mode change");
+  });
+
+  it("renders loosely mode-tagged tools as a normal tool row, not a divider", () => {
+    const transcript = createTranscriptState("session-1");
+    const item: ToolCallItem = {
+      ...toolItem("mode-2", "turn-1", 1, "mode_switch"),
+      title: "update_model_mode",
+      nativeToolName: "update_model_mode",
+    };
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    expect(container.querySelector("[data-mode-transition-divider]")).toBeNull();
+    expect(container.textContent).toContain("update_model_mode");
+  });
+
   it("renders tool calls in an activity block without external vertical padding", () => {
     const transcript = createTranscriptState("session-1");
     const item = genericToolCall();
@@ -104,7 +153,9 @@ describe("TranscriptItemBlock", () => {
     expect(container.innerHTML).toContain("data-transcript-activity-block");
     expect(container.innerHTML).toContain("data-transcript-activity-shell");
     expect(activityBlockClassName(container)).toBe("");
-    expect(container.textContent).toContain("Thinking");
+    // Completed reasoning is labeled "Thought" so the animated status owns
+    // the live word "Thinking".
+    expect(container.textContent).toContain("Thought");
   });
 });
 

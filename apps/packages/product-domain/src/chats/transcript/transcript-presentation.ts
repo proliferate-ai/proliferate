@@ -4,6 +4,7 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
+import { isKnownModeSwitchToolCall } from "../tools/mode-switch-display";
 
 export type TurnDisplayBlock =
   | { kind: "item"; itemId: string }
@@ -275,8 +276,11 @@ function isCollapsibleAction(
   if ((childrenByParentId.get(item.itemId) ?? []).length > 0) {
     return false;
   }
+  // Known mode tools render as standalone phase dividers; other tools the
+  // SDK loosely tags `mode_switch` (any name containing "mode") collapse
+  // like normal actions.
   return item.semanticKind !== "subagent"
-    && item.semanticKind !== "mode_switch"
+    && !isKnownModeSwitchToolCall(item)
     && item.semanticKind !== "cowork_artifact_create"
     && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";

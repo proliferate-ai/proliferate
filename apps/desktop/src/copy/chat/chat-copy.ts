@@ -5,6 +5,15 @@ export const CHAT_COMPOSER_LABELS = {
   stop: "Stop run",
 } as const;
 
+// Context-appropriate labels for the animated streaming/status indicator. The
+// same shimmer used to say "Thinking" everywhere; callers now thread the label
+// that matches their context ("Thinking" is agent work only).
+export const CHAT_STREAMING_STATUS_LABELS = {
+  thinking: "Thinking",
+  sending: "Sending…",
+  restoringSession: "Restoring session…",
+} as const;
+
 export const CHAT_MODE_CONTROL_LABELS = {
   shortcut: "Shift+Tab",
   cycleHint: "Cycle mode",

@@ -1,24 +1,36 @@
 import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { useMemo, useState } from "react";
-import { ArrowUp } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
-import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 import {
+  ComposerAttachedPanel,
+  ComposerCardFooter,
+} from "./ComposerAttachedPanel";
+import {
+  ComposerOptionKeyBadge,
   ComposerOptionRow,
   useComposerOptionNumberKeys,
 } from "./ComposerOptionRow";
 
-// Superset-style agent input (UX_SPEC §5): option rows with number-key
-// badges (1–9 selects), an inset free-text row on --control with an inset
-// ring, outline chips for secondary actions, and a circular solid submit.
+// Agent question wizard on the shared interaction-card anatomy: header/type
+// grammar from ComposerAttachedPanel (text-ui title + text-ui-sm progress
+// context), codex-style option rows with number-key badges (1–9 selects), an
+// inset free-text row on --control with an inset ring, and the shared
+// ComposerCardFooter (secondary chips left, primary chip right).
+//
+// Selecting a real (agent-provided) option auto-advances to the next question
+// — or submits on the last one — so single-select questions resolve in one
+// click like the approval card; Back is still available in the footer. The
+// synthetic "None of the above" row is the exception: it opens the free-text
+// field instead of advancing, and renders under a hairline separator with a
+// muted tone so it never reads like one of the agent's real options.
 
 const OTHER_OPTION_LABEL = "None of the above";
-const CHIP_BUTTON_CLASSNAME =
-  "rounded-md border border-input px-3 py-1 text-base font-medium text-muted-foreground transition-colors hover:border-border-heavy hover:text-foreground";
 
 function optionsForQuestion(question: UserInputQuestion) {
   return [
@@ -82,19 +94,6 @@ export function UserInputCard({
     ? `${Math.min(questionIndex + 1, questions.length)} of ${questions.length}`
     : null;
 
-  const header = (
-    <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-      <div className="text-chat min-w-0 truncate font-medium leading-[var(--text-chat--line-height)] text-foreground">
-        {title}
-      </div>
-      {progressLabel && (
-        <div className="shrink-0 text-base text-faint">
-          {progressLabel}
-        </div>
-      )}
-    </div>
-  );
-
   const answers = useMemo<UserInputSubmittedAnswer[]>(() =>
     questions.map((question) => {
       const draft = drafts[question.questionId] ?? {
@@ -109,6 +108,8 @@ export function UserInputCard({
     selectedOptionLabel: null,
     text: "",
   };
+  const isFirst = questionIndex === 0;
+  const isLast = questionIndex >= questions.length - 1;
 
   const updateDraft = (patch: Partial<UserInputDraft>) => {
     if (!currentQuestion) return;
@@ -124,36 +125,60 @@ export function UserInputCard({
     }));
   };
 
-  const selectOptionAtIndex = (index: number) => {
-    const option = options[index];
-    if (!option) return;
-    updateDraft({
-      selectedOptionLabel: option.label,
-      text: option.label === OTHER_OPTION_LABEL ? draft.text : "",
+  // Answers with an override draft for the current question, so an auto-advance
+  // click can submit the just-selected option without waiting for the drafts
+  // state update to flush.
+  const answersWithCurrentDraft = (nextDraft: UserInputDraft): UserInputSubmittedAnswer[] =>
+    questions.map((question) => {
+      const source = currentQuestion && question.questionId === currentQuestion.questionId
+        ? nextDraft
+        : drafts[question.questionId] ?? { selectedOptionLabel: null, text: "" };
+      return buildSubmittedAnswer(question, source);
     });
+
+  const chooseOption = (index: number) => {
+    const option = options[index];
+    if (!option || !currentQuestion) return;
+    const isSynthetic = option.label === OTHER_OPTION_LABEL;
+    const nextDraft: UserInputDraft = {
+      selectedOptionLabel: option.label,
+      text: isSynthetic ? draft.text : "",
+    };
+    updateDraft(nextDraft);
+    if (isSynthetic) {
+      // Synthetic "None of the above" opens the free-text field instead of
+      // advancing — the user still has to type a custom answer.
+      return;
+    }
+    // A concrete agent option is a complete answer: advance to the next
+    // question, or submit when this is the last one.
+    if (isLast) {
+      onSubmit(answersWithCurrentDraft(nextDraft));
+    } else {
+      setQuestionIndex((current) => Math.min(questions.length - 1, current + 1));
+    }
   };
 
   useComposerOptionNumberKeys(
     options.length,
-    selectOptionAtIndex,
+    chooseOption,
     !!currentQuestion,
   );
 
   if (!currentQuestion) {
     return (
-      <ComposerAttachedPanel header={header}>
-        <div className="flex items-center justify-end gap-2 px-3 pb-3">
-          <Button type="button" variant="unstyled" size="unstyled" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
+      <ComposerAttachedPanel title={title} context={progressLabel}>
+        <ComposerCardFooter
+          secondaryActions={[{ label: "Cancel", onSelect: onCancel }]}
+        />
       </ComposerAttachedPanel>
     );
   }
 
+  const agentOptionCount = currentQuestion.options?.length ?? 0;
+  const hasSyntheticOption = currentQuestion.isOther;
+  const syntheticIndex = agentOptionCount;
   const showTextInput = allowsDraftText(currentQuestion, draft);
-  const isFirst = questionIndex === 0;
-  const isLast = questionIndex >= questions.length - 1;
   const handleAdvance = () => {
     if (isLast) {
       onSubmit(answers);
@@ -163,33 +188,42 @@ export function UserInputCard({
   };
 
   return (
-    <ComposerAttachedPanel header={header}>
+    <ComposerAttachedPanel title={title} context={progressLabel}>
       <div className="flex max-h-[300px] flex-col">
         <div className="min-h-0 overflow-y-auto px-2">
           {(currentQuestion.header && currentQuestion.header !== title)
             || currentQuestion.question ? (
               <div className="space-y-1 px-1 pb-2">
                 {currentQuestion.header && currentQuestion.header !== title && (
-                  <div className="text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
+                  <div className="text-ui font-medium text-foreground">
                     {currentQuestion.header}
                   </div>
                 )}
-                <div className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
+                <div className="text-ui text-muted-foreground">
                   {currentQuestion.question}
                 </div>
               </div>
             ) : null}
 
-          {options.map((option, index) => (
+          {(currentQuestion.options ?? []).map((option, index) => (
             <ComposerOptionRow
               key={option.label}
               index={index}
               label={option.label}
               description={option.description}
               selected={draft.selectedOptionLabel === option.label}
-              onSelect={() => selectOptionAtIndex(index)}
+              onSelect={() => chooseOption(index)}
             />
           ))}
+
+          {hasSyntheticOption && (
+            <SyntheticOptionRow
+              index={syntheticIndex}
+              hasAgentOptions={agentOptionCount > 0}
+              selected={draft.selectedOptionLabel === OTHER_OPTION_LABEL}
+              onSelect={() => chooseOption(syntheticIndex)}
+            />
+          )}
         </div>
 
         {showTextInput && (
@@ -212,7 +246,7 @@ export function UserInputCard({
                   : "Enter your answer"}
                 autoComplete="off"
                 data-telemetry-mask="true"
-                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-chat text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
+                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-ui text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
               />
             ) : (
               <Textarea
@@ -232,59 +266,97 @@ export function UserInputCard({
                   : "Enter your answer"}
                 autoComplete="off"
                 data-telemetry-mask="true"
-                className="flex-1 cursor-text px-0 py-1 text-chat text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)]"
+                className="flex-1 cursor-text px-0 py-1 text-ui text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)]"
               />
             )}
           </div>
         )}
 
-        <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-3 pt-1">
-          <Button type="button" variant="unstyled" size="unstyled" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
-            Cancel
-          </Button>
-          <div className="flex items-center gap-2">
-            {!isFirst && (
-              <Button
-                type="button"
-                variant="unstyled"
-                size="unstyled"
-                className={CHIP_BUTTON_CLASSNAME}
-                onClick={() =>
-                  setQuestionIndex((index) => Math.max(0, index - 1))}
-              >
-                Back
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="unstyled"
-              size="unstyled"
-              aria-label={isLast ? "Submit" : "Next"}
-              onClick={handleAdvance}
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80"
-            >
-              <ArrowUp className="size-3.5" />
-            </Button>
-          </div>
-        </div>
+        <ComposerCardFooter
+          secondaryActions={[
+            { label: "Cancel", onSelect: onCancel },
+            ...(!isFirst
+              ? [{
+                label: "Back",
+                onSelect: () =>
+                  setQuestionIndex((index) => Math.max(0, index - 1)),
+              }]
+              : []),
+          ]}
+          primaryAction={{
+            label: isLast ? "Submit" : "Next",
+            onSelect: handleAdvance,
+          }}
+        />
       </div>
     </ComposerAttachedPanel>
   );
 }
 
+/**
+ * The synthetic "None of the above" row. Shares the option-row anatomy (same
+ * number-key badge, hover fill, and paddings) but sits under a hairline
+ * separator and renders in a muted --faint tone so it reads as an escape hatch
+ * rather than one of the agent's real answers.
+ */
+function SyntheticOptionRow({
+  index,
+  hasAgentOptions,
+  selected,
+  onSelect,
+}: {
+  index: number;
+  hasAgentOptions: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <div className={hasAgentOptions ? "mt-1 border-t border-border/60 pt-1" : ""}>
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        onClick={onSelect}
+        className={twMerge(
+          "group/option flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-accent",
+          selected ? "bg-accent" : "",
+        )}
+      >
+        <ComposerOptionKeyBadge>{index + 1}</ComposerOptionKeyBadge>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span
+            className={twMerge(
+              "text-ui transition-colors",
+              selected
+                ? "text-muted-foreground"
+                : "text-faint group-hover/option:text-muted-foreground",
+            )}
+          >
+            {OTHER_OPTION_LABEL}
+          </span>
+          <span className="text-ui-sm text-faint">Write a custom answer</span>
+        </span>
+      </Button>
+    </div>
+  );
+}
+
 export function ConnectedUserInputCard() {
   const { pendingUserInput } = useActivePendingInteractionState();
+  // Hold the last payload so the card can still render while the dock slot
+  // plays its 150ms exit fade after the request resolves.
+  const held = useHeldInteractionPayload(pendingUserInput);
   const { handleSubmitUserInput, handleCancelUserInput } = useChatUserInputActions();
 
-  if (!pendingUserInput) {
+  if (!held) {
     return null;
   }
 
   return (
     <UserInputCard
-      key={pendingUserInput.requestId}
-      title={pendingUserInput.title}
-      questions={pendingUserInput.questions}
+      key={held.requestId}
+      title={held.title}
+      questions={held.questions}
       onSubmit={handleSubmitUserInput}
       onCancel={handleCancelUserInput}
     />

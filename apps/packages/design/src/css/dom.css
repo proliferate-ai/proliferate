@@ -131,25 +131,44 @@ body {
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
-/* ---- Streaming text fade (UX_SPEC §13) ----
-   Shared with desktop.css: per-block 200ms opacity fade while streaming;
-   the class is only attached during live streams so history never replays. */
-@keyframes streaming-fade {
+/* ---- Skeleton shimmer (codex block shimmer) ----
+   Loading blocks share one motion family with the thinking-text sweep in
+   desktop.css: a soft gradient band travelling left→right via transform
+   (compositor-only — never background-position). Stagger sibling rows by
+   setting the --shimmer-delay custom property per row. */
+@keyframes skeleton-shimmer-sweep {
   from {
-    opacity: 0;
+    transform: translateX(-100%);
   }
   to {
-    opacity: 1;
+    transform: translateX(100%);
   }
 }
 
-.animate-streaming-fade {
-  animation: streaming-fade var(--streaming-fade-duration, 200ms)
-    var(--streaming-fade-easing, cubic-bezier(0.37, 0.55, 0.86, 0.88));
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-muted-foreground) 16%, transparent) 50%,
+    transparent 100%
+  );
+  will-change: transform;
+  transform: translateX(-100%);
+  animation: skeleton-shimmer-sweep 3s linear infinite;
+  animation-delay: var(--shimmer-delay, 0s);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-streaming-fade {
+  .skeleton-shimmer::before {
     animation: none;
   }
 }

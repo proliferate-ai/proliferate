@@ -1,10 +1,12 @@
 import { useCallback, useMemo } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Pencil, X } from "@proliferate/ui/icons";
+import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
 import { useQueuedPromptEditReader } from "@/hooks/chat/ui/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/workflows/use-delete-pending-prompt";
+import { CHAT_STREAMING_STATUS_LABELS } from "@/copy/chat/chat-copy";
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueRow,
@@ -33,7 +35,11 @@ export function PendingPromptList({
 
   return (
     <div
-      className="relative flex flex-col gap-1 overflow-clip rounded-t-2xl border-x border-t border-border/70 bg-card/70 px-2 py-1.5 backdrop-blur-sm"
+      // Queue panel rides the shared dock-panel shell (see
+      // ComposerAttachedPanel): 13px top radius docking into the composer,
+      // 0.5px border, 2% foreground tint. No backdrop blur — the dock bans
+      // blur over the transcript (ChatComposerDock PERF note).
+      className="relative flex flex-col overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] px-1.5 py-1.5"
       data-telemetry-mask
       aria-label="Queued messages"
     >
@@ -102,6 +108,11 @@ interface PendingPromptRowProps {
   onDelete: (entry: PendingPromptQueueRow) => void;
 }
 
+// Hover-reveal for the row's edit/remove affordances: keep the queue calm at
+// rest instead of striping every row with always-on icon buttons.
+const QUEUE_ROW_ACTION_CLASSNAME =
+  "size-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/queue-row:opacity-100 group-focus-within/queue-row:opacity-100";
+
 function PendingPromptRow({
   entry,
   onBeginEdit,
@@ -111,6 +122,7 @@ function PendingPromptRow({
     seq,
     label,
     isBeingEdited,
+    isSending,
     showEditAction,
     canEdit,
     editDisabledReason,
@@ -118,7 +130,11 @@ function PendingPromptRow({
     canDelete,
     deleteDisabledReason,
   } = entry;
-  const renderEditAction = showEditAction && !isBeingEdited;
+  // While the entry is in flight the edit affordance is meaningless — the
+  // "Sending…" hint owns the trailing slot. Delete stays only when it can
+  // still act (cancel while preparing); a dead disabled X is just clutter.
+  const renderEditAction = showEditAction && !isBeingEdited && !isSending;
+  const renderDeleteAction = showDeleteAction && (!isSending || canDelete);
 
   const handleBeginEdit = useCallback(() => {
     if (!canEdit) return;
@@ -130,40 +146,55 @@ function PendingPromptRow({
     onDelete(entry);
   }, [canDelete, entry, onDelete]);
 
+  // One trailing state hint per row: sending shimmer > editing note > actions.
+  const stateHint = isSending
+    ? (
+      <ThinkingText
+        text={CHAT_STREAMING_STATUS_LABELS.sending}
+        className="shrink-0 text-ui-sm font-normal leading-[var(--text-ui-sm--line-height)]"
+      />
+    )
+    : isBeingEdited
+      ? (
+        <span className="shrink-0 text-ui-sm leading-[var(--text-ui-sm--line-height)] text-faint">
+          Editing…
+        </span>
+      )
+      : null;
+
   return (
-    <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40">
+    <div className="group/queue-row flex min-h-7 items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-accent">
       <div
-        className={`min-w-0 flex-1 truncate text-sm leading-snug text-foreground/90 ${
-          isBeingEdited ? "pointer-events-none opacity-60" : ""
+        className={`min-w-0 flex-1 truncate text-ui leading-[var(--text-ui--line-height)] transition-colors ${
+          isBeingEdited
+            ? "text-muted-foreground/60"
+            : "text-muted-foreground group-hover/queue-row:text-foreground"
         }`}
         title={label}
       >
         {label}
       </div>
-      {isBeingEdited ? (
-        <div className="shrink-0 text-xs italic text-muted-foreground">
-          editing in composer…
-        </div>
-      ) : renderEditAction ? (
+      {stateHint}
+      {renderEditAction && (
         <Button
           variant="ghost"
           size="icon-sm"
           disabled={!canEdit}
           onClick={handleBeginEdit}
-          className="shrink-0 opacity-60 hover:opacity-100"
+          className={QUEUE_ROW_ACTION_CLASSNAME}
           aria-label="Edit queued message"
           title={editDisabledReason ?? "Edit queued message"}
         >
           <Pencil className="size-3.5" />
         </Button>
-      ) : null}
-      {showDeleteAction && (
+      )}
+      {renderDeleteAction && (
         <Button
           variant="ghost"
           size="icon-sm"
           disabled={!canDelete}
           onClick={handleDelete}
-          className="shrink-0 opacity-60 hover:opacity-100"
+          className={QUEUE_ROW_ACTION_CLASSNAME}
           aria-label="Delete queued message"
           title={deleteDisabledReason ?? "Delete queued message"}
         >

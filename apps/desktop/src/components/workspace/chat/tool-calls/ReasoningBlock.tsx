@@ -18,7 +18,7 @@ export function ReasoningBlock({ content }: ReasoningBlockProps) {
   return (
     <ToolActionRow
       icon={<ThinkingGlyph />}
-      label="Thinking"
+      label="Thought"
       hint={deriveHint(content)}
       status="completed"
       defaultExpanded={false}

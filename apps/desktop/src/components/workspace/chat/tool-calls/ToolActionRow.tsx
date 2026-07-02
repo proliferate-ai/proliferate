@@ -173,7 +173,7 @@ function renderInlineHint(hint?: ReactNode) {
     return (
       <span
         title={String(hint)}
-        className="max-w-[280px] min-w-0 shrink truncate font-mono text-base leading-none text-current"
+        className="max-w-[280px] min-w-0 shrink truncate text-base leading-none text-current"
       >
         {hint}
       </span>

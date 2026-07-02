@@ -78,7 +78,6 @@
   --text-xl--line-height: 1.75rem;
 
   /* -- Animations -- */
-  --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
   --animate-blink-cursor: blink-cursor 1s step-end infinite;
   --animate-popover-in: popover-in 150ms cubic-bezier(0.19, 1, 0.22, 1); /* codex --cubic-enter */
 
@@ -1044,20 +1043,83 @@ body {
   }
 }
 
-@keyframes pulse-dot {
-  0%,
+/* ---- Composer dock card motion (interaction cards / todo tracker) ----
+   Owned by useComposerDockCardPresence (apps/desktop). Mount rides the codex
+   chip-enter recipe — 280ms cubic-bezier(.23,1,.32,1) with a soft overshoot
+   at 70% — adapted to a full-width bottom-docked card (rises out of the
+   composer, transform-origin bottom). Resolve fades the card out for 150ms
+   (CARD_EXIT_DURATION_MS must match) before the slot unmounts it.
+   Compositor-only by owner rule: transform/opacity ONLY (see the
+   thinking-text block below). */
+@keyframes composer-dock-card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.005);
+  }
   100% {
     opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(0.85);
+    transform: translateY(0) scale(1);
   }
 }
 
-.pulse-running {
-  animation: var(--animate-pulse-dot);
+@keyframes composer-dock-card-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.composer-dock-card-enter {
+  transform-origin: 50% 100%;
+  animation: composer-dock-card-enter 280ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.composer-dock-card-exit {
+  animation: composer-dock-card-exit 150ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-dock-card-enter,
+  .composer-dock-card-exit {
+    animation: none;
+  }
+}
+
+/* ---- Status-chip entrance (codex _chip recipe) ----
+   Used by the plan-decision status chip (ProposedPlanCard): when the
+   proposed_plan item arrives the chip springs in-place over the still-mounted
+   plan card. 280ms cubic-bezier(.23,1,.32,1) with a soft overshoot at 70%.
+   Compositor-only by owner rule: transform/opacity ONLY. */
+@keyframes chip-enter {
+  0% {
+    opacity: 0;
+    transform: translate(-8px, 4px) scale(0.92);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(1px, -1px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+.chip-enter {
+  transform-origin: 0 50%;
+  animation: chip-enter 280ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip-enter {
+    animation: none;
+  }
 }
 
 /* ---- Satellite ripple for streaming logo ---- */
@@ -1100,47 +1162,51 @@ body {
   animation: ripple-spin 6s linear infinite;
 }
 
-@keyframes streaming-fade {
-  0% {
-    opacity: 0.4;
+/* Turn-tail status crossfade — the shimmer / transient-thought / needs-input
+   marker share one slot; a state change fades the incoming content in over
+   150ms instead of a hard swap. Compositor-only (opacity), and gated behind
+   motion-safe: at the call site so reduced-motion gets an instant swap. */
+@keyframes status-crossfade {
+  from {
+    opacity: 0;
   }
-  100% {
+  to {
     opacity: 1;
   }
 }
 
-.animate-streaming-fade {
-  animation: streaming-fade 180ms ease-out;
+.animate-status-crossfade {
+  animation: status-crossfade 150ms ease-out;
 }
 
-/* While assistant text is revealing, soften the trailing edge of the live
-   block so new words emerge from a fade instead of popping in. The mask only
-   covers the last line-height of the block; everything above stays opaque. */
-.streaming-tail-mask {
-  mask-image: linear-gradient(
-    to bottom,
-    black calc(100% - 1.4em),
-    rgba(0, 0, 0, 0.35) 100%
-  );
-}
-
-/* Thinking indicator — the codex-style dim-band sweep, compositor-only.
-   OWNER RULE: this animation may only use transform/opacity. The old sweep
-   animated background-position on background-clip:text, which repaints on
-   the MAIN thread every step, so it jittered whenever stream batches or
-   layout ran. Here the band is a masked window (.thinking-text-band) whose
-   transform sweeps across the text while the glyph copy inside counter-
-   translates in lockstep — both transforms run on the compositor, and the
-   soft-edge mask is static (rasterized once), so no per-frame paint exists
-   to jitter. Geometry contract: band width 50% of the label; window sweep
-   -100%→200% of band width pairs with glyph counter-sweep 50%→-100% of
-   label width (glyphs = -0.5 × band). Change one, change both. */
+/* Thinking indicator — codex-grade shimmer, compositor-only.
+   OWNER RULE: this animation may only use transform/opacity. Codex's own
+   .loading-shimmer animates background-position on background-clip:text,
+   which repaints on the MAIN thread every frame; here the same look rides
+   codex's cadencedShimmer architecture instead — a masked band window
+   (.thinking-text-band) whose transform sweeps across the text while the
+   glyph copy inside counter-translates in lockstep. Both transforms run on
+   the compositor and the soft-edge mask is static (rasterized once), so no
+   per-frame paint exists to jitter.
+   Geometry contract: band window and glyph copy are both exactly the label
+   width; the glyph sweep is the negation of the band sweep (-50%→125%
+   pairs with 50%→-125%), so the copy stays glyph-aligned under any easing.
+   Change one, change both.
+   Color math (codex .loading-shimmer): base text = the ~50%-of-foreground
+   description color (--color-faint) at 45% dark / 55% light — dimmer and
+   calmer than body text. Band contrast: in dark the band is a soft SHADOW
+   (#0009 — darker than the base, a shadow passing through gray text, not a
+   shine); in light it is #ffffffbf. Motion is a smooth continuous sweep —
+   never steps(): the old cadence read as stutter at this size.
+   Hover is intentionally inert (no color or band change): the previous
+   shimmer deleted the band and recolored on mouse-over, which flickered
+   whenever the pointer crossed the transcript. */
 @keyframes thinking-band-sweep {
   from {
-    transform: translateX(-100%);
+    transform: translateX(-50%);
   }
   to {
-    transform: translateX(200%);
+    transform: translateX(125%);
   }
 }
 
@@ -1149,60 +1215,62 @@ body {
     transform: translateX(50%);
   }
   to {
-    transform: translateX(-100%);
+    transform: translateX(-125%);
   }
 }
 
 .thinking-text {
   position: relative;
-  color: color-mix(in srgb, var(--color-foreground) 45%, transparent);
+  color: color-mix(in srgb, var(--color-faint) 45%, transparent);
+}
+
+:root[data-mode="light"] .thinking-text {
+  color: color-mix(in srgb, var(--color-faint) 55%, transparent);
 }
 
 .thinking-text-band {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 50%;
+  width: 100%;
   overflow: hidden;
   pointer-events: none;
+  /* Codex cadencedShimmer mask: soft-edged band, solid core 20–30%,
+     nothing beyond 50% — the sweep reads as a gentle pass, not a wipe. */
   -webkit-mask-image: linear-gradient(
-    to right,
+    90deg,
     transparent 0%,
-    black 40%,
-    black 60%,
-    transparent 100%
+    black 20%,
+    black 30%,
+    transparent 50%
   );
   mask-image: linear-gradient(
-    to right,
+    90deg,
     transparent 0%,
-    black 40%,
-    black 60%,
-    transparent 100%
+    black 20%,
+    black 30%,
+    transparent 50%
   );
   will-change: transform;
-  animation: thinking-band-sweep var(--thinking-text-duration, 2s)
-    var(--thinking-text-easing, steps(48, end)) infinite;
+  animation: thinking-band-sweep var(--thinking-text-duration, 2.2s)
+    var(--thinking-text-easing, linear) infinite;
 }
 
 .thinking-text-band-glyphs {
   display: block;
-  /* 200% of the 50%-wide band = exactly the label width, so the copy lays
-     out (and truncates) identically to the base text beneath it. */
-  width: 200%;
+  /* Same width as the label, so the copy lays out (and truncates)
+     identically to the base text beneath it. */
+  width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: color-mix(in srgb, var(--color-background) 75%, transparent);
+  color: rgb(0 0 0 / 0.6);
   will-change: transform;
-  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 2s)
-    var(--thinking-text-easing, steps(48, end)) infinite;
+  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 2.2s)
+    var(--thinking-text-easing, linear) infinite;
 }
 
-.thinking-text:hover {
-  color: var(--color-muted-foreground);
-}
-
-.thinking-text:hover .thinking-text-band {
-  display: none;
+:root[data-mode="light"] .thinking-text-band-glyphs {
+  color: rgb(255 255 255 / 0.75);
 }
 
 @media (prefers-reduced-motion: reduce) {

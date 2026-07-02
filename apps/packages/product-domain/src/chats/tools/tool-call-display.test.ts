@@ -73,6 +73,25 @@ describe("describeToolCallDisplay", () => {
     });
   });
 
+  it("treats mode_switch-tagged tools as normal tool rows", () => {
+    // The divider visual for exact known mode tools lives in
+    // mode-switch-display; describeToolCallDisplay no longer special-cases
+    // the SDK's over-broad mode_switch semantic kind.
+    const display = describeToolCallDisplay(
+      toolCallItem({
+        semanticKind: "mode_switch",
+        nativeToolName: "update_model_mode",
+      }),
+      "update_model_mode",
+    );
+
+    expect(display).toEqual({
+      label: "update_model_mode",
+      hint: undefined,
+      iconKey: "settings",
+    });
+  });
+
   it("keeps cowork artifact semantic kinds specialized", () => {
     const display = describeToolCallDisplay(
       toolCallItem({ semanticKind: "cowork_artifact_update" }),

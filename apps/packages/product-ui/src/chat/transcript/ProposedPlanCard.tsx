@@ -1,8 +1,16 @@
+import type { ComponentType } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@proliferate/ui/kit/DropdownMenu";
 import {
   Check,
   FileText,
   ArrowRight,
+  MoreHorizontal,
   X,
 } from "@proliferate/ui/icons";
 import { CollapsiblePlanCard } from "./CollapsiblePlanCard";
@@ -13,6 +21,12 @@ import type {
 } from "./MarkdownBody";
 
 type ProposedPlanDecisionState =
+  // "streaming" is the pre-decision phase: the ExitPlanMode tool call is still
+  // streaming its plan body. It renders through this exact component (as
+  // ClaudePlanCard) with an identical shell — no chip, no footer — so that when
+  // the proposed_plan item arrives the status chip and footer appear in place
+  // with no chrome swap or remount.
+  | "streaming"
   | "pending"
   | "approved"
   | "rejected"
@@ -46,6 +60,15 @@ interface ProposedPlanCardProps {
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 }
 
+interface FooterAction {
+  key: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  onClick?: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+}
+
 export function ProposedPlanCard({
   content,
   isStreaming,
@@ -71,41 +94,96 @@ export function ProposedPlanCard({
     && decisionState === "approved"
     && nativeResolutionState === "pending_link"
     && decisionVersion !== null
-    && onApprove;
+    && Boolean(onApprove);
   const canDecide =
     decisionState === "pending"
     && decisionVersion !== null
-    && onApprove
-    && onReject;
-  const status = decisionState
-    ? resolveDecisionStatus(
-      decisionState,
-      nativeResolutionState,
-      errorMessage,
-      nativeContinuation,
-    )
-    : null;
+    && Boolean(onApprove)
+    && Boolean(onReject);
   const showImplementHere =
     decisionState === "approved"
-    && !!onImplementHere
+    && Boolean(onImplementHere)
     && (!nativeContinuation || nativeResolutionState === "failed");
-  const hasFooterActions = Boolean(
-    canDecide
-      || canRetryNativeApproval
-      || onHandOffToNewSession
-      || showImplementHere,
+
+  // Status chip: fixed Title-case vocabulary only. The chip never carries a
+  // raw error string — a failure surfaces its message on the note line below
+  // the header instead.
+  const status =
+    decisionState && decisionState !== "streaming"
+      ? resolveDecisionStatus(decisionState, nativeResolutionState)
+      : null;
+  const failureMessage =
+    nativeResolutionState === "failed" ? errorMessage?.trim() || null : null;
+
+  // Footer: at most two visible buttons — a primary (Approve / Run here) and a
+  // secondary (Reject). Every other action lives in the "..." overflow menu.
+  const approveAction: FooterAction | null =
+    canDecide || canRetryNativeApproval
+      ? {
+        key: "approve",
+        label: "Approve",
+        icon: Check,
+        onClick: onApprove,
+        loading: isApproving,
+        disabled: isRejecting,
+      }
+      : null;
+  const rejectAction: FooterAction | null = canDecide
+    ? {
+      key: "reject",
+      label: "Reject",
+      icon: X,
+      onClick: onReject,
+      loading: isRejecting,
+      disabled: isApproving,
+    }
+    : null;
+  const runHereAction: FooterAction | null = showImplementHere
+    ? {
+      key: "run-here",
+      label: "Run here",
+      icon: FileText,
+      onClick: onImplementHere,
+      loading: isImplementingHere,
+    }
+    : null;
+  const newSessionAction: FooterAction | null = onHandOffToNewSession
+    ? {
+      key: "new-session",
+      label: "New session",
+      icon: ArrowRight,
+      onClick: onHandOffToNewSession,
+    }
+    : null;
+
+  let primaryAction = approveAction ?? runHereAction ?? null;
+  const overflowActions = [runHereAction, newSessionAction].filter(
+    (action): action is FooterAction =>
+      action !== null && action !== primaryAction,
   );
-  const approveLabel = nativeContinuation ? "Approve and continue" : "Approve plan";
+  // Never orphan a lone action inside an overflow menu with no visible button.
+  if (!primaryAction && overflowActions.length > 0) {
+    primaryAction = overflowActions.shift() ?? null;
+  }
+
+  const hasFooterActions = Boolean(
+    primaryAction || rejectAction || overflowActions.length > 0,
+  );
 
   return (
     <CollapsiblePlanCard
       title={title?.trim() || "Plan"}
       content={content}
       subtitle={status ? (
-        <span className={status.className}>
-          <span className={status.dotClassName} />
+        <span className={`${status.className} chip-enter`}>
+          <span className="size-1.5 shrink-0 rounded-full bg-current" />
           {status.label}
         </span>
+      ) : undefined}
+      note={failureMessage ? (
+        <p className="px-4 pt-2 text-ui-sm text-destructive">
+          {failureMessage}
+        </p>
       ) : undefined}
       emptyContent={isStreaming ? "Preparing plan..." : "No plan content"}
       copyLabel="Copy plan"
@@ -118,61 +196,61 @@ export function ProposedPlanCard({
       footer={hasFooterActions ? (
         <div
           data-chat-transcript-ignore
-          className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3.5 py-2.5"
+          className="flex items-center gap-2 border-t border-border/40 px-3.5 py-2.5"
         >
-          {canDecide && decisionState && (
+          {rejectAction && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={onReject}
-              loading={isRejecting}
-              disabled={isApproving}
-              className="rounded-md px-2.5 text-sm"
+              onClick={rejectAction.onClick}
+              loading={rejectAction.loading}
+              disabled={rejectAction.disabled}
+              className="rounded-md px-2.5 text-ui-sm"
             >
-              <X className="size-3.5" />
-              Reject
+              <rejectAction.icon className="size-3.5" />
+              {rejectAction.label}
             </Button>
           )}
           <span className="min-w-2 flex-1" />
-          {onHandOffToNewSession && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onHandOffToNewSession}
-              title="Start a new session with this plan attached."
-              className="rounded-md px-2.5 text-sm"
-            >
-              <ArrowRight className="size-3.5" />
-              Start in new session
-            </Button>
+          {overflowActions.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="More plan actions"
+                  className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <MoreHorizontal className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="shadow-popover">
+                {overflowActions.map((action) => (
+                  <DropdownMenuItem
+                    key={action.key}
+                    onSelect={() => action.onClick?.()}
+                  >
+                    <action.icon className="size-3.5" />
+                    {action.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
-          {showImplementHere && (
+          {primaryAction && (
             <Button
               type="button"
               variant="primary"
               size="sm"
-              onClick={onImplementHere}
-              loading={isImplementingHere}
-              className="rounded-md px-2.5 text-sm"
+              onClick={primaryAction.onClick}
+              loading={primaryAction.loading}
+              disabled={primaryAction.disabled}
+              className="rounded-md px-2.5 text-ui-sm"
             >
-              <FileText className="size-3.5" />
-              {nativeContinuation ? "Carry out here instead" : "Carry out here"}
-            </Button>
-          )}
-          {(canDecide || canRetryNativeApproval) && decisionState && (
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={onApprove}
-              loading={isApproving}
-              disabled={isRejecting}
-              className="rounded-md px-2.5 text-sm"
-            >
-              <Check className="size-3.5" />
-              {canRetryNativeApproval ? "Continue agent" : approveLabel}
+              <primaryAction.icon className="size-3.5" />
+              {primaryAction.label}
             </Button>
           )}
         </div>
@@ -184,72 +262,46 @@ export function ProposedPlanCard({
 interface DecisionStatus {
   label: string;
   className: string;
-  dotClassName: string;
 }
 
-function resolveDecisionStatus(
-  decisionState: ProposedPlanDecisionState,
-  nativeResolutionState: ProposedPlanNativeResolutionState | null,
-  errorMessage: string | null,
-  nativeContinuation: boolean,
-): DecisionStatus {
-  const baseClassName =
-    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-sm font-medium leading-none";
+const CHIP_BASE_CLASSNAME =
+  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-ui-sm font-medium leading-none";
 
+function resolveDecisionStatus(
+  decisionState: Exclude<ProposedPlanDecisionState, "streaming">,
+  nativeResolutionState: ProposedPlanNativeResolutionState | null,
+): DecisionStatus {
   if (nativeResolutionState === "failed") {
     return {
-      label: errorMessage?.trim() || "agent resolution failed",
-      className: `${baseClassName} bg-destructive text-destructive-foreground`,
-      dotClassName: "size-1.5 rounded-full bg-current",
-    };
-  }
-  if (nativeResolutionState === "pending_link") {
-    return {
-      label: nativeContinuation && decisionState === "approved"
-        ? "waiting to continue"
-        : nativeContinuation
-          ? "awaiting approval"
-          : "awaiting decision",
-      className: `${baseClassName} bg-warning text-warning-foreground`,
-      dotClassName: "size-1.5 rounded-full bg-current",
-    };
-  }
-  if (nativeResolutionState === "pending_resolution") {
-    return {
-      label: nativeContinuation ? "continuing" : "resolving",
-      className: `${baseClassName} bg-warning text-warning-foreground`,
-      dotClassName: "size-1.5 rounded-full bg-current",
+      label: "Failed",
+      className: `${CHIP_BASE_CLASSNAME} bg-destructive text-destructive-foreground`,
     };
   }
 
   switch (decisionState) {
     case "approved": {
       return {
-        label: "approved",
-        className: `${baseClassName} bg-foreground/10 text-foreground`,
-        dotClassName: "size-1.5 rounded-full bg-current",
+        label: "Approved",
+        className: `${CHIP_BASE_CLASSNAME} bg-foreground/10 text-foreground`,
       };
     }
     case "rejected": {
       return {
-        label: "rejected",
-        className: `${baseClassName} bg-muted text-muted-foreground`,
-        dotClassName: "size-1.5 rounded-full bg-current",
+        label: "Rejected",
+        className: `${CHIP_BASE_CLASSNAME} bg-muted text-muted-foreground`,
       };
     }
     case "superseded": {
       return {
-        label: "superseded",
-        className: `${baseClassName} bg-muted text-muted-foreground`,
-        dotClassName: "size-1.5 rounded-full bg-current",
+        label: "Superseded",
+        className: `${CHIP_BASE_CLASSNAME} bg-muted text-muted-foreground`,
       };
     }
     case "pending":
     default: {
       return {
-        label: "pending",
-        className: `${baseClassName} bg-warning text-warning-foreground`,
-        dotClassName: "size-1.5 rounded-full bg-current",
+        label: "Awaiting approval",
+        className: `${CHIP_BASE_CLASSNAME} bg-warning text-warning-foreground`,
       };
     }
   }
