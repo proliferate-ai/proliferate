@@ -13,8 +13,15 @@ from proliferate.db.store.agent_gateway.catalog import (
     get_latest_catalog_snapshot,
     upsert_catalog_override,
 )
+from proliferate.db.store.agent_gateway.credits import (
+    create_llm_credit_grant,
+    get_remaining_credit_usd,
+    sum_active_grants_usd,
+    sum_usage_cost_usd,
+)
 from proliferate.db.store.agent_gateway.enrollments import (
     ensure_enrollment_row,
+    get_enrollment_by_virtual_key_id,
     get_enrollment_for_organization,
     get_enrollment_for_user,
     get_enrollment_virtual_key_decrypted,
@@ -24,6 +31,7 @@ from proliferate.db.store.agent_gateway.enrollments import (
     mark_enrollment_failed,
     mark_enrollment_synced,
     revoke_enrollment,
+    set_enrollment_budget_status,
 )
 from proliferate.db.store.agent_gateway.policy import (
     get_org_agent_policy,
@@ -36,6 +44,8 @@ from proliferate.db.store.agent_gateway.records import (
     AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
     AgentLlmUsageImportCursorRecord,
+    LlmCreditBalanceRecord,
+    LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
 )
 from proliferate.db.store.agent_gateway.route_selections import (
@@ -57,19 +67,24 @@ __all__ = [
     "AgentCatalogSnapshotRecord",
     "AgentGatewayEnrollmentRecord",
     "AgentLlmUsageImportCursorRecord",
+    "LlmCreditBalanceRecord",
+    "LlmCreditGrantRecord",
     "OrgAgentPolicyRecord",
     "advance_usage_import_cursor",
     "build_redacted_hint",
     "create_agent_api_key",
     "create_catalog_snapshot",
+    "create_llm_credit_grant",
     "ensure_enrollment_row",
     "get_agent_api_key_decrypted",
     "get_catalog_override",
+    "get_enrollment_by_virtual_key_id",
     "get_enrollment_for_organization",
     "get_enrollment_for_user",
     "get_enrollment_virtual_key_decrypted",
     "get_latest_catalog_snapshot",
     "get_org_agent_policy",
+    "get_remaining_credit_usd",
     "get_route_selection",
     "get_usage_import_cursor",
     "insert_usage_event_once",
@@ -82,7 +97,10 @@ __all__ = [
     "mark_enrollment_synced",
     "revoke_agent_api_key",
     "revoke_enrollment",
+    "set_enrollment_budget_status",
     "set_org_agent_policy",
+    "sum_active_grants_usd",
+    "sum_usage_cost_usd",
     "upsert_catalog_override",
     "upsert_route_selection",
     "validate_route_selection",
