@@ -207,7 +207,6 @@ export function SidebarWorkspaceContent({
                 statusIndicator={item.statusIndicator}
                 detailIndicators={item.detailIndicators}
                 cloudStatus={item.cloudStatus}
-                lastInteracted={item.lastInteracted}
                 branchName={item.branchName}
                 gitStatus={item.gitStatus}
                 needsReview={item.needsReview}

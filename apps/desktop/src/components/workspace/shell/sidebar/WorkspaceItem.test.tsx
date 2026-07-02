@@ -111,20 +111,7 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the timestamp on active workspace rows", () => {
-    render(
-      <WorkspaceItem
-        name="Fresh worktree"
-        variant="worktree"
-        active
-        lastInteracted={new Date().toISOString()}
-      />,
-    );
-
-    expect(screen.getByText("now")).toBeTruthy();
-  });
-
-  it("renders the PR status dot on the idle git glyph", () => {
+  it("renders the PR status dot on the leading git glyph", () => {
     render(
       <WorkspaceItem
         name="Feature worktree"
@@ -136,7 +123,7 @@ describe("WorkspaceItem", () => {
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
   });
 
-  it("lets an activity indicator own the leading well alone", () => {
+  it("renders the activity indicator in the right slot, keeping the PR glyph", () => {
     render(
       <WorkspaceItem
         name="Feature worktree"
@@ -147,10 +134,11 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
-    expect(screen.queryByRole("img", { name: "PR #805 · Open" })).toBeNull();
+    // The status no longer evicts the PR glyph + dot from the leading well.
+    expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
   });
 
-  it("renders no PR dot for an authoritative no-PR branch", () => {
+  it("renders no leading glyph for an authoritative no-PR branch", () => {
     const { container } = render(
       <WorkspaceItem
         name="Feature worktree"
@@ -168,22 +156,47 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.queryByRole("img")).toBeNull();
-    // The branch glyph still occupies the leading well.
-    expect(container.querySelector("svg")).not.toBeNull();
+    // No branch-glyph fallback: the leading well stays empty.
+    expect(container.querySelector("svg")).toBeNull();
   });
 
-  it("swaps the timestamp for the unread dot when the row needs review", () => {
+  it("renders no leading glyph when PR data is unknown", () => {
+    const { container } = render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        gitStatus={makeGitStatus({ pr: null })}
+      />,
+    );
+
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
+  it("shows the unread dot in the right slot when the row needs review", () => {
     render(
       <WorkspaceItem
         name="Feature worktree"
         variant="worktree"
         needsReview
-        lastInteracted={new Date().toISOString()}
       />,
     );
 
     expect(screen.getByRole("img", { name: "Unseen activity" })).toBeTruthy();
-    expect(screen.queryByText("now")).toBeNull();
+  });
+
+  it("lets an activity indicator beat the unread dot in the right slot", () => {
+    render(
+      <WorkspaceItem
+        name="Feature worktree"
+        variant="worktree"
+        needsReview
+        statusIndicator={{ kind: "iterating", tooltip: "Iterating" }}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Unseen activity" })).toBeNull();
   });
 
   it("opens the pull request from the context menu", () => {

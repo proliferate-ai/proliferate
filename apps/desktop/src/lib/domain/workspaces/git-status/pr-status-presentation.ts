@@ -98,7 +98,6 @@ export function prStatusViewFromGitStatus(
 }
 
 export interface SidebarGitGlyph {
-  kind: "pull_request" | "branch";
   /** attention === "conflicts" — render destructive tone. */
   conflicted: boolean;
   /** Tooltip content; null renders the glyph without a tooltip. */
@@ -106,33 +105,25 @@ export interface SidebarGitGlyph {
 }
 
 /**
- * Leading-well glyph for idle sidebar rows (§3.2 ladder items 4–6):
- * PR glyph when a PR exists, branch glyph when only branch identity is known,
- * null (empty reserved well) when there is no git data at all.
+ * Leading-well PR glyph for sidebar rows (§3.2): rendered ONLY when the row
+ * has a real PR (open/draft/merged/closed). No PR (authoritative "none") and
+ * unknown PR data (`pr: null`) both leave the well empty — there is no
+ * branch-glyph fallback. Conflict attention keeps the destructive tone on PR
+ * rows; conflicted rows WITHOUT a PR get no leading glyph — attention there
+ * surfaces via the right-slot affordances (status indicator / unread dot),
+ * not a leading icon.
  */
 export function sidebarGitGlyphForStatus(
   status: WorkspaceGitStatus | null | undefined,
 ): SidebarGitGlyph | null {
-  if (!status) {
+  if (!status?.pr || status.pr.state === "none") {
     return null;
   }
   const conflicted = status.attention === "conflicts";
-  const conflictTooltip = conflicted ? "Merge conflicts in worktree" : null;
-  if (status.pr && status.pr.state !== "none") {
-    return {
-      kind: "pull_request",
-      conflicted,
-      tooltip: conflictTooltip ?? prStatusCompoundLabel(status),
-    };
-  }
-  if (status.branch) {
-    return {
-      kind: "branch",
-      conflicted,
-      tooltip: conflictTooltip ?? status.branch,
-    };
-  }
-  return null;
+  return {
+    conflicted,
+    tooltip: conflicted ? "Merge conflicts in worktree" : prStatusCompoundLabel(status),
+  };
 }
 
 /** "#805" — compact PR number label for workspaces-page rows (§4.1). */

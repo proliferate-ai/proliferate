@@ -75,13 +75,14 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   active?: boolean;
   archived?: boolean;
   /**
-   * Activity indicator (spinner / error / waiting). Owns the leading well
-   * alone when present; pass null so `leadingGlyph` can take the well.
+   * Activity indicator rendered in the LEADING well, owning it alone when
+   * present. Legacy slot kept for row-view consumers (web sidebar); desktop
+   * workspace rows put activity in `trailingStatus` instead.
    */
   status?: ReactNode;
   /**
-   * Idle git glyph (PR / branch icon) shown when no activity `status` is
-   * present. Decorated by the PR dot when `prStatus` is set (§3.2).
+   * Git glyph (PR icon) in the leading well. Decorated by the PR dot when
+   * `prStatus` is set (§3.2). Rows without a real PR leave the well empty.
    */
   leadingGlyph?: ReactNode;
   attentionStatus?: ReactNode;
@@ -89,6 +90,13 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   subtitle?: string | null;
   detail?: ReactNode;
   trailingLabel?: string | null;
+  /**
+   * Activity indicator (spinner / waiting / error) in the TRAILING cell.
+   * Right-slot precedence: shortcut reveal and hover actions win (it fades
+   * out like the other trailing content), then `trailingStatus`, then
+   * `unreadDot`, then `trailingLabel`.
+   */
+  trailingStatus?: ReactNode;
   shortcutLabel?: string | null;
   shortcutRevealVisible?: boolean;
   hoverAction?: ReactNode;
@@ -99,8 +107,8 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
    */
   prStatus?: PrStatusView | null;
   /**
-   * Unseen-activity dot in the trailing cell (codex pattern, §3.4). Takes
-   * the timestamp's footprint and yields to hover actions.
+   * Unseen-activity dot in the trailing cell (codex pattern, §3.4). Yields
+   * to `trailingStatus` (live activity wins) and to hover actions.
    */
   unreadDot?: boolean;
   onSelect?: () => void;
@@ -116,6 +124,7 @@ export function ProductSidebarWorkspaceRow({
   subtitle = null,
   detail = null,
   trailingLabel = null,
+  trailingStatus = null,
   shortcutLabel = null,
   shortcutRevealVisible = false,
   hoverAction = null,
@@ -176,11 +185,20 @@ export function ProductSidebarWorkspaceRow({
           ) : null}
         </div>
 
-        {(trailingLabel || shortcutLabel || hoverAction || unreadDot) ? (
+        {(trailingLabel || trailingStatus || shortcutLabel || hoverAction || unreadDot) ? (
           <div className={`grid h-5 min-w-[26px] shrink-0 items-center justify-items-end ${detail ? "ml-[5px]" : "ml-1.5"
             }`}>
 
-            {unreadDot ? (
+            {trailingStatus ? (
+              <div
+                className={`col-start-1 row-start-1 flex size-5 items-center justify-center transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+                    ? "opacity-0"
+                    : "group-hover:opacity-0 group-focus-within:opacity-0"
+                  }`}
+              >
+                {trailingStatus}
+              </div>
+            ) : unreadDot ? (
               <Tooltip
                 content="Unseen activity"
                 className={`col-start-1 row-start-1 flex size-5 items-center justify-center transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible

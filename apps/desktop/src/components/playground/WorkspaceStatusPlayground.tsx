@@ -87,7 +87,7 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "Conflicts (attention)",
+    label: "Conflicts (attention) · destructive PR glyph",
     name: "Rebase me",
     gitStatus: makeGitStatus({
       dirty: true,
@@ -97,7 +97,18 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "No PR (authoritative) · ahead 2, dirty",
+    label: "Conflicts · no PR — no leading glyph (unread dot only)",
+    name: "Conflicted local",
+    gitStatus: makeGitStatus({
+      dirty: true,
+      conflicted: true,
+      attention: "conflicts",
+      pr: { state: "none", number: null, url: null, checks: "none", reviewDecision: "none" },
+    }),
+    needsReview: true,
+  },
+  {
+    label: "No PR (authoritative) — no leading icon",
     name: "Local only",
     gitStatus: makeGitStatus({
       ahead: 2,
@@ -106,12 +117,12 @@ const SCENARIOS: ScenarioRow[] = [
     }),
   },
   {
-    label: "PR data unavailable (degraded)",
+    label: "PR data unavailable (degraded) — no leading icon",
     name: "Unknown hosting",
     gitStatus: makeGitStatus({ pr: null }),
   },
   {
-    label: "Working · agent iterating",
+    label: "Working · spinner in right slot",
     name: "Agent running",
     gitStatus: makeGitStatus({
       pr: { state: "open", number: 813, url: "https://github.com/acme/repo/pull/813", checks: "pending", reviewDecision: "none" },
@@ -119,16 +130,29 @@ const SCENARIOS: ScenarioRow[] = [
     statusIndicator: { kind: "iterating", tooltip: "Agent is working" },
   },
   {
-    label: "Waiting for input",
+    label: "Waiting for input · right slot",
     name: "Needs a decision",
     gitStatus: makeGitStatus(),
     statusIndicator: { kind: "waiting_input", tooltip: "Waiting for your input" },
   },
   {
-    label: "Error state",
+    label: "Waiting for plan approval · right slot",
+    name: "Plan pending",
+    gitStatus: makeGitStatus(),
+    statusIndicator: { kind: "waiting_plan", tooltip: "Waiting for plan approval" },
+  },
+  {
+    label: "Queued prompt · right slot",
+    name: "Queued follow-up",
+    gitStatus: makeGitStatus(),
+    statusIndicator: { kind: "queued_prompt", tooltip: "Queued Home prompt" },
+  },
+  {
+    label: "Error · right slot, beats unread dot",
     name: "Crashed run",
     gitStatus: makeGitStatus(),
     statusIndicator: { kind: "error", tooltip: "The agent hit an error" },
+    needsReview: true,
   },
 ];
 
@@ -158,6 +182,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  * WorkspaceGitStatus permutation rendered through the real sidebar row, plus
  * the PrStatusBadge kinds. No live data — pure fixtures, so states that need
  * a real PR (merged, CI failing...) are reviewable at any time.
+ *
+ * Layout rules under test: the leading well carries the PR glyph + dot ONLY
+ * for real PR states (no branch fallback, no icon for no-PR/degraded rows);
+ * activity indicators (spinner/waiting/error) render in the row's RIGHT slot
+ * where the relative timestamp used to live, beating the unread dot but
+ * yielding to hover affordances.
  */
 export function WorkspaceStatusPlayground() {
   return (
@@ -174,7 +204,6 @@ export function WorkspaceStatusPlayground() {
                 gitStatus={scenario.gitStatus}
                 statusIndicator={scenario.statusIndicator ?? null}
                 needsReview={scenario.needsReview}
-                lastInteracted="2026-07-01T09:30:00.000Z"
                 onSelect={() => {}}
                 onOpenPullRequest={() => {}}
                 onMarkDone={() => {}}

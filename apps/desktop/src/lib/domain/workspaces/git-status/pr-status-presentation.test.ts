@@ -163,24 +163,30 @@ describe("sidebarGitGlyphForStatus", () => {
     expect(sidebarGitGlyphForStatus(status({ branch: null, pr: null }))).toBeNull();
   });
 
-  it("prefers the pull-request glyph with the compound tooltip", () => {
+  it("renders the pull-request glyph with the compound tooltip", () => {
     const glyph = sidebarGitGlyphForStatus(status({ pr: pr() }));
     expect(glyph).toEqual({
-      kind: "pull_request",
       conflicted: false,
       tooltip: "PR #805 · Open",
     });
   });
 
-  it("falls back to the branch glyph for authoritative no-PR and unknown PR", () => {
-    expect(sidebarGitGlyphForStatus(status({ pr: pr({ state: "none" }) }))?.kind).toBe("branch");
-    expect(sidebarGitGlyphForStatus(status({ pr: null }))?.kind).toBe("branch");
+  it("returns null for authoritative no-PR and unknown PR (no branch fallback)", () => {
+    expect(sidebarGitGlyphForStatus(status({ pr: pr({ state: "none" }) }))).toBeNull();
+    expect(sidebarGitGlyphForStatus(status({ pr: null }))).toBeNull();
   });
 
-  it("marks conflicts with the conflict tooltip", () => {
+  it("marks conflicts with the conflict tooltip on PR rows", () => {
     const glyph = sidebarGitGlyphForStatus(status({ pr: pr(), attention: "conflicts" }));
     expect(glyph?.conflicted).toBe(true);
     expect(glyph?.tooltip).toBe("Merge conflicts in worktree");
+  });
+
+  it("renders no glyph for conflicted rows without a PR (right-slot affordances own attention)", () => {
+    expect(sidebarGitGlyphForStatus(status({ pr: null, attention: "conflicts" }))).toBeNull();
+    expect(
+      sidebarGitGlyphForStatus(status({ pr: pr({ state: "none" }), attention: "conflicts" })),
+    ).toBeNull();
   });
 });
 

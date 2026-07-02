@@ -23,7 +23,6 @@ import type {
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
-import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
 import {
   prStatusViewFromGitStatus,
   sidebarGitGlyphForStatus,
@@ -54,18 +53,22 @@ interface WorkspaceItemProps {
   cloudStatus?: CloudSidebarStatus | null;
   active?: boolean;
   archived?: boolean;
+  /**
+   * Activity indicator (spinner / waiting / error). Rendered in the row's
+   * RIGHT slot; hover affordances (shortcut reveal, menu trigger) still win
+   * per the row's trailing-cell precedence, and it beats the unread dot.
+   */
   statusIndicator?: SidebarStatusIndicator | null;
   detailIndicators?: SidebarDetailIndicator[];
-  lastInteracted?: string | null;
   shortcutLabel?: string | null;
   shortcutRevealVisible?: boolean;
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
   /**
-   * Composed git/PR status (§3.2/§3.3). Drives the idle leading glyph
-   * (PR / branch icon), the PR status dot, tooltips, and the "Open pull
-   * request" menu item. Null when no git data is known — the well stays
-   * empty and the row degrades gracefully.
+   * Composed git/PR status (§3.2/§3.3). Drives the leading PR glyph, the PR
+   * status dot, tooltips, and the "Open pull request" menu item. The well is
+   * empty whenever the row has no real PR (pr null/unknown or state "none"),
+   * so no-git-data rows degrade gracefully.
    */
   gitStatus?: WorkspaceGitStatus | null;
   /** Renders the trailing unseen-activity dot (§3.4, codex pattern). */
@@ -100,7 +103,6 @@ export function WorkspaceItem({
   archived = false,
   statusIndicator = null,
   detailIndicators = [],
-  lastInteracted,
   shortcutLabel = null,
   shortcutRevealVisible = false,
   branchName = null,
@@ -135,9 +137,6 @@ export function WorkspaceItem({
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  const timestampLabel = lastInteracted
-    ? formatSidebarRelativeTime(lastInteracted)
-    : null;
   const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
     canRename: !!onRename,
     canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
@@ -199,19 +198,19 @@ export function WorkspaceItem({
     />
   ) : null;
 
-  // Leading-well ladder (§3.2): an activity indicator owns the well alone; idle
-  // rows fall back to the git glyph, and rows without git data keep it empty.
-  const gitGlyph = statusIndicator ? null : sidebarGitGlyphForStatus(gitStatus);
-  const prStatusView = gitGlyph?.kind === "pull_request"
-    ? prStatusViewFromGitStatus(gitStatus)
-    : null;
+  // Leading well (§3.2): PR glyph + dot for real PR states only — rows with
+  // no PR (null/unknown or authoritative "none") leave the well empty.
+  // Activity indicators live in the row's RIGHT slot (trailingStatus), where
+  // the relative timestamp used to sit.
+  const gitGlyph = sidebarGitGlyphForStatus(gitStatus);
+  const prStatusView = gitGlyph ? prStatusViewFromGitStatus(gitStatus) : null;
   const leadingGlyph = gitGlyph ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} /> : null;
 
   const row = (
     <ProductSidebarWorkspaceRow
       active={active}
       archived={archived}
-      status={statusIndicator ? (
+      trailingStatus={statusIndicator ? (
         <SidebarStatusIndicatorView
           indicator={statusIndicator}
           onAction={onIndicatorAction}
@@ -220,7 +219,6 @@ export function WorkspaceItem({
       leadingGlyph={leadingGlyph}
       label={name}
       detail={detail}
-      trailingLabel={timestampLabel}
       prStatus={prStatusView}
       unreadDot={needsReview}
       shortcutLabel={shortcutLabel}
