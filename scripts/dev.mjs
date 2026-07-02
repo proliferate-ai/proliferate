@@ -583,6 +583,10 @@ function writeLaunchEnv(paths, env) {
     PROLIFERATE_DEV: "1",
     DEBUG: "true",
     ...orderedEnv(env, persistedKeys),
+    // The harness serves with --runtime-home $ANYHARNESS_RUNTIME_HOME; export
+    // the same path to the desktop app so files it writes for the harness
+    // (e.g. the dispatch worker's integration gateway home) land there too.
+    ANYHARNESS_DEV_RUNTIME_HOME: env.ANYHARNESS_RUNTIME_HOME,
     ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
     VITE_ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
     VITE_PROLIFERATE_API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,

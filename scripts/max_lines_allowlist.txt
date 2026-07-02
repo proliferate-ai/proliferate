@@ -22,8 +22,6 @@ anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 645 catalog probe with per-harness model-source fallbacks and tests
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1112 custom migration with legacy schema coverage
-anyharness/crates/proliferate-worker/src/control/commands/executor.rs 1636 existing Proliferate worker oversized command executor
-anyharness/crates/proliferate-worker/src/control/commands/mapping.rs 979 existing Proliferate worker oversized command mapper
 anyharness/sdk-react/src/hooks/sessions.ts 653 existing SDK React oversized file
 cloud/sdk/src/types/generated.ts 765 existing generated cloud SDK type surface
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1880 existing SDK oversized test file
@@ -38,7 +36,7 @@ server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read 
 server/proliferate/server/cloud/agent_auth/models.py 563 managed sandbox desktop apply response extends existing cloud agent auth API schema module pending request/response split
 server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
-server/proliferate/constants/cloud.py 660 existing cloud constants module with command and target config enums
+server/proliferate/constants/cloud.py 678 existing cloud constants module with command, target, and runtime-worker config
 server/tests/integration/test_auth_flow.py 2052 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test

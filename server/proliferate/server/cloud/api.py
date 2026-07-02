@@ -11,6 +11,12 @@ from proliferate.server.cloud.github_app.api import (
 from proliferate.server.cloud.github_app.api import router as github_app_router
 from proliferate.server.cloud.repos.api import router as repos_router
 from proliferate.server.cloud.repositories.api import router as repositories_router
+from proliferate.server.cloud.runtime_workers.api import (
+    router as runtime_workers_router,
+)
+from proliferate.server.cloud.runtime_workers.api import (
+    worker_router as runtime_worker_router,
+)
 from proliferate.server.cloud.secrets.api import router as secrets_router
 from proliferate.server.cloud.webhooks.api import router as webhooks_router
 from proliferate.server.cloud.workspaces.api import router as workspaces_router
@@ -27,4 +33,6 @@ router.include_router(workspaces_router)
 router.include_router(worktree_policy_router)
 router.include_router(capabilities_router)
 router.include_router(agent_run_config_router)
+router.include_router(runtime_workers_router)
+router.include_router(runtime_worker_router)
 router.include_router(webhooks_router)
