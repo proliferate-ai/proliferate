@@ -17,6 +17,9 @@ pub fn get_current_pull_request(
         Err(github_cli::GhError::AuthRequired(msg)) => {
             Err(HostingServiceError::GhAuthRequired(msg))
         }
+        Err(github_cli::GhError::UnsupportedRemote(msg)) => {
+            Err(HostingServiceError::RemoteUnsupported(msg))
+        }
         Err(github_cli::GhError::CommandFailed(msg)) => {
             Err(HostingServiceError::PullRequestViewFailed(msg))
         }

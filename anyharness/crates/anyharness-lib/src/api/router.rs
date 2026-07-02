@@ -314,6 +314,11 @@ pub fn build_router(state: AppState) -> Router {
             "/workspaces/{workspace_id}/hosting/pull-requests",
             post(hosting::create_pull_request),
         )
+        // Hosting (repo-root-scoped, branch PR statuses via gh GraphQL)
+        .route(
+            "/repo-roots/{repo_root_id}/hosting/pull-requests",
+            get(hosting::get_repo_pull_request_statuses),
+        )
         // Terminals (workspace-scoped, interactive PTY shells)
         .route(
             "/workspaces/{workspace_id}/terminals",
