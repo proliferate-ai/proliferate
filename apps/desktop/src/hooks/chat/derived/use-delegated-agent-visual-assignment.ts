@@ -20,6 +20,10 @@ const EMPTY_ASSIGNMENT: DelegatedAgentVisualAssignment = {};
 // Pure core (exported for tests): resolves one sibling's color/shape from the
 // parent's ordered children. Subagents are the prefix of the header's merged
 // child list, so this matches the tab/strip assignment for every subagent.
+// The lookup leans on the server-enforced uniqueness of sessionLinkId within
+// a parent: a duplicated link would collapse to its first occurrence here
+// while the positional passes number every row, breaking the cross-surface
+// agreement this hook exists to provide.
 export function delegatedAgentVisualAssignmentFromChildren(
   children:
     | readonly Pick<ChildSubagentSummary, "sessionLinkId" | "childSessionId">[]

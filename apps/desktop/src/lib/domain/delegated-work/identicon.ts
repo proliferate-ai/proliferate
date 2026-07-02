@@ -62,6 +62,12 @@ export function assignDistinctIdenticonSeeds(
       salt += 1;
       key = shapeKeyForSalt(seedHash, salt);
     }
+    if (usedKeys.has(key)) {
+      // 2^15 shapes against single-digit sibling lists makes exhaustion
+      // effectively unreachable, but if it ever happens, say so instead of
+      // silently registering a duplicate shape.
+      console.warn("Delegated-agent identicon probing exhausted; a sibling shape may repeat.");
+    }
     usedKeys.add(key);
     out.set(seed, salt);
   }
