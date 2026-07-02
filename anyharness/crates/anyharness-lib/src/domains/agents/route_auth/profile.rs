@@ -63,11 +63,13 @@ pub struct GatewayProfile {
 /// - state present, has selection(s) for the harness: profile per route.
 ///   OpenCode merges ALL its selections into one composite profile
 ///   (spec §3.3); single-source harnesses error (typed) on more than one.
-/// - state present + scoped (`revision > 0`) but NO selection for the harness:
-///   fail-closed [`RouteAuthError::SelectionMissing`] (spec §3), mirroring the
-///   old `AGENT_AUTH_SELECTION_REQUIRED` semantics against the new model.
-/// - state present but NOT scoped (`revision == 0`) with no selection: legacy
-///   `Native` (bootstrapping state before any selection exists).
+/// - state present but NO selection for the harness (regardless of revision):
+///   legacy `Native`. A harness the user never configured uses its own native
+///   login — the least-surprising default, and safe (native = the user's own
+///   CLI sign-in, never ambient/leaked credentials). We deliberately do NOT
+///   fail-closed here: `revision` scoping is GLOBAL (any one selection bumps
+///   it), so fail-closing on a missing selection blocked launching every
+///   un-configured harness the moment a different one was configured.
 pub fn resolve_profile(
     state: Option<&AgentAuthState>,
     harness_kind: &str,
@@ -77,14 +79,7 @@ pub fn resolve_profile(
     };
     let selections = state.selections_for(harness_kind);
     if selections.is_empty() {
-        return if state.is_scoped() {
-            Err(RouteAuthError::SelectionMissing {
-                harness_kind: harness_kind.to_string(),
-                revision: state.revision,
-            })
-        } else {
-            Ok(AgentRuntimeAuthProfile::Native)
-        };
+        return Ok(AgentRuntimeAuthProfile::Native);
     }
     if harness_kind == OPENCODE_HARNESS {
         return resolve_opencode_composite(harness_kind, &selections, state.revision);
@@ -226,7 +221,10 @@ mod tests {
     }
 
     #[test]
-    fn scoped_missing_selection_fails_closed() {
+    fn missing_selection_falls_back_to_native_even_when_scoped() {
+        // Configuring a DIFFERENT harness (codex) bumps the global revision to
+        // 7, but claude — which the user never configured — must still launch
+        // on its own native login, not fail-closed.
         let state = state(
             7,
             vec![AuthSelection {
@@ -239,11 +237,8 @@ mod tests {
                 model_catalog: None,
             }],
         );
-        let error = resolve_profile(Some(&state), "claude").expect_err("fail-closed");
-        assert!(matches!(
-            error,
-            RouteAuthError::SelectionMissing { revision: 7, .. }
-        ));
+        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
+        assert_eq!(profile, AgentRuntimeAuthProfile::Native);
     }
 
     #[test]
