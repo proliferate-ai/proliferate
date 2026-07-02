@@ -1751,57 +1751,18 @@ body {
   );
 }
 
-@keyframes thinking-text-sweep {
+/* Thinking indicator — compositor-only animation. The previous sweep animated
+   background-position on background-clip:text, which repaints on the MAIN
+   thread every step: any main-thread work (stream batches, layout) made it
+   visibly jitter. Opacity animates on the compositor thread, so the pulse
+   stays perfectly smooth even while the main thread is busy. */
+@keyframes thinking-text-pulse {
   0%,
-  2.806% {
-    opacity: 0;
-    background-position: 145% 0;
-  }
-  4.677% {
-    opacity: 0.95;
-    background-position: 145% 0;
-  }
-  21.983% {
-    opacity: 0.95;
-    background-position: -55% 0;
-  }
-  22.544% {
-    opacity: 0;
-    background-position: -62% 0;
-  }
-  22.568% {
-    opacity: 0;
-    background-position: 145% 0;
-  }
-  23.854% {
-    opacity: 0.95;
-    background-position: 145% 0;
-  }
-  41.16% {
-    opacity: 0.95;
-    background-position: -55% 0;
-  }
-  42.002%,
-  60.711% {
-    opacity: 0;
-    background-position: -62% 0;
-  }
-  62.348% {
-    opacity: 0.78;
-    background-position: -55% 0;
-  }
-  78.485% {
-    opacity: 0.78;
-    background-position: 42% 0;
-  }
-  94.621% {
-    opacity: 0.9;
-    background-position: -42% 0;
-  }
-  97.194%,
   100% {
-    opacity: 0;
-    background-position: -62% 0;
+    opacity: 0.06;
+  }
+  50% {
+    opacity: 0.85;
   }
 }
 
@@ -1815,30 +1776,20 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  color: transparent;
-  background-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    transparent 40%,
-    color-mix(in oklab, var(--color-foreground) 72%, var(--color-muted-foreground) 28%) 50%,
-    transparent 60%,
-    transparent 100%
-  );
-  background-size: 160% 100%;
-  background-repeat: no-repeat;
-  background-clip: text;
-  -webkit-background-clip: text;
+  color: color-mix(in oklab, var(--color-foreground) 72%, var(--color-muted-foreground) 28%);
+  opacity: 0;
+  will-change: opacity;
+  transform: translateZ(0);
   animation: var(
     --thinking-text-animation,
-    thinking-text-sweep 4.276s cubic-bezier(0.45, 0, 0.55, 1) infinite
+    thinking-text-pulse 2.2s ease-in-out infinite
   );
 }
 
 @media (prefers-reduced-motion: reduce) {
   .thinking-text::after {
     animation: none;
-    background-position: 55% 50%;
-    opacity: 0.72;
+    opacity: 0.5;
   }
 }
 
