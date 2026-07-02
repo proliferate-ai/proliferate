@@ -1,5 +1,10 @@
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { PlanMarkdownBody } from "@/components/workspace/chat/content/PlanMarkdownBody";
+import { PlanMarkdownBody } from "@proliferate/product-ui/chat/transcript/PlanMarkdownBody";
+import {
+  renderTranscriptCodeBlock,
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "@/components/workspace/chat/transcript/transcript-markdown";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 
 interface PlanReferencePreviewDialogProps {
@@ -25,15 +30,20 @@ export function PlanReferencePreviewDialog({
       {plan && (
         <div className="space-y-3" data-telemetry-mask>
           <div>
-            <div className="text-base font-semibold leading-tight text-foreground">
+            <div className="text-ui font-semibold leading-tight text-foreground">
               {plan.title}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               Plan attachment
             </div>
           </div>
-          <div className="rounded-lg bg-foreground/5 px-4 py-3">
-            <PlanMarkdownBody content={plan.bodyMarkdown} />
+          <div className="rounded-lg border border-border/70 bg-card/85 px-4 py-3">
+            <PlanMarkdownBody
+              content={plan.bodyMarkdown}
+              renderLink={renderTranscriptLink}
+              renderInlineCode={renderTranscriptInlineCode}
+              renderCodeBlock={renderTranscriptCodeBlock}
+            />
           </div>
         </div>
       )}

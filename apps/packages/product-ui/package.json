@@ -159,6 +159,14 @@
       "types": "./dist/chat/transcript/ProposedPlanCard.d.ts",
       "import": "./dist/chat/transcript/ProposedPlanCard.js"
     },
+    "./chat/transcript/CollapsiblePlanCard": {
+      "types": "./dist/chat/transcript/CollapsiblePlanCard.d.ts",
+      "import": "./dist/chat/transcript/CollapsiblePlanCard.js"
+    },
+    "./chat/transcript/PlanMarkdownBody": {
+      "types": "./dist/chat/transcript/PlanMarkdownBody.d.ts",
+      "import": "./dist/chat/transcript/PlanMarkdownBody.js"
+    },
     "./chat/transcript/CopyMessageButton": {
       "types": "./dist/chat/transcript/CopyMessageButton.d.ts",
       "import": "./dist/chat/transcript/CopyMessageButton.js"

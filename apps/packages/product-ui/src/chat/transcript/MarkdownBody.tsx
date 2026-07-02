@@ -1,9 +1,13 @@
 import {
+  Children,
+  cloneElement,
   createElement,
+  isValidElement,
   memo,
   useMemo,
   useState,
   type HTMLAttributes,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
@@ -18,7 +22,16 @@ interface MarkdownBodyProps {
   renderLink?: MarkdownLinkRenderer;
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
+  taskListItems?: MarkdownTaskListItemPresentation;
 }
+
+/**
+ * "inline" keeps GFM task-list checkboxes in the text flow (default chat
+ * prose). "grid" restructures each task item into a two-column grid —
+ * checkbox column auto, content column minmax(0,1fr) — so wrapped lines and
+ * nested blocks stay aligned under the label (codex plan treatment).
+ */
+export type MarkdownTaskListItemPresentation = "inline" | "grid";
 
 export interface MarkdownLinkRenderInput {
   href: string;
@@ -74,6 +87,8 @@ type MdCodeProps = MdElementProps & {
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 };
 
+const LI_CLASSNAME = "pl-0.5 text-chat leading-[var(--text-chat--line-height)]";
+
 // Markdown component overrides are the React element *types* for every
 // rendered node. They must be referentially stable across renders: a fresh
 // arrow function per render is a new component type, which makes React
@@ -99,7 +114,7 @@ const STATIC_MARKDOWN_COMPONENTS = {
   ol: (props: MdElementProps) =>
     mdHtmlElement("ol", "my-0 list-decimal pl-[1.3125rem] text-chat leading-[var(--text-chat--line-height)] text-foreground [&>li+li]:mt-2", props),
   li: (props: MdElementProps) =>
-    mdHtmlElement("li", "pl-0.5 text-chat leading-[var(--text-chat--line-height)]", props),
+    mdHtmlElement("li", LI_CLASSNAME, props),
   blockquote: (props: MdElementProps) =>
     mdHtmlElement(
       "blockquote",
@@ -183,12 +198,96 @@ function createMarkdownAnchor(renderLink: MarkdownLinkRenderer | undefined) {
   };
 }
 
+// Codex plan task-list grid: checkbox column sized auto, content column
+// minmax(0,1fr). react-markdown emits tight task items as
+// `li > input + <inline content>` (and loose ones with the input inside the
+// leading <p>), so a pure-CSS grid would scatter the inline runs across
+// cells; instead the item is restructured into checkbox + content wrapper.
+function GridTaskListItem(props: MdElementProps & { children?: ReactNode }) {
+  const { children, dangerouslySetInnerHTML, className, node: _node, ...rest } = props;
+  const isTaskListItem =
+    typeof className === "string" && className.includes("task-list-item");
+  const split = isTaskListItem && !dangerouslySetInnerHTML
+    ? splitTaskListItemChildren(children)
+    : null;
+  if (!split) {
+    return mdHtmlElement("li", LI_CLASSNAME, props);
+  }
+  const mergedClassName = [
+    LI_CLASSNAME,
+    "grid grid-cols-[auto_minmax(0,1fr)]",
+    className,
+  ].filter(Boolean).join(" ");
+  return (
+    <li {...rest} className={mergedClassName}>
+      {cloneElement(split.checkbox, {
+        // Codex nudge: drop the checkbox 0.25rem so it optically centers on
+        // the first text line.
+        className: [split.checkbox.props.className, "mt-1"].filter(Boolean).join(" "),
+      })}
+      <div className="min-w-0">{split.content}</div>
+    </li>
+  );
+}
+
+interface SplitTaskListItem {
+  checkbox: ReactElement<{ className?: string }>;
+  content: ReactNode[];
+}
+
+function splitTaskListItemChildren(children: ReactNode): SplitTaskListItem | null {
+  const nodes = Children.toArray(children);
+  // Tight items: the checkbox input is a direct child of the <li>.
+  const inputIndex = nodes.findIndex(isCheckboxElement);
+  if (inputIndex >= 0) {
+    return {
+      checkbox: nodes[inputIndex] as SplitTaskListItem["checkbox"],
+      content: [...nodes.slice(0, inputIndex), ...nodes.slice(inputIndex + 1)],
+    };
+  }
+  // Loose items: the checkbox sits at the head of the leading paragraph.
+  const paragraphIndex = nodes.findIndex(
+    (node) => isValidElement(node) && hastTagName(node) === "p",
+  );
+  if (paragraphIndex < 0) {
+    return null;
+  }
+  const paragraph = nodes[paragraphIndex] as ReactElement<{ children?: ReactNode }>;
+  const paragraphChildren = Children.toArray(paragraph.props.children);
+  const nestedInputIndex = paragraphChildren.findIndex(isCheckboxElement);
+  if (nestedInputIndex < 0) {
+    return null;
+  }
+  const strippedParagraph = cloneElement(paragraph, undefined, ...[
+    ...paragraphChildren.slice(0, nestedInputIndex),
+    ...paragraphChildren.slice(nestedInputIndex + 1),
+  ]);
+  return {
+    checkbox: paragraphChildren[nestedInputIndex] as SplitTaskListItem["checkbox"],
+    content: [
+      ...nodes.slice(0, paragraphIndex),
+      strippedParagraph,
+      ...nodes.slice(paragraphIndex + 1),
+    ],
+  };
+}
+
+function isCheckboxElement(node: ReactNode): boolean {
+  return isValidElement(node) && node.type === "input";
+}
+
+function hastTagName(node: ReactElement): string | null {
+  const hast = (node.props as { node?: { tagName?: unknown } }).node;
+  return typeof hast?.tagName === "string" ? hast.tagName : null;
+}
+
 export const MarkdownBody = memo(function MarkdownBody({
   content,
   className = "",
   renderLink,
   renderInlineCode,
   renderCodeBlock,
+  taskListItems = "inline",
 }: MarkdownBodyProps) {
   const markdownClassName = [
     "text-chat leading-[var(--text-chat--line-height)] text-foreground break-words",
@@ -208,6 +307,7 @@ export const MarkdownBody = memo(function MarkdownBody({
 
   const components = useMemo(() => ({
     ...STATIC_MARKDOWN_COMPONENTS,
+    ...(taskListItems === "grid" ? { li: GridTaskListItem } : null),
     a: createMarkdownAnchor(renderLink),
     code: (props: MdCodeProps) => (
       <MarkdownCode
@@ -216,7 +316,7 @@ export const MarkdownBody = memo(function MarkdownBody({
         renderCodeBlock={renderCodeBlock}
       />
     ),
-  }), [renderCodeBlock, renderInlineCode, renderLink]);
+  }), [renderCodeBlock, renderInlineCode, renderLink, taskListItems]);
 
   return (
     <div className={markdownClassName}>
