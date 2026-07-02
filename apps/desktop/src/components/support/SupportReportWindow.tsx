@@ -122,7 +122,7 @@ export function SupportReportWindow() {
                     <FileText className="size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium leading-5">{attachment.fileName}</div>
-                      <div className="text-[11px] leading-4 text-muted-foreground">
+                      <div className="text-base text-muted-foreground">
                         {attachment.contentType || "file"} · {formatBytes(attachment.sizeBytes)}
                       </div>
                     </div>
@@ -171,7 +171,7 @@ export function SupportReportWindow() {
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium leading-5">{option.label}</span>
                       {description ? (
-                        <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                        <span className="block truncate text-base text-muted-foreground">
                           {description}
                         </span>
                       ) : null}
@@ -196,7 +196,7 @@ export function SupportReportWindow() {
                     <Folder className="size-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium leading-5">{workspace.label}</span>
-                      <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+                      <span className="block truncate text-base text-muted-foreground">
                         {[workspace.location, workspace.branch, workspace.status]
                           .filter(Boolean)
                           .join(" · ")}
@@ -218,7 +218,7 @@ export function SupportReportWindow() {
               <span className="block font-medium leading-5">
                 Include my message in the public issue
               </span>
-              <span className="block text-[11px] leading-4 text-muted-foreground">
+              <span className="block text-base text-muted-foreground">
                 Your message may appear on GitHub. Do not include secrets or API keys.
                 Diagnostics and files stay private.
               </span>

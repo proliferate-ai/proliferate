@@ -60,7 +60,7 @@ export function SidebarPrimaryNavigation({
       icon: <Zap className="size-4" />,
       label: "Workflows",
       status: (
-        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-sidebar-muted-foreground">
+        <span className="font-mono text-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
           beta
         </span>
       ),

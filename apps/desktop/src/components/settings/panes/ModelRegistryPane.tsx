@@ -99,7 +99,7 @@ export function ModelRegistryPane({
                 className="flex min-h-9 items-center justify-between gap-3 rounded-md px-2 py-1 hover:bg-muted/50"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] text-foreground">{model.displayName}</p>
+                  <p className="truncate text-ui text-foreground">{model.displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {model.id}
                     {model.hasManualOverride ? " · manual" : model.catalogDefaultOptIn ? " · default" : ""}

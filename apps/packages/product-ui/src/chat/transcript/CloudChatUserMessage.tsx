@@ -50,7 +50,7 @@ export function CloudChatUserMessage({
                   size="sm"
                   data-chat-transcript-ignore
                   onClick={() => setExpanded((value) => !value)}
-                  className="h-auto px-1 py-0 text-[11px] text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  className="h-auto px-1 py-0 text-base text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >
                   {expanded ? "Show less" : "Show more"}
                 </Button>

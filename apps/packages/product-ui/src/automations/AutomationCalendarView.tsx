@@ -61,7 +61,7 @@ export function AutomationCalendarView({
                   active ? "bg-foreground/[0.075] text-foreground" : "",
                 )}
               >
-                <span className="text-[10px] font-medium uppercase leading-3 tracking-wide">
+                <span className="text-sm font-medium uppercase leading-3 tracking-wide">
                   {day.weekdayLabel}
                 </span>
                 <span className="text-lg font-medium leading-6 tabular-nums">

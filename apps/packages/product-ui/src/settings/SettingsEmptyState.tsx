@@ -37,9 +37,9 @@ export function SettingsEmptyState({
           {icon}
         </div>
       ) : null}
-      <div className="text-[13px] font-medium leading-5 text-foreground">{title}</div>
+      <div className="text-ui font-medium leading-5 text-foreground">{title}</div>
       {description ? (
-        <div className="max-w-[48ch] text-[12px] leading-[1.45] text-muted-foreground">
+        <div className="max-w-[48ch] text-ui-sm leading-[1.45] text-muted-foreground">
           {description}
         </div>
       ) : null}

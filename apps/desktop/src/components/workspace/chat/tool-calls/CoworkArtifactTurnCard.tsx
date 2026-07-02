@@ -49,7 +49,7 @@ export function CoworkArtifactTurnCard({
               </div>
             )}
             {(typeLabel || !presentation.summary?.exists) && (
-              <div className="pt-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <div className="pt-1 text-base uppercase tracking-[0.08em] text-muted-foreground">
                 {[typeLabel, presentation.summary?.exists === false ? "File missing" : null]
                   .filter((value): value is string => Boolean(value))
                   .join(" · ")}

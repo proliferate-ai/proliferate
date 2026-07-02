@@ -254,7 +254,7 @@ function CloudChatHeaderNotice({ notice }: { notice: CloudChatHeaderNoticeView }
       {detailsOpen && notice.diagnostics ? (
         <div className="mt-2 flex items-start gap-2 pl-6">
           <code
-            className="min-w-0 flex-1 break-words rounded-md bg-background/35 px-2 py-1.5 font-mono text-[11px] leading-5 text-muted-foreground"
+            className="min-w-0 flex-1 break-words rounded-md bg-background/35 px-2 py-1.5 font-mono text-base leading-5 text-muted-foreground"
             data-telemetry-mask
           >
             {notice.diagnostics.text}

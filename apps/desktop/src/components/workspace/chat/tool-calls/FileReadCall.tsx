@@ -61,7 +61,7 @@ export function FileReadCall({
         pathLabel={workspacePath ?? path}
         workspacePath={workspacePath}
       />
-      {scopeLabel && <span className="truncate text-[12px] text-faint">{scopeLabel}</span>}
+      {scopeLabel && <span className="truncate text-ui-sm text-faint">{scopeLabel}</span>}
     </div>
   );
 

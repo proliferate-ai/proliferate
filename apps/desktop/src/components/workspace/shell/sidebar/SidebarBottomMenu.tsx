@@ -99,9 +99,9 @@ export function SidebarBottomMenu() {
                 )}
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[13px] leading-5">{displayName}</span>
+                <span className="truncate text-ui leading-5">{displayName}</span>
                 {planLabel ? (
-                  <span className="truncate text-[12px] leading-4 text-faint">{planLabel}</span>
+                  <span className="truncate text-ui-sm text-faint">{planLabel}</span>
                 ) : null}
               </span>
             </Button>
@@ -207,7 +207,7 @@ function HarnessVersionsRow() {
   return (
     <div className="mt-1 border-t border-border px-2.5 pb-1 pt-2">
       <Tooltip content={line} className="block max-w-full">
-        <div className="truncate text-[11px] leading-4 text-faint">{line}</div>
+        <div className="truncate text-base text-faint">{line}</div>
       </Tooltip>
     </div>
   );

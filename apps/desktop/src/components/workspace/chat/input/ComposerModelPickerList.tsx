@@ -45,13 +45,13 @@ export function ComposerModelPickerContent({
         ))}
 
         {filteredGroups.length === 0 && groups.length > 0 && (
-          <p className="px-3 py-4 text-center text-[13px] leading-[18px] text-muted-foreground">
+          <p className="px-3 py-4 text-center text-ui text-muted-foreground">
             {CHAT_MODEL_SELECTOR_LABELS.noMatchPrefix} "{search}"
           </p>
         )}
 
         {groups.length === 0 && (
-          <p className="px-3 py-4 text-center text-[13px] leading-[18px] text-muted-foreground">
+          <p className="px-3 py-4 text-center text-ui text-muted-foreground">
             {CHAT_MODEL_SELECTOR_LABELS.noProviders}
           </p>
         )}
@@ -84,7 +84,7 @@ function ComposerModelGroup({
   return (
     <>
       {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
-      <div className="min-h-5 truncate px-2.5 py-0.5 text-[12px] font-[430] leading-4 text-muted-foreground/70">
+      <div className="min-h-5 truncate px-2.5 py-0.5 text-ui-sm font-[430] text-muted-foreground/70">
         {group.providerDisplayName}
       </div>
       {group.models.map((model) => (
@@ -97,7 +97,7 @@ function ComposerModelGroup({
                 && !model.isSelected
                 && !hasSelectedModel
                 && group.kind !== activeKind && (
-                <span className="text-[12px] leading-4 text-muted-foreground/70">
+                <span className="text-ui-sm text-muted-foreground/70">
                   {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
                 </span>
               )}

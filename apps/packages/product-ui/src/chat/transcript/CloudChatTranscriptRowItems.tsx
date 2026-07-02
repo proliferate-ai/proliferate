@@ -258,7 +258,7 @@ export function CloudChatSystemRow({
         <div className="mt-1 space-y-1.5">
           {body ? (
             <div
-              className="whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[12px] leading-[1.65] text-muted-foreground select-text"
+              className="whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-ui-sm leading-[1.65] text-muted-foreground select-text"
               data-telemetry-mask
             >
               {body}

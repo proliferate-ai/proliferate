@@ -50,7 +50,7 @@ export function ProductSidebarRepoGroupHeader({
             {hoverIconNode}
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-[13px] leading-5 text-current">
+        <span className="min-w-0 flex-1 truncate text-ui leading-5 text-current">
           {label}
         </span>
 
@@ -136,7 +136,7 @@ export function ProductSidebarWorkspaceRow({
         ) : null}
 
         <div className={`${attentionStatus ? "ml-1" : "ml-1.5"} flex min-w-0 flex-1 items-center gap-2 pl-0.5`}>
-          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-[13px] leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
+          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-ui leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
             }`}>
             <span
               className={`${hasSubtitle ? "max-w-full" : "min-w-0 flex-1"} truncate select-none`}
@@ -162,7 +162,7 @@ export function ProductSidebarWorkspaceRow({
             }`}>
 
             {trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-[12px] leading-4 tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui-sm tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>

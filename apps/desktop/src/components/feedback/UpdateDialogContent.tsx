@@ -40,13 +40,13 @@ export function UpdateDialogContent({
           <h2 className="text-[15px] font-semibold leading-6 text-foreground">
             A new version of Proliferate is available!
           </h2>
-          <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+          <p className="mt-1 text-ui leading-5 text-muted-foreground">
             {`${newVersion} is now available${haveClause}. Would you like to download it now?`}
           </p>
         </div>
       </div>
 
-      <Label className="mb-0 flex select-none items-center gap-2 pl-[4.5rem] text-[13px]">
+      <Label className="mb-0 flex select-none items-center gap-2 pl-[4.5rem] text-ui">
         <Checkbox
           checked={autoUpdate}
           onChange={(event) => onToggleAutoUpdate(event.target.checked)}

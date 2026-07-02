@@ -137,7 +137,7 @@ export function WorktreeSortMenu({
 
 export function WorktreeTableHeader() {
   return (
-    <div className="grid h-7 min-w-[700px] grid-cols-[minmax(0,1fr)_74px_52px_82px_68px_136px] items-center gap-4 px-5 text-[10px] uppercase tracking-[0.04em] text-muted-foreground/60">
+    <div className="grid h-7 min-w-[700px] grid-cols-[minmax(0,1fr)_74px_52px_82px_68px_136px] items-center gap-4 px-5 text-sm uppercase tracking-[0.04em] text-muted-foreground/60">
       <span>Worktree</span>
       <span>Status</span>
       <span className="text-right">Chats</span>
@@ -170,7 +170,7 @@ export function RuntimeWorktreeRow({
   return (
     <div className="group grid min-h-10 min-w-[700px] grid-cols-[minmax(0,1fr)_74px_52px_82px_68px_136px] items-center gap-4 px-5 text-xs transition-colors hover:bg-foreground/[0.04]">
       <div className="flex min-w-0 items-baseline gap-2.5">
-        <span className="min-w-0 truncate text-[13px] font-medium text-foreground">{label}</span>
+        <span className="min-w-0 truncate text-ui font-medium text-foreground">{label}</span>
         <span className="min-w-0 truncate text-xs text-muted-foreground/60">
           {branchLabel ? `${repoLabel} / ${branchLabel}` : repoLabel}
         </span>
@@ -301,7 +301,7 @@ export function formatByteEstimate(value: number | null | undefined): string {
 
 function MenuLabel({ label }: { label: string }) {
   return (
-    <div className="px-2 py-1.5 text-[11px] text-muted-foreground/70">
+    <div className="px-2 py-1.5 text-base text-muted-foreground/70">
       {label}
     </div>
   );

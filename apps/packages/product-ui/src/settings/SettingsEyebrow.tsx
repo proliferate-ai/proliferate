@@ -2,7 +2,7 @@ import { type ElementType, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
 export const SETTINGS_EYEBROW_CLASS =
-  "font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+  "font-mono text-base font-medium uppercase tracking-[0.06em] text-muted-foreground";
 
 export interface SettingsEyebrowProps {
   children: ReactNode;

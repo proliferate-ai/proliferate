@@ -94,7 +94,7 @@ function ArchivedChatRow({
             : <Archive className="size-4" />}
         </span>
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium leading-5 text-foreground">
+          <div className="truncate text-ui font-medium leading-5 text-foreground">
             {row.title}
           </div>
           <div className="mt-0.5 truncate text-xs leading-5 text-muted-foreground">

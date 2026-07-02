@@ -121,7 +121,7 @@ export function WorkspacesCommandList({
           >
             <FolderPlus className="size-4 shrink-0" aria-hidden />
             <span>Create</span>
-            <span className="ml-auto text-[11px] text-faint opacity-0 transition-opacity group-hover:opacity-100 group-data-[selected=true]:opacity-100">
+            <span className="ml-auto text-base text-faint opacity-0 transition-opacity group-hover:opacity-100 group-data-[selected=true]:opacity-100">
               {createShortcutLabel}
             </span>
           </CommandItem>
@@ -166,7 +166,7 @@ function WorkspaceCommandRow({
               ) : null}
             </span>
             {meta ? (
-              <span className="flex min-w-0 items-center gap-2 text-[12px] leading-4 text-faint">
+              <span className="flex min-w-0 items-center gap-2 text-ui-sm text-faint">
                 <span aria-hidden>·</span>
                 <span className="truncate">{meta}</span>
               </span>
@@ -174,10 +174,10 @@ function WorkspaceCommandRow({
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-3">
-          <span className="w-16 text-right text-[12px] leading-4 tabular-nums text-faint group-data-[selected=true]:hidden">
+          <span className="w-16 text-right text-ui-sm tabular-nums text-faint group-data-[selected=true]:hidden">
             {item.updatedLabel ?? ""}
           </span>
-          <span className="hidden w-16 text-right text-[12px] leading-4 text-faint group-data-[selected=true]:inline">
+          <span className="hidden w-16 text-right text-ui-sm text-faint group-data-[selected=true]:inline">
             Go to →
           </span>
         </div>

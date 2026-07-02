@@ -217,7 +217,7 @@ export function HomeComposerForm({
       {modelAvailabilityNoticeSlot}
 
       {composer.submitDisabledReason ? (
-        <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
+        <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
           <span>{composer.submitDisabledReason}</span>
           {submitDisabledReasonCtaSlot}
         </div>

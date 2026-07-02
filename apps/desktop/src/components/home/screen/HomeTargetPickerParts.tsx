@@ -20,7 +20,7 @@ export const TARGET_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE
 export const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
 
 const TARGET_PICKER_SECTION_CLASS =
-  "flex min-h-6 items-center truncate px-2.5 py-1 text-[12px] leading-4 text-muted-foreground";
+  "flex min-h-6 items-center truncate px-2.5 py-1 text-ui-sm text-muted-foreground";
 const TARGET_PICKER_TRIGGER_ICON_CLASS = "size-3.5";
 const TARGET_PICKER_MENU_ICON_CLASS = "size-full";
 
@@ -115,7 +115,7 @@ export const HomeTargetRowItem = forwardRef<HTMLButtonElement, HomeTargetRowItem
         ref={ref}
         type={type}
         className={twMerge(
-          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-[13px] leading-[18px] text-muted-foreground outline-none transition-colors enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-accent data-[state=open]:text-foreground",
+          "flex h-6 min-w-0 select-none items-center gap-1 whitespace-nowrap rounded-full border border-transparent px-1.5 py-0 text-ui text-muted-foreground outline-none transition-colors enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 data-[state=open]:bg-accent data-[state=open]:text-foreground",
           className,
         )}
         {...props}

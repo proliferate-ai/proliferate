@@ -85,7 +85,7 @@ export function PluginToolsTab({ item }: { item: PluginInventoryItem }) {
                   <span className="flex shrink-0 items-center gap-1.5">
                     {component.publicLabel && component.publicTone ? (
                       <span
-                        className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${PUBLIC_TONE_CLASSES[component.publicTone]}`}
+                        className={`rounded-full border px-1.5 py-0.5 text-sm font-medium ${PUBLIC_TONE_CLASSES[component.publicTone]}`}
                       >
                         {component.publicLabel}
                       </span>

@@ -18,7 +18,7 @@ export function ClosedChatTabsMenu({
 }) {
   return (
     <div className="flex max-h-[70vh] flex-col overflow-hidden">
-      <div className="shrink-0 px-2 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <div className="shrink-0 px-2 pb-1 pt-1.5 text-base font-medium uppercase tracking-[0.08em] text-muted-foreground">
         Closed sessions
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">

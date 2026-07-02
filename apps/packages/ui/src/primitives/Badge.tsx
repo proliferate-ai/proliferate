@@ -22,7 +22,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       <span
         ref={ref}
         className={twMerge(
-          "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4",
+          "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-base font-medium",
           toneClasses[tone],
           className,
         )}

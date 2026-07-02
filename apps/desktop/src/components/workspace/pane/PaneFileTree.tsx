@@ -76,7 +76,7 @@ export function PaneFileTree<TData = unknown>({
             {sections.map((section) => (
               <div key={section.id} className="flex flex-col gap-px">
                 {section.label && (
-                  <div className="flex h-6 items-center justify-between gap-2 px-2 text-[10px] font-medium uppercase tracking-wide text-sidebar-muted-foreground">
+                  <div className="flex h-6 items-center justify-between gap-2 px-2 text-sm font-medium uppercase tracking-wide text-sidebar-muted-foreground">
                     <span className="min-w-0 truncate">{section.label}</span>
                     {section.trailing}
                   </div>
@@ -133,7 +133,7 @@ function PaneFileTreeNodeRow<TData>({
         }}
         title={node.title ?? node.path}
         className={twMerge(
-          "h-6 w-full justify-start gap-1.5 rounded-md px-2 text-[10px] hover:bg-sidebar-accent",
+          "h-6 w-full justify-start gap-1.5 rounded-md px-2 text-sm hover:bg-sidebar-accent",
           isDirectory ? "text-sidebar-muted-foreground" : "text-sidebar-foreground",
           node.selected && "bg-sidebar-accent text-sidebar-foreground",
         )}

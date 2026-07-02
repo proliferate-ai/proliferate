@@ -145,7 +145,7 @@ function GitReviewFileMeta({ file }: { file: GitPanelReviewFile }) {
 function GitReviewTreeStats({ stats }: { stats: TreeStats }) {
   if (stats.additions > 0 || stats.deletions > 0) {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-[10px] tabular-nums tracking-tight">
+      <span className="inline-flex shrink-0 items-center gap-1 text-sm tabular-nums tracking-tight">
         {stats.additions > 0 && <span className="text-git-green">+{stats.additions}</span>}
         {stats.deletions > 0 && <span className="text-git-red">-{stats.deletions}</span>}
       </span>
