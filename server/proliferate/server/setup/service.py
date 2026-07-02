@@ -20,25 +20,21 @@ The lifecycle, all single-org mode only:
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.identity.store import create_auth_user
-from proliferate.auth.passwords import (
-    PasswordValidationError,
-    hash_password,
-    normalize_password_email,
-    validate_new_password,
-)
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db.store import instance_setup as instance_setup_store
-from proliferate.db.store.auth_passwords import update_user_password_hash
 from proliferate.server.organizations.membership_policy import claim_instance_organization
+from proliferate.server.setup.accounts import (
+    AccountValidationError,
+    create_password_account,
+    normalize_account_email,
+    validate_account_password,
+)
 from proliferate.server.setup.domain.tokens import (
     hash_setup_token,
     mint_setup_token,
@@ -51,8 +47,6 @@ from proliferate.server.setup.errors import (
 )
 
 logger = logging.getLogger(__name__)
-
-_EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 @dataclass(frozen=True)
@@ -140,12 +134,10 @@ async def claim_first_run(
     ):
         raise InvalidSetupTokenError()
 
-    normalized_email = normalize_password_email(email)
-    if not _EMAIL_PATTERN.fullmatch(normalized_email):
-        raise SetupValidationError("Enter a valid email address.")
     try:
-        validate_new_password(password)
-    except PasswordValidationError as exc:
+        normalized_email = normalize_account_email(email)
+        validate_account_password(password)
+    except AccountValidationError as exc:
         raise SetupValidationError(exc.reason) from exc
 
     # Serialize concurrent claims; the lock is held until this transaction
@@ -154,18 +146,7 @@ async def claim_first_run(
     if await instance_setup_store.count_users(db) > 0:
         raise SetupClosedError()
 
-    user = await create_auth_user(
-        db,
-        email=normalized_email,
-        display_name=None,
-        avatar_url=None,
-    )
-    await update_user_password_hash(
-        db,
-        user_id=user.id,
-        hashed_password=hash_password(password),
-        password_set_at=datetime.now(UTC),
-    )
+    user = await create_password_account(db, email=normalized_email, password=password)
     organization = await claim_instance_organization(db, user)
     await instance_setup_store.delete_setup_token(db)
     await db_engine.run_after_commit(db, _remove_token_file_after_commit)
