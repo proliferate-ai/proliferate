@@ -41,7 +41,6 @@ class AuthorizedCloudWorkspaceSnapshot:
     materialized_target_id: UUID | None
     required_runtime_config_sequence: int | None
     required_runtime_config_revision_id: str | None
-    required_agent_auth_revision: int | None
     created_at: datetime
     updated_at: datetime
     ready_at: datetime | None
@@ -334,7 +333,6 @@ def _workspace_snapshot(row: CloudWorkspace) -> AuthorizedCloudWorkspaceSnapshot
         materialized_target_id=row.materialized_target_id,
         required_runtime_config_sequence=row.required_runtime_config_sequence,
         required_runtime_config_revision_id=row.required_runtime_config_revision_id,
-        required_agent_auth_revision=row.required_agent_auth_revision,
         created_at=row.created_at,
         updated_at=row.updated_at,
         ready_at=row.ready_at,

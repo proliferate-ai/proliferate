@@ -44,12 +44,6 @@ describe("resolveCloudSandboxGatewayConnectionForWorkspace", () => {
       },
       runtime: {
         generation: 7,
-        runtimeAuth: {
-          status: "current",
-          configCurrent: true,
-          targetCurrent: true,
-          requiresRestart: false,
-        },
       },
     } as unknown as CloudWorkspaceDetail);
 

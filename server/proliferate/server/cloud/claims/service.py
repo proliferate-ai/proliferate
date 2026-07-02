@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.authorization import PolicyDenied
 from proliferate.config import settings
 from proliferate.db.store import cloud_workspaces
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import claims as claims_store
 from proliferate.db.store.cloud_claims import tokens as tokens_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
@@ -426,22 +425,10 @@ async def _active_signing_key_applied_to_target(
 ) -> bool:
     if workspace.sandbox_profile_id is None or workspace.target_id is None:
         return False
-    state = await agent_auth_store.get_target_state(
+    _current, revision = await runtime_config_store.get_current(
         db,
         sandbox_profile_id=workspace.sandbox_profile_id,
-        target_id=workspace.target_id,
     )
-    if (
-        state is None
-        or state.runtime_config_status != "applied"
-        or state.applied_runtime_config_revision_id is None
-    ):
-        return False
-    try:
-        revision_id = UUID(state.applied_runtime_config_revision_id)
-    except ValueError:
-        return False
-    revision = await runtime_config_store.get_revision_by_id(db, revision_id)
     if revision is None:
         return False
     try:

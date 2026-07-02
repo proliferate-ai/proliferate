@@ -11,12 +11,12 @@ export interface UpgradeGateCopy {
 export const TEAM_UPGRADE_GATE_COPY: UpgradeGateCopy = {
   title: "Upgrade to Team",
   description:
-    "Create a Team when you are ready to share cloud runtime, agent auth, and collaboration settings with everyone you invite.",
+    "Create a Team when you are ready to share cloud runtime and collaboration settings with everyone you invite.",
   benefitsTitle: "Team includes",
   benefits: [
     "Members, invitations, and admin roles",
     "Organization cloud work, Slack sessions, and workflows",
-    "Organization integrations, MCPs, skills, and synced agent auth",
+    "Organization integrations, MCPs, and skills",
     "20 managed-cloud hours per user each month",
   ],
   footnote: "You will review seats and payment details in Stripe before anything is charged.",

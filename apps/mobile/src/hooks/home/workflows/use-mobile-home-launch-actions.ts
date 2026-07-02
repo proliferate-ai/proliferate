@@ -1,10 +1,8 @@
 import { useRef, useState } from "react";
 import type {
-  AgentAuthAgentKind,
   CloudAgentCatalogResponse,
 } from "@proliferate/cloud-sdk";
 import {
-  useCloudClient,
   useCreateCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
 import type { CloudLaunchComposerSelection } from "@proliferate/product-domain/chats/cloud/composer-controls";
@@ -17,7 +15,6 @@ import {
   type MobileRuntimeOption,
 } from "../../../lib/domain/home/mobile-home-launch";
 import { savePendingMobilePrompt } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import { ensurePersonalAgentAuthLaunchReady } from "../../../lib/access/cloud/agent-auth-launch-readiness";
 import type { MobileCloudChat } from "../../../navigation/navigation-model";
 
 export function useMobileHomeLaunchActions(input: {
@@ -34,7 +31,6 @@ export function useMobileHomeLaunchActions(input: {
   const submitInFlightRef = useRef(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const client = useCloudClient();
   const createWorkspace = useCreateCloudWorkspace();
 
   async function submit(text: string): Promise<void> {
@@ -59,13 +55,6 @@ export function useMobileHomeLaunchActions(input: {
     });
 
     try {
-      setStatus("Creating cloud workspace.");
-      await ensurePersonalAgentAuthLaunchReady({
-        client,
-        agentKind: normalizeAgentAuthAgentKind(input.selection.agentKind),
-        modelId: input.selection.modelId,
-        onStatus: setStatus,
-      });
       setStatus("Creating cloud workspace.");
       const workspace = await createWorkspace.mutateAsync({
         gitProvider: "github",
@@ -108,16 +97,4 @@ export function useMobileHomeLaunchActions(input: {
     submit,
     submitting: createWorkspace.isPending || submitInFlightRef.current,
   };
-}
-
-function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind | null {
-  switch (agentKind) {
-    case "claude":
-    case "codex":
-    case "opencode":
-    case "gemini":
-      return agentKind;
-    default:
-      return null;
-  }
 }

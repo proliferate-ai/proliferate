@@ -77,8 +77,6 @@ impl SessionRuntime {
             workspace_id: workspace_id.to_string(),
             agent_kind: source_agent_kind,
             native_session_id: None,
-            agent_auth_scope: None,
-            required_agent_auth_revision: None,
             agent_auth_contexts: None,
             requested_model_id: None,
             current_model_id: None,

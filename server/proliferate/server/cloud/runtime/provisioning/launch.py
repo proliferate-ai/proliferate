@@ -16,12 +16,8 @@ from proliferate.constants.cloud import (
     CloudWorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.integrations.sandbox import SandboxProvider
-from proliferate.server.cloud.agent_auth.service import (
-    request_agent_auth_refresh_for_profile_target,
-)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.bootstrap import (
     build_detached_supervisor_launch_command,
@@ -225,13 +221,6 @@ async def launch_and_connect_runtime(
         )
         raise
     tracker.complete(target_id=str(target_id))
-    await request_agent_auth_refresh_and_wait(
-        tracker,
-        ctx,
-        reason="workspace_provision",
-        force_restart=False,
-        set_workspace_status=set_workspace_status,
-    )
     await refresh_runtime_config_and_apply(
         tracker,
         ctx,
@@ -343,81 +332,6 @@ async def wait_for_worker_target_online(
     )
 
 
-async def wait_for_agent_auth_target_current(
-    ctx: CloudProvisionInput,
-    *,
-    total_attempts: int = 120,
-    delay_seconds: float = 0.5,
-) -> None:
-    last_status = "missing"
-    last_applied_revision: int | None = None
-    last_error: str | None = None
-    for _attempt in range(max(1, total_attempts)):
-        async with db_engine.async_session_factory() as db:
-            state = await agent_auth_store.get_target_state(
-                db,
-                sandbox_profile_id=ctx.sandbox_profile_id,
-                target_id=ctx.target_id,
-            )
-        if state is not None:
-            last_status = state.status
-            last_applied_revision = state.applied_revision
-            last_error = state.last_error_message
-            if state.status == "failed":
-                raise CloudApiError(
-                    "agent_auth_apply_failed",
-                    state.last_error_message or "Agent authentication failed to apply.",
-                    status_code=409,
-                )
-            if (
-                state.status == "applied"
-                and state.applied_revision is not None
-                and state.applied_revision >= ctx.required_agent_auth_revision
-                and not state.force_restart_required
-            ):
-                return
-        await asyncio.sleep(delay_seconds)
-
-    raise RuntimeError(
-        "Agent auth target state did not become current "
-        f"for target {ctx.target_id}; last_status={last_status}; "
-        f"last_applied_revision={last_applied_revision}; "
-        f"required_revision={ctx.required_agent_auth_revision}; "
-        f"last_error={last_error or '<none>'}."
-    )
-
-
-async def request_agent_auth_refresh_and_wait(
-    tracker: ProvisionStepTracker,
-    ctx: CloudProvisionInput,
-    *,
-    reason: str,
-    force_restart: bool,
-    set_workspace_status: SetWorkspaceStatus,
-) -> None:
-    await set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Applying agent authentication",
-    )
-    tracker.begin(
-        ProvisionStep.apply_agent_auth,
-        target_id=str(ctx.target_id),
-        revision=ctx.required_agent_auth_revision,
-    )
-    async with db_engine.async_session_factory() as db, db.begin():
-        await request_agent_auth_refresh_for_profile_target(
-            db,
-            sandbox_profile_id=ctx.sandbox_profile_id,
-            target_id=ctx.target_id,
-            actor_user_id=ctx.user_id,
-            reason=reason,
-            force_restart=force_restart,
-        )
-    await wait_for_agent_auth_target_current(ctx)
-    tracker.complete(target_id=str(ctx.target_id), revision=ctx.required_agent_auth_revision)
-
-
 async def refresh_runtime_config_and_apply(
     tracker: ProvisionStepTracker,
     ctx: CloudProvisionInput,
@@ -471,17 +385,6 @@ async def refresh_runtime_config_and_apply(
                 "Runtime config was applied but the cloud worker is not registered.",
                 status_code=409,
             )
-        await agent_auth_store.record_runtime_config_worker_status(
-            db,
-            sandbox_profile_id=ctx.sandbox_profile_id,
-            target_id=ctx.target_id,
-            sequence=status.current_revision.sequence,
-            revision_id=revision_id,
-            worker_id=worker_id,
-            status="applied",
-            error_code=None,
-            error_message=None,
-        )
     tracker.complete(
         target_id=str(ctx.target_id),
         revision=str(revision_id),

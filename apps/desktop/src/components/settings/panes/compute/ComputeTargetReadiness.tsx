@@ -2,15 +2,12 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { computeTargetReadiness } from "@/lib/domain/compute/target-readiness";
 import type {
   ComputeRuntimeConfigStatus,
-  ComputeSandboxProfileTargetState,
   ComputeTargetSummary,
 } from "@/lib/domain/compute/target-types";
 
 interface ComputeTargetReadinessProps {
   target: ComputeTargetSummary;
-  sandboxProfileTargetState?: ComputeSandboxProfileTargetState | null;
   runtimeConfigStatus?: ComputeRuntimeConfigStatus | null;
-  loadingTargetState?: boolean;
   loadingRuntimeConfig?: boolean;
 }
 
@@ -26,15 +23,11 @@ const READINESS_TONE: Record<
 
 export function ComputeTargetReadiness({
   target,
-  sandboxProfileTargetState = null,
   runtimeConfigStatus = null,
-  loadingTargetState = false,
   loadingRuntimeConfig = false,
 }: ComputeTargetReadinessProps) {
   const items = computeTargetReadiness(target, {
-    sandboxProfileTargetState,
     runtimeConfigStatus,
-    loadingTargetState,
     loadingRuntimeConfig,
   });
   return (

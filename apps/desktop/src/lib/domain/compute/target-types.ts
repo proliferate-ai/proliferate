@@ -63,33 +63,6 @@ export interface ComputeTargetDetail extends ComputeTargetSummary {
   createdByUserId: string;
 }
 
-export interface ComputeSandboxProfileTargetState {
-  target?: {
-    id: string;
-    kind: string;
-    status: string;
-    profileTargetRole: string;
-  } | null;
-  sandbox?: {
-    id: string;
-    status: string;
-    provider: string;
-    externalSandboxId?: string | null;
-    blockedReason?: string | null;
-  } | null;
-  runtimeAccess?: {
-    targetId: string;
-    cloudSandboxId?: string | null;
-    anyharnessBaseUrl?: string | null;
-    lastWorkerId?: string | null;
-    lastHeartbeatAt?: string | null;
-  } | null;
-  targetReady: boolean;
-  sandboxReady: boolean;
-  runtimeAccessReady: boolean;
-  ready: boolean;
-}
-
 export interface ComputeRuntimeConfigStatus {
   currentRevision?: {
     revisionId: string;

@@ -19,7 +19,6 @@ const USER_PREFERENCE_KEYS = [
   "transparentChromeEnabled",
   "subagentsEnabled",
   "coworkWorkspaceDelegationEnabled",
-  "cloudRuntimeInputSyncEnabled",
   "worktreeAutoDeleteLimit",
   "pasteAttachmentsEnabled",
   "reviewDefaultsByKind",
@@ -39,6 +38,7 @@ const DEPRECATED_USER_PREFERENCE_KEYS = [
   "onboardingPrimaryGoalId",
   "pluginsInCodingSessionsEnabled",
   "powersInCodingSessionsEnabled",
+  "cloudRuntimeInputSyncEnabled",
 ] as const;
 
 const DEPRECATED_USER_PREFERENCE_KEY_SET = new Set<string>(DEPRECATED_USER_PREFERENCE_KEYS);

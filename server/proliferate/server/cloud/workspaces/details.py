@@ -21,7 +21,6 @@ from proliferate.db.store.automation_runs import (
     AutomationRunValue,
     list_latest_runs_by_cloud_workspace_ids_for_user,
 )
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_environments import (
     get_runtime_environment_for_workspace,
     load_runtime_environment_for_workspace,
@@ -34,11 +33,6 @@ from proliferate.server.billing.snapshots import (
     get_billing_snapshot_for_subject_in_session,
 )
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
-from proliferate.server.cloud.runtime.credentials.auth_status import (
-    build_workspace_runtime_auth_snapshot,
-    load_workspace_runtime_auth_snapshot,
-    selected_agent_auth_agent_kinds,
-)
 from proliferate.server.cloud.workspaces.models import (
     WorkspaceCreatorContext,
     WorkspaceDetail,
@@ -127,32 +121,6 @@ def cloud_workspace_block_message(blocked_reason: str | None) -> str:
     return "Cloud usage is currently unavailable."
 
 
-async def _agent_auth_agent_kinds_for_workspace_request(
-    db: AsyncSession,
-    workspace: WorkspaceRow,
-) -> tuple[str, ...]:
-    sandbox_profile_id = workspace.sandbox_profile_id
-    if sandbox_profile_id is None:
-        profile = await agent_auth_store.get_active_personal_sandbox_profile_for_user(
-            db,
-            workspace.user_id,
-        )
-        if profile is None:
-            return ()
-        sandbox_profile_id = profile.id
-    return await selected_agent_auth_agent_kinds(
-        db,
-        sandbox_profile_id=sandbox_profile_id,
-    )
-
-
-async def _load_agent_auth_agent_kinds_for_workspace(
-    workspace: WorkspaceRow,
-) -> tuple[str, ...]:
-    async with db_session.open_async_session() as db:
-        return await _agent_auth_agent_kinds_for_workspace_request(db, workspace)
-
-
 def _workspace_action_block(
     workspace: WorkspaceRow,
     billing: BillingSnapshot,
@@ -187,11 +155,6 @@ async def workspace_summaries_for_request(
             cloud_workspace_id=workspace.id,
         )
         runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
-        runtime_auth = await build_workspace_runtime_auth_snapshot(
-            db,
-            workspace=workspace,
-            runtime_environment=runtime_environment,
-        )
         latest_sessions = await projections_store.list_session_projections_for_workspace(
             db,
             cloud_workspace_id=workspace.id,
@@ -223,7 +186,6 @@ async def workspace_summaries_for_request(
             workspace_summary_payload(
                 workspace,
                 runtime_environment=runtime_environment,
-                runtime_auth=runtime_auth,
                 billing=billing,
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
@@ -254,12 +216,7 @@ async def build_workspace_detail_for_request(
         cloud_workspace_id=workspace.id,
     )
     runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
-    runtime_auth = await build_workspace_runtime_auth_snapshot(
-        db,
-        workspace=workspace,
-        runtime_environment=runtime_environment,
-    )
-    ready_agent_kind_values = await _agent_auth_agent_kinds_for_workspace_request(db, workspace)
+    ready_agent_kind_values: tuple[str, ...] = ()
     latest_sessions = await projections_store.list_session_projections_for_workspace(
         db,
         cloud_workspace_id=workspace.id,
@@ -291,7 +248,6 @@ async def build_workspace_detail_for_request(
         workspace,
         ready_agent_kind_values,
         runtime_environment=runtime_environment,
-        runtime_auth=runtime_auth,
         billing=billing,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
@@ -320,11 +276,7 @@ async def build_workspace_detail(
             cloud_workspace_id=workspace.id,
         )
         runtime_environment = await load_runtime_environment_for_workspace(db, workspace)
-    runtime_auth = await load_workspace_runtime_auth_snapshot(
-        workspace=workspace,
-        runtime_environment=runtime_environment,
-    )
-    ready_agent_kind_values = await _load_agent_auth_agent_kinds_for_workspace(workspace)
+    ready_agent_kind_values: tuple[str, ...] = ()
     async with db_session.open_async_session() as db:
         latest_sessions = await projections_store.list_session_projections_for_workspace(
             db,
@@ -356,7 +308,6 @@ async def build_workspace_detail(
         workspace,
         ready_agent_kind_values,
         runtime_environment=runtime_environment,
-        runtime_auth=runtime_auth,
         billing=billing,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,

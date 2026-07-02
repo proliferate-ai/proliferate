@@ -15,9 +15,7 @@ import type {
   CloudTranscriptItem,
 } from "@proliferate/cloud-sdk";
 import {
-  useAgentAuthCredentials,
   useCloudAgentCatalog,
-  useCloudCapabilities,
   useCloudClient,
   useCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
@@ -43,8 +41,6 @@ export function useWebCloudChatData() {
   const { token: productToken } = useAuthToken();
   const workspaceQuery = useCloudWorkspace(workspaceId ?? null, Boolean(workspaceId));
   const agentCatalog = useCloudAgentCatalog();
-  const cloudCapabilities = useCloudCapabilities();
-  const agentAuthCredentials = useAgentAuthCredentials();
   const workspace = workspaceQuery.data ?? null;
   const workspaceStatus = workspace ? effectiveWorkspaceStatus(workspace) : null;
   const sessionsQuery = useQuery({
@@ -148,8 +144,6 @@ export function useWebCloudChatData() {
     client,
     workspaceQuery,
     agentCatalog,
-    cloudCapabilities,
-    agentAuthCredentials,
     snapshot,
     workspace,
     workspaceStatus,

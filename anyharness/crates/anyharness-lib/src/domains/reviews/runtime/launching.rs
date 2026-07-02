@@ -110,8 +110,6 @@ impl ReviewRuntime {
             None,
             SessionMcpBindingPolicy::InternalOnly,
             false,
-            None,
-            None,
             OriginContext::system_local_runtime(),
         ) {
             Ok(child) => child,

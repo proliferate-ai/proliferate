@@ -12,7 +12,6 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from proliferate.constants.cloud import CloudTargetStatus, CloudTargetUpdateStatus
 from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
-from proliferate.db.models.cloud.agent_auth import SandboxProfile
 from proliferate.db.models.cloud.cloud_target_runtime_access import CloudTargetRuntimeAccess
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.targets import (
@@ -24,10 +23,6 @@ from proliferate.db.models.cloud.targets import (
     CloudTargetStatus as CloudTargetStatusRow,
 )
 from proliferate.db.models.organizations import OrganizationMembership
-from proliferate.db.store.cloud_profile_target_guard import (
-    ProfileTargetInvariantError,
-    require_primary_managed_profile_target,
-)
 from proliferate.db.store.cloud_sync import worker_control
 from proliferate.utils.time import utcnow
 
@@ -325,79 +320,6 @@ async def get_active_personal_target_by_kind(
     return _target_snapshot(target, status, inventory, worker)
 
 
-async def ensure_primary_profile_target(
-    db: AsyncSession,
-    *,
-    sandbox_profile_id: UUID,
-    created_by_user_id: UUID | None,
-) -> CloudTargetSnapshot:
-    profile = (
-        await db.execute(
-            select(SandboxProfile)
-            .where(
-                SandboxProfile.id == sandbox_profile_id,
-                SandboxProfile.archived_at.is_(None),
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if profile is None:
-        raise RuntimeError("Sandbox profile not found.")
-    existing = (
-        await db.execute(
-            select(CloudTarget)
-            .where(
-                CloudTarget.sandbox_profile_id == sandbox_profile_id,
-                CloudTarget.profile_target_role == "primary",
-                CloudTarget.archived_at.is_(None),
-            )
-            .with_for_update()
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        status = await db.get(CloudTargetStatusRow, existing.id)
-        inventory = await db.get(CloudTargetInventory, existing.id)
-        worker = await _get_worker_for_status(db, status)
-        return _target_snapshot(existing, status, inventory, worker)
-
-    if profile.owner_scope == "personal":
-        owner_user_id = profile.owner_user_id
-        organization_id = None
-        if owner_user_id is None:
-            raise RuntimeError("Personal sandbox profile is missing owner_user_id.")
-        target_created_by_user_id = created_by_user_id or owner_user_id
-    else:
-        owner_user_id = None
-        organization_id = profile.organization_id
-        if organization_id is None:
-            raise RuntimeError("Organization sandbox profile is missing organization_id.")
-        if created_by_user_id is None:
-            raise RuntimeError("Organization primary target requires created_by_user_id.")
-        target_created_by_user_id = created_by_user_id
-
-    target = await create_target(
-        db,
-        display_name=(
-            "Personal cloud sandbox"
-            if profile.owner_scope == "personal"
-            else "Shared cloud sandbox"
-        ),
-        kind="managed_cloud",
-        owner_scope=profile.owner_scope,
-        owner_user_id=owner_user_id,
-        organization_id=organization_id,
-        created_by_user_id=target_created_by_user_id,
-        default_workspace_root=None,
-        sandbox_profile_id=profile.id,
-        profile_target_role="primary",
-    )
-    if profile.status == "configuring":
-        profile.status = "provisioning"
-        profile.updated_at = utcnow()
-        await db.flush()
-    return target
-
-
 async def get_target_by_id(
     db: AsyncSession,
     target_id: UUID,
@@ -596,14 +518,6 @@ async def update_target_runtime_access(
     worker_id: UUID | None,
     heartbeat_at: datetime,
 ) -> CloudTargetRuntimeAccessSnapshot | None:
-    try:
-        await require_primary_managed_profile_target(
-            db,
-            sandbox_profile_id=sandbox_profile_id,
-            target_id=target_id,
-        )
-    except ProfileTargetInvariantError:
-        return None
     if cloud_sandbox_id is not _UNSET and cloud_sandbox_id is not None:
         active_sandbox = (
             await db.execute(

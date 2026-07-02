@@ -1,7 +1,6 @@
 export * from "./generated.js";
 export * from "./auth.js";
 export * from "./sso.js";
-export * from "./agent-auth.js";
 export * from "./agent-run-configs.js";
 export * from "./targets.js";
 export * from "./commands.js";

@@ -9,7 +9,6 @@ import {
   buildLaunchAgentModelControl,
   buildLaunchConfigControl,
   fallbackLaunchComposerControls,
-  unavailableLaunchComposerControls,
 } from "./composer-launch-control-builders";
 import {
   defaultLaunchModel,
@@ -18,7 +17,6 @@ import {
   selectLaunchAgent,
   selectLaunchModel,
   selectedLaunchControlValue,
-  shouldShowUnavailableLaunchControls,
 } from "./composer-launch-catalog";
 import {
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
@@ -43,12 +41,6 @@ export function buildCloudLaunchComposerControls(input: {
     launchableAgentKinds: input.launchableAgentKinds,
   });
   if (catalogAgents.length === 0) {
-    if (shouldShowUnavailableLaunchControls({
-      catalog: input.catalog,
-      launchableAgentKinds: input.launchableAgentKinds,
-    })) {
-      return unavailableLaunchComposerControls();
-    }
     return fallbackLaunchComposerControls({
       modelId: input.selection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
       onModelSelect: (modelId) =>
@@ -87,17 +79,6 @@ export function resolveCloudLaunchSelection(input: {
   });
   const agent = selectLaunchAgent(agents, input.selection.agentKind);
   if (!agent) {
-    if (shouldShowUnavailableLaunchControls({
-      catalog: input.catalog,
-      launchableAgentKinds: input.launchableAgentKinds,
-    })) {
-      return {
-        ...input.selection,
-        agentKind: input.selection.agentKind || "",
-        modelId: null,
-        modeId: null,
-      };
-    }
     return {
       ...input.selection,
       agentKind: input.selection.agentKind || DEFAULT_DIRECT_PROMPT_AGENT_KIND,

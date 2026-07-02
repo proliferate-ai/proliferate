@@ -20,7 +20,6 @@ import {
   type PendingWorkspaceEntry,
   type PendingWorkspaceInitialSession,
 } from "@/lib/domain/workspaces/creation/pending-entry";
-import { useAgentAuthCache } from "@/hooks/access/cloud/use-agent-auth-cache";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
@@ -32,8 +31,6 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { autoSyncDetectedAgentAuthCredentialsIfNeeded } from "@/lib/access/cloud/agent-auth-recovery";
-import { syncLocalAgentAuthCredentialToCloud } from "@/lib/access/cloud/agent-auth-sync";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -94,7 +91,6 @@ export function useCreateCloudWorkspace() {
   const authUser = useAuthStore((state) => state.user);
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
-  const { invalidateAgentAuth } = useAgentAuthCache();
   const invalidateCloudBillingState = useInvalidateCloudBillingState();
   const { clearCachedCloudWorkspaceConnections } = useCloudWorkspaceConnectionCache();
   const { getWorkspaceCollections } = useWorkspaceCollectionsCache({
@@ -109,26 +105,12 @@ export function useCreateCloudWorkspace() {
       telemetryHandled: true,
     },
     mutationFn: async (input) => {
-      try {
-        return await createCloudWorkspace(input);
-      } catch (error) {
-        const didSync = await autoSyncDetectedAgentAuthCredentialsIfNeeded(
-          error,
-          syncLocalAgentAuthCredentialToCloud,
-        );
-        if (!didSync) {
-          throw error;
-        }
-        return await createCloudWorkspace(input);
-      }
+      return createCloudWorkspace(input);
     },
     onSuccess: async (workspace) => {
       await clearCachedCloudWorkspaceConnections(workspace.id);
       upsertCloudWorkspace(workspace);
-      await Promise.all([
-        invalidateCloudBillingState(),
-        invalidateAgentAuth(),
-      ]);
+      await invalidateCloudBillingState();
     },
   });
   const { mutateAsync: createCloudWorkspaceMutation } = createMutation;

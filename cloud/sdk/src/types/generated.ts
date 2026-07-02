@@ -115,15 +115,10 @@ export type CloudRuntimeStatus =
   | "error"
   | "disabled";
 
-export type CloudRuntimeAuthState =
-  Schema<"WorkspaceRuntimeAuthState">;
-export type CloudRuntimeAuthStatus = CloudRuntimeAuthState["status"];
-
 export interface CloudWorkspaceRuntimeSummary {
   environmentId: string | null;
   status: CloudRuntimeStatus;
   generation: number;
-  runtimeAuth?: CloudRuntimeAuthState | null;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
 }
@@ -265,7 +260,6 @@ export interface CloudConnectionInfo {
   runtimeGeneration: number;
   allowedAgentKinds: CloudAgentKind[];
   readyAgentKinds: string[];
-  runtimeAuth: CloudRuntimeAuthState;
 }
 export type CloudGitRepositorySummary = Schema<"CloudGitRepositorySummary">;
 export type CloudGitRepositoriesResponse =

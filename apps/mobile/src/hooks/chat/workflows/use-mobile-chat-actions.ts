@@ -117,8 +117,6 @@ export function useMobileChatActions({
     launchSelection,
     runtimeLabel,
     catalog: agentResources.agentCatalog.data,
-    agentGateway: agentResources.cloudCapabilities.data?.agentGateway,
-    agentAuthCredentials: agentResources.agentAuthCredentials.data,
     updateLaunchSelection: setLaunchSelection,
     onSubmitSessionConfig: (rawConfigId, value) => {
       void submitSessionConfig(rawConfigId, value);

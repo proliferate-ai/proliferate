@@ -587,8 +587,6 @@ impl MobilityService {
             // Native agent session state is tied to the source workspace path.
             // Keep durable history, but let the destination start a fresh native session.
             session.native_session_id = None;
-            session.agent_auth_scope = None;
-            session.required_agent_auth_revision = None;
             // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
             session.mcp_bindings_ciphertext = None;
             session.mcp_binding_summaries_json = None;

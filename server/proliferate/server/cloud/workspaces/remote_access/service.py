@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
     CloudCommandKind,
     CloudCommandSource,
     CloudTargetKind,
@@ -24,7 +25,6 @@ from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_by_id,
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
-from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.service import enqueue_command
@@ -38,7 +38,6 @@ from proliferate.server.cloud.workspaces.access import (
 )
 from proliferate.server.cloud.workspaces.details import build_workspace_detail_for_request
 from proliferate.server.cloud.workspaces.models import WorkspaceDetail
-from proliferate.server.cloud.workspaces.payloads import runtime_auth_payload
 from proliferate.server.cloud.workspaces.remote_access.models import (
     BootstrapWorkspaceRemoteAccessRequest,
     WorkspaceConnection,
@@ -375,9 +374,8 @@ async def get_cloud_connection(
         access_token=target.access_token,
         anyharness_workspace_id=target.anyharness_workspace_id,
         runtime_generation=target.runtime_generation,
-        allowed_agent_kinds=allowed_agent_kinds(),
+        allowed_agent_kinds=list(SUPPORTED_CLOUD_AGENTS),
         ready_agent_kinds=target.ready_agent_kinds,
-        runtime_auth=runtime_auth_payload(target.runtime_auth),
     )
 
 

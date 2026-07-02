@@ -7,7 +7,6 @@ import {
 } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
-import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
 import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
@@ -167,21 +166,6 @@ function renderSettingsSection(
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
   }
-  if (activeSection === "agent-authentication") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
   // SLACK BOT PARKED: render branch is intentionally disabled with the settings entry point.
   // if (activeSection === "slack-bot") {
   //   if (!cloudEnabled) {
@@ -329,7 +313,6 @@ export function SettingsScreen({
           }}
           onSelectSection={onSelectSection}
           disabledSections={{
-            "agent-authentication": !cloudEnabled,
             "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,

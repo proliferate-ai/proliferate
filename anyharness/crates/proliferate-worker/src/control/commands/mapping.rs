@@ -201,29 +201,6 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
         "required_runtime_config_content_hash",
     );
     copy_optional_value_field(&mut body, object, "sandboxProfileId", "sandbox_profile_id");
-    if let Some(sandbox_profile_id) = string_field(object, "sandboxProfileId", "sandbox_profile_id")
-    {
-        body.insert(
-            "agentAuthScope".to_string(),
-            json!({
-                "provider": "proliferate-cloud",
-                "id": sandbox_profile_id,
-                "targetId": command.target_id,
-            }),
-        );
-    } else {
-        body.remove("agentAuthScope");
-    }
-    if let Some(revision) = integer_field(
-        object,
-        "requiredAgentAuthRevision",
-        "required_agent_auth_revision",
-    ) {
-        body.insert(
-            "requiredAgentAuthRevision".to_string(),
-            Value::Number(revision.into()),
-        );
-    }
     map_runtime_config_preflight(
         &mut body,
         &command.target_id,
@@ -296,7 +273,6 @@ fn prompt_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMappingEr
         ));
     };
     let mut body = object.clone();
-    strip_agent_auth_preflight_fields(&mut body);
     map_runtime_config_preflight(
         &mut body,
         &command.target_id,
@@ -371,11 +347,6 @@ fn map_runtime_config_preflight(
         }),
     );
     Ok(())
-}
-
-fn strip_agent_auth_preflight_fields(body: &mut Map<String, Value>) {
-    body.remove("agentAuthScope");
-    body.remove("requiredAgentAuthRevision");
 }
 
 fn interaction_resolution_body(payload: &Value) -> Result<(String, Value), CommandMappingError> {
@@ -681,43 +652,6 @@ mod tests {
     }
 
     #[test]
-    fn maps_start_session_agent_auth_scope_from_preflight_payload() {
-        let mut command = test_command(json!({
-            "workspaceId": "workspace-1",
-            "agentKind": "claude",
-            "sandboxProfileId": "profile-1",
-            "requiredAgentAuthRevision": 9
-        }));
-        command.kind = "start_session".to_string();
-
-        let mapped = map_cloud_command(&command).expect("mapped");
-        let AnyHarnessCommand::StartSession { body } = mapped else {
-            panic!("expected start session");
-        };
-        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
-        assert_eq!(body["agentAuthScope"]["id"], "profile-1");
-        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
-        assert_eq!(body["requiredAgentAuthRevision"], 9);
-    }
-
-    #[test]
-    fn does_not_synthesize_start_session_agent_auth_scope_from_envelope() {
-        let mut command = test_command(json!({
-            "workspaceId": "workspace-1",
-            "agentKind": "claude",
-            "requiredAgentAuthRevision": 9
-        }));
-        command.kind = "start_session".to_string();
-        command.sandbox_profile_id = Some("profile-from-envelope".to_string());
-
-        let mapped = map_cloud_command(&command).expect("mapped");
-        let AnyHarnessCommand::StartSession { body } = mapped else {
-            panic!("expected start session");
-        };
-        assert!(body.get("agentAuthScope").is_none());
-    }
-
-    #[test]
     fn maps_runtime_config_preflight_to_anyharness_expected_revision() {
         let mut command = test_command(json!({
             "workspaceId": "workspace-1",
@@ -780,30 +714,6 @@ mod tests {
     }
 
     #[test]
-    fn maps_start_session_overwrites_untrusted_agent_auth_scope() {
-        let mut command = test_command(json!({
-            "workspaceId": "workspace-1",
-            "agentKind": "claude",
-            "sandboxProfileId": "profile-1",
-            "requiredAgentAuthRevision": 9,
-            "agentAuthScope": {
-                "provider": "local",
-                "id": "default",
-                "targetId": "other-target"
-            }
-        }));
-        command.kind = "start_session".to_string();
-
-        let mapped = map_cloud_command(&command).expect("mapped");
-        let AnyHarnessCommand::StartSession { body } = mapped else {
-            panic!("expected start session");
-        };
-        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
-        assert_eq!(body["agentAuthScope"]["id"], "profile-1");
-        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
-    }
-
-    #[test]
     fn maps_start_session_with_contract_allowlist() {
         let mut command = test_command(json!({
             "workspaceId": "workspace-1",
@@ -838,36 +748,10 @@ mod tests {
     }
 
     #[test]
-    fn maps_start_session_strips_untrusted_agent_auth_scope_without_preflight() {
-        let mut command = test_command(json!({
-            "workspaceId": "workspace-1",
-            "agentKind": "claude",
-            "agentAuthScope": {
-                "provider": "local",
-                "id": "default",
-                "targetId": "other-target"
-            }
-        }));
-        command.kind = "start_session".to_string();
-
-        let mapped = map_cloud_command(&command).expect("mapped");
-        let AnyHarnessCommand::StartSession { body } = mapped else {
-            panic!("expected start session");
-        };
-        assert!(body.get("agentAuthScope").is_none());
-    }
-
-    #[test]
     fn strips_preflight_fields_from_prompt_payload() {
         let mut command = test_command(json!({
             "text": "continue",
-            "agentAuthScope": {
-                "provider": "proliferate-cloud",
-                "id": "profile-1",
-                "targetId": "target-1"
-            },
             "sandboxProfileId": "profile-1",
-            "requiredAgentAuthRevision": 9,
             "requiredRuntimeConfigRevisionId": "rev-1",
             "requiredRuntimeConfigSequence": 7,
             "requiredRuntimeConfigContentHash": "sha256:abc"
@@ -879,9 +763,7 @@ mod tests {
         let AnyHarnessCommand::SendPrompt { body, .. } = mapped else {
             panic!("expected send prompt");
         };
-        assert!(body.get("agentAuthScope").is_none());
         assert!(body.get("sandboxProfileId").is_none());
-        assert!(body.get("requiredAgentAuthRevision").is_none());
         assert!(body.get("requiredRuntimeConfigRevisionId").is_none());
         assert_eq!(
             body.pointer("/expectedRuntimeConfigRevision/revisionId")

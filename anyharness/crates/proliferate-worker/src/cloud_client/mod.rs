@@ -1,4 +1,3 @@
-pub mod agent_auth;
 pub mod auth;
 pub mod backfill;
 pub mod catalogs;

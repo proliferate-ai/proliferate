@@ -60,8 +60,6 @@ impl SessionActor {
             &config.launch.workspace_path,
             &config.launch.env.workspace,
             &config.launch.env.session,
-            &config.launch.env.auth_support,
-            &config.launch.env.auth_protected,
             &session_id,
             &workspace_id,
             &source_agent_kind,

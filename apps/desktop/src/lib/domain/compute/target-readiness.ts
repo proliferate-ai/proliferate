@@ -1,13 +1,12 @@
 import type {
   ComputeTargetInventory,
   ComputeRuntimeConfigStatus,
-  ComputeSandboxProfileTargetState,
   ComputeTargetStatus,
   ComputeTargetSummary,
 } from "@/lib/domain/compute/target-types";
 
 export interface ComputeReadinessItem {
-  key: "target" | "worker" | "git" | "node" | "python" | "runtime-config" | "sandbox";
+  key: "target" | "worker" | "git" | "node" | "python" | "runtime-config";
   label: string;
   status: "ready" | "pending" | "missing" | "unavailable";
   detail: string;
@@ -31,9 +30,7 @@ function hasAvailableFlag(value: Record<string, unknown> | null | undefined): bo
 export function computeTargetReadiness(
   targetOrInventory: ComputeTargetSummary | ComputeTargetInventory | null | undefined,
   options: {
-    sandboxProfileTargetState?: ComputeSandboxProfileTargetState | null;
     runtimeConfigStatus?: ComputeRuntimeConfigStatus | null;
-    loadingTargetState?: boolean;
     loadingRuntimeConfig?: boolean;
   } = {},
 ): ComputeReadinessItem[] {
@@ -43,7 +40,6 @@ export function computeTargetReadiness(
     : targetOrInventory as ComputeTargetInventory | null | undefined;
   const targetStatus = target?.status ?? null;
   const currentVersions = target?.update?.currentVersions ?? null;
-  const sandboxState = options.sandboxProfileTargetState ?? null;
   const runtimeConfig = options.runtimeConfigStatus ?? null;
   return [
     {
@@ -85,16 +81,6 @@ export function computeTargetReadiness(
       label: "Runtime config",
       status: runtimeConfigReadiness(target, runtimeConfig, options.loadingRuntimeConfig ?? false),
       detail: runtimeConfigDetail(target, runtimeConfig, options.loadingRuntimeConfig ?? false),
-    },
-    {
-      key: "sandbox",
-      label: "Sandbox",
-      status: sandboxReadiness(
-        target,
-        sandboxState,
-        options.loadingTargetState ?? false,
-      ),
-      detail: sandboxDetail(target, sandboxState, options.loadingTargetState ?? false),
     },
   ];
 }
@@ -164,79 +150,4 @@ function runtimeConfigDetail(
     return "No runtime config revision has been generated for this sandbox profile.";
   }
   return `Revision ${revision.sequence} generated ${revision.createdAt}.`;
-}
-
-function sandboxReadiness(
-  target: ComputeTargetSummary | null,
-  sandboxState: ComputeSandboxProfileTargetState | null,
-  loading: boolean,
-): ComputeReadinessItem["status"] {
-  if (target?.kind !== "managed_cloud") {
-    return "ready";
-  }
-  if (loading) {
-    return "pending";
-  }
-  if (!sandboxState) {
-    return "missing";
-  }
-  if (
-    sandboxState.ready
-    && sandboxState.targetReady === true
-    && sandboxState.sandboxReady === true
-    && sandboxState.runtimeAccessReady === true
-  ) {
-    return "ready";
-  }
-  if (isPendingTargetStatus(sandboxState.target?.status)) {
-    return "pending";
-  }
-  if (!sandboxState.sandbox) {
-    return "missing";
-  }
-  if (isPendingSandboxStatus(sandboxState.sandbox.status)) {
-    return "pending";
-  }
-  return "missing";
-}
-
-function sandboxDetail(
-  target: ComputeTargetSummary | null,
-  sandboxState: ComputeSandboxProfileTargetState | null,
-  loading: boolean,
-): string {
-  if (target?.kind !== "managed_cloud") {
-    return "Direct SSH and local targets do not use a managed cloud sandbox.";
-  }
-  if (loading) {
-    return "Loading managed cloud sandbox state.";
-  }
-  if (!sandboxState) {
-    return "Managed cloud sandbox state has not been reported.";
-  }
-  if (sandboxState.targetReady !== true) {
-    const targetStatus = sandboxState.target?.status ?? target?.status ?? "unknown";
-    return `Primary managed target is ${targetStatus}; waiting for it to come online.`;
-  }
-  if (!sandboxState.sandbox) {
-    return "No active cloud sandbox exists for this target.";
-  }
-  if (sandboxState.sandbox.blockedReason) {
-    return `Sandbox blocked: ${sandboxState.sandbox.blockedReason}.`;
-  }
-  if (sandboxState.sandboxReady !== true) {
-    return `Sandbox is ${sandboxState.sandbox.status}; waiting for provider readiness.`;
-  }
-  if (sandboxState.runtimeAccessReady !== true) {
-    return `Sandbox is ${sandboxState.sandbox.status}; runtime access is not ready.`;
-  }
-  return `Sandbox is ${sandboxState.sandbox.status}; runtime access is ready.`;
-}
-
-function isPendingTargetStatus(status: string | null | undefined): boolean {
-  return status === "enrolling" || status === "provisioning" || status === "pending";
-}
-
-function isPendingSandboxStatus(status: string | null | undefined): boolean {
-  return status === "creating" || status === "provisioning" || status === "pending";
 }

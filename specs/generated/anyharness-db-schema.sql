@@ -4,18 +4,6 @@ CREATE TABLE _migrations (
             applied_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
--- table: agent_auth_config
-CREATE TABLE agent_auth_config (
-    scope_key TEXT PRIMARY KEY NOT NULL,
-    scope_provider TEXT NOT NULL,
-    scope_id TEXT NOT NULL,
-    target_id TEXT,
-    revision INTEGER NOT NULL,
-    config_ciphertext TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
 -- table: agent_model_registry_snapshots
 CREATE TABLE agent_model_registry_snapshots (
     id TEXT PRIMARY KEY,
@@ -455,7 +443,7 @@ CREATE TABLE sessions (
     updated_at TEXT NOT NULL,
     last_prompt_at TEXT,
     closed_at TEXT
-, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_scope_provider TEXT, agent_auth_scope_id TEXT, agent_auth_scope_target_id TEXT, required_agent_auth_revision INTEGER, agent_auth_contexts TEXT);
+, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT);
 
 -- table: terminal_command_runs
 CREATE TABLE terminal_command_runs (

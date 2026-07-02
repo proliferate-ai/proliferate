@@ -24,7 +24,6 @@ import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import {
   assertDirectSessionCreateRuntimeConfigStamped,
-  prepareCloudSandboxGatewayAgentAuthConfig,
   prepareLocalSessionRuntimeConfig,
 } from "@/lib/access/anyharness/session-runtime-config";
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
@@ -284,11 +283,6 @@ async function prepareDirectSessionRuntimeConfig({
   materializeStartedAt: number;
 }) {
   assertDirectSessionCreateRuntimeConfigStamped(target);
-  await prepareCloudSandboxGatewayAgentAuthConfig(
-    target,
-    targetConnection,
-    requestOptions,
-  );
   const expectedRuntimeConfigRevision = await prepareLocalSessionRuntimeConfig(
     targetConnection,
     requestOptions,

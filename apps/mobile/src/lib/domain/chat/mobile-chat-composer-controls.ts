@@ -14,10 +14,7 @@ import {
   type PendingConfigChange,
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 import {
-  readyCloudAgentKinds,
   resolveCloudHarnessAvailability,
-  type CloudAgentAuthCredentialLike,
-  type CloudAgentGatewayCapabilitiesLike,
   type CloudHarnessAvailability,
 } from "@proliferate/product-domain/chats/cloud/harness-availability";
 
@@ -45,28 +42,14 @@ export function buildMobileChatComposerControlsModel(input: {
   launchSelection: CloudLaunchComposerSelection;
   runtimeLabel: string;
   catalog: CloudAgentCatalogResponse | null | undefined;
-  agentGateway: CloudAgentGatewayCapabilitiesLike | null | undefined;
-  agentAuthCredentials: readonly CloudAgentAuthCredentialLike[] | null | undefined;
   updateLaunchSelection: MobileChatLaunchSelectionUpdater;
   onSubmitSessionConfig: (rawConfigId: string, value: string) => void;
   onStartNewSession: (selection?: CloudLaunchComposerSelection) => void;
 }): MobileChatComposerControlsModel {
   const catalogAgentKinds = input.catalog?.agents.map((agent) => agent.kind);
-  const workspaceUsesManagedRuntime =
-    !input.workspace
-    || input.workspace.sandboxType === "managed_personal"
-    || input.workspace.sandboxType === "managed_shared";
-  const readyAgentKinds = readyCloudAgentKinds({
-    credentials: input.agentAuthCredentials,
-    agentGateway: input.agentGateway,
-  });
   const workspaceHarnessAvailability = resolveCloudHarnessAvailability({
     catalogAgentKinds,
     allowedAgentKinds: input.workspace?.allowedAgentKinds,
-    readyAgentKinds: input.workspace?.readyAgentKinds
-      ?? (workspaceUsesManagedRuntime ? readyAgentKinds : catalogAgentKinds),
-    agentGateway: workspaceUsesManagedRuntime ? input.agentGateway : null,
-    assumeFallbackAgentKindsLaunchable: !workspaceUsesManagedRuntime,
   });
   const workspaceLaunchableAgentKinds = workspaceHarnessAvailability.launchableAgentKinds;
   const liveConfig = readSessionLiveConfig(input.session);

@@ -194,8 +194,7 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         }
         StartSessionError::Closed => SendPromptError::SessionClosed,
         StartSessionError::MissingDataKey
-        | StartSessionError::RestartRequired(_)
-        | StartSessionError::AgentAuthSelectionRequired(_) => {
+        | StartSessionError::RestartRequired(_) => {
             SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))
         }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {

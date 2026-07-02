@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
     CloudCommandStatus,
@@ -45,7 +46,6 @@ from proliferate.server.automations.worker.cloud_executor_commands import (
     AutomationCommandResult,
     wait_for_command_result,
 )
-from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.commands.client_state import (
     mark_pending_prompt_interaction_failed_for_command,
 )
@@ -396,7 +396,7 @@ async def _resolve_new_direct_target_workspace_create(
             "Choose a new branch before launching desktop dispatch.",
             status_code=400,
         )
-    if body.agent_kind not in allowed_agent_kinds():
+    if body.agent_kind not in SUPPORTED_CLOUD_AGENTS:
         raise CloudApiError(
             "unsupported_agent_kind",
             "The selected agent is not supported for desktop dispatch.",

@@ -110,8 +110,6 @@ pub(super) fn session_record(agent_kind: &str) -> SessionRecord {
         workspace_id: "workspace-1".to_string(),
         agent_kind: agent_kind.to_string(),
         native_session_id: Some("native-1".to_string()),
-        agent_auth_scope: None,
-        required_agent_auth_revision: None,
         agent_auth_contexts: None,
         requested_model_id: None,
         current_model_id: None,
@@ -188,7 +186,6 @@ fn build_session_launch_env_sets_claude_code_executable_for_claude() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         runtime_home.path(),
-        &BTreeMap::new(),
         None,
     )
     .expect("build env");
@@ -205,7 +202,6 @@ fn build_session_launch_env_sets_requested_model_for_claude() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         runtime_home.path(),
-        &BTreeMap::new(),
         Some("opus[1m]"),
     )
     .expect("build env");
@@ -226,7 +222,6 @@ fn build_session_launch_env_ignores_claude_without_native_path() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, None),
         runtime_home.path(),
-        &BTreeMap::new(),
         None,
     )
     .expect("build env");
@@ -240,7 +235,6 @@ fn build_session_launch_env_sets_requested_model_without_claude_native_path() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Claude, None),
         runtime_home.path(),
-        &BTreeMap::new(),
         Some("sonnet"),
     )
     .expect("build env");
@@ -266,7 +260,6 @@ fn build_session_launch_env_sets_clean_codex_home_for_local_codex() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
         runtime_home.path(),
-        &BTreeMap::new(),
         None,
     )
     .expect("build env");
@@ -289,31 +282,11 @@ fn build_session_launch_env_sets_clean_codex_home_for_local_codex() {
 }
 
 #[test]
-fn build_session_launch_env_does_not_override_protected_codex_home() {
-    let runtime_home = TempDirGuard::new("codex-protected-runtime");
-    let protected_env = BTreeMap::from([(
-        "CODEX_HOME".to_string(),
-        "/tmp/proliferate-gateway-codex".to_string(),
-    )]);
-    let env = build_session_launch_env(
-        &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
-        runtime_home.path(),
-        &protected_env,
-        Some("ignored"),
-    )
-    .expect("build env");
-
-    assert!(env.is_empty());
-    assert!(!runtime_home.path().join("agent-auth").exists());
-}
-
-#[test]
 fn build_session_launch_env_ignores_other_agents() {
     let runtime_home = TempDirGuard::new("other-agent-runtime");
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Cursor, Some("/tmp/managed/cursor-agent")),
         runtime_home.path(),
-        &BTreeMap::new(),
         Some("ignored"),
     )
     .expect("build env");
@@ -327,7 +300,6 @@ fn build_session_launch_env_carries_gemini_model() {
     let env = build_session_launch_env(
         &resolved_agent(AgentKind::Gemini, Some("/tmp/managed/gemini")),
         runtime_home.path(),
-        &BTreeMap::new(),
         Some("gemini-3-pro-preview"),
     )
     .expect("build env");
@@ -340,7 +312,6 @@ fn build_session_launch_env_carries_gemini_model() {
     let no_model = build_session_launch_env(
         &resolved_agent(AgentKind::Gemini, Some("/tmp/managed/gemini")),
         runtime_home.path(),
-        &BTreeMap::new(),
         None,
     )
     .expect("build env");

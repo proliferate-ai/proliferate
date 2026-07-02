@@ -12,8 +12,6 @@ import {
 const FOCUS_PARAM_NAMES = [
   "focus",
   "target",
-  "credential",
-  "kind",
   "cloudRepoOwner",
   "cloudRepoName",
   "checkout",
@@ -44,9 +42,6 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
   if (value === "shared-environments") {
     return SETTINGS_DEFAULT_SECTION;
   }
-  if (value === "cloud") {
-    return "agent-authentication";
-  }
 
   return isSettingsSection(value) ? value : SETTINGS_DEFAULT_SECTION;
 }
@@ -56,8 +51,6 @@ interface SettingsNavigationTarget {
   repo?: string | null;
   focus?: SettingsFocus | null;
   target?: string | null;
-  credential?: string | null;
-  kind?: string | null;
   joinOrganizationId?: string | null;
 }
 
@@ -75,23 +68,13 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
       params.set(name, value);
     }
   }
-  if ((section === "agent-authentication" || section === "compute") && target.target) {
+  if (section === "compute" && target.target) {
     params.set("target", target.target);
-  }
-  if (section === "agent-authentication" && target.credential) {
-    params.set("credential", target.credential);
-  }
-  if (section === "agent-authentication" && target.kind) {
-    params.set("kind", target.kind);
   }
   if (section === "organization-members" && target.joinOrganizationId) {
     params.set("joinOrganizationId", target.joinOrganizationId);
   }
   return `/settings?${params.toString()}`;
-}
-
-export function buildCloudSettingsHref(): string {
-  return buildSettingsHref({ section: "agent-authentication" });
 }
 
 export function buildCloudRepoSettingsHref(
@@ -114,8 +97,6 @@ export interface SettingsSelectionInput {
   rawCloudRepoName?: string | null;
   rawFocus?: string | null;
   rawTarget?: string | null;
-  rawCredential?: string | null;
-  rawKind?: string | null;
   rawCheckout?: string | null;
   rawJoinOrganizationId?: string | null;
   repositories: SettingsRepositoryEntry[];
@@ -135,8 +116,6 @@ export function resolveSettingsSelection({
   rawCloudRepoName = null,
   rawFocus = null,
   rawTarget = null,
-  rawCredential = null,
-  rawKind = null,
   rawCheckout = null,
   rawJoinOrganizationId = null,
   repositories,
@@ -160,8 +139,6 @@ export function resolveSettingsSelection({
   const focus: SettingsFocus = pickFocus({
     focus: rawFocus,
     target: rawTarget,
-    credential: rawCredential,
-    kind: rawKind,
     checkout: rawCheckout,
     joinOrganizationId: rawJoinOrganizationId,
     cloudRepoOwner: rawCloudRepoOwner,
@@ -228,20 +205,13 @@ function cloudRedirectSection(focus: SettingsFocus): SettingsSection {
   if (focus.focus === "billing" || focus.focus === "credits") {
     return "billing";
   }
-  return "agent-authentication";
+  return SETTINGS_DEFAULT_SECTION;
 }
 
 function sanitizeFocusForSection(
   section: SettingsSection,
   focus: SettingsFocus,
 ): SettingsFocus {
-  if (section === "agent-authentication") {
-    return pickFocus({
-      target: focus.target,
-      credential: focus.credential,
-      kind: focus.kind,
-    });
-  }
   if (section === "compute") {
     return pickFocus({ target: focus.target });
   }

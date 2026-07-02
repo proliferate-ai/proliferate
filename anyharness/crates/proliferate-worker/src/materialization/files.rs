@@ -131,27 +131,3 @@ fn set_private_dir_permissions(path: &Path) -> Result<(), WorkerError> {
 fn set_private_dir_permissions(_path: &Path) -> Result<(), WorkerError> {
     Ok(())
 }
-
-pub fn decode_base64(input: &str) -> Result<Vec<u8>, WorkerError> {
-    base64_decode(input).ok_or_else(|| materialization_error("invalid base64 credential file"))
-}
-
-fn base64_decode(input: &str) -> Option<Vec<u8>> {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut output = Vec::new();
-    let mut buffer: u32 = 0;
-    let mut bits: u8 = 0;
-    for byte in input.bytes().filter(|byte| !byte.is_ascii_whitespace()) {
-        if byte == b'=' {
-            break;
-        }
-        let value = TABLE.iter().position(|candidate| *candidate == byte)? as u32;
-        buffer = (buffer << 6) | value;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            output.push(((buffer >> bits) & 0xff) as u8);
-        }
-    }
-    Some(output)
-}

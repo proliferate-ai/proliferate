@@ -22,6 +22,7 @@ from proliferate.server.cloud.runtime_config.models import (
     WorkerRuntimeConfigStatusResponse,
 )
 from proliferate.server.cloud.runtime_config.service import (
+    SandboxProfileSnapshot,
     desktop_runtime_config_apply_request,
     get_profile_runtime_config_status,
     refresh_profile_runtime_config,
@@ -32,11 +33,29 @@ from proliferate.server.cloud.runtime_config.worker import (
     worker_runtime_config_credentials,
     worker_runtime_config_fragment,
 )
-from proliferate.server.cloud.sandbox_profiles.service import get_profile
 from proliferate.server.cloud.worker.auth import authenticate_worker
 
 router = APIRouter(prefix="/sandbox-profiles", tags=["cloud-runtime-config"])
 worker_router = APIRouter(prefix="/worker/runtime-configs", tags=["cloud-worker-runtime-config"])
+
+
+async def get_profile(
+    db: AsyncSession,
+    *,
+    user: User,
+    sandbox_profile_id: UUID,
+) -> SandboxProfileSnapshot:
+    """Stand-in for the removed sandbox_profiles service lookup.
+
+    Sandbox profiles were torn down with the Bifrost gateway stack, so the
+    lookup always misses.
+    """
+    del db, user, sandbox_profile_id
+    raise CloudApiError(
+        "sandbox_profile_not_found",
+        "Sandbox profile not found.",
+        status_code=404,
+    )
 
 
 @router.get("/{sandbox_profile_id}/runtime-config", response_model=RuntimeConfigStatusResponse)

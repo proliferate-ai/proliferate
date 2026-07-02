@@ -56,8 +56,7 @@ impl SessionRuntime {
                     SetSessionConfigOptionError::Rejected("session is closed".to_string())
                 }
                 StartSessionError::MissingDataKey
-                | StartSessionError::RestartRequired(_)
-                | StartSessionError::AgentAuthSelectionRequired(_) => {
+                | StartSessionError::RestartRequired(_) => {
                     SetSessionConfigOptionError::Internal(anyhow::anyhow!(
                         "{SESSION_RESTART_REQUIRED_DETAIL}"
                     ))

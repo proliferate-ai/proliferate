@@ -30,7 +30,7 @@ const BASE_TARGET: ComputeTargetSummary = {
 };
 
 describe("compute target readiness", () => {
-  it("combines target, worker, inventory, and deferred target-state rows", () => {
+  it("combines target, worker, inventory, and runtime-config rows", () => {
     const items = computeTargetReadiness(BASE_TARGET);
 
     expect(items.map((item) => [item.key, item.status])).toEqual([
@@ -40,38 +40,15 @@ describe("compute target readiness", () => {
       ["node", "ready"],
       ["python", "missing"],
       ["runtime-config", "unavailable"],
-      ["sandbox", "ready"],
     ]);
   });
 
-  it("uses sandbox target-state and runtime config for managed cloud readiness", () => {
+  it("uses runtime config revisions for managed cloud readiness", () => {
     const items = computeTargetReadiness({
       ...BASE_TARGET,
       kind: "managed_cloud",
       sandboxProfileId: "profile-1",
     }, {
-      sandboxProfileTargetState: {
-        ready: true,
-        targetReady: true,
-        sandboxReady: true,
-        runtimeAccessReady: true,
-        target: {
-          id: "target-1",
-          kind: "managed_cloud",
-          status: "online",
-          profileTargetRole: "primary",
-        },
-        sandbox: {
-          id: "sandbox-1",
-          status: "running",
-          provider: "e2b",
-        },
-        runtimeAccess: {
-          targetId: "target-1",
-          cloudSandboxId: "sandbox-1",
-          anyharnessBaseUrl: "https://runtime.invalid",
-        },
-      },
       runtimeConfigStatus: {
         currentRevision: {
           revisionId: "revision-1",
@@ -83,62 +60,15 @@ describe("compute target readiness", () => {
     });
 
     expect(items.find((item) => item.key === "runtime-config")?.status).toBe("ready");
-    expect(items.find((item) => item.key === "sandbox")?.status).toBe("ready");
   });
 
-  it("marks managed cloud sandbox state missing when target-state has no sandbox", () => {
+  it("marks runtime config missing when no revision exists", () => {
     const items = computeTargetReadiness({
       ...BASE_TARGET,
       kind: "managed_cloud",
       sandboxProfileId: "profile-1",
-    }, {
-      sandboxProfileTargetState: {
-        ready: false,
-        targetReady: true,
-        sandboxReady: false,
-        runtimeAccessReady: false,
-        target: {
-          id: "target-1",
-          kind: "managed_cloud",
-          status: "online",
-          profileTargetRole: "primary",
-        },
-        sandbox: null,
-        runtimeAccess: null,
-      },
     });
 
-    expect(items.find((item) => item.key === "sandbox")?.status).toBe("missing");
-  });
-
-  it("describes sandbox blocks with sandbox copy", () => {
-    const items = computeTargetReadiness({
-      ...BASE_TARGET,
-      kind: "managed_cloud",
-      sandboxProfileId: "profile-1",
-    }, {
-      sandboxProfileTargetState: {
-        ready: false,
-        targetReady: true,
-        sandboxReady: false,
-        runtimeAccessReady: false,
-        target: {
-          id: "target-1",
-          kind: "managed_cloud",
-          status: "online",
-          profileTargetRole: "primary",
-        },
-        sandbox: {
-          id: "sandbox-1",
-          status: "error",
-          provider: "e2b",
-          blockedReason: "provider capacity",
-        },
-        runtimeAccess: null,
-      },
-    });
-
-    const detail = items.find((item) => item.key === "sandbox")?.detail ?? "";
-    expect(detail).toBe("Sandbox blocked: provider capacity.");
+    expect(items.find((item) => item.key === "runtime-config")?.status).toBe("missing");
   });
 });

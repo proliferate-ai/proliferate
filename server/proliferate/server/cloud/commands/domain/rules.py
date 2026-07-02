@@ -58,7 +58,6 @@ def validate_command_shape(
         CloudCommandKind.configure_git_identity.value,
         CloudCommandKind.ensure_repo_checkout.value,
         CloudCommandKind.materialize_environment.value,
-        CloudCommandKind.refresh_agent_auth_config.value,
         CloudCommandKind.reconcile_agents.value,
     } and (workspace_id or session_id):
         raise CloudApiError(

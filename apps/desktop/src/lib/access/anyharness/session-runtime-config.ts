@@ -38,17 +38,5 @@ export async function prepareLocalRuntimeConfigForTarget(
   if (target.location !== "local" && target.runtimeAccessKind !== "proliferate-gateway") {
     return null;
   }
-  await prepareCloudSandboxGatewayAgentAuthConfig(target, connection, options, config);
   return prepareLocalSessionRuntimeConfig(connection, options, config);
-}
-
-export async function prepareCloudSandboxGatewayAgentAuthConfig(
-  target: RuntimeTarget,
-  _connection: AnyHarnessRuntimeConfigConnection,
-  _options?: unknown,
-  _config?: PrepareLocalSessionRuntimeConfigOptions,
-): Promise<void> {
-  if (target.runtimeAccessKind !== "proliferate-gateway") {
-    return;
-  }
 }

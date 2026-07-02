@@ -8,8 +8,8 @@ from proliferate.integrations.anyharness import (
     ResolvedRemoteWorkspace,
     RuntimeAuthProbe,
 )
-from proliferate.server.cloud.runtime.credentials import remote_agents
-from proliferate.server.cloud.runtime.credentials.remote_agents import (
+from proliferate.server.cloud.runtime import remote_agents
+from proliferate.server.cloud.runtime.remote_agents import (
     _auth_overlay_ready_agent_kinds,
     _install_required_agent_kinds,
     _ready_required_agent_kinds,

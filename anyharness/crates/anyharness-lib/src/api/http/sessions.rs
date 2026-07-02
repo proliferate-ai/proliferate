@@ -109,8 +109,6 @@ pub async fn create_session(
                 None,
                 req.expected_runtime_config_revision.clone(),
                 req.subagents_enabled.unwrap_or(true),
-                req.agent_auth_scope,
-                req.required_agent_auth_revision,
                 origin,
             )
             .await

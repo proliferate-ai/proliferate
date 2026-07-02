@@ -112,7 +112,7 @@ export function commandStatusMessageForNotice(
 }
 
 export function isPromptProgressStatus(message: string | null): boolean {
-  return /^(approving|preparing|rejecting|starting|sending|waiting|queued|loading|using selected cloud agent credential|workspace is provisioning|cloud runtime is picking up|command delivered)/i
+  return /^(approving|preparing|rejecting|starting|sending|waiting|queued|loading|workspace is provisioning|cloud runtime is picking up|command delivered)/i
     .test(message ?? "");
 }
 
@@ -216,7 +216,6 @@ function friendlyCommandErrorCodeMessage(code: string | null | undefined): strin
     case "cloud_command_workspace_not_found":
       return "Workspace no longer exists.";
     case "cloud_command_workspace_target_mismatch":
-    case "cloud_command_agent_auth_target_mismatch":
       return "Workspace is attached to a different runtime target. Refresh the workspace, then retry.";
     case "cloud_command_cloud_workspace_required":
     case "cloud_workspace_required":
@@ -235,9 +234,6 @@ function friendlyCommandErrorCodeMessage(code: string | null | undefined): strin
     case "quota_exceeded":
     case "cloud_repo_limit_reached":
       return "Cloud limit reached. Disable another cloud repo or upgrade before creating this workspace.";
-    case "missing_supported_credentials":
-    case "agent_auth_credentials_missing":
-      return "Add credentials for the selected agent before starting this session.";
     default:
       return null;
   }
@@ -266,8 +262,7 @@ function isManagedTargetConfigMessage(message: string): boolean {
 
 function isCloudRuntimeProfileMessage(message: string): boolean {
   const normalized = message.toLowerCase();
-  return (normalized.includes("agent auth sandbox profile")
-    || normalized.includes("runtime config sandbox profile"))
+  return normalized.includes("runtime config sandbox profile")
     && (normalized.includes("not attached")
       || normalized.includes("does not match")
       || normalized.includes("target mismatch")

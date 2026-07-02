@@ -1,5 +1,4 @@
 pub mod access;
-pub mod agent_auth_config;
 pub mod agents;
 mod agents_contract;
 mod agents_errors;

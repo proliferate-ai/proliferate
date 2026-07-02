@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.cloud import CloudCommandActorKind, CloudCommandKind, CloudCommandSource
-from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_mcp.connections import (
     list_enabled_connections_for_organization_profile,
     list_enabled_connections_for_personal_profile,
@@ -72,6 +71,23 @@ from proliferate.server.cloud.target_config.models import (
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 
+@dataclass(frozen=True)
+class SandboxProfileSnapshot:
+    """Minimal stand-in for the removed cloud_sandbox_profiles store snapshot.
+
+    Sandbox profiles were torn down with the Bifrost gateway stack
+    (specs/codebase/primitives/agent-auth-litellm.md). The parked
+    runtime-config code paths only need these fields to keep their
+    signatures intact until they are rebuilt or removed.
+    """
+
+    id: UUID
+    owner_scope: str
+    owner_user_id: UUID | None
+    organization_id: UUID | None
+    primary_target_id: UUID | None
+
+
 async def refresh_profile_runtime_config(
     db: AsyncSession,
     *,
@@ -110,25 +126,12 @@ async def refresh_profile_runtime_config(
             ),
         )
     if compiled.blocking_errors:
-        await _mark_primary_target_runtime_config_failed(
-            db,
-            profile_id=profile.id,
-            sequence=revision.sequence,
-            revision_id=revision.id,
-            blocking_errors=compiled.blocking_errors,
-        )
         return RuntimeConfigStatusResponse(
             sandbox_profile_id=str(profile.id),
             current_revision=runtime_config_revision_model(revision),
             manifest=parse_json_dict(revision.manifest_json),
             warnings=parse_json_dict(revision.warnings_json),
         )
-    await _mark_primary_target_runtime_config_pending(
-        db,
-        profile_id=profile.id,
-        sequence=revision.sequence,
-        revision_id=revision.id,
-    )
     await _queue_primary_target_runtime_config_materialization(
         db,
         profile=profile,
@@ -164,7 +167,7 @@ async def get_profile_runtime_config_status(
 async def desktop_runtime_config_apply_request(
     db: AsyncSession,
     *,
-    profile: sandbox_profile_store.SandboxProfileSnapshot,
+    profile: SandboxProfileSnapshot,
     target_id: UUID | None,
     actor_user_id: UUID,
 ) -> DesktopRuntimeConfigApplyResponse:
@@ -237,7 +240,7 @@ async def desktop_runtime_config_apply_request(
 async def compile_profile_runtime_config(
     db: AsyncSession,
     *,
-    profile: sandbox_profile_store.SandboxProfileSnapshot,
+    profile: SandboxProfileSnapshot,
 ) -> CompiledRuntimeConfigManifest:
     entries = tuple(
         entry for entry in build_connector_catalog() if catalog_entry_is_configured(entry)
@@ -555,79 +558,25 @@ def _direct_attach_auth_payload() -> dict[str, object]:
 async def _load_profile(
     db: AsyncSession,
     sandbox_profile_id: UUID,
-) -> sandbox_profile_store.SandboxProfileSnapshot:
-    profile = await sandbox_profile_store.load_sandbox_profile_by_id(db, sandbox_profile_id)
-    if profile is None:
-        raise CloudApiError(
-            "sandbox_profile_not_found",
-            "Sandbox profile not found.",
-            status_code=404,
-        )
-    return profile
-
-
-async def _mark_primary_target_runtime_config_pending(
-    db: AsyncSession,
-    *,
-    profile_id: UUID,
-    sequence: int,
-    revision_id: UUID,
-) -> None:
-    target_id = await sandbox_profile_store.load_primary_target_id(db, profile_id)
-    if target_id is None:
-        return
-    await agent_auth_store.mark_runtime_config_pending(
-        db,
-        sandbox_profile_id=profile_id,
-        target_id=target_id,
-        sequence=sequence,
-        revision_id=revision_id,
+) -> SandboxProfileSnapshot:
+    # Sandbox profiles were removed with the Bifrost gateway teardown, so the
+    # lookup always misses.
+    del db, sandbox_profile_id
+    raise CloudApiError(
+        "sandbox_profile_not_found",
+        "Sandbox profile not found.",
+        status_code=404,
     )
-
-
-async def _mark_primary_target_runtime_config_failed(
-    db: AsyncSession,
-    *,
-    profile_id: UUID,
-    sequence: int,
-    revision_id: UUID,
-    blocking_errors: tuple[dict[str, object], ...],
-) -> None:
-    target_id = await sandbox_profile_store.load_primary_target_id(db, profile_id)
-    if target_id is None:
-        return
-    await agent_auth_store.mark_runtime_config_failed(
-        db,
-        sandbox_profile_id=profile_id,
-        target_id=target_id,
-        sequence=sequence,
-        revision_id=revision_id,
-        error_code=_first_blocking_error_code(blocking_errors),
-        error_message=json.dumps(
-            {"blockingErrors": list(blocking_errors)},
-            ensure_ascii=True,
-            separators=(",", ":"),
-            sort_keys=True,
-        ),
-    )
-
-
-def _first_blocking_error_code(blocking_errors: tuple[dict[str, object], ...]) -> str:
-    for error in blocking_errors:
-        code = error.get("code")
-        if isinstance(code, str) and code:
-            return code
-    return "runtime_config_blocked"
 
 
 async def _queue_primary_target_runtime_config_materialization(
     db: AsyncSession,
     *,
-    profile: sandbox_profile_store.SandboxProfileSnapshot,
+    profile: SandboxProfileSnapshot,
     revision: SandboxProfileRuntimeConfigRevisionSnapshot,
     actor_user_id: UUID | None,
 ) -> None:
-    target_id = await sandbox_profile_store.load_primary_target_id(db, profile.id)
+    target_id = profile.primary_target_id
     if target_id is None:
         return
     target = await targets_store.get_target_by_id(db, target_id)
@@ -791,10 +740,5 @@ async def _record_runtime_config_command(
     target_id: UUID,
     command_id: UUID,
 ) -> None:
-    await agent_auth_store.record_runtime_config_command(
-        db,
-        sandbox_profile_id=profile_id,
-        target_id=target_id,
-        command_id=command_id,
-    )
+    del profile_id
     await enqueue_managed_target_wake_outbox(db, target_id=target_id, command_id=command_id)

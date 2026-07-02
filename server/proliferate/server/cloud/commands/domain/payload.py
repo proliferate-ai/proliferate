@@ -44,12 +44,6 @@ _DECIDE_PLAN_FIELDS = {
 }
 _CONFIGURE_GIT_IDENTITY_FIELDS = {"targetGitIdentityId", "configVersion"}
 _ENSURE_REPO_CHECKOUT_FIELDS = {"provider", "owner", "name", "path", "baseBranch"}
-_REFRESH_AGENT_AUTH_CONFIG_FIELDS = {
-    "sandboxProfileId",
-    "revision",
-    "reason",
-    "forceRestart",
-}
 _MAX_MATERIALIZE_WORKSPACE_DISPLAY_NAME_CHARS = 160
 
 
@@ -59,9 +53,6 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
         return
     if kind == CloudCommandKind.ensure_repo_checkout.value:
         _validate_ensure_repo_checkout_payload(payload)
-        return
-    if kind == CloudCommandKind.refresh_agent_auth_config.value:
-        _validate_refresh_agent_auth_config_payload(payload)
         return
     if kind == CloudCommandKind.reconcile_agents.value:
         _validate_reconcile_agents_payload(payload)
@@ -73,9 +64,6 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
     }:
         if kind == CloudCommandKind.decide_plan.value:
             _validate_decide_plan_payload(payload)
-            _validate_optional_runtime_config_preflight_payload(kind=kind, payload=payload)
-            return
-        _validate_optional_agent_auth_preflight_payload(kind=kind, payload=payload)
         _validate_optional_runtime_config_preflight_payload(kind=kind, payload=payload)
         return
     if kind == CloudCommandKind.prune_workspace_worktree.value:
@@ -250,46 +238,6 @@ def _validate_ensure_repo_checkout_payload(payload: dict[str, object]) -> None:
     _optional_string(payload, "baseBranch")
 
 
-def _validate_refresh_agent_auth_config_payload(payload: dict[str, object]) -> None:
-    _reject_unknown_fields(
-        payload,
-        _REFRESH_AGENT_AUTH_CONFIG_FIELDS,
-        code="cloud_command_refresh_agent_auth_payload_unknown",
-        message_prefix="refresh_agent_auth_config payload contains unsupported field(s): ",
-    )
-    _required_string(
-        payload,
-        "sandboxProfileId",
-        code="cloud_command_refresh_agent_auth_profile_required",
-        message="refresh_agent_auth_config payload must contain sandboxProfileId.",
-    )
-    revision = _required_int(
-        payload,
-        "revision",
-        code="cloud_command_refresh_agent_auth_revision_required",
-        message="refresh_agent_auth_config payload must contain revision.",
-    )
-    if revision < 0:
-        raise CloudApiError(
-            "cloud_command_refresh_agent_auth_revision_invalid",
-            "refresh_agent_auth_config revision must be non-negative.",
-            status_code=400,
-        )
-    _required_string(
-        payload,
-        "reason",
-        code="cloud_command_refresh_agent_auth_reason_required",
-        message="refresh_agent_auth_config payload must contain reason.",
-    )
-    value = payload.get("forceRestart")
-    if not isinstance(value, bool):
-        raise CloudApiError(
-            "cloud_command_refresh_agent_auth_force_restart_required",
-            "refresh_agent_auth_config payload must contain boolean forceRestart.",
-            status_code=400,
-        )
-
-
 def _validate_reconcile_agents_payload(payload: dict[str, object]) -> None:
     _reject_unknown_fields(
         payload,
@@ -302,101 +250,6 @@ def _validate_reconcile_agents_payload(payload: dict[str, object]) -> None:
         raise CloudApiError(
             "cloud_command_reconcile_agents_reinstall_invalid",
             "reconcile_agents reinstall must be a boolean when provided.",
-            status_code=400,
-        )
-
-
-def _validate_optional_agent_auth_preflight_payload(
-    *,
-    kind: str,
-    payload: dict[str, object],
-) -> None:
-    has_profile = "sandboxProfileId" in payload
-    has_revision = "requiredAgentAuthRevision" in payload
-    has_scope = "agentAuthScope" in payload
-    if not has_profile and not has_revision and not has_scope:
-        return
-    sandbox_profile_id = _agent_auth_sandbox_profile_id(payload)
-    if not sandbox_profile_id:
-        raise CloudApiError(
-            "cloud_command_agent_auth_profile_required",
-            f"{kind} payload must contain sandboxProfileId with auth preflight.",
-            status_code=400,
-        )
-    if has_profile or has_revision:
-        revision = _required_int(
-            payload,
-            "requiredAgentAuthRevision",
-            code="cloud_command_agent_auth_revision_required",
-            message=f"{kind} payload must contain requiredAgentAuthRevision with auth preflight.",
-        )
-        if revision < 0:
-            raise CloudApiError(
-                "cloud_command_agent_auth_revision_invalid",
-                f"{kind} requiredAgentAuthRevision must be non-negative.",
-                status_code=400,
-            )
-    _validate_agent_auth_scope(payload, kind, sandbox_profile_id=sandbox_profile_id)
-
-
-def _agent_auth_sandbox_profile_id(payload: dict[str, object]) -> str:
-    sandbox_profile_id = str(payload.get("sandboxProfileId") or "")
-    if sandbox_profile_id:
-        return sandbox_profile_id
-    expected_revision = payload.get("expectedRuntimeConfigRevision")
-    if isinstance(expected_revision, dict):
-        external_scope = expected_revision.get("externalScope")
-        if isinstance(external_scope, dict):
-            expected_provider = str(external_scope.get("provider") or "")
-            if expected_provider == "proliferate-cloud":
-                return str(external_scope.get("id") or "")
-    return ""
-
-
-def _validate_agent_auth_scope(
-    payload: dict[str, object],
-    kind: str,
-    *,
-    sandbox_profile_id: str,
-) -> None:
-    raw_scope = payload.get("agentAuthScope")
-    if raw_scope is None:
-        return
-    if not isinstance(raw_scope, dict):
-        raise CloudApiError(
-            "cloud_command_agent_auth_scope_invalid",
-            f"{kind} agentAuthScope must be an object.",
-            status_code=400,
-        )
-    scope = {str(key): value for key, value in raw_scope.items()}
-    _reject_unknown_fields(
-        scope,
-        {"provider", "id", "targetId"},
-        code="cloud_command_agent_auth_scope_invalid",
-        message_prefix=f"{kind} agentAuthScope contains unsupported field(s): ",
-    )
-    provider = _required_string(
-        scope,
-        "provider",
-        code="cloud_command_agent_auth_scope_invalid",
-        message=f"{kind} agentAuthScope must contain provider.",
-    )
-    scope_id = _required_string(
-        scope,
-        "id",
-        code="cloud_command_agent_auth_scope_invalid",
-        message=f"{kind} agentAuthScope must contain id.",
-    )
-    _required_string(
-        scope,
-        "targetId",
-        code="cloud_command_agent_auth_scope_invalid",
-        message=f"{kind} agentAuthScope must contain targetId.",
-    )
-    if provider != "proliferate-cloud" or scope_id != sandbox_profile_id:
-        raise CloudApiError(
-            "cloud_command_agent_auth_scope_invalid",
-            f"{kind} agentAuthScope must match the cloud-owned auth preflight scope.",
             status_code=400,
         )
 

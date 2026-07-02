@@ -13,7 +13,6 @@ from proliferate.integrations.anyharness.client import (
 )
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.models import (
-    RemoteAgentAuthConfigApplyResult,
     RemoteAgentInstallResult,
     RemoteAgentSummary,
     RuntimeAuthProbe,
@@ -170,87 +169,6 @@ async def install_runtime_agent(
         agent=agent,
         already_installed=already_installed if isinstance(already_installed, bool) else None,
     )
-
-
-async def apply_agent_auth_config(
-    runtime_url: str,
-    access_token: str,
-    body: dict[str, object],
-) -> RemoteAgentAuthConfigApplyResult:
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.put(
-                f"{runtime_url}/v1/agents/auth-config",
-                headers=auth_headers(access_token),
-                json=body,
-            )
-    except httpx.HTTPError as exc:
-        raise CloudRuntimeReconnectError("Failed to apply cloud agent auth config.") from exc
-    if not response.is_success:
-        preview = response_preview(response.text)
-        suffix = f" Response: {preview}" if preview else ""
-        raise CloudRuntimeReconnectError(
-            f"Cloud runtime rejected agent auth config (status {response.status_code}).{suffix}"
-        )
-    try:
-        payload: object = response.json()
-    except ValueError as exc:
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime returned invalid JSON after applying agent auth config."
-        ) from exc
-    if not isinstance(payload, dict):
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime returned an invalid agent auth config apply response."
-        )
-    applied = payload.get("applied")
-    revision = payload.get("revision")
-    status = payload.get("status")
-    selection_count = payload.get("selectionCount")
-    if (
-        not isinstance(applied, bool)
-        or not isinstance(revision, int)
-        or not isinstance(status, str)
-    ):
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime returned incomplete agent auth config apply status."
-        )
-    return RemoteAgentAuthConfigApplyResult(
-        applied=applied,
-        revision=revision,
-        status=status,
-        selection_count=selection_count if isinstance(selection_count, int) else 0,
-    )
-
-
-async def get_agent_auth_config_status(
-    runtime_url: str,
-    access_token: str,
-) -> dict[str, object]:
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{runtime_url}/v1/agents/auth-config/status",
-                headers=auth_headers(access_token),
-            )
-    except httpx.HTTPError as exc:
-        raise CloudRuntimeReconnectError("Failed to load cloud agent auth config status.") from exc
-    if not response.is_success:
-        raise CloudRuntimeReconnectError(
-            rejected_response_message(
-                "load cloud agent auth config status", response.status_code, response.text
-            )
-        )
-    try:
-        payload: object = response.json()
-    except ValueError as exc:
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime returned invalid JSON for agent auth config status."
-        ) from exc
-    if not isinstance(payload, dict):
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime returned an invalid agent auth config status response."
-        )
-    return payload
 
 
 async def apply_runtime_config(

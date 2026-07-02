@@ -9,7 +9,6 @@ from proliferate.integrations.sandbox import SandboxProvider
 from proliferate.server.cloud.runtime.config_sync.worktree_policy import (
     sync_cloud_worktree_policy_to_runtime,
 )
-from proliferate.server.cloud.runtime.credentials.remote_agents import reconcile_remote_agents
 from proliferate.server.cloud.runtime.git_operations import (
     ensure_requested_base_sha_available,
     resolve_runtime_root_head_sha,
@@ -29,6 +28,7 @@ from proliferate.server.cloud.runtime.provisioning.remote_workspace import (
     resolve_remote_workspace,
 )
 from proliferate.server.cloud.runtime.provisioning.step_tracker import ProvisionStepTracker
+from proliferate.server.cloud.runtime.remote_agents import reconcile_remote_agents
 
 SetWorkspaceStatus = Callable[..., Awaitable[None]]
 
@@ -92,7 +92,7 @@ async def prepare_workspace_in_runtime(
     runtime_token: str,
     set_workspace_status: SetWorkspaceStatus,
 ) -> RuntimeHandshake:
-    required_agent_kinds = ctx.agent_auth_agent_kinds
+    required_agent_kinds: tuple[str, ...] = ()
     await set_workspace_status(
         ctx.workspace_id,
         CloudWorkspaceStatus.materializing,
@@ -107,7 +107,6 @@ async def prepare_workspace_in_runtime(
         runtime_token,
         workspace_id=ctx.workspace_id,
         required_agent_kinds=required_agent_kinds,
-        auth_overlay_agent_kinds=ctx.agent_auth_agent_kinds,
     )
     tracker.complete(ready_agents=",".join(ready_agents))
 

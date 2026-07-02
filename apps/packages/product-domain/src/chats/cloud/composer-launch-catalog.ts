@@ -1,7 +1,6 @@
 import type {
   CloudAgentCatalogAgent,
   CloudAgentCatalogModel,
-  CloudAgentCatalogResponse,
 } from "@proliferate/cloud-sdk";
 import { modelMatchesSelectedValue } from "./composer-control-identity";
 import {
@@ -49,17 +48,6 @@ export function launchableCatalogAgents(input: {
     allowed.add(input.includeAgentKind);
   }
   return input.agents.filter((agent) => allowed.has(agent.kind));
-}
-
-export function shouldShowUnavailableLaunchControls(input: {
-  catalog?: CloudAgentCatalogResponse | null;
-  launchableAgentKinds?: readonly string[] | null;
-}): boolean {
-  if (input.launchableAgentKinds !== undefined && input.launchableAgentKinds !== null) {
-    return normalizeCloudAgentKindList(input.launchableAgentKinds).length === 0
-      || Boolean(input.catalog?.agents?.length);
-  }
-  return Boolean(input.catalog?.agents?.length);
 }
 
 export function selectLaunchAgent(

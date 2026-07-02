@@ -20,7 +20,6 @@ from proliferate.db.store.billing import (
     count_active_cloud_repo_environments,
 )
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
-from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
 from proliferate.utils.time import utcnow
 
@@ -175,98 +174,10 @@ async def create_managed_cloud_workspace_for_profile(
     origin: str = "manual_desktop",
     repo_env_vars_ciphertext: str | None = None,
 ) -> CloudWorkspace:
-    profile, _target = await require_primary_managed_profile_target(
-        db,
-        sandbox_profile_id=sandbox_profile_id,
-        target_id=target_id,
+    raise NotImplementedError(
+        "Managed sandbox-profile cloud workspaces were removed with the "
+        "agent-auth gateway teardown."
     )
-    if profile.owner_scope == "personal":
-        owner_user_id = profile.owner_user_id
-        organization_id = None
-        if owner_user_id is None:
-            raise RuntimeError("Personal sandbox profile is missing owner_user_id.")
-        user_id = owner_user_id
-    else:
-        owner_user_id = None
-        organization_id = profile.organization_id
-        if organization_id is None:
-            raise RuntimeError("Organization sandbox profile is missing organization_id.")
-        user_id = created_by_user_id
-    now = utcnow()
-    workspace = CloudWorkspace(
-        user_id=user_id,
-        owner_scope=profile.owner_scope,
-        owner_user_id=owner_user_id,
-        organization_id=organization_id,
-        created_by_user_id=created_by_user_id,
-        billing_subject_id=profile.billing_subject_id,
-        runtime_environment_id=None,
-        sandbox_profile_id=sandbox_profile_id,
-        target_id=target_id,
-        display_name=display_name,
-        git_provider=git_provider,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        normalized_repo_key=normalized_repo_key(
-            git_provider=git_provider,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        ),
-        git_branch=git_branch,
-        git_base_branch=git_base_branch,
-        worktree_path=worktree_path,
-        origin=origin,
-        origin_json=origin_json,
-        status=CloudWorkspaceStatus.pending.value,
-        status_detail="Pending",
-        last_error=None,
-        template_version=template_version,
-        runtime_generation=0,
-        materialized_target_id=None,
-        required_runtime_config_sequence=0,
-        required_runtime_config_revision_id=None,
-        required_agent_auth_revision=profile.desired_agent_auth_revision,
-        repo_env_vars_ciphertext=repo_env_vars_ciphertext,
-        repo_files_applied_version=0,
-        repo_setup_applied_version=0,
-        repo_post_ready_phase=WorkspacePostReadyPhase.idle.value,
-        repo_post_ready_files_total=0,
-        repo_post_ready_files_applied=0,
-        repo_post_ready_apply_token=None,
-        repo_files_last_failed_path=None,
-        repo_files_last_error=None,
-        cleanup_state=CloudWorkspaceCleanupState.none.value,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(workspace)
-    try:
-        await db.flush()
-    except IntegrityError as exc:
-        raise CloudWorkspaceUniqueConflictError("Cloud workspace already exists.") from exc
-    db.add(
-        CloudWorkspaceExposure(
-            target_id=target_id,
-            cloud_workspace_id=workspace.id,
-            anyharness_workspace_id=None,
-            owner_scope=profile.owner_scope,
-            owner_user_id=owner_user_id,
-            organization_id=organization_id,
-            visibility=(
-                "shared_unclaimed" if profile.owner_scope == "organization" else "private"
-            ),
-            claimed_by_user_id=None,
-            default_projection_level="live",
-            commandable=True,
-            status="active",
-            revision=1,
-            origin=workspace.origin,
-            created_at=now,
-            updated_at=now,
-        )
-    )
-    await db.flush()
-    return workspace
 
 
 async def create_direct_target_cloud_workspace(
@@ -320,7 +231,6 @@ async def create_direct_target_cloud_workspace(
         materialized_target_id=None,
         required_runtime_config_sequence=0,
         required_runtime_config_revision_id=None,
-        required_agent_auth_revision=None,
         repo_env_vars_ciphertext=None,
         repo_files_applied_version=0,
         repo_setup_applied_version=0,

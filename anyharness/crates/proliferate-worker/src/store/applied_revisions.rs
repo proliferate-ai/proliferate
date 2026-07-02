@@ -7,7 +7,6 @@ use crate::error::WorkerError;
 #[allow(dead_code)]
 pub enum ReconcileDomain {
     RuntimeConfig,
-    AgentAuth,
     Exposures,
     RevokedJti,
 }
@@ -16,7 +15,6 @@ impl ReconcileDomain {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::RuntimeConfig => "runtime_config",
-            Self::AgentAuth => "agent_auth",
             Self::Exposures => "exposures",
             Self::RevokedJti => "revoked_jti",
         }

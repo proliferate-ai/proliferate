@@ -5,13 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID, uuid4
 
 from proliferate.integrations.sandbox import RuntimeEndpoint, SandboxHandle, SandboxRuntimeContext
-
-if TYPE_CHECKING:
-    from proliferate.server.cloud.runtime.credentials.auth_status import RuntimeAuthStateSnapshot
 
 
 class ProvisionStep(StrEnum):
@@ -24,7 +21,6 @@ class ProvisionStep(StrEnum):
     install_node_runtime = "install_node_runtime"
     check_rust_runtime = "check_rust_runtime"
     install_rust_runtime = "install_rust_runtime"
-    apply_agent_auth = "apply_agent_auth"
     apply_runtime_config = "apply_runtime_config"
     clone_repository = "clone_repository"
     checkout_cloud_branch = "checkout_cloud_branch"
@@ -56,8 +52,6 @@ class CloudProvisionInput:
     anyharness_data_key: str
     sandbox_profile_id: UUID
     target_id: UUID
-    required_agent_auth_revision: int
-    agent_auth_agent_kinds: tuple[str, ...]
     repo_env_vars: dict[str, str]
     requested_base_sha: str | None = None
     runtime_environment_id: UUID = dataclass_field(default_factory=uuid4)
@@ -93,4 +87,3 @@ class RuntimeConnectionTarget:
     anyharness_workspace_id: str | None
     runtime_generation: int
     ready_agent_kinds: list[str]
-    runtime_auth: RuntimeAuthStateSnapshot

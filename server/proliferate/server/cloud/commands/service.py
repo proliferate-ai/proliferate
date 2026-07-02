@@ -29,9 +29,7 @@ from proliferate.server.cloud.commands.domain.rules import (
 from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.preflight import (
-    populate_agent_auth_preflight_payload,
     stamp_managed_runtime_config_preflight,
-    validate_agent_auth_preflight,
     validate_managed_runtime_config_current_for_command,
     validate_runtime_config_preflight,
 )
@@ -92,12 +90,6 @@ async def enqueue_command(
         )
     kind = validate_active_command_kind(body.kind)
     source = validate_command_source(body.source)
-    if kind == CloudCommandKind.refresh_agent_auth_config.value:
-        raise CloudApiError(
-            "cloud_command_internal_only",
-            "Agent auth refresh commands are created by sandbox profile changes.",
-            status_code=400,
-        )
     validate_command_shape(
         kind=kind,
         workspace_id=(
@@ -117,25 +109,12 @@ async def enqueue_command(
         session_id=body.session_id,
         preconditions=body.preconditions,
     )
-    payload = await populate_agent_auth_preflight_payload(
-        db,
-        target=target,
-        kind=kind,
-        payload=body.payload,
-    )
-    validate_command_payload(kind=kind, payload=payload)
-    await validate_agent_auth_preflight(
-        db,
-        actor_user_id=user.id,
-        target=target,
-        payload=payload,
-    )
     payload = await stamp_managed_runtime_config_preflight(
         db,
         actor_user_id=user.id,
         target=target,
         kind=kind,
-        payload=payload,
+        payload=body.payload,
         require_target_config=not command_has_managed_cloud_workspace(
             target=target,
             kind=kind,

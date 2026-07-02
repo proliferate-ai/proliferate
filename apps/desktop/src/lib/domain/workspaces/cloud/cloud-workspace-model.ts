@@ -60,31 +60,10 @@ export type CloudRuntimeStatus =
   | "error"
   | "disabled";
 
-export type CloudRuntimeAuthStatus =
-  | "current"
-  | "stale"
-  | "restart_required"
-  | "apply_failed"
-  | "missing_credentials";
-
-export interface CloudRuntimeAuthState {
-  status: CloudRuntimeAuthStatus;
-  configCurrent: boolean;
-  targetCurrent: boolean;
-  requiresRestart: boolean;
-  desiredRevision?: number | null;
-  appliedRevision?: number | null;
-  lastError?: string | null;
-  lastErrorAt?: string | null;
-  lastAttemptedAt?: string | null;
-  lastAppliedAt?: string | null;
-}
-
 export interface CloudWorkspaceRuntimeSummary {
   environmentId: string | null;
   status: CloudRuntimeStatus;
   generation: number;
-  runtimeAuth?: CloudRuntimeAuthState | null;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
 }

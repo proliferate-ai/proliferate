@@ -85,14 +85,11 @@ impl SessionStartupStrategy {
 }
 
 /// The named environment layers a session launch carries. Keeping the layers
-/// named (rather than four adjacent maps) removes the positional swap hazard.
+/// named (rather than adjacent maps) removes the positional swap hazard.
 #[derive(Debug, Clone, Default)]
 pub struct LaunchEnv {
     pub workspace: BTreeMap<String, String>,
     pub session: BTreeMap<String, String>,
-    pub auth_support: BTreeMap<String, String>,
-    /// Secrets — never logged.
-    pub auth_protected: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default)]

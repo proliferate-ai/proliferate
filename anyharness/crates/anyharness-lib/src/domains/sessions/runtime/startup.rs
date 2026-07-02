@@ -157,9 +157,6 @@ impl SessionRuntime {
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
                 }
-                StartSessionError::AgentAuthSelectionRequired(required) => {
-                    EnsureLiveSessionError::AgentAuthSelectionRequired(required)
-                }
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     EnsureLiveSessionError::Internal(error)
                 }
@@ -310,17 +307,7 @@ impl SessionRuntime {
             .workspace_runtime
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
-        let agent_auth_overlay = self
-            .agent_auth_service
-            .launch_overlay(
-                &record.agent_kind,
-                record.agent_auth_scope.as_ref(),
-                record.required_agent_auth_revision,
-            )
-            .map_err(map_agent_auth_launch_error_to_start)?;
-        let mut readiness_env = workspace_env.clone();
-        readiness_env.extend(agent_auth_overlay.support_env.clone());
-        readiness_env.extend(agent_auth_overlay.protected_env.clone());
+        let readiness_env = workspace_env.clone();
         let agent_resolution_started = Instant::now();
         let resolved_agent =
             resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
@@ -333,7 +320,6 @@ impl SessionRuntime {
         let session_launch_env = build_session_launch_env(
             &resolved_agent,
             &self.runtime_home,
-            &agent_auth_overlay.protected_env,
             record.requested_model_id.as_deref(),
         )
         .map_err(StartSessionError::Internal)?;
@@ -359,8 +345,6 @@ impl SessionRuntime {
             workspace_path,
             workspace_env,
             session_env: session_launch_env,
-            auth_support_env: agent_auth_overlay.support_env,
-            auth_protected_env: agent_auth_overlay.protected_env,
             mcp_servers: mcp_launch.mcp_servers,
             startup: startup_strategy,
             every_prompt_append: mcp_launch.system_prompt_append,
@@ -416,9 +400,6 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
             anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
         }
         StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
-        StartSessionError::AgentAuthSelectionRequired(required) => {
-            anyhow::anyhow!(required.detail)
-        }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
     }
 }
@@ -468,23 +449,7 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
         StartSessionError::RestartRequired(detail) => {
             CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
         }
-        StartSessionError::AgentAuthSelectionRequired(required) => {
-            CreateAndStartSessionError::AgentAuthSelectionRequired(required)
-        }
         StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
         StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
-    }
-}
-
-fn map_agent_auth_launch_error_to_start(
-    error: crate::domains::agents::auth::AgentAuthLaunchOverlayError,
-) -> StartSessionError {
-    match error {
-        crate::domains::agents::auth::AgentAuthLaunchOverlayError::SelectionRequired(required) => {
-            StartSessionError::AgentAuthSelectionRequired(required)
-        }
-        crate::domains::agents::auth::AgentAuthLaunchOverlayError::Internal(error) => {
-            StartSessionError::Internal(error)
-        }
     }
 }

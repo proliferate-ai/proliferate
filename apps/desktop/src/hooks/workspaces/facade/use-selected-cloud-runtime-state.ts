@@ -86,20 +86,12 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     persistedStatus,
     visibility: selectedCloudWorkspace?.visibility ?? null,
     connectionState,
-    runtimeAuth: usesCloudRuntime
-      ? connectionQuery.data?.runtimeAuth
-        ?? selectedCloudWorkspace?.runtime?.runtimeAuth
-        ?? null
-      : null,
     isWarm,
   }), [
     connectionState,
-    connectionQuery.data?.runtimeAuth,
     isWarm,
     persistedStatus,
-    selectedCloudWorkspace?.runtime?.runtimeAuth,
     selectedCloudWorkspace?.visibility,
-    usesCloudRuntime,
   ]);
 
   return {

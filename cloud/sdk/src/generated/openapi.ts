@@ -1171,23 +1171,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/capabilities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Cloud Capabilities Endpoint */
-        get: operations["cloud_capabilities_endpoint_v1_cloud_capabilities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/agent-run-configs": {
         parameters: {
             query?: never;
@@ -1288,6 +1271,40 @@ export interface paths {
         get: operations["get_cloud_mcp_catalog_endpoint_v1_cloud_mcp_catalog_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/webhooks/e2b": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** E2B Webhook Endpoint */
+        post: operations["e2b_webhook_endpoint_v1_cloud_webhooks_e2b_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/webhooks/github-app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Github App Webhook Endpoint */
+        post: operations["github_app_webhook_endpoint_v1_cloud_webhooks_github_app_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1876,23 +1893,6 @@ export interface components {
             /** Githubgrantstatus */
             githubGrantStatus: string | null;
         };
-        /** AgentAuthSlotCapability */
-        AgentAuthSlotCapability: {
-            /** Agentkind */
-            agentKind: string;
-            /** Authslotid */
-            authSlotId: string;
-            /** Label */
-            label: string;
-            /** Shortlabel */
-            shortLabel: string;
-            /** Credentialproviderids */
-            credentialProviderIds: string[];
-            /** Localprovider */
-            localProvider: string | null;
-            /** Primary */
-            primary: boolean;
-        };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
             /**
@@ -2161,51 +2161,6 @@ export interface components {
             mapping?: components["schemas"]["AgentCatalogControlMapping"] | null;
         } & {
             [key: string]: unknown;
-        };
-        /** AgentGatewayByokProviderCapabilities */
-        AgentGatewayByokProviderCapabilities: {
-            /** Anthropicapikey */
-            anthropicApiKey: boolean;
-            /** Openaiapikey */
-            openaiApiKey: boolean;
-            /** Geminiapikey */
-            geminiApiKey: boolean;
-            /** Bedrockassumerole */
-            bedrockAssumeRole: boolean;
-            /** Openaicompatible */
-            openaiCompatible: boolean;
-        };
-        /** AgentGatewayCapabilities */
-        AgentGatewayCapabilities: {
-            /** Enabled */
-            enabled: boolean;
-            /** Managedcreditspersonalenabled */
-            managedCreditsPersonalEnabled: boolean;
-            /** Managedcreditsorganizationenabled */
-            managedCreditsOrganizationEnabled: boolean;
-            /** Defaultmanagedbudgetusd */
-            defaultManagedBudgetUsd: string | null;
-            /** Managedcreditagentkinds */
-            managedCreditAgentKinds: string[];
-            /** Topology */
-            topology: string;
-            /** Routeisolation */
-            routeIsolation: string;
-            /** Liveproofstatus */
-            liveProofStatus: string;
-            /** Byokenabled */
-            byokEnabled: boolean;
-            /** Byokpersonalenabled */
-            byokPersonalEnabled: boolean;
-            /** Byokorganizationenabled */
-            byokOrganizationEnabled: boolean;
-            /** Byokorganizationdisabledreason */
-            byokOrganizationDisabledReason: string | null;
-            byokProviders: components["schemas"]["AgentGatewayByokProviderCapabilities"];
-            /** Opencodegatewayenabled */
-            opencodeGatewayEnabled: boolean;
-            /** Agentauthslots */
-            agentAuthSlots: components["schemas"]["AgentAuthSlotCapability"][];
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -2677,10 +2632,6 @@ export interface components {
             platform?: string | null;
             /** Routeorscreen */
             routeOrScreen?: string | null;
-        };
-        /** CloudCapabilitiesResponse */
-        CloudCapabilitiesResponse: {
-            agentGateway: components["schemas"]["AgentGatewayCapabilities"];
         };
         /** CloudGitRepositoriesResponse */
         CloudGitRepositoriesResponse: {
@@ -3175,6 +3126,14 @@ export interface components {
         DevDesktopHandoffRequest: {
             /** Url */
             url: string;
+        };
+        /** E2BWebhookReceipt */
+        E2BWebhookReceipt: {
+            /**
+             * Received
+             * @default true
+             */
+            received: boolean;
         };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
@@ -6963,26 +6922,6 @@ export interface operations {
             };
         };
     };
-    cloud_capabilities_endpoint_v1_cloud_capabilities_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CloudCapabilitiesResponse"];
-                };
-            };
-        };
-    };
     list_agent_run_configs_endpoint_v1_cloud_agent_run_configs_get: {
         parameters: {
             query?: {
@@ -7300,6 +7239,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectorCatalogResponse"];
+                };
+            };
+        };
+    };
+    e2b_webhook_endpoint_v1_cloud_webhooks_e2b_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "e2b-signature"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2BWebhookReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    github_app_webhook_endpoint_v1_cloud_webhooks_github_app_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-github-event"?: string | null;
+                "x-hub-signature-256"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

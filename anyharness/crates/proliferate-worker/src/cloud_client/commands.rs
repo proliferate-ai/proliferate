@@ -98,7 +98,6 @@ pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
     "materialize_workspace",
     "prune_workspace_worktree",
     "materialize_environment",
-    "refresh_agent_auth_config",
     "send_prompt",
     "decide_plan",
     "resolve_interaction",

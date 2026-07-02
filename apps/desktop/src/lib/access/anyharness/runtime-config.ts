@@ -1,5 +1,4 @@
 import type {
-  ApplyAgentAuthConfigRequest,
   ApplyRuntimeConfigRequest,
 } from "@anyharness/sdk";
 import {
@@ -20,12 +19,4 @@ export function applyRuntimeConfig(
   options?: ApplyRuntimeConfigOptions,
 ) {
   return getAnyHarnessClient(connection).runtimeConfig.apply(request, options);
-}
-
-export function applyAgentAuthConfig(
-  connection: RuntimeConfigConnection,
-  request: ApplyAgentAuthConfigRequest,
-  options?: ApplyRuntimeConfigOptions,
-) {
-  return getAnyHarnessClient(connection).agents.applyAuthConfig(request, options);
 }
