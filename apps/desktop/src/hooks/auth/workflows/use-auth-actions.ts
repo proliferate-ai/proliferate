@@ -9,11 +9,13 @@ import {
   cancelActiveAuthFlow,
   linkDesktopProvider,
   signInWithGitHub,
-  signInWithPassword,
   signInWithSso,
   signOut,
-  type PasswordSignInCredentials,
 } from "@/lib/integrations/auth/orchestration-provider-flow";
+import {
+  signInWithPassword,
+  type PasswordSignInCredentials,
+} from "@/lib/integrations/auth/orchestration-password-flow";
 import {
   isAbortError,
   type GitHubDesktopSignInOptions,

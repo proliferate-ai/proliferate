@@ -21,7 +21,6 @@ import {
   getGitHubDesktopAuthAvailability,
   isPendingDesktopAuthExpired,
   pollGitHubDesktopSession,
-  signInWithDesktopPassword,
   type DesktopIdentityProvider,
 } from "@/lib/integrations/auth/proliferate-auth";
 import {
@@ -141,51 +140,6 @@ export async function signInWithGitHub(
       toError(error, "GitHub sign-in failed"),
     );
     throw toError(error, "GitHub sign-in failed");
-  }
-}
-
-export interface PasswordSignInCredentials {
-  email: string;
-  password: string;
-}
-
-// Direct email/password sign-in. Unlike the browser-based provider flows there
-// is no PKCE handoff: the server returns the desktop token pair in one call.
-export async function signInWithPassword(
-  credentials: PasswordSignInCredentials,
-  deps: AuthOrchestrationDeps,
-): Promise<{
-  provider: AuthTelemetryProvider;
-  source: AuthSignInSource;
-}> {
-  if (isDevAuthBypassed()) {
-    applyDevBypassState(deps);
-    return {
-      provider: "dev_bypass",
-      source: "dev_bypass",
-    };
-  }
-
-  const controlPlaneReachable = await checkControlPlaneReachable();
-  if (!controlPlaneReachable) {
-    throw new AuthRequestError(
-      "Signing in requires a reachable control plane.",
-      503,
-    );
-  }
-
-  try {
-    const session = await signInWithDesktopPassword(
-      credentials.email,
-      credentials.password,
-    );
-    await applyAuthenticatedState(deps, session);
-    return {
-      provider: "password",
-      source: "password_form",
-    };
-  } catch (error) {
-    throw toError(error, "Sign-in failed");
   }
 }
 

@@ -3,7 +3,7 @@ import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import {
   getDesktopAuthMethods,
   type DesktopAuthMethods,
-} from "@/lib/integrations/auth/proliferate-auth";
+} from "@/lib/integrations/auth/proliferate-auth-password";
 import { useControlPlaneHealth } from "@/hooks/access/cloud/use-control-plane-health";
 import { desktopAuthMethodsKey } from "./query-keys";
 

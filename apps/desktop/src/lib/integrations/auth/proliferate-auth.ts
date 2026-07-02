@@ -43,7 +43,7 @@ export {
 }
 export type { DesktopAuthCallback }
 
-interface DesktopTokenResponse {
+export interface DesktopTokenResponse {
   access_token: string
   refresh_token: string
   token_type: string
@@ -60,16 +60,6 @@ interface DesktopTokenResponse {
 interface OAuthAvailabilityResponse {
   enabled: boolean
   client_id?: string | null
-}
-
-interface AuthMethodsResponse {
-  password_login: boolean
-  github: boolean
-}
-
-export interface DesktopAuthMethods {
-  passwordLogin: boolean
-  github: boolean
 }
 
 interface StartAuthResponse {
@@ -102,11 +92,11 @@ export interface DesktopProviderAuthOptions {
 const GITHUB_RECOVERY_TIMEOUT_MS = 2 * 60 * 1000
 const GITHUB_APP_SETTINGS_FALLBACK_URL = "https://github.com/settings/applications"
 
-function buildUrl(path: string): string {
+export function buildUrl(path: string): string {
   return buildAuthUrl(path)
 }
 
-function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
+export function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
   const expiresAt = new Date(Date.now() + response.expires_in * 1000).toISOString()
   return {
     access_token: response.access_token,
@@ -176,44 +166,6 @@ export async function getGitHubDesktopAuthAvailability(): Promise<GitHubDesktopA
 export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
   const availability = await getGitHubDesktopAuthAvailability()
   return availability.enabled
-}
-
-export async function getDesktopAuthMethods(): Promise<DesktopAuthMethods> {
-  const response = await fetchAuthResponse(buildUrl("/auth/desktop/methods"), {
-    headers: {
-      Accept: "application/json",
-    },
-  })
-
-  if (!response.ok) {
-    throw await parseAuthError(response)
-  }
-
-  const payload = (await response.json()) as AuthMethodsResponse
-  return {
-    passwordLogin: payload.password_login === true,
-    github: payload.github === true,
-  }
-}
-
-export async function signInWithDesktopPassword(
-  email: string,
-  password: string,
-): Promise<StoredAuthSession> {
-  const response = await fetchAuthResponse(buildUrl("/auth/desktop/password/login"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  })
-
-  if (!response.ok) {
-    throw await parseAuthError(response)
-  }
-
-  return toStoredSession((await response.json()) as DesktopTokenResponse)
 }
 
 export async function beginGitHubDesktopSignIn(
