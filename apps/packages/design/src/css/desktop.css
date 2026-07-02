@@ -233,7 +233,15 @@
   --color-delegated-agent-5: hsl(265 88% 78%);
   --color-delegated-agent-6: hsl(188 85% 59%);
   --color-delegated-agent-7: hsl(24 95% 72%);
-  --color-delegated-agent-8: hsl(199 89% 68%);
+  --color-delegated-agent-8: hsl(142 70% 60%);
+  --color-delegated-agent-9: hsl(199 89% 68%);
+  --color-delegated-agent-10: hsl(84 65% 58%);
+  --color-delegated-agent-11: hsl(168 72% 52%);
+  --color-delegated-agent-12: hsl(240 85% 77%);
+  --color-delegated-agent-13: hsl(316 82% 72%);
+  --color-delegated-agent-14: hsl(35 45% 63%);
+  --color-delegated-agent-15: hsl(338 85% 70%);
+  --color-delegated-agent-16: hsl(215 22% 74%);
 
   /* -- Todo -- */
   --color-todo-in-progress: #339cff;
@@ -802,7 +810,15 @@ mark.codex-thread-find-active {
   --color-delegated-agent-5: hsl(265 80% 55%);
   --color-delegated-agent-6: hsl(192 90% 36%);
   --color-delegated-agent-7: hsl(25 95% 46%);
-  --color-delegated-agent-8: hsl(199 89% 42%);
+  --color-delegated-agent-8: hsl(142 72% 33%);
+  --color-delegated-agent-9: hsl(199 89% 42%);
+  --color-delegated-agent-10: hsl(84 75% 30%);
+  --color-delegated-agent-11: hsl(168 85% 28%);
+  --color-delegated-agent-12: hsl(240 70% 55%);
+  --color-delegated-agent-13: hsl(316 75% 42%);
+  --color-delegated-agent-14: hsl(30 55% 38%);
+  --color-delegated-agent-15: hsl(338 78% 45%);
+  --color-delegated-agent-16: hsl(215 20% 45%);
   --color-file-icon-folder: hsl(0 0% 17%);
   --color-file-icon-neutral: hsl(0 0% 17%);
   --color-file-icon-muted: hsl(0 0% 43%);

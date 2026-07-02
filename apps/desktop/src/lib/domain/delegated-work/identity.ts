@@ -103,6 +103,62 @@ const COLOR_IDENTITIES = [
     borderColorClassName: "border-delegated-agent-8",
     colorVar: "var(--color-delegated-agent-8)",
   },
+  {
+    token: "delegated-agent-9",
+    colorClassName: "bg-delegated-agent-9",
+    textColorClassName: "text-delegated-agent-9",
+    borderColorClassName: "border-delegated-agent-9",
+    colorVar: "var(--color-delegated-agent-9)",
+  },
+  {
+    token: "delegated-agent-10",
+    colorClassName: "bg-delegated-agent-10",
+    textColorClassName: "text-delegated-agent-10",
+    borderColorClassName: "border-delegated-agent-10",
+    colorVar: "var(--color-delegated-agent-10)",
+  },
+  {
+    token: "delegated-agent-11",
+    colorClassName: "bg-delegated-agent-11",
+    textColorClassName: "text-delegated-agent-11",
+    borderColorClassName: "border-delegated-agent-11",
+    colorVar: "var(--color-delegated-agent-11)",
+  },
+  {
+    token: "delegated-agent-12",
+    colorClassName: "bg-delegated-agent-12",
+    textColorClassName: "text-delegated-agent-12",
+    borderColorClassName: "border-delegated-agent-12",
+    colorVar: "var(--color-delegated-agent-12)",
+  },
+  {
+    token: "delegated-agent-13",
+    colorClassName: "bg-delegated-agent-13",
+    textColorClassName: "text-delegated-agent-13",
+    borderColorClassName: "border-delegated-agent-13",
+    colorVar: "var(--color-delegated-agent-13)",
+  },
+  {
+    token: "delegated-agent-14",
+    colorClassName: "bg-delegated-agent-14",
+    textColorClassName: "text-delegated-agent-14",
+    borderColorClassName: "border-delegated-agent-14",
+    colorVar: "var(--color-delegated-agent-14)",
+  },
+  {
+    token: "delegated-agent-15",
+    colorClassName: "bg-delegated-agent-15",
+    textColorClassName: "text-delegated-agent-15",
+    borderColorClassName: "border-delegated-agent-15",
+    colorVar: "var(--color-delegated-agent-15)",
+  },
+  {
+    token: "delegated-agent-16",
+    colorClassName: "bg-delegated-agent-16",
+    textColorClassName: "text-delegated-agent-16",
+    borderColorClassName: "border-delegated-agent-16",
+    colorVar: "var(--color-delegated-agent-16)",
+  },
 ] as const;
 
 export interface DelegatedWorkVisualIdentity {
@@ -116,14 +172,47 @@ export interface DelegatedWorkVisualIdentity {
   iconSeedHash: number;
 }
 
-export function delegatedWorkVisualIdentity(id: string): DelegatedWorkVisualIdentity {
-  // Name and color come from the same seed but are decoupled: the color uses an
-  // avalanche mix of the seed hash so a name collision does not also force a color
-  // collision. A naive second hash stays correlated here because there are 8 colors
-  // and 40 names (8 divides 40), so the color must depend on the hash's high bits.
+export const DELEGATED_AGENT_COLOR_COUNT = COLOR_IDENTITIES.length;
+
+// Hashed color index used when no sibling-assigned index is provided: an
+// avalanche mix of the seed hash so a name collision does not also force a
+// color collision. A naive second hash stays correlated here because the
+// palette size divides the 40-name pool, so the color must depend on the
+// hash's high bits.
+export function delegatedColorIndexFromSeed(seed: string): number {
+  return mixHash(stableIndex(seed)) % COLOR_IDENTITIES.length;
+}
+
+// Sibling-aware color assignment: the position in the ordered sibling list IS
+// the color (pure index), so up to DELEGATED_AGENT_COLOR_COUNT simultaneous
+// siblings never repeat a color — a guarantee per-agent hashing cannot give
+// (birthday paradox). Past the palette size colors must repeat (pigeonhole);
+// the identicon shape keeps those siblings distinguishable.
+export function assignDistinctDelegatedColorIndices(
+  orderedSeeds: readonly string[],
+): Map<string, number> {
+  const out = new Map<string, number>();
+  orderedSeeds.forEach((seed, index) => {
+    if (!out.has(seed)) {
+      out.set(seed, index % COLOR_IDENTITIES.length);
+    }
+  });
+  return out;
+}
+
+export function delegatedWorkVisualIdentity(
+  id: string,
+  colorIndex?: number,
+): DelegatedWorkVisualIdentity {
   const seedHash = stableIndex(id);
   const generatedName = FRIENDLY_NAMES[seedHash % FRIENDLY_NAMES.length] ?? "Mary";
-  const color = COLOR_IDENTITIES[mixHash(seedHash) % COLOR_IDENTITIES.length] ?? COLOR_IDENTITIES[0];
+  // A sibling-assigned colorIndex wins: only a pass that sees the whole
+  // ordered sibling list can hand out distinct colors. The hashed index is the
+  // fallback for callers that know a single agent in isolation.
+  const resolvedColorIndex = isAssignableColorIndex(colorIndex)
+    ? colorIndex
+    : delegatedColorIndexFromSeed(id);
+  const color = COLOR_IDENTITIES[resolvedColorIndex] ?? COLOR_IDENTITIES[0];
   return {
     generatedName,
     initial: generatedName.slice(0, 1),
@@ -142,15 +231,19 @@ export function buildDelegatedAgentIdentity({
   workspaceId,
   sessionId,
   sessionLinkId,
+  colorIndex,
+  shapeSalt,
 }: {
   id: string;
   title: string | null | undefined;
   workspaceId?: string | null;
   sessionId?: string | null;
   sessionLinkId?: string | null;
+  colorIndex?: number;
+  shapeSalt?: number;
 }): DelegatedAgentIdentity {
-  const seed = sessionLinkId?.trim() || sessionId?.trim() || id;
-  const visual = delegatedWorkVisualIdentity(seed);
+  const seed = resolveDelegatedIdentitySeed({ id, sessionId, sessionLinkId });
+  const visual = delegatedWorkVisualIdentity(seed, colorIndex);
   const resolvedTitle = normalizeTitle(title);
   const shortId = shortDelegatedWorkId(seed);
   return {
@@ -165,7 +258,7 @@ export function buildDelegatedAgentIdentity({
     textColorClassName: visual.textColorClassName,
     borderColorClassName: visual.borderColorClassName,
     colorVar: visual.colorVar,
-    iconSeedHash: visual.iconSeedHash,
+    iconSeedHash: identiconSeedFromSalt(visual.iconSeedHash, shapeSalt ?? 0),
     openTarget: sessionId
       ? {
         workspaceId: workspaceId ?? null,
@@ -174,6 +267,35 @@ export function buildDelegatedAgentIdentity({
       } satisfies DelegatedAgentOpenTarget
       : null,
   };
+}
+
+// The seed every visual trait derives from; sessionLinkId is the stable
+// cross-surface handle, so it wins over the session id and the raw id.
+export function resolveDelegatedIdentitySeed(input: {
+  id: string;
+  sessionId?: string | null;
+  sessionLinkId?: string | null;
+}): string {
+  return input.sessionLinkId?.trim() || input.sessionId?.trim() || input.id;
+}
+
+// Salt 0 is the agent's natural fingerprint seed; positive salts perturb it
+// deterministically. The sibling pass probes salts to break exact identicon
+// collisions while leaving non-colliding agents untouched. Lives here (not in
+// identicon.ts) so the identity builder can fold the salt without a circular
+// import — identicon.ts already imports from this module.
+export function identiconSeedFromSalt(seedHash: number, salt: number): number {
+  if (salt <= 0) {
+    return seedHash >>> 0;
+  }
+  return mixHash((seedHash ^ Math.imul(salt, 0x9e3779b1)) >>> 0);
+}
+
+function isAssignableColorIndex(colorIndex: number | undefined): colorIndex is number {
+  return colorIndex !== undefined
+    && Number.isInteger(colorIndex)
+    && colorIndex >= 0
+    && colorIndex < COLOR_IDENTITIES.length;
 }
 
 export function shortDelegatedWorkId(id: string | null | undefined): string {

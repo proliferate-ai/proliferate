@@ -26,6 +26,11 @@ export interface HeaderHierarchyChildRow {
   statusLabel: string;
   wakeScheduled: boolean;
   isActive: boolean;
+  // Stamped by the sibling-aware pass over the parent's merged child list so
+  // siblings never repeat a color or an exact identicon shape. Optional:
+  // rows built outside that pass fall back to the per-seed hash.
+  colorIndex?: number;
+  shapeSalt?: number;
 }
 
 export function buildKnownHeaderSessions(args: {

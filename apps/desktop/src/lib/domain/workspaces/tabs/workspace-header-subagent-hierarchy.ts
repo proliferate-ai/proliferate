@@ -7,6 +7,11 @@ import type {
   SessionSubagentsResponse,
 } from "@anyharness/sdk";
 import { formatSubagentLabel } from "@proliferate/product-domain/chats/subagents/provenance";
+import {
+  DELEGATED_AGENT_COLOR_COUNT,
+  resolveDelegatedIdentitySeed,
+} from "@/lib/domain/delegated-work/identity";
+import { assignDistinctIdenticonSeeds } from "@/lib/domain/delegated-work/identicon";
 import type { SubagentSessionRelationshipHint } from "@proliferate/product-domain/chats/subagents/session-relationship-hints";
 import {
   reviewAssignmentHeaderStatusLabel,
@@ -122,6 +127,28 @@ export function buildWorkspaceHeaderSubagentHierarchy({
         childToParent.set(child.sessionId, sessionId);
       }
     }
+  }
+
+  // Sibling-aware pass over each parent's MERGED child list (subagents +
+  // reviews + cowork, in that append order): the position hands out a
+  // distinct color per sibling and the shape guard perturbs only true
+  // identicon collisions. Running after the three appends is what keeps
+  // cross-source siblings from ever colliding. Subagents sit at the front of
+  // the merged list, so their color/shape here match the composer strip,
+  // which numbers the same subagent prefix on its own.
+  for (const children of childrenByParentSessionId.values()) {
+    const orderedSeeds = children.map((child) =>
+      resolveDelegatedIdentitySeed({
+        id: child.sessionLinkId || child.sessionId,
+        sessionId: child.sessionId,
+        sessionLinkId: child.sessionLinkId,
+      })
+    );
+    const shapeSalts = assignDistinctIdenticonSeeds(orderedSeeds);
+    children.forEach((child, index) => {
+      child.colorIndex = index % DELEGATED_AGENT_COLOR_COUNT;
+      child.shapeSalt = shapeSalts.get(orderedSeeds[index] ?? "") ?? 0;
+    });
   }
 
   return {

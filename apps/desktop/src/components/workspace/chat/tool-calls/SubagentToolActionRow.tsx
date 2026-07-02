@@ -5,7 +5,11 @@ import { Robot } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
 import { DelegatedAgentIdenticon } from "@/components/workspace/delegated-work/DelegatedAgentIdenticon";
-import { useTranscriptOpenSession } from "@/components/workspace/chat/transcript/TranscriptContexts";
+import {
+  useTranscriptOpenSession,
+  useTranscriptSessionId,
+} from "@/components/workspace/chat/transcript/TranscriptContexts";
+import { useDelegatedAgentVisualAssignment } from "@/hooks/chat/derived/use-delegated-agent-visual-assignment";
 import type {
   SubagentMcpReceiptPresentation,
 } from "@proliferate/product-domain/chats/subagents/subagent-tool-presentation";
@@ -30,6 +34,11 @@ export function SubagentToolActionRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const openSession = useTranscriptOpenSession();
+  const transcriptSessionId = useTranscriptSessionId();
+  const visualAssignment = useDelegatedAgentVisualAssignment({
+    parentSessionId: transcriptSessionId,
+    sessionLinkId: presentation.sessionLinkId,
+  });
   const targetSessionId = presentation.childSessionId?.trim() || null;
   const canOpenSession =
     presentation.openSessionAllowed && !!targetSessionId && !!openSession;
@@ -42,6 +51,8 @@ export function SubagentToolActionRow({
     title: presentation.title,
     sessionId: presentation.childSessionId,
     sessionLinkId: presentation.sessionLinkId,
+    colorIndex: visualAssignment.colorIndex,
+    shapeSalt: visualAssignment.shapeSalt,
   });
   const hoverAgent = {
     identity,

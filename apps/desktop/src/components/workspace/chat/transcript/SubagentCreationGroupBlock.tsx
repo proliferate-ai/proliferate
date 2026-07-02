@@ -13,7 +13,8 @@ import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identit
 import {
   delegatedWorkStatusCategoryFromLabel,
 } from "@/lib/domain/delegated-work/presentation";
-import { useTranscriptOpenSession } from "./TranscriptContexts";
+import { useDelegatedAgentVisualAssignment } from "@/hooks/chat/derived/use-delegated-agent-visual-assignment";
+import { useTranscriptOpenSession, useTranscriptSessionId } from "./TranscriptContexts";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
@@ -86,11 +87,18 @@ function SubagentCreationRow({
   const launchDisplay = resolveSubagentLaunchDisplay(item);
   const launchResult = parseSubagentLaunchResult(item);
   const provisioningStatus = parseSubagentProvisioningStatus(item);
+  const transcriptSessionId = useTranscriptSessionId();
+  const visualAssignment = useDelegatedAgentVisualAssignment({
+    parentSessionId: transcriptSessionId,
+    sessionLinkId: launchResult?.sessionLinkId ?? null,
+  });
   const identity = buildDelegatedAgentIdentity({
     id: item.toolCallId ?? item.itemId,
     title: launchDisplay.title,
     sessionId: launchResult?.childSessionId ?? null,
     sessionLinkId: launchResult?.sessionLinkId ?? item.toolCallId ?? item.itemId,
+    colorIndex: visualAssignment.colorIndex,
+    shapeSalt: visualAssignment.shapeSalt,
   });
   const promptPreview = formatPromptPreview(launchDisplay.prompt);
   const canOpenChild = !!launchResult?.childSessionId && !!onOpenChild;

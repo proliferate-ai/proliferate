@@ -17,7 +17,12 @@ import type {
 import {
   delegatedWorkStatusCategoryFromLabel,
 } from "@/lib/domain/delegated-work/presentation";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import {
+  buildDelegatedAgentIdentity,
+  DELEGATED_AGENT_COLOR_COUNT,
+  resolveDelegatedIdentitySeed,
+} from "@/lib/domain/delegated-work/identity";
+import { assignDistinctIdenticonSeeds } from "@/lib/domain/delegated-work/identicon";
 
 const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
 
@@ -85,9 +90,16 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
   );
 
   const rows = useMemo(
-    () => children.map((child, index) => (
-      buildSubagentRow(child, index + 1)
-    )),
+    () => {
+      // Same sibling-aware assignment as the header hierarchy pass: subagents
+      // are the prefix of the merged tab list, so numbering and probing this
+      // subagent-only list yields the exact same color/shape as the tabs.
+      const orderedSeeds = children.map((child) => subagentRowSeed(child));
+      const shapeSalts = assignDistinctIdenticonSeeds(orderedSeeds);
+      return children.map((child, index) => (
+        buildSubagentRow(child, index + 1, shapeSalts.get(orderedSeeds[index] ?? "") ?? 0)
+      ));
+    },
     [children],
   );
   const parent = useMemo(
@@ -177,9 +189,18 @@ function buildParent(parent: ParentSubagentLinkSummary | null): SubagentComposer
   };
 }
 
+function subagentRowSeed(child: ChildSubagentSummary): string {
+  return resolveDelegatedIdentitySeed({
+    id: child.sessionLinkId,
+    sessionId: child.childSessionId,
+    sessionLinkId: child.sessionLinkId,
+  });
+}
+
 function buildSubagentRow(
   child: ChildSubagentSummary,
   ordinal: number,
+  shapeSalt: number,
 ): SubagentComposerStripRow {
   const label = formatSubagentLabel(child.label ?? child.title, ordinal);
   const statusLabel = formatSessionStatus(child.status);
@@ -192,6 +213,8 @@ function buildSubagentRow(
       title: label,
       sessionId: child.childSessionId,
       sessionLinkId: child.sessionLinkId,
+      colorIndex: (ordinal - 1) % DELEGATED_AGENT_COLOR_COUNT,
+      shapeSalt,
     }),
     statusLabel,
     statusCategory: delegatedWorkStatusCategoryFromLabel({

@@ -4,6 +4,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 
+// The sibling color/shape lookup reads the runtime subagents query, which
+// needs the AnyHarness workspace provider; receipts fall back to the hashed
+// identity when the assignment is empty, which is what these tests assert.
+vi.mock("@/hooks/chat/derived/use-delegated-agent-visual-assignment", () => ({
+  useDelegatedAgentVisualAssignment: () => ({}),
+}));
+
 describe("SubagentWakeBadge", () => {
   afterEach(() => {
     cleanup();

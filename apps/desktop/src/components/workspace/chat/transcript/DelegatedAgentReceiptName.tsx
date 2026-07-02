@@ -1,5 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import { useDelegatedAgentVisualAssignment } from "@/hooks/chat/derived/use-delegated-agent-visual-assignment";
+import { useTranscriptSessionId } from "./TranscriptContexts";
 
 interface DelegatedAgentReceiptNameProps {
   id: string;
@@ -18,11 +20,18 @@ export function DelegatedAgentReceiptName({
   onOpenSession,
   className = "",
 }: DelegatedAgentReceiptNameProps) {
+  const transcriptSessionId = useTranscriptSessionId();
+  const visualAssignment = useDelegatedAgentVisualAssignment({
+    parentSessionId: transcriptSessionId,
+    sessionLinkId,
+  });
   const identity = buildDelegatedAgentIdentity({
     id,
     title,
     sessionId,
     sessionLinkId,
+    colorIndex: visualAssignment.colorIndex,
+    shapeSalt: visualAssignment.shapeSalt,
   });
   const visibleLabel = identity.generatedName;
   const fullLabel = identity.displayName;

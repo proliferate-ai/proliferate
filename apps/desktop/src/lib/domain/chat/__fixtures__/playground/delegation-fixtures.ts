@@ -2,7 +2,11 @@ import type {
   DelegatedAgentIdentity,
   DelegatedWorkStatusCategory,
 } from "@/lib/domain/delegated-work/model";
-import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
+import {
+  buildDelegatedAgentIdentity,
+  DELEGATED_AGENT_COLOR_COUNT,
+} from "@/lib/domain/delegated-work/identity";
+import { assignDistinctIdenticonSeeds } from "@/lib/domain/delegated-work/identicon";
 import {
   delegatedWorkStatusCategoryFromLabel,
 } from "@/lib/domain/delegated-work/presentation";
@@ -101,14 +105,20 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
   },
 ] satisfies Omit<PlaygroundSubagentStripRow, "identity" | "statusCategory">[];
 
+const PLAYGROUND_SHAPE_SALTS = assignDistinctIdenticonSeeds(
+  RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS.map((row) => row.sessionLinkId),
+);
+
 export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] =
-  RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS.map((row) => ({
+  RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS.map((row, index) => ({
     ...row,
     identity: buildDelegatedAgentIdentity({
       id: row.sessionLinkId,
       title: row.label,
       sessionId: row.childSessionId,
       sessionLinkId: row.sessionLinkId,
+      colorIndex: index % DELEGATED_AGENT_COLOR_COUNT,
+      shapeSalt: PLAYGROUND_SHAPE_SALTS.get(row.sessionLinkId) ?? 0,
     }),
     statusCategory: delegatedWorkStatusCategoryFromLabel({
       statusLabel: row.statusLabel,
