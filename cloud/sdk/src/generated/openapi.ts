@@ -1328,6 +1328,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/integrations/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integration Health Endpoint */
+        get: operations["list_integration_health_endpoint_v1_cloud_integrations_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integrations/authentications": {
         parameters: {
             query?: never;
@@ -3401,6 +3418,41 @@ export interface components {
             url: string;
             /** Authorization */
             authorization: string;
+        };
+        /** IntegrationHealthItem */
+        IntegrationHealthItem: {
+            /**
+             * Definitionid
+             * Format: uuid
+             */
+            definitionId: string;
+            /** Accountid */
+            accountId?: string | null;
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Authkind */
+            authKind: string;
+            /** Effectiveenabled */
+            effectiveEnabled: boolean;
+            /** Policyenabled */
+            policyEnabled?: boolean | null;
+            /** Accountenabled */
+            accountEnabled?: boolean | null;
+            /** Health */
+            health: string;
+            /** Tokenexpiresat */
+            tokenExpiresAt?: string | null;
+            /** Toolcount */
+            toolCount?: number | null;
+            /** Lasterrorcode */
+            lastErrorCode?: string | null;
+        };
+        /** IntegrationHealthResponse */
+        IntegrationHealthResponse: {
+            /** Items */
+            items: components["schemas"]["IntegrationHealthItem"][];
         };
         /** IntegrationOAuthFlowStatusResponse */
         IntegrationOAuthFlowStatusResponse: {
@@ -7450,6 +7502,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_integration_health_endpoint_v1_cloud_integrations_health_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationHealthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

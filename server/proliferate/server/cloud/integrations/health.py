@@ -1,0 +1,156 @@
+"""Integration health: what's connected, and what needs the user's attention.
+
+For each definition visible to the user we compute a single health verdict by
+combining org policy, the user's account state, and — for OAuth accounts that
+claim to be ready — an active credential probe so a silently-expired token
+surfaces as ``needs_reauth`` rather than failing mid-session.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.db.store import organizations as organization_store
+from proliferate.db.store.integrations import accounts as accounts_store
+from proliferate.db.store.integrations import definitions as definitions_store
+from proliferate.db.store.integrations import policies as policies_store
+from proliferate.db.store.integrations import tool_cache as tool_cache_store
+from proliferate.db.store.integrations.accounts import IntegrationAccountRecord
+from proliferate.db.store.integrations.definitions import IntegrationDefinitionRecord
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations.access import ensure_provider_access
+
+
+class HealthVerdict(StrEnum):
+    """Health verdicts, in rough "needs attention" order."""
+
+    READY = "ready"
+    NEEDS_AUTH = "needs_auth"
+    NEEDS_REAUTH = "needs_reauth"
+    DISABLED_BY_USER = "disabled_by_user"
+    DISABLED_BY_ORG = "disabled_by_org"
+    ERROR = "error"
+
+
+@dataclass(frozen=True)
+class IntegrationHealth:
+    definition_id: UUID
+    account_id: UUID | None
+    namespace: str
+    display_name: str
+    auth_kind: str
+    effective_enabled: bool
+    policy_enabled: bool | None
+    account_enabled: bool | None
+    health: HealthVerdict
+    token_expires_at: datetime | None
+    tool_count: int | None
+    last_error_code: str | None
+
+
+async def _tool_count(db: AsyncSession, account_id: UUID) -> int | None:
+    cache = await tool_cache_store.get_tool_cache(db, account_id)
+    if cache is None or cache.status != "ready":
+        return None
+    try:
+        return len(json.loads(cache.tools_json))
+    except (ValueError, TypeError):
+        return None
+
+
+async def _account_health(
+    db: AsyncSession,
+    *,
+    account: IntegrationAccountRecord,
+    definition: IntegrationDefinitionRecord,
+) -> tuple[HealthVerdict, str | None]:
+    """Return (health, last_error_code) for an existing account."""
+    if not account.enabled:
+        return HealthVerdict.DISABLED_BY_USER, account.last_error_code
+    if account.status == "setup_required":
+        return HealthVerdict.NEEDS_AUTH, account.last_error_code
+    if account.status == "error":
+        return HealthVerdict.ERROR, account.last_error_code
+    # status == "ready": actively probe OAuth so expired tokens surface early.
+    if account.auth_kind == "oauth2":
+        try:
+            await ensure_provider_access(db, account_record=account, definition_record=definition)
+        except CloudApiError as exc:
+            if exc.code == "integration_reauth_required":
+                return HealthVerdict.NEEDS_REAUTH, exc.code
+            return HealthVerdict.ERROR, exc.code
+    return HealthVerdict.READY, None
+
+
+async def list_integration_health(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    organization_id: UUID | None = None,
+) -> list[IntegrationHealth]:
+    if organization_id is not None:
+        # An org's custom definitions + policy are private to its members; a
+        # non-member must not learn about them by supplying the org id.
+        membership = await organization_store.get_active_membership(
+            db, organization_id=organization_id, user_id=user_id
+        )
+        if membership is None:
+            raise CloudApiError(
+                "organization_not_found", "Organization not found.", status_code=404
+            )
+        definitions = await definitions_store.list_definitions_visible_to_org(db, organization_id)
+        policies = {
+            policy.definition_id: policy.enabled
+            for policy in await policies_store.list_policies_for_org(db, organization_id)
+        }
+    else:
+        definitions = await definitions_store.list_seed_definitions(db)
+        policies = {}
+
+    accounts = {
+        account.definition_id: account
+        for account in await accounts_store.list_accounts_for_user(db, user_id)
+    }
+
+    items: list[IntegrationHealth] = []
+    for definition in definitions:
+        if definition.archived_at is not None:
+            continue
+        policy_enabled = policies.get(definition.id)
+        effective_enabled = (
+            policy_enabled if policy_enabled is not None else definition.enabled_by_default
+        )
+        account = accounts.get(definition.id)
+
+        if not effective_enabled:
+            health = HealthVerdict.DISABLED_BY_ORG
+            last_error = None
+        elif account is None:
+            health = HealthVerdict.NEEDS_AUTH
+            last_error = None
+        else:
+            health, last_error = await _account_health(db, account=account, definition=definition)
+
+        items.append(
+            IntegrationHealth(
+                definition_id=definition.id,
+                account_id=account.id if account else None,
+                namespace=definition.namespace,
+                display_name=definition.display_name,
+                auth_kind=definition.auth_kind,
+                effective_enabled=effective_enabled,
+                policy_enabled=policy_enabled,
+                account_enabled=account.enabled if account else None,
+                health=health,
+                token_expires_at=account.token_expires_at if account else None,
+                tool_count=await _tool_count(db, account.id) if account else None,
+                last_error_code=last_error,
+            )
+        )
+    return items

@@ -63,6 +63,25 @@ class IntegrationOAuthFlowStatusResponse(_CamelModel):
     final_surface: str
 
 
+class IntegrationHealthItem(_CamelModel):
+    definition_id: UUID
+    account_id: UUID | None = None
+    namespace: str
+    display_name: str
+    auth_kind: str
+    effective_enabled: bool
+    policy_enabled: bool | None = None
+    account_enabled: bool | None = None
+    health: str
+    token_expires_at: datetime | None = None
+    tool_count: int | None = None
+    last_error_code: str | None = None
+
+
+class IntegrationHealthResponse(_CamelModel):
+    items: list[IntegrationHealthItem]
+
+
 # --------------------------------------------------------------------------- #
 # Org-admin definition management
 # --------------------------------------------------------------------------- #
