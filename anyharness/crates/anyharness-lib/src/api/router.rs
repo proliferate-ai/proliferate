@@ -11,7 +11,7 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
+    agent_auth, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
     mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
     sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
@@ -55,6 +55,8 @@ pub fn build_router(state: AppState) -> Router {
             post(agents::start_agent_login_terminal),
         )
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
+        // Agent-auth state (desktop-pushed local-surface state.json)
+        .route("/agent-auth/state", put(agent_auth::put_agent_auth_state))
         // Catalogs (worker-pushed agent catalog document)
         .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
         // Workspaces

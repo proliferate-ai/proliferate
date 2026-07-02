@@ -40,6 +40,9 @@ from proliferate.server.billing.subjects import ensure_organization_billing_subj
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.materialization import service as materialization_service
+from proliferate.server.cloud.materialization.materialize.agent_auth import (
+    build_agent_auth_state,
+)
 from proliferate.utils.time import utcnow
 
 _ENROLLMENT_STATUS_NONE = "none"
@@ -257,6 +260,21 @@ async def get_capabilities(
         settings.agent_gateway_litellm_public_base_url or None,
         enrollment.sync_status if enrollment is not None else _ENROLLMENT_STATUS_NONE,
     )
+
+
+async def get_auth_state(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str,
+) -> dict[str, object] | None:
+    """Render the user's state.json document for one surface.
+
+    Same render path as the cloud materializer; ``None`` means the user has no
+    selections for the surface at all (legacy/native fall-through).
+    """
+    state, _ = await build_agent_auth_state(db, user_id, surface=surface)
+    return state
 
 
 async def get_enrollment(

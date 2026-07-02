@@ -30,6 +30,14 @@ export function agentRouteSelectionsKey() {
   return [...agentGatewayRootKey(), "route-selections"] as const;
 }
 
+export function agentAuthStateRootKey() {
+  return [...agentGatewayRootKey(), "state"] as const;
+}
+
+export function agentAuthStateKey(surface: string) {
+  return [...agentAuthStateRootKey(), surface] as const;
+}
+
 export function agentGatewayCapabilitiesKey() {
   return [...agentGatewayRootKey(), "capabilities"] as const;
 }

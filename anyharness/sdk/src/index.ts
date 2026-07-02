@@ -43,6 +43,12 @@ export type {
 } from "./types/replay.js";
 
 export type {
+  AgentAuthStateSelection,
+  AgentAuthStateDocument,
+  ApplyAgentAuthStateResponse,
+} from "./types/agent-auth.js";
+
+export type {
   AgentInstallState,
   AgentCredentialState,
   AgentReadinessState,

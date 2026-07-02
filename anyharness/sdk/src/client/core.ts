@@ -1,4 +1,5 @@
 import type { ProblemDetails } from "../types/runtime.js";
+import { AgentAuthClient } from "./agent-auth.js";
 import { AgentsClient } from "./agents.js";
 import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
@@ -364,6 +365,7 @@ export function hashTimingScope(value: string): string {
 export class AnyHarnessClient {
   readonly runtime: RuntimeClient;
   readonly agents: AgentsClient;
+  readonly agentAuth: AgentAuthClient;
   readonly mobility: MobilityClient;
   readonly plans: PlansClient;
   readonly repoRoots: RepoRootsClient;
@@ -383,6 +385,7 @@ export class AnyHarnessClient {
     const transport = new AnyHarnessTransport(options);
     this.runtime = new RuntimeClient(transport);
     this.agents = new AgentsClient(transport);
+    this.agentAuth = new AgentAuthClient(transport);
     this.mobility = new MobilityClient(transport);
     this.plans = new PlansClient(transport);
     this.repoRoots = new RepoRootsClient(transport);
