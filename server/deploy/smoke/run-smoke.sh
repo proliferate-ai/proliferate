@@ -406,15 +406,21 @@ phase_journey() {
   if [[ "$invitation_status" != "pending" ]]; then
     fail "expected a pending invitation, got status '${invitation_status:-<empty>}'; body: $LAST_RESPONSE_BODY"
   fi
-  # A parallel hardening branch adds a registration token to the invitation
-  # response and requires it at registration. Pick it up when present so this
-  # smoke passes on both sides of that change.
+  # Registration requires proof of invitation: the invitation id doubles as
+  # the registration token the inviting admin shares. Prefer an explicit token
+  # field if a future response ever adds one, then fall back to the id.
   invitation_token="$(json_get token <<<"$LAST_RESPONSE_BODY")"
   if [[ -z "$invitation_token" ]]; then
     invitation_token="$(json_get invitationToken <<<"$LAST_RESPONSE_BODY")"
   fi
   if [[ -z "$invitation_token" ]]; then
     invitation_token="$(json_get registrationToken <<<"$LAST_RESPONSE_BODY")"
+  fi
+  if [[ -z "$invitation_token" ]]; then
+    invitation_token="$(json_get id <<<"$LAST_RESPONSE_BODY")"
+  fi
+  if [[ -z "$invitation_token" ]]; then
+    fail "invitation response carries no registration token or id: $LAST_RESPONSE_BODY"
   fi
 
   # (f) The invitee self-registers through invite-as-allowlist.
