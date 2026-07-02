@@ -1,55 +1,54 @@
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 import { twMerge } from "../utils/tw-merge";
 
-export interface SegmentedControlOption<Value extends string = string> {
-  value: Value;
-  label: string;
+export interface SegmentedControlItem<Id extends string = string> {
+  id: Id;
+  label: ReactNode;
   icon?: ReactNode;
+  disabled?: boolean;
 }
 
-/**
- * Exclusive 2–4 option switch (design-system SegmentedControl, CONTRACT §5):
- * one bordered frame, hairline dividers, active segment on the foreground-mix
- * fill (the app's `--accent-strong` equivalent — there is no such token).
- */
-export function SegmentedControl<Value extends string>({
+interface SegmentedControlProps<Id extends string> {
+  items: readonly SegmentedControlItem<Id>[];
+  value: Id;
+  onChange: (id: Id) => void;
+  ariaLabel?: string;
+  className?: string;
+}
+
+export function SegmentedControl<Id extends string>({
+  items,
   value,
-  options,
   onChange,
   ariaLabel,
   className = "",
-}: {
-  value: Value;
-  options: readonly SegmentedControlOption<Value>[];
-  onChange: (value: Value) => void;
-  ariaLabel?: string;
-  className?: string;
-}) {
+}: SegmentedControlProps<Id>) {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
       className={twMerge("inline-flex overflow-hidden rounded-md border border-input", className)}
     >
-      {options.map((option, index) => {
-        const active = option.value === value;
+      {items.map((item) => {
+        const active = item.id === value;
         return (
           <button
-            key={option.value}
+            key={item.id}
             type="button"
             role="radio"
             aria-checked={active}
-            onClick={() => onChange(option.value)}
+            disabled={item.disabled}
+            data-active={active ? "" : undefined}
             className={twMerge(
-              "inline-flex h-[30px] cursor-pointer items-center gap-1.5 px-2.5 text-ui-sm font-medium transition-colors [&>svg]:size-[13px]",
-              index > 0 && "border-l border-input",
+              "inline-flex h-[30px] items-center gap-1.5 border-l border-input px-3 text-xs font-medium transition-colors first:border-l-0 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-[13px]",
               active
                 ? "bg-foreground/10 text-foreground"
                 : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
+            onClick={() => onChange(item.id)}
           >
-            {option.icon}
-            {option.label}
+            {item.icon}
+            {item.label}
           </button>
         );
       })}

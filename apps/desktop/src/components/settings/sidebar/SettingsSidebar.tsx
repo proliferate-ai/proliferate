@@ -1,6 +1,7 @@
-import { Fragment, useMemo, type ReactNode } from "react";
+import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
 import {
   Blocks,
+  Bot,
   Brain,
   Building2,
   CircleUser,
@@ -18,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
@@ -72,10 +74,23 @@ const SETTINGS_ROW_ACTIVE_CLASS =
 const SETTINGS_ROW_DISABLED_CLASS =
   "!text-muted-foreground hover:!text-muted-foreground";
 
+/** Brand glyph for a per-harness nav entry, adapted to the icon-map contract. */
+function harnessNavIcon(kind: string) {
+  return function HarnessNavIcon({ className }: { className?: string }) {
+    return <ProviderIcon kind={kind} className={className} />;
+  };
+}
+
 const SETTINGS_NAV_ICONS = {
   account: CircleUser,
   "agent-api-keys": KeyRound,
+  "agent-claude": harnessNavIcon("claude"),
+  "agent-codex": harnessNavIcon("codex"),
   "agent-defaults": SlidersHorizontal,
+  "agent-gemini": harnessNavIcon("gemini"),
+  "agent-grok": harnessNavIcon("grok"),
+  "agent-opencode": harnessNavIcon("opencode"),
+  agents: Bot,
   appearance: Palette,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
@@ -94,7 +109,7 @@ const SETTINGS_NAV_ICONS = {
   "repo-environment": KeyRound,
   support: LifeBuoy,
   worktrees: Scissors,
-} satisfies Record<SettingsNavIconId, typeof Settings2>;
+} satisfies Record<SettingsNavIconId, ComponentType<{ className?: string }>>;
 
 function settingsRowClass(active: boolean, disabled = false) {
   return [

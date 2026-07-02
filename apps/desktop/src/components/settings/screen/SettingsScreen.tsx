@@ -8,8 +8,10 @@ import {
 } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
-import { AgentApiKeysPane } from "@/components/settings/panes/AgentApiKeysPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
+import { AgentsOverviewPane } from "@/components/settings/panes/agents/overview/AgentsOverviewPane";
+import { ApiKeysPane } from "@/components/settings/panes/agents/api-keys/ApiKeysPane";
+import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
@@ -43,8 +45,10 @@ import {
   SETTINGS_SCOPE_LABELS,
   SETTINGS_SCOPE_ORDER,
   getFirstSectionForScope,
+  getHarnessKindForSettingsSection,
   getSettingsScopeForSection,
   isSettingsAdminOnlySection,
+  isSettingsHarnessSection,
 } from "@/lib/domain/settings/navigation-presentation";
 import { RepoScopeHeaderControls } from "@/components/settings/screen/RepoScopeHeaderControls";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
@@ -98,6 +102,7 @@ function renderSettingsSection(
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
   focus: SettingsFocus,
+  onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
   onSelectRepoContext: (context: RepoSettingsContext) => void,
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void,
@@ -108,6 +113,12 @@ function renderSettingsSection(
     cloudSignInChecking,
     cloudSignInAvailable,
   };
+  if (activeSection === "agents") {
+    return <AgentsOverviewPane onSelectSection={onSelectSection} />;
+  }
+  if (isSettingsHarnessSection(activeSection)) {
+    return <HarnessPane harnessKind={getHarnessKindForSettingsSection(activeSection)} />;
+  }
   if (activeSection === "agent-defaults") {
     return <AgentDefaultsPane />;
   }
@@ -117,7 +128,7 @@ function renderSettingsSection(
     }
 
     if (cloudActive) {
-      return <AgentApiKeysPane />;
+      return <ApiKeysPane />;
     }
 
     if (cloudSignInChecking) {
@@ -376,6 +387,7 @@ export function SettingsScreen({
                     cloudSignInChecking,
                     cloudSignInAvailable,
                     focus,
+                    onSelectSection,
                     onSelectRepo,
                     onSelectRepoContext,
                     onSelectCloudEnvironment,

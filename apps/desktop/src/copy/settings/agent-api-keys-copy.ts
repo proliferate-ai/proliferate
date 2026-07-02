@@ -1,0 +1,26 @@
+export const AGENT_API_KEYS_COPY = {
+  title: "API keys",
+  description:
+    "Provider keys agents use when their authentication route is set to API key.",
+  keysSection: "Keys",
+  loading: "Loading API keys...",
+  loadError: "Could not load API keys. Check your connection and try again.",
+  emptyTitle: "No API keys yet",
+  emptyDescription: "Add a provider key below to let agents authenticate with your own key.",
+  signInRequired: "Sign in to Proliferate Cloud to manage your API key pool.",
+  addSection: "Add key",
+  addSectionDescription:
+    "The secret is stored encrypted and never displayed again after saving.",
+  providerLabel: "Provider",
+  nameLabel: "Key name",
+  namePlaceholder: "Key name",
+  secretLabel: "Secret",
+  secretPlaceholder: "Secret",
+  addAction: "Add key",
+  addError: "Could not add the API key.",
+  revokeAction: "Revoke",
+  revokeTitle: "Revoke API key",
+  revokeConfirmLabel: "Revoke key",
+  revokedToast: "API key revoked.",
+  revokeError: "Could not revoke the API key.",
+} as const;
