@@ -4,7 +4,6 @@ import { useSaveRepoEnvironment } from "@proliferate/cloud-sdk-react";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { runAddRepoWorkflow } from "@/lib/domain/workspaces/creation/add-repo-workflow";
-import { pickFolder } from "@/lib/access/tauri/shell";
 import { loadAnonymousTelemetryBootstrap } from "@/lib/integrations/telemetry/anonymous-storage";
 import { useWorkspaceCollectionsInvalidationActions } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
@@ -29,6 +28,10 @@ function describeAddRepoFailure(error: unknown): string {
 
   return error instanceof Error ? error.message : "Failed to add repository.";
 }
+
+export type AddRepoFromPathResult =
+  | { succeeded: true }
+  | { succeeded: false; error: string };
 
 function isRepoEntryBlockedPath(pathname: string): boolean {
   // Global shortcuts can invoke this hook outside authenticated app surfaces.
@@ -81,9 +84,9 @@ export function useAddRepo() {
   const addRepoFromPath = useCallback(async (
     path: string,
     options?: { createCloudEnvironment?: boolean },
-  ): Promise<boolean> => {
+  ): Promise<AddRepoFromPathResult> => {
     if (!canAddRepo) {
-      return false;
+      return { succeeded: false, error: "Add repository is unavailable right now." };
     }
 
     const createCloudEnvironment = options?.createCloudEnvironment ?? true;
@@ -101,10 +104,11 @@ export function useAddRepo() {
         unhideRepoRoot,
         openRepoSetupModal,
       });
-      return true;
+      return { succeeded: true };
     } catch (error) {
-      showToast(describeAddRepoFailure(error));
-      return false;
+      const message = describeAddRepoFailure(error);
+      showToast(message);
+      return { succeeded: false, error: message };
     } finally {
       setIsAddingRepo(false);
     }
@@ -119,22 +123,8 @@ export function useAddRepo() {
     upsertRepoRootInWorkspaceCollections,
   ]);
 
-  const addRepoFromPicker = useCallback(async () => {
-    if (!canAddRepo) {
-      return;
-    }
-
-    const path = await pickFolder();
-    if (!path) {
-      return;
-    }
-
-    await addRepoFromPath(path);
-  }, [addRepoFromPath, canAddRepo]);
-
   return {
     addRepoFromPath,
-    addRepoFromPicker,
     canAddRepo,
     addRepoDisabledReason: canAddRepo
       ? null

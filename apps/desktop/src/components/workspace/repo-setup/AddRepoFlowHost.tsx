@@ -60,12 +60,14 @@ export function AddRepoFlowHost() {
     setFlowError(null);
     void addRepoFromPath(step.path, {
       createCloudEnvironment: canCreateCloudEnvironment && options.createCloudEnvironment,
-    }).then((succeeded) => {
-      if (succeeded) {
+    }).then((result) => {
+      if (result.succeeded) {
         closeFlow();
+        return;
       }
-      // Failures already toast from useAddRepo; keep the dialog open so the
-      // user can retry or back out.
+      // Failures also toast from useAddRepo; surface the reason inline and
+      // keep the dialog open so the user can retry or back out.
+      setFlowError(result.error);
     });
   }, [addRepoFromPath, canCreateCloudEnvironment, closeFlow, step]);
 
@@ -75,9 +77,14 @@ export function AddRepoFlowHost() {
   }, [setStep]);
 
   const handleClose = useCallback(() => {
+    // Ignore Escape/overlay-click while a local add is committing so the
+    // dialog cannot vanish mid-add.
+    if (isAddingRepo) {
+      return;
+    }
     setFlowError(null);
     closeFlow();
-  }, [closeFlow]);
+  }, [closeFlow, isAddingRepo]);
 
   return (
     <>
@@ -109,8 +116,8 @@ export function AddRepoFlowHost() {
           onOpenExternalUrl={openExternal}
           onClose={closeCloudPicker}
           onEnvironmentAdded={(repoId) => {
-            showToast(`Added cloud repo ${repoId}`, "info");
-            closeCloudPicker();
+            // The controller closes itself (calls onClose) after this fires.
+            showToast(repoId ? `Added ${repoId}` : "Cloud repo added.", "info");
           }}
         />
       ) : null}

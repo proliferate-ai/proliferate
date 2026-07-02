@@ -113,7 +113,7 @@ export function GitReviewSectionHeader({
         {section.label}
       </span>
       <ChevronRight
-        className={`size-3 shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/section-toggle:opacity-100 ${collapsed ? "" : "rotate-90"} ${collapsed ? "opacity-100" : ""}`}
+        className={`size-3 shrink-0 transition-[opacity,transform] duration-200 ${collapsed ? "opacity-100" : "rotate-90 opacity-0 group-hover/section-toggle:opacity-100"}`}
       />
       <span className="flex-1" />
       <span className="tabular-nums">{section.files.length}</span>

@@ -118,15 +118,27 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
             <Copy className="size-3 shrink-0 text-muted-foreground/70" />
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem disabled={gitDisabled} onSelect={handlePr}>
+        <DropdownMenuItem
+          disabled={gitDisabled}
+          title={git.gitActionsDisabledReason ?? undefined}
+          onSelect={handlePr}
+        >
           <GitPullRequest className="size-4 text-muted-foreground" />
           {git.hasExistingPr ? "Open PR" : "Create PR"}
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={gitDisabled} onSelect={git.onCommit}>
+        <DropdownMenuItem
+          disabled={gitDisabled}
+          title={git.gitActionsDisabledReason ?? undefined}
+          onSelect={git.onCommit}
+        >
           <GitCommit className="size-4 text-muted-foreground" />
           Commit…
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={gitDisabled} onSelect={git.onPush}>
+        <DropdownMenuItem
+          disabled={gitDisabled}
+          title={git.gitActionsDisabledReason ?? undefined}
+          onSelect={git.onPush}
+        >
           <ArrowUp className="size-4 text-muted-foreground" />
           Push
         </DropdownMenuItem>
