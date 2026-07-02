@@ -7,6 +7,7 @@ import {
 } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
+import { AgentApiKeysPane } from "@/components/settings/panes/AgentApiKeysPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
 import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
@@ -76,6 +77,21 @@ function renderSettingsSection(
 ): ReactNode {
   if (activeSection === "agent-defaults") {
     return <AgentDefaultsPane />;
+  }
+  if (activeSection === "agent-api-keys") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <AgentApiKeysPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
   if (activeSection === "general") {
     return <GeneralPane />;
@@ -309,6 +325,7 @@ export function SettingsScreen({
           }}
           onSelectSection={onSelectSection}
           disabledSections={{
+            "agent-api-keys": !cloudEnabled,
             "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,

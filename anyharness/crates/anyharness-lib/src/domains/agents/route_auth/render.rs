@@ -14,7 +14,9 @@ use std::path::Path;
 use crate::domains::agents::model::AgentKind;
 
 use super::materialize;
-use super::profile::{AgentRuntimeAuthProfile, ApiKeyProfile, GatewayProfile};
+use super::profile::{
+    AgentRuntimeAuthProfile, ApiKeyProfile, GatewayProfile, OpenCodeCompositeProfile,
+};
 use super::RouteAuthError;
 
 /// A sensible default small/fast model for Claude's sidecar calls when the
@@ -64,7 +66,36 @@ pub fn render_profile(
         AgentRuntimeAuthProfile::Native => Ok(RenderedRouteAuth::default()),
         AgentRuntimeAuthProfile::ApiKey(profile) => render_api_key(profile, runtime_home),
         AgentRuntimeAuthProfile::Gateway(profile) => render_gateway(profile, runtime_home),
+        AgentRuntimeAuthProfile::OpenCodeComposite(profile) => {
+            render_opencode_composite(profile, runtime_home)
+        }
     }
+}
+
+/// Render OpenCode's merged multi-slot profile into ONE launch delta
+/// (spec §3.3): the gateway slot materializes the injected opencode.json
+/// (provider `proliferate` only) exactly like the single-selection gateway
+/// route, and each direct provider key rides its plain provider env var.
+///
+/// Additivity: opencode deep-merges the `OPENCODE_CONFIG` file with the
+/// user's own global/project configs (verified against opencode 1.16.2), and
+/// per-provider env keys enable providers without any config at all — so our
+/// injected sources ADD to, and never replace, the user's local providers.
+fn render_opencode_composite(
+    profile: &OpenCodeCompositeProfile,
+    runtime_home: &Path,
+) -> Result<RenderedRouteAuth, RouteAuthError> {
+    let mut rendered = RenderedRouteAuth::default();
+    if let Some(gateway) = &profile.gateway {
+        render_opencode_gateway(gateway, runtime_home, &mut rendered)?;
+    }
+    for key_profile in &profile.provider_keys {
+        rendered.set(
+            provider_env_key(key_profile.provider.as_deref()),
+            &key_profile.key,
+        );
+    }
+    Ok(rendered)
 }
 
 fn parse_harness(harness_kind: &str) -> Result<AgentKind, RouteAuthError> {

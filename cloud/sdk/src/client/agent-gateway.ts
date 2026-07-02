@@ -79,11 +79,13 @@ export async function upsertAgentRouteSelection(
 export async function clearAgentRouteSelection(
   harnessKind: string,
   surface: string,
+  slot: string = "primary",
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<void> {
   await client.requestJson<void>({
     method: "DELETE",
     path: routeSelectionPath(harnessKind, surface),
+    query: { slot },
   });
 }
 

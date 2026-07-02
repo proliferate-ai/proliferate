@@ -13,7 +13,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.agent_gateway import AGENT_API_KEY_PROVIDERS
+from proliferate.constants.agent_gateway import (
+    AGENT_API_KEY_PROVIDERS,
+    AGENT_AUTH_SLOT_PRIMARY,
+    AGENT_AUTH_SURFACE_CLOUD,
+)
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
@@ -22,6 +26,7 @@ from proliferate.db.store.agent_gateway import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
+from proliferate.server.cloud.materialization import service as materialization_service
 
 _ENROLLMENT_STATUS_NONE = "none"
 _MAX_DISPLAY_NAME_LENGTH = 255
@@ -99,6 +104,8 @@ async def revoke_api_key(
         api_key_id=str(record.id),
         provider=record.provider,
     )
+    # A revoked key may back a cloud api_key selection; the next pass strips it.
+    await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
     return record
 
 
@@ -118,6 +125,7 @@ async def upsert_route_selection(
     surface: str,
     route: str,
     api_key_id: UUID | None,
+    slot: str = AGENT_AUTH_SLOT_PRIMARY,
 ) -> AgentAuthRouteSelectionRecord:
     try:
         agent_gateway_store.validate_route_selection(
@@ -125,6 +133,7 @@ async def upsert_route_selection(
             surface=surface,
             route=route,
             api_key_id=api_key_id,
+            slot=slot,
         )
     except ValueError as error:
         raise CloudApiError(
@@ -140,24 +149,34 @@ async def upsert_route_selection(
             surface=surface,
             route=route,
             api_key_id=api_key_id,
+            slot=slot,
         )
-    except ValueError as error:
-        # Pure legality already passed; the remaining failure mode is an
-        # api_key_id that is not an active key owned by the caller.
+    except agent_gateway_store.AgentApiKeyNotUsableError as error:
         raise CloudApiError(
             "agent_api_key_not_found",
             "api_key_id must reference an active key owned by the caller.",
             status_code=404,
+        ) from error
+    except ValueError as error:
+        # Pure legality already passed; the remaining failure mode is an
+        # opencode provider slot fed a key of another provider.
+        raise CloudApiError(
+            "invalid_agent_route_selection",
+            str(error),
+            status_code=400,
         ) from error
     log_cloud_event(
         "agent_route_selection_upserted",
         user_id=str(user_id),
         harness_kind=harness_kind,
         surface=surface,
+        slot=slot,
         route=route,
         api_key_id=str(api_key_id) if api_key_id is not None else None,
         revision=record.revision,
     )
+    if surface == AGENT_AUTH_SURFACE_CLOUD:
+        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
     return record
 
 
@@ -167,17 +186,19 @@ async def clear_route_selection(
     user_id: UUID,
     harness_kind: str,
     surface: str,
+    slot: str = AGENT_AUTH_SLOT_PRIMARY,
 ) -> None:
     deleted = await agent_gateway_store.delete_route_selection(
         db,
         user_id=user_id,
         harness_kind=harness_kind,
         surface=surface,
+        slot=slot,
     )
     if not deleted:
         raise CloudApiError(
             "agent_route_selection_not_found",
-            "No route selection exists for this harness and surface.",
+            "No route selection exists for this harness, surface, and slot.",
             status_code=404,
         )
     log_cloud_event(
@@ -185,7 +206,10 @@ async def clear_route_selection(
         user_id=str(user_id),
         harness_kind=harness_kind,
         surface=surface,
+        slot=slot,
     )
+    if surface == AGENT_AUTH_SURFACE_CLOUD:
+        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
 
 
 async def get_capabilities(

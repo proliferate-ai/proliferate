@@ -2096,6 +2096,8 @@ export interface components {
              * @enum {string}
              */
             surface: "local" | "cloud";
+            /** Slot */
+            slot: string;
             /**
              * Route
              * @enum {string}
@@ -2119,6 +2121,11 @@ export interface components {
             route: "native" | "api_key" | "gateway";
             /** Apikeyid */
             apiKeyId?: string | null;
+            /**
+             * Slot
+             * @default primary
+             */
+            slot: string;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
@@ -2397,6 +2404,8 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
+            /** Providers */
+            providers?: components["schemas"]["AgentGatewayProviderInfo"][];
         };
         /** AgentGatewayCatalogOverrideResponse */
         AgentGatewayCatalogOverrideResponse: {
@@ -2477,6 +2486,24 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
+        };
+        /**
+         * AgentGatewayProviderInfo
+         * @description One PROVIDER_REGISTRY entry; the UI never hardcodes provider metadata.
+         */
+        AgentGatewayProviderInfo: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Envkey */
+            envKey: string;
+            /** Keyurl */
+            keyUrl: string;
+            /** Harnesses */
+            harnesses: string[];
+            /** Recommendedfor */
+            recommendedFor: string[];
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -7380,7 +7407,9 @@ export interface operations {
     };
     clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                slot?: string;
+            };
             header?: never;
             path: {
                 harness_kind: string;
