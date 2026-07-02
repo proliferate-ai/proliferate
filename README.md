@@ -2,8 +2,8 @@
 
 <p>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/proliferate-wordmark-dark.svg" />
-    <img src="./specs/developing/assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
+    <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/proliferate-lockup-dark.svg" />
+    <img src="./specs/developing/assets/readme/proliferate-lockup-light.svg" width="180" alt="Proliferate" />
   </picture>
 </p>
 
