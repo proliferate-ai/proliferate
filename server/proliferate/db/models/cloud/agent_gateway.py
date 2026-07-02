@@ -8,6 +8,7 @@ and the slim usage-event ledger fed by the spend-log importer.
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
@@ -143,6 +144,10 @@ class AgentGatewayEnrollment(Base):
             "sync_status IN ('pending', 'synced', 'failed')",
             name="ck_agent_gateway_enrollment_sync_status",
         ),
+        CheckConstraint(
+            "budget_status IN ('ok', 'exhausted')",
+            name="ck_agent_gateway_enrollment_budget_status",
+        ),
         Index(
             "ux_agent_gateway_enrollment_active_user",
             "user_id",
@@ -184,6 +189,11 @@ class AgentGatewayEnrollment(Base):
         nullable=True,
     )
     sync_status: Mapped[str] = mapped_column(String(16), default="pending")
+    budget_status: Mapped[str] = mapped_column(
+        String(16),
+        default="ok",
+        server_default=text("'ok'"),
+    )
     sync_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -357,6 +367,45 @@ class AgentLlmUsageEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     raw_metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class LlmCreditGrant(Base):
+    """A grant of LLM credits for a billing subject (credit side of the ledger).
+
+    Debits are the imported ``agent_llm_usage_event`` rows; remaining credit is
+    ``sum(active grants.amount_usd) - sum(usage.cost_usd)``. There is no
+    per-grant consumption row: usage events are the single debit source.
+    """
+
+    __tablename__ = "llm_credit_grant"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('free_signup', 'topup', 'admin')",
+            name="ck_llm_credit_grant_source",
+        ),
+        CheckConstraint(
+            "amount_usd >= 0",
+            name="ck_llm_credit_grant_amount_non_negative",
+        ),
+        UniqueConstraint("source_ref", name="uq_llm_credit_grant_source_ref"),
+        Index("ix_llm_credit_grant_billing_subject_id", "billing_subject_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    billing_subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("billing_subject.id", ondelete="CASCADE"),
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    source: Mapped[str] = mapped_column(String(32))
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(12, 4))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class AgentLlmUsageImportCursor(Base):

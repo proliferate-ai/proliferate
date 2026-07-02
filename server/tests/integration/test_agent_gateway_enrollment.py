@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_ADMIN
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.agent_gateway import AgentGatewayEnrollment
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store import agent_gateway as store
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
 from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
 from proliferate.server.cloud.agent_gateway.enrollment import (
+    _parse_budget,
+    _remaining_credit_budget_raw,
     backfill_enrollments,
     ensure_org_enrollment,
     ensure_user_enrollment,
@@ -289,6 +295,51 @@ async def test_user_enrollment_recovers_orphaned_key_on_retry(
         )
         is not None
     )
+
+
+@pytest.mark.asyncio
+async def test_exhausted_grant_yields_blocked_budget_not_uncapped(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: StubLiteLLM,
+) -> None:
+    """A granted-but-exhausted subject must mirror a near-zero (blocked) cap.
+
+    Flooring the mirrored budget at exactly "0" would parse as *uncapped*
+    (org-default semantics), minting an unbounded key for an out-of-credit
+    subject. The floor must be a tiny positive value instead.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    user_id = await _create_user(db_session)
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+
+    # Grant $1, then debit $5 of usage so remaining credit is negative.
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=subject.id,
+        source=LLM_CREDIT_SOURCE_ADMIN,
+        amount_usd=Decimal("1"),
+        user_id=user_id,
+    )
+    await store.insert_usage_event_once(
+        db_session,
+        litellm_request_id="req-exhaust-budget",
+        occurred_at=datetime(2026, 7, 1, 12, 0, tzinfo=UTC),
+        billing_subject_id=subject.id,
+        cost_usd=5.0,
+    )
+    balance = await store.get_remaining_credit_usd(db_session, subject.id)
+    assert balance.remaining_usd < Decimal("0")
+
+    budget_raw = await _remaining_credit_budget_raw(
+        db_session,
+        billing_subject_id=subject.id,
+        fallback=settings.agent_gateway_default_user_budget_usd,
+    )
+    parsed = _parse_budget(budget_raw)
+    # Not uncapped (None), not the default fallback — a real, tiny positive cap.
+    assert parsed is not None
+    assert 0 < parsed <= 0.01
 
 
 @pytest.mark.asyncio

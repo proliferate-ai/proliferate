@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 
@@ -45,6 +46,7 @@ class AgentGatewayEnrollmentRecord:
     litellm_user_id: str | None
     virtual_key_id: str | None
     sync_status: str
+    budget_status: str
     sync_fingerprint: str | None
     last_error_code: str | None
     last_error_message: str | None
@@ -85,6 +87,28 @@ class OrgAgentPolicyRecord:
     updated_by_user_id: UUID | None
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True)
+class LlmCreditGrantRecord:
+    id: UUID
+    billing_subject_id: UUID
+    user_id: UUID | None
+    source: str
+    amount_usd: Decimal
+    created_at: datetime
+    expires_at: datetime | None
+    source_ref: str | None
+
+
+@dataclass(frozen=True)
+class LlmCreditBalanceRecord:
+    """Snapshot of a subject's LLM credit state at a point in time."""
+
+    billing_subject_id: UUID
+    granted_usd: Decimal
+    used_usd: Decimal
+    remaining_usd: Decimal
 
 
 @dataclass(frozen=True)

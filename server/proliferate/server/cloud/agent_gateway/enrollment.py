@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,8 +30,17 @@ from proliferate.db.store.billing_subjects import (
 )
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
+from proliferate.server.cloud.agent_gateway.free_credits import ensure_user_free_credit_grant
 
 logger = logging.getLogger(__name__)
+
+# When a subject with an active grant has exhausted it, LiteLLM's ``max_budget``
+# must mirror a *near-zero* cap rather than "0" — our ``_parse_budget`` reads
+# "0"/empty as "uncapped" (the org-default semantics), so flooring at exactly 0
+# would mint an unbounded key for an out-of-credit subject. A tiny positive
+# floor keeps the key effectively blocked (never unbounded) while the importer
+# also disables it on the next tick.
+_EXHAUSTED_BUDGET_FLOOR_USD = Decimal("0.01")
 
 
 def build_sync_fingerprint(*, team_id: str, budget: str, key_alias: str) -> str:
@@ -106,16 +116,48 @@ async def ensure_user_enrollment(
     )
     if not settings.agent_gateway_enabled:
         return enrollment
+    # Grant free credits (deduped) before syncing so the LiteLLM budget can
+    # mirror the resulting remaining balance. Runs every pass; idempotent.
+    await ensure_user_free_credit_grant(db, user_id)
     if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
         return enrollment
+    budget_raw = await _remaining_credit_budget_raw(
+        db,
+        billing_subject_id=subject.id,
+        fallback=settings.agent_gateway_default_user_budget_usd,
+    )
     return await _sync_enrollment(
         db,
         enrollment=enrollment,
         team_alias=f"user-{user_id}",
         litellm_user_id=f"user-{user_id}",
         subject_label=f"user-{user_id}",
-        budget_raw=settings.agent_gateway_default_user_budget_usd,
+        budget_raw=budget_raw,
     )
+
+
+async def _remaining_credit_budget_raw(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    fallback: str,
+) -> str:
+    """Budget string mirroring remaining LLM credit.
+
+    When the subject has any active credit grant, the LiteLLM budget mirrors
+    the remaining balance, floored at a tiny positive value so an exhausted
+    subject gets a near-zero (blocked) cap rather than "0" — which
+    ``_parse_budget`` would read as uncapped. With no grant at all — e.g. free
+    credits disabled or no linked GitHub identity — fall back to the default
+    user budget so gateway access is not silently uncapped-to-zero.
+    """
+    balance = await agent_gateway_store.get_remaining_credit_usd(db, billing_subject_id)
+    if balance.granted_usd <= 0:
+        return fallback
+    remaining = balance.remaining_usd
+    if remaining <= _EXHAUSTED_BUDGET_FLOOR_USD:
+        remaining = _EXHAUSTED_BUDGET_FLOOR_USD
+    return str(remaining)
 
 
 async def ensure_org_enrollment(

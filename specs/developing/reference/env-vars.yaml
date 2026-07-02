@@ -539,6 +539,24 @@
   description: Interval for the enrollment backfill worker that retries pending/failed LiteLLM enrollments and enrolls pre-existing users
   tags: [local-dev, self-hosted, production]
 
+- name: AGENT_GATEWAY_FREE_CREDIT_USD
+  secret: false
+  default: "5"
+  description: One-time free LLM credit (USD) granted at enrollment, deduped through free_cloud_allocation; "0" disables the grant
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_USAGE_IMPORT_INTERVAL_SECONDS
+  secret: false
+  default: "60.0"
+  description: Interval for the usage-import worker that pages LiteLLM spend logs into the LLM usage ledger and enforces credit exhaustion
+  tags: [local-dev, self-hosted, production]
+
+- name: AGENT_GATEWAY_USAGE_IMPORT_OVERLAP_SECONDS
+  secret: false
+  default: "300.0"
+  description: Overlap window (seconds) re-read on each usage-import tick; dedupe on litellm_request_id makes overlapping windows safe
+  tags: [local-dev, self-hosted, production]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud MCP
 # ═══════════════════════════════════════════════════════════════════════
