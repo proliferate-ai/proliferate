@@ -9,12 +9,13 @@ import { ChatView } from "@/components/workspace/chat/ChatView";
 import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
 import { WorkspaceShellShortcuts } from "@/components/workspace/shell/screen/WorkspaceShellShortcuts";
+import { WorkspaceResizeSeparator } from "@/components/workspace/shell/screen/WorkspaceResizeSeparator";
 import {
   WorkspaceHeaderTabsViewModelProvider,
 } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-palette/WorkspaceCommandPalette";
-import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
+import { WorkspaceShellRightRail } from "@/components/workspace/shell/screen/WorkspaceShellRightRail";
 import { WorkspaceShellSidebar } from "@/components/workspace/shell/sidebar/WorkspaceShellSidebar";
 import {
   WorkspaceSidebarHeaderControls,
@@ -37,8 +38,8 @@ import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
-  buildCloudRepoSettingsHref,
   buildSettingsHref,
+  resolveWorkspaceRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
 import { resolvePendingWorkspacePath } from "@/lib/domain/workspaces/creation/pending-entry";
@@ -149,23 +150,12 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     hasRuntimeReadyWorkspace,
     runtimeBlockedReason,
   ]);
-  const repoSettingsHref = useMemo(() => {
-    const cloudOwner = selectedCloudWorkspace?.repo?.owner?.trim() ?? "";
-    const cloudName = selectedCloudWorkspace?.repo?.name?.trim() ?? "";
-    if (cloudOwner && cloudName) {
-      return buildCloudRepoSettingsHref(cloudOwner, cloudName);
-    }
-    const localRepoPath = selectedRepoRoot?.path?.trim()
-      || selectedWorkspace?.path?.trim()
-      || "";
-    if (!localRepoPath) {
-      return null;
-    }
-    return buildSettingsHref({
-      section: "repo",
-      repo: localRepoPath,
-    });
-  }, [
+  const repoSettingsHref = useMemo(() => resolveWorkspaceRepoSettingsHref({
+    cloudRepoOwner: selectedCloudWorkspace?.repo?.owner,
+    cloudRepoName: selectedCloudWorkspace?.repo?.name,
+    repoRootPath: selectedRepoRoot?.path,
+    workspacePath: selectedWorkspace?.path,
+  }), [
     selectedCloudWorkspace?.repo?.name,
     selectedCloudWorkspace?.repo?.owner,
     selectedRepoRoot?.path,
@@ -249,12 +239,10 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                 onOpenRestartPrompt={openRestartPrompt}
               />
               {sidebarOpen && (
-                <div
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-controls="main-sidebar"
+                <WorkspaceResizeSeparator
+                  edge="left"
+                  ariaControls="main-sidebar"
                   onMouseDown={onLeftSeparatorDown}
-                  className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -ml-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
                 />
               )}
 
@@ -335,17 +323,15 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                         </DebugProfiler>
 
                         {hasRuntimeReadyWorkspace && (
-                          <>
-                            <PublishDialog
-                              open={publishDialog.open}
-                              workspaceId={publishDialog.workspaceId}
-                              initialIntent={publishDialog.initialIntent}
-                              runtimeBlockedReason={runtimeBlockedReason}
-                              repoDefaultBranch={publishRepoDefaultBranch}
-                              onClose={actions.closePublishDialog}
-                              onViewPr={actions.handlePublishDialogViewPr}
-                            />
-                          </>
+                          <PublishDialog
+                            open={publishDialog.open}
+                            workspaceId={publishDialog.workspaceId}
+                            initialIntent={publishDialog.initialIntent}
+                            runtimeBlockedReason={runtimeBlockedReason}
+                            repoDefaultBranch={publishRepoDefaultBranch}
+                            onClose={actions.closePublishDialog}
+                            onViewPr={actions.handlePublishDialogViewPr}
+                          />
                         )}
                       </>
                     ) : (
@@ -354,45 +340,29 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                   </div>
                 </div>
 
-                {hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen && (
-                  <div
-                    role="separator"
-                    aria-orientation="vertical"
-                    onMouseDown={onRightSeparatorDown}
-                    className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -mr-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
-                  />
-                )}
-                {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
-                  <div
-                    className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
-                    style={{ width: rightPanelOpen ? rightPanelWidth : 0 }}
-                  >
-                    <DebugProfiler id="workspace-right-panel">
-                      <div className="h-full" style={{ minWidth: 260 }}>
-                        <RightPanel
-                          workspaceId={selectedWorkspaceId}
-                          workspaceUiKey={workspaceUiKey}
-                          isWorkspaceReady={hasRuntimeReadyWorkspace}
-                          isOpen={rightPanelOpen}
-                          shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
-                          isCloudWorkspaceSelected={isCloudWorkspaceSelected}
-                          state={rightPanelState}
-                          repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
-                            section: "repo",
-                            repo: null,
-                          })}
-                          onStateChange={layout.setRightPanelState}
-                          terminalActivationRequest={terminalActivationRequest}
-                          focusRequestToken={rightPanelFocusRequestToken}
-                          nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
-                          onOpenPanel={actions.openRightPanel}
-                          onTogglePanel={actions.toggleRightPanel}
-                          onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
-                        />
-                      </div>
-                    </DebugProfiler>
-                  </div>
-                )}
+                <WorkspaceShellRightRail
+                  visible={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
+                  open={rightPanelOpen}
+                  width={rightPanelWidth}
+                  onSeparatorMouseDown={onRightSeparatorDown}
+                  workspaceId={selectedWorkspaceId}
+                  workspaceUiKey={workspaceUiKey}
+                  isWorkspaceReady={hasRuntimeReadyWorkspace}
+                  shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
+                  isCloudWorkspaceSelected={isCloudWorkspaceSelected}
+                  state={rightPanelState}
+                  repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
+                    section: "repo",
+                    repo: null,
+                  })}
+                  onStateChange={layout.setRightPanelState}
+                  terminalActivationRequest={terminalActivationRequest}
+                  focusRequestToken={rightPanelFocusRequestToken}
+                  nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
+                  onOpenPanel={actions.openRightPanel}
+                  onTogglePanel={actions.toggleRightPanel}
+                  onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
+                />
               </div>
             </div>
           </WorkspaceHeaderTabsViewModelProvider>
