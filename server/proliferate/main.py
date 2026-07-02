@@ -59,6 +59,7 @@ from proliferate.server.cloud.github_app.api import callback_router as github_ap
 from proliferate.server.cloud.github_app.api import (
     setup_callback_router as github_app_setup_callback_router,
 )
+from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
@@ -159,6 +160,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Start the local Postgres container with `make server-db-up` and run "
             "`make server-migrate` before starting the API."
         ) from exc
+    # Reconcile the built-in integration seed definitions into the database.
+    async with db_engine.async_session_factory() as db, db.begin():
+        await sync_seed_definitions(db)
     if settings.cloud_billing_mode in {"observe", "enforce"}:
         # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
         # start_billing_reconciler()
