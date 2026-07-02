@@ -16,7 +16,7 @@
 
 <p>
   <strong>The Open Source AI IDE.</strong><br />
-  Run Claude Code, Codex, Gemini, and any coding agent in parallel — locally, in cloud<br />
+  Run Claude Code, Codex, OpenCode, and any coding agent in parallel: locally, in cloud<br />
   sandboxes, or on your own servers. Move running sessions between them.
 </p>
 
@@ -48,7 +48,7 @@
 
 ### Move sessions between laptop and cloud
 
-Start an agent locally, hand the running session to a cloud sandbox — or pull it back — mid-task, with changes and history intact.
+Start an agent locally, then hand the running session to a cloud sandbox (or pull it back) mid-task, with changes and history intact.
 
 [Docs →](https://proliferate.com/docs/concepts/workspaces)
 
@@ -63,7 +63,7 @@ Start an agent locally, hand the running session to a cloud sandbox — or pull 
 
 ### Parallel agents, isolated worktrees
 
-Fan work across any mix of agents, each in its own worktree or sandbox — native tools, auth, and config intact. Compare results, merge the winner.
+Fan work across any mix of agents, each in its own worktree or sandbox, with native tools, auth, and config intact. Compare results, merge the winner.
 
 [Docs →](https://proliferate.com/docs/concepts/workspaces)
 
@@ -78,7 +78,7 @@ Fan work across any mix of agents, each in its own worktree or sandbox — nativ
 
 ### Agents managing agents
 
-Delegate across harnesses — Codex hands design work to Claude Code; subagents take on investigation, implementation, and review.
+Delegate across harnesses: Codex hands design work to Claude Code, and subagents take on investigation, implementation, and review.
 
 [Docs →](https://proliferate.com/docs/concepts/subagents)
 
@@ -123,7 +123,7 @@ Run any agent on a schedule, or turn a Slack message into shared agent work your
 
 ### Self-host the whole thing
 
-AGPL, one Docker Compose stack (or one-click AWS). Point the official desktop app at your own server — your infra, your keys.
+AGPL, one Docker Compose stack (or one-click AWS). Point the official desktop app at your own server: your infra, your keys.
 
 [Docs →](https://proliferate.com/docs/deployment)
 
@@ -137,24 +137,23 @@ AGPL, one Docker Compose stack (or one-click AWS). Point the official desktop ap
 
 **Also in the box:**
 
-- **[Plugins](https://proliferate.com/docs/concepts/plugins)** — MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
-- **[Artifacts](https://proliferate.com/docs/concepts/artifacts)** — docs, UI, demos, and components rendered inline as agents produce them
-- **Remote dispatch &amp; SSH** — kick off and steer work from the web; drop into any cloud sandbox from your terminal
-- **Model &amp; credential gateway** — bring your own provider keys or agent subscriptions; agents and sandboxes only ever see short-lived per-user keys, with budgets and limits where you want them
-- **Multiplayer cloud chats &amp; organizations** — live sessions your team can inspect, claim, and continue; seats, shared settings, and governance
-- **Mobile** — coming soon: dispatch work, approve actions, and follow runs from your phone
-- **And more, constantly** — the [changelog](https://proliferate.com/changelog) is the real feature list.
+- **[Plugins](https://proliferate.com/docs/concepts/plugins)**: MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
+- **[Artifacts](https://proliferate.com/docs/concepts/artifacts)**: docs, UI, demos, and components rendered inline as agents produce them
+- **Remote dispatch &amp; SSH**: kick off and steer work from the web; drop into any cloud sandbox from your terminal
+- **Model &amp; credential gateway**: bring your own provider keys or agent subscriptions; agents and sandboxes only ever see short-lived per-user keys, with budgets and limits where you want them
+- **Multiplayer cloud chats &amp; organizations**: live sessions your team can inspect, claim, and continue; seats, shared settings, and governance
+- **Mobile**: coming soon. Dispatch work, approve actions, and follow runs from your phone
+- **And more, constantly**: the [changelog](https://proliferate.com/changelog) is the real feature list.
 
 ---
 
 ## Bring Your Agent
 
-Any coding agent, frontier or open. Each one runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact — and new harness features show up in Proliferate the day they ship.
+Any coding agent, frontier or open. Each one runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact, and new harness features show up in Proliferate the day they ship.
 
 <p>
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/claude.svg" alt="Claude" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/codex.svg" alt="Codex" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
-  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/gemini.svg" alt="Gemini CLI" width="16" valign="middle" /> Gemini CLI</kbd></a> &nbsp;
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/opencode.png" alt="OpenCode" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/cursor.svg" alt="Cursor" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
   <kbd>+ any coding agent</kbd>
@@ -164,7 +163,7 @@ Any coding agent, frontier or open. Each one runs through its native harness, so
 
 ## Install
 
-**[Download for macOS](https://proliferate.com)** — or follow the [installation guide](https://proliferate.com/docs/installation).
+**[Download for macOS](https://proliferate.com)**, or follow the [installation guide](https://proliferate.com/docs/installation).
 
 <details>
 <summary>Run from source</summary>
@@ -176,7 +175,7 @@ make install
 make dev-local
 ```
 
-That runs the desktop app with the bundled local runtime — no server needed.
+That runs the desktop app with the bundled local runtime. No server needed.
 
 For full-stack development (Python 3.12+, `uv`, and Docker also required), use named dev profiles:
 
@@ -195,25 +194,21 @@ See [dev profiles](./specs/developing/local/dev-profiles.md) and [CONTRIBUTING.m
 
 Run the whole Proliferate server yourself (beta): one Docker Compose stack, or a one-click AWS deployment. Point the official desktop app at your server and your team is on your infrastructure.
 
-- **[Self-hosting docs](https://proliferate.com/docs/deployment)** — overview, quickstart, add-ons, and operations
+- **[Self-hosting docs](https://proliferate.com/docs/deployment)**: overview, quickstart, add-ons, and operations
 
-Expect rough edges while in beta — [open an issue](../../issues/new/choose) or ask in [Discord](https://discord.gg/wCEgUnEuF). See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
+Expect rough edges while in beta: [open an issue](../../issues/new/choose) or ask in [Discord](https://discord.gg/wCEgUnEuF). See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
-> **Proliferate Cloud** (hosted) is in beta and rolling out in waves — request access at [proliferate.com](https://proliferate.com). Everything local is open today.
+> **Proliferate Cloud** (hosted) is in beta and rolling out in waves; request access at [proliferate.com](https://proliferate.com). Everything local is open today.
 
 ## Community
 
 - **Discord:** join us on [Discord](https://discord.gg/wCEgUnEuF)
-- **Feedback &amp; ideas:** we ship fast — [request a feature](../../issues/new/choose)
+- **Feedback &amp; ideas:** we ship fast; [request a feature](../../issues/new/choose)
 - **Show support:** [star this repo](https://github.com/proliferate-ai/proliferate) to follow along
 
 ## Contributing
 
-See the [Contribution Guide](./CONTRIBUTING.md).
-
-<a href="https://github.com/proliferate-ai/proliferate/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=proliferate-ai/proliferate" alt="Proliferate contributors" />
-</a>
+Contributions welcome. See the [Contribution Guide](./CONTRIBUTING.md).
 
 ## License
 
