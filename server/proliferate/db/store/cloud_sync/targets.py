@@ -13,6 +13,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import and_, exists, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -154,6 +155,35 @@ async def create_target(
     )
     db.add(target)
     await db.flush()
+    return _target_snapshot(target)
+
+
+async def create_single_active_personal_target(
+    db: AsyncSession,
+    *,
+    display_name: str,
+    kind: str,
+    owner_user_id: UUID,
+    anyharness_bearer_token_ciphertext: str,
+) -> CloudTargetSnapshot | None:
+    """Insert a personal target guarded by the one-active-row-per-user unique
+    index (uq_cloud_targets_personal_desktop_dispatch_active); returns None
+    when a concurrent enrollment already holds the slot."""
+    target = CloudTarget(
+        display_name=display_name,
+        kind=kind,
+        owner_scope="personal",
+        owner_user_id=owner_user_id,
+        organization_id=None,
+        created_by_user_id=owner_user_id,
+        anyharness_bearer_token_ciphertext=anyharness_bearer_token_ciphertext,
+    )
+    try:
+        async with db.begin_nested():
+            db.add(target)
+            await db.flush()
+    except IntegrityError:
+        return None
     return _target_snapshot(target)
 
 

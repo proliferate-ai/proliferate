@@ -85,6 +85,32 @@ def _enrollment_response_for_target(
     )
 
 
+async def _rotate_target_for_reinstall(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    user_id: UUID,
+) -> tuple[targets_store.CloudTargetSnapshot, str]:
+    """Re-enrollment of an existing row is a re-install: the runtime gets a
+    fresh identity, so the bearer rotates rather than resurfacing the old
+    secret, and the row returns to 'enrolling' until the new install
+    registers (the old bearer stops matching the running runtime the moment
+    it rotates, so the row must not keep claiming 'online')."""
+    bearer = _mint_anyharness_bearer()
+    await targets_store.set_target_anyharness_bearer_ciphertext(
+        db,
+        target_id=target_id,
+        ciphertext=encrypt_text(bearer),
+    )
+    await targets_store.set_target_status(
+        db,
+        target_id=target_id,
+        status_value=CloudTargetStatus.enrolling.value,
+    )
+    refreshed = await get_target_detail(db, target_id=target_id, user_id=user_id)
+    return refreshed, bearer
+
+
 async def _require_org_target_admin(
     db: AsyncSession,
     *,
@@ -115,15 +141,8 @@ async def create_target_enrollment(
     if organization_id is not None:
         await _require_org_target_admin(db, organization_id=organization_id, user_id=user.id)
     owner_user_id = user.id if owner_scope == "personal" else None
-    bearer = _mint_anyharness_bearer()
-    target = None
-    if kind == CloudTargetKind.desktop_dispatch.value and owner_scope == "personal":
-        target = await targets_store.get_active_personal_target_by_kind(
-            db,
-            owner_user_id=user.id,
-            kind=kind,
-        )
-    if target is None:
+    if kind != CloudTargetKind.desktop_dispatch.value or owner_scope != "personal":
+        bearer = _mint_anyharness_bearer()
         target = await targets_store.create_target(
             db,
             display_name=display_name,
@@ -134,13 +153,52 @@ async def create_target_enrollment(
             created_by_user_id=user.id,
             anyharness_bearer_token_ciphertext=encrypt_text(bearer),
         )
-    else:
-        # Reusing an existing row is a re-install: rotate its bearer.
-        await targets_store.set_target_anyharness_bearer_ciphertext(
-            db,
-            target_id=target.id,
-            ciphertext=encrypt_text(bearer),
+        return _enrollment_response_for_target(
+            target=target,
+            anyharness_bearer_token=bearer,
+            ttl_seconds=body.ttl_seconds,
         )
+    # Personal desktop_dispatch enrolls into the user's single active row,
+    # enforced by uq_cloud_targets_personal_desktop_dispatch_active: a lost
+    # insert race lands in the reuse branch instead of a duplicate row.
+    existing = await targets_store.get_active_personal_target_by_kind(
+        db,
+        owner_user_id=user.id,
+        kind=kind,
+    )
+    if existing is None:
+        bearer = _mint_anyharness_bearer()
+        created = await targets_store.create_single_active_personal_target(
+            db,
+            display_name=display_name,
+            kind=kind,
+            owner_user_id=user.id,
+            anyharness_bearer_token_ciphertext=encrypt_text(bearer),
+        )
+        if created is not None:
+            return _enrollment_response_for_target(
+                target=created,
+                anyharness_bearer_token=bearer,
+                ttl_seconds=body.ttl_seconds,
+            )
+        existing = await targets_store.get_active_personal_target_by_kind(
+            db,
+            owner_user_id=user.id,
+            kind=kind,
+        )
+    if existing is None:
+        # The concurrent winner's row vanished between the failed insert and
+        # the re-read; surface as retryable rather than looping.
+        raise CloudApiError(
+            "cloud_target_enrollment_conflict",
+            "A concurrent enrollment is in progress. Retry.",
+            status_code=409,
+        )
+    target, bearer = await _rotate_target_for_reinstall(
+        db,
+        target_id=existing.id,
+        user_id=user.id,
+    )
     return _enrollment_response_for_target(
         target=target,
         anyharness_bearer_token=bearer,
@@ -169,20 +227,11 @@ async def create_target_enrollment_for_existing_target(
             organization_id=target.organization_id,
             user_id=user.id,
         )
-    # A re-enrollment is a re-install: the runtime gets a fresh identity, so
-    # the bearer rotates rather than resurfacing the old secret.
-    bearer = _mint_anyharness_bearer()
-    await targets_store.set_target_anyharness_bearer_ciphertext(
+    refreshed, bearer = await _rotate_target_for_reinstall(
         db,
         target_id=target.id,
-        ciphertext=encrypt_text(bearer),
+        user_id=user.id,
     )
-    await targets_store.set_target_status(
-        db,
-        target_id=target.id,
-        status_value=CloudTargetStatus.enrolling.value,
-    )
-    refreshed = await get_target_detail(db, target_id=target.id, user_id=user.id)
     return _enrollment_response_for_target(
         target=refreshed,
         anyharness_bearer_token=bearer,

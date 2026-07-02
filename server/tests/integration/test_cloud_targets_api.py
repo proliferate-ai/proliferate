@@ -14,10 +14,12 @@ import uuid
 
 import pytest
 from httpx import AsyncClient, Response
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.targets import CloudTarget
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.utils.crypto import decrypt_text
 from tests.integration.test_agent_gateway_api import _authed_user
 
@@ -124,6 +126,104 @@ class TestEnrollmentBearer:
         ciphertext = await _stored_ciphertext(db_session, target_id)
         assert ciphertext is not None
         assert decrypt_text(ciphertext) == second_bearer
+
+    @pytest.mark.asyncio
+    async def test_repeat_dispatch_enroll_reuses_row_rotates_and_marks_enrolling(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        _, headers = await _authed_user(client)
+        first = await _enroll(client, headers, display_name="this-mac", kind="desktop_dispatch")
+        assert first.status_code == 200, first.text
+        target_id = first.json()["target"]["id"]
+        first_bearer = first.json()["anyharnessBearerToken"]
+
+        # Simulate the completed install so the reused row reads online.
+        await db_session.execute(
+            update(CloudTarget)
+            .where(CloudTarget.id == uuid.UUID(target_id))
+            .values(status="online")
+        )
+        await db_session.commit()
+
+        second = await _enroll(client, headers, display_name="this-mac", kind="desktop_dispatch")
+        assert second.status_code == 200, second.text
+        body = second.json()
+        # Same row reused, but the response reflects the post-rotation state:
+        # back to enrolling until the re-install registers.
+        assert body["target"]["id"] == target_id
+        assert body["target"]["status"] == "enrolling"
+        second_bearer = body["anyharnessBearerToken"]
+        assert second_bearer != first_bearer
+
+        ciphertext = await _stored_ciphertext(db_session, target_id)
+        assert ciphertext is not None
+        assert decrypt_text(ciphertext) == second_bearer
+
+    @pytest.mark.asyncio
+    async def test_duplicate_active_personal_dispatch_rows_rejected_by_db(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        user_id, _ = await _authed_user(client)
+
+        def dispatch_row() -> CloudTarget:
+            return CloudTarget(
+                display_name="this-mac",
+                kind="desktop_dispatch",
+                status="online",
+                owner_scope="personal",
+                owner_user_id=uuid.UUID(user_id),
+                created_by_user_id=uuid.UUID(user_id),
+            )
+
+        db_session.add(dispatch_row())
+        await db_session.commit()
+
+        db_session.add(dispatch_row())
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+        await db_session.rollback()
+
+    @pytest.mark.asyncio
+    async def test_lost_dispatch_insert_race_lands_in_reuse_branch(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, headers = await _authed_user(client)
+        first = await _enroll(client, headers, display_name="this-mac", kind="desktop_dispatch")
+        assert first.status_code == 200, first.text
+        target_id = first.json()["target"]["id"]
+        first_bearer = first.json()["anyharnessBearerToken"]
+
+        # Simulate losing the check-then-insert race: the pre-insert read
+        # misses the concurrent winner's committed row, so the insert hits
+        # the unique index and the service must recover into the reuse path.
+        real_lookup = targets_store.get_active_personal_target_by_kind
+        reads = {"count": 0}
+
+        async def lose_first_read(db, *, owner_user_id, kind):  # type: ignore[no-untyped-def]
+            reads["count"] += 1
+            if reads["count"] == 1:
+                return None
+            return await real_lookup(db, owner_user_id=owner_user_id, kind=kind)
+
+        monkeypatch.setattr(
+            targets_store,
+            "get_active_personal_target_by_kind",
+            lose_first_read,
+        )
+
+        second = await _enroll(client, headers, display_name="this-mac", kind="desktop_dispatch")
+        assert second.status_code == 200, second.text
+        body = second.json()
+        assert body["target"]["id"] == target_id
+        assert body["target"]["status"] == "enrolling"
+        assert body["anyharnessBearerToken"] != first_bearer
+        assert reads["count"] >= 2
 
     @pytest.mark.asyncio
     async def test_reenroll_foreign_target_is_404(self, client: AsyncClient) -> None:

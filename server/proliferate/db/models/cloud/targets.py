@@ -13,7 +13,7 @@ stack.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
@@ -47,6 +47,17 @@ class CloudTarget(Base):
         ),
         Index("ix_cloud_targets_owner_user_status", "owner_user_id", "status"),
         Index("ix_cloud_targets_organization_status", "organization_id", "status"),
+        # One active personal desktop_dispatch row per user: the enrollment
+        # reuse rule as a DB invariant, so concurrent enrollments cannot
+        # each insert their own row (service recovers via the reuse branch).
+        Index(
+            "uq_cloud_targets_personal_desktop_dispatch_active",
+            "owner_user_id",
+            unique=True,
+            postgresql_where=text(
+                "owner_scope = 'personal' AND kind = 'desktop_dispatch' AND archived_at IS NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
