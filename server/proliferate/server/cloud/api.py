@@ -10,6 +10,8 @@ from proliferate.server.cloud.github_app.api import (
 )
 from proliferate.server.cloud.github_app.api import router as github_app_router
 from proliferate.server.cloud.integration_gateway.api import router as integration_gateway_router
+from proliferate.server.cloud.integrations.api import admin_router as integrations_admin_router
+from proliferate.server.cloud.integrations.api import router as integrations_router
 from proliferate.server.cloud.repos.api import router as repos_router
 from proliferate.server.cloud.repositories.api import router as repositories_router
 from proliferate.server.cloud.runtime_workers.api import (
@@ -37,4 +39,6 @@ router.include_router(agent_run_config_router)
 router.include_router(runtime_workers_router)
 router.include_router(runtime_worker_router)
 router.include_router(integration_gateway_router)
+router.include_router(integrations_router)
+router.include_router(integrations_admin_router)
 router.include_router(webhooks_router)
