@@ -22,6 +22,8 @@ from proliferate.server.cloud.runtime_workers.auth import (
 from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentRequest,
     DesktopWorkerEnrollmentResponse,
+    DesktopWorkerRevokeRequest,
+    DesktopWorkerRevokeResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatRequest,
@@ -31,6 +33,7 @@ from proliferate.server.cloud.runtime_workers.service import (
     create_desktop_enrollment,
     enroll_worker,
     record_heartbeat,
+    revoke_desktop_worker,
 )
 
 worker_router = APIRouter(tags=["cloud-runtime-worker"])
@@ -65,6 +68,22 @@ async def create_desktop_worker_enrollment_endpoint(
     db: AsyncSession = Depends(get_async_session),
 ) -> DesktopWorkerEnrollmentResponse:
     return await create_desktop_enrollment(
+        db,
+        owner_user_id=user.id,
+        desktop_install_id=body.desktop_install_id,
+    )
+
+
+@router.post(
+    "/workers/desktop/revoke",
+    response_model=DesktopWorkerRevokeResponse,
+)
+async def revoke_desktop_worker_endpoint(
+    body: DesktopWorkerRevokeRequest,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> DesktopWorkerRevokeResponse:
+    return await revoke_desktop_worker(
         db,
         owner_user_id=user.id,
         desktop_install_id=body.desktop_install_id,

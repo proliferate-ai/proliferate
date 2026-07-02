@@ -24,6 +24,7 @@ from proliferate.db.store import runtime_workers as store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentResponse,
+    DesktopWorkerRevokeResponse,
     IntegrationGatewayConfig,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
@@ -103,6 +104,25 @@ async def create_desktop_enrollment(
         enrollment_token=token,
         expires_at=expires_at,
     )
+
+
+async def revoke_desktop_worker(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    desktop_install_id: str,
+) -> DesktopWorkerRevokeResponse:
+    """Revoke the caller's active desktop worker and its gateway token.
+
+    Idempotent: revoking when no active worker exists is a successful no-op.
+    """
+    await store.revoke_active_workers_for_identity(
+        db,
+        cloud_sandbox_id=None,
+        owner_user_id=owner_user_id,
+        desktop_install_id=desktop_install_id,
+    )
+    return DesktopWorkerRevokeResponse(revoked=True)
 
 
 async def enroll_worker(
