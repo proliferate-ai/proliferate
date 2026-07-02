@@ -4,15 +4,17 @@ import { mixHash } from "@/lib/domain/delegated-work/identity";
 // independent and columns 3-4 mirror columns 1 and 0. That leaves 15 free bits
 // per grid (2^15 = 32768 shapes), so a handful of sibling subagents stay
 // visually distinct by shape alone even when their colors collide.
-const GRID_SIZE = 5;
+export const IDENTICON_GRID_SIZE = 5;
 const INDEPENDENT_COLUMNS = 3;
-const CELL_COUNT = GRID_SIZE * GRID_SIZE;
+const CELL_COUNT = IDENTICON_GRID_SIZE * IDENTICON_GRID_SIZE;
 
-// Fewer than 3 lit cells reads as a speck at 12-16px and a full grid reads as
-// a solid square; both would erase the fingerprint. Density is otherwise left
-// unclamped on purpose: the natural binomial spread from sparse to dense is
-// part of the look and helps shapes read as different.
+// Fewer than 3 lit cells reads as a speck at 12-16px and a near-full grid
+// (fewer than 3 unlit cells) reads as a solid square; both would erase the
+// fingerprint. Density is otherwise left unclamped on purpose: the natural
+// binomial spread from sparse to dense is part of the look and helps shapes
+// read as different.
 const MIN_LIT_CELLS = 3;
+const MAX_LIT_CELLS = CELL_COUNT - MIN_LIT_CELLS;
 const MAX_DERIVE_ATTEMPTS = 32;
 
 export function delegatedAgentIdenticonCells(seedHash: number): boolean[][] {
@@ -38,10 +40,10 @@ function shapeBits(seedHash: number, attempt: number): number {
 
 function cellsFromBits(bits: number): boolean[][] {
   const cells: boolean[][] = [];
-  for (let row = 0; row < GRID_SIZE; row += 1) {
+  for (let row = 0; row < IDENTICON_GRID_SIZE; row += 1) {
     const rowCells: boolean[] = [];
-    for (let column = 0; column < GRID_SIZE; column += 1) {
-      const independentColumn = Math.min(column, GRID_SIZE - 1 - column);
+    for (let column = 0; column < IDENTICON_GRID_SIZE; column += 1) {
+      const independentColumn = Math.min(column, IDENTICON_GRID_SIZE - 1 - column);
       const bitIndex = row * INDEPENDENT_COLUMNS + independentColumn;
       rowCells.push((bits & (1 << bitIndex)) !== 0);
     }
@@ -52,5 +54,5 @@ function cellsFromBits(bits: number): boolean[][] {
 
 function isDegenerate(cells: boolean[][]): boolean {
   const litCount = cells.flat().filter(Boolean).length;
-  return litCount < MIN_LIT_CELLS || litCount === CELL_COUNT;
+  return litCount < MIN_LIT_CELLS || litCount > MAX_LIT_CELLS;
 }

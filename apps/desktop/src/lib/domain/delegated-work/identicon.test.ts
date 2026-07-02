@@ -27,13 +27,13 @@ describe("delegatedAgentIdenticonCells", () => {
     }
   });
 
-  it("never yields a near-empty or completely full grid", () => {
+  it("never yields a near-empty or near-full grid", () => {
     for (let index = 0; index < 500; index += 1) {
       const cells = delegatedAgentIdenticonCells(stableIndex(`density-seed-${index}`));
       const litCount = cells.flat().filter(Boolean).length;
 
       expect(litCount).toBeGreaterThanOrEqual(3);
-      expect(litCount).toBeLessThan(25);
+      expect(litCount).toBeLessThanOrEqual(22);
     }
   });
 
