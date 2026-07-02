@@ -15,6 +15,7 @@ import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
+import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { OrganizationSecretsPane } from "@/components/settings/panes/OrganizationSecretsPane";
@@ -131,6 +132,21 @@ function renderSettingsSection(
 
     if (cloudActive) {
       return <OrganizationSecretsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
+  if (activeSection === "organization-integrations") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <OrganizationIntegrationsPane />;
     }
 
     if (cloudSignInChecking) {
@@ -296,6 +312,7 @@ export function SettingsScreen({
           disabledSections={{
             "agent-authentication": !cloudEnabled,
             integrations: !cloudEnabled,
+            "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,
             "personal-secrets": !cloudEnabled,
