@@ -74,6 +74,7 @@ from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
+from proliferate.server.organizations.registration_api import router as self_registration_router
 from proliferate.server.organizations.sso.api import router as organization_sso_router
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.service import ensure_first_run_setup_token
@@ -244,6 +245,9 @@ def create_app() -> FastAPI:
         # First-run claim page. Exists only in single-org deployments; hosted
         # production never mounts it, and it 404s once the instance is claimed.
         app.include_router(first_run_setup_router, prefix=api_prefix, tags=["setup"])
+        # Invited self-registration (invite-as-allowlist). Single-org only:
+        # hosted deployments never expose password registration.
+        app.include_router(self_registration_router, prefix=f"{api_prefix}/auth", tags=["auth"])
     app.include_router(organization_join_router, prefix=api_prefix, tags=["organizations"])
     app.include_router(artifact_runtime_router, prefix=api_prefix, tags=["artifact_runtime"])
     app.include_router(

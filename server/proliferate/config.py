@@ -49,6 +49,19 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("ADMIN_EMAILS", "PROLIFERATE_ADMIN_EMAILS"),
     )
+    # Self-registration domain gate (single-org mode only). When set, invited
+    # emails may self-register only if their domain is listed. Comma-separated,
+    # e.g. "corp.example.com". Strictly a gate, never a grant: it restricts who
+    # can register but assigns no roles and admits nobody without an invitation.
+    # Empty (the default) means no domain restriction. SSO just-in-time
+    # provisioning is governed by SSO_ALLOWED_DOMAINS instead.
+    allowed_email_domains: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ALLOWED_EMAIL_DOMAINS",
+            "PROLIFERATE_ALLOWED_EMAIL_DOMAINS",
+        ),
+    )
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"
@@ -403,6 +416,15 @@ class Settings(BaseSettings):
             normalized
             for raw in self.admin_emails.split(",")
             if (normalized := raw.strip().lower())
+        )
+
+    @property
+    def allowed_email_domain_set(self) -> frozenset[str]:
+        """ALLOWED_EMAIL_DOMAINS parsed into normalized (stripped, lowercased) domains."""
+        return frozenset(
+            normalized
+            for raw in self.allowed_email_domains.split(",")
+            if (normalized := raw.strip().lower().lstrip("@"))
         )
 
     @model_validator(mode="after")
