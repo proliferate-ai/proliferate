@@ -16,6 +16,17 @@ class OrganizationServiceError(ProliferateError):
         self.extra_detail = dict(extra_detail or {})
 
 
+class InstanceOrganizationAlreadyClaimed(OrganizationServiceError):
+    """Raised when the first-run claim path finds an instance org already exists."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="instance_already_claimed",
+            message="This Proliferate instance has already been set up.",
+            status_code=409,
+        )
+
+
 class InstanceOrganizationNotClaimed(OrganizationServiceError):
     """Raised when single-org mode is on but the instance org does not exist yet.
 

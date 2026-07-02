@@ -32,6 +32,14 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("SINGLE_ORG_MODE", "PROLIFERATE_SINGLE_ORG_MODE"),
     )
+    # First-run claim (single-org mode only). While the user table is empty the
+    # API mints a setup token, persists its hash in the database, and writes the
+    # plaintext to this local file so deploy tooling can print it. The file is
+    # never served over HTTP; only someone with shell access can read it.
+    setup_token_file: str = Field(
+        default="/var/lib/proliferate/setup/setup-token",
+        validation_alias=AliasChoices("PROLIFERATE_SETUP_TOKEN_FILE", "SETUP_TOKEN_FILE"),
+    )
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"

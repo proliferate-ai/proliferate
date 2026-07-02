@@ -75,6 +75,8 @@ from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
 from proliferate.server.organizations.sso.api import router as organization_sso_router
+from proliferate.server.setup.api import router as first_run_setup_router
+from proliferate.server.setup.service import ensure_first_run_setup_token
 
 # SUPPORT PARKED: diagnostics imports deleted target runtime access models.
 # from proliferate.server.support.api import router as support_router
@@ -170,6 +172,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "Start the local Postgres container with `make server-db-up` and run "
             "`make server-migrate` before starting the API."
         ) from exc
+    # Single-org mode only (no-op otherwise): mint the first-run setup token
+    # while the user table is empty, or clean it up once the instance is
+    # claimed.
+    await ensure_first_run_setup_token()
     if settings.cloud_billing_mode in {"observe", "enforce"}:
         # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
         # start_billing_reconciler()
@@ -234,6 +240,10 @@ def create_app() -> FastAPI:
 
     # ── Domain routes ──
     app.include_router(health_router, prefix=api_prefix, tags=["health"])
+    if settings.single_org_mode:
+        # First-run claim page. Exists only in single-org deployments; hosted
+        # production never mounts it, and it 404s once the instance is claimed.
+        app.include_router(first_run_setup_router, prefix=api_prefix, tags=["setup"])
     app.include_router(organization_join_router, prefix=api_prefix, tags=["organizations"])
     app.include_router(artifact_runtime_router, prefix=api_prefix, tags=["artifact_runtime"])
     app.include_router(

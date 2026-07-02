@@ -26,6 +26,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "github_app_authorizations",
         "github_app_installations",
         "github_app_installation_repositories",
+        "instance_setup_token",
         "oauth_account",
         "organization",
         "organization_invitation",
@@ -67,6 +68,13 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         }
     )
     assert "ux_organization_instance" in organization_indexes
+
+    setup_token_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("instance_setup_token")
+        }
+    )
+    assert {"id", "token_hash", "created_at", "updated_at"} <= setup_token_columns
 
     repo_config_columns = await conn.run_sync(
         lambda sync_conn: {
