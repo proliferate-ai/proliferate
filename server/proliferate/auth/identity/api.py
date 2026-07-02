@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from ipaddress import ip_address, ip_network
 from typing import Annotated
 
 from fastapi import (
@@ -34,6 +33,7 @@ from proliferate.auth.identity.models import (
 )
 from proliferate.auth.identity.password import (
     authenticate_password_login,
+    request_client_ip,
     set_password_credential,
 )
 from proliferate.auth.identity.routing import auth_route_path
@@ -64,41 +64,6 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 
 router = APIRouter(tags=["auth"])
-
-
-def _request_client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded and _request_from_trusted_proxy(request):
-        return forwarded.split(",", 1)[0].strip() or None
-    return request.client.host if request.client is not None else None
-
-
-def _request_from_trusted_proxy(request: Request) -> bool:
-    host = request.client.host if request.client is not None else None
-    if host in {"127.0.0.1", "::1", "localhost"}:
-        return True
-    if not host:
-        return False
-    try:
-        remote_ip = ip_address(host)
-    except ValueError:
-        return host in _trusted_proxy_entries()
-    for entry in _trusted_proxy_entries():
-        try:
-            if remote_ip in ip_network(entry, strict=False):
-                return True
-        except ValueError:
-            if host == entry:
-                return True
-    return False
-
-
-def _trusted_proxy_entries() -> set[str]:
-    return {
-        entry.strip()
-        for entry in settings.password_auth_trusted_proxy_hosts.split(",")
-        if entry.strip()
-    }
 
 
 @router.post("/github/link/start", response_model=StartAuthResponse)
@@ -318,7 +283,7 @@ async def web_password_login(
             db,
             email=body.email,
             password=body.password,
-            client_ip=_request_client_ip(request),
+            client_ip=request_client_ip(request),
         )
         ensure_web_beta_email_allowed(session.email)
     except WebBetaAccessDenied:
@@ -343,7 +308,7 @@ async def mobile_password_login(
             db,
             email=body.email,
             password=body.password,
-            client_ip=_request_client_ip(request),
+            client_ip=request_client_ip(request),
         )
     except HTTPException:
         await db.commit()
