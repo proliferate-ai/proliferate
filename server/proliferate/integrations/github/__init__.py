@@ -8,6 +8,7 @@ from proliferate.integrations.github.app_installations import (
     fetch_installation_repo_coverage_from_github,
     get_github_app_installation,
     list_github_app_installations,
+    list_github_app_user_installations,
     verify_github_app_user_repo_access,
     verify_github_webhook_signature,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "fetch_installation_repo_coverage_from_github",
     "httpx",
     "list_github_app_installations",
+    "list_github_app_user_installations",
     "list_branches",
     "list_github_repositories",
     "refresh_github_app_user_authorization",
