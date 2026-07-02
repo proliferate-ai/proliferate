@@ -8,19 +8,22 @@
  *    bottom-right corner (sidebar workspace rows), mirroring codex's
  *    `--pr-status-dot-color` circle-on-icon pattern.
  *
- * Color map (spec §2): open → green, checks failing → red, pending → yellow,
- * draft → faint, merged → special/blue. Uses cross-app tokens (`success` =
- * `--diff-add` value, `destructive` = `--danger`, `warning-foreground` — the
- * solid warning hue, since `warning` itself is a low-alpha surface tint —
- * `faint`, `info`) so the component works on both desktop and web surfaces.
+ * Tone rules (spec §3.3): every dot tone is an OPAQUE color — no alpha
+ * tokens. open → `success`, checks failing / closed → `destructive`,
+ * pending → HOLLOW `warning-foreground` ring (the solid warning hue, since
+ * `warning` itself is a low-alpha surface tint), changes requested →
+ * filled `warning-foreground`, draft → `muted-foreground`, merged →
+ * `pr-merged` (GitHub-convention purple; never `info`, which is the unread
+ * color). Cross-app tokens, so the component works on desktop and web.
  */
 import type { ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 export type PrStatusKind =
   | "open"
   | "checks_failing"
   | "pending"
+  | "changes_requested"
   | "draft"
   | "merged"
   | "closed";
@@ -36,9 +39,11 @@ export interface PrStatusView {
 const PR_STATUS_TONE: Record<PrStatusKind, string> = {
   open: "bg-success",
   checks_failing: "bg-destructive",
-  pending: "bg-warning-foreground",
-  draft: "bg-faint",
-  merged: "bg-info",
+  // Hollow: pending is the only in-flight state — an outline, not a fill.
+  pending: "border border-warning-foreground bg-transparent",
+  changes_requested: "bg-warning-foreground",
+  draft: "bg-muted-foreground",
+  merged: "bg-pr-merged",
   closed: "bg-destructive",
 };
 
@@ -46,6 +51,7 @@ const PR_STATUS_LABEL: Record<PrStatusKind, string> = {
   open: "Open",
   checks_failing: "Checks failing",
   pending: "Checks pending",
+  changes_requested: "Changes requested",
   draft: "Draft",
   merged: "Merged",
   closed: "Closed",
@@ -64,16 +70,22 @@ export function prStatusTooltip(status: PrStatusView): string {
 export function PrStatusDot({
   status,
   className = "",
+  withNativeTitle = true,
 }: {
   status: PrStatusView;
   className?: string;
+  /**
+   * Pass `false` when a wrapping `Tooltip` primitive already carries the
+   * label — avoids a double tooltip (native + custom).
+   */
+  withNativeTitle?: boolean;
 }) {
   const tooltip = prStatusTooltip(status);
   return (
     <span
       role="img"
       aria-label={tooltip}
-      title={tooltip}
+      title={withNativeTitle ? tooltip : undefined}
       className={twMerge(
         "inline-block size-1.5 shrink-0 rounded-full",
         PR_STATUS_TONE[status.kind],
@@ -85,7 +97,9 @@ export function PrStatusDot({
 
 /**
  * Anchors the PR dot on the bottom-right of a row icon (codex dot-on-icon).
- * Renders children unchanged when no status is present.
+ * Renders children unchanged when no status is present. The dot sits fully
+ * off the 14px glyph's strokes as a bare opaque dot — no ring halo, which
+ * reads wrong on hovered/active alpha-overlay rows.
  */
 export function PrStatusIconOverlay({
   status,
@@ -104,7 +118,8 @@ export function PrStatusIconOverlay({
       {children}
       <PrStatusDot
         status={status}
-        className="absolute -bottom-0.5 -right-0.5 ring-2 ring-sidebar"
+        withNativeTitle={false}
+        className="absolute -bottom-px -right-px"
       />
     </span>
   );

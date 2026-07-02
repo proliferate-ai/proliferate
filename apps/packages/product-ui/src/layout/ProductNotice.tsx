@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 type ProductNoticeTone = "neutral" | "info" | "warning" | "destructive";
 

@@ -1,10 +1,6 @@
 import type { Ref } from "react";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import {
-  PlaygroundMobilityFooterRow,
-  renderMobilityOverlayPreview,
-} from "@/components/playground/PlaygroundComposerMobility";
-import {
   PlaygroundComposerSurface,
   ReplayComposerSurface,
   renderComposerSurfaceForScenario,
@@ -42,7 +38,6 @@ export function PlaygroundComposer({
         outboundSlot={outboundSlot ?? undefined}
         activeSlot={activeSlot ?? undefined}
         attachedSlot={attachedSlot ?? undefined}
-        footerSlot={scenario ? <PlaygroundMobilityFooterRow scenario={scenario} /> : undefined}
         lowerBackdropTopPx={lowerBackdropTopPx}
         shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
       >
@@ -52,7 +47,6 @@ export function PlaygroundComposer({
             ? renderComposerSurfaceForScenario(scenario)
             : <PlaygroundComposerSurface />}
       </ChatComposerDock>
-      {scenario && renderMobilityOverlayPreview(scenario)}
     </div>
   );
 }

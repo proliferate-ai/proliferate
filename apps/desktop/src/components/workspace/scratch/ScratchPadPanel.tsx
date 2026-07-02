@@ -190,7 +190,7 @@ export function ScratchPadPanel({ workspaceKey }: ScratchPadPanelProps) {
         )}
         right={(
           <>
-            <span className="max-w-20 truncate text-[11px] leading-4 text-sidebar-muted-foreground">
+            <span className="max-w-20 truncate text-base text-sidebar-muted-foreground">
               {saveStatus}
             </span>
             <ScratchPadOptionsMenu

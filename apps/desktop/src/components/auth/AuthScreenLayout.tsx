@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";

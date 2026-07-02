@@ -5,35 +5,25 @@ import {
   onUserFacingTurnEnd,
 } from "@/lib/infra/events/turn-end-events";
 import dingSrc from "@/assets/sounds/ding.mp3";
-import gongSrc from "@/assets/sounds/gong.mp3";
 
 export function useTurnEndSound(): void {
-  const audioCache = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const cache = audioCache.current;
-    for (const [id, src] of Object.entries({ ding: dingSrc, gong: gongSrc })) {
-      const audio = new Audio(src);
-      audio.preload = "auto";
-      cache.set(id, audio);
-    }
+    const audio = new Audio(dingSrc);
+    audio.preload = "auto";
+    audioRef.current = audio;
     return () => {
-      cache.clear();
+      audioRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     const handler = () => {
-      const { turnEndSoundEnabled, turnEndSoundId, themePreset } =
-        useUserPreferencesStore.getState();
+      const { turnEndSoundEnabled } = useUserPreferencesStore.getState();
       if (!turnEndSoundEnabled) return;
 
-      const soundId =
-        turnEndSoundId === "gong" && themePreset !== "tbpn"
-          ? "ding"
-          : turnEndSoundId;
-
-      const audio = audioCache.current.get(soundId);
+      const audio = audioRef.current;
       if (audio) {
         audio.currentTime = 0;
         audio.play().catch(() => {});

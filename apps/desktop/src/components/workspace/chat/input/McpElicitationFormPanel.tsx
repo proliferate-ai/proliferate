@@ -1,12 +1,10 @@
 import type { McpElicitationField } from "@anyharness/sdk";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ComposerCardFooter } from "./ComposerAttachedPanel";
 import {
   McpElicitationFieldControl,
   type McpDraftValue,
 } from "./McpElicitationFieldControl";
 import { McpElicitationInlineError } from "./McpElicitationInlineError";
-
-const BUTTON_CLASSNAME = "rounded-xl px-2.5 text-sm";
 
 interface McpElicitationFormPanelProps {
   message: string;
@@ -33,7 +31,7 @@ export function McpElicitationFormPanel({
     <div className="flex max-h-[min(40vh,360px)] flex-col">
       <div className="min-h-0 overflow-y-auto p-3 pb-2">
         <div className="flex flex-col gap-3">
-          <div className="text-sm text-muted-foreground">
+          <div className="text-ui-sm text-muted-foreground">
             {message}
           </div>
           <div className="flex flex-col gap-3">
@@ -50,35 +48,13 @@ export function McpElicitationFormPanel({
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-3 pb-3 pt-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={BUTTON_CLASSNAME}
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className={BUTTON_CLASSNAME}
-          onClick={onDecline}
-        >
-          Decline
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className={BUTTON_CLASSNAME}
-          onClick={onSubmit}
-        >
-          Submit
-        </Button>
-      </div>
+      <ComposerCardFooter
+        secondaryActions={[
+          { label: "Cancel", onSelect: onCancel },
+          { label: "Decline", onSelect: onDecline },
+        ]}
+        primaryAction={{ label: "Submit", onSelect: onSubmit }}
+      />
     </div>
   );
 }

@@ -15,11 +15,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use crate::{
-    agent_seed_env::current_target_triple,
-    app_config,
-    sidecar::{resolve_shell_path, RuntimeStatus, SharedSidecar},
-};
+use crate::{agent_seed_env::current_target_triple, app_config, sidecar::resolve_shell_path};
 
 #[derive(Default)]
 pub struct CloudWorkerState {
@@ -73,11 +69,10 @@ pub fn create_cloud_worker_state() -> SharedCloudWorkerState {
 pub async fn ensure_desktop_dispatch_worker(
     input: EnsureDesktopDispatchWorkerInput,
     state: State<'_, SharedCloudWorkerState>,
-    sidecar: State<'_, SharedSidecar>,
 ) -> Result<EnsureDesktopDispatchWorkerResult, String> {
     let target_id = non_empty("targetId", input.target_id)?;
     let cloud_base_url = configured_cloud_base_url()?;
-    let anyharness_base_url = current_anyharness_base_url(&sidecar).await?;
+    let integration_gateway_home = app_config::anyharness_runtime_home_path()?;
     let enrollment_token = input
         .enrollment_token
         .map(|value| value.trim().to_string())
@@ -135,31 +130,52 @@ pub async fn ensure_desktop_dispatch_worker(
         &paths.config,
         &cloud_base_url,
         enrollment_token.as_deref(),
-        &anyharness_base_url,
         &paths.database,
+        &integration_gateway_home,
     )?;
     drop(mutation_lock);
+
+    let (log_stdout, log_stderr) = open_worker_log(&paths.log)?;
+    tracing::info!(
+        launcher = %launcher,
+        config_path = %paths.config.display(),
+        log_path = %paths.log.display(),
+        "Starting Proliferate Worker"
+    );
 
     let mut command = launcher.command(&paths.config);
     command
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::from(log_stdout))
+        .stderr(std::process::Stdio::from(log_stderr))
         .kill_on_drop(true);
     if let Some(path) = resolve_shell_path() {
         command.env("PATH", path);
     }
 
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Failed to start Proliferate Worker with {launcher}: {error}"))?;
+    let mut child = command.spawn().map_err(|error| {
+        tracing::error!(launcher = %launcher, %error, "Failed to start Proliferate Worker");
+        format!("Failed to start Proliferate Worker with {launcher}: {error}")
+    })?;
+    tracing::info!(
+        launcher = %launcher,
+        pid = child.id(),
+        "Proliferate Worker spawned"
+    );
     sleep(Duration::from_millis(150)).await;
     if let Some(status) = child
         .try_wait()
         .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
     {
+        tracing::error!(
+            launcher = %launcher,
+            %status,
+            log_path = %paths.log.display(),
+            "Proliferate Worker exited during startup"
+        );
         return Err(format!(
-            "Proliferate Worker exited during startup with {status}."
+            "Proliferate Worker exited during startup with {status}. See {} for output.",
+            paths.log.display()
         ));
     }
 
@@ -196,18 +212,10 @@ fn configured_cloud_base_url() -> Result<String, String> {
         .map(|value| value.trim_end_matches('/').to_string())
 }
 
-async fn current_anyharness_base_url(sidecar: &State<'_, SharedSidecar>) -> Result<String, String> {
-    let guard = sidecar.lock().await;
-    if guard.info.status != RuntimeStatus::Healthy {
-        return Err("AnyHarness must be healthy before remote access can start.".to_string());
-    }
-    non_empty("AnyHarness base URL", guard.info.url.clone())
-        .map(|value| value.trim_end_matches('/').to_string())
-}
-
 struct WorkerPaths {
     config: PathBuf,
     database: PathBuf,
+    log: PathBuf,
 }
 
 fn worker_paths(target_id: &str) -> Result<WorkerPaths, String> {
@@ -217,6 +225,7 @@ fn worker_paths(target_id: &str) -> Result<WorkerPaths, String> {
     Ok(WorkerPaths {
         config: root.join("config.toml"),
         database: root.join("worker.sqlite3"),
+        log: root.join("worker.log"),
     })
 }
 
@@ -323,28 +332,45 @@ fn write_worker_config(
     path: &Path,
     cloud_base_url: &str,
     enrollment_token: Option<&str>,
-    anyharness_base_url: &str,
     worker_db_path: &Path,
+    integration_gateway_home: &Path,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
         set_private_dir_permissions(parent)?;
     }
-    let mut lines = vec![
-        format!("cloud_base_url = {}", toml_string(cloud_base_url)),
-        format!("anyharness_base_url = {}", toml_string(anyharness_base_url)),
-        format!(
-            "worker_db_path = {}",
-            toml_string(&worker_db_path.to_string_lossy())
-        ),
-        "heartbeat_interval_seconds = 15".to_string(),
-    ];
+    let mut lines = vec![format!("cloud_base_url = {}", toml_string(cloud_base_url))];
     if let Some(token) = enrollment_token {
-        lines.insert(1, format!("enrollment_token = {}", toml_string(token)));
+        lines.push(format!("enrollment_token = {}", toml_string(token)));
     }
+    lines.push(format!(
+        "worker_db_path = {}",
+        toml_string(&worker_db_path.to_string_lossy())
+    ));
+    lines.push("heartbeat_interval_seconds = 30".to_string());
+    lines.push(format!(
+        "integration_gateway_home = {}",
+        toml_string(&integration_gateway_home.to_string_lossy())
+    ));
     app_config::write_string_file_atomic(path, &format!("{}\n", lines.join("\n")))?;
     set_private_file_permissions(path)
+}
+
+/// Opens (and truncates) the worker log file, returning independent handles
+/// for the child's stdout and stderr so both streams land in the same file.
+fn open_worker_log(path: &Path) -> Result<(std::fs::File, std::fs::File), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
+    }
+    let file = std::fs::File::create(path)
+        .map_err(|error| format!("Failed to open worker log at {}: {error}", path.display()))?;
+    set_private_file_permissions(path)?;
+    let clone = file
+        .try_clone()
+        .map_err(|error| format!("Failed to open worker log at {}: {error}", path.display()))?;
+    Ok((file, clone))
 }
 
 fn toml_string(value: &str) -> String {
@@ -425,8 +451,7 @@ impl fmt::Display for WorkerLauncher {
 
 fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
     if let Ok(value) = std::env::var("PROLIFERATE_WORKER_BIN") {
-        let path = PathBuf::from(value);
-        if is_usable_worker_binary(&path) {
+        if let Some(path) = usable_worker_binary(&PathBuf::from(value)) {
             return Some(WorkerLauncher::Binary(path));
         }
     }
@@ -438,21 +463,21 @@ fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
                 exe_dir.join(format!("proliferate-worker-{target}")),
                 exe_dir.join("proliferate-worker"),
             ] {
-                if is_usable_worker_binary(&candidate) {
-                    return Some(WorkerLauncher::Binary(candidate));
+                if let Some(path) = usable_worker_binary(&candidate) {
+                    return Some(WorkerLauncher::Binary(path));
                 }
             }
         }
     }
 
     for candidate in development_worker_candidates() {
-        if is_usable_worker_binary(&candidate) {
-            return Some(WorkerLauncher::Binary(candidate));
+        if let Some(path) = usable_worker_binary(&candidate) {
+            return Some(WorkerLauncher::Binary(path));
         }
     }
 
     if let Ok(path) = which::which("proliferate-worker") {
-        if is_usable_worker_binary(&path) {
+        if let Some(path) = usable_worker_binary(&path) {
             return Some(WorkerLauncher::Binary(path));
         }
     }
@@ -468,6 +493,18 @@ fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
     }
 
     None
+}
+
+/// Canonicalizes a candidate worker binary so the spawned path is absolute and
+/// independent of the app process working directory. Returns `None` when the
+/// candidate does not exist or is a placeholder sidecar.
+fn usable_worker_binary(candidate: &Path) -> Option<PathBuf> {
+    let path = candidate.canonicalize().ok()?;
+    if is_usable_worker_binary(&path) {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 fn development_worker_candidates() -> Vec<PathBuf> {
@@ -504,7 +541,7 @@ fn development_worker_candidates() -> Vec<PathBuf> {
 
 fn workspace_root() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest_dir.join("../../..");
+    let root = manifest_dir.join("../../..").canonicalize().ok()?;
     if root.join("Cargo.toml").is_file() {
         Some(root)
     } else {

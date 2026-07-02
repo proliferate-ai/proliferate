@@ -7,10 +7,10 @@ use crate::live::sessions::actor::shutdown::cleanup::interaction_resolution_for_
 use crate::live::sessions::actor::shutdown::persist::persist_exit_disposition;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
-use crate::live::sessions::model::SessionStateDurable;
-use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
+use crate::live::sessions::sink::SessionEventSink;
 
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn finalize_exit(

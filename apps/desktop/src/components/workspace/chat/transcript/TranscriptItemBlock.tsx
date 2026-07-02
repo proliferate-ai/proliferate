@@ -8,6 +8,7 @@ import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
 } from "@proliferate/product-domain/chats/tools/claude-plan-tool-call";
+import { deriveModeSwitchDisplay } from "@proliferate/product-domain/chats/tools/mode-switch-display";
 import {
   isAgentSessionProvenance,
   isSubagentWakeProvenance,
@@ -27,6 +28,7 @@ import {
   renderTranscriptLink,
 } from "./transcript-markdown";
 import { ClaudePlanCard } from "./ClaudePlanCard";
+import { ModeTransitionDivider } from "./ModeTransitionDivider";
 import { ConnectedProposedPlanItem } from "./ConnectedProposedPlanItem";
 import { SessionErrorItem } from "./SessionErrorItem";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
@@ -194,6 +196,18 @@ export function TranscriptItemBlock({
                   content={body}
                   isStreaming={item.status === "in_progress"}
                 />
+              </TranscriptActivityBlock>
+            </div>
+          </div>
+        );
+      }
+      const modeSwitchDisplay = deriveModeSwitchDisplay(item);
+      if (modeSwitchDisplay) {
+        return (
+          <div data-transcript-activity-shell className="flex justify-start relative">
+            <div className="flex flex-col w-full max-w-full break-words">
+              <TranscriptActivityBlock>
+                <ModeTransitionDivider label={modeSwitchDisplay.label} />
               </TranscriptActivityBlock>
             </div>
           </div>

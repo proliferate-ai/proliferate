@@ -109,7 +109,7 @@ function GitPanelAggregateStats({
 }) {
   return (
     <div
-      className="flex shrink-0 items-center gap-1 text-[10px] font-medium leading-none tabular-nums"
+      className="flex shrink-0 items-center gap-1 text-sm font-medium leading-none tabular-nums"
       aria-label={`${additions} additions, ${deletions} deletions`}
     >
       <span className={additions > 0 ? "text-git-green" : "text-sidebar-muted-foreground/70"}>

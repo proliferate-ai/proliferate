@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Check } from "@proliferate/ui/icons";
-import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
 
 export function CurrentUserInvitationsSection({
@@ -41,38 +42,27 @@ export function CurrentUserInvitationsSection({
   }
 
   return (
-    <OrganizationSection
+    <SettingsSection
       title="Pending invitations"
       description="Join an organization that invited your signed-in email address."
     >
-      <div>
-        {invitations.map((invitation) => (
-          <div
-            key={invitation.id}
-            className="flex flex-col gap-3 border-b border-border px-4 py-3 last:border-b-0 sm:flex-row sm:items-center"
+      {invitations.map((invitation) => (
+        <SettingsRow
+          key={invitation.id}
+          label={invitation.organizationName ?? "Organization invitation"}
+          description={`${invitation.role} access for ${invitation.email}`}
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            loading={accepting}
+            onClick={() => setAcceptTarget(invitation)}
           >
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-foreground">
-                {invitation.organizationName ?? "Organization invitation"}
-              </div>
-              <div className="truncate text-sm text-muted-foreground">
-                {invitation.role} access for {invitation.email}
-              </div>
-            </div>
-            <div className="flex shrink-0 justify-end">
-              <Button
-                type="button"
-                variant="secondary"
-                loading={accepting}
-                onClick={() => setAcceptTarget(invitation)}
-              >
-                <Check className="size-4" />
-                Accept invitation
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
+            <Check className="size-4" />
+            Accept invitation
+          </Button>
+        </SettingsRow>
+      ))}
       <ConfirmationDialog
         open={acceptTarget !== null}
         title={acceptTarget ? `Join ${acceptTarget.organizationName ?? "organization"}?` : "Join organization?"}
@@ -81,7 +71,7 @@ export function CurrentUserInvitationsSection({
             ? `Accept this invitation for ${acceptTarget.email} and join as ${acceptTarget.role}.`
             : "Accept this invitation and join the organization."
         }
-        confirmLabel="Accept invitation"
+        confirmLabel="Join"
         loading={accepting}
         disableClose={accepting}
         onClose={() => setAcceptTarget(null)}
@@ -94,6 +84,6 @@ export function CurrentUserInvitationsSection({
           onAccept(invitationId);
         }}
       />
-    </OrganizationSection>
+    </SettingsSection>
   );
 }

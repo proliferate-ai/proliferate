@@ -2,14 +2,35 @@ import { useEffect, useRef } from "react";
 import { toast } from "@proliferate/ui/kit/Sonner";
 import { CircleAlert } from "@proliferate/ui/icons";
 import { useUpdater, type UpdaterPhase } from "@/hooks/access/tauri/use-updater";
+import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 
 export const UPDATE_TOAST_ID = "app-update";
+// The "you're up to date" confirmation is a transient success signal, not a
+// lifecycle phase, so it gets its own id — the morphing UPDATE_TOAST_ID is
+// dismissed whenever the phase leaves the update flow, which would kill it.
+export const UP_TO_DATE_TOAST_ID = "app-update-up-to-date";
 
 const UPDATE_TOAST_PHASES = new Set<UpdaterPhase>([
   "available",
   "downloading",
   "ready",
 ]);
+
+const DOWNLOAD_ERROR_FALLBACK =
+  "Something went wrong downloading the update. Try again.";
+
+/**
+ * Keep the raw updater message only when it reads like a sentence a human
+ * wrote: short, single-line, no "Error:" prefixes or stack-frame markers.
+ */
+function humanizeDownloadError(message: string): string {
+  const looksHuman =
+    message.length < 80
+    && !message.includes("\n")
+    && !/error:/i.test(message)
+    && !/\bat\s+\S+:\d+/.test(message);
+  return looksHuman ? message : DOWNLOAD_ERROR_FALLBACK;
+}
 
 function DownloadProgressBar({ progress }: { progress: number | null }) {
   return (
@@ -35,15 +56,37 @@ export function UpdateToastPresenter() {
     phase,
     availableVersion,
     errorMessage,
+    errorSource,
     downloadProgress,
     restartPromptOpen,
+    manualCheckCompletedAt,
     downloadUpdate,
     openRestartPrompt,
+    clearManualCheckCompleted,
   } = useUpdater();
+  const { data: currentVersion } = useAppVersion();
   // Session-scoped dismissal: closing the toast keeps it hidden until the
   // phase or version changes (progress ticks must not resurface it).
   const dismissedKeyRef = useRef<string | null>(null);
   const shownErrorRef = useRef<string | null>(null);
+
+  // One-shot "you're up to date" confirmation: only manual checks raise the
+  // signal, and we clear it right after surfacing so it never replays.
+  useEffect(() => {
+    if (manualCheckCompletedAt === null) {
+      return;
+    }
+    toast("You're up to date", {
+      id: UP_TO_DATE_TOAST_ID,
+      description: currentVersion
+        ? `Proliferate ${currentVersion} is the latest.`
+        : "You're on the latest version.",
+      duration: 4000,
+      action: undefined,
+      cancel: undefined,
+    });
+    clearManualCheckCompleted();
+  }, [clearManualCheckCompleted, currentVersion, manualCheckCompletedAt]);
 
   useEffect(() => {
     const dismissalKey = `${phase}:${availableVersion ?? "unknown"}`;
@@ -56,9 +99,16 @@ export function UpdateToastPresenter() {
 
     if (phase === "error" && errorMessage && shownErrorRef.current !== errorMessage) {
       shownErrorRef.current = errorMessage;
-      toast("Update failed", {
+      // Check failures get stable, actionable copy — the raw message is
+      // usually a network-layer string. Download failures keep the store
+      // message only when it's short and human.
+      const checkFailed = errorSource === "check";
+      toast.dismiss(UP_TO_DATE_TOAST_ID);
+      toast(checkFailed ? "Couldn't check for updates" : "Update failed", {
         id: UPDATE_TOAST_ID,
-        description: errorMessage,
+        description: checkFailed
+          ? "Check your connection and try again."
+          : humanizeDownloadError(errorMessage),
         icon: <CircleAlert className="size-4 text-destructive" />,
         duration: 8000,
         action: undefined,
@@ -81,6 +131,10 @@ export function UpdateToastPresenter() {
       return;
     }
 
+    // An update entering the flow supersedes the "you're up to date"
+    // confirmation — the two contradict each other in the stack.
+    toast.dismiss(UP_TO_DATE_TOAST_ID);
+
     const versionLabel = availableVersion ? ` ${availableVersion}` : "";
     const onDismiss = () => {
       dismissedKeyRef.current = dismissalKey;
@@ -89,7 +143,7 @@ export function UpdateToastPresenter() {
     if (phase === "available") {
       toast("Update available", {
         id: UPDATE_TOAST_ID,
-        description: `Proliferate${versionLabel} is ready to download.`,
+        description: `Proliferate${versionLabel} — downloads in the background.`,
         duration: Infinity,
         closeButton: true,
         onDismiss,
@@ -101,10 +155,14 @@ export function UpdateToastPresenter() {
           },
         },
         cancel: undefined,
-        // Spec §12: Download is a ghost button; solid is reserved for Restart.
+        // Spec §12: solid is reserved for Restart — Download stays secondary,
+        // but quiet-secondary (faint fill + full-contrast label), not ghost:
+        // muted-on-transparent was near-invisible on the toast surface.
+        // [&&] doubles specificity: the kit's solid-primary default is also
+        // !important, and sonner concatenates rather than replaces classNames.
         classNames: {
           actionButton:
-            "!bg-transparent !text-muted-foreground hover:!text-foreground !border !border-input",
+            "[&&]:!bg-foreground/5 [&&]:!text-foreground [&&]:hover:!bg-foreground/10 [&&]:!border [&&]:!border-input",
         },
       });
       return;
@@ -126,7 +184,7 @@ export function UpdateToastPresenter() {
     // ready
     toast("Restart to update", {
       id: UPDATE_TOAST_ID,
-      description: `Proliferate${versionLabel} is installed.`,
+      description: `Proliferate${versionLabel} is ready.`,
       duration: Infinity,
       onDismiss,
       action: {
@@ -142,12 +200,18 @@ export function UpdateToastPresenter() {
           dismissedKeyRef.current = dismissalKey;
         },
       },
+      // Sonner defaults every button to a 28px start margin; the pair should
+      // read as one control cluster, so the action hugs the cancel.
+      classNames: {
+        actionButton: "!ml-2",
+      },
     });
   }, [
     availableVersion,
     downloadProgress,
     downloadUpdate,
     errorMessage,
+    errorSource,
     openRestartPrompt,
     phase,
     restartPromptOpen,

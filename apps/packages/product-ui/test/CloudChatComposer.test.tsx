@@ -164,9 +164,11 @@ describe("CloudChatComposer", () => {
     expect(copyButton.getAttribute("title")).toBeNull();
     expect(copyButton.querySelector(".lucide-git-branch")).toBeTruthy();
 
-    fireEvent.mouseEnter(tooltipTrigger!);
+    // The Radix-backed Tooltip opens on focus/pointermove (not mouseenter).
+    // Focus opens it synchronously, which keeps fake timers out of the way.
+    fireEvent.focus(tooltipTrigger!);
     expect(screen.getByRole("tooltip").textContent).toBe("Copy branch name");
-    fireEvent.mouseLeave(tooltipTrigger!);
+    fireEvent.blur(tooltipTrigger!);
 
     fireEvent.click(copyButton);
 
@@ -181,9 +183,9 @@ describe("CloudChatComposer", () => {
     expect(copyButton.querySelector(".lucide-check")).toBeTruthy();
     expect(copyButton.querySelector(".lucide-git-branch")).toBeNull();
 
-    fireEvent.mouseEnter(tooltipTrigger!);
+    fireEvent.focus(tooltipTrigger!);
     expect(screen.getByRole("tooltip").textContent).toBe("Copied");
-    fireEvent.mouseLeave(tooltipTrigger!);
+    fireEvent.blur(tooltipTrigger!);
 
     act(() => {
       vi.advanceTimersByTime(1400);
@@ -227,9 +229,9 @@ describe("CloudChatComposer", () => {
     expect(tooltipTrigger).toBeTruthy();
     expect(copyButton.getAttribute("title")).toBeNull();
 
-    fireEvent.mouseEnter(tooltipTrigger!);
+    fireEvent.focus(tooltipTrigger!);
     expect(screen.getByRole("tooltip").textContent).toBe("Copy repository name");
-    fireEvent.mouseLeave(tooltipTrigger!);
+    fireEvent.blur(tooltipTrigger!);
 
     fireEvent.click(copyButton);
 

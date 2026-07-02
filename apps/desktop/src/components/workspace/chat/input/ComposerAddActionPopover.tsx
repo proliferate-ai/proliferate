@@ -10,7 +10,7 @@ import {
 } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { PlanPickerContentBody } from "./PlanPickerPopover";
+import { PlanPickerContentBody } from "./PlanPickerContentBody";
 
 interface ComposerAddActionPopoverProps {
   canAttachFile: boolean;
@@ -136,7 +136,7 @@ function ComposerActionRow({
         onClick={onClick}
         className="min-w-0 flex-1"
       >
-        <span className="block whitespace-normal text-[12px] leading-4 text-muted-foreground">
+        <span className="block whitespace-normal text-ui-sm text-muted-foreground">
           {detail}
         </span>
       </PopoverMenuItem>

@@ -2,35 +2,35 @@ import { describe, expect, it } from "vitest";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 
 describe("desktopNavigationTarget", () => {
-  it("routes integration deep links and preserves OAuth handoff query params", () => {
+  it("routes parked integration deep links to settings while integrations are rebuilt", () => {
     expect(
       desktopNavigationTarget(
         "proliferate://integrations?source=mcp_oauth_callback&status=completed",
       ),
-    ).toBe("/integrations?source=mcp_oauth_callback&status=completed");
+    ).toBe("/settings?source=mcp_oauth_callback&status=completed&section=general");
     expect(
       desktopNavigationTarget(
         "proliferate://plugins?source=mcp_oauth_callback&status=completed",
       ),
-    ).toBe("/integrations?source=mcp_oauth_callback&status=completed");
+    ).toBe("/settings?source=mcp_oauth_callback&status=completed&section=general");
     expect(
       desktopNavigationTarget(
         "proliferate-local://plugins?source=mcp_oauth_callback&status=failed",
       ),
-    ).toBe("/integrations?source=mcp_oauth_callback&status=failed");
+    ).toBe("/settings?source=mcp_oauth_callback&status=failed&section=general");
   });
 
   it("accepts defensive integration and plugin slash forms", () => {
-    expect(desktopNavigationTarget("proliferate://integrations/")).toBe("/integrations");
-    expect(desktopNavigationTarget("proliferate://plugins/")).toBe("/integrations");
+    expect(desktopNavigationTarget("proliferate://integrations/")).toBe("/settings?section=general");
+    expect(desktopNavigationTarget("proliferate://plugins/")).toBe("/settings?section=general");
   });
 
-  it("keeps legacy powers handoff deep links compatible with integrations", () => {
+  it("keeps legacy powers handoff deep links routed with integrations", () => {
     expect(
       desktopNavigationTarget(
         "proliferate://powers?source=mcp_oauth_callback&status=completed",
       ),
-    ).toBe("/integrations?source=mcp_oauth_callback&status=completed");
+    ).toBe("/settings?source=mcp_oauth_callback&status=completed&section=general");
   });
 
   it("routes workspace deep links to the desktop workspace opener", () => {

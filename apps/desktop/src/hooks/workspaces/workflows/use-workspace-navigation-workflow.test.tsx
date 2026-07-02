@@ -18,13 +18,6 @@ const harnessMocks = vi.hoisted(() => ({
   },
 }));
 
-const mobilityMocks = vi.hoisted(() => ({
-  state: {
-    selectionLocked: false,
-    selectedLogicalWorkspaceId: null as string | null,
-  },
-}));
-
 const selectionMocks = vi.hoisted(() => ({
   selectWorkspace: vi.fn(async () => undefined),
 }));
@@ -62,10 +55,6 @@ vi.mock("react-router-dom", () => ({
 vi.mock("@/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: typeof harnessMocks.state) => unknown) =>
     selector(harnessMocks.state),
-}));
-
-vi.mock("@/hooks/workspaces/derived/mobility/use-workspace-mobility-state", () => ({
-  useWorkspaceMobilityState: () => mobilityMocks.state,
 }));
 
 vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
@@ -110,8 +99,6 @@ beforeEach(() => {
   harnessMocks.state.pendingWorkspaceEntry = null;
   harnessMocks.state.selectedLogicalWorkspaceId = null;
   harnessMocks.state.selectedWorkspaceId = null;
-  mobilityMocks.state.selectionLocked = false;
-  mobilityMocks.state.selectedLogicalWorkspaceId = null;
   logicalWorkspaceMocks.logicalWorkspaces = [];
   selectionMocks.selectWorkspace.mockResolvedValue(undefined);
   shellMocks.openExternal.mockResolvedValue(undefined);
@@ -151,37 +138,9 @@ describe("useWorkspaceNavigationWorkflow", () => {
     expect(routerMocks.navigate).toHaveBeenCalledWith("/");
   });
 
-  it("blocks top-level navigation while workspace mobility locks selection", () => {
-    mobilityMocks.state.selectionLocked = true;
-    harnessMocks.state.selectedWorkspaceId = "materialized-1";
-    const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
-
-    act(() => result.current.goToTopLevelRoute("/"));
-
-    expect(toastMocks.show).toHaveBeenCalledWith(
-      "Finish the current workspace move before leaving this workspace.",
-    );
-    expect(harnessMocks.state.deselectWorkspacePreservingSessions).not.toHaveBeenCalled();
-    expect(routerMocks.navigate).not.toHaveBeenCalled();
-  });
-
-  it("blocks workspace switching while mobility is locked to another logical workspace", () => {
-    mobilityMocks.state.selectionLocked = true;
-    mobilityMocks.state.selectedLogicalWorkspaceId = "logical-current";
-    const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
-
-    act(() => result.current.selectWorkspaceFromSurface("logical-target", "shortcut"));
-
-    expect(toastMocks.show).toHaveBeenCalledWith(
-      "Finish the current workspace move before switching workspaces.",
-    );
-    expect(selectionMocks.selectWorkspace).not.toHaveBeenCalled();
-    expect(routerMocks.navigate).not.toHaveBeenCalled();
-  });
-
   it("selects workspaces through the shared latency and viewed-state workflow", () => {
     routerMocks.location.pathname = "/settings";
-    mobilityMocks.state.selectedLogicalWorkspaceId = "logical-current";
+    harnessMocks.state.selectedLogicalWorkspaceId = "logical-current";
     const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
 
     act(() => result.current.selectWorkspaceFromSurface("logical-current", "shortcut"));

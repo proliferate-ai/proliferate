@@ -8,6 +8,7 @@ interface WorkspaceShellSidebarProps {
   width: number;
   updaterPhase: UpdaterPhase;
   downloadProgress: number | null;
+  restartWhenIdle: boolean;
   onToggleSidebar: () => void;
   onDownloadUpdate: () => void;
   onOpenRestartPrompt: () => void;
@@ -18,6 +19,7 @@ export function WorkspaceShellSidebar({
   width,
   updaterPhase,
   downloadProgress,
+  restartWhenIdle,
   onToggleSidebar,
   onDownloadUpdate,
   onOpenRestartPrompt,
@@ -37,7 +39,7 @@ export function WorkspaceShellSidebar({
               iconTone="sidebar"
               phase={updaterPhase}
               downloadProgress={downloadProgress}
-              showUpdatePill={false}
+              restartWhenIdle={restartWhenIdle}
               onToggleSidebar={onToggleSidebar}
               onDownloadUpdate={onDownloadUpdate}
               onOpenRestartPrompt={onOpenRestartPrompt}

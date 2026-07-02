@@ -191,6 +191,10 @@
       "types": "./dist/primitives/RangeSlider.d.ts",
       "import": "./dist/primitives/RangeSlider.js"
     },
+    "./primitives/SegmentedControl": {
+      "types": "./dist/primitives/SegmentedControl.d.ts",
+      "import": "./dist/primitives/SegmentedControl.js"
+    },
     "./primitives/Select": {
       "types": "./dist/primitives/Select.d.ts",
       "import": "./dist/primitives/Select.js"
@@ -202,6 +206,10 @@
     "./primitives/SettingsMenu": {
       "types": "./dist/primitives/SettingsMenu.d.ts",
       "import": "./dist/primitives/SettingsMenu.js"
+    },
+    "./primitives/Skeleton": {
+      "types": "./dist/primitives/Skeleton.d.ts",
+      "import": "./dist/primitives/Skeleton.js"
     },
     "./primitives/Spinner": {
       "types": "./dist/primitives/Spinner.d.ts",
@@ -242,6 +250,10 @@
     "./utils/search": {
       "types": "./dist/utils/search.d.ts",
       "import": "./dist/utils/search.js"
+    },
+    "./utils/tw-merge": {
+      "types": "./dist/utils/tw-merge.d.ts",
+      "import": "./dist/utils/tw-merge.js"
     },
     "./kit/AlertDialog": {
       "types": "./dist/kit/AlertDialog.d.ts",

@@ -33,9 +33,9 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
 use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, PermissionOutcome};
+use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::persistence::Db;
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{

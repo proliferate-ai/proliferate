@@ -85,7 +85,11 @@ pub struct AgentCatalogArtifactPin {
 /// trust anchor: install downloads the url, verifies the hash, and refuses
 /// anything else — so a url living in the catalog cannot fetch unintended bytes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum AgentCatalogArtifactSource {
     /// A single executable: download + chmod. Per-platform url+sha.
     Binary {

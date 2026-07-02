@@ -12,6 +12,7 @@ interface CollapsiblePlanCardProps {
   title: string;
   content: string;
   subtitle?: ReactNode;
+  note?: ReactNode;
   footer?: ReactNode;
   emptyContent: string;
   copyLabel: string;
@@ -19,7 +20,6 @@ interface CollapsiblePlanCardProps {
   expandLabel: string;
   initialExpanded?: boolean;
   density?: "default" | "compact";
-  collapsedPreview?: boolean;
   markdownPresentation?: "default" | "proposal";
   renderLink?: MarkdownLinkRenderer;
   renderInlineCode?: MarkdownInlineCodeRenderer;
@@ -27,6 +27,9 @@ interface CollapsiblePlanCardProps {
 }
 
 const COLLAPSED_MAX_HEIGHT = "min(20rem,45vh)";
+// Expanded plans still cap out and scroll internally so a long plan cannot
+// fill the whole transcript.
+const EXPANDED_MAX_HEIGHT = "60vh";
 const COLLAPSED_FADE =
   "linear-gradient(to bottom, black 0, black calc(100% - 5rem), transparent 100%)";
 
@@ -34,6 +37,7 @@ export function CollapsiblePlanCard({
   title,
   content,
   subtitle,
+  note,
   footer,
   emptyContent,
   copyLabel,
@@ -41,7 +45,6 @@ export function CollapsiblePlanCard({
   expandLabel,
   initialExpanded = true,
   density = "default",
-  collapsedPreview = true,
   markdownPresentation = "default",
   renderLink,
   renderInlineCode,
@@ -52,15 +55,16 @@ export function CollapsiblePlanCard({
   const hasContent = content.length > 0;
   const renderedContent = stripDuplicatePlanHeading(content, title);
   const compact = density === "compact";
-  const shellClassName = compact
-    ? "relative overflow-clip rounded-md border border-border/70 bg-card/85 text-left shadow-sm"
-    : "relative overflow-clip rounded-lg bg-foreground/5 text-left";
+  // One shell language for every plan surface; density only changes padding
+  // and title size.
+  const shellClassName =
+    "relative overflow-clip rounded-lg border border-border/70 bg-card/85 text-left";
   const headerClassName = compact
     ? "relative flex items-center justify-between gap-3 border-b border-border/40 px-2.5 py-1.5"
-    : "relative flex items-center justify-between gap-3 px-4 py-3";
+    : "relative flex items-center justify-between gap-3 border-b border-border/40 px-4 py-3";
   const titleClassName = compact
-    ? "truncate text-sm font-semibold leading-tight text-foreground"
-    : "truncate text-base font-semibold leading-tight text-foreground";
+    ? "truncate text-ui-sm font-semibold leading-tight text-foreground"
+    : "truncate text-ui font-semibold leading-tight text-foreground";
 
   const handleCopy = () => {
     if (!content) return;
@@ -108,12 +112,16 @@ export function CollapsiblePlanCard({
           </div>
         )}
       </div>
+      {note}
       {!hasContent ? (
         <div className="px-4 py-3 text-sm text-muted-foreground">
           {emptyContent}
         </div>
       ) : expanded ? (
-        <div className={compact ? "px-3 py-2" : "px-4 py-3"}>
+        <div
+          className={compact ? "overflow-y-auto px-3 py-2" : "overflow-y-auto px-4 py-3"}
+          style={{ maxHeight: EXPANDED_MAX_HEIGHT }}
+        >
           <PlanMarkdownBody
             content={renderedContent}
             presentation={markdownPresentation}
@@ -122,7 +130,7 @@ export function CollapsiblePlanCard({
             renderCodeBlock={renderCodeBlock}
           />
         </div>
-      ) : !collapsedPreview ? null : (
+      ) : (
         <div className="relative">
           <div
             className={compact ? "overflow-hidden px-3 py-2" : "overflow-hidden px-4 py-3"}

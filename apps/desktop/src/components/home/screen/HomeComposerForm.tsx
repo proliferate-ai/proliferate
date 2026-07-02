@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX,
-  HOME_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
+import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
+import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
@@ -100,8 +98,10 @@ export function HomeComposerForm({
     launchControlValues,
     launchTarget,
   });
+  // Cap at maxRows of composer text. Uses the --text-composer--line-height
+  // token so the cap tracks the "UI font size" preference at runtime.
   const homeComposerInputMaxHeight =
-    `${CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX * HOME_CHAT_COMPOSER_INPUT.maxRows}px`;
+    `calc(var(--text-composer--line-height) * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
   // Measure home-composer typing latency + per-surface commit attribution
   // (no-op unless VITE_PROLIFERATE_DEBUG_MAIN_THREAD is enabled).
@@ -159,7 +159,7 @@ export function HomeComposerForm({
                 value={composer.draft}
                 onChange={(event) => handleDraftChange(event.target.value, event.timeStamp)}
                 onKeyDown={composer.handleKeyDown}
-                placeholder="Describe a task"
+                placeholder={CHAT_COMPOSER_LABELS.placeholder}
                 spellCheck={false}
                 autoComplete="off"
                 autoCorrect="off"
@@ -218,7 +218,7 @@ export function HomeComposerForm({
       {modelAvailabilityNoticeSlot}
 
       {composer.submitDisabledReason ? (
-        <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
+        <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
           <span>{composer.submitDisabledReason}</span>
           {submitDisabledReasonCtaSlot}
         </div>

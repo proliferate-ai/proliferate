@@ -5,17 +5,22 @@ import {
   useComposerOptionNumberKeys,
 } from "./ComposerOptionRow";
 import { useActivePendingApproval } from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useChatPermissionActions } from "@/hooks/chat/workflows/use-chat-permission-actions";
 import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
 
-// Codex's approval header is just the title as medium-weight text — no
-// icon, no label chip, no uppercase prefix. The title itself is
-// self-describing (a command, a file path, or a question) so the extra
-// chrome just added visual noise.
+// The header carries a fixed kind identity — a shield glyph + "Permission
+// request" — so every approval reads as the same kind of prompt no matter what
+// is being requested (header grammar from ComposerAttachedPanel: 16px icon +
+// text-ui title). The request payload itself (a shell command, a file path, an
+// MCP tool call) renders as a wrapping mono snippet in the body instead of a
+// truncating one-line title, so long commands stay fully readable.
 //
-// Options follow the Superset anatomy (UX_SPEC §5): full-width rows with
-// hairline separators, leading number-key badges, 1–9 selects. Destructive
-// options (deny/reject/cancel) render in --danger text.
+// Options follow the codex popover-row anatomy (ComposerOptionRow): rounded
+// hover rows without hairlines, leading number-key badges, 1–9 selects. The
+// harness-provided options and the fallback Allow/Deny path render through the
+// exact same rows so the two paths are visually identical; destructive kinds
+// (deny/reject/cancel) render in --danger text.
 
 export interface ApprovalCardProps {
   title: string;
@@ -63,24 +68,23 @@ export function ApprovalCard({
     options[index]?.onSelect();
   });
 
-  const header = (
-    <div className="text-chat min-w-0 truncate font-medium leading-[var(--text-chat--line-height)] text-foreground">
-      {title}
-    </div>
-  );
-
   return (
-    <ComposerAttachedPanel header={header}>
-      <div className="max-h-[300px] overflow-y-auto px-2 pb-2">
-        {options.map((option, index) => (
-          <ComposerOptionRow
-            key={option.key}
-            index={index}
-            label={option.label}
-            destructive={option.destructive}
-            onSelect={option.onSelect}
-          />
-        ))}
+    <ComposerAttachedPanel title="Permission request">
+      <div className="flex flex-col gap-1 px-2 pb-2">
+        <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-surface-control px-2.5 py-2 text-ui-sm text-foreground">
+          {title}
+        </div>
+        <div className="max-h-[240px] overflow-y-auto">
+          {options.map((option, index) => (
+            <ComposerOptionRow
+              key={option.key}
+              index={index}
+              label={option.label}
+              destructive={option.destructive}
+              onSelect={option.onSelect}
+            />
+          ))}
+        </div>
       </div>
     </ComposerAttachedPanel>
   );
@@ -93,20 +97,27 @@ function isDestructiveActionKind(kind: string | null): boolean {
 
 export function ConnectedApprovalCard() {
   const { pendingApproval, pendingApprovalActions } = useActivePendingApproval();
+  // Hold the last payload so the card can still render while the dock slot
+  // plays its 150ms exit fade after the permission resolves.
+  const held = useHeldInteractionPayload(
+    pendingApproval
+      ? { approval: pendingApproval, actions: pendingApprovalActions }
+      : null,
+  );
   const {
     handleSelectPermissionOption,
     handleAllowPermission,
     handleDenyPermission,
   } = useChatPermissionActions();
 
-  if (!pendingApproval) {
+  if (!held) {
     return null;
   }
 
   return (
     <ApprovalCard
-      title={pendingApproval.title}
-      actions={pendingApprovalActions}
+      title={held.approval.title}
+      actions={held.actions}
       onSelectOption={handleSelectPermissionOption}
       onAllow={handleAllowPermission}
       onDeny={handleDenyPermission}

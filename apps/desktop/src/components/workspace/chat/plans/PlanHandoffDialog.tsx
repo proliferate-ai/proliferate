@@ -86,7 +86,7 @@ export function PlanHandoffDialog({
         <div className="flex flex-col gap-3.5" data-telemetry-mask>
           {plan && (
             <div>
-              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+              <div className="mb-1.5 text-base font-medium text-muted-foreground">
                 Attached plan
               </div>
               <Button

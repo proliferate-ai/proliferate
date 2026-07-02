@@ -5,10 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
 import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX,
-  HOME_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
+import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();
@@ -259,8 +256,10 @@ describe("HomeNextScreen model availability notices", () => {
     render(<HomeNextScreen />);
 
     const textarea = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    // jsdom does not collapse var() calcs, so assert the literal calc string
+    // that ties the cap to the --text-composer--line-height scale token.
     const expectedMaxHeight =
-      `${CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX * HOME_CHAT_COMPOSER_INPUT.maxRows}px`;
+      `calc(var(--text-composer--line-height) * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
     expect(textarea.style.maxHeight).toBe(expectedMaxHeight);
     expect(textarea.parentElement?.style.maxHeight).toBe(expectedMaxHeight);

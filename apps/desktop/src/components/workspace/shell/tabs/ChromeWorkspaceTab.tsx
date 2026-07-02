@@ -74,10 +74,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
       >
         <span
           aria-hidden="true"
-          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-[var(--workspace-shell-tab-radius,0.5rem)]"
+          className="workspace-shell-tab__surface pointer-events-none absolute inset-0 rounded-[var(--workspace-shell-tab-radius,0.625rem)] border transition-[background-color,border-color] duration-150"
         />
         <div
-          className={`absolute inset-0 flex items-center overflow-hidden rounded-[var(--workspace-shell-tab-radius,0.5rem)] py-1 ${
+          className={`absolute inset-0 flex items-center overflow-hidden rounded-[var(--workspace-shell-tab-radius,0.625rem)] py-1 ${
             isMini ? "gap-1 px-1" : isSmall ? "gap-1 px-2" : "gap-2 px-2"
           }`}
         >
@@ -115,7 +115,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             size="sm"
             onClick={onSelect}
             onPointerDownCapture={onSelectPointerDownCapture}
-            className={`workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 text-sm leading-4 hover:bg-transparent ${
+            className={`workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 hover:bg-transparent ${
               isActive
                 ? "font-medium text-foreground"
                 : isMultiSelected

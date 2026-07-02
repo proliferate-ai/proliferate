@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
+from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.crypto import decrypt_text
@@ -71,6 +72,9 @@ async def destroy_cloud_sandbox(
     sandbox = await sandbox_store.load_personal_cloud_sandbox(db, user.id, lock_row=True)
     if sandbox is None:
         return None
+    # Retire the sandbox's worker + gateway token so a destroyed sandbox can
+    # never keep authenticating back to Cloud.
+    await runtime_workers_store.revoke_active_workers_for_identity(db, cloud_sandbox_id=sandbox.id)
     return await sandbox_store.mark_cloud_sandbox_destroyed(db, sandbox.id)
 
 

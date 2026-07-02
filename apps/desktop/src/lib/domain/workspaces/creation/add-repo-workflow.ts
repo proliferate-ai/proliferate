@@ -35,7 +35,7 @@ export async function runAddRepoWorkflow({
   saveLocalRepoEnvironment,
   unhideRepoRoot,
   openRepoSetupModal,
-}: RunAddRepoWorkflowArgs): Promise<void> {
+}: RunAddRepoWorkflowArgs): Promise<RepoRoot> {
   const runtimeUrl = await ensureRuntimeReady();
   const repoRoot = await resolveRepoRootFromPath(path);
 
@@ -61,4 +61,5 @@ export async function runAddRepoWorkflow({
     sourceRoot: repoRoot.path,
     repoName: resolveRepoName(repoRoot),
   });
+  return repoRoot;
 }

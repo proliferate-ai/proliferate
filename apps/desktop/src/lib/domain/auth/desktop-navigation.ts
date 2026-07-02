@@ -66,7 +66,11 @@ export function desktopNavigationTarget(url: string): string | null {
     (parsed.hostname === "integrations" || parsed.hostname === "plugins" || parsed.hostname === "powers")
     && (parsed.pathname === "" || parsed.pathname === "/")
   ) {
-    return parsed.search ? `/integrations${parsed.search}` : "/integrations";
+    // INTEGRATIONS PARKED: land on Settings (user scope default section) until a
+    // later PR points these deep links at the rebuilt integrations pane.
+    const params = new URLSearchParams(parsed.search);
+    params.set("section", "general");
+    return `/settings?${params.toString()}`;
   }
 
   if (parsed.hostname === "workspaces") {

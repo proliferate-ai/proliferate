@@ -5,7 +5,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import { Cloud, FolderOpen, Link2 } from "lucide-react";
+import { ArrowLeft, Cloud, FolderOpen, Link2 } from "lucide-react";
 
 import {
   Dialog,
@@ -16,12 +16,14 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Switch } from "@proliferate/ui/primitives/Switch";
+import { CloudRepoPicker, type CloudRepoPickerProps } from "./CloudRepoPicker";
 
 /** Which of the three entry options was picked. */
 export type AddRepoFlowOption = "link-local" | "cloud" | "add-local";
 
 export type AddRepoFlowStep =
   | { kind: "entry" }
+  | { kind: "cloud" }
   | {
     kind: "confirm-local";
     path: string;
@@ -35,6 +37,8 @@ export interface AddRepoFlowProps {
   /** True while the local confirm step is committing. */
   confirming?: boolean;
   error?: string | null;
+  /** View model for the cloud step, wired by the host's controller layer. */
+  cloudPicker?: CloudRepoPickerProps | null;
   onPickOption: (option: AddRepoFlowOption) => void;
   onConfirmLocal: (options: { createCloudEnvironment: boolean }) => void;
   onBack: () => void;
@@ -71,15 +75,16 @@ const ENTRY_OPTIONS: EntryOption[] = [
 
 /**
  * Unified add-repository flow (UX_SPEC §4). Entry = three options; local
- * options confirm the picked path and offer the cloud-sandbox mirror prompt.
- * The cloud option is delegated to the caller, which opens the existing
- * cloud repo picker with all of its wiring intact.
+ * options confirm the picked path and offer the cloud-sandbox mirror prompt;
+ * the cloud option runs the authorize → pick → create sequence in place via
+ * CloudRepoPicker, driven by the host's cloudPicker view model.
  */
 export function AddRepoFlow({
   open,
   step,
   confirming = false,
   error = null,
+  cloudPicker = null,
   onPickOption,
   onConfirmLocal,
   onBack,
@@ -94,9 +99,17 @@ export function AddRepoFlow({
         }
       }}
     >
-      <DialogContent className="max-w-[440px] rounded-xl p-4" data-telemetry-block>
+      <DialogContent
+        // Standard modal scrim (ModalShell recipe) so the dialog reads as an
+        // overlay against the workspace, not a floating card.
+        overlayClassName="bg-black/70 backdrop-blur-sm"
+        className="max-w-[440px] rounded-xl p-4"
+        data-telemetry-block
+      >
         {step.kind === "entry" ? (
           <AddRepoEntryStep onPickOption={onPickOption} />
+        ) : step.kind === "cloud" ? (
+          <AddRepoCloudStep cloudPicker={cloudPicker} onBack={onBack} />
         ) : (
           <AddRepoConfirmLocalStep
             path={step.path}
@@ -153,7 +166,7 @@ function AddRepoEntryStep({
               {entry.icon}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-medium leading-5 text-foreground">
+              <span className="block truncate text-ui font-medium leading-5 text-foreground">
                 {entry.label}
               </span>
               <span className="block truncate text-xs leading-[1.45] text-muted-foreground">
@@ -169,6 +182,41 @@ function AddRepoEntryStep({
           </Button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function AddRepoCloudStep({
+  cloudPicker,
+  onBack,
+}: {
+  cloudPicker: CloudRepoPickerProps | null;
+  onBack: () => void;
+}) {
+  return (
+    <div>
+      <DialogHeader>
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="-ml-1 size-6 rounded-md"
+            aria-label="Back"
+            onClick={onBack}
+          >
+            <ArrowLeft size={14} aria-hidden />
+          </Button>
+          <DialogTitle className="text-[15px] font-semibold leading-5">
+            Add a cloud repo
+          </DialogTitle>
+        </div>
+      </DialogHeader>
+      {cloudPicker ? (
+        <div className="mt-3">
+          <CloudRepoPicker {...cloudPicker} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -205,9 +253,9 @@ function AddRepoConfirmLocalStep({
         {path}
       </div>
       {canCreateCloudEnvironment ? (
-        <Label className="mt-3 mb-0 flex items-center justify-between gap-3 rounded-lg border border-border bg-accent/50 px-3 py-2.5 text-[13px] text-foreground">
+        <Label className="mt-3 mb-0 flex items-center justify-between gap-3 rounded-lg border border-border bg-accent/50 px-3 py-2.5 text-ui text-foreground">
           <span className="min-w-0">
-            <span className="block text-[13px] font-medium leading-5 text-foreground">
+            <span className="block text-ui font-medium leading-5 text-foreground">
               Also create this repo in your cloud sandbox?
             </span>
             <span className="block text-xs leading-[1.45] text-muted-foreground">

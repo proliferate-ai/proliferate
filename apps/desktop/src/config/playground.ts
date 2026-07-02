@@ -3,10 +3,17 @@ export type ScenarioKey =
   | "todos-short"
   | "todos-mid"
   | "todos-long"
+  | "todo-strip-with-approval"
   | "execute-approval"
   | "edit-approval"
+  | "interaction-motion"
+  | "interaction-marker-permission"
+  | "interaction-marker-question"
   | "claude-plan-short"
   | "claude-plan-long"
+  | "plan-streaming-upgrade"
+  | "mode-transition"
+  | "carry-out-plan"
   | "pending-prompts-single"
   | "pending-prompts-multi"
   | "pending-prompts-editing"
@@ -68,14 +75,6 @@ export type ScenarioKey =
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagent-wake-card"
-  | "mobility-local-actionable"
-  | "mobility-local-blocked"
-  | "mobility-unpublished-branch"
-  | "mobility-unpushed-commits"
-  | "mobility-out-of-sync-branch"
-  | "mobility-cloud-active"
-  | "mobility-in-flight"
-  | "mobility-failed"
   | "loading-states";
 
 interface Scenario {
@@ -87,10 +86,17 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "todos-short": { label: "Todos (3)" },
   "todos-mid": { label: "Todos (5)" },
   "todos-long": { label: "Todos (12)" },
+  "todo-strip-with-approval": { label: "Todo strip + approval" },
   "execute-approval": { label: "Execute approval" },
   "edit-approval": { label: "Edit approval" },
+  "interaction-motion": { label: "Interaction motion" },
+  "interaction-marker-permission": { label: "Marker + permission" },
+  "interaction-marker-question": { label: "Marker + question" },
   "claude-plan-short": { label: "Plan approval (short)" },
   "claude-plan-long": { label: "Plan approval (long)" },
+  "plan-streaming-upgrade": { label: "Plan streaming upgrade" },
+  "mode-transition": { label: "Mode transition" },
+  "carry-out-plan": { label: "Carry-out receipt" },
   "pending-prompts-single": { label: "Queue (1 row)" },
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
@@ -152,14 +158,6 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
-  "mobility-local-actionable": { label: "Mobility (actionable)" },
-  "mobility-local-blocked": { label: "Mobility (blocked)" },
-  "mobility-unpublished-branch": { label: "Mobility (publish branch)" },
-  "mobility-unpushed-commits": { label: "Mobility (push commits)" },
-  "mobility-out-of-sync-branch": { label: "Mobility (out of sync)" },
-  "mobility-cloud-active": { label: "Mobility (cloud footer)" },
-  "mobility-in-flight": { label: "Mobility (in flight)" },
-  "mobility-failed": { label: "Mobility (failed)" },
   "loading-states": { label: "Loading states" },
 };
 

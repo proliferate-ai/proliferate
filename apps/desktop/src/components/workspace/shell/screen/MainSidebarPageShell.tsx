@@ -31,6 +31,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   });
   const {
     phase: updaterPhase,
+    downloadProgress,
+    restartWhenIdle,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -64,8 +66,15 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
             >
               <SplitPanel className="size-4" />
             </IconButton>
-            {/* Update pill lives in the sidebar bottom account row (§2.5);
-                header only carries it when the sidebar is hidden. */}
+            {/* The update pill's single home is the top-left, next to the
+                sidebar toggle. */}
+            <SidebarUpdatePill
+              phase={updaterPhase}
+              downloadProgress={downloadProgress}
+              restartWhenIdle={restartWhenIdle}
+              onDownloadUpdate={downloadUpdate}
+              onOpenRestartPrompt={openRestartPrompt}
+            />
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -102,6 +111,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
               </IconButton>
               <SidebarUpdatePill
                 phase={updaterPhase}
+                downloadProgress={downloadProgress}
+                restartWhenIdle={restartWhenIdle}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}
               />

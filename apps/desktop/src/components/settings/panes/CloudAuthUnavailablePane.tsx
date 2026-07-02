@@ -16,7 +16,7 @@ export function CloudAuthUnavailablePane() {
       />
 
       <SettingsEmptyState
-        title="GitHub sign-in is unavailable."
+        title="GitHub sign-in is unavailable"
         description={CAPABILITY_COPY.cloudAuthUnavailableDetails}
         action={
           <Button

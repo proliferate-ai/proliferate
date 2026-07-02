@@ -1,21 +1,17 @@
-import type { ReactNode } from "react";
 import { Cloud, Folder, Plus } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsSection } from "../settings/SettingsSection";
-import { SettingsRow } from "../settings/SettingsRow";
+import { SettingsEmptyState } from "../settings/SettingsEmptyState";
 import { SettingsPageHeader } from "../settings/SettingsPageHeader";
-import { SettingsEyebrow } from "../settings/SettingsEyebrow";
+import { SettingsRow } from "../settings/SettingsRow";
+import { SettingsSection } from "../settings/SettingsSection";
 
 export interface CloudEnvironmentListItemView {
   id: string;
   fullName: string;
   description: string;
-  configured: boolean | null;
-  locationState: "local_only" | "local_and_cloud" | "cloud_only";
-  localSourceRoot?: string | null;
-  trackedFileCount?: number | null;
+  cloudStatus?: "pending" | "running" | "ready" | "error" | null;
 }
 
 export interface CloudEnvironmentListProps {
@@ -24,7 +20,7 @@ export interface CloudEnvironmentListProps {
   cloudEnvironments: readonly CloudEnvironmentListItemView[];
   loadingCloudEnvironments?: boolean;
   cloudUnavailableReason?: string | null;
-  onSelectLocalCheckout?: (id: string) => void;
+  cloudErrorMessage?: string | null;
   onSelectCloudEnvironment: (id: string) => void;
   onAddCloudEnvironment?: () => void;
   onRetryCloudEnvironments?: () => void;
@@ -32,123 +28,128 @@ export interface CloudEnvironmentListProps {
 
 export function CloudEnvironmentList({
   title = "Environments",
-  description = "Configure local checkouts and personal cloud environments.",
+  description = "GitHub repositories that run in Proliferate Cloud.",
   cloudEnvironments,
   loadingCloudEnvironments = false,
   cloudUnavailableReason = null,
-  onSelectLocalCheckout,
+  cloudErrorMessage = null,
   onSelectCloudEnvironment,
   onAddCloudEnvironment,
   onRetryCloudEnvironments,
 }: CloudEnvironmentListProps) {
+  const hasItems = cloudEnvironments.length > 0;
+  const unavailableRow = cloudUnavailableReason ? (
+    <SettingsRow
+      label="Cloud environments unavailable"
+      description={cloudUnavailableReason}
+    />
+  ) : null;
+  const errorRow = !cloudUnavailableReason && cloudErrorMessage ? (
+    <SettingsRow
+      label="Couldn't load cloud environments"
+      description={cloudErrorMessage}
+    >
+      {onRetryCloudEnvironments ? (
+        <Button type="button" variant="secondary" size="sm" onClick={onRetryCloudEnvironments}>
+          Retry
+        </Button>
+      ) : null}
+    </SettingsRow>
+  ) : null;
+
   return (
     <section className="space-y-6">
       <SettingsPageHeader title={title} description={description} />
 
-      <section className="space-y-3">
-        <SectionHeading
-          title="Repositories"
-          description="Local checkouts and GitHub repositories configured for Proliferate Cloud."
-          action={onAddCloudEnvironment ? (
-            <Button type="button" size="sm" onClick={onAddCloudEnvironment}>
-              <Plus size={14} />
-              Add GitHub repo
-            </Button>
-          ) : null}
-        />
-        <SettingsSection>
-          {cloudUnavailableReason ? (
-            <SettingsRow
-              label="Cloud environments unavailable"
-              description={cloudUnavailableReason}
-            />
-          ) : loadingCloudEnvironments && cloudEnvironments.length === 0 ? (
-            <SettingsRow label="Repositories" description="Loading..." />
-          ) : cloudEnvironments.length === 0 ? (
-            <SettingsRow
-              label="No repositories"
-              description="Add a local checkout or GitHub repo to use it from Desktop, web, or mobile."
-            />
-          ) : (
-            cloudEnvironments.map((environment) => (
-              <SettingsRow
+      <SettingsSection
+        title="Repositories"
+        description="GitHub repositories configured for Proliferate Cloud."
+      >
+        {hasItems ? (
+          <>
+            {cloudEnvironments.map((environment) => (
+              <EnvironmentRow
                 key={environment.id}
-                label={(
-                  <span className="flex min-w-0 items-center gap-2">
-                    {environment.locationState === "cloud_only" ? (
-                      <Cloud size={14} className="shrink-0 text-muted-foreground" />
-                    ) : (
-                      <Folder size={14} className="shrink-0 text-muted-foreground" />
-                    )}
-                    <span className="truncate">{environment.fullName}</span>
-                  </span>
-                )}
-                description={environmentDescription(environment)}
+                environment={environment}
+                onSelectCloudEnvironment={onSelectCloudEnvironment}
+              />
+            ))}
+            {unavailableRow}
+            {errorRow}
+            {loadingCloudEnvironments ? (
+              <SettingsRow label="Cloud environments" description="Loading…" />
+            ) : null}
+            {onAddCloudEnvironment && !cloudUnavailableReason ? (
+              <Button
+                type="button"
+                variant="unstyled"
+                size="unstyled"
+                onClick={onAddCloudEnvironment}
+                className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-ui-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
               >
-                <div className="flex items-center gap-2">
-                  {environment.localSourceRoot ? (
-                    <Badge tone="neutral">Local</Badge>
-                  ) : null}
-                  {environment.configured !== null ? (
-                    <Badge tone={environment.configured ? "success" : "warning"}>
-                      {environment.configured ? "Cloud enabled" : "Cloud disabled"}
-                    </Badge>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      if (environment.localSourceRoot && onSelectLocalCheckout) {
-                        onSelectLocalCheckout(environment.localSourceRoot);
-                        return;
-                      }
-                      onSelectCloudEnvironment(environment.id);
-                    }}
-                  >
-                    Configure
-                  </Button>
-                </div>
-              </SettingsRow>
-            ))
-          )}
-          {onRetryCloudEnvironments ? (
-            <SettingsRow label="Refresh" description="Reload cloud environment records.">
-              <Button type="button" variant="secondary" size="sm" onClick={onRetryCloudEnvironments}>
-                Retry
+                <Plus className="size-4" />
+                Add cloud environment
               </Button>
-            </SettingsRow>
-          ) : null}
-        </SettingsSection>
-      </section>
+            ) : null}
+          </>
+        ) : unavailableRow ? (
+          unavailableRow
+        ) : errorRow ? (
+          errorRow
+        ) : loadingCloudEnvironments ? (
+          <SettingsEmptyState size="compact" title="Loading environments…" />
+        ) : (
+          <SettingsEmptyState
+            size="full"
+            icon={<Folder />}
+            title="No environments yet"
+            description="Add a GitHub repo to run it in Proliferate Cloud."
+            action={onAddCloudEnvironment ? (
+              <Button type="button" variant="secondary" onClick={onAddCloudEnvironment}>
+                <Plus size={14} />
+                Add cloud environment
+              </Button>
+            ) : undefined}
+          />
+        )}
+      </SettingsSection>
     </section>
   );
 }
 
-function SectionHeading({
-  title,
-  description,
-  action = null,
+function EnvironmentRow({
+  environment,
+  onSelectCloudEnvironment,
 }: {
-  title: string;
-  description: string;
-  action?: ReactNode;
+  environment: CloudEnvironmentListItemView;
+  onSelectCloudEnvironment: (id: string) => void;
 }) {
   return (
-    <div className="flex items-end justify-between gap-3">
-      <div className="min-w-0">
-        <SettingsEyebrow as="h3">{title}</SettingsEyebrow>
-        <p className="mt-1 max-w-2xl text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
-      </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
-    </div>
+    <SettingsRow
+      title={environment.description}
+      label={(
+        <span className="flex min-w-0 items-center gap-2">
+          <Cloud size={14} className="shrink-0 text-muted-foreground" />
+          <span className="truncate">{environment.fullName}</span>
+        </span>
+      )}
+      description={environment.description}
+    >
+      <Badge tone="neutral">Cloud</Badge>
+      {environment.cloudStatus === "error" ? (
+        <Badge tone="destructive">Setup failed</Badge>
+      ) : null}
+      {environment.cloudStatus === "pending" || environment.cloudStatus === "running" ? (
+        <Badge tone="info">Setting up</Badge>
+      ) : null}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => onSelectCloudEnvironment(environment.id)}
+      >
+        Configure
+      </Button>
+    </SettingsRow>
   );
-}
-
-function environmentDescription(environment: CloudEnvironmentListItemView): string {
-  const parts = [environment.description];
-  if ((environment.trackedFileCount ?? 0) > 0) {
-    parts.push(`${environment.trackedFileCount} tracked file${environment.trackedFileCount === 1 ? "" : "s"}`);
-  }
-  return parts.join(" · ");
 }

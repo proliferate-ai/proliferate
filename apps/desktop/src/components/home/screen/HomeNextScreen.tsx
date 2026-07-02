@@ -119,20 +119,22 @@ export function HomeNextScreen() {
           {/* Hero heading (spec §1.1): 28px / 400 / centered; the project name
               is an inline menu trigger with a pill hover fill. */}
           <div className="mb-5 flex flex-col items-center text-center">
-            <h1 className="max-w-full whitespace-pre-wrap text-[28px] font-normal leading-9 text-foreground">
+            <h1 className="max-w-full whitespace-pre-wrap text-hero font-normal text-foreground">
               <span className="group/title inline-block max-w-full">
                 {promptTarget ? (
                   <>
                     {"What should we build in "}
                     <HomeProjectMenu
                       trigger={(
-                        <button
+                        <Button
                           type="button"
+                          variant="unstyled"
+                          size="unstyled"
                           aria-label={`Change project: ${promptTarget}`}
                           className="relative z-0 inline-block cursor-pointer whitespace-pre outline-none after:absolute after:-inset-x-1.5 after:inset-y-0 after:-z-10 after:rounded-xl after:content-[''] hover:after:bg-accent focus-visible:after:bg-accent data-[state=open]:after:bg-accent"
                         >
                           {promptTarget}
-                        </button>
+                        </Button>
                       )}
                       side="bottom"
                       destination={destination}
@@ -228,7 +230,7 @@ export function HomeNextScreen() {
               />
             )}
             modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
-              <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
+              <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-ui-sm text-muted-foreground">
                 <span>{modelAvailabilityNotice.text}</span>
                 {modelAvailabilityNotice.actionLabel ? (
                   <Button

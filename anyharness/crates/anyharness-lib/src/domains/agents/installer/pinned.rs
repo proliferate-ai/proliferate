@@ -347,7 +347,10 @@ mod tests {
 
         let mut targets = BTreeMap::new();
         targets.insert(
-            Platform::detect().expect("platform").registry_key().to_string(),
+            Platform::detect()
+                .expect("platform")
+                .registry_key()
+                .to_string(),
             ResolvedPinTarget {
                 url: format!("file://{}", archive.display()),
                 sha256: sha,
@@ -373,13 +376,19 @@ mod tests {
 
         let storage = artifact_root(&home, &AgentKind::Cursor, &ArtifactRole::AgentProcess)
             .join("registry_binary");
-        assert!(storage.join("pkg/agent").exists(), "entry binary must survive");
+        assert!(
+            storage.join("pkg/agent").exists(),
+            "entry binary must survive"
+        );
         assert!(
             storage.join("pkg/helper").exists(),
             "sibling file must survive — the cursor regression this guards"
         );
         let launcher = std::fs::read_to_string(&result.path).expect("read launcher");
-        assert!(launcher.contains("acp"), "ACP arg must be baked: {launcher}");
+        assert!(
+            launcher.contains("acp"),
+            "ACP arg must be baked: {launcher}"
+        );
         let _ = std::fs::remove_dir_all(&scratch);
     }
 }

@@ -14,7 +14,7 @@ import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 const GIT_REVIEW_TARGET_TRIGGER_CLASS =
-  "h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
+  "h-6 min-w-0 max-w-[8rem] flex-[1_1_7.25rem] gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-sm leading-[18px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 export function GitReviewTargetSelector({
   mode,

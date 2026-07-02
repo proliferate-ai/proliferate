@@ -1,17 +1,16 @@
 import { useEffect, useRef, type ComponentType } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes";
+import { APP_ROUTES } from "@/config/app-routes";
 import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPage";
-import { IntegrationsPage } from "@/pages/IntegrationsPage";
 import { MainPage } from "@/pages/MainPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { WorkflowsPage } from "@/pages/WorkflowsPage";
 import { WorkspacesPage } from "@/pages/WorkspacesPage";
+import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment";
 import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
 type SettingsRouteComponent = ComponentType<{ returnTo?: string }>;
-const LEGACY_POWERS_ROUTE = LEGACY_APP_ROUTES.powers.replace(/^\//u, "");
 
 interface AuthenticatedAppHostProps {
   MainComponent?: MainRouteComponent;
@@ -23,6 +22,7 @@ export function AuthenticatedAppHost({
   SettingsComponent = SettingsPage,
 }: AuthenticatedAppHostProps = {}) {
   useOrganizationSelectionLifecycle();
+  useDesktopWorkerEnrollment();
   const location = useLocation();
   const isSettingsRoute = location.pathname === APP_ROUTES.settings;
   const lastNonSettingsHrefRef = useRef<string>(APP_ROUTES.home);
@@ -58,12 +58,6 @@ export function AuthenticatedAppHost({
       ) : isHomeRoute ? null : (
         <Routes>
           <Route path="setup" element={<Navigate to={APP_ROUTES.home} replace />} />
-          <Route
-            path={LEGACY_POWERS_ROUTE}
-            element={<LegacyRouteRedirect to={APP_ROUTES.integrations} />}
-          />
-          <Route path="plugins" element={<LegacyRouteRedirect to={APP_ROUTES.integrations} />} />
-          <Route path="integrations" element={<IntegrationsPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />

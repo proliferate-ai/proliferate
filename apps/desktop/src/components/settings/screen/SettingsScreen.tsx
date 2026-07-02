@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   SETTINGS_DEFAULT_SECTION,
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
@@ -9,11 +10,8 @@ import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
 import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
-import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
-import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
-import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
@@ -22,19 +20,23 @@ import { OrganizationSecretsPane } from "@/components/settings/panes/Organizatio
 import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
 import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
-// SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
-// import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
 import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
-import { ComputePane } from "@/components/settings/panes/ComputePane";
-import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
+import { RepoActionsPane } from "@/components/settings/panes/repo/RepoActionsPane";
+import { RepoConfigurePane } from "@/components/settings/panes/repo/RepoConfigurePane";
+import { RepoEnvironmentPane } from "@/components/settings/panes/repo/RepoEnvironmentPane";
 import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
 import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { type SettingsFocus } from "@/lib/domain/settings/navigation";
+import {
+  resolveRepoScopeSelection,
+  type RepoScopeSelection,
+  type RepoSettingsContext,
+} from "@/lib/domain/settings/repo-scope-selection";
 import {
   SETTINGS_SCOPE_LABELS,
   SETTINGS_SCOPE_ORDER,
@@ -42,6 +44,7 @@ import {
   getSettingsScopeForSection,
   isSettingsAdminOnlySection,
 } from "@/lib/domain/settings/navigation-presentation";
+import { RepoScopeHeaderControls } from "@/components/settings/screen/RepoScopeHeaderControls";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
 import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScopeTabs";
 import { ArrowLeft } from "lucide-react";
@@ -60,22 +63,49 @@ interface SettingsScreenProps {
   onNavigateHome: () => void;
   onSelectSection: (section: SettingsSection) => void;
   onSelectRepo: (sourceRoot: string) => void;
+  onSelectRepoContext: (context: RepoSettingsContext) => void;
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void;
+}
+
+interface CloudGateFlags {
+  cloudEnabled: boolean;
+  cloudActive: boolean;
+  cloudSignInChecking: boolean;
+  cloudSignInAvailable: boolean;
+}
+
+/** Cloud-gated sections: unavailable build → sign-in states → the pane itself. */
+function renderCloudGatedPane(flags: CloudGateFlags, pane: () => ReactNode): ReactNode {
+  if (!flags.cloudEnabled) {
+    return <CloudUnavailablePane />;
+  }
+  if (flags.cloudActive) {
+    return pane();
+  }
+  if (flags.cloudSignInChecking || flags.cloudSignInAvailable) {
+    return <CloudSignInRequiredPane />;
+  }
+  return <CloudAuthUnavailablePane />;
 }
 
 function renderSettingsSection(
   activeSection: SettingsSection,
-  repository: SettingsRepositoryEntry | null,
-  repositories: SettingsRepositoryEntry[],
+  repoSelection: RepoScopeSelection,
   cloudEnabled: boolean,
   cloudActive: boolean,
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
   focus: SettingsFocus,
-  onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
+  onSelectRepoContext: (context: RepoSettingsContext) => void,
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void,
 ): ReactNode {
+  const cloudGate: CloudGateFlags = {
+    cloudEnabled,
+    cloudActive,
+    cloudSignInChecking,
+    cloudSignInAvailable,
+  };
   if (activeSection === "agent-defaults") {
     return <AgentDefaultsPane />;
   }
@@ -85,26 +115,11 @@ function renderSettingsSection(
   if (activeSection === "appearance") {
     return <AppearancePane />;
   }
-  if (activeSection === "keyboard") {
-    return <KeyboardShortcutsPane />;
-  }
   if (activeSection === "account") {
     return <AccountPane />;
   }
   if (activeSection === "personal-secrets") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <PersonalSecretsPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+    return renderCloudGatedPane(cloudGate, () => <PersonalSecretsPane />);
   }
   if (activeSection === "billing") {
     return <BillingPane />;
@@ -116,121 +131,66 @@ function renderSettingsSection(
     return <OrganizationMembersPane />;
   }
   if (activeSection === "organization-secrets") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <OrganizationSecretsPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
-  if (activeSection === "organization-integrations") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <OrganizationIntegrationsPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+    return renderCloudGatedPane(cloudGate, () => <OrganizationSecretsPane />);
   }
   // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
   // if (activeSection === "organization-limits") {
   //   return <OrganizationBudgetsPane />;
   // }
   if (activeSection === "organization-sso") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <OrganizationSsoPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+    return renderCloudGatedPane(cloudGate, () => <OrganizationSsoPane />);
   }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;
   }
   if (activeSection === "agent-authentication") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
-  // SLACK BOT PARKED: render branch is intentionally disabled with the settings entry point.
-  // if (activeSection === "slack-bot") {
-  //   if (!cloudEnabled) {
-  //     return <CloudUnavailablePane />;
-  //   }
-  //
-  //   if (cloudActive) {
-  //     return <SlackBotPane />;
-  //   }
-  //
-  //   if (cloudSignInChecking) {
-  //     return <CloudSignInRequiredPane />;
-  //   }
-  //
-  //   return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  // }
-  if (activeSection === "compute") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <ComputePane initialTargetId={focus.target ?? null} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+    return renderCloudGatedPane(
+      cloudGate,
+      () => <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />,
+    );
   }
   if (activeSection === "worktrees") {
     return <WorktreesPane />;
   }
-  if (activeSection === "archived-chats") {
-    return <ArchivedChatsPane />;
+  if (activeSection === "repo-actions") {
+    return (
+      <RepoActionsPane
+        repository={repoSelection.repository}
+        context={repoSelection.context}
+        cloudEnabled={cloudEnabled}
+        cloudActive={cloudActive}
+        cloudSignInChecking={cloudSignInChecking}
+        cloudSignInAvailable={cloudSignInAvailable}
+        onSelectRepo={onSelectRepo}
+        onSelectCloudEnvironment={onSelectCloudEnvironment}
+      />
+    );
+  }
+  if (activeSection === "repo-environment") {
+    return (
+      <RepoEnvironmentPane
+        repository={repoSelection.repository}
+        context={repoSelection.context}
+        cloudEnabled={cloudEnabled}
+        cloudActive={cloudActive}
+        cloudSignInChecking={cloudSignInChecking}
+        cloudSignInAvailable={cloudSignInAvailable}
+        onSelectRepo={onSelectRepo}
+        onSelectCloudEnvironment={onSelectCloudEnvironment}
+        onSelectRepoContext={onSelectRepoContext}
+      />
+    );
   }
   return (
-    <EnvironmentsPane
-      repositories={repositories}
-      selectedRepository={repository}
+    <RepoConfigurePane
+      repository={repoSelection.repository}
+      context={repoSelection.context}
       cloudEnabled={cloudEnabled}
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}
-      focus={focus}
-      onSelectRepository={onSelectRepo}
+      onSelectRepo={onSelectRepo}
       onSelectCloudEnvironment={onSelectCloudEnvironment}
-      onBackToList={() => onSelectSection("environments")}
     />
   );
 }
@@ -243,6 +203,7 @@ export function SettingsScreen({
   onNavigateHome,
   onSelectSection,
   onSelectRepo,
+  onSelectRepoContext,
   onSelectCloudEnvironment,
 }: SettingsScreenProps) {
   const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
@@ -253,9 +214,11 @@ export function SettingsScreen({
     checkNow,
     updatesSupported,
   } = useUpdater();
-  const activeRepository = repositories.find(
-    (repository) => repository.sourceRoot === activeRepoSourceRoot,
-  ) ?? null;
+  const repoSelection = resolveRepoScopeSelection({
+    repositories,
+    activeRepoSourceRoot,
+    focus,
+  });
   const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
   const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
   const shouldRedirectAdminSection =
@@ -298,14 +261,16 @@ export function SettingsScreen({
           className="flex h-10 items-center gap-2 pl-[82px] pr-3"
           data-tauri-drag-region="true"
         >
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={onNavigateHome}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-ui text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
             {SETTINGS_COPY.back}
-          </button>
+          </Button>
         </div>
         <div className="flex h-[46px] items-center gap-4 px-4">
           <SettingsScopeTabs
@@ -316,6 +281,18 @@ export function SettingsScreen({
             value={activeScope}
             onChange={handleScopeChange}
           />
+          <div className="ml-auto flex items-center gap-2.5">
+            {activeScope === "repo" ? (
+              <RepoScopeHeaderControls
+                repositories={repositories}
+                activeRepoSourceRoot={activeRepoSourceRoot}
+                focus={focus}
+                onSelectRepo={onSelectRepo}
+                onSelectRepoContext={onSelectRepoContext}
+                onSelectCloudEnvironment={onSelectCloudEnvironment}
+              />
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -330,18 +307,12 @@ export function SettingsScreen({
           onSelectSection={onSelectSection}
           disabledSections={{
             "agent-authentication": !cloudEnabled,
-            "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,
-            compute: !cloudEnabled,
             "personal-secrets": !cloudEnabled,
-            // SLACK BOT PARKED: section is not registered while the flow is disabled.
-            // "slack-bot": !cloudEnabled,
           }}
           onCheckForUpdates={() => { void checkNow(); }}
           updateActionState={{
-            isChecking: phase === "checking",
-            hasAvailableUpdate: phase === "available" || phase === "ready",
             phase,
             updatesSupported,
           }}
@@ -350,25 +321,20 @@ export function SettingsScreen({
         <div className="relative min-w-0 flex-1 bg-background">
           <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-10">
             <div className="flex justify-center pb-8">
-              <div
-                className={`w-full space-y-6 ${
-                  effectiveActiveSection === "worktrees"
-                    ? "max-w-[58rem]"
-                    : "max-w-[50rem]"
-                }`}
-              >
+              {/* The single settings page-width contract: panes never set their
+                  own max-w — they inherit this container's. */}
+              <div className="w-full max-w-[50rem] space-y-6">
                 <SettingsContentBoundary section={effectiveActiveSection}>
                   {renderSettingsSection(
                     effectiveActiveSection,
-                    activeRepository,
-                    repositories,
+                    repoSelection,
                     cloudEnabled,
                     cloudActive,
                     cloudSignInChecking,
                     cloudSignInAvailable,
                     focus,
-                    onSelectSection,
                     onSelectRepo,
+                    onSelectRepoContext,
                     onSelectCloudEnvironment,
                   )}
                 </SettingsContentBoundary>

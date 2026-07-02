@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { SidebarFooter } from "./SidebarFooter";
+import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
 import { SidebarPrimaryNavigation } from "./SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "./SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
@@ -100,7 +100,6 @@ export const MainSidebar = memo(function MainSidebar() {
     restoreCloudWorkspace: restoreCloudWorkspaceRequest,
   } = useCloudWorkspaceActions();
 
-  const isOnIntegrations = location.pathname === APP_ROUTES.integrations;
   const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
   const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
@@ -266,7 +265,7 @@ export const MainSidebar = memo(function MainSidebar() {
     <DebugProfiler id="workspace-sidebar">
       <ProductSidebarFrame footer={(
         <DebugProfiler id="workspace-sidebar-footer">
-          <SidebarFooter />
+          <SidebarAccountFooter />
         </DebugProfiler>
       )}>
       <ProductSidebarBody>
@@ -274,12 +273,10 @@ export const MainSidebar = memo(function MainSidebar() {
           <SidebarPrimaryNavigation
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
             workspacesActive={isOnWorkspaces}
-            integrationsActive={isOnIntegrations}
             workflowsActive={isOnWorkflows}
             supportActive={false}
             onGoHome={actions.handleGoHome}
             onGoWorkspaces={actions.handleGoWorkspaces}
-            onGoIntegrations={actions.handleGoIntegrations}
             onGoWorkflows={actions.handleGoWorkflows}
             onOpenSupport={handleOpenSupport}
             shortcutRevealVisible={shortcutRevealVisible}
@@ -322,6 +319,7 @@ export const MainSidebar = memo(function MainSidebar() {
               onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
               onIndicatorAction={actions.handleSidebarIndicatorAction}
+              onOpenPullRequest={actions.handleOpenPullRequest}
               onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
               onWorkspaceHover={handleWorkspaceHover}
               shortcutRevealVisible={shortcutRevealVisible}

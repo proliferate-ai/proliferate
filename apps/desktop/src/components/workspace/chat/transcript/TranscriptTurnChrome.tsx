@@ -1,8 +1,23 @@
 import type { ReactNode } from "react";
-import { CircleQuestion, Sparkles } from "@proliferate/ui/icons";
+import {
+  CircleQuestion,
+  MessageCircleQuestion,
+  Sparkles,
+} from "@proliferate/ui/icons";
+import type { PendingInteraction } from "@anyharness/sdk";
 import { CopyMessageButton } from "@/components/workspace/chat/transcript/CopyMessageButton";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
+import { CHAT_STREAMING_STATUS_LABELS } from "@/copy/chat/chat-copy";
+import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+
+/**
+ * The two interaction shapes that get a distinct transcript marker while the
+ * agent waits on the user: a tool/plan approval (Permission) and an
+ * AskUserQuestion / MCP elicitation (Question). Threaded from the composer's
+ * primary pending interaction; null when the kind is unknown (e.g. plan-owned).
+ */
+export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
@@ -68,15 +83,19 @@ export function resolvePendingPromptTrailingStatus(
 ): ReactNode {
   if (sessionViewState === "needs_input") {
     return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <CircleQuestion className="size-3.5 shrink-0 text-muted-foreground" />
-        <span>Waiting for your input</span>
-      </div>
+      <TrailingStatusCrossfade statusKey="needs-input">
+        <ConnectedPendingInteractionMarker />
+      </TrailingStatusCrossfade>
     );
   }
 
   if (forceWorking || sessionViewState === "working") {
-    return <StreamingIndicator startedAt={queuedAt} />;
+    // Outbox / launch dispatch — the truthful voice is "Sending…", not "Thinking".
+    return (
+      <TrailingStatusCrossfade statusKey="sending">
+        <StreamingIndicator startedAt={queuedAt} label={CHAT_STREAMING_STATUS_LABELS.sending} />
+      </TrailingStatusCrossfade>
+    );
   }
 
   return null;
@@ -89,32 +108,114 @@ export function resolveTurnTrailingStatus(
 ): ReactNode {
   // Every variant renders inside the same fixed-height row as the reserved
   // assistant action slot, so swapping between "Thinking…", a transient status,
-  // and the copy-button slot never shifts the content above it.
+  // and the needs-input marker never shifts the content above it. The three
+  // states share one crossfade container: a state change fades the new content
+  // in over 150ms (opacity only) instead of a hard swap.
   if (sessionViewState === "working" && transientStatusText) {
     return (
-      <div className={`flex items-center gap-2 text-xs text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
+      <TrailingStatusCrossfade
+        statusKey="transient"
+        className={`gap-2 text-ui-sm leading-[var(--text-ui-sm--line-height)] text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+      >
         <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate">{transientStatusText}</span>
-      </div>
+      </TrailingStatusCrossfade>
     );
   }
 
   if (sessionViewState === "working") {
     return (
-      <div className={`flex items-center ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
+      <TrailingStatusCrossfade statusKey="working" className={ASSISTANT_ACTION_SLOT_HEIGHT}>
         <StreamingIndicator startedAt={startedAt} />
-      </div>
+      </TrailingStatusCrossfade>
     );
   }
 
   if (sessionViewState === "needs_input") {
     return (
-      <div className={`flex items-center gap-2 text-xs text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
-        <CircleQuestion className="size-3.5 shrink-0 text-muted-foreground" />
-        <span>Waiting for your input</span>
-      </div>
+      <TrailingStatusCrossfade statusKey="needs-input" className={ASSISTANT_ACTION_SLOT_HEIGHT}>
+        <ConnectedPendingInteractionMarker />
+      </TrailingStatusCrossfade>
     );
   }
 
   return null;
+}
+
+// Single container for the three trailing states. `key` forces a remount on a
+// real state change (the crossfade replays), while same-state re-renders — the
+// elapsed second ticking, a transient string re-wording — reconcile in place
+// with no re-animation. Compositor-only (opacity), motion-safe.
+function TrailingStatusCrossfade({
+  statusKey,
+  className,
+  children,
+}: {
+  statusKey: string;
+  className?: string;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <div
+      key={statusKey}
+      data-trailing-status={statusKey}
+      className={`flex items-center motion-safe:animate-status-crossfade ${className ?? ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Reads the composer's primary pending interaction so the transcript marker can
+// name WHAT is awaiting the user (Permission vs Question) rather than a generic
+// "waiting" row. Kept a thin wrapper so the presentation stays pure/testable.
+function ConnectedPendingInteractionMarker(): ReactNode {
+  const { primaryPendingInteraction } = useActivePendingInteractionState();
+  return (
+    <PendingInteractionMarkerView
+      kind={pendingInteractionMarkerKind(primaryPendingInteraction?.kind)}
+    />
+  );
+}
+
+export function pendingInteractionMarkerKind(
+  interactionKind: PendingInteraction["kind"] | undefined,
+): PendingInteractionMarkerKind | null {
+  if (interactionKind === "permission") {
+    return "permission";
+  }
+  if (interactionKind === "user_input" || interactionKind === "mcp_elicitation") {
+    return "question";
+  }
+  return null;
+}
+
+// Superset-style two-part marker: a kind icon + label, then an "Awaiting
+// response" caption. Replaces the old 8px CircleQuestion "Waiting for your
+// input" row.
+export function PendingInteractionMarkerView({
+  kind,
+}: {
+  kind: PendingInteractionMarkerKind | null;
+}): ReactNode {
+  const { Icon, label } =
+    kind === "permission"
+      ? { Icon: MessageCircleQuestion, label: "Permission" }
+      : kind === "question"
+        ? { Icon: MessageCircleQuestion, label: "Question" }
+        : { Icon: CircleQuestion, label: null };
+
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground">
+      <Icon className="size-3.5 shrink-0" />
+      {label && (
+        <span className="text-ui font-medium leading-[var(--text-ui--line-height)] text-foreground">
+          {label}
+        </span>
+      )}
+      <span className="text-ui-sm uppercase leading-[var(--text-ui-sm--line-height)] tracking-wide text-muted-foreground">
+        Awaiting response
+      </span>
+    </div>
+  );
 }

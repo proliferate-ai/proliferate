@@ -8,16 +8,13 @@ import {
   resolveSessionControlPresentation,
   type ConfiguredSessionControlValue,
   type SessionControlIconKey,
-  type SessionControlTone,
 } from "@proliferate/product-domain/chats/session-controls/presentation";
 import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
 
-export type SessionModeTone = SessionControlTone;
 export type SessionModeIconKey = SessionControlIconKey;
 
 export interface SessionModePresentation {
   icon: SessionModeIconKey | null;
-  tone: SessionModeTone;
   shortLabel?: string | null;
 }
 

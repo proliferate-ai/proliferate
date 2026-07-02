@@ -19,15 +19,6 @@ export const APP_SHORTCUTS = {
     match: { kind: "fixed-code", code: "Comma", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
-  goPlugins: {
-    id: "app.go-plugins",
-    label: "⌘P",
-    nonMacLabel: "Ctrl+P",
-    description: "Go to integrations",
-    owner: "js",
-    match: { kind: "fixed-code", code: "KeyP", meta: true, shift: false, alt: false },
-    allowInInputs: false,
-  },
   goAutomations: {
     id: "app.go-automations",
     label: "⌘U",
@@ -58,12 +49,13 @@ export const APP_SHORTCUTS = {
   },
   showKeyboardShortcuts: {
     id: "app.show-keyboard-shortcuts",
-    label: "⌘?",
-    nonMacLabel: "Ctrl+?",
+    label: "⌘/",
+    nonMacLabel: "Ctrl+/",
     description: "Show keyboard shortcuts",
     owner: "js",
-    match: { kind: "fixed-code", code: "Slash", meta: true, shift: true, alt: false },
-    allowInInputs: true,
+    match: { kind: "fixed-code", code: "Slash", meta: true, shift: false, alt: false },
+    // false so editable surfaces keep Mod-/ (e.g. CodeMirror toggleComment).
+    allowInInputs: false,
   },
   increaseWindowZoom: {
     id: "app.increase-window-zoom",

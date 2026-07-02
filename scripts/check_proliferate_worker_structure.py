@@ -8,37 +8,38 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKER_SRC = REPO_ROOT / "anyharness" / "crates" / "proliferate-worker" / "src"
 
+# The worker is deliberately slim post gateway-token rebuild: enroll once,
+# write the integration-gateway dotfile, heartbeat. The old command/tail/
+# reconcile/update machinery must not return.
 BLOCKED_PATHS = (
     WORKER_SRC / "commands",
     WORKER_SRC / "sync",
     WORKER_SRC / "updates",
+    WORKER_SRC / "control",
+    WORKER_SRC / "tail",
+    WORKER_SRC / "inventory.rs",
 )
 
 REQUIRED_FILES = (
-    WORKER_SRC / "control" / "loop.rs",
-    WORKER_SRC / "control" / "commands" / "executor.rs",
-    WORKER_SRC / "control" / "commands" / "mapping.rs",
-    WORKER_SRC / "control" / "reconcile" / "manager.rs",
-    WORKER_SRC / "control" / "reconcile" / "handlers" / "exposures.rs",
-    WORKER_SRC / "tail" / "loop.rs",
-    WORKER_SRC / "tail" / "cursors.rs",
-    WORKER_SRC / "tail" / "mapping.rs",
-    WORKER_SRC / "tail" / "backfill.rs",
+    WORKER_SRC / "cloud_client" / "mod.rs",
+    WORKER_SRC / "cloud_client" / "auth.rs",
+    WORKER_SRC / "cloud_client" / "heartbeat.rs",
+    WORKER_SRC / "identity" / "mod.rs",
+    WORKER_SRC / "identity" / "credentials.rs",
+    WORKER_SRC / "identity" / "enrollment.rs",
+    WORKER_SRC / "identity" / "fingerprint.rs",
+    WORKER_SRC / "integration_gateway.rs",
     WORKER_SRC / "lifecycle" / "heartbeat.rs",
-    WORKER_SRC / "lifecycle" / "self_update.rs",
-    WORKER_SRC / "lifecycle" / "supervisor_mailbox.rs",
-    WORKER_SRC / "store" / "applied_revisions.rs",
     WORKER_SRC / "store" / "connection.rs",
-    WORKER_SRC / "store" / "exposure_cache.rs",
     WORKER_SRC / "store" / "identity.rs",
     WORKER_SRC / "store" / "migrations.rs",
-    WORKER_SRC / "store" / "pending_command_results.rs",
-    WORKER_SRC / "store" / "tail_mappings.rs",
-    WORKER_SRC / "store" / "up_cursor.rs",
+    WORKER_SRC / "config.rs",
+    WORKER_SRC / "process_lock.rs",
+    WORKER_SRC / "runtime.rs",
 )
 
-BLOCKED_IMPORT_RE = re.compile(r"\bcrate::(?:commands|sync|updates)\b")
-BLOCKED_ROOT_MOD_RE = re.compile(r"^\s*mod\s+(?:commands|sync|updates)\s*;")
+BLOCKED_IMPORT_RE = re.compile(r"\bcrate::(?:commands|sync|updates|control|tail|inventory)\b")
+BLOCKED_ROOT_MOD_RE = re.compile(r"^\s*mod\s+(?:commands|sync|updates|control|tail|inventory)\s*;")
 
 
 def main() -> int:

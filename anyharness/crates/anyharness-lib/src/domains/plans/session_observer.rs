@@ -48,10 +48,10 @@ use std::sync::Arc;
 
 use crate::domains::plans::model::NewPlan;
 use crate::domains::plans::service::{PlanCreateError, PlanEventContext, PlanService};
+use crate::live::sessions::model::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
 use crate::live::sessions::model::{
     ObserverEffects, SessionEventObserver, SessionObservation, SessionObserverContext,
 };
-use crate::live::sessions::model::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
 
 /// Detects completed plans in live-session traffic and ingests them through
 /// [`PlanService`], returning the persisted envelopes for sink publication.
@@ -250,10 +250,7 @@ impl SessionEventObserver for PlanSessionObserver {
             }
             SessionObservation::ToolCall { payload, .. } => {
                 let meta = parse_proposed_plan_meta(payload.meta.as_ref());
-                let is_exit_plan = meta
-                    .claude_code
-                    .and_then(|meta| meta.tool_name)
-                    .as_deref()
+                let is_exit_plan = meta.claude_code.and_then(|meta| meta.tool_name).as_deref()
                     == Some("ExitPlanMode");
                 is_exit_plan
                     && payload

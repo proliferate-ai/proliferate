@@ -7,7 +7,7 @@ function Table({ className, ...props }: ComponentProps<"table">) {
     <div data-slot="table-container" className="relative w-full overflow-x-auto">
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-[13px]", className)}
+        className={cn("w-full caption-bottom text-ui", className)}
         {...props}
       />
     </div>
@@ -56,7 +56,7 @@ function TableHead({ className, ...props }: ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-8 px-2 text-left align-middle font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground",
+        "h-8 px-2 text-left align-middle font-mono text-base font-medium uppercase tracking-[0.06em] text-muted-foreground",
         className,
       )}
       {...props}
@@ -68,7 +68,7 @@ function TableCell({ className, ...props }: ComponentProps<"td">) {
   return (
     <td
       data-slot="table-cell"
-      className={cn("px-2 py-2.5 align-middle text-[13px] text-foreground", className)}
+      className={cn("px-2 py-2.5 align-middle text-ui text-foreground", className)}
       {...props}
     />
   );
@@ -78,7 +78,7 @@ function TableCaption({ className, ...props }: ComponentProps<"caption">) {
   return (
     <caption
       data-slot="table-caption"
-      className={cn("mt-3 text-[12px] text-muted-foreground", className)}
+      className={cn("mt-3 text-ui-sm text-muted-foreground", className)}
       {...props}
     />
   );

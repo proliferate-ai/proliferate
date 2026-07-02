@@ -3,6 +3,25 @@
 @source "../../../product-ui/src";
 @import "../theme.css";
 
+/* -- Semantic UI type-scale tokens (shared by web + desktop; desktop.css
+      imports this file). Values are the desktop "UI font size" default
+      preset: applyAppearancePreference() re-writes every --text-* token on
+      :root at boot from UI_FONT_SCALES (appearance.ts), so these build-time
+      defaults MUST match that table's default preset — drift-locked by
+      appearance-css-drift.test.ts in apps/desktop. -- */
+@theme {
+  --text-ui: 13px;                    /* rows, pills, controls, popover items, menus, card titles */
+  --text-ui--line-height: 18px;       /* font size + 5px */
+  --text-ui-sm: 12px;                 /* descriptions, secondary labels, notices, meta */
+  --text-ui-sm--line-height: 16px;    /* font size + 4px */
+  --text-composer: 14px;              /* composer input text only */
+  --text-composer--line-height: 22px; /* font size + 8px */
+  --text-title: 20px;                 /* page/settings titles (SettingsPageHeader pairing) */
+  --text-title--line-height: 24px;    /* 1.2 × font size */
+  --text-hero: 28px;                  /* home hero heading */
+  --text-hero--line-height: 36px;     /* font size + 8px */
+}
+
 :root {
   color-scheme: dark;
   font-family:
@@ -112,25 +131,44 @@ body {
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
-/* ---- Streaming text fade (UX_SPEC §13) ----
-   Shared with desktop.css: per-block 200ms opacity fade while streaming;
-   the class is only attached during live streams so history never replays. */
-@keyframes streaming-fade {
+/* ---- Skeleton shimmer (codex block shimmer) ----
+   Loading blocks share one motion family with the thinking-text sweep in
+   desktop.css: a soft gradient band travelling left→right via transform
+   (compositor-only — never background-position). Stagger sibling rows by
+   setting the --shimmer-delay custom property per row. */
+@keyframes skeleton-shimmer-sweep {
   from {
-    opacity: 0;
+    transform: translateX(-100%);
   }
   to {
-    opacity: 1;
+    transform: translateX(100%);
   }
 }
 
-.animate-streaming-fade {
-  animation: streaming-fade var(--streaming-fade-duration, 200ms)
-    var(--streaming-fade-easing, cubic-bezier(0.37, 0.55, 0.86, 0.88));
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-muted-foreground) 16%, transparent) 50%,
+    transparent 100%
+  );
+  will-change: transform;
+  transform: translateX(-100%);
+  animation: skeleton-shimmer-sweep 3s linear infinite;
+  animation-delay: var(--shimmer-delay, 0s);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-streaming-fade {
+  .skeleton-shimmer::before {
     animation: none;
   }
 }

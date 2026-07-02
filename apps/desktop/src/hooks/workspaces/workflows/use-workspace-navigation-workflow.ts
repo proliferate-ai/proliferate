@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { logicalWorkspaceMatchesId } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
@@ -27,7 +26,6 @@ export function useWorkspaceNavigationWorkflow() {
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
-  const mobility = useWorkspaceMobilityState();
   const { selectWorkspace } = useWorkspaceSelection();
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const { openExternal } = useTauriShellActions();
@@ -40,11 +38,6 @@ export function useWorkspaceNavigationWorkflow() {
   }, [location.pathname, navigate]);
 
   const goToTopLevelRoute = useCallback((path: string) => {
-    if (mobility.selectionLocked) {
-      showToast("Finish the current workspace move before leaving this workspace.");
-      return;
-    }
-
     if (selectedWorkspaceId || selectedLogicalWorkspaceId || pendingWorkspaceEntry) {
       deselectWorkspacePreservingSessions();
       resetWorkspaceEditorState();
@@ -52,12 +45,10 @@ export function useWorkspaceNavigationWorkflow() {
     navigate(path);
   }, [
     deselectWorkspacePreservingSessions,
-    mobility.selectionLocked,
     navigate,
     pendingWorkspaceEntry,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
-    showToast,
   ]);
 
   const selectWorkspaceFromSurface = useCallback((workspaceId: string, source: string) => {
@@ -76,13 +67,8 @@ export function useWorkspaceNavigationWorkflow() {
       return;
     }
 
-    if (mobility.selectionLocked && workspaceId !== mobility.selectedLogicalWorkspaceId) {
-      showToast("Finish the current workspace move before switching workspaces.");
-      return;
-    }
-
     navigateToWorkspaceShell();
-    if (workspaceId === mobility.selectedLogicalWorkspaceId) {
+    if (workspaceId === selectedLogicalWorkspaceId) {
       markWorkspaceViewed(workspaceId);
     }
     const latencyFlowId = startLatencyFlow({
@@ -97,10 +83,9 @@ export function useWorkspaceNavigationWorkflow() {
     });
   }, [
     logicalWorkspaces,
-    mobility.selectedLogicalWorkspaceId,
-    mobility.selectionLocked,
     navigateToWorkspaceShell,
     openExternal,
+    selectedLogicalWorkspaceId,
     selectWorkspace,
     showToast,
   ]);

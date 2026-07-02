@@ -1,24 +1,10 @@
-pub mod agent_auth;
 pub mod auth;
-pub mod backfill;
-pub mod catalogs;
-pub mod commands;
-pub mod control;
-pub mod events;
-pub mod exposures;
-pub mod github_credentials;
 pub mod heartbeat;
-pub mod inventory;
-pub mod revoked_jti;
-pub mod target_config;
-pub mod target_git_identity;
-pub mod updates;
 
 use std::time::Duration;
 
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::{config::WorkerConfig, error::WorkerError};
 
@@ -32,83 +18,52 @@ pub struct CloudClient {
 #[serde(rename_all = "camelCase")]
 pub struct EnrollRequest {
     pub enrollment_token: String,
-    pub machine_fingerprint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub machine_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hostname: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub worker_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub anyharness_version: Option<String>,
-    pub supervisor_version: Option<String>,
-    pub inventory: InventoryPayload,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnrollResponse {
-    pub target_id: String,
     pub worker_id: String,
     pub worker_token: String,
     pub heartbeat_interval_seconds: u64,
+    #[serde(rename = "integrationGateway")]
+    pub integration_gateway: IntegrationGatewayConfig,
+}
+
+/// Integration-gateway coordinates handed to the worker on enroll; written to
+/// the integration-gateway dotfile for the runtime to consume.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationGatewayConfig {
+    pub url: String,
+    pub authorization: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HeartbeatRequest {
-    pub status: String,
-    pub status_detail: Option<String>,
-    pub worker_version: Option<String>,
-    pub anyharness_version: Option<String>,
-    pub supervisor_version: Option<String>,
-    /// Agent catalog version last successfully pushed into the runtime
-    /// (fleet observability; the cloud accepts but may ignore it).
-    pub catalog_version: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct DesiredVersions {
-    pub should_update: bool,
-    pub update_channel: String,
-    pub update_generation: i64,
-    pub anyharness_version: Option<String>,
-    pub worker_version: Option<String>,
-    pub supervisor_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct HeartbeatResponse {
-    pub target_id: String,
     pub worker_id: String,
-    pub status: String,
-    pub server_time: String,
-    pub desired_versions: DesiredVersions,
-    /// `catalogVersion` of the agent catalog the cloud currently serves;
-    /// absent on servers that predate heartbeat convergence.
+    // The server acknowledges liveness without echoing a status; keep this
+    // optional so a minimal ack body still deserializes.
     #[serde(default)]
-    pub catalog_version: Option<String>,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct InventoryPayload {
-    pub os: Option<String>,
-    pub arch: Option<String>,
-    pub distro: Option<String>,
-    pub shell: Option<String>,
-    pub git: Option<Value>,
-    pub node: Option<Value>,
-    pub python: Option<Value>,
-    pub browser: Option<Value>,
-    pub capabilities: Option<Value>,
-    pub providers: Option<Value>,
-    pub mcp: Option<Value>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InventoryRequest {
-    #[serde(flatten)]
-    pub inventory: InventoryPayload,
-    pub status: String,
-    pub status_detail: Option<String>,
+    pub status: Option<String>,
+    #[serde(default)]
+    pub server_time: Option<String>,
 }
 
 impl CloudClient {
@@ -151,24 +106,6 @@ impl CloudClient {
             .await?;
         parse_json_response(response).await
     }
-
-    pub async fn upload_inventory(
-        &self,
-        worker_token: &str,
-        request: &InventoryRequest,
-    ) -> Result<(), WorkerError> {
-        let response = self
-            .http
-            .post(format!("{}/v1/cloud/worker/inventory", self.base_url))
-            .header(
-                reqwest::header::AUTHORIZATION,
-                auth::bearer_header(worker_token),
-            )
-            .json(request)
-            .send()
-            .await?;
-        parse_empty_response(response).await
-    }
 }
 
 async fn parse_json_response<T: DeserializeOwned>(
@@ -182,70 +119,42 @@ async fn parse_json_response<T: DeserializeOwned>(
     Ok(response.json().await?)
 }
 
-async fn parse_empty_response(response: reqwest::Response) -> Result<(), WorkerError> {
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        return Err(WorkerError::Cloud { status, body });
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::HeartbeatResponse;
+    use super::{EnrollResponse, HeartbeatResponse};
 
     #[test]
-    fn heartbeat_response_rejects_missing_required_fields() {
-        let error = serde_json::from_slice::<HeartbeatResponse>(b"{}")
-            .expect_err("missing desiredVersions should fail");
-        assert!(error.to_string().contains("targetId"));
-    }
-
-    #[test]
-    fn heartbeat_response_catalog_version_is_optional_and_parsed() {
-        let without = br#"{
-            "targetId": "target",
+    fn enroll_response_parses_integration_gateway() {
+        let payload = br#"{
             "workerId": "worker",
-            "status": "online",
-            "serverTime": "2026-06-10T00:00:00Z",
-            "desiredVersions": {
-                "shouldUpdate": false,
-                "updateChannel": "stable",
-                "updateGeneration": 0
+            "workerToken": "token",
+            "heartbeatIntervalSeconds": 30,
+            "integrationGateway": {
+                "url": "http://127.0.0.1:8300",
+                "authorization": "Bearer gw-secret"
             }
         }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(without)
-            .expect("pre-convergence servers omit catalogVersion");
-        assert_eq!(response.catalog_version, None);
-
-        let with = br#"{
-            "targetId": "target",
-            "workerId": "worker",
-            "status": "online",
-            "serverTime": "2026-06-10T00:00:00Z",
-            "desiredVersions": {
-                "shouldUpdate": false,
-                "updateChannel": "stable",
-                "updateGeneration": 0
-            },
-            "catalogVersion": "2026-06-10.6"
-        }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(with)
-            .expect("catalogVersion-carrying response");
-        assert_eq!(response.catalog_version.as_deref(), Some("2026-06-10.6"));
+        let response = serde_json::from_slice::<EnrollResponse>(payload)
+            .expect("enroll response with integrationGateway");
+        assert_eq!(response.worker_id, "worker");
+        assert_eq!(response.worker_token, "token");
+        assert_eq!(response.heartbeat_interval_seconds, 30);
+        assert_eq!(response.integration_gateway.url, "http://127.0.0.1:8300");
+        assert_eq!(response.integration_gateway.authorization, "Bearer gw-secret");
     }
 
     #[test]
-    fn heartbeat_response_rejects_missing_desired_versions() {
+    fn heartbeat_response_parses_minimal_ack() {
+        // Mirrors the real server body: workerId + serverTime + interval, no status.
         let payload = br#"{
-            "targetId": "target",
             "workerId": "worker",
-            "status": "online",
-            "serverTime": "2026-05-14T00:00:00Z"
+            "serverTime": "2026-07-01T00:00:00Z",
+            "heartbeatIntervalSeconds": 30
         }"#;
-        let error = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect_err("missing desiredVersions should fail");
-        assert!(error.to_string().contains("desiredVersions"));
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("minimal heartbeat ack");
+        assert_eq!(response.worker_id, "worker");
+        assert_eq!(response.status, None);
+        assert_eq!(response.server_time.as_deref(), Some("2026-07-01T00:00:00Z"));
     }
 }

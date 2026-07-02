@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 interface ToggleProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   pressed?: boolean;

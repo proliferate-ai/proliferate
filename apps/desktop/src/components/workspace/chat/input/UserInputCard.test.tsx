@@ -35,6 +35,40 @@ const SECRET_ONLY: UserInputQuestion[] = [{
   options: [],
 }];
 
+const SINGLE_OPTION: UserInputQuestion[] = [{
+  questionId: "provider",
+  header: "Choose provider",
+  question: "Which model provider should this workspace use?",
+  isOther: false,
+  isSecret: false,
+  options: [
+    { label: "OpenAI", description: "Use the default OpenAI-backed model stack." },
+    { label: "Anthropic", description: "Use the Claude-backed model stack." },
+  ],
+}];
+
+const MULTI_QUESTION: UserInputQuestion[] = [
+  {
+    questionId: "workspace",
+    header: "Workspace",
+    question: "Where should the agent run the next task?",
+    isOther: false,
+    isSecret: false,
+    options: [
+      { label: "Local worktree", description: "Use the current local checkout." },
+      { label: "Cloud workspace", description: "Launch in the hosted runtime." },
+    ],
+  },
+  {
+    questionId: "notes",
+    header: "Extra context",
+    question: "Any extra constraints for the follow-up session?",
+    isOther: false,
+    isSecret: false,
+    options: [],
+  },
+];
+
 describe("UserInputCard", () => {
 
   afterEach(() => {
@@ -67,7 +101,7 @@ describe("UserInputCard", () => {
     }]);
   });
 
-  it("does not submit stale custom text after switching back to a normal option", () => {
+  it("auto-submits the chosen option and drops stale custom text", () => {
     const onSubmit = vi.fn<(answers: UserInputSubmittedAnswer[]) => void>();
     render(
       <UserInputCard
@@ -82,17 +116,71 @@ describe("UserInputCard", () => {
     fireEvent.change(screen.getByPlaceholderText("Write a custom answer"), {
       target: { value: "Ignore the listed choices." },
     });
+
+    // Choosing a concrete agent option is a complete answer: it auto-submits
+    // (this is the only question) and the stale custom text is not carried.
     fireEvent.click(screen.getByRole("button", { name: /Small safe patch/i }));
 
-    expect(screen.queryByPlaceholderText("Write a custom answer")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
-
+    expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith([{
       questionId: "strategy",
       selectedOptionLabel: "Small safe patch",
       text: undefined,
     }]);
+    expect(screen.queryByPlaceholderText("Write a custom answer")).toBeNull();
+  });
+
+  it("auto-submits a single-select question when an option is clicked", () => {
+    const onSubmit = vi.fn<(answers: UserInputSubmittedAnswer[]) => void>();
+    render(
+      <UserInputCard
+        title="Choose provider"
+        questions={SINGLE_OPTION}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /OpenAI/i }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith([{
+      questionId: "provider",
+      selectedOptionLabel: "OpenAI",
+      text: undefined,
+    }]);
+  });
+
+  it("auto-advances mid-wizard without submitting, keeping Back available", () => {
+    const onSubmit = vi.fn<(answers: UserInputSubmittedAnswer[]) => void>();
+    render(
+      <UserInputCard
+        title="Answer questions"
+        questions={MULTI_QUESTION}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("1 of 2")).toBeTruthy();
+    // Choosing an option on the first question advances rather than submits.
+    fireEvent.click(screen.getByRole("button", { name: /Local worktree/i }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("2 of 2")).toBeTruthy();
+    expect(screen.getByText("Any extra constraints for the follow-up session?")).toBeTruthy();
+    // Back stays available so the user can revise the earlier answer.
+    expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText("Enter your answer"), {
+      target: { value: "Keep it minimal." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(onSubmit).toHaveBeenCalledWith([
+      { questionId: "workspace", selectedOptionLabel: "Local worktree", text: undefined },
+      { questionId: "notes", selectedOptionLabel: undefined, text: "Keep it minimal." },
+    ]);
   });
 
   it("keeps freeform-only questions editable", () => {

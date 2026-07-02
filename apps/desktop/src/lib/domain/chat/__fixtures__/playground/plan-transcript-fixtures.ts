@@ -1,3 +1,5 @@
+import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+
 export const CLAUDE_PLAN_SHORT = `# Tighten onboarding copy
 
 ## Context
@@ -49,3 +51,19 @@ With the single-list migration, the header no longer needs its own \`Sheet\`/\`S
 - Manual: every existing shortcut still fires, the new Settings shortcut opens settings, and the menu shows the accelerator
 - Manual: \`Esc\` in the composer still clears focus without triggering workspace-level shortcuts
 `;
+
+/**
+ * Plan-reference attachment part for the carry-out receipt fixture — the
+ * shape the composer attaches to the canned "Carry out the attached plan
+ * now." prompt after 'Run here'.
+ */
+export const CARRY_OUT_PLAN_REFERENCE: PromptDisplayPlanPart = {
+  type: "plan_reference",
+  id: "playground-plan-reference",
+  planId: "playground-plan",
+  title: "Tighten onboarding copy",
+  bodyMarkdown: CLAUDE_PLAN_SHORT,
+  snapshotHash: "playground-snapshot-hash",
+  sourceSessionId: "playground-session",
+  sourceKind: "proposed_plan",
+};

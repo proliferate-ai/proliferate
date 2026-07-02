@@ -8,6 +8,7 @@ import {
   type AgentHarnessModelOption,
 } from "@/components/agents/AgentHarnessModelSelector";
 import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
+import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 
 export type AgentHarnessConfigModelOption = AgentHarnessModelOption;
@@ -38,7 +39,7 @@ export function AgentHarnessConfigComposer({
   disabled = false,
   saving = false,
   actionLabel,
-  placeholder = "Describe a task",
+  placeholder = CHAT_COMPOSER_LABELS.placeholder,
   onSelectModel,
   onAction,
 }: AgentHarnessConfigComposerProps) {

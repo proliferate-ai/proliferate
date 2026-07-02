@@ -20,7 +20,7 @@ export function McpElicitationFieldControl({
   onChange,
 }: McpElicitationFieldControlProps) {
   const description = field.description ? (
-    <div className="mt-1 text-xs text-muted-foreground">{field.description}</div>
+    <div className="mt-1 text-ui-sm text-muted-foreground">{field.description}</div>
   ) : null;
   const label = `${field.label}${field.required ? " *" : ""}`;
 

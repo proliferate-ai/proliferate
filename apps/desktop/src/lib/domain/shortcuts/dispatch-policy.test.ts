@@ -129,23 +129,64 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
-  it("allows the keyboard shortcut sheet from text-entry targets", () => {
+  it("dispatches the keyboard shortcut sheet on Cmd+/ outside editable targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.showKeyboardShortcuts, {
-      key: "?",
+      key: "/",
       code: "Slash",
       metaKey: true,
       ctrlKey: false,
-      shiftKey: true,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("declines the keyboard shortcut sheet in editable targets so editors keep Mod-/", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.showKeyboardShortcuts, {
+      key: "/",
+      code: "Slash",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
       altKey: false,
       defaultPrevented: false,
       target: {
         tagName: "TEXTAREA",
         isContentEditable: false,
       } as unknown as EventTarget,
-    } as KeyboardEvent)).toBe(true);
+    } as KeyboardEvent)).toBe(false);
+
+    // CodeMirror content is contenteditable; Cmd+/ must stay with the
+    // editor's toggleComment even when the editor prevented default first.
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.showKeyboardShortcuts, {
+      key: "/",
+      code: "Slash",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: {
+        tagName: "DIV",
+        isContentEditable: true,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(false);
   });
 
-  it("allows the keyboard shortcut sheet through default-prevented targets", () => {
+  it("allows the keyboard shortcut sheet through default-prevented non-editable targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.showKeyboardShortcuts, {
+      key: "/",
+      code: "Slash",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+
+    // The stale Cmd+Shift+/ chord no longer matches the binding-derived bypass.
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.showKeyboardShortcuts, {
       key: "?",
       code: "Slash",
@@ -155,7 +196,7 @@ describe("shortcut dispatch policy", () => {
       altKey: false,
       defaultPrevented: true,
       target: null,
-    } as KeyboardEvent)).toBe(true);
+    } as KeyboardEvent)).toBe(false);
   });
 
   it("allows left-sidebar toggle from text-entry and terminal focus targets", () => {

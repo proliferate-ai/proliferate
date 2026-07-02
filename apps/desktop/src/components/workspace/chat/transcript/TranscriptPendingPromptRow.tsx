@@ -199,7 +199,7 @@ function OutboxPromptFailureLine({
     <div className="flex justify-end">
       <div
         data-chat-transcript-ignore
-        className="inline-flex max-w-[77%] items-center gap-2 overflow-hidden whitespace-nowrap text-[length:var(--text-chat)] font-normal leading-[var(--text-chat--line-height)] text-muted-foreground/80"
+        className="inline-flex max-w-[77%] items-center gap-2 overflow-hidden whitespace-nowrap text-chat font-normal text-muted-foreground/80"
       >
         <span className="min-w-0 truncate" title={formatOutboxPromptFailureLabel(entry)}>
           <span className="text-destructive/80">Not sent</span>
@@ -209,28 +209,42 @@ function OutboxPromptFailureLine({
         </span>
         <span className="inline-flex shrink-0 items-center gap-1">
           {canRetry && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-auto rounded-none px-1 py-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+            <OutboxTextActionButton
+              label="Retry"
               onClick={() => outboxActions.retryPrompt(entry.clientPromptId)}
-            >
-              Retry
-            </Button>
+            />
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-auto rounded-none px-1 py-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+          <OutboxTextActionButton
+            label="Dismiss"
             onClick={() => outboxActions.dismissPrompt(entry.clientPromptId)}
-          >
-            Dismiss
-          </Button>
+          />
         </span>
       </div>
     </div>
+  );
+}
+
+// The single retry/dismiss affordance grammar for outbox rows: quiet inline
+// text buttons (text-ui-sm chrome) that underline on focus — no outline
+// buttons, no second style in the same file.
+function OutboxTextActionButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      data-chat-transcript-ignore
+      className="h-auto rounded-none px-1 py-0 text-ui-sm font-normal leading-[var(--text-ui-sm--line-height)] text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+      onClick={onClick}
+    >
+      {label}
+    </Button>
   );
 }
 
@@ -262,55 +276,22 @@ function renderOutboxPromptControls(
   entry: PromptOutboxEntry,
   actions: OutboxActionHandlers,
 ): ReactNode {
-  if (entry.deliveryState === "failed_before_dispatch") {
-    return (
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-chat-transcript-ignore
-          onClick={() => actions.retryPrompt(entry.clientPromptId)}
-        >
-          Retry
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          data-chat-transcript-ignore
-          onClick={() => actions.dismissPrompt(entry.clientPromptId)}
-        >
-          Dismiss
-        </Button>
-      </div>
-    );
+  // failed_before_dispatch never reaches here — TranscriptPendingPromptRow
+  // returns the compact OutboxPromptFailureLine (with its own inline retry/
+  // dismiss) before rendering the prompt body + controls.
+  if (entry.deliveryState !== "unknown_after_dispatch") {
+    return null;
   }
-
-  if (entry.deliveryState === "unknown_after_dispatch") {
-    return (
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-chat-transcript-ignore
-          onClick={() => actions.retryPrompt(entry.clientPromptId)}
-        >
-          Retry
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          data-chat-transcript-ignore
-          onClick={() => actions.dismissPrompt(entry.clientPromptId)}
-        >
-          Dismiss
-        </Button>
-      </div>
-    );
-  }
-
-  return null;
+  return (
+    <div className="flex justify-end gap-2">
+      <OutboxTextActionButton
+        label="Retry"
+        onClick={() => actions.retryPrompt(entry.clientPromptId)}
+      />
+      <OutboxTextActionButton
+        label="Dismiss"
+        onClick={() => actions.dismissPrompt(entry.clientPromptId)}
+      />
+    </div>
+  );
 }

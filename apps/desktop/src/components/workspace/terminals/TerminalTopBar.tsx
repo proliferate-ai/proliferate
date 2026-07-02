@@ -153,7 +153,7 @@ export function TerminalTopBar({
                             />
                           )}
                           {isActive && (
-                            <span className="text-[10px] text-sidebar-muted-foreground">
+                            <span className="text-sm text-sidebar-muted-foreground">
                               Active
                             </span>
                           )}

@@ -4,217 +4,182 @@ import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
 
-type ThinkingTimingKey =
-  | "forwardSpeedMs"
-  | "forwardGapMs"
-  | "postForwardGapMs"
-  | "returnSpeedMs"
-  | "returnGapMs";
+// Timing lab for the PRODUCT ThinkingText animation. The two-layer compositor
+// sweep (.thinking-text-band / .thinking-text-band-glyphs, desktop.css) has
+// exactly two knobs — the CSS custom properties consumed by both keyframe
+// pairs:
+//
+//   --thinking-text-duration  (product default 2.2s)
+//   --thinking-text-easing    (product default linear)
+//
+// The controls below write those vars onto the preview labels, so what
+// animates here is byte-for-byte the shipping mechanism; copy the summary
+// line into desktop.css to change the product defaults. The steps() preset
+// exists to compare codex's cadenced feel (steps(48, end)) against the
+// smooth sweep we ship.
 
-type ThinkingTiming = Record<ThinkingTimingKey, number>;
+type EasingKind = "linear" | "steps" | "ease-in-out";
 
-// PORT PENDING: this lab still emits background-position keyframes for the
-// retired background-clip sweep. The product ThinkingText is now a two-layer
-// compositor sweep (.thinking-text-band / -glyphs) driven by
-// --thinking-text-duration / --thinking-text-easing; the sliders here no
-// longer affect it until the timeline builder is ported to translateX pairs
-// (band = 1.5×bgpos − 17.5, glyphs = −0.5×band).
-const PLAYGROUND_THINKING_ANIMATION_NAME = "playground-thinking-text-sweep";
+interface ThinkingTiming {
+  durationMs: number;
+  easingKind: EasingKind;
+  stepCount: number;
+}
 
-const DEFAULT_THINKING_TIMING: ThinkingTiming = {
-  forwardSpeedMs: 740,
-  forwardGapMs: 0,
-  postForwardGapMs: 800,
-  returnSpeedMs: 690,
-  returnGapMs: 0,
+/** Mirrors the shipped fallbacks in desktop.css (2.2s linear); the step count
+    only participates when the steps preset is active. */
+const PRODUCT_DEFAULT_TIMING: ThinkingTiming = {
+  durationMs: 2_200,
+  easingKind: "linear",
+  stepCount: 48,
 };
 
-const TIMING_CONTROLS: Array<{
-  key: ThinkingTimingKey;
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-}> = [
-  {
-    key: "forwardSpeedMs",
-    label: "Speed of -> passes",
-    min: 280,
-    max: 900,
-    step: 10,
-  },
-  {
-    key: "forwardGapMs",
-    label: "Gap between -> and ->",
-    min: 0,
-    max: 360,
-    step: 5,
-  },
-  {
-    key: "postForwardGapMs",
-    label: "Gap after second -> before <-",
-    min: 0,
-    max: 1_000,
-    step: 10,
-  },
-  {
-    key: "returnSpeedMs",
-    label: "Speed of <- and final ->",
-    min: 280,
-    max: 1_000,
-    step: 10,
-  },
-  {
-    key: "returnGapMs",
-    label: "Gap between <- and final ->",
-    min: 0,
-    max: 600,
-    step: 10,
-  },
+const EASING_PRESETS: Array<{ kind: EasingKind; label: string }> = [
+  { kind: "linear", label: "Linear (product)" },
+  { kind: "steps", label: "Steps (codex cadence)" },
+  { kind: "ease-in-out", label: "Ease-in-out" },
 ];
 
-type TimelineFrame = {
-  ms: number;
-  css: string;
-};
+function resolveEasing(timing: ThinkingTiming): string {
+  if (timing.easingKind === "steps") {
+    return `steps(${timing.stepCount}, end)`;
+  }
+  return timing.easingKind;
+}
 
 export function PlaygroundThinkingTimingControls() {
-  const [timing, setTiming] = useState<ThinkingTiming>(DEFAULT_THINKING_TIMING);
-  const timeline = buildThinkingTimeline(timing);
-  const animationStyle = {
-    "--thinking-text-animation":
-      `${PLAYGROUND_THINKING_ANIMATION_NAME} ${timeline.durationMs}ms cubic-bezier(0.45, 0, 0.55, 1) infinite`,
-  } as CSSProperties & Record<"--thinking-text-animation", string>;
+  const [timing, setTiming] = useState<ThinkingTiming>(PRODUCT_DEFAULT_TIMING);
+  const easing = resolveEasing(timing);
+  const previewStyle = {
+    "--thinking-text-duration": `${timing.durationMs}ms`,
+    "--thinking-text-easing": easing,
+  } as CSSProperties;
 
   return (
     <section
       className="space-y-3 rounded-md border border-border p-4"
       data-thinking-timing-controls
     >
-      <style>{timeline.keyframesCss}</style>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h2 className="text-sm font-medium text-foreground">Thinking timing lab</h2>
-          <p className="text-xs text-muted-foreground">
-            Tune the playground-only sequence: {"->"} {"->"} gap {"<-"} gap {"->"}.
+          <p className="text-ui-sm text-muted-foreground">
+            Drives the real product knobs (--thinking-text-duration /
+            --thinking-text-easing) on the shipped band sweep.
           </p>
         </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setTiming(DEFAULT_THINKING_TIMING)}
+          onClick={() => setTiming(PRODUCT_DEFAULT_TIMING)}
         >
           Reset
         </Button>
       </div>
 
-      <div className="flex h-14 items-center rounded-md border border-border px-4">
-        <ThinkingText style={animationStyle} />
+      <div className="flex flex-col justify-center gap-3 rounded-md border border-border px-4 py-3">
+        <ThinkingText style={previewStyle} />
+        <ThinkingText style={previewStyle} text="Searching the codebase for dock slot owners" />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {TIMING_CONTROLS.map((control) => (
-          <TimingRangeControl
-            key={control.key}
-            control={control}
-            value={timing[control.key]}
-            onChange={(value) => {
-              setTiming((current) => ({
-                ...current,
-                [control.key]: value,
-              }));
+      <div className="flex flex-wrap items-center gap-2">
+        {EASING_PRESETS.map((preset) => (
+          <Button
+            key={preset.kind}
+            type="button"
+            variant={timing.easingKind === preset.kind ? "inverted" : "secondary"}
+            size="sm"
+            onClick={() => {
+              setTiming((current) => ({ ...current, easingKind: preset.kind }));
             }}
-          />
+          >
+            {preset.label}
+          </Button>
         ))}
       </div>
 
+      <div className="grid gap-3 md:grid-cols-2">
+        <TimingRangeControl
+          id="thinking-duration"
+          label="Sweep duration"
+          min={800}
+          max={6_000}
+          step={50}
+          value={timing.durationMs}
+          formatValue={(value) => `${value}ms`}
+          onChange={(value) => {
+            setTiming((current) => ({ ...current, durationMs: value }));
+          }}
+        />
+        <TimingRangeControl
+          id="thinking-step-count"
+          label="Step count (steps preset)"
+          min={8}
+          max={96}
+          step={4}
+          value={timing.stepCount}
+          disabled={timing.easingKind !== "steps"}
+          formatValue={(value) => `${value} steps`}
+          onChange={(value) => {
+            setTiming((current) => ({ ...current, stepCount: value }));
+          }}
+        />
+      </div>
+
       <p
-        className="rounded-md bg-foreground/5 px-3 py-2 font-mono text-[11px] leading-5 text-muted-foreground"
+        className="rounded-md bg-foreground/5 px-3 py-2 font-mono text-base leading-5 text-muted-foreground"
         data-thinking-timing-summary
       >
-        forward {timing.forwardSpeedMs}ms {" | "}gap {"->"}/{"->"}{" "}
-        {timing.forwardGapMs}ms {" | "}gap {"->"}/{"<-"} {timing.postForwardGapMs}ms
-        {" | "}return {timing.returnSpeedMs}ms {" | "}gap {"<-"}/{"->"}{" "}
-        {timing.returnGapMs}ms {" | "}cycle {timeline.durationMs}ms
+        --thinking-text-duration: {timing.durationMs}ms;{" "}
+        --thinking-text-easing: {easing};
       </p>
     </section>
   );
 }
 
 function TimingRangeControl({
-  control,
+  id,
+  label,
+  min,
+  max,
+  step,
   value,
+  disabled = false,
+  formatValue,
   onChange,
 }: {
-  control: (typeof TIMING_CONTROLS)[number];
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
   value: number;
+  disabled?: boolean;
+  formatValue: (value: number) => string;
   onChange: (value: number) => void;
 }) {
-  const id = `thinking-${control.key}`;
-
   return (
-    <div className="space-y-2 rounded-md bg-foreground/5 p-3">
+    <div
+      className={`space-y-2 rounded-md bg-foreground/5 p-3 ${disabled ? "opacity-50" : ""}`}
+    >
       <div className="flex items-baseline justify-between gap-3">
         <Label htmlFor={id} className="mb-0 text-foreground">
-          {control.label}
+          {label}
         </Label>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {value}ms
+        <span className="font-mono text-base text-muted-foreground">
+          {formatValue(value)}
         </span>
       </div>
       <RangeSlider
         id={id}
-        min={control.min}
-        max={control.max}
-        step={control.step}
+        min={min}
+        max={max}
+        step={step}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(Number(event.currentTarget.value))}
       />
     </div>
   );
-}
-
-function buildThinkingTimeline(timing: ThinkingTiming) {
-  const frames: TimelineFrame[] = [];
-  let elapsedMs = 0;
-
-  const addFrame = (durationMs: number, css: string) => {
-    elapsedMs += Math.max(0, durationMs);
-    frames.push({ ms: elapsedMs, css });
-  };
-
-  frames.push({
-    ms: 0,
-    css: "opacity: 0; background-position: 145% 0;",
-  });
-  addFrame(120, "opacity: 0; background-position: 145% 0;");
-  addFrame(80, "opacity: 0.95; background-position: 145% 0;");
-  addFrame(timing.forwardSpeedMs, "opacity: 0.95; background-position: -55% 0;");
-  addFrame(24, "opacity: 0; background-position: -62% 0;");
-  addFrame(timing.forwardGapMs, "opacity: 0; background-position: -62% 0;");
-  addFrame(1, "opacity: 0; background-position: 145% 0;");
-  addFrame(55, "opacity: 0.95; background-position: 145% 0;");
-  addFrame(timing.forwardSpeedMs, "opacity: 0.95; background-position: -55% 0;");
-  addFrame(36, "opacity: 0; background-position: -62% 0;");
-  addFrame(timing.postForwardGapMs, "opacity: 0; background-position: -62% 0;");
-  addFrame(70, "opacity: 0.78; background-position: -55% 0;");
-  addFrame(timing.returnSpeedMs, "opacity: 0.78; background-position: 42% 0;");
-  addFrame(timing.returnGapMs, "opacity: 0.78; background-position: 42% 0;");
-  addFrame(timing.returnSpeedMs, "opacity: 0.9; background-position: -42% 0;");
-  addFrame(110, "opacity: 0; background-position: -62% 0;");
-  addFrame(120, "opacity: 0; background-position: -62% 0;");
-
-  return {
-    durationMs: elapsedMs,
-    keyframesCss: [
-      `@keyframes ${PLAYGROUND_THINKING_ANIMATION_NAME} {`,
-      ...frames.map((frame) => `  ${formatPercent(frame.ms, elapsedMs)}% { ${frame.css} }`),
-      "}",
-    ].join("\n"),
-  };
-}
-
-function formatPercent(ms: number, totalMs: number) {
-  return Number(((ms / totalMs) * 100).toFixed(3));
 }

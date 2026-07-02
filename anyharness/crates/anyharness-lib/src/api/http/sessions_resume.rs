@@ -39,21 +39,10 @@ pub async fn resume_session(
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
     let span = FlowHeaders::from_headers(&headers).span();
-    let req = parse_optional_resume_request(body)?;
+    // Parse (and validate) the optional body so legacy fields are still rejected.
+    parse_optional_resume_request(body)?;
     async move {
         let has_live_session = state.session_runtime.has_live_session(&session_id).await;
-        if req.expected_runtime_config_revision.is_some() && has_live_session {
-            return Err(ApiError::conflict(
-                "runtime config changes require restarting the session",
-                "RUNTIME_CONFIG_RESUME_UNSUPPORTED",
-            ));
-        }
-        if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
-            state
-                .runtime_config_service
-                .assert_session_context_matches(&session_id, expected)
-                .map_err(super::runtime_config::map_runtime_config_error)?;
-        }
         let mcp_refresh = if has_live_session {
             None
         } else {
@@ -105,32 +94,23 @@ mod tests {
 
     #[test]
     fn resume_request_accepts_missing_body() {
-        let request = match parse_optional_resume_request(Bytes::new()) {
-            Ok(request) => request,
-            Err(_) => panic!("parse empty body"),
-        };
-
-        assert!(request.expected_runtime_config_revision.is_none());
+        if parse_optional_resume_request(Bytes::new()).is_err() {
+            panic!("parse empty body");
+        }
     }
 
     #[test]
     fn resume_request_accepts_empty_object() {
-        let request = match parse_optional_resume_request(Bytes::from_static(br#"{}"#)) {
-            Ok(request) => request,
-            Err(_) => panic!("parse empty object"),
-        };
-
-        assert!(request.expected_runtime_config_revision.is_none());
+        if parse_optional_resume_request(Bytes::from_static(br#"{}"#)).is_err() {
+            panic!("parse empty object");
+        }
     }
 
     #[test]
     fn resume_request_accepts_null_body() {
-        let request = match parse_optional_resume_request(Bytes::from_static(br#" null "#)) {
-            Ok(request) => request,
-            Err(_) => panic!("parse null body"),
-        };
-
-        assert!(request.expected_runtime_config_revision.is_none());
+        if parse_optional_resume_request(Bytes::from_static(br#" null "#)).is_err() {
+            panic!("parse null body");
+        }
     }
 
     #[test]

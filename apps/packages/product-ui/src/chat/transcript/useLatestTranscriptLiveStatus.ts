@@ -150,14 +150,50 @@ export function useLatestTranscriptLiveStatus({
     showDelayedLatestLiveStatus,
   ]);
 
-  const latestLiveStatus = latestTurn
-    && (showDelayedLatestLiveStatus || shouldShowImmediateOutboxLiveStatus)
+  // SINGLE-SHIMMER RULE: a live exploration/work block (or any active tool)
+  // renders its own CollapsedActions shimmer. The delayed-visibility state
+  // above lags one render behind the synchronous eligibility, so a freshly
+  // started tool could otherwise leave the tail shimmer mounted for a frame
+  // alongside the summary shimmer — two sweeps in one viewport. Re-checking the
+  // synchronous conditions here hides the tail in the same render, so there is
+  // never more than one shimmer.
+  const hasCompetingLiveShimmer =
+    !!latestLiveExplorationBlock
+    || !!latestLiveWorkBlock
+    || latestTurnHasActiveToolWork;
+  // NEEDS-INPUT MARKER: a pending interaction is a stable blocking state, not
+  // a transient stream gap, so it bypasses both the "working"-only shimmer
+  // eligibility (and its grace timers — show immediately, no strobe risk) AND
+  // the competing-shimmer suppression: the request that pauses a tool call
+  // leaves that call counted as active work, which would otherwise hide the
+  // marker for exactly the case it exists for. The marker is static (not a
+  // shimmer), so the single-shimmer rule is preserved. The owner's prose-tail
+  // rule still applies via shouldAllowTurnTrailingStatus.
+  const latestNeedsInputStatus =
+    !!latestTurn
+    && latestTurnInProgress
+    && sessionViewState === "needs_input"
+    && shouldAllowTurnTrailingStatus({
+        turn: latestTurn,
+        transcript,
+        isLatestTurnInProgress: true,
+      })
       ? renderTurnTrailingStatus?.({
           startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,
           sessionViewState,
           transientStatusText: latestTransientText,
         }) ?? null
       : null;
+  const latestLiveStatus = latestNeedsInputStatus
+    ?? (latestTurn
+      && !hasCompetingLiveShimmer
+      && (showDelayedLatestLiveStatus || shouldShowImmediateOutboxLiveStatus)
+        ? renderTurnTrailingStatus?.({
+            startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,
+            sessionViewState,
+            transientStatusText: latestTransientText,
+          }) ?? null
+        : null);
 
   return {
     latestLiveExplorationBlock,

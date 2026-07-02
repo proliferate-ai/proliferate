@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -12,17 +12,9 @@ pub struct WorkerConfig {
     pub cloud_base_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enrollment_token: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub anyharness_base_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub anyharness_bearer_token: Option<String>,
     pub worker_db_path: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub materialization_root: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_update_request_dir: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_version: Option<String>,
+    pub integration_gateway_home: Option<PathBuf>,
     #[serde(default = "default_heartbeat_interval_seconds")]
     pub heartbeat_interval_seconds: u64,
     #[serde(skip)]
@@ -30,7 +22,22 @@ pub struct WorkerConfig {
 }
 
 fn default_heartbeat_interval_seconds() -> u64 {
-    60
+    30
+}
+
+/// Directory into which the worker writes the integration-gateway dotfile when
+/// `integration_gateway_home` is not set in config. Mirrors
+/// `anyharness-lib::default_runtime_home()` so the runtime and worker agree.
+pub fn default_integration_gateway_home() -> PathBuf {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
+    let dir = if std::env::var_os("PROLIFERATE_DEV").is_some() || cfg!(debug_assertions) {
+        ".proliferate-local"
+    } else {
+        ".proliferate"
+    };
+    PathBuf::from(home).join(dir).join("anyharness")
 }
 
 impl WorkerConfig {
@@ -68,6 +75,20 @@ impl WorkerConfig {
 }
 
 fn write_private_config(path: &Path, contents: String) -> Result<(), WorkerError> {
+    write_private_file(path, contents.as_bytes(), "config.toml", |path, source| {
+        WorkerError::WriteConfig { path, source }
+    })
+}
+
+/// Atomically write `contents` to `path` with 0600 perms, creating the parent
+/// directory (0700) if needed. Shared by config + integration-gateway dotfile.
+/// `write_err` maps write/rename failures to the caller's error variant.
+pub(crate) fn write_private_file(
+    path: &Path,
+    contents: &[u8],
+    fallback_name: &str,
+    write_err: fn(PathBuf, io::Error) -> WorkerError,
+) -> Result<(), WorkerError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|source| WorkerError::CreateParent {
             path: parent.to_path_buf(),
@@ -78,17 +99,11 @@ fn write_private_config(path: &Path, contents: String) -> Result<(), WorkerError
     let file_name = path
         .file_name()
         .and_then(|value| value.to_str())
-        .unwrap_or("config.toml");
+        .unwrap_or(fallback_name);
     let tmp_path = path.with_file_name(format!(".{file_name}.tmp.{}", std::process::id()));
-    fs::write(&tmp_path, contents).map_err(|source| WorkerError::WriteConfig {
-        path: tmp_path.clone(),
-        source,
-    })?;
+    fs::write(&tmp_path, contents).map_err(|source| write_err(tmp_path.clone(), source))?;
     set_private_file_permissions(&tmp_path)?;
-    fs::rename(&tmp_path, path).map_err(|source| WorkerError::WriteConfig {
-        path: path.to_path_buf(),
-        source,
-    })
+    fs::rename(&tmp_path, path).map_err(|source| write_err(path.to_path_buf(), source))
 }
 
 #[cfg(unix)]

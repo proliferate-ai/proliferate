@@ -76,7 +76,7 @@ export function TurnDiffFileCard({
     >
       {!isRuntimeReady ? (
         <TurnDiffInlineState
-          icon={<RefreshCw className="size-3.5" />}
+          icon={<RefreshCw className="size-4" />}
           title="Diff unavailable"
           description={runtimeBlockedReason ?? "The workspace runtime is not ready."}
         />
@@ -88,14 +88,14 @@ export function TurnDiffFileCard({
         />
       ) : metadataErrorMessage && !currentDiff ? (
         <TurnDiffInlineState
-          icon={<CircleAlert className="size-3.5" />}
+          icon={<CircleAlert className="size-4" />}
           title="Diff unavailable"
           description={metadataErrorMessage}
           onOpenFile={onOpenFile}
         />
       ) : !currentDiff ? (
         <TurnDiffInlineState
-          icon={<FileIcon className="size-3.5" />}
+          icon={<FileIcon className="size-4" />}
           title="No current diff"
           description="This file was touched, but there are no current changes to review against the selected base."
           onOpenFile={onOpenFile}
@@ -113,7 +113,7 @@ export function TurnDiffFileCard({
         />
       ) : diffErrorMessage ? (
         <TurnDiffInlineState
-          icon={<CircleAlert className="size-3.5" />}
+          icon={<CircleAlert className="size-4" />}
           title="Diff unavailable"
           description={diffErrorMessage}
           onOpenFile={onOpenFile}

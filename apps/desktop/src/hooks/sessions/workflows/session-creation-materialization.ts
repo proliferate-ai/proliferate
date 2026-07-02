@@ -23,10 +23,8 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import {
-  assertDirectSessionCreateRuntimeConfigStamped,
-  prepareCloudSandboxGatewayAgentAuthConfig,
-  prepareLocalSessionRuntimeConfig,
-} from "@/lib/access/anyharness/session-runtime-config";
+  assertDirectSessionCreateSupported,
+} from "@/lib/access/anyharness/direct-session-create-guard";
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
 import {
   createSession,
@@ -142,20 +140,12 @@ export async function materializeSessionCreation({
   }
 
   const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
-  const expectedRuntimeConfigRevision = await prepareDirectSessionRuntimeConfig({
-    target,
-    targetConnection,
-    requestOptions,
-    pendingSessionId,
-    workspaceId,
-    materializeStartedAt,
-  });
+  assertDirectSessionCreateSupported(target);
   const session: Session = await createSession(targetConnection, {
     workspaceId: target.anyharnessWorkspaceId,
     agentKind: options.agentKind,
     modelId: options.modelId,
     ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
-    ...(expectedRuntimeConfigRevision ? { expectedRuntimeConfigRevision } : {}),
     subagentsEnabled,
     origin: DESKTOP_ORIGIN,
   }, requestOptions);
@@ -263,41 +253,4 @@ export async function materializeSessionCreation({
   }
 
   return pendingSessionId;
-}
-
-async function prepareDirectSessionRuntimeConfig({
-  target,
-  targetConnection,
-  requestOptions,
-  pendingSessionId,
-  workspaceId,
-  materializeStartedAt,
-}: {
-  target: Awaited<ReturnType<typeof resolveRuntimeTargetForWorkspace>>;
-  targetConnection: {
-    runtimeUrl: string;
-    authToken?: string;
-  };
-  requestOptions: ReturnType<typeof buildLatencyRequestOptions>;
-  pendingSessionId: string;
-  workspaceId: string;
-  materializeStartedAt: number;
-}) {
-  assertDirectSessionCreateRuntimeConfigStamped(target);
-  await prepareCloudSandboxGatewayAgentAuthConfig(
-    target,
-    targetConnection,
-    requestOptions,
-  );
-  const expectedRuntimeConfigRevision = await prepareLocalSessionRuntimeConfig(
-    targetConnection,
-    requestOptions,
-  );
-  logLatency("session.create.materialize.runtime_config_prepared", {
-    clientSessionId: pendingSessionId,
-    workspaceId,
-    hasExpectedRuntimeConfigRevision: Boolean(expectedRuntimeConfigRevision),
-    elapsedMs: Date.now() - materializeStartedAt,
-  });
-  return expectedRuntimeConfigRevision;
 }

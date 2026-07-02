@@ -19,15 +19,18 @@ from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
     SandboxIOTarget,
 )
+from proliferate.server.cloud.materialization.sandbox_io.worker_sidecar import (
+    launch_worker_sidecar,
+)
 from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
     build_runtime_launch_script,
 )
-from proliferate.server.cloud.runtime.liveness.health import (
+from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.liveness_health import (
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
 )
-from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     build_detached_runtime_launch_command,
@@ -205,6 +208,12 @@ async def _launch_anyharness_runtime(
         endpoint.runtime_url,
         runtime_token,
         workspace_id=sandbox_record.id,
+    )
+    await launch_worker_sidecar(
+        provider=provider,
+        provider_sandbox=provider_sandbox,
+        sandbox_record=sandbox_record,
+        runtime_context=runtime_context,
     )
     await cloud_sandboxes_store.mark_cloud_sandbox_ready(
         db,

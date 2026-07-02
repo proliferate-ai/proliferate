@@ -104,7 +104,7 @@ export function BrowserToolbar({
         </Tooltip>
       </form>
       {urlError && (
-        <p className="border-t border-sidebar-border px-3 py-1 text-[11px] leading-4 text-sidebar-muted-foreground">
+        <p className="border-t border-sidebar-border px-3 py-1 text-base text-sidebar-muted-foreground">
           Enter a valid http or https URL, localhost host, or port.
         </p>
       )}

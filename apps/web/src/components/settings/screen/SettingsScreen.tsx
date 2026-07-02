@@ -44,7 +44,10 @@ export function SettingsScreen() {
             state: settingsNavigationState(location.state),
           });
         }}
-        contentClassName={activeSection === "billing" ? "max-w-6xl" : undefined}
+        // The billing surface no longer clamps its own width (the desktop
+        // settings screen owns the page-width contract), so pin web's
+        // historical 820px at the shell.
+        contentClassName={activeSection === "billing" ? "max-w-[820px]" : undefined}
       >
         {activeSection === "account" ? (
           <AccountSettingsSection />

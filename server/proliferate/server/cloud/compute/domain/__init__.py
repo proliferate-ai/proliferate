@@ -1,1 +1,0 @@
-"""Pure cloud compute rules."""

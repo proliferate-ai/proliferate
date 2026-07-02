@@ -3,8 +3,8 @@ import { Navigate, Route, useLocation } from "react-router-dom"
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
+import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { ToastContainer } from "@/components/feedback/Toast"
-import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
@@ -32,6 +32,7 @@ import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-
 import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue"
 import { useTurnEndSound } from "@/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
+import { useWorkspaceGitStatusPersistence } from "@/hooks/workspaces/lifecycle/use-workspace-git-status-persistence"
 import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
 import {
   elapsedStartupMs,
@@ -74,6 +75,14 @@ const UpdatePlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/UpdatePlaygroundPage").then((m) => ({
         default: m.UpdatePlaygroundPage,
+      })),
+    )
+  : null
+
+const WorkspaceStatusPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/WorkspaceStatusPlaygroundPage").then((m) => ({
+        default: m.WorkspaceStatusPlaygroundPage,
       })),
     )
   : null
@@ -213,6 +222,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_ui_lifecycle")
   useWorkspaceUiLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_ui_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_workspace_git_status_persistence")
+  useWorkspaceGitStatusPersistence()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_workspace_git_status_persistence")
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_intent_dispatcher")
   useSessionIntentDispatcher()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_intent_dispatcher")
@@ -306,6 +318,16 @@ function AppRuntime() {
                 }
               />
             )}
+            {import.meta.env.DEV && WorkspaceStatusPlaygroundPage && (
+              <Route
+                path="/playground/workspace-status"
+                element={
+                  <Suspense fallback={null}>
+                    <WorkspaceStatusPlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
             {import.meta.env.DEV && AuthPlaygroundPage && (
               <Route
                 path="/playground/auth"
@@ -326,7 +348,7 @@ function AppRuntime() {
           {/* Kit Sonner toaster + update lifecycle toasts (UX spec §12). */}
           <Toaster />
           <UpdateToastPresenter />
-          <TurnEndCelebration />
+          <KeyboardShortcutsDialog />
         </ShortcutRevealProvider>
       </AppCommandActionsProvider>
     </>

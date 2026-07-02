@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { FileText, X } from "@proliferate/ui/icons";
-import { CollapsiblePlanCard } from "@/components/workspace/chat/content/CollapsiblePlanCard";
+import { CollapsiblePlanCard } from "@proliferate/product-ui/chat/transcript/CollapsiblePlanCard";
+import {
+  renderTranscriptCodeBlock,
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "@/components/workspace/chat/transcript/transcript-markdown";
 import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/PlanReferencePreviewDialog";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 
@@ -84,14 +89,16 @@ function PlanReferenceTranscriptCard({ plan }: { plan: PromptDisplayPlanPart }) 
     <CollapsiblePlanCard
       title={plan.title}
       content={plan.bodyMarkdown}
-      subtitle={<span className="shrink-0 text-xs text-muted-foreground">Attached plan</span>}
+      subtitle={<span className="shrink-0 text-sm text-muted-foreground">Attached plan</span>}
       emptyContent="No plan content"
       copyLabel="Copy attached plan"
       collapseLabel="Collapse attached plan"
       expandLabel="Expand attached plan"
       initialExpanded={false}
       density="compact"
-      collapsedPreview={false}
+      renderLink={renderTranscriptLink}
+      renderInlineCode={renderTranscriptInlineCode}
+      renderCodeBlock={renderTranscriptCodeBlock}
     />
   );
 }

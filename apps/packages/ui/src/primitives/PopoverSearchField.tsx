@@ -6,6 +6,8 @@ export interface PopoverSearchFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Accessible name when the placeholder alone is not descriptive enough. */
+  ariaLabel?: string;
 }
 
 /**
@@ -20,16 +22,18 @@ export function PopoverSearchField({
   onChange,
   placeholder = "Search",
   autoFocus,
+  ariaLabel,
 }: PopoverSearchFieldProps) {
   return (
     <div className="flex items-center gap-2 px-2.5 py-[7px]">
-      <Search className="size-4 shrink-0 text-muted-foreground/75" />
+      <Search className="size-3.5 shrink-0 text-muted-foreground/75" />
       <Input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[13px] leading-[18px] shadow-none focus:ring-0"
+        aria-label={ariaLabel}
+        className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
       />
     </div>
   );

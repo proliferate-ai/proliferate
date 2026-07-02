@@ -1,12 +1,11 @@
 use anyharness_contract::v1::InteractionKind;
 
 use crate::live::sessions::{
-    Resolution, PermissionDecision, ResolveInteractionCommandError,
-    RevealMcpElicitationUrlError,
+    PermissionDecision, Resolution, ResolveInteractionCommandError, RevealMcpElicitationUrlError,
 };
 
 use super::{
-    InteractionPermissionDecision, ResolutionRequest, McpElicitationUrlReveal,
+    InteractionPermissionDecision, McpElicitationUrlReveal, ResolutionRequest,
     ResolveInteractionError, SessionRuntime,
 };
 
@@ -48,22 +47,18 @@ impl SessionRuntime {
 
         let kind_matches = matches!(
             (&resolution, pending_kind),
-            (
-                ResolutionRequest::Decision(_),
-                InteractionKind::Permission
-            ) | (
-                ResolutionRequest::OptionId(_),
-                InteractionKind::Permission
-            ) | (
-                ResolutionRequest::Submitted { .. },
-                InteractionKind::UserInput
-            ) | (
-                ResolutionRequest::Accepted { .. },
-                InteractionKind::McpElicitation
-            ) | (
-                ResolutionRequest::Declined,
-                InteractionKind::McpElicitation
-            ) | (ResolutionRequest::Cancelled, _)
+            (ResolutionRequest::Decision(_), InteractionKind::Permission)
+                | (ResolutionRequest::OptionId(_), InteractionKind::Permission)
+                | (
+                    ResolutionRequest::Submitted { .. },
+                    InteractionKind::UserInput
+                )
+                | (
+                    ResolutionRequest::Accepted { .. },
+                    InteractionKind::McpElicitation
+                )
+                | (ResolutionRequest::Declined, InteractionKind::McpElicitation)
+                | (ResolutionRequest::Cancelled, _)
                 | (ResolutionRequest::Dismissed, _)
         );
         if !kind_matches {
@@ -73,21 +68,13 @@ impl SessionRuntime {
         }
 
         let actor_resolution = match resolution {
-            ResolutionRequest::Decision(decision) => {
-                Resolution::Decision(match decision {
-                    InteractionPermissionDecision::Allow => PermissionDecision::Allow,
-                    InteractionPermissionDecision::Deny => PermissionDecision::Deny,
-                })
-            }
-            ResolutionRequest::OptionId(option_id) => {
-                Resolution::Selected { option_id }
-            }
-            ResolutionRequest::Submitted { answers } => {
-                Resolution::Submitted { answers }
-            }
-            ResolutionRequest::Accepted { fields } => {
-                Resolution::Accepted { fields }
-            }
+            ResolutionRequest::Decision(decision) => Resolution::Decision(match decision {
+                InteractionPermissionDecision::Allow => PermissionDecision::Allow,
+                InteractionPermissionDecision::Deny => PermissionDecision::Deny,
+            }),
+            ResolutionRequest::OptionId(option_id) => Resolution::Selected { option_id },
+            ResolutionRequest::Submitted { answers } => Resolution::Submitted { answers },
+            ResolutionRequest::Accepted { fields } => Resolution::Accepted { fields },
             ResolutionRequest::Declined => Resolution::Declined,
             ResolutionRequest::Cancelled => Resolution::Cancelled,
             ResolutionRequest::Dismissed => Resolution::Dismissed,

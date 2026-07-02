@@ -1,5 +1,4 @@
 import {
-  Blocks,
   LayoutGrid,
   LifeBuoy,
   SquarePen,
@@ -11,7 +10,6 @@ import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
   workspacesActive: boolean;
-  integrationsActive: boolean;
   workflowsActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
@@ -21,7 +19,6 @@ interface SidebarPrimaryNavigationProps {
   };
   onGoHome: () => void;
   onGoWorkspaces: () => void;
-  onGoIntegrations: () => void;
   onGoWorkflows: () => void;
   onOpenSupport: () => void;
 }
@@ -29,14 +26,12 @@ interface SidebarPrimaryNavigationProps {
 export function SidebarPrimaryNavigation({
   homeActive,
   workspacesActive,
-  integrationsActive,
   workflowsActive,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
   onGoHome,
   onGoWorkspaces,
-  onGoIntegrations,
   onGoWorkflows,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
@@ -60,16 +55,10 @@ export function SidebarPrimaryNavigation({
       icon: <Zap className="size-4" />,
       label: "Workflows",
       status: (
-        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-sidebar-muted-foreground">
+        <span className="font-mono text-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
           beta
         </span>
       ),
-    },
-    {
-      id: "integrations",
-      active: integrationsActive,
-      icon: <Blocks className="size-4" />,
-      label: "Integrations",
     },
     {
       id: "support",
@@ -87,9 +76,6 @@ export function SidebarPrimaryNavigation({
         break;
       case "workspaces":
         onGoWorkspaces();
-        break;
-      case "integrations":
-        onGoIntegrations();
         break;
       case "workflows":
         onGoWorkflows();

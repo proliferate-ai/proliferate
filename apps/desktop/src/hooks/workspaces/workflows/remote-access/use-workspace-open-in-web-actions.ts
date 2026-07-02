@@ -1,27 +1,25 @@
 import { useCallback, useMemo } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
+import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useWorkspaceOpenInWebActions() {
-  const mobility = useWorkspaceMobilityState();
+  const { selectedLogicalWorkspace } = useSelectedLogicalWorkspace();
   const { copyText, openExternal } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
-  const cloudWorkspaceId = mobility.selectedLogicalWorkspace?.cloudWorkspace?.id
-    ?? mobility.selectedLogicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
+  const cloudWorkspaceId = selectedLogicalWorkspace?.cloudWorkspace?.id
+    ?? selectedLogicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
     ?? null;
   const url = useMemo(() => (
     cloudWorkspaceId
       ? webWorkspaceDeepLink(cloudWorkspaceId, getProliferateWebBaseUrl())
       : null
   ), [cloudWorkspaceId]);
-  const disabledReason = mobility.selectionLocked
-    ? "Workspace sync is still finishing."
-    : url
-      ? null
-      : "Enable remote access first.";
+  const disabledReason = url
+    ? null
+    : "Enable remote access first.";
   const title = url
     ? "Open this workspace in the web app."
     : "Enable remote access first to open this workspace from web and mobile.";

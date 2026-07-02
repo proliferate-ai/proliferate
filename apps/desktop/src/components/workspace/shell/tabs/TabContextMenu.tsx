@@ -28,7 +28,7 @@ export function TabContextMenu({
     <div className="py-0.5">
       {items.map((item) => {
         if (item.kind === "separator") {
-          return <div key={item.id} className="my-1 border-t border-border" />;
+          return <div key={item.id} className="mx-2.5 my-1 h-px bg-border" />;
         }
 
         return (

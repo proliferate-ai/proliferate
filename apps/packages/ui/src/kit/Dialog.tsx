@@ -33,7 +33,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/60",
+        "fixed inset-0 z-50 bg-black/70 backdrop-blur-sm",
         className,
       )}
       {...props}
@@ -107,7 +107,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-[13px] font-medium leading-5 text-foreground", className)}
+      className={cn("text-ui font-medium leading-5 text-foreground", className)}
       {...props}
     />
   );
@@ -120,7 +120,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-[12px] leading-[1.45] text-muted-foreground", className)}
+      className={cn("text-ui-sm leading-[1.45] text-muted-foreground", className)}
       {...props}
     />
   );

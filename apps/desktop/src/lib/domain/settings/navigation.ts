@@ -3,11 +3,13 @@ import {
   SETTINGS_DEFAULT_SECTION,
   type SettingsSection,
 } from "@/config/settings";
+import { getSettingsScopeForSection } from "@/lib/domain/settings/navigation-presentation";
 import {
   cloudRepositoryKey,
   isCloudRepository,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
+import { isRepoSettingsContext } from "@/lib/domain/settings/repo-scope-selection";
 
 const FOCUS_PARAM_NAMES = [
   "focus",
@@ -18,6 +20,7 @@ const FOCUS_PARAM_NAMES = [
   "cloudRepoName",
   "checkout",
   "joinOrganizationId",
+  "context",
 ] as const;
 
 type SettingsFocusParam = (typeof FOCUS_PARAM_NAMES)[number];
@@ -44,11 +47,31 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
   if (value === "shared-environments") {
     return SETTINGS_DEFAULT_SECTION;
   }
+  if (value === "keyboard") {
+    // KEYBOARD PANE REMOVED (owner rev 2026-07-01): the ⌘/ shortcuts modal is
+    // the only surface, so old settings links fall back to the default page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
+  if (value === "archived-chats") {
+    // ARCHIVED CHATS PAGE REMOVED (owner rev 2026-07-02): archive/unarchive
+    // lives in the workspace sidebar, so old settings links fall back to the
+    // default page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
   if (value === "cloud") {
     return "agent-authentication";
   }
 
   return isSettingsSection(value) ? value : SETTINGS_DEFAULT_SECTION;
+}
+
+/**
+ * Sections that edit a picked repository (the whole Repo scope): they carry
+ * the `repo` selection and Cloud|Local `context` params. Keyed off the scope
+ * nav so WP2/WP3 section registration extends URL handling automatically.
+ */
+export function isRepoScopeSection(section: SettingsSection): boolean {
+  return getSettingsScopeForSection(section) === "repo";
 }
 
 interface SettingsNavigationTarget {
@@ -65,7 +88,7 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
   const params = new URLSearchParams();
   const section = target.section === "repo" ? "environments" : target.section;
   params.set("section", section);
-  if (section === "environments" && target.repo) {
+  if (isRepoScopeSection(section) && target.repo) {
     params.set("repo", target.repo);
   }
   const focus = target.focus ?? {};
@@ -75,7 +98,7 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
       params.set(name, value);
     }
   }
-  if ((section === "agent-authentication" || section === "compute") && target.target) {
+  if (section === "agent-authentication" && target.target) {
     params.set("target", target.target);
   }
   if (section === "agent-authentication" && target.credential) {
@@ -107,6 +130,34 @@ export function buildCloudRepoSettingsHref(
   });
 }
 
+/**
+ * Repository settings link for a workspace: cloud repos deep-link into the
+ * cloud environment entry; local workspaces fall back to the repo root path
+ * (or the workspace path) and resolve to null when neither is known.
+ */
+export function resolveWorkspaceRepoSettingsHref(input: {
+  cloudRepoOwner?: string | null;
+  cloudRepoName?: string | null;
+  repoRootPath?: string | null;
+  workspacePath?: string | null;
+}): string | null {
+  const cloudOwner = input.cloudRepoOwner?.trim() ?? "";
+  const cloudName = input.cloudRepoName?.trim() ?? "";
+  if (cloudOwner && cloudName) {
+    return buildCloudRepoSettingsHref(cloudOwner, cloudName);
+  }
+  const localRepoPath = input.repoRootPath?.trim()
+    || input.workspacePath?.trim()
+    || "";
+  if (!localRepoPath) {
+    return null;
+  }
+  return buildSettingsHref({
+    section: "repo",
+    repo: localRepoPath,
+  });
+}
+
 export interface SettingsSelectionInput {
   rawSection: string | null;
   rawRepo?: string | null;
@@ -118,6 +169,7 @@ export interface SettingsSelectionInput {
   rawKind?: string | null;
   rawCheckout?: string | null;
   rawJoinOrganizationId?: string | null;
+  rawContext?: string | null;
   repositories: SettingsRepositoryEntry[];
 }
 
@@ -139,6 +191,7 @@ export function resolveSettingsSelection({
   rawKind = null,
   rawCheckout = null,
   rawJoinOrganizationId = null,
+  rawContext = null,
   repositories,
 }: SettingsSelectionInput): SettingsSelection {
   const repositoryRoots = new Set(repositories.map((repository) => repository.sourceRoot));
@@ -166,14 +219,15 @@ export function resolveSettingsSelection({
     joinOrganizationId: rawJoinOrganizationId,
     cloudRepoOwner: rawCloudRepoOwner,
     cloudRepoName: rawCloudRepoName,
+    context: rawContext,
   });
-  let repoSourceRoot: string | null = section === "environments" ? rawRepo : null;
+  let repoSourceRoot: string | null = isRepoScopeSection(section) ? rawRepo : null;
 
   if (rawSection === "cloud") {
     section = cloudRedirectSection(focus);
   }
 
-  if (section === "environments" && rawRepo) {
+  if (isRepoScopeSection(section) && rawRepo) {
     repoSourceRoot = rawRepo;
   }
 
@@ -191,9 +245,18 @@ export function resolveSettingsSelection({
     }
   }
 
-  if (section === "environments") {
+  if (isRepoScopeSection(section)) {
     if (!repoSourceRoot || !repositoryRoots.has(repoSourceRoot)) {
       repoSourceRoot = null;
+    }
+    // Cloud deep links (cloudRepoOwner/cloudRepoName) select the matching
+    // repository entry — including cloud-only entries whose sourceRoot is
+    // `cloud:owner/name` — when no explicit repo selection survived.
+    if (!repoSourceRoot && rawCloudRepoOwner && rawCloudRepoName) {
+      const matches = cloudRepositoriesByKey.get(
+        cloudRepositoryKey(rawCloudRepoOwner, rawCloudRepoName),
+      ) ?? [];
+      repoSourceRoot = matches[0]?.sourceRoot ?? null;
     }
   }
 
@@ -219,9 +282,6 @@ function pickFocus(
 }
 
 function cloudRedirectSection(focus: SettingsFocus): SettingsSection {
-  if (focus.target) {
-    return "compute";
-  }
   if (focus.cloudRepoOwner || focus.cloudRepoName || focus.focus === "repo" || focus.focus === "environment") {
     return "environments";
   }
@@ -242,14 +302,12 @@ function sanitizeFocusForSection(
       kind: focus.kind,
     });
   }
-  if (section === "compute") {
-    return pickFocus({ target: focus.target });
-  }
-  if (section === "environments") {
+  if (isRepoScopeSection(section)) {
     return pickFocus({
       focus: focus.focus,
       cloudRepoOwner: focus.cloudRepoOwner,
       cloudRepoName: focus.cloudRepoName,
+      context: isRepoSettingsContext(focus.context) ? focus.context : null,
     });
   }
   if (section === "billing") {

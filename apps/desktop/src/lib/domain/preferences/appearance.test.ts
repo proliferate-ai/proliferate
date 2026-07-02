@@ -23,6 +23,10 @@ function cssLengthToPx(value: string): number {
   return Number.parseFloat(value);
 }
 
+const UI_FONT_SCALE_SLOTS = Object.keys(
+  UI_FONT_SCALES.default,
+) as (keyof typeof UI_FONT_SCALES.default)[];
+
 function expectMonotonicTokenScale(token: keyof TextTokenScale) {
   for (let index = 1; index < APPEARANCE_SIZE_IDS.length; index += 1) {
     const previousId = APPEARANCE_SIZE_IDS[index - 1];
@@ -30,18 +34,10 @@ function expectMonotonicTokenScale(token: keyof TextTokenScale) {
     if (!previousId || !id) {
       continue;
     }
-    expect(cssLengthToPx(UI_FONT_SCALES[id].xs[token]))
-      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].xs[token]));
-    expect(cssLengthToPx(UI_FONT_SCALES[id].sm[token]))
-      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].sm[token]));
-    expect(cssLengthToPx(UI_FONT_SCALES[id].base[token]))
-      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].base[token]));
-    expect(cssLengthToPx(UI_FONT_SCALES[id].chat[token]))
-      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].chat[token]));
-    expect(cssLengthToPx(UI_FONT_SCALES[id].lg[token]))
-      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].lg[token]));
-    expect(cssLengthToPx(UI_FONT_SCALES[id].xl[token]))
-      .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId].xl[token]));
+    for (const slot of UI_FONT_SCALE_SLOTS) {
+      expect(cssLengthToPx(UI_FONT_SCALES[id][slot][token]))
+        .toBeGreaterThanOrEqual(cssLengthToPx(UI_FONT_SCALES[previousId][slot][token]));
+    }
   }
 }
 
@@ -102,9 +98,14 @@ describe("appearance preferences", () => {
       xs: { fontSize: "0.5rem", lineHeight: "0.75rem" },
       sm: { fontSize: "0.625rem", lineHeight: "1rem" },
       base: { fontSize: "0.6875rem", lineHeight: "1rem" },
+      uiSm: { fontSize: "12px", lineHeight: "16px" },
+      ui: { fontSize: "13px", lineHeight: "18px" },
       chat: { fontSize: "12px", lineHeight: "20px" },
+      composer: { fontSize: "14px", lineHeight: "22px" },
       lg: { fontSize: "0.875rem", lineHeight: "1.25rem" },
       xl: { fontSize: "1.125rem", lineHeight: "1.75rem" },
+      title: { fontSize: "20px", lineHeight: "24px" },
+      hero: { fontSize: "28px", lineHeight: "36px" },
     });
   });
 
@@ -114,65 +115,105 @@ describe("appearance preferences", () => {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
         sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
         base: { fontSize: "0.53125rem", lineHeight: "0.84375rem" },
+        uiSm: { fontSize: "9.5px", lineHeight: "13.5px" },
+        ui: { fontSize: "10.5px", lineHeight: "15.5px" },
         chat: { fontSize: "9.5px", lineHeight: "17.5px" },
+        composer: { fontSize: "11.5px", lineHeight: "19.5px" },
         lg: { fontSize: "0.71875rem", lineHeight: "1.09375rem" },
         xl: { fontSize: "0.96875rem", lineHeight: "1.4375rem" },
+        title: { fontSize: "17px", lineHeight: "21px" },
+        hero: { fontSize: "24px", lineHeight: "32px" },
       },
       xsmall: {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
         sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
         base: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
+        uiSm: { fontSize: "10px", lineHeight: "14px" },
+        ui: { fontSize: "11px", lineHeight: "16px" },
         chat: { fontSize: "10px", lineHeight: "18px" },
+        composer: { fontSize: "12px", lineHeight: "20px" },
         lg: { fontSize: "0.75rem", lineHeight: "1.125rem" },
         xl: { fontSize: "1rem", lineHeight: "1.5rem" },
+        title: { fontSize: "18px", lineHeight: "22px" },
+        hero: { fontSize: "25px", lineHeight: "33px" },
       },
       small: {
         xs: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
         sm: { fontSize: "0.5625rem", lineHeight: "0.9375rem" },
         base: { fontSize: "0.625rem", lineHeight: "0.9375rem" },
+        uiSm: { fontSize: "11px", lineHeight: "15px" },
+        ui: { fontSize: "12px", lineHeight: "17px" },
         chat: { fontSize: "11px", lineHeight: "19px" },
+        composer: { fontSize: "13px", lineHeight: "21px" },
         lg: { fontSize: "0.8125rem", lineHeight: "1.1875rem" },
         xl: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
+        title: { fontSize: "19px", lineHeight: "23px" },
+        hero: { fontSize: "26.5px", lineHeight: "34.5px" },
       },
       default: {
         xs: { fontSize: "0.5rem", lineHeight: "0.75rem" },
         sm: { fontSize: "0.625rem", lineHeight: "1rem" },
         base: { fontSize: "0.6875rem", lineHeight: "1rem" },
+        uiSm: { fontSize: "12px", lineHeight: "16px" },
+        ui: { fontSize: "13px", lineHeight: "18px" },
         chat: { fontSize: "12px", lineHeight: "20px" },
+        composer: { fontSize: "14px", lineHeight: "22px" },
         lg: { fontSize: "0.875rem", lineHeight: "1.25rem" },
         xl: { fontSize: "1.125rem", lineHeight: "1.75rem" },
+        title: { fontSize: "20px", lineHeight: "24px" },
+        hero: { fontSize: "28px", lineHeight: "36px" },
       },
       large: {
         xs: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
         sm: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
         base: { fontSize: "0.75rem", lineHeight: "1.125rem" },
+        uiSm: { fontSize: "13px", lineHeight: "17px" },
+        ui: { fontSize: "14px", lineHeight: "19px" },
         chat: { fontSize: "13px", lineHeight: "21px" },
+        composer: { fontSize: "15px", lineHeight: "23px" },
         lg: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
         xl: { fontSize: "1.1875rem", lineHeight: "1.875rem" },
+        title: { fontSize: "21px", lineHeight: "25px" },
+        hero: { fontSize: "29.5px", lineHeight: "37.5px" },
       },
       xlarge: {
         xs: { fontSize: "0.625rem", lineHeight: "1rem" },
         sm: { fontSize: "0.75rem", lineHeight: "1.125rem" },
         base: { fontSize: "0.8125rem", lineHeight: "1.25rem" },
+        uiSm: { fontSize: "14px", lineHeight: "18px" },
+        ui: { fontSize: "15px", lineHeight: "20px" },
         chat: { fontSize: "14px", lineHeight: "22px" },
+        composer: { fontSize: "16px", lineHeight: "24px" },
         lg: { fontSize: "1rem", lineHeight: "1.5rem" },
         xl: { fontSize: "1.25rem", lineHeight: "2rem" },
+        title: { fontSize: "22px", lineHeight: "26px" },
+        hero: { fontSize: "31px", lineHeight: "39px" },
       },
       xxlarge: {
         xs: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
         sm: { fontSize: "0.8125rem", lineHeight: "1.25rem" },
         base: { fontSize: "0.875rem", lineHeight: "1.375rem" },
+        uiSm: { fontSize: "15px", lineHeight: "19px" },
+        ui: { fontSize: "16px", lineHeight: "21px" },
         chat: { fontSize: "15px", lineHeight: "23px" },
+        composer: { fontSize: "17px", lineHeight: "25px" },
         lg: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
         xl: { fontSize: "1.3125rem", lineHeight: "2.125rem" },
+        title: { fontSize: "23.5px", lineHeight: "27.5px" },
+        hero: { fontSize: "32.5px", lineHeight: "40.5px" },
       },
       xxxlarge: {
         xs: { fontSize: "0.75rem", lineHeight: "1.125rem" },
         sm: { fontSize: "0.875rem", lineHeight: "1.3125rem" },
         base: { fontSize: "0.9375rem", lineHeight: "1.5rem" },
+        uiSm: { fontSize: "16px", lineHeight: "20px" },
+        ui: { fontSize: "17px", lineHeight: "22px" },
         chat: { fontSize: "16px", lineHeight: "24px" },
+        composer: { fontSize: "18px", lineHeight: "26px" },
         lg: { fontSize: "1.125rem", lineHeight: "1.75rem" },
         xl: { fontSize: "1.375rem", lineHeight: "2.25rem" },
+        title: { fontSize: "24.5px", lineHeight: "28.5px" },
+        hero: { fontSize: "34px", lineHeight: "42px" },
       },
     });
   });

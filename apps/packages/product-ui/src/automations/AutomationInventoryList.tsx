@@ -1,6 +1,6 @@
 import { MoreHorizontal, Pause, Pencil, Play, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type {
   AutomationInventoryGroupView,

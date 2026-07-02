@@ -4,6 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Plus } from "@proliferate/ui/icons";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { CloudAgentAuthCredentialForm } from "@/components/settings/panes/agent-authentication/CloudAgentAuthCredentialForm";
 import {
   CredentialMethodRow,
@@ -53,14 +54,10 @@ export function AuthenticationMethodsSection({
     slot.localProvider !== null
   );
   return (
-    <section className="space-y-3">
-      <div className="space-y-1">
-        <h2 className="text-sm font-medium text-foreground">Authentication methods</h2>
-        <p className="max-w-2xl text-sm leading-5 text-muted-foreground">
-          Detected local credentials, synced credentials, cloud API keys, BYOK,
-          and managed credits available to your personal sandboxes.
-        </p>
-      </div>
+    <SettingsSection
+      title="Authentication methods"
+      description="Local, synced, API key, and managed-credit credentials available to your personal sandboxes"
+    >
       <div>
         <SettingsEyebrow className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)_11rem] gap-3 border-b border-border bg-foreground/5 py-2">
           <span>Method</span>
@@ -91,8 +88,8 @@ export function AuthenticationMethodsSection({
           onEnsureFreeCredits={onEnsureFreeCredits}
         />
         {userManagedCredentials.length === 0 ? (
-          <div className="border-t border-border py-3 text-sm text-muted-foreground">
-            No synced or BYOK credentials have been saved yet.
+          <div className="border-t border-border py-3 text-ui-sm text-muted-foreground">
+            No synced or BYOK credentials yet.
           </div>
         ) : userManagedCredentials.map((credential) => (
           <CredentialMethodRow
@@ -108,7 +105,7 @@ export function AuthenticationMethodsSection({
           type="button"
           variant="unstyled"
           size="unstyled"
-          className="flex w-full items-center justify-start gap-3 whitespace-normal py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
+          className="flex w-full items-center justify-start gap-3 whitespace-normal py-3 text-left text-ui-sm text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
           onClick={() => setAddingCredential((value) => !value)}
         >
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5">
@@ -116,11 +113,11 @@ export function AuthenticationMethodsSection({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-medium text-foreground">Add credential</span>
-            <span className="block text-sm leading-5 text-muted-foreground">
-              Add Anthropic, OpenAI, Gemini, or Bedrock credentials for a harness.
+            <span className="block text-ui-sm leading-[1.45] text-muted-foreground">
+              Add Anthropic, OpenAI, Gemini, or Bedrock credentials for an agent.
             </span>
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-ui-sm text-muted-foreground">
             {addingCredential ? "Close" : "Add"}
           </span>
         </Button>
@@ -147,6 +144,6 @@ export function AuthenticationMethodsSection({
           }
         }}
       />
-    </section>
+    </SettingsSection>
   );
 }

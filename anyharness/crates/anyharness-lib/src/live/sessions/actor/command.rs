@@ -1,16 +1,15 @@
 use std::fmt;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, McpElicitationSubmittedField,
-    UserInputSubmittedAnswer,
+    ConfigApplyState, McpElicitationSubmittedField, UserInputSubmittedAnswer,
 };
 use tokio::sync::oneshot;
 
 use crate::domains::sessions::prompt::PromptPayload;
-use crate::live::sessions::model::SessionDomainOp;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
+use crate::live::sessions::model::SessionDomainOp;
 use crate::live::sessions::rendezvous::broker::PermissionDecision;
 #[derive(Debug)]
 pub enum PromptAcceptError {

@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -17,7 +17,6 @@ import { useWorkspaceRetireActions } from "@/hooks/workspaces/workflows/use-work
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 
 export function useWorkspaceSidebarActions() {
-  const mobility = useWorkspaceMobilityState();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const {
     goToTopLevelRoute,
@@ -36,6 +35,7 @@ export function useWorkspaceSidebarActions() {
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const showToast = useToastStore((state) => state.show);
   const { markDone, retryCleanup } = useWorkspaceRetireActions();
+  const { openExternal } = useTauriShellActions();
 
   const handleAddRepo = useCallback(() => {
     openAddRepoFlow();
@@ -43,10 +43,6 @@ export function useWorkspaceSidebarActions() {
 
   const handleGoHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
-  }, [goToTopLevelRoute]);
-
-  const handleGoIntegrations = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.integrations);
   }, [goToTopLevelRoute]);
 
   const handleGoWorkflows = useCallback(() => {
@@ -61,6 +57,12 @@ export function useWorkspaceSidebarActions() {
     selectWorkspaceFromSurface(workspaceId, "sidebar");
   }, [selectWorkspaceFromSurface]);
 
+  const handleOpenPullRequest = useCallback((url: string) => {
+    void openExternal(url).catch(() => {
+      showToast("Failed to open the pull request.");
+    });
+  }, [openExternal, showToast]);
+
   const handleSidebarIndicatorAction = useCallback((action: SidebarIndicatorAction) => {
     switch (action.kind) {
       case "open_workspace":
@@ -72,11 +74,6 @@ export function useWorkspaceSidebarActions() {
           : "/workflows");
         return;
       case "open_source_session": {
-        if (mobility.selectionLocked && action.workspaceId !== mobility.selectedLogicalWorkspaceId) {
-          showToast("Finish the current workspace move before switching workspaces.");
-          return;
-        }
-
         navigateToWorkspaceShell();
         void openWorkspaceSession({
           workspaceId: action.workspaceId,
@@ -92,8 +89,6 @@ export function useWorkspaceSidebarActions() {
   }, [
     goToTopLevelRoute,
     handleSelectWorkspace,
-    mobility.selectedLogicalWorkspaceId,
-    mobility.selectionLocked,
     navigateToWorkspaceShell,
     openWorkspaceSession,
     showToast,
@@ -194,10 +189,10 @@ export function useWorkspaceSidebarActions() {
   return {
     handleAddRepo,
     handleGoHome,
-    handleGoIntegrations,
     handleGoWorkflows,
     handleGoWorkspaces,
     handleSidebarIndicatorAction,
+    handleOpenPullRequest,
     handleMarkWorkspaceDone,
     handleRetryWorkspaceCleanup,
     handleSelectWorkspace,

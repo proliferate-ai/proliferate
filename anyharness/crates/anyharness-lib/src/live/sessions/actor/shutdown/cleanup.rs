@@ -6,8 +6,6 @@ pub(in crate::live::sessions::actor) fn interaction_resolution_for_exit(
 ) -> Resolution {
     match disposition {
         ActorExitDisposition::Dismiss => Resolution::Dismissed,
-        ActorExitDisposition::Error { .. } | ActorExitDisposition::Close => {
-            Resolution::Cancelled
-        }
+        ActorExitDisposition::Error { .. } | ActorExitDisposition::Close => Resolution::Cancelled,
     }
 }

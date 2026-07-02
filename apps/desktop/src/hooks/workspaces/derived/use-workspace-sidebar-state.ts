@@ -21,6 +21,7 @@ import {
 } from "@/hooks/ui/document/use-document-focus-visibility";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
+import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
 import { useDebouncedWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -134,6 +135,7 @@ export function useWorkspaceSidebarState({
     workspaceCollections?.cleanupAttentionWorkspaces ?? EMPTY_WORKSPACES;
   const { repoRoots } = useStandardRepoProjection();
   const { data: gitStatus } = useWorkspaceMetadataSync();
+  const { statusesByLogicalId: gitStatusesByLogicalId } = useWorkspaceGitStatuses();
   const computeTargets = useComputeTargetOptions();
 
   const sessionWorkspaceIds = useSessionDirectoryStore(useShallow((state) => {
@@ -178,6 +180,7 @@ export function useWorkspaceSidebarState({
       "pendingWorkspaceEntry",
       "workspaceActivities",
       "gitStatus",
+      "gitStatuses",
       "targetAppearance",
     ],
     count: (value) => value.length,
@@ -195,6 +198,7 @@ export function useWorkspaceSidebarState({
       workspaceActivities,
       pendingPromptCounts,
       gitStatus,
+      gitStatusesByLogicalId,
       activeSessionTitle,
       lastViewedAt,
       workspaceLastInteracted,
@@ -208,6 +212,7 @@ export function useWorkspaceSidebarState({
     archivedSet,
     computeTargets.targetAppearanceById,
     gitStatus,
+    gitStatusesByLogicalId,
     hiddenRepoRootSet,
     lastViewedAt,
     logicalWorkspaces,

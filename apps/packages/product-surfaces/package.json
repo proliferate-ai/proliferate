@@ -7,10 +7,6 @@
     "dist"
   ],
   "exports": {
-    "./plugins/CloudPluginsSurface": {
-      "types": "./dist/plugins/CloudPluginsSurface.d.ts",
-      "import": "./dist/plugins/CloudPluginsSurface.js"
-    },
     "./settings/BillingSettingsSurface": {
       "types": "./dist/settings/BillingSettingsSurface.d.ts",
       "import": "./dist/settings/BillingSettingsSurface.js"
@@ -23,10 +19,6 @@
       "types": "./dist/settings/CloudSecretsSettingsSurface.d.ts",
       "import": "./dist/settings/CloudSecretsSettingsSurface.js"
     },
-    "./settings/CloudOrganizationIntegrationsPolicySurface": {
-      "types": "./dist/settings/CloudOrganizationIntegrationsPolicySurface.d.ts",
-      "import": "./dist/settings/CloudOrganizationIntegrationsPolicySurface.js"
-    },
     "./settings/CloudOrganizationSsoSettingsSurface": {
       "types": "./dist/settings/CloudOrganizationSsoSettingsSurface.d.ts",
       "import": "./dist/settings/CloudOrganizationSsoSettingsSurface.js"
@@ -34,6 +26,14 @@
     "./settings/cloud-environments/AddCloudEnvironmentDialogController": {
       "types": "./dist/settings/cloud-environments/AddCloudEnvironmentDialogController.d.ts",
       "import": "./dist/settings/cloud-environments/AddCloudEnvironmentDialogController.js"
+    },
+    "./settings/cloud-environments/use-add-cloud-environment": {
+      "types": "./dist/settings/cloud-environments/use-add-cloud-environment.d.ts",
+      "import": "./dist/settings/cloud-environments/use-add-cloud-environment.js"
+    },
+    "./settings/cloud-environments/use-cloud-environment-draft": {
+      "types": "./dist/settings/cloud-environments/use-cloud-environment-draft.d.ts",
+      "import": "./dist/settings/cloud-environments/use-cloud-environment-draft.js"
     },
     "./support/CloudSupportSurface": {
       "types": "./dist/support/CloudSupportSurface.d.ts",
