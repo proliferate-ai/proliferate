@@ -84,6 +84,7 @@ from proliferate.server.notifications import (
     SignupSlackNotification,
     schedule_signup_slack_notification,
 )
+from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 
 if TYPE_CHECKING:
     from proliferate.auth.users import UserManager
@@ -456,6 +457,11 @@ async def finish_github_desktop_callback(
             scopes=parse_scope_string(token.get("scope")),
         ),
     )
+
+    # ADMIN_EMAILS floor: asserted at every login. This legacy desktop GitHub
+    # callback resolves its user outside resolve_provider_user, so it hooks
+    # the shared helper itself.
+    await ensure_admin_email_role(db, user)
 
     auth_code = await create_auth_code(
         db,

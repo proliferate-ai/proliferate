@@ -23,9 +23,13 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.constants.organizations import ORGANIZATION_ROLE_MEMBER
+from proliferate.constants.organizations import (
+    ORGANIZATION_ROLE_ADMIN,
+    ORGANIZATION_ROLE_MEMBER,
+)
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.organization_records import OrganizationRecord
+from proliferate.server.organizations.admin_emails import is_admin_listed_email
 from proliferate.server.organizations.domain.profile import (
     default_organization_name,
     derive_logo_domain_from_email,
@@ -72,11 +76,18 @@ class SingleOrgPolicy:
             # No instance org yet. Only the first-run claim flow may create one;
             # a normal sign-in must not, so we fail closed.
             raise InstanceOrganizationNotClaimed()
+        # ADMIN_EMAILS floor, asserted at account creation: listed identities
+        # start at admin instead of member.
+        role = (
+            ORGANIZATION_ROLE_ADMIN
+            if is_admin_listed_email(user.email)
+            else ORGANIZATION_ROLE_MEMBER
+        )
         await organization_store.add_active_membership(
             db,
             organization_id=instance_organization.id,
             user_id=user.id,
-            role=ORGANIZATION_ROLE_MEMBER,
+            role=role,
         )
 
 
