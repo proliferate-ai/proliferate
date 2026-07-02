@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import and_, exists, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -21,6 +21,9 @@ from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.organizations import OrganizationMembership
 
 
+# Deliberately excludes anyharness_bearer_token_ciphertext: snapshots feed
+# list/detail payload builders, and the bearer must never ride along. Read it
+# through get_target_anyharness_bearer_ciphertext instead.
 @dataclass(frozen=True)
 class CloudTargetSnapshot:
     id: UUID
@@ -90,3 +93,103 @@ async def get_visible_target_by_id(
     if row is None:
         return None
     return _target_snapshot(row)
+
+
+async def list_visible_targets(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[CloudTargetSnapshot]:
+    rows = (
+        await db.execute(
+            select(CloudTarget)
+            .where(_visible_target_filter(user_id))
+            .order_by(CloudTarget.created_at, CloudTarget.id)
+        )
+    ).scalars()
+    return [_target_snapshot(row) for row in rows]
+
+
+async def get_active_personal_target_by_kind(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    kind: str,
+) -> CloudTargetSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudTarget)
+            .where(CloudTarget.owner_scope == "personal")
+            .where(CloudTarget.owner_user_id == owner_user_id)
+            .where(CloudTarget.kind == kind)
+            .where(CloudTarget.archived_at.is_(None))
+            .order_by(CloudTarget.created_at)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    return _target_snapshot(row)
+
+
+async def create_target(
+    db: AsyncSession,
+    *,
+    display_name: str,
+    kind: str,
+    owner_scope: str,
+    owner_user_id: UUID | None,
+    organization_id: UUID | None,
+    created_by_user_id: UUID,
+    anyharness_bearer_token_ciphertext: str,
+) -> CloudTargetSnapshot:
+    target = CloudTarget(
+        display_name=display_name,
+        kind=kind,
+        owner_scope=owner_scope,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        created_by_user_id=created_by_user_id,
+        anyharness_bearer_token_ciphertext=anyharness_bearer_token_ciphertext,
+    )
+    db.add(target)
+    await db.flush()
+    return _target_snapshot(target)
+
+
+async def set_target_status(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    status_value: str,
+) -> None:
+    await db.execute(
+        update(CloudTarget).where(CloudTarget.id == target_id).values(status=status_value)
+    )
+
+
+async def set_target_anyharness_bearer_ciphertext(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    ciphertext: str,
+) -> None:
+    await db.execute(
+        update(CloudTarget)
+        .where(CloudTarget.id == target_id)
+        .values(anyharness_bearer_token_ciphertext=ciphertext)
+    )
+
+
+async def get_target_anyharness_bearer_ciphertext(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+) -> str | None:
+    return (
+        await db.execute(
+            select(CloudTarget.anyharness_bearer_token_ciphertext).where(
+                CloudTarget.id == target_id
+            )
+        )
+    ).scalar_one_or_none()

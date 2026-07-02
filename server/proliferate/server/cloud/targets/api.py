@@ -1,4 +1,10 @@
-"""HTTP routes for cloud compute targets."""
+"""HTTP routes for cloud compute targets (minimal direct-runtime slice).
+
+Enrollment mints the per-runtime AnyHarness bearer; it surfaces exactly
+twice — in the enrollment response (once, for the Desktop installer flow)
+and via the owner-gated runtime-access endpoint (direct attach). List and
+detail payloads never carry it.
+"""
 
 from __future__ import annotations
 
@@ -12,27 +18,27 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.targets.models import (
-    ArchiveCloudTargetResponse,
     CloudTargetDetail,
     CloudTargetEnrollmentRequest,
     CloudTargetEnrollmentResponse,
     CloudTargetExistingEnrollmentRequest,
+    CloudTargetRuntimeAccessResponse,
     CloudTargetSummary,
     target_detail_payload,
     target_summary_payload,
 )
 from proliferate.server.cloud.targets.service import (
-    archive_target,
     create_target_enrollment,
     create_target_enrollment_for_existing_target,
     get_target_detail,
+    get_target_runtime_access,
     list_targets,
 )
 
 router = APIRouter(prefix="/targets", tags=["cloud-targets"])
 
 
-@router.post("/enrollments", response_model=CloudTargetEnrollmentResponse)
+@router.post("", response_model=CloudTargetEnrollmentResponse)
 async def create_target_enrollment_endpoint(
     body: CloudTargetEnrollmentRequest,
     db: AsyncSession = Depends(get_async_session),
@@ -84,14 +90,14 @@ async def get_target_endpoint(
     return target_detail_payload(value)
 
 
-@router.post("/{target_id}/archive", response_model=ArchiveCloudTargetResponse)
-async def archive_target_endpoint(
+@router.get("/{target_id}/runtime-access", response_model=CloudTargetRuntimeAccessResponse)
+async def get_target_runtime_access_endpoint(
     target_id: UUID,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> ArchiveCloudTargetResponse:
+) -> CloudTargetRuntimeAccessResponse:
     try:
-        value = await archive_target(db, target_id=target_id, user=user)
+        bearer = await get_target_runtime_access(db, target_id=target_id, user_id=user.id)
     except CloudApiError as error:
         raise_cloud_error(error)
-    return ArchiveCloudTargetResponse(target=target_detail_payload(value))
+    return CloudTargetRuntimeAccessResponse(anyharness_bearer_token=bearer)

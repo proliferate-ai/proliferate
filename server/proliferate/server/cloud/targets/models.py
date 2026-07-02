@@ -1,98 +1,28 @@
-"""Request and response models for cloud compute targets."""
+"""Request and response models for cloud compute targets.
+
+Minimal direct-runtime reintroduction: only the ownership/identity shape of
+the minimal ``cloud_targets`` registry is exposed. Inventory, worker status,
+and update-channel payloads return with the worker slice of the stack.
+
+The per-runtime AnyHarness bearer appears in exactly two payloads — the
+enrollment response (once, alongside the enrollment token, so it can reach
+the Desktop installer flow) and the runtime-access response (owner-gated
+direct attach). It must never be added to summary/detail payloads.
+"""
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from typing import Literal, cast
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from proliferate.constants.cloud import CloudTargetUpdateChannel, CloudTargetUpdateStatus
-from proliferate.db.store.cloud_sync.targets import (
-    CloudTargetCurrentVersionsSnapshot,
-    CloudTargetInventorySnapshot,
-    CloudTargetSnapshot,
-    CloudTargetStatusSnapshot,
-)
+from proliferate.db.store.cloud_sync.targets import CloudTargetSnapshot
 
 
 def _to_iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
-
-
-def _parse_json(value: str | None) -> dict[str, object] | None:
-    if value is None:
-        return None
-    parsed = cast(object, json.loads(value))
-    return parsed if isinstance(parsed, dict) else {"value": parsed}
-
-
-class CloudTargetInventoryModel(BaseModel):
-    os: str | None = None
-    arch: str | None = None
-    distro: str | None = None
-    shell: str | None = None
-    git: dict[str, object] | None = None
-    node: dict[str, object] | None = None
-    python: dict[str, object] | None = None
-    browser: dict[str, object] | None = None
-    capabilities: dict[str, object] | None = None
-    providers: dict[str, object] | None = None
-    mcp: dict[str, object] | None = None
-    updated_at: str = Field(serialization_alias="updatedAt")
-
-
-class CloudTargetStatusModel(BaseModel):
-    status: str
-    status_detail: str | None = Field(default=None, serialization_alias="statusDetail")
-    last_seen_at: str | None = Field(default=None, serialization_alias="lastSeenAt")
-    last_heartbeat_at: str | None = Field(default=None, serialization_alias="lastHeartbeatAt")
-    updated_at: str | None = Field(default=None, serialization_alias="updatedAt")
-
-
-class CloudTargetDesiredVersionsModel(BaseModel):
-    anyharness_version: str | None = Field(
-        default=None,
-        serialization_alias="anyharnessVersion",
-    )
-    worker_version: str | None = Field(default=None, serialization_alias="workerVersion")
-    supervisor_version: str | None = Field(
-        default=None,
-        serialization_alias="supervisorVersion",
-    )
-
-
-class CloudTargetCurrentVersionsModel(BaseModel):
-    worker_id: str = Field(serialization_alias="workerId")
-    anyharness_version: str | None = Field(
-        default=None,
-        serialization_alias="anyharnessVersion",
-    )
-    worker_version: str | None = Field(default=None, serialization_alias="workerVersion")
-    supervisor_version: str | None = Field(
-        default=None,
-        serialization_alias="supervisorVersion",
-    )
-    reported_at: str | None = Field(default=None, serialization_alias="reportedAt")
-
-
-class CloudTargetUpdateModel(BaseModel):
-    channel: CloudTargetUpdateChannel
-    generation: int
-    desired_versions: CloudTargetDesiredVersionsModel = Field(
-        serialization_alias="desiredVersions",
-    )
-    current_versions: CloudTargetCurrentVersionsModel | None = Field(
-        default=None,
-        serialization_alias="currentVersions",
-    )
-    status: CloudTargetUpdateStatus | None = None
-    status_detail: str | None = Field(default=None, serialization_alias="statusDetail")
-    component: Literal["anyharness", "worker", "supervisor"] | None = None
-    version: str | None = None
-    reported_at: str | None = Field(default=None, serialization_alias="reportedAt")
 
 
 class CloudTargetSummary(BaseModel):
@@ -101,19 +31,7 @@ class CloudTargetSummary(BaseModel):
     kind: str
     status: str
     owner_scope: str = Field(serialization_alias="ownerScope")
-    sandbox_profile_id: str | None = Field(default=None, serialization_alias="sandboxProfileId")
-    profile_target_role: str = Field(serialization_alias="profileTargetRole")
     organization_id: str | None = Field(default=None, serialization_alias="organizationId")
-    default_workspace_root: str | None = Field(
-        default=None,
-        serialization_alias="defaultWorkspaceRoot",
-    )
-    inventory: CloudTargetInventoryModel | None = None
-    status_detail: CloudTargetStatusModel | None = Field(
-        default=None,
-        serialization_alias="statusDetail",
-    )
-    update: CloudTargetUpdateModel
     archived_at: str | None = Field(default=None, serialization_alias="archivedAt")
     created_at: str = Field(serialization_alias="createdAt")
     updated_at: str = Field(serialization_alias="updatedAt")
@@ -132,7 +50,6 @@ class CloudTargetEnrollmentRequest(BaseModel):
         alias="ownerScope",
     )
     organization_id: UUID | None = Field(default=None, alias="organizationId")
-    default_workspace_root: str | None = Field(default=None, alias="defaultWorkspaceRoot")
     ttl_seconds: int | None = Field(default=None, alias="ttlSeconds")
 
 
@@ -143,80 +60,14 @@ class CloudTargetExistingEnrollmentRequest(BaseModel):
 class CloudTargetEnrollmentResponse(BaseModel):
     target: CloudTargetDetail
     enrollment_token: str = Field(serialization_alias="enrollmentToken")
+    anyharness_bearer_token: str = Field(serialization_alias="anyharnessBearerToken")
     install_command: str = Field(serialization_alias="installCommand")
     artifact_base_url: str | None = Field(default=None, serialization_alias="artifactBaseUrl")
     expires_at: str = Field(serialization_alias="expiresAt")
 
 
-class ArchiveCloudTargetResponse(BaseModel):
-    target: CloudTargetDetail
-
-
-def inventory_payload(
-    value: CloudTargetInventorySnapshot | None,
-) -> CloudTargetInventoryModel | None:
-    if value is None:
-        return None
-    return CloudTargetInventoryModel(
-        os=value.os,
-        arch=value.arch,
-        distro=value.distro,
-        shell=value.shell,
-        git=_parse_json(value.git_json),
-        node=_parse_json(value.node_json),
-        python=_parse_json(value.python_json),
-        browser=_parse_json(value.browser_json),
-        capabilities=_parse_json(value.capabilities_json),
-        providers=_parse_json(value.providers_json),
-        mcp=_parse_json(value.mcp_json),
-        updated_at=_to_iso(value.updated_at),
-    )
-
-
-def status_payload(
-    value: CloudTargetStatusSnapshot | None,
-) -> CloudTargetStatusModel | None:
-    if value is None:
-        return None
-    return CloudTargetStatusModel(
-        status=value.status,
-        status_detail=value.status_detail,
-        last_seen_at=_to_iso(value.last_seen_at),
-        last_heartbeat_at=_to_iso(value.last_heartbeat_at),
-        updated_at=_to_iso(value.updated_at),
-    )
-
-
-def current_versions_payload(
-    value: CloudTargetCurrentVersionsSnapshot | None,
-) -> CloudTargetCurrentVersionsModel | None:
-    if value is None:
-        return None
-    return CloudTargetCurrentVersionsModel(
-        worker_id=str(value.worker_id),
-        anyharness_version=value.anyharness_version,
-        worker_version=value.worker_version,
-        supervisor_version=value.supervisor_version,
-        reported_at=_to_iso(value.reported_at),
-    )
-
-
-def update_payload(value: CloudTargetSnapshot) -> CloudTargetUpdateModel:
-    return CloudTargetUpdateModel(
-        channel=value.update_channel,
-        generation=value.update_generation,
-        desired_versions=CloudTargetDesiredVersionsModel(
-            anyharness_version=value.desired_anyharness_version,
-            worker_version=value.desired_worker_version,
-            supervisor_version=value.desired_supervisor_version,
-        ),
-        current_versions=current_versions_payload(value.current_versions),
-        status=value.update_status,
-        status_detail=value.update_status_detail,
-        component=value.update_component,
-        version=value.update_version,
-        reported_at=_to_iso(value.update_reported_at),
-    )
+class CloudTargetRuntimeAccessResponse(BaseModel):
+    anyharness_bearer_token: str = Field(serialization_alias="anyharnessBearerToken")
 
 
 def target_summary_payload(value: CloudTargetSnapshot) -> CloudTargetSummary:
@@ -226,13 +77,7 @@ def target_summary_payload(value: CloudTargetSnapshot) -> CloudTargetSummary:
         kind=value.kind,
         status=value.status,
         owner_scope=value.owner_scope,
-        sandbox_profile_id=str(value.sandbox_profile_id) if value.sandbox_profile_id else None,
-        profile_target_role=value.profile_target_role,
         organization_id=str(value.organization_id) if value.organization_id else None,
-        default_workspace_root=value.default_workspace_root,
-        inventory=inventory_payload(value.inventory),
-        status_detail=status_payload(value.status_record),
-        update=update_payload(value),
         archived_at=_to_iso(value.archived_at),
         created_at=_to_iso(value.created_at),
         updated_at=_to_iso(value.updated_at),

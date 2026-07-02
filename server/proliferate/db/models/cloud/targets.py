@@ -5,14 +5,15 @@ ssh/personal-target design (specs/tbd/ssh-personal-target-design.md §3.1)
 brings the enrollment record back as the ownership anchor for per-target
 agent-auth scoping: a ``CloudTarget`` row is a user-owned direct runtime that
 target-scoped route selections reference. Only the ownership/identity columns
-live here; enrollment transport state (workers, inventory, heartbeats,
-bearer ciphertext) returns with the enrollment slice of the stack.
+plus the per-runtime AnyHarness bearer (§3.3) live here; enrollment transport
+state (workers, inventory, heartbeats) returns with the worker slice of the
+stack.
 """
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
@@ -67,6 +68,11 @@ class CloudTarget(Base):
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
     )
+    # Per-runtime AnyHarness bearer, Fernet-encrypted with the cloud secret key
+    # (same recoverable-ciphertext pattern as CloudSandbox.runtime_token_ciphertext,
+    # NOT the one-way HMAC used for enrollment tokens): the plaintext must be
+    # re-readable for direct attach (runtime-access endpoint) and re-install.
+    anyharness_bearer_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

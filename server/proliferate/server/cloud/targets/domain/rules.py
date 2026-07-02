@@ -9,7 +9,6 @@ from proliferate.constants.cloud import (
     CLOUD_TARGET_DEFAULT_ENROLLMENT_TTL_SECONDS,
     CLOUD_TARGET_MAX_ENROLLMENT_TTL_SECONDS,
     SUPPORTED_ENROLLABLE_CLOUD_TARGET_KINDS,
-    CloudTargetKind,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.targets.domain.types import CloudTargetOwnerScope
@@ -78,27 +77,18 @@ def clamp_enrollment_ttl_seconds(value: int | None) -> int:
     return min(value, CLOUD_TARGET_MAX_ENROLLMENT_TTL_SECONDS)
 
 
-def default_workspace_root_for_kind(kind: str, supplied_root: str | None) -> str | None:
-    root = supplied_root.strip() if supplied_root is not None else ""
-    if root:
-        return root
-    if kind == CloudTargetKind.ssh.value:
-        return "~/proliferate-workspaces"
-    if kind == CloudTargetKind.desktop_dispatch.value:
-        return "~/Proliferate/workspaces"
-    return None
-
-
 def build_install_command(
     *,
     installer_url: str,
     cloud_base_url: str,
     enrollment_token: str,
+    anyharness_bearer_token: str,
     artifact_base_url: str | None,
 ) -> str:
     env_parts = [
         f"PROLIFERATE_CLOUD_URL={shlex.quote(cloud_base_url)}",
         f"PROLIFERATE_ENROLLMENT_TOKEN={shlex.quote(enrollment_token)}",
+        f"PROLIFERATE_ANYHARNESS_BEARER_TOKEN={shlex.quote(anyharness_bearer_token)}",
     ]
     if artifact_base_url:
         env_parts.append(f"PROLIFERATE_ARTIFACT_BASE_URL={shlex.quote(artifact_base_url)}")
