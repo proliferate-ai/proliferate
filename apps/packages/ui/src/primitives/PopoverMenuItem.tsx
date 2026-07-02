@@ -45,9 +45,8 @@ export function PopoverMenuItem({
   const rowClassName = density === "compact"
     ? "flex w-full items-center gap-1.5"
     : "flex w-full items-center gap-1.5";
-  const defaultIconClassName = density === "compact"
-    ? "flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
-    : "flex shrink-0 items-center justify-center text-muted-foreground";
+  const defaultIconClassName =
+    "flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100";
   const defaultTrailingClassName = density === "compact"
     ? "flex size-5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
     : "flex shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&_*]:text-ui-sm";

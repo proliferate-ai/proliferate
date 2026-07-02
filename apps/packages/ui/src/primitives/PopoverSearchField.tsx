@@ -23,7 +23,7 @@ export function PopoverSearchField({
 }: PopoverSearchFieldProps) {
   return (
     <div className="flex items-center gap-2 px-2.5 py-[7px]">
-      <Search className="size-4 shrink-0 text-muted-foreground/75" />
+      <Search className="size-3.5 shrink-0 text-muted-foreground/75" />
       <Input
         value={value}
         onChange={(event) => onChange(event.target.value)}

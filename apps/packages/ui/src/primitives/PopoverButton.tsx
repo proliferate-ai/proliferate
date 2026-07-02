@@ -12,15 +12,16 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Slot } from "@radix-ui/react-slot";
 import { Popover, PopoverTrigger } from "../kit/Popover";
 import { useNativeOverlayRegistration } from "../overlays/overlay-presence";
+import { POPOVER_SURFACE_CLASS } from "./popover-surface";
 
 type PopoverAlign = "start" | "end";
 type PopoverSide = "bottom" | "top" | "right" | "left";
 type PopoverPlacementSide = PopoverSide | "auto";
 type PopoverTriggerMode = "click" | "doubleClick" | "contextMenu";
 
-export const POPOVER_FRAME_CLASS =
-  "m-px rounded-xl bg-popover/90 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm";
-export const POPOVER_SURFACE_CLASS = `${POPOVER_FRAME_CLASS} flex max-h-[calc(100vh-1rem)] min-w-[240px] max-w-[320px] select-none flex-col overflow-y-auto p-1`;
+// Re-export so existing `from "@proliferate/ui/primitives/PopoverButton"`
+// imports keep working; the constants live in the dependency-free leaf.
+export { POPOVER_FRAME_CLASS, POPOVER_SURFACE_CLASS } from "./popover-surface";
 
 interface PopoverButtonProps {
   /** The trigger element — receives onClick and ref. */
@@ -171,7 +172,7 @@ export function PopoverButton({
           // back to the trigger.
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
-          className={`z-50 outline-none ${className}`}
+          className={`z-50 outline-none animate-popover-in [transform-origin:var(--radix-popover-content-transform-origin)] ${className}`}
         >
           {children(close)}
         </PopoverPrimitive.Content>
