@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 
 interface SessionTitleRenamePopoverProps {
   currentTitle: string;
@@ -39,7 +39,7 @@ export function SessionTitleRenamePopover({
       align="start"
       side="bottom"
       offset={6}
-      className="w-72 rounded-xl border border-border bg-popover p-3 shadow-floating"
+      className={`w-72 ${POPOVER_FRAME_CLASS} p-3`}
       externalOpen={externalOpen}
       onOpenChange={onOpenChange}
     >

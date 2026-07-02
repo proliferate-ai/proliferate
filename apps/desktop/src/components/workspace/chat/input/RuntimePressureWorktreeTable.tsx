@@ -2,7 +2,7 @@ import type { WorktreeInventoryRow } from "@anyharness/sdk";
 import { Check, ListFilter, SlidersHorizontal, Trash } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   worktreeGitStatusView,
@@ -52,7 +52,7 @@ export function WorktreeFilterMenu({
   return (
     <PopoverButton
       align="end"
-      className="w-52 rounded-lg border border-border/80 bg-popover/95 p-1 shadow-popover"
+      className={`w-52 ${POPOVER_FRAME_CLASS} p-1`}
       trigger={(
         <Button type="button" variant="ghost" size="sm" className={active ? "text-foreground" : ""}>
           <ListFilter className="size-3.5" />
@@ -117,7 +117,7 @@ export function WorktreeSortMenu({
   return (
     <PopoverButton
       align="end"
-      className="w-44 rounded-lg border border-border/80 bg-popover/95 p-1 shadow-popover"
+      className={`w-44 ${POPOVER_FRAME_CLASS} p-1`}
       trigger={(
         <Button type="button" variant="ghost" size="sm">
           <SlidersHorizontal className="size-3.5" />

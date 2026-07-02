@@ -4,7 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 import {
@@ -192,7 +192,7 @@ export function TerminalHeaderIcon({
         triggerMode="contextMenu"
         side="bottom"
         align="start"
-        className="w-56 rounded-md border border-border bg-popover p-1 shadow-floating"
+        className={`w-56 ${POPOVER_FRAME_CLASS} p-1`}
         trigger={trigger}
       >
         {(close) => (

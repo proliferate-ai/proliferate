@@ -205,7 +205,7 @@ function ComposerConfigSubmenuButton({
     <PopoverMenuItem
       label={modelConfigSubmenuLabel(control)}
       trailing={<ChevronDown className="-rotate-90 size-3.5 shrink-0" />}
-      className={active ? "bg-popover-accent text-popover-foreground" : ""}
+      className={active ? "bg-list-hover text-popover-foreground" : ""}
       aria-haspopup="menu"
       aria-expanded={active}
       data-state={active ? "open" : "closed"}
