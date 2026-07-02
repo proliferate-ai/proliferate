@@ -118,6 +118,26 @@ resolve_instance_public_ip() {
   exit 1
 }
 
+# Compose a URL from SITE_ADDRESS. Operators may set SITE_ADDRESS with or
+# without a scheme (Caddy accepts both); Caddy serves https unless the
+# operator configured an explicit http:// site.
+site_url_from_address() {
+  local address="$1"
+  local path="$2"
+  local scheme="https"
+  local host="$address"
+
+  if [[ "$host" == http://* ]]; then
+    scheme="http"
+    host="${host#http://}"
+  elif [[ "$host" == https://* ]]; then
+    host="${host#https://}"
+  fi
+  host="${host%/}"
+
+  printf '%s://%s%s' "$scheme" "$host" "$path"
+}
+
 random_hex() {
   local bytes="$1"
 
@@ -171,7 +191,7 @@ if [[ -z "$SITE_ADDRESS" ]]; then
 fi
 
 if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
-  PUBLIC_HEALTHCHECK_URL="https://${SITE_ADDRESS}/health"
+  PUBLIC_HEALTHCHECK_URL="$(site_url_from_address "$SITE_ADDRESS" /health)"
 fi
 
 POSTGRES_PASSWORD="$(resolve_value \
