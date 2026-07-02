@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
@@ -8,7 +7,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
-import { APP_ROUTES } from "@/config/app-routes";
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
@@ -53,7 +51,6 @@ const TURN_END_SOUND_OPTIONS: { id: TurnEndSoundId; label: string }[] = [
 const SETTINGS_CONTROL_WIDTH_CLASS = "w-[240px]";
 
 export function GeneralPane() {
-  const navigate = useNavigate();
   const { data: editors = EMPTY_EDITORS } = useAvailableEditors();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultOpenInTargetId: state.defaultOpenInTargetId,
@@ -212,18 +209,6 @@ export function GeneralPane() {
       </SettingsSection>
 
       <SettingsSection title="Session policy">
-          <SettingsRow
-            label="Integrations setup"
-            description="Configure cloud connectors and plugin packages."
-          >
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(APP_ROUTES.integrations)}
-            >
-              Open Integrations
-            </Button>
-          </SettingsRow>
           <SettingsRow
             label="Allow coding agents to spin up subagents"
             description="Applies to new sessions. Existing sessions keep their saved delegation policy."

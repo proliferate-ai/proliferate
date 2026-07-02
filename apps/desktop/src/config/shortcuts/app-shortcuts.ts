@@ -19,15 +19,6 @@ export const APP_SHORTCUTS = {
     match: { kind: "fixed-code", code: "Comma", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
-  goPlugins: {
-    id: "app.go-plugins",
-    label: "⌘P",
-    nonMacLabel: "Ctrl+P",
-    description: "Go to integrations",
-    owner: "js",
-    match: { kind: "fixed-code", code: "KeyP", meta: true, shift: false, alt: false },
-    allowInInputs: false,
-  },
   goAutomations: {
     id: "app.go-automations",
     label: "⌘U",

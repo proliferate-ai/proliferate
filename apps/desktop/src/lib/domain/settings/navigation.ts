@@ -80,7 +80,7 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
       params.set(name, value);
     }
   }
-  if ((section === "agent-authentication" || section === "compute") && target.target) {
+  if (section === "agent-authentication" && target.target) {
     params.set("target", target.target);
   }
   if (section === "agent-authentication" && target.credential) {
@@ -109,6 +109,34 @@ export function buildCloudRepoSettingsHref(
       cloudRepoOwner: gitOwner,
       cloudRepoName: gitRepoName,
     },
+  });
+}
+
+/**
+ * Repository settings link for a workspace: cloud repos deep-link into the
+ * cloud environment entry; local workspaces fall back to the repo root path
+ * (or the workspace path) and resolve to null when neither is known.
+ */
+export function resolveWorkspaceRepoSettingsHref(input: {
+  cloudRepoOwner?: string | null;
+  cloudRepoName?: string | null;
+  repoRootPath?: string | null;
+  workspacePath?: string | null;
+}): string | null {
+  const cloudOwner = input.cloudRepoOwner?.trim() ?? "";
+  const cloudName = input.cloudRepoName?.trim() ?? "";
+  if (cloudOwner && cloudName) {
+    return buildCloudRepoSettingsHref(cloudOwner, cloudName);
+  }
+  const localRepoPath = input.repoRootPath?.trim()
+    || input.workspacePath?.trim()
+    || "";
+  if (!localRepoPath) {
+    return null;
+  }
+  return buildSettingsHref({
+    section: "repo",
+    repo: localRepoPath,
   });
 }
 
@@ -224,9 +252,6 @@ function pickFocus(
 }
 
 function cloudRedirectSection(focus: SettingsFocus): SettingsSection {
-  if (focus.target) {
-    return "compute";
-  }
   if (focus.cloudRepoOwner || focus.cloudRepoName || focus.focus === "repo" || focus.focus === "environment") {
     return "environments";
   }
@@ -246,9 +271,6 @@ function sanitizeFocusForSection(
       credential: focus.credential,
       kind: focus.kind,
     });
-  }
-  if (section === "compute") {
-    return pickFocus({ target: focus.target });
   }
   if (section === "environments") {
     return pickFocus({

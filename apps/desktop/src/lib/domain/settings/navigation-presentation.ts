@@ -8,11 +8,9 @@ export type SettingsNavIconId =
   | "archived-chats"
   | "billing"
   | "check-for-updates"
-  | "compute"
   | "environments"
   | "general"
   | "organization"
-  | "organization-integrations"
   | "organization-limits"
   | "organization-members"
   | "organization-model-policy"
@@ -101,7 +99,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "org_policies",
         heading: "Policies",
         items: [
-          { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
           { kind: "section", id: "organization-model-policy", label: "Model policy", iconId: "organization-model-policy", adminOnly: true },
         ],
       },
@@ -122,7 +119,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         heading: null,
         items: [
           { kind: "section", id: "environments", label: "Environments", iconId: "environments" },
-          { kind: "section", id: "compute", label: "Personal compute", iconId: "compute" },
         ],
       },
     ],

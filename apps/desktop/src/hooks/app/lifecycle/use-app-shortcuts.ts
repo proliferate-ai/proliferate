@@ -36,10 +36,6 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     actions.goHome.execute("shortcut");
   });
 
-  useShortcutHandler("app.go-plugins", () => {
-    actions.goIntegrations.execute("shortcut");
-  });
-
   useShortcutHandler("app.go-automations", () => {
     actions.goWorkflows.execute("shortcut");
   });

@@ -13,7 +13,6 @@ import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane
 import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
-import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
@@ -22,13 +21,10 @@ import { OrganizationSecretsPane } from "@/components/settings/panes/Organizatio
 import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
 import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
-// SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
-// import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
 import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
-import { ComputePane } from "@/components/settings/panes/ComputePane";
 import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
 import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
 import {
@@ -127,21 +123,6 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  if (activeSection === "organization-integrations") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <OrganizationIntegrationsPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
   // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
   // if (activeSection === "organization-limits") {
   //   return <OrganizationBudgetsPane />;
@@ -171,37 +152,6 @@ function renderSettingsSection(
 
     if (cloudActive) {
       return <AgentAuthenticationPane initialAgentKind={focus.kind ?? null} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
-  // SLACK BOT PARKED: render branch is intentionally disabled with the settings entry point.
-  // if (activeSection === "slack-bot") {
-  //   if (!cloudEnabled) {
-  //     return <CloudUnavailablePane />;
-  //   }
-  //
-  //   if (cloudActive) {
-  //     return <SlackBotPane />;
-  //   }
-  //
-  //   if (cloudSignInChecking) {
-  //     return <CloudSignInRequiredPane />;
-  //   }
-  //
-  //   return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  // }
-  if (activeSection === "compute") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <ComputePane initialTargetId={focus.target ?? null} />;
     }
 
     if (cloudSignInChecking) {
@@ -329,13 +279,9 @@ export function SettingsScreen({
           onSelectSection={onSelectSection}
           disabledSections={{
             "agent-authentication": !cloudEnabled,
-            "organization-integrations": !cloudEnabled,
             "organization-secrets": !cloudEnabled,
             "organization-sso": !cloudEnabled,
-            compute: !cloudEnabled,
             "personal-secrets": !cloudEnabled,
-            // SLACK BOT PARKED: section is not registered while the flow is disabled.
-            // "slack-bot": !cloudEnabled,
           }}
           onCheckForUpdates={() => { void checkNow(); }}
           updateActionState={{

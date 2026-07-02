@@ -23,11 +23,11 @@ from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
     build_runtime_launch_script,
 )
-from proliferate.server.cloud.runtime.liveness.health import (
+from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.liveness_health import (
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
 )
-from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     build_detached_runtime_launch_command,

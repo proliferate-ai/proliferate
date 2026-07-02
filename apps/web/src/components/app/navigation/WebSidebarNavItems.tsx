@@ -1,5 +1,4 @@
 import {
-  Blocks,
   House,
   LifeBuoy,
   Zap,
@@ -16,12 +15,6 @@ export function buildNavItems(pathname: string): SidebarNavItemView[] {
       label: "Home",
       icon: <House className="size-4" />,
       active: pathname === routes.home,
-    },
-    {
-      id: "integrations",
-      label: "Integrations",
-      icon: <Blocks className="size-4" />,
-      active: pathname.startsWith(routes.integrations),
     },
     {
       id: "workflows",

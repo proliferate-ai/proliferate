@@ -1,1 +1,0 @@
-"""Cloud plugin package domain."""
