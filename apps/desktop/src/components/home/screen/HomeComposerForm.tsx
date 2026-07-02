@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
 import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS,
+  CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX,
   HOME_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
+import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
@@ -61,8 +62,10 @@ interface HomeComposerFormProps {
   launchTarget: HomeLaunchTarget | null;
 
   // --- stable slots built by the parent (draft-independent → never re-render on keystroke) ---
-  /** Model / mode / session-config pickers rendered on the left of the control row. */
+  /** Leading control-row content (mode pill), stable across keystrokes. */
   controlsSlot: ReactNode;
+  /** Trailing control-row content (model/config selector), stable across keystrokes. */
+  controlsTrailingSlot?: ReactNode;
   /** The `HomeTargetPicker` row rendered directly under the composer surface. */
   targetPickerSlot: ReactNode;
   /** Model-availability notice (draft-independent), or null. */
@@ -82,6 +85,7 @@ export function HomeComposerForm({
   launchControlValues,
   launchTarget,
   controlsSlot,
+  controlsTrailingSlot,
   targetPickerSlot,
   modelAvailabilityNoticeSlot,
   submitDisabledReasonCtaSlot,
@@ -97,7 +101,7 @@ export function HomeComposerForm({
     launchTarget,
   });
   const homeComposerInputMaxHeight =
-    `calc(${CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS} * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
+    `${CHAT_COMPOSER_INPUT_LINE_HEIGHT_PX * HOME_CHAT_COMPOSER_INPUT.maxRows}px`;
 
   // Measure home-composer typing latency + per-surface commit attribution
   // (no-op unless VITE_PROLIFERATE_DEBUG_MAIN_THREAD is enabled).
@@ -131,6 +135,7 @@ export function HomeComposerForm({
   return (
     <>
       <DebugProfiler id="home-composer">
+        <div className="relative z-10">
         <ChatComposerSurface>
           <form
             className="relative flex flex-col"
@@ -150,7 +155,7 @@ export function HomeComposerForm({
                 data-telemetry-mask
                 data-home-composer-editor
                 ref={composer.textareaRef}
-                rows={4}
+                rows={2}
                 value={composer.draft}
                 onChange={(event) => handleDraftChange(event.target.value, event.timeStamp)}
                 onKeyDown={composer.handleKeyDown}
@@ -166,14 +171,14 @@ export function HomeComposerForm({
               />
             </div>
 
-            <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-              <DebugProfiler id="home-composer-controls">
-                <div className="flex min-w-0 flex-wrap items-center gap-[5px]">
+            <ChatComposerControlRowFrame
+              leading={(
+                <DebugProfiler id="home-composer-controls">
                   {controlsSlot}
-                </div>
-              </DebugProfiler>
-
-              <div className="flex items-center">
+                </DebugProfiler>
+              )}
+              trailing={controlsTrailingSlot}
+              action={(
                 <ChatComposerActions
                   isRunning={false}
                   isEmpty={composer.draft.trim().length === 0}
@@ -181,14 +186,17 @@ export function HomeComposerForm({
                   onSubmit={() => { void composer.submit(); }}
                   onCancel={composer.cancel}
                 />
-              </div>
-            </div>
+              )}
+            />
           </form>
         </ChatComposerSurface>
+        </div>
       </DebugProfiler>
 
       <DebugProfiler id="home-target-picker">
-        <div className="mt-2 flex min-w-0 flex-wrap items-center justify-start gap-[5px] px-2">
+        {/* Codex home footer: a tray tucked under the composer (rounded-b,
+            sidebar bg) so the selectors read as attached, not floating. */}
+        <div className="relative z-0 -mx-px -mt-[18px] flex min-w-0 flex-wrap items-center justify-start gap-1 overflow-hidden rounded-b-2xl bg-sidebar px-2 pb-2 pt-[25px]">
           {targetPickerSlot}
         </div>
       </DebugProfiler>
@@ -210,7 +218,7 @@ export function HomeComposerForm({
       {modelAvailabilityNoticeSlot}
 
       {composer.submitDisabledReason ? (
-        <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
+        <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
           <span>{composer.submitDisabledReason}</span>
           {submitDisabledReasonCtaSlot}
         </div>

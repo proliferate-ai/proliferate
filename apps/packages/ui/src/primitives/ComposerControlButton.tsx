@@ -78,7 +78,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     const baseClassName = `gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-[var(--color-composer-control-hover)] hover:text-current focus:outline-none data-[state=open]:bg-[var(--color-composer-control-hover)] ${classes}`;
     const buttonClassName = iconOnly
       ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`
-      : `h-7 min-w-0 max-w-full !justify-start px-2 py-0 text-left text-base leading-[18px] ${baseClassName} ${className}`;
+      : `h-7 min-w-0 max-w-full !justify-start px-2 py-0 text-left text-[13px] leading-[18px] ${baseClassName} ${className}`;
     const iconOnlyLabel = typeof label === "string"
       ? label
       : typeof props["aria-label"] === "string"

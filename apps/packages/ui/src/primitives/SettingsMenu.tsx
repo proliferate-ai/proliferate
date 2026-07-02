@@ -59,7 +59,7 @@ export function SettingsMenu({
             <div key={group.id}>
               {groupIndex > 0 && <div className="my-1 border-t border-border-light" />}
               {group.label && (
-                <div className="min-h-6 truncate px-2 py-1 text-sm leading-4 text-foreground-tertiary">
+                <div className="min-h-6 truncate px-2 py-1 text-[12px] leading-4 text-foreground-tertiary">
                   {group.label}
                 </div>
               )}
@@ -76,7 +76,7 @@ export function SettingsMenu({
                   }}
                 >
                   {option.detail && (
-                    <span className="block truncate text-sm leading-4 text-foreground-tertiary">
+                    <span className="block truncate text-[12px] leading-4 text-foreground-tertiary">
                       {option.detail}
                     </span>
                   )}

@@ -3,6 +3,7 @@ import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import {
   buildHomeOnboardingCards,
   findHomeUnconfiguredGitHubRepository,
+  resolveHomeModelProbeCardState,
 } from "./home-screen";
 
 const githubRepository = {
@@ -124,5 +125,55 @@ describe("findHomeUnconfiguredGitHubRepository", () => {
       repositories: [githubRepository],
       repoConfigs: [configuredRepoConfig],
     })).toBeNull();
+  });
+});
+
+describe("resolveHomeModelProbeCardState", () => {
+  const baseArgs = {
+    dismissed: false,
+    agentsLoading: false,
+    isReconciling: false,
+    harnessKinds: ["opencode"],
+    modelCount: 3,
+    agentSetupCardVisible: false,
+  };
+
+  it("is hidden when dismissed", () => {
+    expect(resolveHomeModelProbeCardState({ ...baseArgs, dismissed: true }))
+      .toEqual({ kind: "hidden" });
+  });
+
+  it("probes while reconciling, even mid-load", () => {
+    expect(resolveHomeModelProbeCardState({
+      ...baseArgs,
+      isReconciling: true,
+      agentsLoading: true,
+    })).toEqual({ kind: "probing", harnessKinds: ["opencode"] });
+  });
+
+  it("is hidden while agents are still loading", () => {
+    expect(resolveHomeModelProbeCardState({ ...baseArgs, agentsLoading: true }))
+      .toEqual({ kind: "hidden" });
+  });
+
+  it("reports available models once probing settles", () => {
+    expect(resolveHomeModelProbeCardState(baseArgs)).toEqual({
+      kind: "done",
+      modelCount: 3,
+      harnessKinds: ["opencode"],
+    });
+  });
+
+  it("prompts to connect a provider when no models exist", () => {
+    expect(resolveHomeModelProbeCardState({ ...baseArgs, modelCount: 0 }))
+      .toEqual({ kind: "none" });
+  });
+
+  it("suppresses the none state when the agent-setup card is already shown", () => {
+    expect(resolveHomeModelProbeCardState({
+      ...baseArgs,
+      modelCount: 0,
+      agentSetupCardVisible: true,
+    })).toEqual({ kind: "hidden" });
   });
 });

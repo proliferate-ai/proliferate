@@ -1,18 +1,23 @@
 import { useState } from "react";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { HomeComposerForm } from "@/components/home/screen/HomeComposerForm";
-import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
-import { HomeModelPicker } from "@/components/home/screen/HomeModelPicker";
 import { HomeOnboardingCards } from "@/components/home/screen/HomeOnboardingCards";
+import { HomeProjectMenu } from "@/components/home/screen/HomeProjectMenu";
 import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
-import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
+import { ComposerModelConfigSelector } from "@/components/workspace/chat/input/ComposerModelConfigSelector";
+import { SessionModeControl } from "@/components/workspace/chat/input/SessionModeControl";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "@/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
 import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-target-selection-state";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
+import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
+import {
+  buildHomeModeControlDescriptor,
+  buildHomeModelSelectorProps,
+} from "@/lib/domain/home/home-composer-controls";
 import { type HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
+import { resolveHomeModelProbeCardState } from "@/lib/domain/home/home-screen";
 import { resolveHomeTargetLaunchKindForRepository } from "@/lib/domain/home/home-target-picker";
 
 export function HomeNextScreen() {
@@ -32,6 +37,8 @@ export function HomeNextScreen() {
     onboardingCards,
     isAddingRepo,
     handleHomeAction,
+    modelProbeInputs,
+    dismissModelProbeCard,
   } = useHomeScreen();
   const homeNext = useHomeNextState({
     destination,
@@ -54,13 +61,44 @@ export function HomeNextScreen() {
     },
   });
   const configureCloud = useHomeCloudRepoSettingsNavigation(homeNext.cloudRepoTarget);
+  // Unified composer (owner rev 2026-07-01): home renders the SAME control-row
+  // components as the chat input (SessionModeControl + ComposerModelConfigSelector),
+  // fed by launch-time adapters instead of live-session state.
+  const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
+  const launchControlGroups = buildComposerSessionControlGroups(homeLaunchControls.controls);
+  // Mode always comes from the home adapter: useHomeNextLaunchControls filters
+  // mode keys out of `controls`, so launchControlGroups.modeControl never fires.
+  const homeModeControl = buildHomeModeControlDescriptor({
+    modes: homeNext.modeOptions,
+    selectedModeId: homeNext.effectiveMode?.value ?? null,
+    onSelect: setModeOverrideId,
+  });
+  const homeModelSelectorProps = buildHomeModelSelectorProps({
+    groups: homeNext.modelGroups,
+    selectedModel: homeNext.selectedModel,
+    availabilityState: homeNext.modelAvailabilityState,
+    onSelect: (selection) => {
+      setModelSelectionOverride(selection);
+      setModeOverrideId(null);
+      setLaunchControlOverrides({});
+    },
+  });
 
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
     : null;
-  const heading = promptTarget
-    ? `What should we build in ${promptTarget}?`
-    : "What should we build?";
+  // Model-probe onboarding card (spec §10). Inputs may be absent when the
+  // facade is mocked; hide the card in that case.
+  const modelProbeState = modelProbeInputs
+    ? resolveHomeModelProbeCardState({
+      ...modelProbeInputs,
+      modelCount: homeNext.modelGroups.reduce(
+        (count, group) => count + group.models.length,
+        0,
+      ),
+      agentSetupCardVisible: onboardingCards.some((card) => card.id === "agent-defaults"),
+    })
+    : undefined;
   const modelAvailabilityNotice =
     homeNext.modelAvailabilityState === "no_launchable_model"
       ? {
@@ -74,18 +112,56 @@ export function HomeNextScreen() {
         }
         : null;
   return (
-    // home-screen profiler wraps the WHOLE screen (including this component's
-    // own render): if it reports commit time while typing but home-composer
-    // accounts for less, the draft render-isolation is leaking to the parent.
-    <DebugProfiler id="home-screen">
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
       <main className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-6 py-16">
         <div className="w-full max-w-3xl">
+          {/* Hero heading (spec §1.1): 28px / 400 / centered; the project name
+              is an inline menu trigger with a pill hover fill. */}
           <div className="mb-5 flex flex-col items-center text-center">
-            <p className="max-w-[34rem] text-2xl font-medium leading-tight text-foreground">
-              {heading}
-            </p>
+            <h1 className="max-w-full whitespace-pre-wrap text-[28px] font-normal leading-9 text-foreground">
+              <span className="group/title inline-block max-w-full">
+                {promptTarget ? (
+                  <>
+                    {"What should we build in "}
+                    <HomeProjectMenu
+                      trigger={(
+                        <button
+                          type="button"
+                          aria-label={`Change project: ${promptTarget}`}
+                          className="relative z-0 inline-block cursor-pointer whitespace-pre outline-none after:absolute after:-inset-x-1.5 after:inset-y-0 after:-z-10 after:rounded-xl after:content-[''] hover:after:bg-accent focus-visible:after:bg-accent data-[state=open]:after:bg-accent"
+                        >
+                          {promptTarget}
+                        </button>
+                      )}
+                      side="bottom"
+                      destination={destination}
+                      repositories={homeNext.repositories}
+                      selectedRepository={homeNext.selectedRepository}
+                      onSelectRepository={(sourceRoot) => {
+                        const launchKind = resolveHomeTargetLaunchKindForRepository({
+                          currentLaunchKind: repoLaunchKind,
+                          sourceRoot,
+                          cloudActionBySourceRoot: homeNext.cloudRepoActionBySourceRoot,
+                        });
+                        patchTargetSelection({
+                          destination: "repository",
+                          repositorySelection: { kind: "repository", sourceRoot },
+                          repoLaunchKind: launchKind,
+                        });
+                      }}
+                      onSelectCowork={() => {
+                        patchTargetSelection({ destination: "cowork" });
+                      }}
+                      onAddRepository={() => handleHomeAction("add-repository")}
+                    />
+                    ?
+                  </>
+                ) : (
+                  "What should we build?"
+                )}
+              </span>
+            </h1>
           </div>
 
           <HomeComposerForm
@@ -96,29 +172,21 @@ export function HomeNextScreen() {
             modeId={homeNext.effectiveModeId}
             launchControlValues={homeLaunchControls.launchControlValues}
             launchTarget={homeNext.launchTarget}
-            controlsSlot={
-              <>
-                <HomeModelPicker
-                  groups={homeNext.modelGroups}
-                  selectedModel={homeNext.selectedModel}
-                  onSelect={(selection) => {
-                    setModelSelectionOverride(selection);
-                    setModeOverrideId(null);
-                    setLaunchControlOverrides({});
-                  }}
-                />
-                <HomeModePicker
-                  modes={homeNext.modeOptions}
-                  selectedMode={homeNext.effectiveMode}
-                  onSelect={setModeOverrideId}
-                />
-                <SessionConfigControls
-                  agentKind={homeNext.effectiveModelSelection?.kind ?? null}
-                  controls={homeLaunchControls.controls}
-                />
-              </>
-            }
-            targetPickerSlot={
+            controlsSlot={homeModeControl ? (
+              <SessionModeControl
+                agentKind={homeAgentKind}
+                control={homeModeControl}
+                triggerStyle="value"
+              />
+            ) : null}
+            controlsTrailingSlot={(
+              <ComposerModelConfigSelector
+                modelSelectorProps={homeModelSelectorProps}
+                agentKind={homeAgentKind}
+                controls={launchControlGroups.modelConfigControls}
+              />
+            )}
+            targetPickerSlot={(
               <HomeTargetPicker
                 destination={destination}
                 repoLaunchKind={repoLaunchKind}
@@ -158,24 +226,22 @@ export function HomeNextScreen() {
                 onAddRepository={() => handleHomeAction("add-repository")}
                 onConfigureCloud={configureCloud}
               />
-            }
-            modelAvailabilityNoticeSlot={
-              modelAvailabilityNotice ? (
-                <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
-                  <span>{modelAvailabilityNotice.text}</span>
-                  {modelAvailabilityNotice.actionLabel ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleHomeAction("agent-settings")}
-                      className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                    >
-                      {modelAvailabilityNotice.actionLabel}
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null
-            }
+            )}
+            modelAvailabilityNoticeSlot={modelAvailabilityNotice ? (
+              <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-[12px] text-muted-foreground">
+                <span>{modelAvailabilityNotice.text}</span>
+                {modelAvailabilityNotice.actionLabel ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleHomeAction("agent-settings")}
+                    className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                  >
+                    {modelAvailabilityNotice.actionLabel}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             submitDisabledReasonCtaSlot={
               repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
                 <Button
@@ -188,17 +254,19 @@ export function HomeNextScreen() {
                 </Button>
               ) : null
             }
-            onboardingSlot={
+            onboardingSlot={(
               <HomeOnboardingCards
                 cards={onboardingCards}
                 isAddingRepo={isAddingRepo}
                 onSelect={(card) => handleHomeAction(card.id)}
+                modelProbe={modelProbeState}
+                onOpenAgents={() => handleHomeAction("agent-settings")}
+                onDismissModelProbe={dismissModelProbeCard}
               />
-            }
+            )}
           />
         </div>
       </main>
     </div>
-    </DebugProfiler>
   );
 }

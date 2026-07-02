@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { X } from "@proliferate/ui/icons";
-import { UpdateNotificationCard } from "./UpdateNotificationCard";
 
 type ToastTimer = ReturnType<typeof setTimeout>;
 
@@ -56,7 +55,6 @@ export function ToastContainer() {
           </Button>
         </div>
       ))}
-      <UpdateNotificationCard />
     </div>
   );
 }

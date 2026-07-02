@@ -35,9 +35,12 @@ export function PopoverMenuItem({
     ? "hover:bg-sidebar-accent focus:bg-sidebar-accent"
     : "hover:bg-list-hover focus:bg-list-hover";
   const hasDescription = children !== undefined && children !== null && children !== false;
+  // Absolute px (codex desktop scale: rows 13px/18px, px 10 / py 5) — themed
+  // rem utilities drift under the app UI-font scale and made popovers render
+  // at a different size than everything else.
   const outerClassName = density === "compact"
-    ? "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col rounded-lg px-2 py-1 text-sm font-normal leading-4 text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
-    : "group/menu-item flex min-h-8 w-full cursor-pointer select-none flex-col rounded-lg px-2 py-1.5 text-sm font-normal leading-4 text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent";
+    ? "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col rounded-lg px-2 py-1 text-[13px] font-normal leading-[18px] text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent"
+    : "group/menu-item flex min-h-7 w-full cursor-pointer select-none flex-col rounded-lg px-2.5 py-[5px] text-[13px] font-normal leading-[18px] text-popover-foreground outline-none transition-colors disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent";
   const rowClassName = density === "compact"
     ? "flex w-full items-center gap-1.5"
     : "flex w-full items-center gap-1.5";
@@ -46,7 +49,7 @@ export function PopoverMenuItem({
     : "flex shrink-0 items-center justify-center text-muted-foreground";
   const defaultTrailingClassName = density === "compact"
     ? "flex size-5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
-    : "flex shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&_*]:text-xs [&_*]:leading-4";
+    : "flex shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&_*]:text-[12px] [&_*]:leading-4";
 
   return (
     <button
@@ -78,7 +81,7 @@ export function PopoverMenuItem({
       </span>
       {hasDescription && (
         <span className={`mt-0.5 flex w-full items-center gap-2 ${icon ? "pl-6" : ""}`}>
-          <span className="min-w-0 flex-1 text-left text-xs leading-4 text-muted-foreground [&>*]:!mt-0 [&_*]:text-xs [&_*]:leading-4">
+          <span className="min-w-0 flex-1 text-left text-[12px] leading-4 text-muted-foreground [&>*]:!mt-0 [&_*]:text-[12px] [&_*]:leading-4">
             {children}
           </span>
         </span>
