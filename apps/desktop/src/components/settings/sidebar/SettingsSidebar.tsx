@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
-import { AppSidebarFooter } from "@/components/app/sidebar/AppSidebarFooter";
+import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   SETTINGS_SHORTCUT_SECTION_ORDER,
@@ -315,7 +315,7 @@ export function SettingsSidebar({
           </div>
         </div>
       </nav>
-      <AppSidebarFooter />
+      <SidebarAccountFooter />
     </div>
   );
 }

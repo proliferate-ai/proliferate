@@ -138,7 +138,14 @@ export function CoworkWorkspaceShell({
               >
                 <SplitPanel className="size-4" />
               </IconButton>
-              {/* Update pill lives in the sidebar bottom account row (§2.5). */}
+              {/* The update pill's single home is the top-left, next to the
+                  sidebar toggle. */}
+              <SidebarUpdatePill
+                phase={updaterPhase}
+                downloadProgress={downloadProgress}
+                onDownloadUpdate={downloadUpdate}
+                onOpenRestartPrompt={openRestartPrompt}
+              />
             </div>
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">

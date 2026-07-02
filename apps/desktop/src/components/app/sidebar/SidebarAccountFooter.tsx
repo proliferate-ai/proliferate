@@ -1,5 +1,20 @@
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import {
+  BookOpen,
+  CreditCard,
+  Globe,
+  Keyboard,
+  LogOut,
+  MessageSquare,
+  Settings,
+} from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  ChevronUpDown,
+  Mail,
+} from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import {
@@ -7,28 +22,30 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import {
-  Check,
-  ChevronUpDown,
-  ExternalLink,
-  LifeBuoy,
-  LogOut,
-  Mail,
-  Settings,
-} from "@proliferate/ui/icons";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog";
 import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
-import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
+import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
+import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
-import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
+import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {
   OrganizationInvitationRecord,
   OrganizationRecord,
 } from "@/lib/domain/organizations/organization-records";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+
+const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
+const PROLIFERATE_DISCORD_URL = "https://discord.gg/wCEgUnEuF";
 
 function OrganizationSwitcherMark({
   organization,
@@ -62,13 +79,21 @@ function OrganizationSwitcherMark({
   return <span className={baseClassName}>{initials}</span>;
 }
 
-export function AppSidebarFooter() {
+/**
+ * The single sidebar bottom-left account block, shared verbatim by the main
+ * sidebar and the settings sidebar: avatar + name/organization trigger opening
+ * one popover with invitations, the organization switcher, plan, help links,
+ * settings/log out and the harness-versions footer.
+ */
+export function SidebarAccountFooter() {
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const authStatus = useAuthStore((state) => state.status);
   const { openExternal } = useTauriShellActions();
   const handleSignOut = useAppSidebarSignOutAction();
   const openSupport = useOpenSupportReportWindow({ source: "sidebar" });
   const showToast = useToastStore((state) => state.show);
+  const { data: billingPlan } = useCloudBilling();
   const {
     activeOrganization,
     activeOrganizationId,
@@ -82,8 +107,20 @@ export function AppSidebarFooter() {
   const actions = useOrganizationActions(activeOrganizationId);
   const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? [];
   const [acceptTarget, setAcceptTarget] = useState<OrganizationInvitationRecord | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-  const activeLabel = activeOrganization?.name ?? "Organization";
+  const displayName = user?.display_name?.trim() || user?.email || "Account";
+  const initials = displayName.trim().slice(0, 2).toUpperCase() || "PR";
+  const organizationName = activeOrganization?.name ?? null;
+  const planLabel = billingPlan
+    ? (billingPlan.isPaidCloud ? "Pro" : "Free")
+    : null;
+
+  const openExternalUrl = (url: string) => {
+    void openExternal(url).catch(() => {
+      showToast("Failed to open the link.");
+    });
+  };
 
   async function handleAcceptInvitation() {
     if (!acceptTarget) {
@@ -101,7 +138,8 @@ export function AppSidebarFooter() {
 
   return (
     <div className="shrink-0">
-      <div className="flex shrink-0 items-center border-t !border-sidebar-border/75 px-3 py-3">
+      <div aria-hidden className="h-[0.5px] bg-border" />
+      <div className="flex items-center px-2 py-2">
         <PopoverButton
           align="start"
           side="top"
@@ -111,16 +149,27 @@ export function AppSidebarFooter() {
               type="button"
               variant="unstyled"
               size="unstyled"
-              className="h-10 w-full min-w-0 justify-start rounded-lg px-2 text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
-              title={activeLabel}
+              aria-label="Open account menu"
+              className="flex h-10 w-full min-w-0 items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
+              title={displayName}
             >
-              <OrganizationSwitcherMark
-                organization={activeOrganization}
-                label={activeLabel}
-                className="size-6 rounded-md"
-              />
-              <span className="min-w-0 flex-1 truncate text-left text-sm font-[430] leading-4">
-                {activeLabel}
+              <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-accent text-ui-sm font-medium text-sidebar-foreground">
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    className="size-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  initials
+                )}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-ui">{displayName}</span>
+                {organizationName ? (
+                  <span className="truncate text-ui-sm text-faint">{organizationName}</span>
+                ) : null}
               </span>
               <ChevronUpDown className="size-3.5 shrink-0 text-sidebar-muted-foreground" />
             </Button>
@@ -131,7 +180,7 @@ export function AppSidebarFooter() {
             <div className="max-h-[28rem] overflow-y-auto">
               {pendingInvitations.length > 0 ? (
                 <div className="py-1">
-                  <div className="px-2 py-1 text-xs leading-4 text-muted-foreground">
+                  <div className="px-2 py-1 text-ui-sm text-muted-foreground">
                     Pending invitations
                   </div>
                   {pendingInvitations.map((invitation) => (
@@ -153,11 +202,11 @@ export function AppSidebarFooter() {
 
               <div className={`${pendingInvitations.length > 0 ? "border-t border-border-light" : ""} py-1`}>
                 {organizationsQuery.isLoading ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  <div className="px-2 py-1.5 text-ui text-muted-foreground">
                     Loading organizations...
                   </div>
                 ) : organizationsQuery.isError ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  <div className="px-2 py-1.5 text-ui text-muted-foreground">
                     Organizations could not be loaded.
                   </div>
                 ) : organizations.length > 0 ? (
@@ -186,10 +235,87 @@ export function AppSidebarFooter() {
                     />
                   ))
                 ) : (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  <div className="px-2 py-1.5 text-ui text-muted-foreground">
                     No organizations yet.
                   </div>
                 )}
+              </div>
+
+              {planLabel ? (
+                <div className="border-t border-border-light py-1">
+                  <PopoverMenuItem
+                    variant="sidebar"
+                    label="Plan"
+                    icon={<CreditCard className="size-3.5" />}
+                    trailing={<span>{planLabel}</span>}
+                    onClick={() => {
+                      navigate("/settings");
+                      close();
+                    }}
+                  />
+                </div>
+              ) : null}
+
+              <div className="border-t border-border-light py-1">
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Keyboard shortcuts"
+                  icon={<Keyboard className="size-3.5" />}
+                  onClick={() => {
+                    close();
+                    setShortcutsOpen(true);
+                  }}
+                />
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Docs"
+                  icon={<BookOpen className="size-3.5" />}
+                  trailing={<ArrowUpRight className="size-3" />}
+                  onClick={() => {
+                    openExternalUrl(PROLIFERATE_DOCS_URL);
+                    close();
+                  }}
+                />
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Changelog"
+                  labelClassName="ml-6"
+                  trailing={<ArrowUpRight className="size-3" />}
+                  onClick={() => {
+                    openExternalUrl(PROLIFERATE_CHANGELOG_URL);
+                    close();
+                  }}
+                />
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Discord"
+                  labelClassName="ml-6"
+                  trailing={<ArrowUpRight className="size-3" />}
+                  onClick={() => {
+                    openExternalUrl(PROLIFERATE_DISCORD_URL);
+                    close();
+                  }}
+                />
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Go to web"
+                  icon={<Globe className="size-3.5" />}
+                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
+                  onClick={() => {
+                    openExternalUrl(getProliferateWebBaseUrl());
+                    close();
+                  }}
+                />
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Send feedback"
+                  icon={<MessageSquare className="size-3.5" />}
+                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSupport)}</span>}
+                  onClick={() => {
+                    openSupport();
+                    close();
+                  }}
+                />
               </div>
 
               <div className="border-t border-border-light py-1">
@@ -197,29 +323,9 @@ export function AppSidebarFooter() {
                   variant="sidebar"
                   label="Settings"
                   icon={<Settings className="size-3.5" />}
+                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSettings)}</span>}
                   onClick={() => {
                     navigate("/settings");
-                    close();
-                  }}
-                />
-              </div>
-
-              <div className="border-t border-border-light py-1">
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Docs"
-                  icon={<ExternalLink className="size-3.5" />}
-                  onClick={() => {
-                    void openExternal(PROLIFERATE_DOCS_URL);
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Support"
-                  icon={<LifeBuoy className="size-3.5" />}
-                  onClick={() => {
-                    openSupport();
                     close();
                   }}
                 />
@@ -233,6 +339,8 @@ export function AppSidebarFooter() {
                   }}
                 />
               </div>
+
+              <HarnessVersionsRow />
             </div>
           )}
         </PopoverButton>
@@ -253,6 +361,41 @@ export function AppSidebarFooter() {
           void handleAcceptInvitation();
         }}
       />
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+    </div>
+  );
+}
+
+/**
+ * §9 footer line: `Proliferate v{x} • Claude Code {y} • …` from installed
+ * agent artifact versions (agentProcess.version via the agents query).
+ * Truncated with a tooltip listing everything.
+ */
+function HarnessVersionsRow() {
+  const { data: appVersion } = useAppVersion();
+  const { agents } = useAgentCatalog();
+
+  const versions = useMemo(() => {
+    const parts: string[] = [`Proliferate v${appVersion ?? "…"}`];
+    for (const agent of agents) {
+      if (agent.installState !== "installed") {
+        continue;
+      }
+      const version = agent.agentProcess?.version ?? agent.native?.version;
+      if (version) {
+        parts.push(`${agent.displayName} ${version}`);
+      }
+    }
+    return parts;
+  }, [agents, appVersion]);
+
+  const line = versions.join(" • ");
+
+  return (
+    <div className="mt-1 border-t border-border px-2.5 pb-1 pt-2">
+      <Tooltip content={line} className="block max-w-full">
+        <div className="truncate text-ui-sm text-faint">{line}</div>
+      </Tooltip>
     </div>
   );
 }
