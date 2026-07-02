@@ -38,6 +38,7 @@ from proliferate.constants.auth import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth import create_auth_code
+from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 from proliferate.server.organizations.membership_policy import place_new_identity
 
 AUTH_CHALLENGE_LIFETIME_SECONDS = 600
@@ -402,6 +403,21 @@ async def _consume_challenge_for_callback(
 
 
 async def resolve_provider_user(
+    db: AsyncSession,
+    *,
+    verified: VerifiedProviderIdentity,
+    challenge: AuthChallengeSnapshot,
+) -> User:
+    user = await _resolve_provider_user(db, verified=verified, challenge=challenge)
+    if challenge.purpose == "login":
+        # ADMIN_EMAILS floor: asserted at every login. Covers every OAuth
+        # callback surface (web, desktop, mobile) for all providers because
+        # they all resolve their user here.
+        await ensure_admin_email_role(db, user)
+    return user
+
+
+async def _resolve_provider_user(
     db: AsyncSession,
     *,
     verified: VerifiedProviderIdentity,

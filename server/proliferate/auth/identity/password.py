@@ -31,6 +31,7 @@ from proliferate.db.store.auth_passwords import (
     record_password_login_failure,
     update_user_password_hash,
 )
+from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 
 PASSWORD_BAD_CREDENTIALS_MESSAGE = "Email or password is incorrect."
 PASSWORD_RATE_LIMIT_MESSAGE = "Too many attempts. Wait a moment, then try again."
@@ -110,6 +111,8 @@ async def authenticate_password_login(
         db,
         buckets=password_login_buckets(email=normalized_email, client_ip=None),
     )
+    # ADMIN_EMAILS floor: asserted at every login, not just account creation.
+    await ensure_admin_email_role(db, user)
     from proliferate.auth.identity.sessions import mint_auth_session
 
     return await mint_auth_session(db, user=user)
