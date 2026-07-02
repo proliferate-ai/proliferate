@@ -399,13 +399,16 @@ fn gemini_api_key_sets_only_gemini_key() {
 // --- fail-closed / missing / malformed / native ----------------------------
 
 #[test]
-fn scoped_state_without_selection_fails_closed_with_code() {
-    let home = TempHome::new("fail-closed");
+fn scoped_state_without_selection_renders_native_delta() {
+    // A scoped state (codex configured, revision bumped) must NOT block claude,
+    // which the user never configured — claude renders an empty (native) delta
+    // and launches on its own login.
+    let home = TempHome::new("missing-native");
     home.write_state_json(&gateway_state("codex", None)); // no claude selection
 
-    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("fail-closed");
-    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_MISSING");
-    assert!(matches!(error, RouteAuthError::SelectionMissing { .. }));
+    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    assert!(rendered.set.is_empty());
+    assert!(rendered.remove.is_empty());
 }
 
 #[test]
