@@ -75,12 +75,43 @@ function TodoEntryRow({
   );
 }
 
+// Uniform 12px status icons (spinner/check/circle) keep the row rhythm
+// aligned — the previous 14px spinner next to 9px circles jittered.
 function TodoStatusIcon({ status }: { status: string }) {
   if (status === "in_progress") {
-    return <Spinner className="size-3.5" />;
+    return <Spinner className="size-3 shrink-0" />;
   }
   if (status === "completed") {
-    return <CheckCircleFilled className="h-[9px] w-[9px] shrink-0 text-foreground/70" />;
+    return <CheckCircleFilled className="size-3 shrink-0 text-foreground/70" />;
   }
-  return <Circle className="h-[9px] w-[9px] shrink-0 text-muted-foreground" />;
+  return <Circle className="size-3 shrink-0 text-muted-foreground" />;
+}
+
+/**
+ * Slim one-line fallback rendered directly below an interaction card when a
+ * permission/question takes the dock's active slot: plan progress stays
+ * visible ("3/7 tasks" + the in-flight task) instead of being evicted with
+ * the full tracker panel.
+ */
+export function TodoTrackerStrip({ entries }: TodoTrackerPanelProps) {
+  const completedCount = entries.filter((e) => e.status === "completed").length;
+  const currentTask = entries.find((e) => e.status === "in_progress") ?? null;
+
+  return (
+    <div
+      data-todo-tracker-strip
+      className="flex min-w-0 items-center gap-1.5 border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] px-3 py-1.5 text-ui-sm text-muted-foreground"
+    >
+      <ClipboardList className="size-3 shrink-0" />
+      <span className="shrink-0 tabular-nums">
+        {completedCount}/{entries.length} tasks
+      </span>
+      {currentTask && (
+        <>
+          <Spinner className="ml-1 size-3 shrink-0" />
+          <span className="min-w-0 truncate">{currentTask.content}</span>
+        </>
+      )}
+    </div>
+  );
 }

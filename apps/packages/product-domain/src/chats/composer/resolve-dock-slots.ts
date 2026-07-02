@@ -17,6 +17,13 @@ export type ComposerDockAmbientSlot =
   | { kind: "workspace_status" }
   | { kind: "cloud_runtime" };
 
+/**
+ * Slim companion rendered directly below the active interaction card so plan
+ * progress is not evicted entirely while a permission/question/MCP form
+ * holds the dock's single active slot.
+ */
+export type ComposerDockActiveSlotCompanion = { kind: "todo_strip" };
+
 export interface ComposerDockAttachedSlot {
   ambientSlot: ComposerDockAmbientSlot | null;
   delegatedWork: boolean;
@@ -25,6 +32,7 @@ export interface ComposerDockAttachedSlot {
 export interface ComposerDockSlotResolution {
   outboundSlot: ComposerDockOutboundSlot | null;
   activeSlot: ComposerDockActiveSlot | null;
+  activeSlotCompanion: ComposerDockActiveSlotCompanion | null;
   attachedSlot: ComposerDockAttachedSlot | null;
 }
 
@@ -56,6 +64,10 @@ export function resolveComposerDockSlots({
   const activeSlot = !suppressSessionSlots
     ? resolveActiveSlot(primaryPendingInteractionKind, hasActiveTodoTracker)
     : null;
+  const activeSlotCompanion =
+    activeSlot && activeSlot.kind !== "todo_tracker" && hasActiveTodoTracker
+      ? { kind: "todo_strip" as const }
+      : null;
   const ambientSlot = !suppressWorkspaceStatusPanels
     ? resolveAmbientSlot(hasWorkspaceStatusPanel, hasCloudRuntimePanel)
     : null;
@@ -71,6 +83,7 @@ export function resolveComposerDockSlots({
   return {
     outboundSlot,
     activeSlot,
+    activeSlotCompanion,
     attachedSlot,
   };
 }

@@ -171,6 +171,10 @@
       "types": "./dist/chats/tools/mcp-tool-presentation.d.ts",
       "import": "./dist/chats/tools/mcp-tool-presentation.js"
     },
+    "./chats/tools/mode-switch-display": {
+      "types": "./dist/chats/tools/mode-switch-display.d.ts",
+      "import": "./dist/chats/tools/mode-switch-display.js"
+    },
     "./chats/tools/skills-tool-result": {
       "types": "./dist/chats/tools/skills-tool-result.d.ts",
       "import": "./dist/chats/tools/skills-tool-result.js"

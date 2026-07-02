@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { resolveComposerDockSlots } from "@proliferate/product-domain/chats/composer/resolve-dock-slots";
 import { CloudRuntimeAttachedPanel } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalAttachedPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
-import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
+import { TodoTrackerPanel, TodoTrackerStrip } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
@@ -75,11 +75,26 @@ export function useComposerDockSlots(options?: {
         ? <CloudRuntimeAttachedPanel />
         : null
   ), [dockSlotResolution.attachedSlot?.ambientSlot?.kind]);
-  const activeSlotContent = useMemo<ReactNode | null>(() => (
-    interactionPanel || (dockSlotResolution.activeSlot?.kind === "todo_tracker" && activeTodoTracker
+  // While an interaction holds the slot, plan progress collapses to a slim
+  // one-line strip directly below the card instead of being evicted.
+  const todoStrip = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.activeSlotCompanion?.kind === "todo_strip" && activeTodoTracker
+      ? <TodoTrackerStrip entries={activeTodoTracker.entries} />
+      : null
+  ), [activeTodoTracker, dockSlotResolution.activeSlotCompanion?.kind]);
+  const activeSlotContent = useMemo<ReactNode | null>(() => {
+    if (interactionPanel) {
+      return (
+        <>
+          {interactionPanel}
+          {todoStrip}
+        </>
+      );
+    }
+    return dockSlotResolution.activeSlot?.kind === "todo_tracker" && activeTodoTracker
       ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
-      : null)
-  ), [activeTodoTracker, dockSlotResolution.activeSlot?.kind, interactionPanel]);
+      : null;
+  }, [activeTodoTracker, dockSlotResolution.activeSlot?.kind, interactionPanel, todoStrip]);
   // Identity key for the active-slot presence animation: a new interaction
   // (or the todo tracker taking the slot back) replays the entrance, while
   // resolving the last card fades the slot out before unmount.
