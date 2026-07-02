@@ -8,18 +8,9 @@ import {
   Archive,
   Folder,
   GitBranch,
-  MoreHorizontal,
   Pencil,
   Trash,
 } from "@proliferate/ui/icons";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "@proliferate/ui/kit/DropdownMenu";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
@@ -36,7 +27,7 @@ import {
   SidebarDetailIndicatorsView,
   SidebarStatusIndicatorView,
 } from "./SidebarIndicators";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { WorkspaceItemMenu } from "./WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
 import type { PrStatusView } from "@proliferate/product-ui/workspaces/PrStatusBadge";
@@ -171,86 +162,20 @@ export function WorkspaceItem({
     || !!onMarkDone
     || !!branchName;
 
-  // Three-dot workspace menu (UX spec §2), built on the kit DropdownMenu with
-  // the §7 overlay recipe. The git section carries the items that exist at
-  // sidebar level today: the read-only branch row + copy branch name. PR /
-  // pull–push actions are not plumbed to sidebar rows and are not invented.
   const workspaceMenu = hasMenuActions ? (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <IconButton
-          tone="sidebar"
-          size="xs"
-          onClick={(e) => e.stopPropagation()}
-          title="Workspace actions"
-          className="opacity-50 hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
-        >
-          <MoreHorizontal className="size-3.5" />
-        </IconButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        onClick={(e) => e.stopPropagation()}
-        className="min-w-[220px]"
-      >
-        {onRename && (
-          <DropdownMenuItem onSelect={handleRenameCommand}>
-            <Pencil className="size-4 text-muted-foreground" />
-            Rename
-          </DropdownMenuItem>
-        )}
-        {onArchive && !archived && (
-          <DropdownMenuItem onSelect={handleArchiveCommand}>
-            <Archive className="size-4 text-muted-foreground" />
-            Archive...
-          </DropdownMenuItem>
-        )}
-        {onUnarchive && archived && (
-          <DropdownMenuItem onSelect={handleUnarchiveCommand}>
-            <Archive className="size-4 text-muted-foreground" />
-            Unarchive
-          </DropdownMenuItem>
-        )}
-        {onCopyWorkspaceLocation && (
-          <DropdownMenuItem onSelect={handleCopyWorkspaceLocationCommand}>
-            <Folder className="size-4 text-muted-foreground" />
-            {workspaceLocationCopyLabel ?? "Copy workspace location"}
-            <DropdownMenuShortcut>
-              {getShortcutDisplayLabel(SHORTCUTS.copyWorkspacePath)}
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
-        )}
-        {(branchName || onCopyBranchName) && (
-          <>
-            <DropdownMenuSeparator />
-            {branchName && (
-              <div className="flex items-center gap-2 px-2 py-1.5 font-mono text-ui-sm text-muted-foreground">
-                <GitBranch className="size-3.5 shrink-0" />
-                <span className="min-w-0 truncate">{branchName}</span>
-              </div>
-            )}
-            {onCopyBranchName && (
-              <DropdownMenuItem onSelect={handleCopyBranchNameCommand}>
-                <GitBranch className="size-4 text-muted-foreground" />
-                Copy branch name
-                <DropdownMenuShortcut>
-                  {getShortcutDisplayLabel(SHORTCUTS.copyBranchName)}
-                </DropdownMenuShortcut>
-              </DropdownMenuItem>
-            )}
-          </>
-        )}
-        {onMarkDone && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={handleMarkDoneCommand}>
-              <Trash className="size-4" />
-              Delete workspace...
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <WorkspaceItemMenu
+      archived={archived}
+      branchName={branchName}
+      workspaceLocationCopyLabel={workspaceLocationCopyLabel}
+      onRename={onRename ? handleRenameCommand : undefined}
+      onArchive={onArchive ? handleArchiveCommand : undefined}
+      onUnarchive={onUnarchive ? handleUnarchiveCommand : undefined}
+      onCopyWorkspaceLocation={
+        onCopyWorkspaceLocation ? handleCopyWorkspaceLocationCommand : undefined
+      }
+      onCopyBranchName={onCopyBranchName ? handleCopyBranchNameCommand : undefined}
+      onMarkDone={onMarkDone ? handleMarkDoneCommand : undefined}
+    />
   ) : null;
 
   const row = (
