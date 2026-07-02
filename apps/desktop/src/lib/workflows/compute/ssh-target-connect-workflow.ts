@@ -124,6 +124,7 @@ export async function runSshTargetConnectWorkflow(
     const profile = {
       ...input.directAccess,
       targetId: enrollment.target.id,
+      anyharnessBearerToken: enrollment.anyharnessBearerToken,
     };
 
     setPhase("saving_profile");

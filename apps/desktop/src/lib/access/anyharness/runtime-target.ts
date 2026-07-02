@@ -4,6 +4,7 @@ import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/c
 import { getCloudWorkspaceWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
 import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
 import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
+import { resolveSshDirectTargetBearer } from "@/lib/access/anyharness/ssh-direct-bearer";
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -38,6 +39,7 @@ export async function resolveRuntimeTargetForWorkspace(
         "SSH direct access is not configured for this target. Add the SSH host, user, and key in Compute settings.",
       );
     }
+    const authToken = await resolveSshDirectTargetBearer(profile);
     const tunnel = await ensureSshAnyHarnessTunnel({
       targetId: profile.targetId,
       sshHost: profile.sshHost,
@@ -45,10 +47,12 @@ export async function resolveRuntimeTargetForWorkspace(
       sshPort: profile.sshPort,
       identityFile: profile.identityFile ?? null,
       remoteAnyHarnessPort: profile.remoteAnyHarnessPort,
+      anyharnessBearerToken: authToken,
     });
     return {
       location: "target",
       baseUrl: tunnel.localUrl,
+      authToken: authToken ?? undefined,
       anyharnessWorkspaceId: targetWorkspace.anyharnessWorkspaceId,
       runtimeGeneration: 0,
       targetId: targetWorkspace.targetId,

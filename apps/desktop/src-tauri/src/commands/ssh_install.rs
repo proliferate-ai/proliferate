@@ -3,7 +3,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use super::ssh_tunnel::{
+use super::ssh_common::{
     append_common_ssh_options, command_output_error, normalize_port, parse_ssh_connection,
     redact_tokens, ssh_destination, wait_for_child_output, DEFAULT_ANYHARNESS_PORT,
 };

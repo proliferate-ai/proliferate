@@ -32,8 +32,7 @@ export function useSshDirectTargetProfile(targetId: string | null | undefined) {
   }, [reload]);
 
   const saveProfile = useCallback(async (next: SshDirectTargetProfile) => {
-    await setSshDirectTargetProfile(next);
-    setProfile(next);
+    setProfile(await setSshDirectTargetProfile(next));
   }, []);
 
   const testConnection = useCallback(async (next: SshDirectTargetProfile) => {
@@ -46,11 +45,14 @@ export function useSshDirectTargetProfile(targetId: string | null | undefined) {
         sshPort: next.sshPort,
         identityFile: next.identityFile ?? null,
         remoteAnyHarnessPort: next.remoteAnyHarnessPort,
+        anyharnessBearerToken: next.anyharnessBearerToken
+          ?? profile?.anyharnessBearerToken
+          ?? null,
       });
     } finally {
       setTesting(false);
     }
-  }, []);
+  }, [profile?.anyharnessBearerToken]);
 
   return {
     profile,

@@ -5,6 +5,7 @@ import type {
   CloudTargetExistingEnrollmentRequest,
   CloudTargetEnrollmentRequest,
   CloudTargetEnrollmentResponse,
+  CloudTargetRuntimeAccessResponse,
   CloudTargetSummary,
 } from "../types/index.js";
 
@@ -48,6 +49,17 @@ export async function getTarget(
   return client.requestJson<CloudTargetDetail>({
     method: "GET",
     path: "/v1/cloud/targets/{target_id}",
+    pathParams: { target_id: targetId },
+  });
+}
+
+export async function getTargetRuntimeAccess(
+  targetId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudTargetRuntimeAccessResponse> {
+  return client.requestJson<CloudTargetRuntimeAccessResponse>({
+    method: "GET",
+    path: "/v1/cloud/targets/{target_id}/runtime-access",
     pathParams: { target_id: targetId },
   });
 }

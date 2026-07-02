@@ -72,7 +72,9 @@ export function useComputeTargetEnrollment() {
         targetId: string,
         body: CloudTargetExistingEnrollmentRequest,
       ) => createExistingTargetEnrollment({ targetId, body }),
-      saveDirectProfile: setSshDirectTargetProfile,
+      saveDirectProfile: async (profile) => {
+        await setSshDirectTargetProfile(profile);
+      },
       saveAppearance: setComputeTargetAppearancePreference,
       probeSsh: probeSshTargetConnection,
       installRuntime: installSshTargetRuntime,

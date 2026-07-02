@@ -127,7 +127,13 @@ describe("runSshTargetConnectWorkflow", () => {
       "connected",
     ]);
     expect(workflowDeps.saveDirectProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ targetId: "target-1" }),
+      expect.objectContaining({
+        targetId: "target-1",
+        anyharnessBearerToken: "runtime-bearer",
+      }),
+    );
+    expect(workflowDeps.verifyTunnel).toHaveBeenCalledWith(
+      expect.objectContaining({ anyharnessBearerToken: "runtime-bearer" }),
     );
     expect(workflowDeps.installRuntime).toHaveBeenCalledWith(
       expect.objectContaining({

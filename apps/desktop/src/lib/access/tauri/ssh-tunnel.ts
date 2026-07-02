@@ -7,6 +7,7 @@ export interface EnsureSshAnyHarnessTunnelInput {
   sshPort?: number | null;
   identityFile?: string | null;
   remoteAnyHarnessPort?: number | null;
+  anyharnessBearerToken?: string | null;
 }
 
 export interface ProbeSshTargetConnectionInput {

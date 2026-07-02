@@ -1,17 +1,16 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Read;
 use std::net::TcpListener;
-use std::path::PathBuf;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
-use std::thread;
 use std::time::{Duration, Instant};
 use tauri::State;
 
-const DEFAULT_SSH_PORT: u16 = 22;
-pub(crate) const DEFAULT_ANYHARNESS_PORT: u16 = 8457;
-const SSH_CONNECT_TIMEOUT_SECONDS: u16 = 12;
+use super::ssh_common::{
+    append_common_ssh_options, command_output_error, normalize_port, parse_ssh_connection,
+    ssh_destination, wait_for_child_output, CommandOutput, DEFAULT_ANYHARNESS_PORT,
+};
+
 const SSH_PROBE_TIMEOUT: Duration = Duration::from_secs(25);
 const TUNNEL_READY_TIMEOUT: Duration = Duration::from_secs(12);
 const TUNNEL_READY_POLL: Duration = Duration::from_millis(150);
@@ -58,6 +57,7 @@ pub struct EnsureSshAnyHarnessTunnelInput {
     ssh_port: Option<u16>,
     identity_file: Option<String>,
     remote_anyharness_port: Option<u16>,
+    anyharness_bearer_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,20 +80,6 @@ pub struct ProbeSshTargetConnectionResult {
 pub struct EnsureSshAnyHarnessTunnelResult {
     local_url: String,
     local_port: u16,
-}
-
-#[derive(Debug)]
-pub(crate) struct SshConnection {
-    ssh_host: String,
-    ssh_user: String,
-    ssh_port: u16,
-    identity_file: Option<PathBuf>,
-}
-
-pub(crate) struct CommandOutput {
-    pub(crate) status: ExitStatus,
-    pub(crate) stdout: String,
-    pub(crate) stderr: String,
 }
 
 #[tauri::command]
@@ -142,6 +128,14 @@ pub async fn ensure_ssh_anyharness_tunnel(
         return Err("target_id is required.".to_string());
     }
 
+    let anyharness_bearer_token = input
+        .anyharness_bearer_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    let bearer = anyharness_bearer_token.as_deref();
+
     let connection = parse_ssh_connection(
         input.ssh_host,
         input.ssh_user,
@@ -164,7 +158,10 @@ pub async fn ensure_ssh_anyharness_tunnel(
     };
 
     if let Some(existing) = existing_tunnel_result(&state, &target_id, &connection_key)? {
-        if wait_for_anyharness(&existing.local_url).await.is_ok() {
+        if wait_for_anyharness(&existing.local_url, bearer)
+            .await
+            .is_ok()
+        {
             return Ok(existing);
         }
         remove_tunnel_for_port(&state, &target_id, existing.local_port);
@@ -199,7 +196,7 @@ pub async fn ensure_ssh_anyharness_tunnel(
         local_url.clone(),
         child,
     )? {
-        return match wait_for_anyharness(&existing.local_url).await {
+        return match wait_for_anyharness(&existing.local_url, bearer).await {
             Ok(()) => Ok(existing),
             Err(error) => {
                 remove_tunnel_for_port(&state, &target_id, existing.local_port);
@@ -208,7 +205,7 @@ pub async fn ensure_ssh_anyharness_tunnel(
         };
     }
 
-    match wait_for_anyharness(&local_url).await {
+    match wait_for_anyharness(&local_url, bearer).await {
         Ok(()) => Ok(EnsureSshAnyHarnessTunnelResult {
             local_url,
             local_port,
@@ -385,67 +382,6 @@ fn allocate_local_port() -> Result<u16, String> {
         .map_err(|error| format!("Failed to read local tunnel port: {error}"))
 }
 
-pub(crate) fn parse_ssh_connection(
-    ssh_host: String,
-    ssh_user: String,
-    ssh_port: Option<u16>,
-    identity_file: Option<String>,
-) -> Result<SshConnection, String> {
-    let ssh_host = ssh_host.trim().to_string();
-    let ssh_user = ssh_user.trim().to_string();
-    if ssh_host.is_empty() || ssh_user.is_empty() {
-        return Err("SSH host and user are required.".to_string());
-    }
-    let identity_file = identity_file
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(expand_home_path)
-        .transpose()?;
-    Ok(SshConnection {
-        ssh_host,
-        ssh_user,
-        ssh_port: normalize_port(ssh_port, DEFAULT_SSH_PORT, "SSH port")?,
-        identity_file,
-    })
-}
-
-pub(crate) fn normalize_port(
-    value: Option<u16>,
-    fallback: u16,
-    label: &str,
-) -> Result<u16, String> {
-    match value {
-        Some(0) => Err(format!("{label} must be between 1 and 65535.")),
-        Some(port) => Ok(port),
-        None => Ok(fallback),
-    }
-}
-
-pub(crate) fn append_common_ssh_options(command: &mut Command, connection: &SshConnection) {
-    command
-        .arg("-o")
-        .arg("BatchMode=yes")
-        .arg("-o")
-        .arg("StrictHostKeyChecking=accept-new")
-        .arg("-o")
-        .arg(format!("ConnectTimeout={SSH_CONNECT_TIMEOUT_SECONDS}"))
-        .arg("-o")
-        .arg("ServerAliveInterval=30")
-        .arg("-o")
-        .arg("ServerAliveCountMax=3")
-        .arg("-p")
-        .arg(connection.ssh_port.to_string());
-
-    if let Some(identity_file) = &connection.identity_file {
-        command.arg("-i").arg(identity_file);
-    }
-}
-
-pub(crate) fn ssh_destination(connection: &SshConnection) -> String {
-    format!("{}@{}", connection.ssh_user, connection.ssh_host)
-}
-
 fn spawn_and_wait_for_output(
     mut command: Command,
     timeout: Duration,
@@ -457,96 +393,7 @@ fn spawn_and_wait_for_output(
     wait_for_child_output(child, timeout, context, &[])
 }
 
-pub(crate) fn wait_for_child_output(
-    mut child: Child,
-    timeout: Duration,
-    context: &str,
-    tokens: &[&str],
-) -> Result<CommandOutput, String> {
-    let stdout_reader = spawn_reader(child.stdout.take());
-    let stderr_reader = spawn_reader(child.stderr.take());
-    let deadline = Instant::now() + timeout;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = stdout_reader.join().unwrap_or_default();
-                let stderr = stderr_reader.join().unwrap_or_default();
-                return Ok(CommandOutput {
-                    status,
-                    stdout,
-                    stderr,
-                });
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let stdout = stdout_reader.join().unwrap_or_default();
-                let stderr = stderr_reader.join().unwrap_or_default();
-                let detail = command_output_error(context, &stdout, &stderr, tokens);
-                return Err(format!(
-                    "{context} timed out after {}s: {detail}",
-                    timeout.as_secs()
-                ));
-            }
-            Ok(None) => thread::sleep(Duration::from_millis(100)),
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = stdout_reader.join();
-                let _ = stderr_reader.join();
-                return Err(format!("Failed to wait for {context}: {error}"));
-            }
-        }
-    }
-}
-
-fn spawn_reader<R>(reader: Option<R>) -> thread::JoinHandle<String>
-where
-    R: Read + Send + 'static,
-{
-    thread::spawn(move || {
-        let Some(mut reader) = reader else {
-            return String::new();
-        };
-        let mut output = String::new();
-        let _ = reader.read_to_string(&mut output);
-        output
-    })
-}
-
-pub(crate) fn redact_tokens(value: String, tokens: &[&str]) -> String {
-    tokens.iter().fold(value, |redacted, token| {
-        redacted.replace(token, "[redacted]")
-    })
-}
-
-pub(crate) fn command_output_error(
-    prefix: &str,
-    stdout: &str,
-    stderr: &str,
-    tokens: &[&str],
-) -> String {
-    let stdout = stdout.trim();
-    let stderr = stderr.trim();
-    let mut detail = String::new();
-    if !stderr.is_empty() {
-        detail.push_str(stderr);
-    }
-    if !stdout.is_empty() {
-        if !detail.is_empty() {
-            detail.push_str("\n\n");
-        }
-        detail.push_str(stdout);
-    }
-    detail = redact_tokens(detail, tokens);
-    if detail.is_empty() {
-        prefix.to_string()
-    } else {
-        format!("{prefix}: {detail}")
-    }
-}
-
-async fn wait_for_anyharness(local_url: &str) -> Result<(), String> {
+async fn wait_for_anyharness(local_url: &str, bearer_token: Option<&str>) -> Result<(), String> {
     let deadline = Instant::now() + TUNNEL_READY_TIMEOUT;
     let client = reqwest::Client::builder()
         .timeout(TUNNEL_HEALTH_REQUEST_TIMEOUT)
@@ -556,7 +403,9 @@ async fn wait_for_anyharness(local_url: &str) -> Result<(), String> {
     let mut last_error = String::new();
     while Instant::now() < deadline {
         match client.get(&health_url).send().await {
-            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(response) if response.status().is_success() => {
+                return verify_anyharness_access(&client, local_url, bearer_token).await;
+            }
             Ok(response) => {
                 last_error = format!("health returned {}", response.status());
             }
@@ -571,17 +420,33 @@ async fn wait_for_anyharness(local_url: &str) -> Result<(), String> {
     ))
 }
 
-fn expand_home_path(path: &str) -> Result<PathBuf, String> {
-    if path == "~" {
-        return std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set.".to_string());
+/// `/health` is registered outside the bearer middleware, so reachability
+/// alone does not prove Desktop can use the runtime. Probe an authenticated
+/// `/v1` route so enforcement mismatches fail here instead of on first use.
+async fn verify_anyharness_access(
+    client: &reqwest::Client,
+    local_url: &str,
+    bearer_token: Option<&str>,
+) -> Result<(), String> {
+    let verify_url = format!("{}/v1/workspaces", local_url.trim_end_matches('/'));
+    let mut request = client.get(&verify_url);
+    if let Some(bearer_token) = bearer_token {
+        request = request.bearer_auth(bearer_token);
     }
-    if let Some(rest) = path.strip_prefix("~/") {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or_else(|| "HOME is not set.".to_string())?;
-        return Ok(home.join(rest));
+    let response = request.send().await.map_err(|error| {
+        format!("AnyHarness became reachable, but the access check failed at {verify_url}: {error}")
+    })?;
+    let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return Err(if bearer_token.is_some() {
+            format!(
+                "AnyHarness rejected the stored runtime bearer ({status}). Reconnect the target from Compute settings to refresh its runtime credentials."
+            )
+        } else {
+            format!(
+                "AnyHarness requires a runtime bearer that Desktop does not have ({status}). Reconnect the target from Compute settings."
+            )
+        });
     }
-    Ok(PathBuf::from(path))
+    Ok(())
 }

@@ -17,6 +17,7 @@ export interface SshDirectTargetProfile {
   identityFile?: string | null;
   remoteAnyHarnessPort: number;
   workspaceRoot?: string | null;
+  anyharnessBearerToken?: string | null;
 }
 
 function normalizedPort(value: unknown, fallback: number): number {
@@ -42,6 +43,9 @@ function normalizeProfile(input: unknown): SshDirectTargetProfile | null {
   const workspaceRoot = typeof record.workspaceRoot === "string"
     ? record.workspaceRoot.trim()
     : "";
+  const anyharnessBearerToken = typeof record.anyharnessBearerToken === "string"
+    ? record.anyharnessBearerToken.trim()
+    : "";
   return {
     targetId,
     sshHost,
@@ -53,6 +57,7 @@ function normalizeProfile(input: unknown): SshDirectTargetProfile | null {
       DEFAULT_ANYHARNESS_PORT,
     ),
     workspaceRoot: workspaceRoot || null,
+    anyharnessBearerToken: anyharnessBearerToken || null,
   };
 }
 
@@ -82,14 +87,21 @@ export async function getSshDirectTargetProfile(
 
 export async function setSshDirectTargetProfile(
   profile: SshDirectTargetProfile,
-): Promise<void> {
+): Promise<SshDirectTargetProfile> {
   const normalized = normalizeProfile(profile);
   if (!normalized) {
     throw new Error("SSH host and user are required for direct target access.");
   }
   const profiles = await readProfiles();
+  // Only enrollment and runtime-access recovery write the bearer; connection
+  // edits omit it and must not drop the stored runtime credential.
+  if (!normalized.anyharnessBearerToken) {
+    normalized.anyharnessBearerToken =
+      profiles[normalized.targetId]?.anyharnessBearerToken ?? null;
+  }
   profiles[normalized.targetId] = normalized;
   await persistValue(SSH_DIRECT_TARGET_PROFILES_KEY, profiles);
+  return normalized;
 }
 
 export async function deleteSshDirectTargetProfile(targetId: string): Promise<void> {

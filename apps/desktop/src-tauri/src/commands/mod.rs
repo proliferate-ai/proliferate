@@ -7,6 +7,7 @@ pub mod keychain;
 pub mod process;
 pub mod runtime;
 pub mod shell;
+pub mod ssh_common;
 pub mod ssh_install;
 pub mod ssh_tunnel;
 pub mod support;

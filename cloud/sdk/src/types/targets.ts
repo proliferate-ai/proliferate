@@ -70,6 +70,9 @@ export type CloudTargetEnrollmentResponse =
 export type CloudTargetExistingEnrollmentRequest =
   Schema<"CloudTargetExistingEnrollmentRequest">;
 
+export type CloudTargetRuntimeAccessResponse =
+  Schema<"CloudTargetRuntimeAccessResponse">;
+
 export type ArchiveCloudTargetResponse =
   Schema<"ArchiveCloudTargetResponse">;
 
