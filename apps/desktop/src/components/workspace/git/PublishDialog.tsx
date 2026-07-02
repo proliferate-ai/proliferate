@@ -95,7 +95,6 @@ export function PublishDialog({
       onClose={onClose}
       disableClose={isSubmitting}
       title={title}
-      description="Commit, publish, and create pull requests for this workspace."
       sizeClassName="max-h-[88vh] max-w-xl"
       bodyClassName="min-h-0 px-0 pb-0 pt-0"
       footer={(
@@ -157,14 +156,7 @@ export function PublishDialog({
             {hasDirtyChanges && (
               <PublishSection>
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-ui font-medium text-foreground">Commit message</p>
-                    <p className="text-ui-sm text-muted-foreground">
-                      {commitDraft.includeUnstaged
-                        ? "Stages unstaged files before committing."
-                        : "Commits the currently staged index."}
-                    </p>
-                  </div>
+                  <p className="text-ui font-medium text-foreground">Commit message</p>
                   {viewState.hasUnstagedChanges && (
                     <div className="flex items-center gap-2">
                       <Switch
@@ -246,7 +238,7 @@ export function PublishDialog({
             )}
 
             {(error || viewState.disabledReason) && (
-              <p className="border-t border-border/60 pt-4 text-ui-sm text-destructive">
+              <p className="text-ui-sm text-destructive">
                 {error ?? viewState.disabledReason}
               </p>
             )}

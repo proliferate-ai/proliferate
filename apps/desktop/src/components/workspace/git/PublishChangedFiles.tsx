@@ -17,7 +17,7 @@ interface PublishChangedFilesProps {
 
 export function PublishChangedFiles({ groups, scroll }: PublishChangedFilesProps) {
   const content = (
-    <div className="space-y-3">
+    <div>
       <PublishFileSection title="Staged" files={groups.staged} />
       <PublishFileSection title="Partially staged" files={groups.partial} />
       <PublishFileSection title="Unstaged" files={groups.unstaged} />
@@ -46,16 +46,16 @@ function PublishFileSection({
   if (files.length === 0) return null;
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-base font-medium text-muted-foreground">{title}</p>
-        <span className="text-base tabular-nums text-muted-foreground">{files.length}</span>
+    <section>
+      <div className="flex items-center justify-between px-0.5 pb-1 pt-2">
+        <p className="text-ui-sm font-medium text-muted-foreground">{title}</p>
+        <span className="text-ui-sm tabular-nums text-muted-foreground">{files.length}</span>
       </div>
-      <div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border/60">
+      <div className="divide-y divide-border/40">
         {files.map((file) => (
           <div
             key={`${title}:${file.path}`}
-            className="flex items-center gap-3 px-2.5 py-1.5"
+            className="flex items-center gap-3 px-0.5 py-1.5"
           >
             {/* rtl keeps the tail of long paths visible; text-left pins short
                 paths to the reading edge (text-start maps to right under rtl) */}
