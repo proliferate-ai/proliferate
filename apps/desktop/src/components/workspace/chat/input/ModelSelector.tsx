@@ -222,7 +222,7 @@ function ModelRow({
           {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
         </span>
       ) : isSelected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
-      className="px-2.5 leading-[18px]"
+      className="px-2.5"
       trailingClassName="size-auto opacity-100"
     />
   );
