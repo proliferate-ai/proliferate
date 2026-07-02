@@ -20,6 +20,7 @@ from proliferate.constants.cloud import (
     CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS,
     CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
 )
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers.models import (
@@ -85,14 +86,31 @@ async def create_desktop_enrollment(
     *,
     owner_user_id: UUID,
     desktop_install_id: str,
+    organization_id: UUID | None = None,
 ) -> DesktopWorkerEnrollmentResponse:
-    """Mint a short-lived enrollment token for the user's desktop install."""
+    """Mint a short-lived enrollment token for the user's desktop install.
+
+    The worker identity is an immutable (user, org, install) triple: an org id
+    supplied here is membership-validated and stamped on the enrollment, so the
+    worker (and its gateway grant) is scoped to that org for its whole life.
+    Org-less users enroll with ``organization_id=None``.
+    """
+    if organization_id is not None:
+        # A worker must not be scoped to an org the caller does not belong to;
+        # a non-member must not learn the org exists by supplying its id.
+        membership = await organization_store.get_active_membership(
+            db, organization_id=organization_id, user_id=owner_user_id
+        )
+        if membership is None:
+            raise CloudApiError(
+                "organization_not_found", "Organization not found.", status_code=404
+            )
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     expires_at = utcnow() + timedelta(seconds=CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS)
     await store.create_enrollment(
         db,
         owner_user_id=owner_user_id,
-        organization_id=None,
+        organization_id=organization_id,
         runtime_kind="desktop",
         cloud_sandbox_id=None,
         desktop_install_id=desktop_install_id,

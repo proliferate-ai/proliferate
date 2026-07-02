@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_MEMBER,
+    ORGANIZATION_STATUS_ACTIVE,
+)
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
+from proliferate.db.store.integrations import policies as policies_store
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
 from proliferate.utils.crypto import encrypt_json
 from proliferate.config import settings
@@ -24,18 +32,83 @@ def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
 
 
-async def _gateway_bearer(client: AsyncClient, db_session: AsyncSession, *, prefix: str) -> str:
+async def _authed_user(client: AsyncClient, db_session: AsyncSession, *, prefix: str):
     auth = await create_user_and_login(client, db_session, email_prefix=prefix)
     await seed_linked_github_account(db_session, user_id=auth.user_id, access_token=f"gh-{prefix}")
+    return auth
+
+
+async def _enroll_gateway_bearer(
+    client: AsyncClient,
+    auth,
+    *,
+    prefix: str,
+    organization_id: str | None = None,
+) -> str:
+    body: dict[str, str] = {"desktopInstallId": f"install-{prefix}"}
+    if organization_id is not None:
+        body["organizationId"] = organization_id
     enrollment = await client.post(
         "/v1/cloud/workers/desktop/enrollment",
         headers=auth.headers,
-        json={"desktopInstallId": f"install-{prefix}"},
+        json=body,
     )
+    assert enrollment.status_code == 200, enrollment.text
     token = enrollment.json()["enrollmentToken"]
     enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
     authorization = enroll.json()["integrationGateway"]["authorization"]
     return authorization.removeprefix("Bearer ")
+
+
+async def _gateway_bearer(client: AsyncClient, db_session: AsyncSession, *, prefix: str) -> str:
+    auth = await _authed_user(client, db_session, prefix=prefix)
+    return await _enroll_gateway_bearer(client, auth, prefix=prefix)
+
+
+async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> str:
+    now = datetime.now(UTC)
+    organization = Organization(
+        name="Acme",
+        logo_domain="acme.dev",
+        status=ORGANIZATION_STATUS_ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=uuid.UUID(user_id),
+            role=ORGANIZATION_ROLE_MEMBER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+    return str(organization.id)
+
+
+async def _set_org_policy(
+    db_session: AsyncSession,
+    *,
+    organization_id: str,
+    namespace: str,
+    enabled: bool,
+    updated_by_user_id: str,
+) -> None:
+    definition = await definitions_store.get_seed_by_namespace(db_session, namespace)
+    assert definition is not None
+    await policies_store.upsert_policy(
+        db_session,
+        organization_id=uuid.UUID(organization_id),
+        definition_id=definition.id,
+        enabled=enabled,
+        updated_by_user_id=uuid.UUID(updated_by_user_id),
+    )
+    await db_session.commit()
 
 
 async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespace: str) -> None:
@@ -275,6 +348,91 @@ async def test_call_tool_upstream_failure_returns_mcp_error_not_500(
     by_id = {r["id"]: r for r in response.json()}
     assert by_id[1]["result"]["isError"] is True
     assert by_id[2]["result"]["tools"]  # sibling still returned
+
+
+async def _tool_call(client: AsyncClient, headers: dict[str, str], *, name: str, arguments: dict):
+    response = await client.post(
+        GATEWAY_URL,
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["result"]
+
+
+@pytest.mark.asyncio
+async def test_org_policy_disables_provider_across_gateway(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    auth = await _authed_user(client, db_session, prefix="gw-org-policy")
+    org_id = await _create_org_with_member(db_session, user_id=auth.user_id)
+    bearer = await _enroll_gateway_bearer(
+        client, auth, prefix="gw-org-policy", organization_id=org_id
+    )
+    headers = {"Authorization": f"Bearer {bearer}"}
+    await _seed_ready_account(db_session, user_id=auth.user_id, namespace="context7")
+
+    # No policy row yet: the seed default applies and the provider is listed.
+    listed = await _tool_call(client, headers, name="integrations.list_providers", arguments={})
+    assert [p["provider"] for p in listed["structuredContent"]["providers"]] == ["context7"]
+
+    await _set_org_policy(
+        db_session,
+        organization_id=org_id,
+        namespace="context7",
+        enabled=False,
+        updated_by_user_id=auth.user_id,
+    )
+
+    # list_providers: the disabled definition is excluded outright.
+    hidden = await _tool_call(client, headers, name="integrations.list_providers", arguments={})
+    assert hidden["structuredContent"]["providers"] == []
+
+    # list_tools: an in-band MCP error naming the org policy.
+    tools = await _tool_call(
+        client, headers, name="integrations.list_tools", arguments={"provider": "context7"}
+    )
+    assert tools["isError"] is True
+    assert "disabled" in tools["content"][0]["text"]
+
+    # call_tool: also an in-band MCP error, never a credentialed upstream call.
+    call = await _tool_call(
+        client,
+        headers,
+        name="integrations.call_tool",
+        arguments={"provider": "context7", "tool": "resolve-library-id", "arguments": {}},
+    )
+    assert call["isError"] is True
+
+
+@pytest.mark.asyncio
+async def test_orgless_grant_ignores_other_orgs_policies(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    other = await _authed_user(client, db_session, prefix="gw-org-other")
+    other_org_id = await _create_org_with_member(db_session, user_id=other.user_id)
+
+    auth = await _authed_user(client, db_session, prefix="gw-orgless")
+    bearer = await _enroll_gateway_bearer(client, auth, prefix="gw-orgless")
+    headers = {"Authorization": f"Bearer {bearer}"}
+    await _seed_ready_account(db_session, user_id=auth.user_id, namespace="context7")
+
+    # Another org disabling the definition must not leak into an org-less grant.
+    await _set_org_policy(
+        db_session,
+        organization_id=other_org_id,
+        namespace="context7",
+        enabled=False,
+        updated_by_user_id=other.user_id,
+    )
+
+    listed = await _tool_call(client, headers, name="integrations.list_providers", arguments={})
+    assert [p["provider"] for p in listed["structuredContent"]["providers"]] == ["context7"]
 
 
 @pytest.mark.asyncio

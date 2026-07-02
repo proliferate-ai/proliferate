@@ -1,10 +1,21 @@
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_MEMBER,
+    ORGANIZATION_STATUS_ACTIVE,
+)
+from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
 
@@ -24,6 +35,32 @@ async def _authed_user(client: AsyncClient, db_session: AsyncSession, *, prefix:
         access_token=f"gh-{prefix}",
     )
     return auth
+
+
+async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> str:
+    now = datetime.now(UTC)
+    organization = Organization(
+        name="Acme",
+        logo_domain="acme.dev",
+        status=ORGANIZATION_STATUS_ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=uuid.UUID(user_id),
+            role=ORGANIZATION_ROLE_MEMBER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+    return str(organization.id)
 
 
 async def _desktop_enrollment_token(
@@ -159,6 +196,79 @@ class TestRuntimeWorkerEnrollment:
             json={},
         )
         assert fresh.status_code == 200
+
+
+class TestOrgScopedEnrollment:
+    @pytest.mark.asyncio
+    async def test_member_enrollment_stamps_org_on_worker(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="worker-org-member")
+        org_id = await _create_org_with_member(db_session, user_id=auth.user_id)
+
+        response = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=auth.headers,
+            json={"desktopInstallId": "install-org-a", "organizationId": org_id},
+        )
+        assert response.status_code == 200, response.text
+        token = response.json()["enrollmentToken"]
+
+        enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+        assert enroll.status_code == 200, enroll.text
+
+        worker = (
+            await db_session.execute(
+                select(CloudRuntimeWorker).where(
+                    CloudRuntimeWorker.owner_user_id == uuid.UUID(auth.user_id),
+                    CloudRuntimeWorker.desktop_install_id == "install-org-a",
+                    CloudRuntimeWorker.status != "revoked",
+                )
+            )
+        ).scalar_one()
+        assert worker.organization_id == uuid.UUID(org_id)
+
+    @pytest.mark.asyncio
+    async def test_non_member_enrollment_is_404(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        member = await _authed_user(client, db_session, prefix="worker-org-owner2")
+        outsider = await _authed_user(client, db_session, prefix="worker-org-outsider")
+        org_id = await _create_org_with_member(db_session, user_id=member.user_id)
+
+        response = await client.post(
+            "/v1/cloud/workers/desktop/enrollment",
+            headers=outsider.headers,
+            json={"desktopInstallId": "install-org-b", "organizationId": org_id},
+        )
+        assert response.status_code == 404, response.text
+        assert response.json()["detail"]["code"] == "organization_not_found"
+
+    @pytest.mark.asyncio
+    async def test_omitted_org_enrolls_with_null_org(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="worker-org-none")
+        token = await _desktop_enrollment_token(client, auth, install_id="install-org-c")
+        enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+        assert enroll.status_code == 200, enroll.text
+
+        worker = (
+            await db_session.execute(
+                select(CloudRuntimeWorker).where(
+                    CloudRuntimeWorker.owner_user_id == uuid.UUID(auth.user_id),
+                    CloudRuntimeWorker.desktop_install_id == "install-org-c",
+                    CloudRuntimeWorker.status != "revoked",
+                )
+            )
+        ).scalar_one()
+        assert worker.organization_id is None
 
 
 async def _enroll_worker(client: AsyncClient, auth, *, install_id: str) -> dict:

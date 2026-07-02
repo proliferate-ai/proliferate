@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -46,6 +47,7 @@ class WorkerHeartbeatResponse(_CamelModel):
 
 class DesktopWorkerEnrollmentRequest(_CamelModel):
     desktop_install_id: str = Field(min_length=1, max_length=255)
+    organization_id: UUID | None = None
 
 
 class DesktopWorkerEnrollmentResponse(_CamelModel):

@@ -8,7 +8,6 @@ touch org-custom rows and vice versa.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -91,18 +90,6 @@ async def get_definition(
 ) -> IntegrationDefinitionRecord | None:
     row = await db.get(CloudIntegrationDefinition, definition_id)
     return _record(row) if row is not None else None
-
-
-async def get_definitions_by_ids(
-    db: AsyncSession, definition_ids: Iterable[UUID]
-) -> dict[UUID, IntegrationDefinitionRecord]:
-    ids = list(definition_ids)
-    if not ids:
-        return {}
-    result = await db.scalars(
-        select(CloudIntegrationDefinition).where(CloudIntegrationDefinition.id.in_(ids))
-    )
-    return {row.id: _record(row) for row in result.all()}
 
 
 async def get_seed_by_namespace(
