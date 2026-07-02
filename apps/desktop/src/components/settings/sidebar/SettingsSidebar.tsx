@@ -74,6 +74,7 @@ const SETTINGS_ROW_DISABLED_CLASS =
 
 const SETTINGS_NAV_ICONS = {
   account: CircleUser,
+  "agent-api-keys": KeyRound,
   "agent-defaults": SlidersHorizontal,
   appearance: Palette,
   billing: CreditCard,

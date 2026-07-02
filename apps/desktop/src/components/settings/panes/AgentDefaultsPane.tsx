@@ -12,6 +12,7 @@ import {
 import { SettingsRow, SETTINGS_CONTROL_WIDTH_CLASS } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { AgentAuthenticationSection } from "@/components/settings/panes/agent-auth/AgentAuthenticationSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
@@ -222,6 +223,11 @@ export function AgentDefaultsPane() {
               row={row}
               launchAgent={launchAgents.find((agent) => agent.kind === row.kind) ?? null}
               preferences={preferences}
+            />
+
+            <AgentAuthenticationSection
+              agentKind={row.kind}
+              displayName={row.displayName}
             />
 
             {row.visibilityModels.length > 0 ? (
