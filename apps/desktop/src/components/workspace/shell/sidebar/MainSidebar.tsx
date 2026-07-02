@@ -319,6 +319,7 @@ export const MainSidebar = memo(function MainSidebar() {
               onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
               onIndicatorAction={actions.handleSidebarIndicatorAction}
+              onOpenPullRequest={actions.handleOpenPullRequest}
               onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
               onWorkspaceHover={handleWorkspaceHover}
               shortcutRevealVisible={shortcutRevealVisible}

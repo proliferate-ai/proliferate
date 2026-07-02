@@ -9,6 +9,7 @@ import type {
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
 
 export interface LocalSidebarWorkspaceEntry {
   source: "local";
@@ -86,6 +87,11 @@ export interface SidebarWorkspaceItemState {
   workspaceLocationCopyValue: string | null;
   workspaceLocationCopyToastLabel: string | null;
   branchName: string | null;
+  /**
+   * Composed git/PR status keyed by this item's logical workspace id
+   * (§2.7). Null when no status is known for the workspace.
+   */
+  gitStatus: WorkspaceGitStatus | null;
 }
 
 export interface SidebarGroupState {

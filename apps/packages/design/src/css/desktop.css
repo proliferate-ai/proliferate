@@ -164,6 +164,9 @@
   --color-positive: #40c977;
   --color-positive-muted: rgba(64, 201, 119, 0.15);
   --color-positive-foreground: #ffffff;
+  /* Merged-PR dot (GitHub-convention purple). Distinct from `info`, which
+   * doubles as the unread color. */
+  --color-pr-merged: #ad7bf9;
 
   /* -- Link -- */
   --color-link: rgba(51, 156, 255, 0.12);
@@ -525,6 +528,7 @@ mark.codex-thread-find-active {
   --color-warning-border: rgba(13, 13, 13, 0.078);
   --color-info: #0285ff;
   --color-info-foreground: #ffffff;
+  --color-pr-merged: #8250df;
   --color-positive: #00a240;
   --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;
@@ -684,6 +688,7 @@ mark.codex-thread-find-active {
   --color-warning-border: var(--color-border);
   --color-info: #0285ff;
   --color-info-foreground: #ffffff;
+  --color-pr-merged: #8250df;
   --color-positive: #00a240;
   --color-positive-muted: rgba(0, 162, 64, 0.1);
   --color-positive-foreground: #ffffff;

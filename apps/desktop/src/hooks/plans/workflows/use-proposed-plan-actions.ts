@@ -210,12 +210,7 @@ function usePlanImplementationActions() {
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }, {
-            trackProductEvent,
-            captureGitStatusSnapshot: gitPromptEffects.captureGitStatusSnapshot,
-            stampGitPrompt: gitPromptEffects.stampGitPrompt,
-            refreshPrStatuses: gitPromptEffects.refreshPrStatuses,
-          });
+          }, { trackProductEvent, ...gitPromptEffects.promptSubmitDeps });
         },
         showToast,
       });

@@ -46,6 +46,10 @@ describe("workspace activity indicator", () => {
     });
   });
 
+  // ARCH-14b: needs_review is no longer a status-indicator kind. The
+  // attention count must keep including unread (needsReview) workspaces —
+  // this idle workspace produces no status indicator at all, so only the
+  // direct `needsReview` check can count it.
   it("reports attention for unread workspace activity", () => {
     const workspace = makeLocalLogicalWorkspace({
       id: "unread-workspace",

@@ -18,8 +18,7 @@ type GlyphTestKind =
   | "waiting_input"
   | "waiting_plan"
   | "iterating"
-  | "queued_prompt"
-  | "needs_review";
+  | "queued_prompt";
 
 function countElementsByType(node: ReactNode, targetType: unknown): number {
   if (Array.isArray(node)) {
@@ -72,12 +71,5 @@ describe("SidebarStatusGlyph", () => {
     const glyph = renderGlyph("queued_prompt");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
-  });
-
-  it("uses an unread dot for needs-review work", () => {
-    const glyph = renderGlyph("needs_review");
-
-    expect(countElementsByType(glyph, Clock)).toBe(0);
-    expect(countElementsByType(glyph, "span")).toBe(1);
   });
 });

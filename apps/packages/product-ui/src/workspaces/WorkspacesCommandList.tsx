@@ -3,16 +3,23 @@
  * table. Filter input row on top (border-b, search icon, 13px input), then a
  * scrolling list of recency-grouped rows:
  *
- *   [git-branch 12px faint] [name 13px/500, 144px, truncate] [chevron 12px]
- *   [branch 13px truncate] [PR dot] …… [last-used 12px faint, right-aligned]
+ *   [well: spinner | PR | branch glyph] [name 13px/500, 144px, truncate]
+ *   [chevron 12px] [branch 13px truncate] [PR dot] [#805] [· meta]
+ *   …… [↑2 ↓1] [last-used 12px faint, right-aligned]
+ *
+ * The leading well mirrors the sidebar ladder (running > PR > branch >
+ * empty), uniformly `!size-3`, faint — destructive when the worktree has
+ * merge conflicts. PR state at page scale is dot + number; the state words
+ * live in the dot's tooltip (compound label).
  *
  * Rows are ~36px, radius 6px, `--accent` fill when selected; the selected row
- * swaps the date for `Go to →`. Group headings are 13px/500 foreground with
- * the item count in `--faint`. An optional dashed "Create" row closes the
- * list with a ⌘N hint.
+ * swaps the date for `Go to →` (and hides the ahead/behind label). Group
+ * headings are 13px/500 foreground with the item count in `--faint`. An
+ * optional dashed "Create" row closes the list with a ⌘N hint.
  */
-import { ChevronRight, FolderPlus, GitBranch } from "lucide-react";
+import { ChevronRight, FolderPlus, GitBranch, GitPullRequest } from "lucide-react";
 import type { ReactNode } from "react";
+import { Spinner } from "@proliferate/ui/primitives/Spinner";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 import {
@@ -36,11 +43,16 @@ export interface WorkspacesCommandItemView {
   meta?: string | null;
   /** Relative last-used label, right-aligned tabular-nums. */
   updatedLabel?: string | null;
-  /**
-   * PR status dot (spec §2 component). Render only when status exists —
-   * nothing is invented when PR data is not plumbed.
-   */
+  /** PR status dot (spec §2 component). Render only when status exists. */
   prStatus?: PrStatusView | null;
+  /** Agent activity (iterating / queued prompt) — spinner in the well. */
+  running?: boolean;
+  /** Merge conflicts in the worktree — destructive tint on the well glyph. */
+  attention?: "conflicts" | null;
+  /** "↑2 ↓1" — present only when ahead or behind > 0; hidden when selected. */
+  aheadBehindLabel?: string | null;
+  /** "#805" — rendered after the PR dot; included in the filter value. */
+  prNumberLabel?: string | null;
 }
 
 export interface WorkspacesCommandGroupView {
@@ -140,16 +152,23 @@ function WorkspaceCommandRow({
 }) {
   const branch = item.branch ?? null;
   const meta = item.meta ?? null;
+  const conflicted = item.attention === "conflicts";
 
   return (
     <CommandItem
-      value={`${item.id} ${item.title} ${branch ?? ""} ${meta ?? ""}`.trim()}
+      value={`${item.id} ${item.title} ${branch ?? ""} ${meta ?? ""} ${item.prNumberLabel ?? ""}`.trim()}
       onSelect={onSelect ? () => onSelect(item.id) : undefined}
       className="min-h-9"
     >
       <div className="flex w-full items-center gap-3">
-        <div className="flex w-4 shrink-0 items-center justify-center">
-          <GitBranch className="!size-3 text-faint" aria-hidden />
+        <div
+          className={twMerge(
+            "flex w-4 shrink-0 items-center justify-center",
+            conflicted ? "text-destructive" : "text-faint",
+          )}
+          title={conflicted ? "Merge conflicts in worktree" : undefined}
+        >
+          <WorkspaceRowGlyph item={item} branch={branch} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -162,7 +181,12 @@ function WorkspaceCommandRow({
                 </>
               ) : null}
               {item.prStatus ? (
-                <PrStatusDot status={item.prStatus} className="flex-shrink-0" />
+                <span className="flex flex-shrink-0 items-center gap-1.5 font-normal">
+                  <PrStatusDot status={item.prStatus} className="flex-shrink-0" />
+                  {item.prNumberLabel ? (
+                    <span className="text-ui-sm text-faint">{item.prNumberLabel}</span>
+                  ) : null}
+                </span>
               ) : null}
             </span>
             {meta ? (
@@ -174,6 +198,11 @@ function WorkspaceCommandRow({
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-3">
+          {item.aheadBehindLabel ? (
+            <span className="text-ui-sm tabular-nums text-faint group-data-[selected=true]:hidden">
+              {item.aheadBehindLabel}
+            </span>
+          ) : null}
           <span className="w-16 text-right text-ui-sm tabular-nums text-faint group-data-[selected=true]:hidden">
             {item.updatedLabel ?? ""}
           </span>
@@ -184,4 +213,28 @@ function WorkspaceCommandRow({
       </div>
     </CommandItem>
   );
+}
+
+/**
+ * Leading-well ladder (spec §4.2), mirroring the sidebar: running spinner >
+ * PR glyph > branch glyph > empty reserved well. All glyphs `!size-3`,
+ * toned by the well container (faint / destructive on conflicts).
+ */
+function WorkspaceRowGlyph({
+  item,
+  branch,
+}: {
+  item: WorkspacesCommandItemView;
+  branch: string | null;
+}) {
+  if (item.running) {
+    return <Spinner className="!size-3" />;
+  }
+  if (item.prStatus) {
+    return <GitPullRequest className="!size-3" aria-hidden />;
+  }
+  if (branch) {
+    return <GitBranch className="!size-3" aria-hidden />;
+  }
+  return null;
 }

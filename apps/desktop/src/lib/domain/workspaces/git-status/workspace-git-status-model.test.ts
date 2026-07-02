@@ -4,17 +4,19 @@ import {
   composeWorkspaceGitStatus,
   deriveGitAttention,
   gitStatusFromSnapshot,
-  gitStatusSnapshotsMateriallyEqual,
   isTimestampNewer,
   pathsEqualCanonical,
-  persistedSnapshotFromPullRequestSummary,
-  persistedSnapshotFromStatus,
-  planGitStatusSnapshotWrite,
   workspaceGitStatusesMateriallyEqual,
   type ComposeWorkspaceGitStatusInput,
   type PersistedWorkspaceGitStatusSnapshot,
   type WorkspacePrStatus,
 } from "./workspace-git-status-model";
+import {
+  gitStatusSnapshotsMateriallyEqual,
+  persistedSnapshotFromPullRequestSummary,
+  persistedSnapshotFromStatus,
+  planGitStatusSnapshotWrite,
+} from "./workspace-git-status-snapshots";
 
 const NOW = "2026-07-01T12:00:00.000Z";
 const EARLIER = "2026-07-01T11:00:00.000Z";

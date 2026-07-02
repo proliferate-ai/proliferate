@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useRefreshPrStatuses } from "@/hooks/workspaces/cache/use-pr-status-refresh";
 import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
-import { persistedSnapshotFromStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { persistedSnapshotFromStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
 import {
   recordWorkspaceGitStatusSnapshot,
   stampWorkspaceGitPrompt,
@@ -41,9 +41,12 @@ export function useGitPromptSnapshotEffects() {
   );
 
   return useMemo(() => ({
-    captureGitStatusSnapshot,
-    stampGitPrompt: stampWorkspaceGitPrompt,
-    refreshPrStatuses,
     repoRootIdForLogicalWorkspace,
+    /** Git third of the prompt-submit side-effect deps, ready to spread. */
+    promptSubmitDeps: {
+      captureGitStatusSnapshot,
+      stampGitPrompt: stampWorkspaceGitPrompt,
+      refreshPrStatuses,
+    },
   }), [captureGitStatusSnapshot, refreshPrStatuses, repoRootIdForLogicalWorkspace]);
 }

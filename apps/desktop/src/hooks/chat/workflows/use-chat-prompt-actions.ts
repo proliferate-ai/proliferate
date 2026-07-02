@@ -234,12 +234,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         agentKind: launchSelection?.kind ?? "unknown",
         reuseSession: targetSessionId !== null,
         setWorkspaceArrivalEvent,
-      }, {
-        trackProductEvent,
-        captureGitStatusSnapshot: gitPromptEffects.captureGitStatusSnapshot,
-        stampGitPrompt: gitPromptEffects.stampGitPrompt,
-        refreshPrStatuses: gitPromptEffects.refreshPrStatuses,
-      });
+      }, { trackProductEvent, ...gitPromptEffects.promptSubmitDeps });
       return true;
     } catch (error) {
       if (latencyFlowId) {

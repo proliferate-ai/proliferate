@@ -2,6 +2,8 @@ import { useCallback } from "react";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
@@ -34,6 +36,7 @@ export function useWorkspaceSidebarActions() {
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
   const showToast = useToastStore((state) => state.show);
   const { markDone, retryCleanup } = useWorkspaceRetireActions();
+  const { openExternal } = useTauriShellActions();
 
   const handleAddRepo = useCallback(() => {
     openAddRepoFlow();
@@ -54,6 +57,12 @@ export function useWorkspaceSidebarActions() {
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
     selectWorkspaceFromSurface(workspaceId, "sidebar");
   }, [selectWorkspaceFromSurface]);
+
+  const handleOpenPullRequest = useCallback((url: string) => {
+    void openExternal(url).catch(() => {
+      showToast("Failed to open the pull request.");
+    });
+  }, [openExternal, showToast]);
 
   const handleSidebarIndicatorAction = useCallback((action: SidebarIndicatorAction) => {
     switch (action.kind) {
@@ -184,6 +193,7 @@ export function useWorkspaceSidebarActions() {
     handleGoWorkflows,
     handleGoWorkspaces,
     handleSidebarIndicatorAction,
+    handleOpenPullRequest,
     handleMarkWorkspaceDone,
     handleRetryWorkspaceCleanup,
     handleSelectWorkspace,

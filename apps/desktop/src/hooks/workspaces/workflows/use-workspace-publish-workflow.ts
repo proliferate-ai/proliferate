@@ -17,7 +17,7 @@ import type {
   PublishIntent,
   PublishPullRequestDraft,
 } from "@/lib/domain/workspaces/creation/publish-workflow-model";
-import { persistedSnapshotFromPullRequestSummary } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { persistedSnapshotFromPullRequestSummary } from "@/lib/domain/workspaces/git-status/workspace-git-status-snapshots";
 import { runWorkspacePublishWorkflow } from "@/lib/workflows/workspaces/run-workspace-publish-workflow";
 import { useRefreshPrStatuses } from "@/hooks/workspaces/cache/use-pr-status-refresh";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";

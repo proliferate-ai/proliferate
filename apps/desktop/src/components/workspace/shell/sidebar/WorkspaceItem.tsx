@@ -8,6 +8,7 @@ import {
   Archive,
   Folder,
   GitBranch,
+  GitPullRequest,
   Pencil,
   Trash,
 } from "@proliferate/ui/icons";
@@ -24,13 +25,18 @@ import type {
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
 import {
+  prStatusViewFromGitStatus,
+  sidebarGitGlyphForStatus,
+} from "@/lib/domain/workspaces/git-status/pr-status-presentation";
+import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import {
   SidebarDetailIndicatorsView,
   SidebarStatusIndicatorView,
 } from "./SidebarIndicators";
+import { SidebarWorkspaceGitGlyph } from "./SidebarWorkspaceGitGlyph";
 import { WorkspaceItemMenu } from "./WorkspaceItemMenu";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
-import type { PrStatusView } from "@proliferate/product-ui/workspaces/PrStatusBadge";
 
 interface WorkspaceItemProps {
   workspaceId?: string;
@@ -56,12 +62,17 @@ interface WorkspaceItemProps {
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
   /**
-   * PR status dot-on-icon (UX spec §2). No PR state is plumbed to sidebar
-   * rows yet, so this stays null today; the dot renders only when a status
-   * is provided.
+   * Composed git/PR status (§3.2/§3.3). Drives the idle leading glyph
+   * (PR / branch icon), the PR status dot, tooltips, and the "Open pull
+   * request" menu item. Null when no git data is known — the well stays
+   * empty and the row degrades gracefully.
    */
-  prStatus?: PrStatusView | null;
+  gitStatus?: WorkspaceGitStatus | null;
+  /** Renders the trailing unseen-activity dot (§3.4, codex pattern). */
+  needsReview?: boolean;
   onSelect?: () => void;
+  /** Opens the PR URL externally; enables the "Open pull request" menu item. */
+  onOpenPullRequest?: (url: string) => void;
   workspaceLocationCopyLabel?: string | null;
   onCopyWorkspaceLocation?: () => void;
   onCopyBranchName?: () => void;
@@ -93,8 +104,10 @@ export function WorkspaceItem({
   shortcutLabel = null,
   shortcutRevealVisible = false,
   branchName = null,
-  prStatus = null,
+  gitStatus = null,
+  needsReview = false,
   onSelect,
+  onOpenPullRequest,
   onArchive,
   onUnarchive,
   onMarkDone,
@@ -155,18 +168,26 @@ export function WorkspaceItem({
       )}
     </>
   ) : null;
+  const pullRequestUrl = gitStatus?.pr?.url ?? null;
+  const pullRequestNumber = gitStatus?.pr?.number ?? null;
+  const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
+    ? () => onOpenPullRequest(pullRequestUrl)
+    : undefined;
   const hasMenuActions = hasArchiveAction
     || !!onRename
     || !!onCopyWorkspaceLocation
     || !!onCopyBranchName
     || !!onMarkDone
-    || !!branchName;
+    || !!branchName
+    || !!handleOpenPullRequestCommand;
 
   const workspaceMenu = hasMenuActions ? (
     <WorkspaceItemMenu
       archived={archived}
       branchName={branchName}
       workspaceLocationCopyLabel={workspaceLocationCopyLabel}
+      pullRequestNumber={pullRequestNumber}
+      onOpenPullRequest={handleOpenPullRequestCommand}
       onRename={onRename ? handleRenameCommand : undefined}
       onArchive={onArchive ? handleArchiveCommand : undefined}
       onUnarchive={onUnarchive ? handleUnarchiveCommand : undefined}
@@ -178,20 +199,30 @@ export function WorkspaceItem({
     />
   ) : null;
 
+  // Leading-well ladder (§3.2): an activity indicator owns the well alone; idle
+  // rows fall back to the git glyph, and rows without git data keep it empty.
+  const gitGlyph = statusIndicator ? null : sidebarGitGlyphForStatus(gitStatus);
+  const prStatusView = gitGlyph?.kind === "pull_request"
+    ? prStatusViewFromGitStatus(gitStatus)
+    : null;
+  const leadingGlyph = gitGlyph ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} /> : null;
+
   const row = (
     <ProductSidebarWorkspaceRow
       active={active}
       archived={archived}
-      status={(
+      status={statusIndicator ? (
         <SidebarStatusIndicatorView
           indicator={statusIndicator}
           onAction={onIndicatorAction}
         />
-      )}
+      ) : null}
+      leadingGlyph={leadingGlyph}
       label={name}
       detail={detail}
       trailingLabel={timestampLabel}
-      prStatus={prStatus}
+      prStatus={prStatusView}
+      unreadDot={needsReview}
       shortcutLabel={shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}
       hoverAction={workspaceMenu}
@@ -278,6 +309,19 @@ export function WorkspaceItem({
                   onClick={() => {
                     close();
                     handleCopyWorkspaceLocationCommand();
+                  }}
+                />
+              )}
+              {handleOpenPullRequestCommand && (
+                <PopoverMenuItem
+                  icon={<GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label={pullRequestNumber !== null
+                    ? `Open pull request #${pullRequestNumber}`
+                    : "Open pull request"}
+                  variant="sidebar"
+                  onClick={() => {
+                    close();
+                    handleOpenPullRequestCommand();
                   }}
                 />
               )}

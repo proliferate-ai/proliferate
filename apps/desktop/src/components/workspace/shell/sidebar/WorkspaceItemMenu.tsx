@@ -3,6 +3,7 @@ import {
   Archive,
   Folder,
   GitBranch,
+  GitPullRequest,
   MoreHorizontal,
   Pencil,
   Trash,
@@ -23,7 +24,10 @@ interface WorkspaceItemMenuProps {
   /** Current git branch, shown read-only in the git section. */
   branchName: string | null;
   workspaceLocationCopyLabel?: string | null;
+  /** PR number for the "Open pull request" label; null shows the bare label. */
+  pullRequestNumber?: number | null;
   /** Handlers are optional; omitted ones hide their menu item. */
+  onOpenPullRequest?: () => void;
   onRename?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
@@ -34,14 +38,16 @@ interface WorkspaceItemMenuProps {
 
 /**
  * Three-dot workspace menu (UX spec §2), built on the kit DropdownMenu with
- * the §7 overlay recipe. The git section carries the items that exist at
- * sidebar level today: the read-only branch row + copy branch name. PR /
- * pull–push actions are not plumbed to sidebar rows and are not invented.
+ * the §7 overlay recipe. The git section carries the "Open pull request"
+ * action (when a PR is known for the branch), the read-only branch row, and
+ * copy branch name.
  */
 export function WorkspaceItemMenu({
   archived,
   branchName,
   workspaceLocationCopyLabel,
+  pullRequestNumber = null,
+  onOpenPullRequest,
   onRename,
   onArchive,
   onUnarchive,
@@ -94,9 +100,17 @@ export function WorkspaceItemMenu({
             </DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
-        {(branchName || onCopyBranchName) && (
+        {(branchName || onCopyBranchName || onOpenPullRequest) && (
           <>
             <DropdownMenuSeparator />
+            {onOpenPullRequest && (
+              <DropdownMenuItem onSelect={onOpenPullRequest}>
+                <GitPullRequest className="size-4 text-muted-foreground" />
+                {pullRequestNumber !== null
+                  ? `Open pull request #${pullRequestNumber}`
+                  : "Open pull request"}
+              </DropdownMenuItem>
+            )}
             {branchName && (
               <div className="flex items-center gap-2 px-2 py-1.5 font-mono text-ui-sm text-muted-foreground">
                 <GitBranch className="size-3.5 shrink-0" />
