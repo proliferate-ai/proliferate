@@ -24,6 +24,7 @@ export interface InstallSshTargetRuntimeInput extends ProbeSshTargetConnectionIn
   remoteAnyHarnessPort?: number | null;
   cloudBaseUrl: string;
   enrollmentToken: string;
+  anyharnessBearerToken?: string | null;
   artifactBaseUrl?: string | null;
 }
 

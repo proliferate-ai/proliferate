@@ -114,13 +114,25 @@ EOF
 fi
 chmod 600 "$WORKER_DIR/config.toml"
 
+anyharness_args="$(toml_string "serve"), $(toml_string "--runtime-home"), $(toml_string "$PROLIFERATE_HOME/anyharness"), $(toml_string "--port"), $(toml_string "$PROLIFERATE_ANYHARNESS_PORT")"
+if [ -n "${PROLIFERATE_ANYHARNESS_BEARER_TOKEN:-}" ]; then
+  anyharness_args="$anyharness_args, $(toml_string "--require-bearer-auth")"
+fi
+
 cat > "$SUPERVISOR_DIR/config.toml" <<EOF
 anyharness_binary = $(toml_string "$BIN_DIR/anyharness")
 worker_binary = $(toml_string "$BIN_DIR/proliferate-worker")
 worker_config = $(toml_string "$WORKER_DIR/config.toml")
-anyharness_args = [$(toml_string "serve"), $(toml_string "--runtime-home"), $(toml_string "$PROLIFERATE_HOME/anyharness"), $(toml_string "--port"), $(toml_string "$PROLIFERATE_ANYHARNESS_PORT")]
+anyharness_args = [$anyharness_args]
 restart_delay_seconds = 5
 EOF
+if [ -n "${PROLIFERATE_ANYHARNESS_BEARER_TOKEN:-}" ]; then
+  cat >> "$SUPERVISOR_DIR/config.toml" <<EOF
+
+[anyharness_env]
+ANYHARNESS_BEARER_TOKEN = $(toml_string "$PROLIFERATE_ANYHARNESS_BEARER_TOKEN")
+EOF
+fi
 chmod 600 "$SUPERVISOR_DIR/config.toml"
 
 if command -v systemctl >/dev/null 2>&1; then

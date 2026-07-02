@@ -69,6 +69,7 @@ const connectedTarget = (
 const enrollment = (overrides: Partial<CloudTargetEnrollmentResponse> = {}): CloudTargetEnrollmentResponse => ({
   target: target(),
   enrollmentToken: "enroll-token",
+  anyharnessBearerToken: "runtime-bearer",
   installCommand: "curl -fsSL https://installer.example/install.sh | sh",
   artifactBaseUrl: "https://artifacts.example/releases/current",
   expiresAt: "2026-05-23T00:15:00Z",
@@ -106,7 +107,6 @@ describe("runSshTargetConnectWorkflow", () => {
         displayName: "SSH Box",
         kind: "ssh",
         ownerScope: "personal",
-        defaultWorkspaceRoot: "~/workspaces",
       },
       directAccess: profile(),
       cloudBaseUrl: "https://api.example.com",
@@ -134,6 +134,7 @@ describe("runSshTargetConnectWorkflow", () => {
         artifactBaseUrl: "https://artifacts.example/releases/current",
         cloudBaseUrl: "https://api.example.com",
         enrollmentToken: "enroll-token",
+        anyharnessBearerToken: "runtime-bearer",
         remoteAnyHarnessPort: 18457,
       }),
     );

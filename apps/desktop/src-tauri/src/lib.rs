@@ -13,8 +13,8 @@ mod workspace_activity_indicator;
 
 use commands::{
     anonymous_telemetry, cloud_worker, config, diagnostics as diagnostics_commands,
-    google_workspace_mcp, keychain, process, runtime, shell, ssh_tunnel, support, window_chrome,
-    workspace_scratch,
+    google_workspace_mcp, keychain, process, runtime, shell, ssh_install, ssh_tunnel, support,
+    window_chrome, workspace_scratch,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -258,7 +258,7 @@ pub fn run() {
             window_chrome::apply_macos_window_chrome,
             window_chrome::set_webview_zoom,
             process::command_exists,
-            ssh_tunnel::install_ssh_target_runtime,
+            ssh_install::install_ssh_target_runtime,
             ssh_tunnel::probe_ssh_target_connection,
             ssh_tunnel::ensure_ssh_anyharness_tunnel,
             keychain::list_configured_env_var_names,

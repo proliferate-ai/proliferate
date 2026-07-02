@@ -144,6 +144,7 @@ export async function runSshTargetConnectWorkflow(
       remoteAnyHarnessPort: profile.remoteAnyHarnessPort,
       cloudBaseUrl: input.cloudBaseUrl,
       enrollmentToken: enrollment.enrollmentToken,
+      anyharnessBearerToken: enrollment.anyharnessBearerToken,
       artifactBaseUrl: enrollment.artifactBaseUrl ?? null,
     });
 

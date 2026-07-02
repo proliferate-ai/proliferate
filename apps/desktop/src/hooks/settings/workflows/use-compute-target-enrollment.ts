@@ -102,7 +102,6 @@ export function useComputeTargetEnrollment() {
           kind: "ssh",
           ownerScope,
           organizationId: ownerScope === "organization" ? input.organizationId ?? null : null,
-          defaultWorkspaceRoot: input.defaultWorkspaceRoot ?? null,
         },
         existingEnrollmentRequest: input.existingTargetId ? {} : undefined,
         directAccess: {

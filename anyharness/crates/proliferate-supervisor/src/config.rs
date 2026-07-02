@@ -50,3 +50,58 @@ fn dirs_fallback_home() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SupervisorConfig;
+
+    #[test]
+    fn parses_installer_config_with_bearer_enforcement() {
+        // Mirrors what install/proliferate-target-install.sh writes when
+        // PROLIFERATE_ANYHARNESS_BEARER_TOKEN is set.
+        let config: SupervisorConfig = toml::from_str(
+            r#"
+anyharness_binary = "/home/user/.proliferate/bin/anyharness"
+worker_binary = "/home/user/.proliferate/bin/proliferate-worker"
+worker_config = "/home/user/.proliferate/worker/config.toml"
+anyharness_args = ["serve", "--runtime-home", "/home/user/.proliferate/anyharness", "--port", "8457", "--require-bearer-auth"]
+restart_delay_seconds = 5
+
+[anyharness_env]
+ANYHARNESS_BEARER_TOKEN = "runtime-bearer"
+"#,
+        )
+        .expect("installer-shaped config parses");
+
+        assert!(config
+            .anyharness_args
+            .iter()
+            .any(|arg| arg == "--require-bearer-auth"));
+        assert_eq!(
+            config.anyharness_env.get("ANYHARNESS_BEARER_TOKEN"),
+            Some(&"runtime-bearer".to_string())
+        );
+        assert!(config.process_env.is_empty());
+        assert_eq!(config.restart_delay_seconds, 5);
+    }
+
+    #[test]
+    fn parses_installer_config_without_bearer() {
+        let config: SupervisorConfig = toml::from_str(
+            r#"
+anyharness_binary = "/home/user/.proliferate/bin/anyharness"
+worker_binary = "/home/user/.proliferate/bin/proliferate-worker"
+worker_config = "/home/user/.proliferate/worker/config.toml"
+anyharness_args = ["serve", "--runtime-home", "/home/user/.proliferate/anyharness", "--port", "8457"]
+restart_delay_seconds = 5
+"#,
+        )
+        .expect("installer-shaped config parses");
+
+        assert!(!config
+            .anyharness_args
+            .iter()
+            .any(|arg| arg == "--require-bearer-auth"));
+        assert!(config.anyharness_env.is_empty());
+    }
+}
