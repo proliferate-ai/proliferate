@@ -1,5 +1,6 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
 import type { CloudIntegrationView } from "@/lib/domain/cloud/integrations";
 import {
   integrationAuthKindLabel,
@@ -34,15 +35,18 @@ export function IntegrationRow({
 
   return (
     <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,14rem)] items-center gap-3 border-b border-border py-3 last:border-b-0">
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-foreground">
-          {integration.displayName}
-        </div>
-        {integration.description ? (
-          <div className="mt-0.5 truncate text-sm text-muted-foreground">
-            {integration.description}
+      <div className="flex min-w-0 items-center gap-3">
+        <IntegrationIcon namespace={integration.namespace} className="size-8" />
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-foreground">
+            {integration.displayName}
           </div>
-        ) : null}
+          {integration.description ? (
+            <div className="mt-0.5 truncate text-sm text-muted-foreground">
+              {integration.description}
+            </div>
+          ) : null}
+        </div>
       </div>
       <div className="min-w-0 truncate text-sm text-muted-foreground">
         {integrationAuthKindLabel(integration.authKind)}

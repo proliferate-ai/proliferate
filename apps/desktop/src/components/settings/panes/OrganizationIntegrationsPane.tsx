@@ -8,6 +8,7 @@ import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import type { AdminIntegrationDefinition } from "@proliferate/cloud-sdk/client/integrations";
 import { AddCustomIntegrationDialog } from "@/components/settings/panes/integrations/AddCustomIntegrationDialog";
+import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
 import {
   useAdminIntegrationDefinitionActions,
   useAdminIntegrationDefinitions,
@@ -114,12 +115,15 @@ export function OrganizationIntegrationsPane() {
                 key={definition.definitionId}
                 className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 border-b border-border py-3 last:border-b-0"
               >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">
-                    {definition.displayName}
-                  </div>
-                  <div className="mt-0.5 truncate text-sm text-muted-foreground">
-                    {definition.namespace}
+                <div className="flex min-w-0 items-center gap-3">
+                  <IntegrationIcon namespace={definition.namespace} className="size-8" />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-foreground">
+                      {definition.displayName}
+                    </div>
+                    <div className="mt-0.5 truncate text-sm text-muted-foreground">
+                      {definition.namespace}
+                    </div>
                   </div>
                 </div>
                 <div className="min-w-0">
