@@ -72,12 +72,14 @@ from proliferate.server.cloud.github_app.api import (
 # )
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
+from proliferate.server.meta import router as meta_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
 from proliferate.server.organizations.registration_api import router as self_registration_router
 from proliferate.server.organizations.sso.api import router as organization_sso_router
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.service import ensure_first_run_setup_token
+from proliferate.server.version import server_version
 
 # SUPPORT PARKED: diagnostics imports deleted target runtime access models.
 # from proliferate.server.support.api import router as support_router
@@ -210,7 +212,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=APP_NAME,
-        version="0.1.0",
+        version=server_version(),
         lifespan=lifespan,
     )
 
@@ -241,6 +243,7 @@ def create_app() -> FastAPI:
 
     # ── Domain routes ──
     app.include_router(health_router, prefix=api_prefix, tags=["health"])
+    app.include_router(meta_router, prefix=api_prefix, tags=["meta"])
     if settings.single_org_mode:
         # First-run claim page. Exists only in single-org deployments; hosted
         # production never mounts it, and it 404s once the instance is claimed.
