@@ -46,9 +46,10 @@ BILLING_PERIOD_ROLLOVER_GRACE_SECONDS = 24 * 60 * 60
 STRIPE_METER_EVENT_MAX_PAST_SECONDS = 35 * 24 * 60 * 60
 STRIPE_METER_EVENT_MAX_FUTURE_SECONDS = 5 * 60
 
-ACTIVE_SANDBOX_STATUSES: frozenset[str] = frozenset(
-    {"allocating", "creating", "provisioning", "running"}
-)
+# CloudSandboxStatus values ("creating"/"ready") that consume compute; the
+# pre-#803/#809 lifecycle names (allocating/provisioning/running) no longer
+# exist on cloud_sandbox rows.
+ACTIVE_SANDBOX_STATUSES: frozenset[str] = frozenset({"creating", "ready"})
 
 USAGE_SEGMENT_OPENED_BY_PROVISION = "provision"
 USAGE_SEGMENT_OPENED_BY_RESUME = "resume"
