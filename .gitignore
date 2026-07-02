@@ -3,6 +3,7 @@ node_modules/
 .venv/
 
 reference/
+.context/
 
 # Build output
 dist/

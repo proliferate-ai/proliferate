@@ -149,6 +149,47 @@ make run PROFILE=main
 See [dev profiles](./specs/developing/local/dev-profiles.md) for profile state, ports,
 generated Tauri config, and app labels.
 
+### Running the web app from source (WSL / Linux / macOS)
+
+If you prefer the web UI in any browser instead of the desktop app, use the
+included [`justfile`](./justfile). It activates the Python venv automatically,
+builds the workspace packages, and binds Vite to `127.0.0.1` so WSL2 forwards the
+port to Windows `localhost`.
+
+Requirements:
+
+- `just` (`cargo install just` or `sudo apt install just`)
+- Python 3.12 venv at `~/venvs/proliferate`
+- Docker running (Postgres, Redis, RabbitMQ)
+
+One-time setup:
+
+```bash
+just bootstrap
+```
+
+Daily workflow:
+
+```bash
+# start backing services (runs in the background)
+just infra-up
+
+# terminal 1 — FastAPI control plane
+just api
+
+# terminal 2 — Vite web app
+just web
+```
+
+Then open your browser at:
+
+```text
+http://localhost:5175/
+```
+
+The API is available at `http://127.0.0.1:8001/` and the AnyHarness runtime at
+`http://127.0.0.1:8457/`. Run `just` to see all recipes.
+
 </details>
 
 <details id="self-hosting">
