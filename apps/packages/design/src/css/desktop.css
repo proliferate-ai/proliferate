@@ -193,7 +193,6 @@
   --color-tip-secondary-border: rgb(204 125 94 / 0.5);
   --color-tip-muted: rgb(224 176 157);
   --color-tip-foreground: #f9f9f7;
-  --color-plan-border: rgb(204 125 94 / 0.5);
 
   /* -- Switch -- */
   --color-switch-background: #f9f9f7;
@@ -544,7 +543,6 @@ mark.codex-thread-find-active {
   --color-tip-secondary-border: rgba(51, 156, 255, 0.5);
   --color-tip-muted: rgba(51, 156, 255, 0.6);
   --color-tip-foreground: #ffffff;
-  --color-plan-border: rgba(51, 156, 255, 0.4);
 
   /* -- Switch -- */
   --color-switch-background: #ffffff;
@@ -836,7 +834,6 @@ mark.codex-thread-find-active {
   --color-tip-secondary-border: rgba(125, 198, 255, 0.22);
   --color-tip-muted: rgba(240, 245, 242, 0.7);
   --color-tip-foreground: #f0f5f2;
-  --color-plan-border: rgba(89, 229, 191, 0.34);
 
   /* -- Switch -- */
   --color-switch-background: #f0f5f2;
@@ -1026,7 +1023,6 @@ mark.codex-thread-find-active {
   --color-tip-secondary-border: hsl(17 52% 58% / 0.35);
   --color-tip-muted: hsl(17 52% 44%);
   --color-tip-foreground: hsl(14 15% 22%);
-  --color-plan-border: hsl(17 52% 58% / 0.5);
 
   --color-switch-background: #21201c;
   --color-switch-foreground: #faf9f5;
@@ -1212,7 +1208,6 @@ mark.codex-thread-find-active {
   --color-tip-secondary-border: rgba(13, 13, 13, 0.078);
   --color-tip-muted: #0285ff;
   --color-tip-foreground: #0d0d0d;
-  --color-plan-border: #0285ff;
 
   --color-switch-background: #0d0d0d;
   --color-switch-foreground: #ffffff;
@@ -1373,7 +1368,6 @@ mark.codex-thread-find-active {
   --color-tip-secondary-border: var(--color-border);
   --color-tip-muted: #339cff;
   --color-tip-foreground: var(--color-foreground);
-  --color-plan-border: #339cff;
 
   --color-switch-background: var(--color-primary);
   --color-switch-foreground: #ffffff;

@@ -1,63 +1,22 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Button } from "./Button";
 
-export type ComposerControlTone =
-  | "neutral"
-  | "accent"
-  | "primary"
-  | "warning"
-  | "destructive"
-  | "success"
-  | "info"
-  | "quiet";
-
 interface ComposerControlButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon?: ReactNode;
   label: ReactNode;
   detail?: ReactNode | null;
   trailing?: ReactNode;
-  tone?: ComposerControlTone;
   active?: boolean;
   iconOnly?: boolean;
+  /**
+   * Two-tone value hierarchy: renders the label (the pill's value text) in the
+   * active control color while icon, detail, and trailing affordances stay in
+   * the muted control colors.
+   */
+  emphasizeLabel?: boolean;
   labelClassName?: string;
   detailClassName?: string;
 }
-
-const toneClassNames: Record<ComposerControlTone, { idle: string; active: string }> = {
-  neutral: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-active-foreground)]",
-  },
-  // Plan mode (UX_SPEC §5): the selected plan pill is tinted with --special.
-  accent: {
-    idle: "text-[color:var(--color-special)]",
-    active: "text-[color:var(--color-special)]",
-  },
-  primary: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-active-foreground)]",
-  },
-  warning: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-active-foreground)]",
-  },
-  destructive: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-active-foreground)]",
-  },
-  success: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-active-foreground)]",
-  },
-  info: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-active-foreground)]",
-  },
-  quiet: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-foreground)]",
-  },
-};
 
 export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerControlButtonProps>(
   function ComposerControlButton({
@@ -65,16 +24,18 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     label,
     detail = null,
     trailing,
-    tone = "neutral",
     active = false,
     iconOnly = false,
+    emphasizeLabel = false,
     labelClassName = "",
     detailClassName = "",
     className = "",
     type = "button",
     ...props
   }, ref) {
-    const classes = active ? toneClassNames[tone].active : toneClassNames[tone].idle;
+    const classes = active
+      ? "text-[color:var(--color-composer-control-active-foreground)]"
+      : "text-[color:var(--color-composer-control-foreground)]";
     const baseClassName = `gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-[var(--color-composer-control-hover)] hover:text-current focus:outline-none data-[state=open]:bg-[var(--color-composer-control-hover)] ${classes}`;
     const buttonClassName = iconOnly
       ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`
@@ -99,7 +60,13 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
           <span className="sr-only">{iconOnlyLabel}</span>
         ) : (
           <span className="flex min-w-0 items-center gap-1">
-            <span className={`min-w-0 truncate text-left ${labelClassName}`}>{label}</span>
+            <span
+              className={`min-w-0 truncate text-left ${
+                emphasizeLabel ? "text-[color:var(--color-composer-control-active-foreground)]" : ""
+              } ${labelClassName}`}
+            >
+              {label}
+            </span>
             {detail && (
               <span className={`flex min-w-0 items-center gap-1 truncate text-left text-[color:var(--color-composer-control-muted-foreground)] ${detailClassName}`}>
                 <span aria-hidden="true" className="shrink-0">·</span>

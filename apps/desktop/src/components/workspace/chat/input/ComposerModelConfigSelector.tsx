@@ -178,7 +178,6 @@ export function ComposerModelConfigSelector({
     return (
       <ComposerControlButton
         disabled
-        tone="quiet"
         icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
         label={triggerLabel}
         detail={triggerDetail}
@@ -192,6 +191,7 @@ export function ComposerModelConfigSelector({
       <PopoverButton
         trigger={(
           <ComposerControlButton
+            emphasizeLabel
             icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
             label={triggerLabel}
             detail={triggerDetail}
