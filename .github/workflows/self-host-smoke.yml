@@ -1,0 +1,71 @@
+name: Self-Host Smoke
+
+# Boots the production self-hosted control plane the way an operator does
+# (server/deploy/docker-compose.production.yml via bootstrap.sh: generated
+# secrets, migrate, health gate) with an http-only Caddy site so no DNS or TLS
+# issuance is needed, then asserts the deployment serves /health. Nobody lives
+# in the production-compose lane day to day, so this is the check that keeps it
+# from regressing silently. Designed to be a blocking required check on PRs to
+# main.
+#
+# Path-scoped to the surfaces that change the smoke result (server image inputs
+# plus the deploy bundle and this workflow); doc-only PRs skip the image build.
+# The push:main run seeds the buildx layer cache that PR builds restore from, so
+# steady-state runtime is dominated by the ~30s stack boot, not the build.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "catalogs/**"
+      - "server/deploy/**"
+      - ".github/workflows/self-host-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "catalogs/**"
+      - "server/deploy/**"
+      - ".github/workflows/self-host-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-host-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  SMOKE_IMAGE: proliferate-server:smoke
+
+jobs:
+  smoke:
+    name: Production compose smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build once and load into the local Docker engine so the compose stack
+      # reuses it (no registry push). GHA cache is shared from the main-branch
+      # build, so PR builds restore unchanged dependency layers.
+      - name: Build server image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: server/Dockerfile
+          load: true
+          tags: ${{ env.SMOKE_IMAGE }}
+          cache-from: type=gha,scope=self-host-smoke
+          cache-to: type=gha,scope=self-host-smoke,mode=max
+
+      - name: Run self-host smoke
+        env:
+          PROLIFERATE_SMOKE_IMAGE: ${{ env.SMOKE_IMAGE }}
+        run: server/deploy/smoke/run-smoke.sh

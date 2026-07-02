@@ -40,6 +40,12 @@ export PROLIFERATE_ENV_FILE="$RUNTIME_ENV_FILE"
 
 COMPOSE_ARGS=(--env-file "$RUNTIME_ENV_FILE" -f "$SCRIPT_DIR/docker-compose.production.yml")
 
+# Optional compose override, used by the self-host smoke (smoke/run-smoke.sh)
+# to remap host ports while exercising this exact bootstrap path.
+if [[ -n "${PROLIFERATE_COMPOSE_OVERRIDE_FILE:-}" ]]; then
+  COMPOSE_ARGS+=(-f "$PROLIFERATE_COMPOSE_OVERRIDE_FILE")
+fi
+
 docker compose "${COMPOSE_ARGS[@]}" up -d db
 docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
 docker compose "${COMPOSE_ARGS[@]}" up -d api caddy
