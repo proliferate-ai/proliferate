@@ -159,42 +159,6 @@ secrets (`OPENAI_API_KEY`, `GEMINI_API_KEY`, `CURSOR_API_KEY`,
 The billing reconciler interval (`BILLING_RECONCILE_INTERVAL_SECONDS`) now
 lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 
-## Agent LLM Gateway
-
-| Variable | Secret | Required | Used for |
-| --- | --- | --- | --- |
-| `AGENT_GATEWAY_ENABLED` | No | No | Enables Bifrost-backed managed LLM auth and BYOK policy provisioning |
-| `AGENT_GATEWAY_BIFROST_BASE_URL` | No | When gateway is enabled | Private Bifrost management API base URL for provider keys, virtual keys, and logs |
-| `AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL` | No | When gateway is enabled | Public Bifrost inference base URL written into managed sandbox auth config |
-| `AGENT_GATEWAY_BIFROST_ADMIN_TOKEN` | Yes | When Bifrost admin API is protected | Optional Bifrost management API bearer token; never sent to sandboxes |
-| `AGENT_GATEWAY_BIFROST_REQUEST_TIMEOUT_SECONDS` | No | No | Bifrost management API timeout |
-| `AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED` | No | BYOK with Bifrost | Operator proof flag that Bifrost virtual keys isolate BYOK credentials safely |
-| `AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY` | Yes | Managed credits via Anthropic-backed Bifrost | Proliferate-owned Anthropic provider key materialized into Bifrost |
-| `AGENT_GATEWAY_MANAGED_OPENAI_API_KEY` | Yes | Managed credits via OpenAI-backed Bifrost | Proliferate-owned OpenAI provider key materialized into Bifrost |
-| `AGENT_GATEWAY_MANAGED_GEMINI_API_KEY` | Yes | Managed credits via Gemini-backed Bifrost | Proliferate-owned Gemini provider key materialized into Bifrost |
-| `AGENT_GATEWAY_MANAGED_BEDROCK_REGION` | No | Managed credits via Bedrock-backed Bifrost | AWS Bedrock region for Proliferate-owned managed credits |
-| `AGENT_GATEWAY_MANAGED_BEDROCK_ROLE_ARN` | No | Managed credits via Bedrock-backed Bifrost | AWS Bedrock role ARN for Proliferate-owned managed credits |
-| `AGENT_GATEWAY_MANAGED_BEDROCK_EXTERNAL_ID` | Yes | No | Optional ExternalId for the managed-credit Bedrock role |
-| `AGENT_GATEWAY_MANAGED_BUDGET_FREE_USD` | No | Only for organization managed credits | Included organization managed-credit budget for free-plan organizations |
-| `AGENT_GATEWAY_MANAGED_BUDGET_PRO_USD` | No | Only for organization managed credits | Included organization managed-credit budget for Pro organizations |
-| `AGENT_GATEWAY_MANAGED_BUDGET_UNLIMITED_USD` | No | Only for organization managed credits | Included organization managed-credit budget for unlimited-plan organizations |
-| `AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED` | No | No | Enables personal onboarding managed-credit grants for GitHub-linked users |
-| `AGENT_GATEWAY_USER_FREE_CREDIT_USD` | No | Only for personal managed credits | Personal free managed-credit amount |
-| `AGENT_GATEWAY_USER_FREE_CREDIT_PERIOD` | No | Only for personal managed credits | Free-credit period key mode: registration or monthly |
-| `AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS` | No | Only for managed credits | Comma-separated agent kinds eligible for Proliferate managed credits |
-| `AGENT_GATEWAY_MAX_REQUEST_BYTES` | No | No | Maximum gateway request body size |
-| `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | No | No | Gateway request timeout for any remaining compatibility callers |
-| `AGENT_GATEWAY_BYOK_ENABLED` | No | No | Enables user/org provider credentials through Bifrost; hosted-cloud V1 leaves this disabled |
-| `AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables Anthropic API key credentials through the gateway |
-| `AGENT_GATEWAY_OPENAI_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables OpenAI API key credentials through the gateway |
-| `AGENT_GATEWAY_BEDROCK_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables AWS Bedrock AssumeRole credentials through the gateway |
-| `AGENT_GATEWAY_GEMINI_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` and Bifrost | Enables Gemini API key credentials through Bifrost |
-| `AGENT_GATEWAY_OPENAI_COMPATIBLE_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables OpenAI-compatible provider credentials through the gateway |
-| `AGENT_GATEWAY_OPENCODE_ENABLED` | No | No | Enables the experimental OpenCode gateway route |
-| `AGENT_GATEWAY_RECONCILER_ENABLED` | No | No | Starts the background router reconciler and Bifrost usage importer |
-| `AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS` | No | No | Delay between reconciliation passes |
-| `AGENT_GATEWAY_RECONCILER_BATCH_SIZE` | No | No | Maximum unsynced, drifted, failed policy, budget, or usage rows checked by one reconciliation pass |
-
 ## Cloud MCP
 
 | Variable | Secret | Required | Used for |

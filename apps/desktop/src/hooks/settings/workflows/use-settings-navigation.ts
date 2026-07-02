@@ -28,8 +28,6 @@ export function useSettingsNavigation({
   const rawCloudRepoName = searchParams.get("cloudRepoName");
   const rawFocus = searchParams.get("focus");
   const rawTarget = searchParams.get("target");
-  const rawCredential = searchParams.get("credential");
-  const rawKind = searchParams.get("kind");
   const rawCheckout = searchParams.get("checkout");
   const rawJoinOrganizationId = searchParams.get("joinOrganizationId");
   const rawContext = searchParams.get("context");
@@ -44,8 +42,6 @@ export function useSettingsNavigation({
     rawCloudRepoName,
     rawFocus,
     rawTarget,
-    rawCredential,
-    rawKind,
     rawCheckout,
     rawJoinOrganizationId,
     rawContext,
@@ -57,13 +53,11 @@ export function useSettingsNavigation({
     rawCloudRepoName,
     rawCloudRepoOwner,
     rawContext,
-    rawCredential,
     rawCheckout,
     rawFailureCode,
     rawFlowId,
     rawFocus,
     rawJoinOrganizationId,
-    rawKind,
     rawRepo,
     rawSection,
     rawStatus,

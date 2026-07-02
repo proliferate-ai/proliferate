@@ -3,7 +3,7 @@ import { connectAgentLoginTerminal, type TerminalStreamHandle } from "@anyharnes
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useXtermSurface } from "@/hooks/terminals/lifecycle/use-xterm-surface";
 
-interface UseAgentAuthTerminalViewportInput {
+interface UseAgentLoginTerminalViewportInput {
   terminal: AgentLoginTerminalRecord | null;
   baseUrl: string;
   authToken?: string;
@@ -12,14 +12,14 @@ interface UseAgentAuthTerminalViewportInput {
   onExit: (code: number | null) => void;
 }
 
-export function useAgentAuthTerminalViewport({
+export function useAgentLoginTerminalViewport({
   terminal,
   baseUrl,
   authToken,
   visible,
   focusRequestToken,
   onExit,
-}: UseAgentAuthTerminalViewportInput) {
+}: UseAgentLoginTerminalViewportInput) {
   const streamHandleRef = useRef<TerminalStreamHandle | null>(null);
   const lastSeqRef = useRef(0);
   const lastTerminalIdRef = useRef<string | null>(null);
@@ -43,7 +43,7 @@ export function useAgentAuthTerminalViewport({
     focusRequestToken,
     onData: handleTerminalData,
     onResize: handleTerminalResize,
-    logPrefix: "AgentAuthTerminal",
+    logPrefix: "AgentLoginTerminal",
     scrollback: 2000,
     fontSize: 9,
     lineHeight: 1,

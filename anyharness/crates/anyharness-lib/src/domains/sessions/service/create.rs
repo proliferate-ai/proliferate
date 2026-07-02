@@ -2,13 +2,11 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::Instant;
 
-use anyharness_contract::v1::AgentAuthExternalScope;
 use uuid::Uuid;
 
 use super::{CreateSessionError, SessionService};
 use crate::domains::agents::auth::context::classify;
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
-use crate::domains::agents::auth::AgentAuthLaunchOverlayError;
 use crate::domains::agents::catalog::service::{ActiveCatalog, SelectionUnsupported};
 use crate::domains::agents::model::{AgentDescriptor, ResolvedAgentStatus};
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
@@ -30,8 +28,6 @@ impl SessionService {
         mcp_binding_policy: SessionMcpBindingPolicy,
         system_prompt_append: Option<String>,
         subagents_enabled: bool,
-        agent_auth_scope: Option<AgentAuthExternalScope>,
-        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateSessionError> {
         let started = Instant::now();
@@ -81,24 +77,9 @@ impl SessionService {
             "[workspace-latency] session.create.agent_descriptor_found"
         );
 
-        let workspace_env =
+        let readiness_env =
             read_materialized_launch_env(&self.runtime_home, Path::new(&workspace.path))
                 .map_err(CreateSessionError::Internal)?;
-        let agent_auth_overlay = self
-            .agent_auth_service
-            .launch_overlay(
-                agent_kind,
-                agent_auth_scope.as_ref(),
-                required_agent_auth_revision,
-            )
-            .map_err(map_agent_auth_launch_error_to_create)?;
-        let auth_support_env_keys: Vec<String> =
-            agent_auth_overlay.support_env.keys().cloned().collect();
-        let auth_protected_env_keys: Vec<String> =
-            agent_auth_overlay.protected_env.keys().cloned().collect();
-        let mut readiness_env = workspace_env.clone();
-        readiness_env.extend(agent_auth_overlay.support_env);
-        readiness_env.extend(agent_auth_overlay.protected_env);
         let agent_resolution_started = Instant::now();
         let resolved = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
         if resolved.status != ResolvedAgentStatus::Ready {
@@ -108,9 +89,7 @@ impl SessionService {
                 status = ?resolved.status,
                 credential_state = ?resolved.credential_state,
                 descriptor_auth_env_vars = ?descriptor.auth.expected_env_vars(),
-                auth_support_env_keys = ?auth_support_env_keys,
-                auth_protected_env_keys = ?auth_protected_env_keys,
-                "Agent auth launch overlay did not satisfy agent readiness"
+                "Agent readiness check failed for session create"
             );
             let detail = resolved.agent_process.message.clone().or_else(|| {
                 resolved
@@ -162,8 +141,6 @@ impl SessionService {
             workspace_id: workspace_id.to_string(),
             agent_kind: agent_kind.to_string(),
             native_session_id: None,
-            agent_auth_scope,
-            required_agent_auth_revision,
             agent_auth_contexts,
             requested_model_id: resolved_model_id.clone(),
             current_model_id: resolved_model_id,
@@ -259,14 +236,5 @@ fn map_selection_unsupported(
             agent_kind: agent_kind.to_string(),
             mode_id,
         },
-    }
-}
-
-fn map_agent_auth_launch_error_to_create(error: AgentAuthLaunchOverlayError) -> CreateSessionError {
-    match error {
-        AgentAuthLaunchOverlayError::SelectionRequired(required) => {
-            CreateSessionError::AgentAuthSelectionRequired(required)
-        }
-        AgentAuthLaunchOverlayError::Internal(error) => CreateSessionError::Internal(error),
     }
 }

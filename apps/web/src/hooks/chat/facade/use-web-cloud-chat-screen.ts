@@ -49,8 +49,6 @@ export function useWebCloudChatScreen(): WebCloudChatScreenState {
     client,
     workspaceQuery,
     agentCatalog,
-    cloudCapabilities,
-    agentAuthCredentials,
     snapshot,
     workspace,
     workspaceStatus,
@@ -122,8 +120,6 @@ export function useWebCloudChatScreen(): WebCloudChatScreenState {
   } = useWebCloudHarnessAvailability({
     workspace,
     agentCatalog: agentCatalog.data,
-    agentGateway: cloudCapabilities.data?.agentGateway,
-    agentAuthCredentials: agentAuthCredentials.data,
   });
   const {
     liveConfig,

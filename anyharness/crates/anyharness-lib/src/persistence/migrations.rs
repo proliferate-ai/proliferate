@@ -185,6 +185,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0049_session_agent_auth_contexts",
         include_str!("sql/0049_session_agent_auth_contexts.sql"),
     ),
+    (
+        "0050_drop_agent_auth_config",
+        include_str!("sql/0050_drop_agent_auth_config.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

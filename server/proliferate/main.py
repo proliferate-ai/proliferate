@@ -47,12 +47,6 @@ from proliferate.server.billing.api import router as billing_router
 #     stop_billing_reconciler,
 # )
 from proliferate.server.catalogs.api import router as catalogs_router
-
-# AGENT AUTH PARKED: retarget away from sandbox_profile/cloud_targets before remounting.
-# from proliferate.server.cloud.agent_auth.reconciler import (
-#     start_agent_gateway_reconciler,
-#     stop_agent_gateway_reconciler,
-# )
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.gateway.api import router as gateway_router
 from proliferate.server.cloud.github_app.api import callback_router as github_app_callback_router
@@ -167,15 +161,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
         # start_billing_reconciler()
         pass
-    # AGENT AUTH PARKED.
-    # start_agent_gateway_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        # AGENT AUTH PARKED.
-        # await stop_agent_gateway_reconciler()
         # BILLING RECONCILER PARKED.
         # await stop_billing_reconciler()
         flush_server_sentry()

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
-export interface AgentAuthTerminalSession {
+export interface AgentLoginTerminalSession {
   kind: string;
   terminal: AgentLoginTerminalRecord | null;
   message: string | null;
@@ -31,7 +31,7 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function useAgentAuthTerminalWorkflow() {
+export function useAgentLoginTerminalWorkflow() {
   // Owns Agent Defaults' local auth terminal workflow. Components decide layout;
   // this hook owns start/close/restart and post-exit readiness refresh.
   const runtime = useAnyHarnessRuntimeContext();
@@ -40,7 +40,7 @@ export function useAgentAuthTerminalWorkflow() {
   const { invalidateAgentLaunchReadinessResources } = useAgentResourcesCache();
   const startLoginTerminal = useStartAgentLoginTerminalMutation();
   const closeLoginTerminal = useCloseAgentLoginTerminalMutation();
-  const [sessionsByKind, setSessionsByKind] = useState<Record<string, AgentAuthTerminalSession>>({});
+  const [sessionsByKind, setSessionsByKind] = useState<Record<string, AgentLoginTerminalSession>>({});
 
   const runtimeConnection = useMemo(() => ({
     baseUrl: runtime.runtimeUrl?.trim() || runtimeUrl.trim(),
@@ -58,7 +58,7 @@ export function useAgentAuthTerminalWorkflow() {
   }, [invalidateAgentLaunchReadinessResources, runtimeConnection.baseUrl]);
 
   const closeExistingTerminal = useCallback(async (
-    session: AgentAuthTerminalSession | undefined,
+    session: AgentLoginTerminalSession | undefined,
   ) => {
     const terminalId = session?.terminal?.id;
     if (!terminalId) {

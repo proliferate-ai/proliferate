@@ -103,7 +103,6 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     transparentChromeEnabled: defaults.transparentChromeEnabled,
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
-    cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
     worktreeAutoDeleteLimit: defaults.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: defaults.pasteAttachmentsEnabled,
     reviewDefaultsByKind: defaults.reviewDefaultsByKind,

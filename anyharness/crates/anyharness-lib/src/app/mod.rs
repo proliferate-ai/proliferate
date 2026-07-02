@@ -8,7 +8,6 @@ use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::hosting::PrStatusCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
-use crate::domains::agents::auth::{AgentAuthConfigStore, AgentAuthService};
 use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
@@ -95,7 +94,6 @@ pub struct AppState {
     pub agent_seed_store: AgentSeedStore,
     pub agent_runtime: Arc<AgentRuntime>,
     pub catalog_sync_service: Arc<CatalogSyncService>,
-    pub agent_auth_service: Arc<AgentAuthService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -176,11 +174,6 @@ impl AppState {
         ));
         catalog_sync_service
             .set_catalog_applied_poke(catalog_applied_reconcile_poke(agent_runtime.clone()));
-        let agent_auth_service = Arc::new(AgentAuthService::new(
-            AgentAuthConfigStore::new(db.clone()),
-            session_data_cipher.clone(),
-            runtime_home.clone(),
-        ));
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -206,7 +199,6 @@ impl AppState {
             SessionStore::new(db.clone()),
             session_delete_workflow.clone(),
             WorkspaceStore::new(db.clone()),
-            agent_auth_service.clone(),
             AgentCatalogService::new(catalog_sync_service.clone()),
             runtime_home.clone(),
         ));
@@ -314,7 +306,6 @@ impl AppState {
             workspace_access_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
-            agent_auth_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
@@ -418,7 +409,6 @@ impl AppState {
             agent_seed_store,
             agent_runtime,
             catalog_sync_service,
-            agent_auth_service,
             agent_reconcile_service,
             repo_root_service,
             workspace_runtime,
