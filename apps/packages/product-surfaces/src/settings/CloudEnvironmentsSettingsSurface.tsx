@@ -8,22 +8,12 @@ import { CloudEnvironmentList } from "@proliferate/product-ui/environments/Cloud
 import { AddCloudEnvironmentDialogController } from "./cloud-environments/AddCloudEnvironmentDialogController";
 import { CloudEnvironmentDetail } from "./cloud-environments/CloudEnvironmentDetail";
 
-export interface LocalCheckoutView {
-  id: string;
-  name: string;
-  description: string;
-  gitOwner?: string | null;
-  gitRepoName?: string | null;
-}
-
 export interface CloudEnvironmentRepoSelection {
   gitOwner: string;
   gitRepoName: string;
 }
 
 export interface CloudEnvironmentsSettingsSurfaceProps {
-  mode: "cloud-only" | "hybrid";
-  localCheckouts?: readonly LocalCheckoutView[];
   selectedCloudRepo?: CloudEnvironmentRepoSelection | null;
   organizationId?: string | null;
   canManageGitHubAppInstallation?: boolean;
@@ -33,13 +23,10 @@ export interface CloudEnvironmentsSettingsSurfaceProps {
   enabled?: boolean;
   cloudUnavailableReason?: string | null;
   onSelectCloudEnvironment: (repo: CloudEnvironmentRepoSelection) => void;
-  onSelectLocalCheckout?: (sourceRoot: string) => void;
   onBackToList: () => void;
 }
 
 export function CloudEnvironmentsSettingsSurface({
-  mode,
-  localCheckouts = [],
   selectedCloudRepo = null,
   organizationId = null,
   canManageGitHubAppInstallation = false,
@@ -49,22 +36,10 @@ export function CloudEnvironmentsSettingsSurface({
   enabled = true,
   cloudUnavailableReason = null,
   onSelectCloudEnvironment,
-  onSelectLocalCheckout,
   onBackToList,
 }: CloudEnvironmentsSettingsSurfaceProps) {
   const [addOpen, setAddOpen] = useState(false);
   const repoConfigs = useRepositories(enabled);
-  const localCheckoutsForDomain = useMemo(
-    () => localCheckouts
-      .map((checkout) => ({
-        gitOwner: checkout.gitOwner ?? null,
-        gitRepoName: checkout.gitRepoName ?? null,
-        sourceRoot: checkout.id,
-        name: checkout.name,
-        secondaryLabel: checkout.description,
-      })),
-    [localCheckouts],
-  );
   const cloudEnvironmentConfigs = useMemo(
     () => (repoConfigs.data?.repositories ?? []).flatMap((repository) => {
       const cloudEnvironment = repository.environments.find((environment) =>
@@ -76,17 +51,14 @@ export function CloudEnvironmentsSettingsSurface({
       return [{
         gitOwner: repository.gitOwner,
         gitRepoName: repository.gitRepoName,
-        configured: true,
-        configuredAt: null,
-        filesVersion: null,
+        materializationStatus: cloudEnvironment.materialization?.status ?? null,
       }];
     }),
     [repoConfigs.data?.repositories],
   );
   const cloudEnvironmentItems = useMemo(() => buildCloudEnvironmentListItems({
     configs: cloudEnvironmentConfigs,
-    localCheckouts: mode === "hybrid" ? localCheckoutsForDomain : [],
-  }), [cloudEnvironmentConfigs, localCheckoutsForDomain, mode]);
+  }), [cloudEnvironmentConfigs]);
 
   if (selectedCloudRepo && enabled) {
     return (
@@ -102,28 +74,22 @@ export function CloudEnvironmentsSettingsSurface({
     );
   }
 
-  const resolvedCloudUnavailableReason = cloudUnavailableReason
-    ?? (repoConfigs.isError ? "Cloud environments could not be loaded." : null);
-
   return (
     <>
       <CloudEnvironmentList
         title="Environments"
-        description={mode === "hybrid"
-          ? "Configure local checkouts and personal Cloud environments."
-          : "Personal Cloud environments are GitHub repositories Proliferate can run without a local clone."}
+        description="Personal Cloud environments are GitHub repositories Proliferate can run without a local clone."
         cloudEnvironments={cloudEnvironmentItems.map((environment) => ({
           id: environment.id,
           fullName: environment.fullName,
           description: environment.description,
-          configured: environment.configured,
-          locationState: environment.locationState,
-          localSourceRoot: environment.localSourceRoot,
-          trackedFileCount: null,
+          cloudStatus: environment.cloudStatus,
         }))}
         loadingCloudEnvironments={enabled && repoConfigs.isLoading}
-        cloudUnavailableReason={resolvedCloudUnavailableReason}
-        onSelectLocalCheckout={mode === "hybrid" ? onSelectLocalCheckout : undefined}
+        cloudUnavailableReason={cloudUnavailableReason}
+        cloudErrorMessage={enabled && repoConfigs.isError
+          ? "Cloud environments could not be loaded."
+          : null}
         onSelectCloudEnvironment={(repoId) => {
           const parsed = parseGitRepoId(repoId);
           if (parsed) {

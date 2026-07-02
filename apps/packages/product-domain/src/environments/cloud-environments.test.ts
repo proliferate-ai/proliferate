@@ -10,67 +10,41 @@ import {
 } from "./cloud-environments";
 
 describe("cloud environment helpers", () => {
-  it("projects local and cloud environments into one repository list", () => {
+  it("projects cloud environment configs into list items", () => {
     expect(buildCloudEnvironmentListItems({
       configs: [
-        { gitOwner: "acme", gitRepoName: "cloud-only", configured: true, filesVersion: 2 },
-        { gitOwner: "acme", gitRepoName: "disabled", configured: false, filesVersion: 3 },
-        { gitOwner: "acme", gitRepoName: "local", configured: true, filesVersion: 1 },
-      ],
-      localCheckouts: [
-        {
-          gitOwner: "acme",
-          gitRepoName: "local",
-          sourceRoot: "/repos/local",
-          name: "local",
-          secondaryLabel: null,
-        },
-        {
-          gitOwner: "acme",
-          gitRepoName: "local-only",
-          sourceRoot: "/repos/local-only",
-          name: "local-only",
-          secondaryLabel: null,
-        },
-        {
-          gitOwner: null,
-          gitRepoName: null,
-          sourceRoot: "/repos/no-remote",
-          name: "no-remote",
-          secondaryLabel: null,
-        },
+        { gitOwner: "acme", gitRepoName: "cloud-only", materializationStatus: "ready" },
+        { gitOwner: "acme", gitRepoName: "broken", materializationStatus: "error" },
+        { gitOwner: "acme", gitRepoName: "warming", materializationStatus: "running" },
       ],
     })).toMatchObject([
       {
-        id: "/repos/local",
-        configState: "configured",
-        locationState: "local_and_cloud",
-        localSourceRoot: "/repos/local",
-      },
-      {
-        id: "/repos/local-only",
-        configState: null,
-        locationState: "local_only",
-        localSourceRoot: "/repos/local-only",
-      },
-      {
-        id: "/repos/no-remote",
-        fullName: "no-remote",
-        configState: null,
-        locationState: "local_only",
-      },
-      {
-        id: "acme/cloud-only",
-        configState: "configured",
-        locationState: "cloud_only",
+        id: "acme/broken",
+        gitOwner: "acme",
+        gitRepoName: "broken",
+        fullName: "acme/broken",
+        cloudStatus: "error",
         description: "Cloud-only environment",
       },
       {
-        id: "acme/disabled",
-        configState: "disabled",
-        locationState: "cloud_only",
+        id: "acme/cloud-only",
+        cloudStatus: "ready",
+      },
+      {
+        id: "acme/warming",
+        cloudStatus: "running",
       },
     ]);
+  });
+
+  it("sorts by name, ignoring materialization state", () => {
+    expect(buildCloudEnvironmentListItems({
+      configs: [
+        { gitOwner: "acme", gitRepoName: "zulu", materializationStatus: "ready" },
+        { gitOwner: "acme", gitRepoName: "alpha" },
+        { gitOwner: "acme", gitRepoName: "mid", materializationStatus: "error" },
+      ],
+    }).map((item) => item.id)).toEqual(["acme/alpha", "acme/mid", "acme/zulu"]);
   });
 
   it("explains repositories that cannot be cloud environments", () => {

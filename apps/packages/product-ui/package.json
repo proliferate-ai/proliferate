@@ -211,6 +211,14 @@
       "types": "./dist/settings/SettingsScopeTabs.d.ts",
       "import": "./dist/settings/SettingsScopeTabs.js"
     },
+    "./settings/RepoPicker": {
+      "types": "./dist/settings/RepoPicker.d.ts",
+      "import": "./dist/settings/RepoPicker.js"
+    },
+    "./settings/SettingsSaveFooter": {
+      "types": "./dist/settings/SettingsSaveFooter.d.ts",
+      "import": "./dist/settings/SettingsSaveFooter.js"
+    },
     "./settings/SettingsShell": {
       "types": "./dist/settings/SettingsShell.d.ts",
       "import": "./dist/settings/SettingsShell.js"
@@ -259,25 +267,25 @@
       "types": "./dist/new-chat/NewChatSurface.d.ts",
       "import": "./dist/new-chat/NewChatSurface.js"
     },
-    "./repos/AddCloudRepoDialog": {
-      "types": "./dist/repos/AddCloudRepoDialog.d.ts",
-      "import": "./dist/repos/AddCloudRepoDialog.js"
-    },
     "./repos/AddRepoFlow": {
       "types": "./dist/repos/AddRepoFlow.d.ts",
       "import": "./dist/repos/AddRepoFlow.js"
     },
-    "./environments/AddCloudEnvironmentDialog": {
-      "types": "./dist/environments/AddCloudEnvironmentDialog.d.ts",
-      "import": "./dist/environments/AddCloudEnvironmentDialog.js"
+    "./repos/CloudRepoPicker": {
+      "types": "./dist/repos/CloudRepoPicker.d.ts",
+      "import": "./dist/repos/CloudRepoPicker.js"
     },
     "./environments/CloudEnvironmentList": {
       "types": "./dist/environments/CloudEnvironmentList.d.ts",
       "import": "./dist/environments/CloudEnvironmentList.js"
     },
-    "./environments/CloudEnvironmentEditor": {
-      "types": "./dist/environments/CloudEnvironmentEditor.d.ts",
-      "import": "./dist/environments/CloudEnvironmentEditor.js"
+    "./environments/CloudEnvironmentConfigSection": {
+      "types": "./dist/environments/CloudEnvironmentConfigSection.d.ts",
+      "import": "./dist/environments/CloudEnvironmentConfigSection.js"
+    },
+    "./environments/ScriptBlock": {
+      "types": "./dist/environments/ScriptBlock.d.ts",
+      "import": "./dist/environments/ScriptBlock.js"
     },
     "./workspaces/WorkspaceRow": {
       "types": "./dist/workspaces/WorkspaceRow.d.ts",
