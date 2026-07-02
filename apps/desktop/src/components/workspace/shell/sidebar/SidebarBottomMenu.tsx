@@ -55,6 +55,7 @@ export function SidebarBottomMenu() {
   const { data: billingPlan } = useCloudBilling();
   const {
     phase: updaterPhase,
+    downloadProgress,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -108,6 +109,7 @@ export function SidebarBottomMenu() {
           <div className="ml-1 flex shrink-0 items-center empty:hidden">
             <SidebarUpdatePill
               phase={updaterPhase}
+              downloadProgress={downloadProgress}
               onDownloadUpdate={downloadUpdate}
               onOpenRestartPrompt={openRestartPrompt}
             />
@@ -118,12 +120,16 @@ export function SidebarBottomMenu() {
             sideOffset={8}
             className="w-[340px]"
           >
-            <DropdownMenuItem onSelect={() => setShortcutsOpen(true)}>
+            <DropdownMenuItem
+              onSelect={(event) => {
+                // Prevent Radix's default close-and-restore-focus so the
+                // dialog opened from the menu item keeps focus.
+                event.preventDefault();
+                setShortcutsOpen(true);
+              }}
+            >
               <Keyboard className="size-4 text-muted-foreground" />
               Keyboard shortcuts
-              <DropdownMenuShortcut>
-                {getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}
-              </DropdownMenuShortcut>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => openExternalUrl(PROLIFERATE_DOCS_URL)}>
               <BookOpen className="size-4 text-muted-foreground" />

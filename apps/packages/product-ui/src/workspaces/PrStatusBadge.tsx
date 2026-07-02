@@ -10,8 +10,9 @@
  *
  * Color map (spec §2): open → green, checks failing → red, pending → yellow,
  * draft → faint, merged → special/blue. Uses cross-app tokens (`success` =
- * `--diff-add` value, `destructive` = `--danger`, `warning`, `faint`, `info`)
- * so the component works on both desktop and web surfaces.
+ * `--diff-add` value, `destructive` = `--danger`, `warning-foreground` — the
+ * solid warning hue, since `warning` itself is a low-alpha surface tint —
+ * `faint`, `info`) so the component works on both desktop and web surfaces.
  */
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
@@ -35,7 +36,7 @@ export interface PrStatusView {
 const PR_STATUS_TONE: Record<PrStatusKind, string> = {
   open: "bg-success",
   checks_failing: "bg-destructive",
-  pending: "bg-warning",
+  pending: "bg-warning-foreground",
   draft: "bg-faint",
   merged: "bg-info",
   closed: "bg-destructive",

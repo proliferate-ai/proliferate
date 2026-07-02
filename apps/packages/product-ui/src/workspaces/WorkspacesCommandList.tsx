@@ -23,7 +23,6 @@ import {
   CommandItem,
   CommandList,
 } from "@proliferate/ui/kit/Command";
-import { Button } from "@proliferate/ui/primitives/Button";
 
 import { PrStatusDot, type PrStatusView } from "./PrStatusBadge";
 
@@ -112,19 +111,20 @@ export function WorkspacesCommandList({
           </CommandGroup>
         ))}
         {onCreate ? (
-          <Button
-            type="button"
-            variant="unstyled"
-            size="unstyled"
-            onClick={onCreate}
-            className="group/create mt-2 flex w-full items-center gap-2 rounded-md border border-dashed border-border px-2.5 py-2 text-[13px] font-medium leading-5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          <CommandItem
+            // Keep the row mounted (and keyboard-reachable) even when the
+            // current filter matches no workspace names.
+            forceMount
+            value="__create-workspace__"
+            onSelect={() => onCreate()}
+            className="mt-2 w-full gap-2 border border-dashed border-border px-2.5 py-2 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[selected=true]:text-foreground"
           >
             <FolderPlus className="size-4 shrink-0" aria-hidden />
             <span>Create</span>
-            <span className="ml-auto text-[11px] text-faint opacity-0 transition-opacity group-hover/create:opacity-100">
+            <span className="ml-auto text-[11px] text-faint opacity-0 transition-opacity group-hover:opacity-100 group-data-[selected=true]:opacity-100">
               {createShortcutLabel}
             </span>
-          </Button>
+          </CommandItem>
         ) : null}
       </CommandList>
     </Command>
