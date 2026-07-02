@@ -155,10 +155,12 @@ export function UpdateToastPresenter() {
           },
         },
         cancel: undefined,
-        // Spec §12: Download is a ghost button; solid is reserved for Restart.
+        // Spec §12: solid is reserved for Restart — Download stays secondary,
+        // but quiet-secondary (faint fill + full-contrast label), not ghost:
+        // muted-on-transparent was near-invisible on the toast surface.
         classNames: {
           actionButton:
-            "!bg-transparent !text-muted-foreground hover:!text-foreground !border !border-input",
+            "!bg-foreground/5 !text-foreground hover:!bg-foreground/10 !border !border-input",
         },
       });
       return;
