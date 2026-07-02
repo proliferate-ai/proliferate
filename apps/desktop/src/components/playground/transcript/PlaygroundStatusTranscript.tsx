@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CircleAlert } from "@proliferate/ui/icons";
 import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
+import { PendingInteractionMarkerView } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
 import type { ScenarioKey } from "@/config/playground";
 import {
   HookPreview,
@@ -60,6 +61,23 @@ export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNo
             isStreaming={false}
           />
           <StreamingIndicator startedAt={new Date(Date.now() - 18_000).toISOString()} />
+        </TranscriptPreviewShell>
+      );
+    // Two-part pending-interaction pattern: the typed transcript marker below
+    // pairs with the docked card rendered for the same scenario key by
+    // PlaygroundPanelSlotFixtures.
+    case "interaction-marker-permission":
+      return (
+        <TranscriptPreviewShell>
+          <AssistantMessage content="The branch is ready — I need to push it before opening the PR." />
+          <PendingInteractionMarkerView kind="permission" />
+        </TranscriptPreviewShell>
+      );
+    case "interaction-marker-question":
+      return (
+        <TranscriptPreviewShell>
+          <AssistantMessage content="Two providers can back this integration; the choice decides which auth flow I wire up." />
+          <PendingInteractionMarkerView kind="question" />
         </TranscriptPreviewShell>
       );
     case "gemini-retry-status":

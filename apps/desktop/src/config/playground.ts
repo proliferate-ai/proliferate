@@ -3,10 +3,17 @@ export type ScenarioKey =
   | "todos-short"
   | "todos-mid"
   | "todos-long"
+  | "todo-strip-with-approval"
   | "execute-approval"
   | "edit-approval"
+  | "interaction-motion"
+  | "interaction-marker-permission"
+  | "interaction-marker-question"
   | "claude-plan-short"
   | "claude-plan-long"
+  | "plan-streaming-upgrade"
+  | "mode-transition"
+  | "carry-out-plan"
   | "pending-prompts-single"
   | "pending-prompts-multi"
   | "pending-prompts-editing"
@@ -87,10 +94,17 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "todos-short": { label: "Todos (3)" },
   "todos-mid": { label: "Todos (5)" },
   "todos-long": { label: "Todos (12)" },
+  "todo-strip-with-approval": { label: "Todo strip + approval" },
   "execute-approval": { label: "Execute approval" },
   "edit-approval": { label: "Edit approval" },
+  "interaction-motion": { label: "Interaction motion" },
+  "interaction-marker-permission": { label: "Marker + permission" },
+  "interaction-marker-question": { label: "Marker + question" },
   "claude-plan-short": { label: "Plan approval (short)" },
   "claude-plan-long": { label: "Plan approval (long)" },
+  "plan-streaming-upgrade": { label: "Plan streaming upgrade" },
+  "mode-transition": { label: "Mode transition" },
+  "carry-out-plan": { label: "Carry-out receipt" },
   "pending-prompts-single": { label: "Queue (1 row)" },
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
