@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  BookMarked,
   BookOpen,
   CreditCard,
   Globe,
@@ -13,6 +14,7 @@ import {
   ArrowUpRight,
   Check,
   ChevronUpDown,
+  Discord,
   Mail,
 } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -279,7 +281,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Changelog"
-                  labelClassName="ml-6"
+                  icon={<BookMarked className="size-3.5" />}
                   trailing={<ArrowUpRight className="size-3" />}
                   onClick={() => {
                     openExternalUrl(PROLIFERATE_CHANGELOG_URL);
@@ -289,7 +291,7 @@ export function SidebarAccountFooter() {
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Discord"
-                  labelClassName="ml-6"
+                  icon={<Discord className="size-3.5" />}
                   trailing={<ArrowUpRight className="size-3" />}
                   onClick={() => {
                     openExternalUrl(PROLIFERATE_DISCORD_URL);

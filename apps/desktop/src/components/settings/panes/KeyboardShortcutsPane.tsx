@@ -1,30 +1,13 @@
 import { useMemo, useState } from "react";
-import {
-  COMPOSER_SHORTCUT_GROUPS,
-  SHORTCUT_GROUPS,
-} from "@/config/shortcuts/groups";
-import {
-  COMPOSER_SHORTCUTS,
-  type ComposerShortcutKey,
-} from "@/config/shortcuts/composer-shortcuts";
-import { SHORTCUTS, type ShortcutKey } from "@/config/shortcuts/registry";
-import type { ComposerShortcutDef, ShortcutDef } from "@/config/shortcuts/types";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-
-interface ShortcutEntryView {
-  id: string;
-  command: string;
-  labels: string[];
-}
-
-interface ShortcutSectionView {
-  title: string;
-  entries: ShortcutEntryView[];
-}
+import {
+  buildShortcutSections,
+  type ShortcutEntryView,
+  type ShortcutSectionView,
+} from "@/lib/domain/shortcuts/shortcut-sections";
 
 function ShortcutBadge({ label }: { label: string }) {
   return (
@@ -72,127 +55,14 @@ function ShortcutSection({ section }: { section: ShortcutSectionView }) {
   );
 }
 
-function searchTermsForShortcut(
-  shortcutKey: ShortcutKey,
-  shortcut: ShortcutDef,
-  groupTitle: string,
-): string[] {
-  return [
-    groupTitle,
-    shortcut.description,
-    shortcut.id,
-    shortcut.label,
-    shortcut.nonMacLabel ?? "",
-    getShortcutDisplayLabel(shortcut),
-    shortcutKey,
-  ];
-}
-
-function searchTermsForComposerShortcut(
-  shortcutKey: ComposerShortcutKey,
-  shortcut: ComposerShortcutDef,
-  groupTitle: string,
-): string[] {
-  return [
-    groupTitle,
-    shortcut.description,
-    shortcut.key,
-    shortcut.label,
-    shortcut.nonMacLabel ?? "",
-    getShortcutDisplayLabel(shortcut),
-    shortcutKey,
-  ];
-}
-
-function matchesQuery(terms: readonly string[], query: string): boolean {
-  if (!query) {
-    return true;
-  }
-
-  return terms.some((term) => term.toLowerCase().includes(query));
-}
-
-function buildShortcutEntries(shortcutKeys: readonly ShortcutKey[]): ShortcutEntryView[] {
-  const entriesById = new Map<string, ShortcutEntryView>();
-
-  for (const shortcutKey of shortcutKeys) {
-    const shortcut = SHORTCUTS[shortcutKey];
-    const entryId = `${shortcut.id}:${shortcut.description}`;
-    const label = getShortcutDisplayLabel(shortcut);
-    const existingEntry = entriesById.get(entryId);
-
-    if (existingEntry) {
-      if (!existingEntry.labels.includes(label)) {
-        existingEntry.labels.push(label);
-      }
-      continue;
-    }
-
-    entriesById.set(entryId, {
-      id: entryId,
-      command: shortcut.description,
-      labels: [label],
-    });
-  }
-
-  return [...entriesById.values()];
-}
-
 export function KeyboardShortcutsPane() {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
 
-  const shortcutGroups = useMemo(() => SHORTCUT_GROUPS.map((group) => {
-    const groupMatches = matchesQuery([group.title], normalizedQuery);
-    const shortcutKeys = groupMatches
-      ? group.shortcutKeys
-      : group.shortcutKeys.filter((shortcutKey) => matchesQuery(
-        searchTermsForShortcut(shortcutKey, SHORTCUTS[shortcutKey], group.title),
-        normalizedQuery,
-      ));
-
-    return {
-      ...group,
-      shortcutKeys,
-    };
-  }).filter((group) => group.shortcutKeys.length > 0), [normalizedQuery]);
-
-  const composerShortcutGroups = useMemo(() => COMPOSER_SHORTCUT_GROUPS.map((group) => {
-    const groupMatches = matchesQuery([group.title], normalizedQuery);
-    const shortcutKeys = groupMatches
-      ? group.shortcutKeys
-      : group.shortcutKeys.filter((shortcutKey) => matchesQuery(
-        searchTermsForComposerShortcut(
-          shortcutKey,
-          COMPOSER_SHORTCUTS[shortcutKey],
-          group.title,
-        ),
-        normalizedQuery,
-      ));
-
-    return {
-      ...group,
-      shortcutKeys,
-    };
-  }).filter((group) => group.shortcutKeys.length > 0), [normalizedQuery]);
-
-  const sections = useMemo<ShortcutSectionView[]>(() => [
-    ...shortcutGroups.map((group) => ({
-      title: group.title,
-      entries: buildShortcutEntries(group.shortcutKeys),
-    })),
-    ...composerShortcutGroups.map((group) => ({
-      title: group.title,
-      entries: group.shortcutKeys.map((shortcutKey) => {
-        const shortcut = COMPOSER_SHORTCUTS[shortcutKey];
-        return {
-          id: `${group.title}:${shortcut.key}:${shortcutKey}`,
-          command: shortcut.description,
-          labels: [getShortcutDisplayLabel(shortcut)],
-        };
-      }),
-    })),
-  ], [composerShortcutGroups, shortcutGroups]);
+  const sections = useMemo(
+    () => buildShortcutSections(normalizedQuery),
+    [normalizedQuery],
+  );
 
   const hasShortcuts = sections.length > 0;
 
