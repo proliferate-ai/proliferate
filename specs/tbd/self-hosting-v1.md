@@ -619,3 +619,22 @@ Also owed once B5 lands: purge Bifrost from
    credentials; rotation must re-encrypt; runbook entry required.
 5. **The session-preserving swap (B10).** The one place we're building novel
    machinery rather than composing precedents; budget review time accordingly.
+
+---
+
+## 13. Amendments (2026-07-02, ratified)
+
+- **D4 refined:** `SINGLE_ORG_MODE` default is the expression
+  `telemetry_mode != "hosted_product"` (explicit env override wins), so hosted
+  production is safe with zero infra change.
+- **D5/B2 scope addition — desktop password sign-in.** Password login today
+  backs only web/mobile routes; the desktop signs in exclusively via the
+  GitHub OAuth callback. Self-host v1 is desktop-only, so Track A adds a
+  desktop password login route + an email/password form on the sign-in
+  screen, shown as the DEFAULT when GitHub OAuth is not configured (server
+  advertises available auth methods). Basic auth is the default auth story
+  for self-host.
+- **Verification bar:** the stack is done only when the acceptance demo runs
+  end to end on BOTH lanes: (1) Docker Compose tarball flow on a clean host,
+  (2) the AWS one-click CloudFormation flow, driven via AWS CLI. Execution
+  state + work orders: `~/delete/self-hosting-execution.md`.
