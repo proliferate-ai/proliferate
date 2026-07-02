@@ -369,9 +369,8 @@ fn validate_launch_composes_variants_by_declared_syntax() {
         .find(|control| control["key"] == "model")
         .expect("codex model control")["mapping"]["variantSyntax"] =
         serde_json::json!("slash-effort");
-    let slash_document =
-        parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
-            .expect("doctored draft must load");
+    let slash_document = parse_agent_catalog_json(&serde_json::to_string(&raw).expect("serialize"))
+        .expect("doctored draft must load");
     let slash_catalog = ActiveCatalog::new(Arc::new(slash_document));
     let slash = slash_catalog
         .validate_launch(

@@ -2,19 +2,17 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use crate::live::sessions::actor::command::{
-    Resolution, ResolveInteractionCommandError,
-};
+use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::interactions::outcomes::{
     broker_outcome_to_interaction_event, map_resolve_interaction_error,
 };
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{SessionDomainOp, SessionOpEmitter, SessionOpStep};
-use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::rendezvous::broker::{
-    InteractionRendezvous, InteractionRendezvousOutcome, InteractionCancelOutcome,
+    InteractionCancelOutcome, InteractionRendezvous, InteractionRendezvousOutcome,
 };
+use crate::live::sessions::sink::SessionEventSink;
 
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn resolve_interaction(

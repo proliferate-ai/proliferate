@@ -191,8 +191,9 @@ impl SessionEventSink {
                 });
             }
             ConfigOptionUpdate(config) => {
-                outcome.needs_actor =
-                    Some(ActorBoundUpdate::ConfigOptions(config.config_options.clone()));
+                outcome.needs_actor = Some(ActorBoundUpdate::ConfigOptions(
+                    config.config_options.clone(),
+                ));
             }
             SessionInfoUpdate(info) => {
                 outcome.needs_actor = Some(ActorBoundUpdate::SessionInfo {

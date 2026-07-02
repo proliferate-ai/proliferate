@@ -389,11 +389,8 @@ pub trait SessionEventObserver: Send + Sync {
         false
     }
 
-    fn observe(
-        &self,
-        ctx: &SessionObserverContext,
-        obs: SessionObservation<'_>,
-    ) -> ObserverEffects;
+    fn observe(&self, ctx: &SessionObserverContext, obs: SessionObservation<'_>)
+        -> ObserverEffects;
 }
 
 /// A permission request as seen by a [`PermissionAdvisor`], before it is

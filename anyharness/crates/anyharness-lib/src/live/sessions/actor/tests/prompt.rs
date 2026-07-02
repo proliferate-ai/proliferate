@@ -29,7 +29,9 @@ fn empty_turn_error_ignores_turns_with_agent_content() {
     let mut diagnostics = PromptDiagnostics::new(None);
     let notif = acp::schema::SessionNotification::new(
         "native-1",
-        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new("hello".into())),
+        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new(
+            "hello".into(),
+        )),
     );
     diagnostics.observe_notification(&notif);
 

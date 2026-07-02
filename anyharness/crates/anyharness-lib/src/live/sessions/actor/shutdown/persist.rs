@@ -4,9 +4,9 @@ use anyharness_contract::v1::{SessionEndReason, SessionExecutionPhase};
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
+use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
-use crate::live::sessions::handle::LiveSessionHandle;
 
 pub(in crate::live::sessions::actor) async fn persist_exit_disposition(
     handle: &Arc<LiveSessionHandle>,

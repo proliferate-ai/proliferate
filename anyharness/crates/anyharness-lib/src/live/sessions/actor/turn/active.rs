@@ -6,8 +6,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, Resolution, PromptAcceptError, PromptAcceptance,
-    SessionCommand,
+    ForkSessionCommandError, PromptAcceptError, PromptAcceptance, Resolution, SessionCommand,
 };
 use crate::live::sessions::actor::fork::handle::reject_busy_close_native_child_session;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;

@@ -12,7 +12,7 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth_config, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
-    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, runtime_config, sessions,
+    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
     sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
     workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
@@ -65,10 +65,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
         // Catalogs (worker-pushed agent catalog document)
         .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
-        .route(
-            "/runtime-config",
-            get(runtime_config::get_runtime_config).put(runtime_config::apply_runtime_config),
-        )
         // Workspaces
         .route(
             "/workspaces",

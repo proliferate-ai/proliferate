@@ -34,9 +34,9 @@ pub fn render(
     for block in &payload.blocks {
         match block {
             StoredPromptBlock::Text { text } => {
-                blocks.push(acp::schema::ContentBlock::Text(acp::schema::TextContent::new(
-                    text.clone(),
-                )));
+                blocks.push(acp::schema::ContentBlock::Text(
+                    acp::schema::TextContent::new(text.clone()),
+                ));
             }
             StoredPromptBlock::Image {
                 attachment_id,
@@ -124,9 +124,9 @@ pub fn render(
                         ),
                     ));
                 } else {
-                    blocks.push(acp::schema::ContentBlock::Text(acp::schema::TextContent::new(
-                        markdown,
-                    )));
+                    blocks.push(acp::schema::ContentBlock::Text(
+                        acp::schema::TextContent::new(markdown),
+                    ));
                 }
             }
         }

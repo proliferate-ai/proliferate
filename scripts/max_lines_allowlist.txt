@@ -8,14 +8,13 @@
 # when the file is under its threshold.
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 949 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-contract/src/v1/sessions.rs 802 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/api/openapi.rs 867 existing AnyHarness oversized file (+hosting schema registration)
-anyharness/crates/anyharness-lib/src/api/router_tests.rs 1302 existing AnyHarness oversized test file (+hosting PR-status route tests)
+anyharness/crates/anyharness-contract/src/v1/sessions.rs 773 existing AnyHarness contract oversized file
+anyharness/crates/anyharness-lib/src/api/openapi.rs 835 existing AnyHarness oversized file (+hosting schema registration)
+anyharness/crates/anyharness-lib/src/api/router_tests.rs 1282 existing AnyHarness oversized test file (+hosting PR-status route tests)
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1901 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1522 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1512 existing AnyHarness oversized test file
-anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs 1057 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 733 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/sessions/store/sessions.rs 613 runtime pressure metadata extends existing session store queries
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests

@@ -28,7 +28,9 @@ pub(in crate::live::sessions) struct NativeSessionStartupState {
 }
 
 impl NativeSessionStartupState {
-    pub(in crate::live::sessions) fn from_new_session(response: &acp::schema::NewSessionResponse) -> Self {
+    pub(in crate::live::sessions) fn from_new_session(
+        response: &acp::schema::NewSessionResponse,
+    ) -> Self {
         Self::from_session_parts(response.modes.as_ref(), response.config_options.as_deref())
     }
 

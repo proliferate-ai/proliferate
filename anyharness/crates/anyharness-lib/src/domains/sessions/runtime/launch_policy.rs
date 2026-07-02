@@ -388,11 +388,17 @@ mod tests {
         facts.fork_parent_native_session_id = Some(Some("   ".to_string()));
 
         let error = choose_startup_strategy(&facts).expect_err("blank parent native id");
-        assert_eq!(error.to_string(), "fork parent is missing native session id");
+        assert_eq!(
+            error.to_string(),
+            "fork parent is missing native session id"
+        );
 
         facts.fork_parent_native_session_id = Some(None);
         let error = choose_startup_strategy(&facts).expect_err("absent parent native id");
-        assert_eq!(error.to_string(), "fork parent is missing native session id");
+        assert_eq!(
+            error.to_string(),
+            "fork parent is missing native session id"
+        );
     }
 
     #[test]

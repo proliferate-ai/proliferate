@@ -10,9 +10,7 @@ use super::error::ApiError;
 use super::sessions_errors::map_resolve_interaction_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
-use crate::domains::sessions::runtime::{
-    InteractionPermissionDecision, ResolutionRequest,
-};
+use crate::domains::sessions::runtime::{InteractionPermissionDecision, ResolutionRequest};
 
 #[utoipa::path(
     post,
@@ -89,9 +87,7 @@ pub async fn reveal_mcp_elicitation_url(
 
 fn resolve_interaction_input(request: ResolveInteractionRequest) -> ResolutionRequest {
     match request {
-        ResolveInteractionRequest::Selected { option_id } => {
-            ResolutionRequest::OptionId(option_id)
-        }
+        ResolveInteractionRequest::Selected { option_id } => ResolutionRequest::OptionId(option_id),
         ResolveInteractionRequest::Decision {
             decision: InteractionDecision::Allow,
         } => ResolutionRequest::Decision(InteractionPermissionDecision::Allow),
@@ -101,9 +97,7 @@ fn resolve_interaction_input(request: ResolveInteractionRequest) -> ResolutionRe
         ResolveInteractionRequest::Submitted { answers } => {
             ResolutionRequest::Submitted { answers }
         }
-        ResolveInteractionRequest::Accepted { fields } => {
-            ResolutionRequest::Accepted { fields }
-        }
+        ResolveInteractionRequest::Accepted { fields } => ResolutionRequest::Accepted { fields },
         ResolveInteractionRequest::Declined => ResolutionRequest::Declined,
         ResolveInteractionRequest::Cancelled => ResolutionRequest::Cancelled,
         ResolveInteractionRequest::Dismissed => ResolutionRequest::Dismissed,

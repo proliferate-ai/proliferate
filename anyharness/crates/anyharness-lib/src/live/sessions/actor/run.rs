@@ -76,7 +76,12 @@ impl SessionActor {
         background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     ) -> Option<ActorExitDisposition> {
         match cmd {
-            SessionCommand::Prompt { payload, prompt_id, from_queue_seq, respond_to } => {
+            SessionCommand::Prompt {
+                payload,
+                prompt_id,
+                from_queue_seq,
+                respond_to,
+            } => {
                 self.run_turn(
                     ActivePromptRequest {
                         payload,
@@ -90,7 +95,11 @@ impl SessionActor {
                 )
                 .await
             }
-            SessionCommand::EditPendingPrompt { seq, payload, respond_to } => {
+            SessionCommand::EditPendingPrompt {
+                seq,
+                payload,
+                respond_to,
+            } => {
                 let _ = respond_to.send(self.handle_edit_pending_prompt(seq, payload).await);
                 None
             }
@@ -98,7 +107,11 @@ impl SessionActor {
                 let _ = respond_to.send(self.handle_delete_pending_prompt(seq).await);
                 None
             }
-            SessionCommand::ResolveInteraction { request_id, resolution, respond_to } => {
+            SessionCommand::ResolveInteraction {
+                request_id,
+                resolution,
+                respond_to,
+            } => {
                 let result = self.resolve_interaction(request_id, resolution).await;
                 let _ = respond_to.send(result);
                 None
@@ -134,18 +147,22 @@ impl SessionActor {
                 None
             }
             SessionCommand::Cancel => {
-                let _ = self.conn.send_notification(acp::schema::CancelNotification::new(
-                    self.native_session_id.clone(),
-                ));
+                let _ = self
+                    .conn
+                    .send_notification(acp::schema::CancelNotification::new(
+                        self.native_session_id.clone(),
+                    ));
                 None
             }
             SessionCommand::Dismiss { respond_to } => {
-                self.resolve_pending_interactions(Resolution::Dismissed).await;
+                self.resolve_pending_interactions(Resolution::Dismissed)
+                    .await;
                 let _ = respond_to.send(Ok(()));
                 Some(ActorExitDisposition::Dismiss)
             }
             SessionCommand::Close { respond_to } => {
-                self.resolve_pending_interactions(Resolution::Cancelled).await;
+                self.resolve_pending_interactions(Resolution::Cancelled)
+                    .await;
                 let _ = respond_to.send(Ok(()));
                 Some(ActorExitDisposition::Close)
             }
