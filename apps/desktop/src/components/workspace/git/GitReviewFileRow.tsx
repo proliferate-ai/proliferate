@@ -175,7 +175,7 @@ export function GitReviewFileRow({
       >
         {!currentDiff ? (
           <GitReviewInlineEmptyState
-            icon={<FileIcon className="size-3.5" />}
+            icon={<FileIcon className="size-4" />}
             title="No current diff"
             description="This file was touched, but there are no current changes to review against the selected base."
             onOpenFile={() => void openFile(file.path)}
@@ -188,7 +188,7 @@ export function GitReviewFileRow({
           />
         ) : waitingForDiffPermit ? (
           <GitReviewInlineEmptyState
-            icon={<RefreshCw className="size-3.5" />}
+            icon={<RefreshCw className="size-4" />}
             title="Waiting to load diff"
             description="This file will load when review capacity is available."
           />
@@ -200,7 +200,7 @@ export function GitReviewFileRow({
           />
         ) : diffErrorMessage ? (
           <GitReviewInlineEmptyState
-            icon={<CircleAlert className="size-3.5" />}
+            icon={<CircleAlert className="size-4" />}
             title="Diff unavailable"
             description={diffErrorMessage}
             onOpenFile={() => void openFile(file.path)}

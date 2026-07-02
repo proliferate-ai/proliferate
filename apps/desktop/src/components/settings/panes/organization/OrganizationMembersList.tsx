@@ -150,7 +150,7 @@ function MemberRow({
               <MenuSeparator />
               <PopoverMenuItem
                 label="Remove"
-                icon={<Trash className="size-3.5" />}
+                icon={<Trash className="size-4" />}
                 disabled={removeDisabled || updating}
                 onClick={() => {
                   onRemove(member.membershipId);
@@ -205,7 +205,7 @@ function InvitationRow({
           {(close) => (
             <PopoverMenuItem
               label="Revoke invitation"
-              icon={<Trash className="size-3.5" />}
+              icon={<Trash className="size-4" />}
               disabled={!onRevokeInvitation || updating}
               onClick={() => {
                 onRevokeInvitation?.(invitation.id);

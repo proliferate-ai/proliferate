@@ -80,6 +80,7 @@
   /* -- Animations -- */
   --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
   --animate-blink-cursor: blink-cursor 1s step-end infinite;
+  --animate-popover-in: popover-in 150ms cubic-bezier(0.19, 1, 0.22, 1); /* codex --cubic-enter */
 
   /* -- Scrollbars -- */
   --color-scrollbar-thumb: rgba(255, 255, 255, 0.08);
@@ -116,7 +117,7 @@
   --color-card-foreground: #ffffff;
 
   /* -- Popover (Codex elevated-primary) -- */
-  --color-popover: #212121;
+  --color-popover: #2d2d2d; /* codex dropdown surface — one step above panels */
   --color-popover-foreground: #ffffff;
   --color-popover-accent: rgba(255, 255, 255, 0.05);
   --color-popover-ring: rgba(255, 255, 255, 0.084);
@@ -1028,6 +1029,21 @@ body {
   animation: panel-in 150ms ease-out;
 }
 
+/* Shared menu-surface enter (codex parity): applied at Radix positioned
+   wrappers (PopoverButton/DropdownMenu/ContextMenu content, Tooltip), never
+   inside POPOVER_SURFACE_CLASS, so hand-positioned surfaces don't
+   double-animate. No exit animation — Radix unmounts immediately. */
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
@@ -1491,33 +1507,34 @@ body {
 :root {
   --workspace-shell-header-height: 46px; /* codex --height-toolbar */
   --workspace-shell-tab-height: 1.75rem; /* 28px */
-  --workspace-shell-tab-font-size: var(--text-sm);
-  --workspace-shell-tab-line-height: var(--text-sm--line-height);
+  --workspace-shell-tab-font-size: var(--text-ui-sm);
+  --workspace-shell-tab-line-height: var(--text-ui-sm--line-height);
   --workspace-shell-tab-font-weight: 500;
   --workspace-shell-tab-icon-size: 0.875rem; /* 14px */
   --workspace-shell-tab-content-gap: 0.5rem;
-  --workspace-shell-tab-radius: 0.5rem; /* 8px — codex tab chrome */
-  /* Codex tab chrome (UX_SPEC §7): fill-only tabs, no rim. Rest is
-     transparent, hover paints the accent tint, the active tab a stronger
-     foreground mix (--accent-strong equivalent). */
+  --workspace-shell-tab-radius: 0.625rem; /* 10px — codex rounded-lg */
+  /* Tabs are flat at rest (transparent fill, no rim), paint the accent tint
+     on hover, and "chip up" when active/multi-selected: the stronger
+     foreground-mix fill plus a --color-border-heavy hairline rim, rhyming
+     with the rimmed header action chips. */
   --workspace-shell-tab-border: transparent;
   --workspace-shell-tab-inactive-background: transparent;
   --workspace-shell-tab-inactive-border: transparent;
   --workspace-shell-tab-hover-background: var(--color-accent);
   --workspace-shell-tab-hover-border: transparent;
   --workspace-shell-tab-active-background: color-mix(in oklab, var(--color-foreground) 8%, transparent);
-  --workspace-shell-tab-active-border: transparent;
+  --workspace-shell-tab-active-border: var(--color-border-heavy);
   --workspace-shell-tab-selected-background: color-mix(in oklab, var(--color-foreground) 10%, transparent);
-  --workspace-shell-tab-selected-border: transparent;
+  --workspace-shell-tab-selected-border: var(--color-border-heavy);
   --workspace-shell-action-size: 1.75rem; /* 28px */
-  --workspace-shell-action-font-size: var(--text-sm);
-  --workspace-shell-action-line-height: var(--text-sm--line-height);
+  --workspace-shell-action-font-size: var(--text-ui-sm);
+  --workspace-shell-action-line-height: var(--text-ui-sm--line-height);
   --workspace-shell-action-font-weight: 500;
   --workspace-shell-action-icon-size: 0.8125rem; /* 13px */
   --workspace-shell-action-radius: 0.5rem;
-  /* Header action buttons (+, Run, open-in) follow the codex toolbar: ghost
-     (no rim, no fill) at rest, tint on hover. */
-  --workspace-shell-action-border: transparent;
+  /* Header action buttons (+, Run, open-in) are chips: a 1px --color-border
+     rim at rest (pre-migration feel), tint fill on hover/open. */
+  --workspace-shell-action-border: var(--color-border);
   --workspace-shell-action-background: transparent;
   --workspace-shell-action-foreground: var(--color-muted-foreground);
   --workspace-shell-action-hover-background: var(--color-composer-control-hover);

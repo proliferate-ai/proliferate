@@ -208,7 +208,7 @@ export function HomeTargetPicker({
         <PopoverButton
           trigger={(
             <HomeTargetRowItem
-              icon={<GitBranchIcon className="size-3.5" />}
+              icon={<GitBranchIcon className="size-4" />}
               value={selectedBranchName ?? "base branch"}
               aria-label={`Branch: ${selectedBranchName ?? "base branch"}`}
             />
@@ -229,7 +229,7 @@ export function HomeTargetPicker({
                 filteredBranches.map((branch) => (
                   <PopoverMenuItem
                     key={branch}
-                    icon={<GitBranchIcon className="size-3.5" />}
+                    icon={<GitBranchIcon className="size-4" />}
                     label={branch}
                     trailing={selectedBranchName === branch ? <Check className="size-3.5" /> : null}
                     onClick={() => {

@@ -47,7 +47,7 @@ export function RightPanelNewTabMenu({
           data-autofocus={defaultKind === "terminal" || undefined}
           onSelect={onCreateTerminal}
         >
-          <AppShellTerminalIcon className="size-4 text-muted-foreground" />
+          <AppShellTerminalIcon className="size-4" />
           Terminal
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -55,7 +55,7 @@ export function RightPanelNewTabMenu({
           data-autofocus={defaultKind === "browser" || undefined}
           onSelect={onCreateBrowser}
         >
-          <AppShellBrowserIcon className="size-4 text-muted-foreground" />
+          <AppShellBrowserIcon className="size-4" />
           Browser
         </DropdownMenuItem>
       </DropdownMenuContent>
