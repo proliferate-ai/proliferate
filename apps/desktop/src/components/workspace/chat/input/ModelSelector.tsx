@@ -1,15 +1,16 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import type {
   ModelSelectorGroup as ModelSelectorGroupData,
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
-import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { POPOVER_FRAME_CLASS, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_FRAME_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   Check,
@@ -29,13 +30,11 @@ export function ModelSelector({
   groups,
   hasAgents,
   isLoading,
-  notReadyAgents,
   onSelect,
 }: ModelSelectorProps) {
+  const navigate = useNavigate();
   const {
     open,
-    addProviderOpen,
-    setupAgent,
     search,
     triggerRef,
     menuPos,
@@ -43,9 +42,6 @@ export function ModelSelector({
     setSearch,
     handleOpen,
     handleClose,
-    toggleAddProvider,
-    openSetupAgent,
-    closeSetupAgent,
   } = useModelSelectorMenu({ groups });
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
   useNativeOverlayRegistration(selectorEnabled && open && menuPos !== null);
@@ -154,40 +150,20 @@ export function ModelSelector({
               <div className="border-t border-border p-1">
                 <PopoverMenuItem
                   density="compact"
-                  onClick={toggleAddProvider}
+                  onClick={() => {
+                    handleClose();
+                    // UX_SPEC §5: add-harness routes to Settings → Agents.
+                    navigate(buildSettingsHref({ section: "agent-authentication" }));
+                  }}
                   icon={<Plus className="size-3.5 shrink-0" />}
-                  label={CHAT_MODEL_SELECTOR_LABELS.addProvider}
+                  label={CHAT_MODEL_SELECTOR_LABELS.addHarness}
                   className="px-2.5 text-muted-foreground hover:text-popover-foreground"
                 />
               </div>
             </div>
-
-            {addProviderOpen && notReadyAgents.length > 0 && (
-              <div className={`absolute bottom-0 left-[calc(18rem+8px)] w-56 ${POPOVER_SURFACE_CLASS}`}>
-                {notReadyAgents.map((agent) => (
-                  <PopoverMenuItem
-                    key={agent.kind}
-                    onClick={() => openSetupAgent(agent)}
-                    density="compact"
-                    icon={<ProviderIcon kind={agent.kind} className="size-3.5 shrink-0 text-muted-foreground" />}
-                    label={agent.displayName}
-                    trailing={<span className="shrink-0 text-xs text-muted-foreground/60">Setup</span>}
-                    className="px-2.5 leading-[18px]"
-                    trailingClassName="size-auto opacity-100"
-                  />
-                ))}
-              </div>
-            )}
           </FixedPositionLayer>
         </>,
         document.body,
-      )}
-
-      {setupAgent && (
-        <AgentSetupModal
-          agent={setupAgent}
-          onClose={closeSetupAgent}
-        />
       )}
     </div>
   );

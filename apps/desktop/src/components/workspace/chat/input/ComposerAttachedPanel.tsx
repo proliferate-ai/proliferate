@@ -15,10 +15,13 @@ export function ComposerAttachedPanel({
   expanded = true,
   onToggleExpanded,
 }: ComposerAttachedPanelProps) {
+  // Superset attached-panel anatomy (UX_SPEC §5): 13px radius (top — the
+  // bottom edge docks into the composer), 0.5px border, 2% foreground tint,
+  // question header px-12 pt-12 pb-12.
   return (
-    <div className="relative overflow-clip rounded-t-2xl border-x border-t border-border/70 bg-card/70 backdrop-blur-sm transition-colors">
+    <div className="relative overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] backdrop-blur-sm transition-colors">
       {header && (
-        <div className="flex w-full items-center justify-between gap-1.5 py-1.5 pr-2 pl-3 text-sm">
+        <div className="flex w-full items-start justify-between gap-1.5 py-3 pr-2 pl-3 text-chat leading-[var(--text-chat--line-height)]">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {header}
           </div>

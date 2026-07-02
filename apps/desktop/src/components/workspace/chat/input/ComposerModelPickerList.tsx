@@ -26,7 +26,8 @@ export function ComposerModelPickerContent({
     <div className="flex min-h-0 flex-1 flex-col space-y-1">
       <div className="space-y-1">
         <div className="px-1">
-          <div className="flex h-7 items-center rounded-lg border border-border bg-surface-control px-2.5">
+          {/* Superset inset input (UX_SPEC §5): control bg + inset ring. */}
+          <div className="flex h-7 items-center rounded-lg bg-surface-control px-2.5 ring-1 ring-inset ring-input">
             <Input
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}

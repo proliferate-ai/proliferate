@@ -1,8 +1,4 @@
-import type {
-  Dispatch,
-  ReactNode,
-  SetStateAction,
-} from "react";
+import type { ReactNode } from "react";
 import {
   resolveComposerControlOptionDescription,
   resolveComposerControlOptionLabel,
@@ -10,7 +6,6 @@ import {
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type {
   ModelSelectorGroup,
-  ModelSelectorProps,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
@@ -20,7 +15,6 @@ import {
   ChevronDown,
 } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
-import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 export function ComposerControlSubmenu({
@@ -74,37 +68,6 @@ export function ComposerHarnessSubmenu({
         />
       ))}
     </ComposerPopoverSurface>
-  );
-}
-
-export function ComposerAddProviderRows({
-  addProviderOpen,
-  notReadyAgents,
-  onAddProviderOpenChange,
-  onSetupAgent,
-}: {
-  addProviderOpen: boolean;
-  notReadyAgents: ModelSelectorProps["notReadyAgents"];
-  onAddProviderOpenChange: Dispatch<SetStateAction<boolean>>;
-  onSetupAgent: (agent: ModelSelectorProps["notReadyAgents"][number]) => void;
-}) {
-  return (
-    <>
-      <PopoverMenuItem
-        label={CHAT_MODEL_SELECTOR_LABELS.addProvider}
-        trailing={<ChevronDown className={`size-3.5 shrink-0 transition-transform ${addProviderOpen ? "rotate-180" : ""}`} />}
-        onClick={() => onAddProviderOpenChange((open) => !open)}
-      />
-      {addProviderOpen && notReadyAgents.map((agent) => (
-        <PopoverMenuItem
-          key={agent.kind}
-          label={agent.displayName}
-          trailing={<span className="text-xs text-muted-foreground">Setup</span>}
-          className="ml-2 w-[calc(100%-0.5rem)]"
-          onClick={() => onSetupAgent(agent)}
-        />
-      ))}
-    </>
   );
 }
 

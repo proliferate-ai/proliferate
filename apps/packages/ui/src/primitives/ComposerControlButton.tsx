@@ -28,9 +28,10 @@ const toneClassNames: Record<ComposerControlTone, { idle: string; active: string
     idle: "text-[color:var(--color-composer-control-foreground)]",
     active: "text-[color:var(--color-composer-control-active-foreground)]",
   },
+  // Plan mode (UX_SPEC §5): the selected plan pill is tinted with --special.
   accent: {
-    idle: "text-[color:var(--color-composer-control-foreground)]",
-    active: "text-[color:var(--color-composer-control-active-foreground)]",
+    idle: "text-[color:var(--color-special)]",
+    active: "text-[color:var(--color-special)]",
   },
   primary: {
     idle: "text-[color:var(--color-composer-control-foreground)]",
@@ -77,7 +78,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     const baseClassName = `gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-[var(--color-composer-control-hover)] hover:text-current focus:outline-none data-[state=open]:bg-[var(--color-composer-control-hover)] ${classes}`;
     const buttonClassName = iconOnly
       ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`
-      : `h-7 min-w-0 max-w-full !justify-start px-2 py-0 text-left text-sm leading-[18px] ${baseClassName} ${className}`;
+      : `h-7 min-w-0 max-w-full !justify-start px-2 py-0 text-left text-base leading-[18px] ${baseClassName} ${className}`;
     const iconOnlyLabel = typeof label === "string"
       ? label
       : typeof props["aria-label"] === "string"
@@ -100,8 +101,9 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
           <span className="flex min-w-0 items-center gap-1">
             <span className={`min-w-0 truncate text-left ${labelClassName}`}>{label}</span>
             {detail && (
-              <span className={`truncate text-left text-[color:var(--color-composer-control-muted-foreground)] ${detailClassName}`}>
-                {detail}
+              <span className={`flex min-w-0 items-center gap-1 truncate text-left text-[color:var(--color-composer-control-muted-foreground)] ${detailClassName}`}>
+                <span aria-hidden="true" className="shrink-0">·</span>
+                <span className="min-w-0 truncate">{detail}</span>
               </span>
             )}
           </span>

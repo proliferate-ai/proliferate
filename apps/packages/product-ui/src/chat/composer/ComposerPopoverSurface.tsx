@@ -10,11 +10,13 @@ export function ComposerPopoverSurface({
   className = "",
   ...props
 }: ComposerPopoverSurfaceProps) {
+  // Overlay recipe (UX_SPEC §5/§7): popover bg, 0.5px ring, 12px radius,
+  // 4px padding, overlay shadow, backdrop blur.
   return (
     <div
       {...props}
       className={twMerge(
-        "rounded-[18px] border border-border/60 bg-popover/96 p-1.5 text-popover-foreground shadow-floating backdrop-blur-lg",
+        "rounded-xl bg-popover/90 p-1 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm",
         className,
       )}
     >

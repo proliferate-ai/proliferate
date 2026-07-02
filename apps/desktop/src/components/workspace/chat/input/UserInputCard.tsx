@@ -1,14 +1,23 @@
 import type { UserInputQuestion, UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { useMemo, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { ArrowUp } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
+import {
+  ComposerOptionRow,
+  useComposerOptionNumberKeys,
+} from "./ComposerOptionRow";
+
+// Superset-style agent input (UX_SPEC §5): option rows with number-key
+// badges (1–9 selects), an inset free-text row on --control with an inset
+// ring, outline chips for secondary actions, and a circular solid submit.
 
 const OTHER_OPTION_LABEL = "None of the above";
-const BUTTON_CLASSNAME = "rounded-xl px-2.5 text-sm";
+const CHIP_BUTTON_CLASSNAME =
+  "rounded-md border border-input px-3 py-1 text-base font-medium text-muted-foreground transition-colors hover:border-border-heavy hover:text-foreground";
 
 function optionsForQuestion(question: UserInputQuestion) {
   return [
@@ -78,7 +87,7 @@ export function UserInputCard({
         {title}
       </div>
       {progressLabel && (
-        <div className="shrink-0 text-xs text-muted-foreground">
+        <div className="shrink-0 text-base text-faint">
           {progressLabel}
         </div>
       )}
@@ -94,34 +103,14 @@ export function UserInputCard({
       return buildSubmittedAnswer(question, draft);
     }), [drafts, questions]);
 
-  if (!currentQuestion) {
-    return (
-      <ComposerAttachedPanel header={header}>
-        <div className="flex items-center justify-end gap-2 p-3">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className={BUTTON_CLASSNAME}
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-        </div>
-      </ComposerAttachedPanel>
-    );
-  }
-
-  const draft = drafts[currentQuestion.questionId] ?? {
+  const options = currentQuestion ? optionsForQuestion(currentQuestion) : [];
+  const draft: UserInputDraft = (currentQuestion && drafts[currentQuestion.questionId]) ?? {
     selectedOptionLabel: null,
     text: "",
   };
-  const options = optionsForQuestion(currentQuestion);
-  const showTextInput = allowsDraftText(currentQuestion, draft);
-  const isFirst = questionIndex === 0;
-  const isLast = questionIndex >= questions.length - 1;
 
   const updateDraft = (patch: Partial<UserInputDraft>) => {
+    if (!currentQuestion) return;
     setDrafts((current) => ({
       ...current,
       [currentQuestion.questionId]: {
@@ -134,132 +123,143 @@ export function UserInputCard({
     }));
   };
 
+  const selectOptionAtIndex = (index: number) => {
+    const option = options[index];
+    if (!option) return;
+    updateDraft({
+      selectedOptionLabel: option.label,
+      text: option.label === OTHER_OPTION_LABEL ? draft.text : "",
+    });
+  };
+
+  useComposerOptionNumberKeys(
+    options.length,
+    selectOptionAtIndex,
+    !!currentQuestion,
+  );
+
+  if (!currentQuestion) {
+    return (
+      <ComposerAttachedPanel header={header}>
+        <div className="flex items-center justify-end gap-2 px-3 pb-3">
+          <button type="button" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </ComposerAttachedPanel>
+    );
+  }
+
+  const showTextInput = allowsDraftText(currentQuestion, draft);
+  const isFirst = questionIndex === 0;
+  const isLast = questionIndex >= questions.length - 1;
+  const handleAdvance = () => {
+    if (isLast) {
+      onSubmit(answers);
+      return;
+    }
+    setQuestionIndex((index) => Math.min(questions.length - 1, index + 1));
+  };
+
   return (
     <ComposerAttachedPanel header={header}>
-      <div className="flex max-h-[min(40vh,360px)] flex-col">
-        <div className="min-h-0 overflow-y-auto p-3 pb-2">
-          <div className="flex flex-col gap-3">
-            <div className="space-y-1">
-              {currentQuestion.header && currentQuestion.header !== title && (
-                <div className="text-sm font-medium text-foreground">
-                  {currentQuestion.header}
+      <div className="flex max-h-[300px] flex-col">
+        <div className="min-h-0 overflow-y-auto px-2">
+          {(currentQuestion.header && currentQuestion.header !== title)
+            || currentQuestion.question ? (
+              <div className="space-y-1 px-1 pb-2">
+                {currentQuestion.header && currentQuestion.header !== title && (
+                  <div className="text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
+                    {currentQuestion.header}
+                  </div>
+                )}
+                <div className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
+                  {currentQuestion.question}
                 </div>
-              )}
-              <div className="text-sm text-muted-foreground">
-                {currentQuestion.question}
               </div>
-            </div>
+            ) : null}
 
-            {options.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {options.map((option) => {
-                  const selected = draft.selectedOptionLabel === option.label;
-                  return (
-                    <Button
-                      key={option.label}
-                      type="button"
-                      variant={selected ? "primary" : "secondary"}
-                      size="sm"
-                      className="h-auto justify-start rounded-xl px-3 py-2 text-left"
-                      onClick={() =>
-                        updateDraft({
-                          selectedOptionLabel: option.label,
-                          text: option.label === OTHER_OPTION_LABEL ? draft.text : "",
-                        })}
-                    >
-                      <span className="flex flex-col gap-0.5">
-                        <span>{option.label}</span>
-                        {option.description && (
-                          <span
-                            className={
-                              selected
-                                ? "text-primary-foreground/75"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            {option.description}
-                          </span>
-                        )}
-                      </span>
-                    </Button>
-                  );
-                })}
-              </div>
-            )}
-
-            {showTextInput && (
-              currentQuestion.isSecret ? (
-                <Input
-                  type="password"
-                  value={draft.text}
-                  onChange={(event) =>
-                    updateDraft({ text: event.currentTarget.value })}
-                  placeholder="Enter your answer"
-                  autoComplete="off"
-                  data-telemetry-mask="true"
-                />
-              ) : (
-                <Textarea
-                  value={draft.text}
-                  onChange={(event) =>
-                    updateDraft({ text: event.currentTarget.value })}
-                  placeholder={draft.selectedOptionLabel === OTHER_OPTION_LABEL
-                    ? "Write a custom answer"
-                    : "Enter your answer"}
-                  rows={3}
-                  data-telemetry-mask="true"
-                />
-              )
-            )}
-          </div>
+          {options.map((option, index) => (
+            <ComposerOptionRow
+              key={option.label}
+              index={index}
+              label={option.label}
+              description={option.description}
+              selected={draft.selectedOptionLabel === option.label}
+              onSelect={() => selectOptionAtIndex(index)}
+            />
+          ))}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-3 pt-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className={BUTTON_CLASSNAME}
-            onClick={onCancel}
-          >
+        {showTextInput && (
+          <div className="mx-2 mb-2 mt-1 flex shrink-0 cursor-text items-start gap-3 rounded-lg bg-surface-control px-2.5 py-2 ring-1 ring-inset ring-input">
+            {currentQuestion.isSecret ? (
+              <Input
+                variant="unstyled"
+                type="password"
+                value={draft.text}
+                onChange={(event) =>
+                  updateDraft({ text: event.currentTarget.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAdvance();
+                  }
+                }}
+                placeholder={draft.selectedOptionLabel === OTHER_OPTION_LABEL
+                  ? "Write a custom answer"
+                  : "Enter your answer"}
+                autoComplete="off"
+                data-telemetry-mask="true"
+                className="flex-1 cursor-text border-0 bg-transparent px-0 py-1 text-chat text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)] focus:ring-0"
+              />
+            ) : (
+              <Textarea
+                variant="ghost"
+                rows={3}
+                value={draft.text}
+                onChange={(event) =>
+                  updateDraft({ text: event.currentTarget.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    handleAdvance();
+                  }
+                }}
+                placeholder={draft.selectedOptionLabel === OTHER_OPTION_LABEL
+                  ? "Write a custom answer"
+                  : "Enter your answer"}
+                autoComplete="off"
+                data-telemetry-mask="true"
+                className="flex-1 cursor-text px-0 py-1 text-chat text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-muted-foreground)_40%,transparent)]"
+              />
+            )}
+          </div>
+        )}
+
+        <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-3 pt-1">
+          <button type="button" className={CHIP_BUTTON_CLASSNAME} onClick={onCancel}>
             Cancel
-          </Button>
+          </button>
           <div className="flex items-center gap-2">
             {!isFirst && (
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                size="sm"
-                className={BUTTON_CLASSNAME}
+                className={CHIP_BUTTON_CLASSNAME}
                 onClick={() =>
                   setQuestionIndex((index) => Math.max(0, index - 1))}
               >
                 Back
-              </Button>
+              </button>
             )}
-            {isLast ? (
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                className={BUTTON_CLASSNAME}
-                onClick={() => onSubmit(answers)}
-              >
-                Submit
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                className={BUTTON_CLASSNAME}
-                onClick={() =>
-                  setQuestionIndex((index) =>
-                    Math.min(questions.length - 1, index + 1))}
-              >
-                Next
-              </Button>
-            )}
+            <button
+              type="button"
+              aria-label={isLast ? "Submit" : "Next"}
+              onClick={handleAdvance}
+              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80"
+            >
+              <ArrowUp className="size-3.5" />
+            </button>
           </div>
         </div>
       </div>
