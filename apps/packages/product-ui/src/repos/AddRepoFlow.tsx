@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@proliferate/ui/kit/Dialog";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 
 /** Which of the three entry options was picked. */
@@ -138,11 +139,13 @@ function AddRepoEntryStep({
       </DialogHeader>
       <div className="mt-3">
         {ENTRY_OPTIONS.map((entry, index) => (
-          <button
+          <Button
             key={entry.option}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={() => onPickOption(entry.option)}
-            className={`flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none ${
+            className={`flex w-full items-center justify-start gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none ${
               index > 0 ? "border-t border-border/60" : ""
             }`}
           >
@@ -163,7 +166,7 @@ function AddRepoEntryStep({
             >
               {index + 1}
             </kbd>
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -202,7 +205,7 @@ function AddRepoConfirmLocalStep({
         {path}
       </div>
       {canCreateCloudEnvironment ? (
-        <label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-accent/50 px-3 py-2.5">
+        <Label className="mt-3 mb-0 flex items-center justify-between gap-3 rounded-lg border border-border bg-accent/50 px-3 py-2.5 text-[13px] text-foreground">
           <span className="min-w-0">
             <span className="block text-[13px] font-medium leading-5 text-foreground">
               Also create this repo in your cloud sandbox?
@@ -217,7 +220,7 @@ function AddRepoConfirmLocalStep({
             size="compact"
             aria-label="Also create this repo in your cloud sandbox"
           />
-        </label>
+        </Label>
       ) : null}
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" variant="secondary" size="md" onClick={onBack} disabled={confirming}>
