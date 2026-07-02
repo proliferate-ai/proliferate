@@ -37,6 +37,18 @@ describe("settings navigation", () => {
     });
   });
 
+  it("redirects the legacy agent-authentication section to agent api keys", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "agent-authentication",
+      repositories: [],
+    })).toEqual({
+      activeSection: "agent-api-keys",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+  });
+
   it("redirects legacy defaults and advanced sections to agent defaults", () => {
     expect(resolveSettingsSelection({
       rawSection: "defaults",
