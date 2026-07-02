@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.integrations import CloudIntegrationToolSchemaCache
@@ -121,3 +121,20 @@ async def mark_tool_cache_stale(
     await db.flush()
     await db.refresh(cache)
     return _record(cache)
+
+
+async def delete_tool_cache(
+    db: AsyncSession,
+    account_id: UUID,
+) -> None:
+    """Delete the tool-schema cache row for ``account_id`` (no-op if absent).
+
+    The cache keys on ``account_id`` with no FK cascade, so account deletion
+    must clear this row explicitly.
+    """
+    await db.execute(
+        delete(CloudIntegrationToolSchemaCache).where(
+            CloudIntegrationToolSchemaCache.account_id == account_id
+        )
+    )
+    await db.flush()
