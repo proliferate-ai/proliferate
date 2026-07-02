@@ -582,6 +582,12 @@ function writeLaunchEnv(paths, env) {
   const launchEnv = {
     PROLIFERATE_DEV: "1",
     DEBUG: "true",
+    // Local dev stays multi-org: the single-org default derives from
+    // telemetry mode (local_dev is non-hosted, so it would flip into
+    // single-org mode and 503 every sign-in on a fresh dev database until
+    // /setup is claimed). Override at invocation when working on
+    // self-hosting flows: SINGLE_ORG_MODE=true make run PROFILE=<name>.
+    SINGLE_ORG_MODE: process.env.SINGLE_ORG_MODE || "false",
     ...orderedEnv(env, persistedKeys),
     ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
     VITE_ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
