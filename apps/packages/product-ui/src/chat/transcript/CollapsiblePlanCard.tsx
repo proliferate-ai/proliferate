@@ -12,6 +12,7 @@ interface CollapsiblePlanCardProps {
   title: string;
   content: string;
   subtitle?: ReactNode;
+  note?: ReactNode;
   footer?: ReactNode;
   emptyContent: string;
   copyLabel: string;
@@ -36,6 +37,7 @@ export function CollapsiblePlanCard({
   title,
   content,
   subtitle,
+  note,
   footer,
   emptyContent,
   copyLabel,
@@ -110,6 +112,7 @@ export function CollapsiblePlanCard({
           </div>
         )}
       </div>
+      {note}
       {!hasContent ? (
         <div className="px-4 py-3 text-sm text-muted-foreground">
           {emptyContent}

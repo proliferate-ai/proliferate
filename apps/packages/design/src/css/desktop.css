@@ -1725,6 +1725,37 @@ body {
   }
 }
 
+/* ---- Status-chip entrance (codex _chip recipe) ----
+   Used by the plan-decision status chip (ProposedPlanCard): when the
+   proposed_plan item arrives the chip springs in-place over the still-mounted
+   plan card. 280ms cubic-bezier(.23,1,.32,1) with a soft overshoot at 70%.
+   Compositor-only by owner rule: transform/opacity ONLY. */
+@keyframes chip-enter {
+  0% {
+    opacity: 0;
+    transform: translate(-8px, 4px) scale(0.92);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(1px, -1px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+.chip-enter {
+  transform-origin: 0 50%;
+  animation: chip-enter 280ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip-enter {
+    animation: none;
+  }
+}
+
 /* ---- Satellite ripple for streaming logo ---- */
 @keyframes ripple-sat {
   0%, 100% {

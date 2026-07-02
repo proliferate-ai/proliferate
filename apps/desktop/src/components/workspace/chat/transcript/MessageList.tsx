@@ -36,11 +36,13 @@ import {
   type ChatTranscriptTurnStatusInput,
 } from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
 import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
+import { collectToolCallIdsWithProposedPlan } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import {
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,
 } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "./TranscriptContexts";
+import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
 import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "./TranscriptTurnRow";
 
@@ -136,6 +138,17 @@ export function MessageList({
   const effectiveTranscriptViewState = typingActive
     ? deferredTranscriptViewState
     : transcriptViewState;
+
+  // Transcript-wide ExitPlanMode suppression index (the plan-doubling fix):
+  // a proposed_plan item can land in a different turn than the ExitPlanMode
+  // tool call that opened it, so the suppression set MUST span the whole
+  // transcript — not a single turn's blocks. Derived once here and threaded
+  // to every turn row via context. Keyed off the effective (deferred while
+  // typing) transcript so it stays consistent with what the rows render.
+  const proposedPlanToolCallIds = useMemo(
+    () => collectToolCallIdsWithProposedPlan(effectiveTranscriptViewState.transcript),
+    [effectiveTranscriptViewState.transcript],
+  );
 
   const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
     // Tag the scroll source: a persistent stream of `source.programmatic`
@@ -250,17 +263,19 @@ export function MessageList({
           onOpenSession={onOpenSession}
           canOpenSession={canOpenSession}
         >
-          <DebugProfiler id="transcript-row-list-router">
-            <DeferredChatTranscriptView
-              state={effectiveTranscriptViewState}
-              outboxActions={outboxActions}
-              onScrollSample={handleTranscriptScroll}
-              renderPendingPromptRow={renderPendingPromptRow}
-              renderTurnRow={renderTurnRow}
-              renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
-              renderTurnTrailingStatus={renderTurnTrailingStatusRow}
-            />
-          </DebugProfiler>
+          <ProposedPlanToolCallIdsProvider value={proposedPlanToolCallIds}>
+            <DebugProfiler id="transcript-row-list-router">
+              <DeferredChatTranscriptView
+                state={effectiveTranscriptViewState}
+                outboxActions={outboxActions}
+                onScrollSample={handleTranscriptScroll}
+                renderPendingPromptRow={renderPendingPromptRow}
+                renderTurnRow={renderTurnRow}
+                renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
+                renderTurnTrailingStatus={renderTurnTrailingStatusRow}
+              />
+            </DebugProfiler>
+          </ProposedPlanToolCallIdsProvider>
         </TranscriptContextProviders>
       </DebugProfiler>
     </DebugProfiler>
