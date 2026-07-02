@@ -198,6 +198,46 @@ async def get_instance_organization(db: AsyncSession) -> OrganizationRecord | No
     return organization_record(organization) if organization is not None else None
 
 
+async def create_instance_organization(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    name: str,
+    logo_domain: str | None,
+) -> OrganizationRecord:
+    """Create THE instance organization with its first owner.
+
+    Only the first-run claim flow may call this. The partial unique index on
+    ``is_instance`` makes "at most one instance org" a database invariant, so a
+    duplicate claim fails loudly instead of minting a second org.
+    """
+    now = utcnow()
+    organization = Organization(
+        name=name,
+        logo_domain=logo_domain,
+        logo_image=None,
+        is_instance=True,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(organization)
+    await db.flush()
+    db.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=owner_user_id,
+            role=ORGANIZATION_ROLE_OWNER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            removed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db.flush()
+    return organization_record(organization)
+
+
 async def add_active_membership(
     db: AsyncSession,
     *,

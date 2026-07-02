@@ -25,7 +25,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.organizations import ORGANIZATION_ROLE_MEMBER
 from proliferate.db.store import organizations as organization_store
-from proliferate.server.organizations.errors import InstanceOrganizationNotClaimed
+from proliferate.db.store.organization_records import OrganizationRecord
+from proliferate.server.organizations.domain.profile import (
+    default_organization_name,
+    derive_logo_domain_from_email,
+)
+from proliferate.server.organizations.errors import (
+    InstanceOrganizationAlreadyClaimed,
+    InstanceOrganizationNotClaimed,
+)
 from proliferate.server.organizations.registration import (
     OrganizationRegistrationUser,
     ensure_default_organization_for_account,
@@ -70,6 +78,27 @@ class SingleOrgPolicy:
             user_id=user.id,
             role=ORGANIZATION_ROLE_MEMBER,
         )
+
+
+async def claim_instance_organization(
+    db: AsyncSession,
+    owner: OrganizationRegistrationUser,
+) -> OrganizationRecord:
+    """Create the instance organization with its first owner.
+
+    This is the single-org claim path: the only code allowed to create the
+    instance org that ``SingleOrgPolicy`` places every later identity into.
+    Called exactly once, by the first-run claim flow, under its advisory lock.
+    """
+    existing = await organization_store.get_instance_organization(db)
+    if existing is not None:
+        raise InstanceOrganizationAlreadyClaimed()
+    return await organization_store.create_instance_organization(
+        db,
+        owner_user_id=owner.id,
+        name=default_organization_name(email=owner.email, display_name=owner.display_name),
+        logo_domain=derive_logo_domain_from_email(owner.email),
+    )
 
 
 def select_membership_policy() -> MembershipPolicy:
