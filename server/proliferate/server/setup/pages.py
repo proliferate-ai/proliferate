@@ -75,7 +75,8 @@ _PAGE_STYLE = """
 """
 
 
-def _page(title: str, body: str) -> str:
+def render_page(title: str, body: str) -> str:
+    """The shared shell for server-rendered pages (also used by /register)."""
     return (
         "<!doctype html>\n"
         '<html lang="en">\n'
@@ -134,7 +135,7 @@ def render_setup_form(
         '<button type="submit">Claim this instance</button>\n'
         "</form>"
     )
-    return _page("Set up Proliferate", body)
+    return render_page("Set up Proliferate", body)
 
 
 def render_setup_success(email: str) -> str:
@@ -147,9 +148,9 @@ def render_setup_success(email: str) -> str:
         '<p class="hint">Setup is now closed. Invite teammates from inside '
         "the app.</p>"
     )
-    return _page("Proliferate setup complete", body)
+    return render_page("Proliferate setup complete", body)
 
 
 def render_setup_not_found() -> str:
     body = '<h1>Not found</h1>\n<p class="sub">There is nothing to set up here.</p>'
-    return _page("Not found", body)
+    return render_page("Not found", body)

@@ -76,6 +76,9 @@ from proliferate.server.meta import router as meta_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.organizations.join_api import router as organization_join_router
 from proliferate.server.organizations.registration_api import router as self_registration_router
+from proliferate.server.organizations.registration_pages import (
+    router as registration_pages_router,
+)
 from proliferate.server.organizations.sso.api import router as organization_sso_router
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.service import ensure_first_run_setup_token
@@ -251,6 +254,9 @@ def create_app() -> FastAPI:
         # Invited self-registration (invite-as-allowlist). Single-org only:
         # hosted deployments never expose password registration.
         app.include_router(self_registration_router, prefix=f"{api_prefix}/auth", tags=["auth"])
+        # Server-rendered /register page: the HTML sibling of the registration
+        # route above, for the invite link an admin shares with a teammate.
+        app.include_router(registration_pages_router, prefix=api_prefix, tags=["auth"])
     app.include_router(organization_join_router, prefix=api_prefix, tags=["organizations"])
     app.include_router(artifact_runtime_router, prefix=api_prefix, tags=["artifact_runtime"])
     app.include_router(
