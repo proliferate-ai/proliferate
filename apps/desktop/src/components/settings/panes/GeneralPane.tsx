@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
@@ -50,7 +50,6 @@ const TURN_END_SOUND_OPTIONS: { id: TurnEndSoundId; label: string }[] = [
   { id: "ding", label: "Ding" },
   { id: "gong", label: "Gong" },
 ];
-const SETTINGS_CONTROL_WIDTH_CLASS = "w-[240px]";
 
 export function GeneralPane() {
   const navigate = useNavigate();
@@ -91,7 +90,7 @@ export function GeneralPane() {
   )?.label ?? "Worktree";
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-6">
       <SettingsPageHeader title="General" />
 
       <SettingsSection title="Preferences">
@@ -103,7 +102,7 @@ export function GeneralPane() {
               label={currentTargetLabel}
               leading={<OpenTargetIcon iconId={currentTarget?.iconId} className="size-4 rounded-sm" />}
               className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName="w-60"
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "targets",
                 options: targets.map((target) => ({
@@ -124,7 +123,7 @@ export function GeneralPane() {
             <SettingsMenu
               label={currentBranchPrefixLabel}
               className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName="w-60"
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "branch-prefix",
                 options: BRANCH_PREFIX_OPTIONS.map((option) => ({
@@ -138,13 +137,13 @@ export function GeneralPane() {
           </SettingsRow>
 
           <SettingsRow
-            label="New workspace (⌘N)"
+            label="New workspace"
             description="What ⌘N creates by default"
           >
             <SettingsMenu
               label={currentNewWorkspaceModeLabel}
               className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName="w-60"
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "new-workspace-mode",
                 options: NEW_WORKSPACE_MODE_OPTIONS.map((option) => ({
@@ -159,7 +158,6 @@ export function GeneralPane() {
 
           <SettingsRow
             label="Turn long pastes into attachments"
-            description="Large text pastes in chat become text-resource attachments instead of inline draft text."
           >
             <Switch
               checked={preferences.pasteAttachmentsEnabled}
@@ -168,7 +166,7 @@ export function GeneralPane() {
           </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection title="Feedback">
+      <SettingsSection title="Sounds">
           <SettingsRow
             label="Turn end sound"
             description="Play a sound when an agent finishes its turn"
@@ -188,7 +186,7 @@ export function GeneralPane() {
                   <SettingsMenu
                     label={SOUND_LABELS[preferences.turnEndSoundId]}
                     className={SETTINGS_CONTROL_WIDTH_CLASS}
-                    menuClassName="w-60"
+                    menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
                     groups={[{
                       id: "turn-end-sounds",
                       options: TURN_END_SOUND_OPTIONS
@@ -211,19 +209,22 @@ export function GeneralPane() {
           </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection title="Session policy">
+      <SettingsSection title="Integrations">
           <SettingsRow
             label="Integrations setup"
-            description="Configure cloud connectors and plugin packages."
+            description="Cloud connectors and plugin packages"
           >
             <Button
               type="button"
               variant="outline"
               onClick={() => navigate(APP_ROUTES.integrations)}
             >
-              Open Integrations
+              Open integrations
             </Button>
           </SettingsRow>
+      </SettingsSection>
+
+      <SettingsSection title="Session policy">
           <SettingsRow
             label="Allow coding agents to spin up subagents"
             description="Applies to new sessions. Existing sessions keep their saved delegation policy."

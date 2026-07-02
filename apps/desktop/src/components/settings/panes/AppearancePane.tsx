@@ -1,6 +1,6 @@
 import type { FC } from "react";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -48,9 +48,6 @@ const MODE_ICONS: Record<ColorMode, FC<{ className?: string }>> = {
   system: Monitor,
 };
 
-const SETTINGS_CONTROL_WIDTH_CLASS = "w-[240px]";
-const SETTINGS_CONTROL_MENU_CLASS = "w-[240px]";
-
 const PREVIEW_DIFF = `@@ -1,5 +1,5 @@
  export const environment = {
 -  branch: "develop",
@@ -72,7 +69,7 @@ export function AppearancePane() {
   const canIncreaseZoom = windowZoomId !== WINDOW_ZOOM_IDS[WINDOW_ZOOM_IDS.length - 1];
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-6">
       <SettingsPageHeader title="Appearance" />
 
       <SettingsSection title="Preferences">
@@ -113,12 +110,11 @@ export function AppearancePane() {
 
           <SettingsRow
             label="Theme"
-            description="Choose the Proliferate visual preset"
           >
             <SettingsMenu
               label={PRESET_LABELS[preset]}
               className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName={SETTINGS_CONTROL_MENU_CLASS}
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "theme-presets",
                 options: THEME_PRESETS.map((themePreset) => ({
@@ -149,7 +145,7 @@ export function AppearancePane() {
               >
                 <Minus className="size-3.5" />
               </Button>
-              <div className="flex h-8 min-w-16 items-center justify-center border-x border-border-light px-3 text-sm font-[430] leading-4 text-foreground">
+              <div className="flex h-8 min-w-16 items-center justify-center border-x border-border-light px-3 text-ui font-medium text-foreground">
                 {WINDOW_ZOOM_LABELS[windowZoomId]}
               </div>
               <Button
@@ -173,7 +169,7 @@ export function AppearancePane() {
             <SettingsMenu
               label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
               className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName={SETTINGS_CONTROL_MENU_CLASS}
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "ui-font-size",
                 options: UI_FONT_SIZE_OPTIONS.map((option) => ({
@@ -193,7 +189,7 @@ export function AppearancePane() {
             <SettingsMenu
               label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
               className={SETTINGS_CONTROL_WIDTH_CLASS}
-              menuClassName={SETTINGS_CONTROL_MENU_CLASS}
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
               groups={[{
                 id: "readable-code-font-size",
                 options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({

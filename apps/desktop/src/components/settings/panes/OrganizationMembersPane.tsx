@@ -3,8 +3,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
-import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
@@ -73,7 +73,7 @@ export function OrganizationMembersPane() {
       joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
       showToast(`Joined ${response.organization.name}.`, "info");
     } catch {
-      joinFlow.setStatusMessage("Invitation could not be accepted.");
+      joinFlow.setStatusMessage("Could not accept invitation.");
     }
   }
 
@@ -89,7 +89,7 @@ export function OrganizationMembersPane() {
       await copyText(link.url);
       showToast("Invite link copied.", "info");
     } catch {
-      showToast("Invite link could not be copied.");
+      showToast("Could not copy invite link.");
     }
   }
 
@@ -125,20 +125,20 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowSignInState ? (
-        <OrganizationSection title="Members" description="Organization access is tied to your signed-in account.">
-          <SettingsEmptyState size="compact" title="Sign in to view organization members." />
-        </OrganizationSection>
+        <SettingsSection title="Members" description="Organization access is tied to your signed-in account.">
+          <SettingsEmptyState size="compact" title="Sign in to view organization members" />
+        </SettingsSection>
       ) : null}
 
       {shouldShowLoadingState ? (
-        <div className="text-xs text-muted-foreground">Loading members...</div>
+        <div className="text-ui-sm text-muted-foreground">Loading members…</div>
       ) : null}
 
       {shouldShowErrorState ? (
-        <OrganizationSection title="Members">
+        <SettingsSection title="Members">
           <SettingsEmptyState
             size="compact"
-            title="Organization members could not be loaded."
+            title="Could not load organization members"
             action={
               <Button
                 type="button"
@@ -151,7 +151,7 @@ export function OrganizationMembersPane() {
               </Button>
             }
           />
-        </OrganizationSection>
+        </SettingsSection>
       ) : null}
 
       {shouldShowPendingInvitations ? (
@@ -166,9 +166,13 @@ export function OrganizationMembersPane() {
       ) : null}
 
       {shouldShowEmptyState ? (
-        <OrganizationSection title="Members">
-          <SettingsEmptyState size="compact" title="No organization yet." />
-        </OrganizationSection>
+        <SettingsSection title="Members">
+          <SettingsEmptyState
+            size="compact"
+            title="No organization yet"
+            description="Create or join an organization to manage members."
+          />
+        </SettingsSection>
       ) : null}
 
       {activeOrganization ? (
@@ -211,7 +215,7 @@ export function OrganizationMembersPane() {
 
 function OrganizationNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
       {children}
     </div>
   );

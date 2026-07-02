@@ -27,7 +27,7 @@ export function GitHubAppInstallationSection({
   const installed = status?.installed === true;
   const repositorySelection = formatRepositorySelection(status?.repositorySelection ?? null);
   const statusLabel = loading
-    ? "Checking"
+    ? "Checking…"
     : installed
       ? "Installed"
       : "Not installed";
@@ -40,7 +40,7 @@ export function GitHubAppInstallationSection({
   return (
     <SettingsSection
       title="GitHub App"
-      description="Repository access for organization cloud environments."
+      description="Repository access for organization cloud environments"
     >
       <SettingsRow
         label="Organization installation"

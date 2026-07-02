@@ -1,6 +1,5 @@
 import { CloudSecretsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudSecretsSettingsSurface";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
@@ -18,22 +17,19 @@ export function OrganizationSecretsPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Organization secrets"
-        description="Manage secrets available in every member's cloud sandbox."
+        description="Secrets available in every member's cloud sandbox"
       />
 
       {organizationsQuery.isLoading ? (
-        <SettingsSection>
-          <SettingsRow label="Organization secrets" description="Loading organization..." />
-        </SettingsSection>
+        <div className="text-ui-sm text-muted-foreground">Loading organization…</div>
       ) : null}
 
       {!organizationsQuery.isLoading && !activeOrganization ? (
-        <SettingsSection>
-          <SettingsRow
-            label="No organization"
-            description="Create or join an organization before configuring organization-wide secrets."
-          />
-        </SettingsSection>
+        <SettingsEmptyState
+          size="compact"
+          title="No organization yet"
+          description="Create or join an organization to configure organization-wide secrets."
+        />
       ) : null}
 
       {activeOrganization ? (

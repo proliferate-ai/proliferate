@@ -37,7 +37,7 @@ export function WorktreeStorageSection() {
 
   return (
     <>
-      <SettingsSection className="w-full">
+      <SettingsSection title="Worktrees" className="w-full">
         <WorktreePolicyRow
           draftValue={cleanupPolicy.draftValue}
           currentValue={cleanupPolicy.value}
@@ -50,7 +50,7 @@ export function WorktreeStorageSection() {
         {pressure.isDiscovering && pressure.targets.length === 0 ? (
           <SettingsRow
             label="Runtime status"
-            description="Looking for runtimes..."
+            description="Looking for runtimes…"
           />
         ) : pressure.targets.length === 0 ? (
           <SettingsRow
@@ -180,7 +180,7 @@ function runtimeStatusDescription(targetState: RuntimePressureTargetState): stri
     return "Runtime inventory is unavailable.";
   }
   if (targetState.isLoading) {
-    return "Loading worktree status...";
+    return "Loading worktree status…";
   }
   if (targetState.target.location === "cloud") {
     return targetState.detailLines.join(" · ");

@@ -2,6 +2,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import type {
   SlackBotConfig,
   SlackChannel,
@@ -30,32 +32,24 @@ export function ChannelsSection({
   const disabled = !canManage || !config || saving;
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-0.5">
-          <h2 className="text-sm font-medium text-foreground">Channels</h2>
-          <p className="text-sm text-muted-foreground">
-            Leave the list empty to let the bot respond in any channel it can read.
-          </p>
-        </div>
-        <Badge tone={allowedChannelIds.length === 0 ? "success" : "accent"}>
-          {allowedChannelIds.length === 0
-            ? "Any channel"
-            : `${allowedChannelIds.length.toLocaleString()} allowed`}
-        </Badge>
-      </div>
-      <div>
-        <div className="flex items-center justify-between gap-3 border-b border-border py-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground">Allowed channels</div>
-            <div className="mt-0.5 text-sm text-muted-foreground">
-              {loadingChannels
-                ? "Loading Slack channels..."
-                : channels.length === 0
-                  ? "No channels are available from Slack yet."
-                  : "Choose channels for a tighter rollout, or clear the list for any channel."}
-            </div>
-          </div>
+    <SettingsSection
+      title="Channels"
+      description="Leave the list empty to let the bot respond in any channel it can read."
+    >
+      <SettingsRow
+        label="Allowed channels"
+        description={loadingChannels
+          ? "Loading Slack channels…"
+          : channels.length === 0
+            ? "No channels are available from Slack yet."
+            : "Choose channels for a tighter rollout, or clear the list for any channel."}
+      >
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Badge tone={allowedChannelIds.length === 0 ? "success" : "accent"}>
+            {allowedChannelIds.length === 0
+              ? "Any channel"
+              : `${allowedChannelIds.length.toLocaleString()} allowed`}
+          </Badge>
           <Button
             type="button"
             variant="outline"
@@ -65,39 +59,39 @@ export function ChannelsSection({
             Allow any
           </Button>
         </div>
-        {channels.map((channel) => {
-          const selected = allowedChannelSet.has(channel.id);
-          return (
-            <Label
-              key={channel.id}
-              className="mb-0 flex items-start gap-3 border-b border-border py-3 last:border-b-0"
-            >
-              <Checkbox
-                checked={selected}
-                disabled={disabled || channel.isArchived}
-                onChange={(event) => {
-                  const nextIds = event.currentTarget.checked
-                    ? [...allowedChannelIds, channel.id]
-                    : allowedChannelIds.filter((id) => id !== channel.id);
-                  onUpdateConfig({ allowedSlackChannelIds: nextIds });
-                }}
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium text-foreground">
-                  #{channel.name}
-                </span>
-                <span className="block text-sm text-muted-foreground">
-                  {channel.isArchived
-                    ? "Archived"
-                    : channel.isPrivate
-                      ? "Private channel"
-                      : "Public channel"}
-                </span>
+      </SettingsRow>
+      {channels.map((channel) => {
+        const selected = allowedChannelSet.has(channel.id);
+        return (
+          <Label
+            key={channel.id}
+            className="mb-0 flex items-start gap-3 border-t border-border py-3 first:border-t-0"
+          >
+            <Checkbox
+              checked={selected}
+              disabled={disabled || channel.isArchived}
+              onChange={(event) => {
+                const nextIds = event.currentTarget.checked
+                  ? [...allowedChannelIds, channel.id]
+                  : allowedChannelIds.filter((id) => id !== channel.id);
+                onUpdateConfig({ allowedSlackChannelIds: nextIds });
+              }}
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">
+                #{channel.name}
               </span>
-            </Label>
-          );
-        })}
-      </div>
-    </section>
+              <span className="block text-sm text-muted-foreground">
+                {channel.isArchived
+                  ? "Archived"
+                  : channel.isPrivate
+                    ? "Private channel"
+                    : "Public channel"}
+              </span>
+            </span>
+          </Label>
+        );
+      })}
+    </SettingsSection>
   );
 }

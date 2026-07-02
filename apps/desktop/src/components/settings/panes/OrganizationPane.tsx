@@ -13,11 +13,11 @@ import {
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
-import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
 import {
   GitHubAppInstallationSection,
   isOrganizationAdminRole,
 } from "@/components/settings/panes/organization/GitHubAppInstallationSection";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
@@ -142,7 +142,7 @@ export function OrganizationPane() {
       await openExternal(response.installationUrl);
     } catch (error) {
       setStatusMessage(
-        error instanceof Error ? error.message : "GitHub App installation could not start.",
+        error instanceof Error ? error.message : "Could not start GitHub App installation.",
       );
     }
   }
@@ -162,7 +162,7 @@ export function OrganizationPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Organization"
-        description="Organization profile, Team setup, and billing."
+        description="Profile, Team plan setup, and billing."
       />
 
       {statusMessage ? (
@@ -170,19 +170,20 @@ export function OrganizationPane() {
       ) : null}
 
       {shouldShowSignInState ? (
-        <OrganizationSection title="Organization" description="Organization access is tied to your signed-in account.">
-          <SettingsEmptyState title="Sign in to view your organization." />
-        </OrganizationSection>
+        <SettingsSection title="Organization" description="Organization access is tied to your signed-in account.">
+          <SettingsEmptyState size="compact" title="Sign in to view your organization" />
+        </SettingsSection>
       ) : null}
 
       {shouldShowLoadingState ? (
-        <div className="text-xs text-muted-foreground">Loading organizations...</div>
+        <div className="text-ui-sm text-muted-foreground">Loading organizations…</div>
       ) : null}
 
       {shouldShowErrorState ? (
-        <OrganizationSection title="Organization">
+        <SettingsSection title="Organization">
           <SettingsEmptyState
-            title="Organization settings could not be loaded."
+            size="compact"
+            title="Could not load organization settings"
             action={
               <Button
                 type="button"
@@ -195,11 +196,11 @@ export function OrganizationPane() {
               </Button>
             }
           />
-        </OrganizationSection>
+        </SettingsSection>
       ) : null}
 
       {shouldShowEmptyState ? (
-        <OrganizationSection title="Team">
+        <SettingsSection title="Team">
           {teamCheckoutQuery.data?.intent?.checkoutUrl ? (
             <SettingsEmptyState
               title={teamCheckoutQuery.data.intent.teamName}
@@ -256,14 +257,14 @@ export function OrganizationPane() {
                     <div className="mt-2 text-sm text-destructive">
                       {teamCheckoutActions.createTeamCheckoutError instanceof Error
                         ? teamCheckoutActions.createTeamCheckoutError.message
-                        : "Team checkout could not start."}
+                        : "Could not start Team checkout."}
                     </div>
                   ) : null}
                 </form>
               }
             />
           )}
-        </OrganizationSection>
+        </SettingsSection>
       ) : null}
 
       <UpgradeGateDialog
@@ -276,7 +277,7 @@ export function OrganizationPane() {
           teamCheckoutActions.createTeamCheckoutError instanceof Error
             ? teamCheckoutActions.createTeamCheckoutError.message
             : teamCheckoutActions.createTeamCheckoutError
-              ? "Team checkout could not start."
+              ? "Could not start Team checkout."
               : null
         }
         onClose={() => setTeamUpgradeGateOpen(false)}
@@ -318,7 +319,7 @@ export function OrganizationPane() {
 
 function OrganizationNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border-light bg-foreground/5 px-4 py-3 text-sm text-muted-foreground">
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
       {children}
     </div>
   );

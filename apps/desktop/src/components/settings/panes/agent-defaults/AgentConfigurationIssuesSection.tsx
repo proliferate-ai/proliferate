@@ -4,7 +4,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { AgentAuthTerminalPanel } from "@/components/agents/AgentAuthTerminalPanel";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import type { AgentAuthTerminalSession } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
 import {
   badgeToneForAgentStatus,
@@ -45,16 +45,16 @@ export function AgentConfigurationIssuesSection({
   onRestartAuthTerminal: (agent: AgentSummary) => void;
 }) {
   return (
-    <AgentDefaultsSection
+    <SettingsSection
       title="Needs configuration"
-      description="These harnesses are installed or known, but cannot be used as launch defaults yet."
+      description="These agents need setup before they can launch chats."
     >
       <div>
         {agentsLoading ? (
           <div className="p-3">
             <LoadingState
               message="Checking agent configuration"
-              subtext="Refreshing harness readiness..."
+              subtext="Checking agent readiness…"
             />
           </div>
         ) : agents.map((agent) => {
@@ -69,7 +69,7 @@ export function AgentConfigurationIssuesSection({
           return (
             <div
               key={agent.kind}
-              className="border-b border-border/60 px-3 py-3 last:border-b-0"
+              className="border-b border-border px-3 py-3 last:border-b-0"
             >
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5 text-muted-foreground">
@@ -78,18 +78,18 @@ export function AgentConfigurationIssuesSection({
 
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium text-foreground">
+                    <span className="truncate text-ui font-medium text-foreground">
                       {agent.displayName}
                     </span>
                     <Badge tone={badgeToneForAgentStatus(status.tone)}>
                       {status.label}
                     </Badge>
                   </div>
-                  <p className="text-sm leading-5 text-muted-foreground">
+                  <p className="text-ui-sm leading-[1.45] text-muted-foreground">
                     {configurationDetailForAgent(agent, reconcileResult)}
                   </p>
                   {agent.expectedEnvVars.length > 0 ? (
-                    <p className="text-xs text-muted-foreground/80">
+                    <p className="text-ui-sm text-muted-foreground/80">
                       Expected credentials: {agent.expectedEnvVars.join(", ")}
                     </p>
                   ) : null}
@@ -129,6 +129,6 @@ export function AgentConfigurationIssuesSection({
           );
         })}
       </div>
-    </AgentDefaultsSection>
+    </SettingsSection>
   );
 }

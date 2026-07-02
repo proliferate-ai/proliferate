@@ -29,11 +29,11 @@ export function buildGitHubAppUserAuthorizationServiceView({
     description: "Authorizes Proliferate Cloud to use your GitHub identity in managed sandboxes.",
     accountLabel: status?.githubLogin ? `@${status.githubLogin}` : null,
     statusLabel: loading
-      ? "Checking"
+      ? "Checking…"
       : connected
         ? "Authorized"
         : needsReconnect
-          ? "Reauthorize"
+          ? "Needs reauthorization"
           : "Not authorized",
     tone: connected ? "success" : needsReconnect ? "warning" : "neutral",
     action: connected
@@ -43,7 +43,7 @@ export function buildGitHubAppUserAuthorizationServiceView({
         }
       : {
           label: authorizing
-            ? "Opening GitHub..."
+            ? "Opening GitHub…"
             : needsReconnect
               ? "Reauthorize GitHub App"
               : "Authorize GitHub App",

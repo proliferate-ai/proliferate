@@ -26,7 +26,7 @@ export function ArchivedChatsPane() {
         description="Archived chats are hidden from the main sidebar. Unarchive a chat to bring it back to active workspaces."
         action={
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             type="button"
             disabled={isRefreshing}
@@ -40,24 +40,31 @@ export function ArchivedChatsPane() {
       />
 
       {backgroundRefreshFailed ? (
-        <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning">
+        <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-ui-sm text-warning">
           Could not refresh archived chats. Showing the last loaded list.
         </div>
       ) : null}
 
       {isLoading ? (
-        <div className="py-5 text-xs text-muted-foreground" role="status">
-          Loading archived chats
+        <div className="text-ui-sm text-muted-foreground" role="status">
+          Loading archived chats…
         </div>
       ) : error && rows.length === 0 ? (
-        <div className="py-5 text-xs text-muted-foreground" role="alert">
-          Could not load archived chats.
-        </div>
+        <SettingsEmptyState
+          size="compact"
+          title="Could not load archived chats"
+          description="Check your connection and try again."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => { void refetch(); }}>
+              Retry
+            </Button>
+          }
+        />
       ) : rows.length === 0 ? (
         <SettingsEmptyState
           size="compact"
           icon={<Archive aria-hidden="true" />}
-          title="No archived chats"
+          title="No archived chats yet"
           description="Archive a chat from the sidebar to move it here."
         />
       ) : (

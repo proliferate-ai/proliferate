@@ -4,15 +4,15 @@ import { RefreshCw } from "@proliferate/ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
-import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { AgentDefaultComposer } from "@/components/settings/panes/AgentDefaultComposer";
 import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
 import {
   AgentConfigurationIssuesSection,
   type AgentConfigurationIssueAction,
 } from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
-import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsRow, SETTINGS_CONTROL_WIDTH_CLASS } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
@@ -122,7 +122,7 @@ export function AgentDefaultsPane() {
       const usesAuthenticationPage = agent.readiness === "credentials_required"
         || (agent.readiness === "login_required" && !agent.supportsLogin);
       const authActionLabel = authTerminalSession?.isStarting
-        ? "Opening..."
+        ? "Opening…"
         : authTerminalSession?.terminal
           ? "Restart auth"
           : authTerminalSession?.errorMessage
@@ -164,13 +164,13 @@ export function AgentDefaultsPane() {
   ]);
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-6">
       <SettingsPageHeader
-        title="Agent Defaults"
-        description="Configure default harness launch behavior. Local installs and sign-in repair live here; shared credentials live in Agent Authentication."
+        title="Agent defaults"
+        description="Defaults for how new chats launch each agent. Shared credentials live in Authentication."
         action={
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             type="button"
             disabled={!canUpdateLocalInstalls}
@@ -185,44 +185,32 @@ export function AgentDefaultsPane() {
         }
       />
 
-      <AgentDefaultsSection title="Default harness">
+      <SettingsSection title="Default agent">
           {connectionState === "connecting" ? (
-            <div className="p-3">
-              <LoadingState
-                message="Connecting"
-                subtext="Waiting for the runtime before loading agent defaults..."
-              />
-            </div>
+            <div className="text-ui-sm text-muted-foreground">Waiting for the runtime…</div>
           ) : connectionState === "failed" ? (
-            <div className="space-y-1 p-3">
-              <p className="text-sm font-medium text-foreground">Agent defaults are unavailable</p>
-              <p className="text-xs text-muted-foreground">
-                {runtimeError ?? "Reconnect the runtime to edit launch defaults."}
-              </p>
-            </div>
+            <SettingsEmptyState
+              size="compact"
+              title="Could not load agent defaults"
+              description={runtimeError ?? "Reconnect the runtime to edit launch defaults."}
+            />
           ) : ((agentsLoading || modelRegistriesLoading || runtimeLaunchOptions.isLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
-            <div className="p-3">
-              <LoadingState
-                message="Loading agent defaults"
-                subtext="Fetching available agents and model registries..."
-              />
-            </div>
+            <div className="text-ui-sm text-muted-foreground">Loading agent defaults…</div>
           ) : agentDefaultRows.length === 0 ? (
-            <div className="space-y-1 p-3">
-              <p className="text-sm font-medium text-foreground">No agent defaults are available</p>
-              <p className="text-xs text-muted-foreground">
-                Install and configure a harness before editing launch defaults.
-              </p>
-            </div>
+            <SettingsEmptyState
+              size="compact"
+              title="No agent defaults yet"
+              description="Install and configure an agent before editing launch defaults."
+            />
           ) : (
             <SettingsRow
-              label="Harness"
+              label="Agent"
               description="Launch identity for new chats"
             >
               <SettingsMenu
                 label={primaryHarnessLabel}
-                className="w-[240px]"
-                menuClassName="w-64"
+                className={SETTINGS_CONTROL_WIDTH_CLASS}
+                menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
                 groups={[{
                   id: "harnesses",
                   options: agentDefaultRows.map((row) => ({
@@ -242,10 +230,10 @@ export function AgentDefaultsPane() {
               />
             </SettingsRow>
           )}
-      </AgentDefaultsSection>
+      </SettingsSection>
 
       {connectionState !== "failed" && orderedAgentDefaultRows.map((row) => (
-        <AgentDefaultsSection key={row.kind} title={`${row.displayName} defaults`}>
+        <SettingsSection key={row.kind} title={`${row.displayName} defaults`}>
           <div className="space-y-2">
             <AgentDefaultComposer
               row={row}
@@ -305,7 +293,7 @@ export function AgentDefaultsPane() {
               />
             ) : null}
           </div>
-        </AgentDefaultsSection>
+        </SettingsSection>
       ))}
 
       {connectionState !== "failed" && agentsNeedingSetup.length > 0 ? (

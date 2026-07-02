@@ -279,7 +279,7 @@ export function AccountPane() {
             : undefined,
           connectGoogle: isAuthenticated && !devAuthBypassed
             ? {
-                label: linkingGoogle ? "Waiting for Google..." : "Add Google",
+                label: linkingGoogle ? "Waiting for Google…" : "Add Google",
                 icon: <ProviderBrandIcon provider="google" className="size-[13px]" />,
                 loading: linkingGoogle,
                 disabled: !canLinkGoogle || linkingGoogle,

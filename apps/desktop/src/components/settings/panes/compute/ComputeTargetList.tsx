@@ -1,6 +1,7 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
-import { ChevronRight, Server } from "@proliferate/ui/icons";
+import { ChevronRight } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import {
   computeTargetKindLabel,
@@ -38,49 +39,25 @@ export function ComputeTargetList({
   const targetGroups = groupComputeTargetsByOwnerScope(targets);
 
   return (
-    <div>
-      <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
-            <Server className="size-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-medium text-foreground">SSH Targets</h3>
-              {!loading && targets.length > 0 ? (
-                <Badge tone="neutral">{targetCountLabel(targets.length)}</Badge>
-              ) : null}
-            </div>
-            <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              Select an SSH target to inspect setup, readiness, local access, and auth.
-            </p>
-          </div>
-        </div>
-        {loading || targets.length > 0 ? (
-          <Button type="button" variant="secondary" size="sm" onClick={onAddSshTarget}>
-            {COMPUTE_COPY.addSshTarget}
-          </Button>
-        ) : null}
-      </div>
+    <div className="space-y-6">
       {loading ? (
-        <div className="space-y-2 pt-4">
+        <div className="space-y-2">
           <TargetRowSkeleton />
           <TargetRowSkeleton />
         </div>
       ) : targets.length === 0 ? (
-        <div className="space-y-3 pt-4">
-          <div className="rounded-md border border-dashed border-border/70 bg-foreground/5 p-4">
-            <div className="text-sm font-medium text-foreground">{COMPUTE_COPY.emptyTitle}</div>
-            <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              {COMPUTE_COPY.emptyDescription}
-            </p>
-          </div>
-          <Button type="button" variant="outline" onClick={onAddSshTarget}>
-            {COMPUTE_COPY.addSshTarget}
-          </Button>
-        </div>
+        <SettingsEmptyState
+          size="compact"
+          title={COMPUTE_COPY.emptyTitle}
+          description={COMPUTE_COPY.emptyDescription}
+          action={(
+            <Button type="button" variant="secondary" onClick={onAddSshTarget}>
+              {COMPUTE_COPY.addSshTarget}
+            </Button>
+          )}
+        />
       ) : (
-        <div className="space-y-4 pt-4">
+        <div className="space-y-6">
           {targetGroups.map((group) => (
             <TargetGroup
               key={group.id}
@@ -194,6 +171,3 @@ function TargetRowSkeleton() {
   );
 }
 
-function targetCountLabel(count: number) {
-  return count === 1 ? "1 target" : `${count} targets`;
-}
