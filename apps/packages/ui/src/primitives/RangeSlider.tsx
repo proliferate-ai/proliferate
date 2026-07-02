@@ -1,5 +1,5 @@
 import { forwardRef, type InputHTMLAttributes } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 type RangeSliderProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 

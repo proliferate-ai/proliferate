@@ -109,6 +109,18 @@ for f in $TYPE_HITS; do
   fi
 done
 
+# tailwind-merge must be imported via the configured wrapper: the stock config
+# classifies our custom text-* size tokens as COLORS and silently deletes them
+# on merge. Only the wrapper module itself may import the library.
+TW_MERGE_MODULE="../packages/ui/src/utils/tw-merge.ts"
+RAW_TW_HITS=$(grep -rln 'from "tailwind-merge"' "${TYPE_ROOTS[@]}" 2>/dev/null || true)
+for f in $RAW_TW_HITS; do
+  if [[ "$f" != "$TW_MERGE_MODULE" ]]; then
+    echo "FAIL [raw tailwind-merge import — use @proliferate/ui/utils/tw-merge]: $f"
+    FAIL=1
+  fi
+done
+
 if [[ $FAIL -eq 1 ]]; then
   echo
   echo "Design-system check failed. Spell type through the semantic tokens"

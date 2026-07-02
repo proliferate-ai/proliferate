@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";

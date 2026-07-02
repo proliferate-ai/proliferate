@@ -1,5 +1,5 @@
 import { forwardRef, type TextareaHTMLAttributes } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 type TextareaVariant = "default" | "ghost" | "code";
 type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;

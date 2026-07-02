@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { TEXT_SIZE_TOKEN_IDS, twMerge } from "@proliferate/ui/utils/tw-merge";
 import { DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES } from "./appearance";
 
 /**
@@ -92,5 +93,24 @@ describe("design-package @theme --text-* tokens", () => {
       Object.assign(merged, tokens);
     }
     expect(merged).toEqual(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES);
+  });
+
+  it("registers every custom size token with the configured twMerge (or merges drop it)", () => {
+    // tailwind-merge classifies unknown text-* classes as colors and deletes
+    // them on conflict; every custom font-size token must be in the shared
+    // config's list. Stock Tailwind sizes (xs/sm/base/lg/xl) are known to
+    // tailwind-merge already and are exempt.
+    const stockSizes = new Set(["xs", "sm", "base", "lg", "xl"]);
+    const customIds = Object.keys(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES)
+      .filter((name) => !name.endsWith("--line-height"))
+      .map((name) => name.replace(/^--text-/, ""))
+      .filter((id) => !stockSizes.has(id));
+    for (const id of customIds) {
+      expect(TEXT_SIZE_TOKEN_IDS).toContain(id);
+    }
+    // and the merge must actually preserve them against a color conflict
+    for (const id of customIds) {
+      expect(twMerge(`text-${id} text-muted-foreground`)).toBe(`text-${id} text-muted-foreground`);
+    }
   });
 });

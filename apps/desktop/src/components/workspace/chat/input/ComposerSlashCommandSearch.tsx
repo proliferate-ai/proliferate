@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Keyboard } from "@proliferate/ui/icons";
 import type {

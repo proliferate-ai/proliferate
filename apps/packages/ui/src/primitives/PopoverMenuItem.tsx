@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 export type PopoverMenuItemVariant = "default" | "sidebar";
 export type PopoverMenuItemDensity = "default" | "compact";

@@ -1,5 +1,5 @@
 import { forwardRef, type HTMLAttributes } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 export type BadgeTone = "neutral" | "accent" | "success" | "info" | "warning" | "destructive";
 

@@ -1,6 +1,6 @@
 import { Check, ListFilter, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 import { ProductNotice } from "../layout/ProductNotice";
 import { ProductPageShell } from "../layout/ProductPageShell";
