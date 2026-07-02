@@ -8,6 +8,7 @@ ORM stack.
 
 from __future__ import annotations
 
+import logging
 from typing import Protocol
 from uuid import UUID
 
@@ -17,8 +18,11 @@ from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.crypto import decrypt_text
+
+logger = logging.getLogger(__name__)
 
 
 class _UserWithId(Protocol):
@@ -75,6 +79,17 @@ async def destroy_cloud_sandbox(
     # Retire the sandbox's worker + gateway token so a destroyed sandbox can
     # never keep authenticating back to Cloud.
     await runtime_workers_store.revoke_active_workers_for_identity(db, cloud_sandbox_id=sandbox.id)
+    if sandbox.e2b_sandbox_id:
+        provider = get_sandbox_provider(sandbox.e2b_template_ref)
+        try:
+            await provider.destroy_sandbox(sandbox.e2b_sandbox_id)
+        except Exception:
+            logger.warning(
+                "cloud sandbox provider destroy failed sandbox_id=%s e2b_sandbox_id=%s",
+                sandbox.id,
+                sandbox.e2b_sandbox_id,
+                exc_info=True,
+            )
     return await sandbox_store.mark_cloud_sandbox_destroyed(db, sandbox.id)
 
 
