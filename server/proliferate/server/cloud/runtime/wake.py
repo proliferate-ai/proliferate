@@ -314,7 +314,7 @@ async def _resume_target_runtime_environment(
             "command_id": str(command_id) if command_id is not None else None,
             "runtime_environment_id": str(environment.id),
             "workspace_id": str(wake_workspace_id),
-            "runtime_url": runtime_url,
+            "runtime_url_present": bool(runtime_url),
             "force_launcher_restart": force_launcher_restart,
         },
     )
