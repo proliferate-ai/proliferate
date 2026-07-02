@@ -19,8 +19,13 @@ router = APIRouter(prefix="/password", tags=["auth"])
 
 
 class PasswordRegisterRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     email: str = Field(max_length=PASSWORD_EMAIL_MAX_LENGTH)
     password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+    # Proof of invitation: the invitation id from the inviting admin. Looked up
+    # by token (never by email) with a uniform 403 for anything invalid.
+    invitation_token: str = Field(alias="invitationToken", max_length=128)
 
 
 class PasswordRegisterResponse(BaseModel):
@@ -44,6 +49,7 @@ async def register_with_password(
         db,
         email=body.email,
         password=body.password,
+        invitation_token=body.invitation_token,
     )
     return PasswordRegisterResponse(
         email=registration.email,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -35,6 +36,14 @@ REGISTER_PATH = "/auth/password/register"
 
 def _factory(test_engine):
     return async_sessionmaker(test_engine, expire_on_commit=False)
+
+
+def _payload(*, email=INVITED_EMAIL, password=PASSWORD, invitation_token=None):
+    return {
+        "email": email,
+        "password": password,
+        "invitationToken": invitation_token if invitation_token is not None else str(uuid4()),
+    }
 
 
 @pytest_asyncio.fixture
@@ -101,24 +110,33 @@ async def _count_users(test_engine) -> int:
 
 
 async def test_registration_route_does_not_exist_in_hosted_mode(client):
-    response = await client.post(
-        REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": PASSWORD},
-    )
+    response = await client.post(REGISTER_PATH, json=_payload())
     assert response.status_code == 404
 
 
 async def test_registration_closed_before_first_run_claim(single_org_client, test_engine):
-    response = await single_org_client.post(
-        REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": PASSWORD},
-    )
+    response = await single_org_client.post(REGISTER_PATH, json=_payload())
     assert response.status_code == 403
     assert await _count_users(test_engine) == 0
 
 
+async def test_registration_respects_password_auth_kill_switch(
+    single_org_client, test_engine, monkeypatch
+):
+    _, organization_id = await _claim_instance(test_engine)
+    invitation_id = await _invite(test_engine, organization_id)
+    monkeypatch.setattr(settings, "password_auth_enabled", False)
+
+    response = await single_org_client.post(
+        REGISTER_PATH,
+        json=_payload(invitation_token=str(invitation_id)),
+    )
+    assert response.status_code == 404
+    assert await _count_users(test_engine) == 1  # only the owner
+
+
 # ---------------------------------------------------------------------------
-# The allowlist
+# The invitation token is the proof of invitation
 # ---------------------------------------------------------------------------
 
 
@@ -128,7 +146,7 @@ async def test_invited_email_registers_into_instance_org(single_org_client, test
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": PASSWORD},
+        json=_payload(invitation_token=str(invitation_id)),
     )
     assert response.status_code == 201
     payload = response.json()
@@ -157,16 +175,59 @@ async def test_invited_email_registers_into_instance_org(single_org_client, test
         assert invitation.accepted_by_user_id == user.id
 
 
-async def test_non_invited_email_gets_403(single_org_client, test_engine):
-    await _claim_instance(test_engine)
+async def test_registration_requires_invitation_token(single_org_client, test_engine):
+    _, organization_id = await _claim_instance(test_engine)
+    await _invite(test_engine, organization_id)
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": "stranger@example.com", "password": PASSWORD},
+        json={"email": INVITED_EMAIL, "password": PASSWORD},
+    )
+    assert response.status_code == 422
+    assert await _count_users(test_engine) == 1
+
+
+async def test_unknown_token_gets_uniform_403_even_for_invited_email(
+    single_org_client, test_engine
+):
+    """Knowing an invited email is not enough: a wrong token gets the same
+    response as an uninvited email, so nothing enumerates the allowlist."""
+    _, organization_id = await _claim_instance(test_engine)
+    await _invite(test_engine, organization_id)
+
+    invited_wrong_token = await single_org_client.post(
+        REGISTER_PATH,
+        json=_payload(invitation_token=str(uuid4())),
+    )
+    uninvited = await single_org_client.post(
+        REGISTER_PATH,
+        json=_payload(email="stranger@example.com", invitation_token=str(uuid4())),
+    )
+    malformed = await single_org_client.post(
+        REGISTER_PATH,
+        json=_payload(invitation_token="not-a-token"),
+    )
+
+    for response in (invited_wrong_token, uninvited, malformed):
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "registration_not_invited"
+    # Byte-identical bodies: nothing distinguishes the three cases.
+    assert invited_wrong_token.json() == uninvited.json() == malformed.json()
+    assert await _count_users(test_engine) == 1
+
+
+async def test_token_email_mismatch_gets_uniform_403(single_org_client, test_engine):
+    """A valid token cannot register a different email than it was issued for."""
+    _, organization_id = await _claim_instance(test_engine)
+    invitation_id = await _invite(test_engine, organization_id)
+
+    response = await single_org_client.post(
+        REGISTER_PATH,
+        json=_payload(email="somebody-else@example.com", invitation_token=str(invitation_id)),
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "registration_not_invited"
-    assert await _count_users(test_engine) == 1  # only the owner
+    assert await _count_users(test_engine) == 1
 
 
 async def test_revoked_invitation_cannot_register(single_org_client, test_engine):
@@ -182,7 +243,7 @@ async def test_revoked_invitation_cannot_register(single_org_client, test_engine
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": PASSWORD},
+        json=_payload(invitation_token=str(invitation_id)),
     )
     assert response.status_code == 403
     assert await _count_users(test_engine) == 1
@@ -190,11 +251,11 @@ async def test_revoked_invitation_cannot_register(single_org_client, test_engine
 
 async def test_existing_account_registration_conflicts(single_org_client, test_engine):
     _, organization_id = await _claim_instance(test_engine)
-    await _invite(test_engine, organization_id, email=OWNER_EMAIL)
+    invitation_id = await _invite(test_engine, organization_id, email=OWNER_EMAIL)
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": OWNER_EMAIL, "password": PASSWORD},
+        json=_payload(email=OWNER_EMAIL, invitation_token=str(invitation_id)),
     )
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "account_already_exists"
@@ -202,11 +263,11 @@ async def test_existing_account_registration_conflicts(single_org_client, test_e
 
 async def test_registration_validates_password(single_org_client, test_engine):
     _, organization_id = await _claim_instance(test_engine)
-    await _invite(test_engine, organization_id)
+    invitation_id = await _invite(test_engine, organization_id)
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": "short"},
+        json=_payload(password="short", invitation_token=str(invitation_id)),
     )
     assert response.status_code == 400
     assert await _count_users(test_engine) == 1
@@ -220,12 +281,12 @@ async def test_registration_validates_password(single_org_client, test_engine):
 async def test_domain_gate_blocks_other_domains(single_org_client, test_engine, monkeypatch):
     _, organization_id = await _claim_instance(test_engine)
     outsider = "contractor@outsider.org"
-    await _invite(test_engine, organization_id, email=outsider)
+    invitation_id = await _invite(test_engine, organization_id, email=outsider)
     monkeypatch.setattr(settings, "allowed_email_domains", "example.com")
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": outsider, "password": PASSWORD},
+        json=_payload(email=outsider, invitation_token=str(invitation_id)),
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "registration_domain_not_allowed"
@@ -234,12 +295,12 @@ async def test_domain_gate_blocks_other_domains(single_org_client, test_engine, 
 
 async def test_domain_gate_admits_listed_domains(single_org_client, test_engine, monkeypatch):
     _, organization_id = await _claim_instance(test_engine)
-    await _invite(test_engine, organization_id)
+    invitation_id = await _invite(test_engine, organization_id)
     monkeypatch.setattr(settings, "allowed_email_domains", "example.com, extra.example")
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": PASSWORD},
+        json=_payload(invitation_token=str(invitation_id)),
     )
     assert response.status_code == 201
 
@@ -251,7 +312,7 @@ async def test_domain_gate_is_not_a_grant(single_org_client, test_engine, monkey
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": "uninvited@example.com", "password": PASSWORD},
+        json=_payload(email="uninvited@example.com"),
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "registration_not_invited"
@@ -264,7 +325,8 @@ async def test_domain_gate_is_not_a_grant(single_org_client, test_engine, monkey
 
 async def test_password_owner_invites_and_invitee_registers(single_org_client, test_engine):
     """The whole self-host loop: password-only owner invites via the API and
-    the invitee self-registers; both end up in the one instance org."""
+    the invitee self-registers with the invitation token; both end up in the
+    one instance org."""
     owner_id, organization_id = await _claim_instance(test_engine)
     async with _factory(test_engine)() as session:
         await update_user_password_hash(
@@ -289,10 +351,12 @@ async def test_password_owner_invites_and_invitee_registers(single_org_client, t
         headers={"Authorization": f"Bearer {token}"},
     )
     assert invite.status_code == 201
+    # The invitation id doubles as the registration token the admin shares.
+    invitation_token = invite.json()["id"]
 
     register = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": PASSWORD},
+        json=_payload(invitation_token=invitation_token),
     )
     assert register.status_code == 201
 
@@ -306,20 +370,42 @@ async def test_password_owner_invites_and_invitee_registers(single_org_client, t
 
 
 # ---------------------------------------------------------------------------
-# ADMIN_EMAILS floor at registration
+# Roles at registration: invited role, ADMIN_EMAILS floor
 # ---------------------------------------------------------------------------
+
+
+async def test_invited_admin_role_is_honored(single_org_client, test_engine):
+    _, organization_id = await _claim_instance(test_engine)
+    invitation_id = await _invite(test_engine, organization_id, role=ORGANIZATION_ROLE_ADMIN)
+
+    response = await single_org_client.post(
+        REGISTER_PATH,
+        json=_payload(invitation_token=str(invitation_id)),
+    )
+    assert response.status_code == 201
+
+    async with _factory(test_engine)() as session:
+        user = (
+            await session.execute(select(User).where(User.email == INVITED_EMAIL))
+        ).scalar_one()
+        membership = (
+            await session.execute(
+                select(OrganizationMembership).where(OrganizationMembership.user_id == user.id)
+            )
+        ).scalar_one()
+        assert membership.role == ORGANIZATION_ROLE_ADMIN
 
 
 async def test_admin_listed_registrant_starts_as_admin(
     single_org_client, test_engine, monkeypatch
 ):
     _, organization_id = await _claim_instance(test_engine)
-    await _invite(test_engine, organization_id)
+    invitation_id = await _invite(test_engine, organization_id)
     monkeypatch.setattr(settings, "admin_emails", INVITED_EMAIL)
 
     response = await single_org_client.post(
         REGISTER_PATH,
-        json={"email": INVITED_EMAIL, "password": PASSWORD},
+        json=_payload(invitation_token=str(invitation_id)),
     )
     assert response.status_code == 201
 

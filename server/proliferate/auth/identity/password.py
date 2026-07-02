@@ -82,7 +82,12 @@ def _trusted_proxy_entries() -> set[str]:
     }
 
 
-def _ensure_password_auth_enabled() -> None:
+def ensure_password_auth_enabled() -> None:
+    """Enforce the password-auth kill switch on every password surface.
+
+    Covers login, credential management, and account registration: when the
+    operator disables password auth, no path may verify or create a password.
+    """
     if not settings.password_auth_enabled:
         raise HTTPException(status_code=404, detail="Email sign-in is not enabled.")
 
@@ -143,7 +148,7 @@ async def authenticate_password_user(
     Surface transports (web, mobile, desktop) wrap this and mint their own
     session shapes.
     """
-    _ensure_password_auth_enabled()
+    ensure_password_auth_enabled()
     normalized_email = normalize_password_email(email)
     buckets = password_login_buckets(email=normalized_email, client_ip=client_ip)
     now = datetime.now(UTC)
@@ -186,7 +191,7 @@ async def set_password_credential(
     current_password: str | None,
     new_password: str,
 ) -> PasswordCredentialResponse:
-    _ensure_password_auth_enabled()
+    ensure_password_auth_enabled()
     if user.password_set_at is not None:
         if not current_password:
             raise HTTPException(status_code=400, detail="Current password is required.")
