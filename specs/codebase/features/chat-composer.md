@@ -1,11 +1,17 @@
 # Chat Composer Standards
 
-Status: authoritative for the chat composer area (`apps/desktop/src/components/workspace/chat/input/**`, the panels above the input, and the Claude plan card in the transcript).
+Status: authoritative for the chat composer area (`apps/desktop/src/components/workspace/chat/input/**`, the panels above the input, and the Claude plan card in the transcript). Owner rev 2026-07-02.
 
 Scope:
 
 - `apps/desktop/src/components/workspace/chat/input/**`
-- `apps/desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
+- `apps/packages/product-ui/src/chat/composer/**` — the shared composer surface
+  pieces live here, not in Desktop: `ChatComposerSurface`,
+  `ChatComposerControlRowFrame`, `ComposerPopoverSurface`.
+- `apps/packages/product-ui/src/chat/transcript/ProposedPlanCard.tsx` — the
+  desktop file at
+  `apps/desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
+  is a re-export only.
 - `apps/desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
 - `apps/desktop/src/components/workspace/chat/plans/**`
 - `apps/desktop/src/components/workspace/reviews/**`
@@ -49,9 +55,17 @@ ChatView
         └── WorkspaceMobilityFooterRow
 ```
 
+The home screen reuses the same composer: `HomeComposerForm`
+(`apps/desktop/src/components/home/screen/HomeComposerForm.tsx`) renders the
+same `ChatComposerSurface` + `ChatComposerControlRowFrame` from
+`@proliferate/product-ui`, with slot-based render isolation (controls, trailing
+controls, and actions are passed in as stable slot elements so keystrokes only
+re-render the composer subtree).
+
 Non-negotiable:
 
 - **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, slot ordering, and the inset region wrappers all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
+- **No `backdrop-blur` on the dock's transcript-covering layer.** That layer sits over the scrolling transcript, and backdrop blur forces WKWebView to re-blur everything behind it on every frame. The implementation is a gradient fade into an opaque-ish `bg-background/95` sheet (`ChatComposerDock.tsx`), not a blur.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **Do not add in-composer read-only status badges.** MCP/plugin state belongs in settings, session details, or explicit action surfaces, not as a persistent strip inside `ChatInput`.
 - **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Dock-region panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the dock regions so its own top outline remains visible at the seam.
@@ -238,9 +252,11 @@ Borrowed directly from `references/codex_todo.html` and `references/codex_plan.h
 `ChatComposerDock` wraps dock panes in one shared inset width (`px-5`) so queue,
 active state, and attached context read as one dock. Slots have no bottom margin
 and no positive z-index: `ComposerAttachedPanel` is an attached cap above the
-composer, using `rounded-t-2xl border-x border-t border-border/70 bg-card/70`,
-while the composer surface paints after the dock panes so the input's top
-outline remains visible at the seam. When several trays stack, only the top
+composer, using `rounded-t-[13px] border-x-[0.5px] border-t-[0.5px]
+border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]
+backdrop-blur-sm` (the Superset tray shell: 13px top radius, 0.5px hairlines, a
+2% foreground tint on the background), while the composer surface paints after
+the dock panes so the input's top outline remains visible at the seam. When several trays stack, only the top
 visible tray keeps top rounding; inner trays flatten into a hairline seam. Do
 not add a `flatTop` mode, a detached gap, a full-perimeter dock card, a width
 staircase, a separate color per slot, or a `z-*` layer that lets a dock pane
@@ -258,9 +274,19 @@ At most **one** visual element in a header's leading position:
 
 Do **not** stack icon + uppercase label + `·` separator + title. That was the pre-cleanup pattern and it read as noise. If you find yourself adding a second leading element, stop and pick one.
 
-### 4.3 Button sizing is uniform in ApprovalCard
+### 4.3 Approval options are Superset-style rows, not buttons
 
-All approval action buttons use `size="sm"` with `className="rounded-xl px-2.5 text-sm"`. Both branches (explicit-actions and fallback allow/deny) use the same constant (`APPROVAL_BUTTON_CLASSNAME`). Do not diverge the two rows, and do not use `!important` modifiers — the `Button` primitive uses `tailwind-merge` so plain className overrides win.
+`APPROVAL_BUTTON_CLASSNAME` is gone. Approval options render as full-width
+`ComposerOptionRow` rows (`apps/desktop/src/components/workspace/chat/input/ComposerOptionRow.tsx`):
+hairline `border-t border-border/60` separators, a leading number-key badge
+(`ComposerOptionKeyBadge` — 24px square, 3px radius, `bg-surface-control`,
+mono), and a hover accent fill that promotes the label from muted to
+foreground. `useComposerOptionNumberKeys` makes pressing 1–9 select the
+corresponding option (skipped while typing in an input/textarea/contenteditable).
+Destructive options (deny/reject/cancel) render their label in
+`text-destructive`. Both branches (explicit actions and the fallback
+Allow/Deny pair) go through the same row component — do not reintroduce a
+button row.
 
 ### 4.4 Todo tracker specifics
 
@@ -275,14 +301,56 @@ Do **not** grow the scroll cap past `max-h-40` — the Codex reference is exactl
 
 ### 4.5 ProposedPlanCard specifics
 
-- Shell: `rounded-lg bg-foreground/5` (borderless, very subtle tint — no outline).
-- Header: bold plan title + optional decision state + `Button size="icon-sm"` Copy + `Button size="icon-sm"` Collapse.
-- Body expanded: plain markdown at `px-4 py-3`.
-- Body collapsed: `max-height: min(20rem, 45vh)` with a bottom-only `mask-image` fade + a floating `Button size="pill" variant="inverted"` "Expand plan" pill centered near the bottom.
+- `ProposedPlanCard` (product-ui `chat/transcript`) is built on
+  `CollapsiblePlanCard`, which owns the shell and collapse behavior.
+- Shell: `rounded-md border border-border/70 bg-card/85 shadow-sm`.
+- Header: bold plan title + optional decision state + icon-only Copy/Collapse
+  buttons.
+- Body expanded: plain markdown.
+- Body collapsed: capped height with a bottom-only `mask-image` fade + a
+  floating expand pill labeled "Expand plan summary" centered near the bottom.
+- Approve copy: "Approve and continue" when the plan is a native continuation
+  (the harness resumes implementation in-session after approval), "Approve
+  plan" otherwise.
 - Pending decision actions render in the transcript card, not in the composer
   interaction slot. Generic linked permission interactions are suppressed from
   `ConnectedApprovalCard`.
 - Default: expanded. Collapse is via the header chevron.
+
+### 4.6 Composer surface + control-row tone (owner rev 2026-07-02)
+
+Control-row tone rule — the pills are **monochrome**:
+
+- Every control pill is a `ComposerControlButton`
+  (`apps/packages/ui/src/primitives/ComposerControlButton.tsx`). It has no
+  `tone` prop; the tone system was deleted 2026-07-02 along with the plan-mode
+  tint (`--color-plan-border` is gone). Do **not** reintroduce mode-based
+  tinting on the mode pill or any other control.
+- Hierarchy is two-tone value-vs-affordance, not color: the pill's *value*
+  (active state or `emphasizeLabel`) renders in
+  `--color-composer-control-active-foreground` (bright), while icons, details,
+  and idle affordances stay in `--color-composer-control-foreground` /
+  `--color-composer-control-muted-foreground` (dim).
+
+As-built composer surface — `ChatComposerSurface` (product-ui) tags itself with
+the `chat-composer-surface` class, whose paint lives in
+`apps/packages/design/src/css/dom.css`:
+
+- Background: `--color-composer-background`.
+- Outline: a 0.5px stroke-in-shadow (`0 0 0 0.5px var(--color-composer-border)`)
+  stacked with `--color-composer-shadow` (the desktop theme sets it to
+  `--shadow-composer`; the `dom.css` baseline is `--shadow-subtle`) — there is
+  no CSS `border`.
+- Radius: `rounded-[var(--radius-composer,1rem)]`; `--radius-composer` is 1rem.
+
+Placeholder variants — strings live in
+`apps/desktop/src/copy/chat/chat-copy.ts` (`CHAT_COMPOSER_LABELS`):
+
+- "Describe a task" — the home composer and any chat whose transcript has no
+  turns yet.
+- "Ask for a follow-up" — once the session transcript has turns. The signal is
+  `ChatView`'s surface mode (`session-transcript`), threaded into `ChatInput`
+  as the optional `hasSessionTurns` prop; no store or query is involved.
 
 ## 5. No raw primitives, no inline SVGs
 
@@ -296,7 +364,7 @@ Rules that apply everywhere in `apps/desktop/src/**` but are easy to violate in 
 
 These are patterns that were tried and rejected. Reintroducing them reopens known problems:
 
-- **Detached dock-region cards (`rounded-2xl border` plus a dock gap).** Panels above the composer are attached trays, not separate floating cards. Keep `ComposerAttachedPanel` on the `rounded-t-2xl border-x border-t` shell and keep dock-region wrappers gapless.
+- **Detached dock-region cards (`rounded-2xl border` plus a dock gap).** Panels above the composer are attached trays, not separate floating cards. Keep `ComposerAttachedPanel` on the rounded-top hairline tray shell (§4.1) and keep dock-region wrappers gapless.
 - **Positive z-index on dock-region wrappers.** The composer must paint after attached trays so its top outline remains visible at the seam.
 - **Ad hoc `first:*` stacking rounded-corner tricks.** Dock-region order is explicit in `ChatComposerDock`; do not fake region-specific corner behavior with selector tricks.
 - **`flatTop` on `ChatComposerSurface`.** The prop was deleted. The composer surface keeps its normal styling. Panels above are attached trays, not a replacement shell for the composer.
