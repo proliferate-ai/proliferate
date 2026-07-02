@@ -117,9 +117,11 @@ cp .env.production.example .env.static
 ```
 
 To verify the download first, fetch `self-hosted-assets.SHA256SUMS` from the
-same release and run `sha256sum -c` against it before extracting. Working from
-a monorepo checkout instead? `server/deploy/` is the same directory; run the
-steps below from there.
+same release and run `sha256sum -c --ignore-missing` against it before
+extracting. The sums file also covers the runtime binaries and the AWS
+template, so without `--ignore-missing` the check always fails on this
+bundle-only download. Working from a monorepo checkout instead?
+`server/deploy/` is the same directory; run the steps below from there.
 
 4. Fill in the required values in `.env.static`:
    - `SITE_ADDRESS`
