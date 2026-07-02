@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.db import engine as engine_module
 from proliferate.db.models.billing import UsageSegment
-from proliferate.db.models.cloud.sandboxes import CloudSandbox
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 
 
@@ -34,42 +32,16 @@ async def seed_usage_segment(
 ) -> tuple[uuid.UUID, UsageSegment]:
     subject = await ensure_personal_billing_subject(db_session, user_id)
     now = datetime.now(UTC)
-    workspace = CloudWorkspace(
-        user_id=user_id,
-        billing_subject_id=subject.id,
-        display_name="acme/rocket",
-        git_provider="github",
-        git_owner="acme",
-        git_repo_name="rocket",
-        git_branch="main",
-        git_base_branch="main",
-        status="running" if not ended else "stopped",
-        status_detail="Running" if not ended else "Stopped",
-        last_error=None,
-        template_version="v1",
-        runtime_generation=1,
-    )
-    db_session.add(workspace)
-    await db_session.flush()
-
-    sandbox = CloudSandbox(
-        provider="e2b",
-        external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
-        status="running" if not ended else "paused",
-        template_version="v1",
-        started_at=now - timedelta(hours=hours),
-        stopped_at=now if ended else None,
-    )
-    db_session.add(sandbox)
-    await db_session.flush()
-    workspace.active_sandbox_id = sandbox.id
-
+    # Usage accounting only reads usage_segment rows (workspace_id/sandbox_id
+    # are plain UUID columns without foreign keys), so seed synthetic ids
+    # instead of CloudWorkspace/CloudSandbox rows. The old workspace/sandbox
+    # seeding relied on model fields removed by the #803/#809 cutover.
     segment = UsageSegment(
         user_id=user_id,
         billing_subject_id=subject.id,
-        workspace_id=workspace.id,
-        sandbox_id=sandbox.id,
-        external_sandbox_id=sandbox.external_sandbox_id,
+        workspace_id=uuid.uuid4(),
+        sandbox_id=uuid.uuid4(),
+        external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
         sandbox_execution_id=None,
         started_at=now - timedelta(hours=hours),
         ended_at=now if ended else None,

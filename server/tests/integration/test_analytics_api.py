@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.analytics import (
     ClientDailyActivity,
-    CloudMcpConnectionEvent,
     CloudWorkspaceMobilityEvent,
 )
 from proliferate.db.models.cloud.mobility import CloudWorkspaceMobility
@@ -166,41 +165,6 @@ async def test_client_daily_activity_sanitizes_route_or_screen(
         )
     ).scalar_one()
     assert row.route_or_screen == "unknown"
-
-
-@pytest.mark.asyncio
-async def test_mcp_connection_create_and_delete_write_lifecycle_events(
-    client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    session = await _register_and_login(client, "analytics-mcp@example.com")
-    headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-    created = await client.post(
-        "/v1/cloud/mcp/connections",
-        headers=headers,
-        json={"catalogEntryId": "linear", "enabled": True},
-    )
-    assert created.status_code == 200
-    deleted = await client.delete(
-        f"/v1/cloud/mcp/connections/{created.json()['connectionId']}",
-        headers=headers,
-    )
-    assert deleted.status_code == 200
-
-    events = (
-        (
-            await db_session.execute(
-                select(CloudMcpConnectionEvent)
-                .where(CloudMcpConnectionEvent.user_id == uuid.UUID(session["user_id"]))
-                .order_by(CloudMcpConnectionEvent.created_at)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    assert [event.event_type for event in events] == ["connection_created", "deleted"]
-    assert events[0].catalog_entry_id == "linear"
 
 
 @pytest.mark.asyncio

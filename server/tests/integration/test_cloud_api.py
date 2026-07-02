@@ -543,6 +543,14 @@ class TestCloudRepoBranches:
         session = await _register_and_login(client, "cloud-branches@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        # /v1/cloud/repos/* requires GitHub App authorization since the #809
+        # cutover (ensure_fresh_github_app_authorization).
+        await _seed_github_app_repo_authority(
+            db_session,
+            monkeypatch,
+            user_id=session["user_id"],
+            git_owner="acme",
+        )
 
         response = await client.get(
             "/v1/cloud/repos/acme/rocket/branches",

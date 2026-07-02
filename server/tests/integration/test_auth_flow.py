@@ -265,13 +265,8 @@ class TestPasswordAuthFlow:
         assert protected.status_code == 403
         assert protected.json()["detail"]["code"] == "github_link_required"
 
-        sandbox_profile = await client.post(
-            "/v1/cloud/sandbox-profiles/personal",
-            headers={"Authorization": f"Bearer {payload['accessToken']}"},
-        )
-        assert sandbox_profile.status_code == 403
-        assert sandbox_profile.json()["detail"]["code"] == "github_link_required"
-
+        # /v1/cloud/sandbox-profiles/* was removed from the cloud API by the
+        # #803/#809 cutover; re-add coverage when the router is remounted.
         ai_magic = await client.post(
             "/v1/ai_magic/session-titles/generate",
             headers={"Authorization": f"Bearer {payload['accessToken']}"},

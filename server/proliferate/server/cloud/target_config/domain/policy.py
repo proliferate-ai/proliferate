@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from proliferate.db.store.cloud_sync.targets import CloudTargetSnapshot
+
 from proliferate.server.cloud.errors import CloudApiError
 
 
