@@ -7739,6 +7739,7 @@ export interface operations {
         parameters: {
             query?: {
                 targetId?: string | null;
+                scope?: "all" | null;
             };
             header?: never;
             path?: never;

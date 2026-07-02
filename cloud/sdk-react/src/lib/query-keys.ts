@@ -34,6 +34,11 @@ export function agentRouteSelectionsKey(targetId: string | null = null) {
   return [...agentRouteSelectionsRootKey(), targetId] as const;
 }
 
+/** The scope=all listing (defaults + every target's overrides). */
+export function agentRouteSelectionsAllKey() {
+  return [...agentRouteSelectionsRootKey(), "all-scopes"] as const;
+}
+
 export function agentAuthStateRootKey() {
   return [...agentGatewayRootKey(), "state"] as const;
 }

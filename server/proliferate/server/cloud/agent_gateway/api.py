@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -104,15 +105,25 @@ async def revoke_agent_api_key_endpoint(
 @router.get("/route-selections", response_model=AgentAuthRouteSelectionListResponse)
 async def list_agent_route_selections_endpoint(
     target_id: str | None = Query(None, alias="targetId"),
+    scope: Literal["all"] | None = Query(None),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentAuthRouteSelectionListResponse:
     try:
-        records = await service.list_route_selections(
-            db,
-            user_id=user.id,
-            target_id=_parse_target_id(target_id),
-        )
+        if scope == "all":
+            if target_id is not None:
+                raise CloudApiError(
+                    "invalid_cloud_target_scope",
+                    "targetId cannot be combined with scope=all.",
+                    status_code=400,
+                )
+            records = await service.list_all_route_selections(db, user_id=user.id)
+        else:
+            records = await service.list_route_selections(
+                db,
+                user_id=user.id,
+                target_id=_parse_target_id(target_id),
+            )
     except CloudApiError as error:
         raise_cloud_error(error)
     return AgentAuthRouteSelectionListResponse(

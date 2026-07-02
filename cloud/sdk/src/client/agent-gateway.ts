@@ -75,6 +75,21 @@ export async function listAgentRouteSelections(
   });
 }
 
+/**
+ * Every scope's selections in one list: the default rows plus each enrolled
+ * runtime's override rows (disambiguated by `targetId`). For consumers that
+ * reason across scopes, e.g. API-key usage summaries.
+ */
+export async function listAllAgentRouteSelections(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AgentAuthRouteSelectionListResponse> {
+  return client.requestJson<AgentAuthRouteSelectionListResponse>({
+    method: "GET",
+    path: "/v1/cloud/agent-gateway/route-selections",
+    query: { scope: "all" },
+  });
+}
+
 export async function upsertAgentRouteSelection(
   harnessKind: string,
   surface: string,

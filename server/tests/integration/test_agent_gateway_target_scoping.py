@@ -115,6 +115,62 @@ class TestTargetSelectionCrud:
         assert [entry["targetId"] for entry in remaining.json()["selections"]] == [None]
 
     @pytest.mark.asyncio
+    async def test_scope_all_lists_defaults_and_every_target_override(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        user_id, headers = await _authed_user(client)
+        target_a = await _create_target(db_session, owner_user_id=user_id)
+        target_b = await _create_target(db_session, owner_user_id=user_id)
+
+        default = await client.put(
+            f"{_SELECTIONS}/claude/local",
+            headers=headers,
+            json={"route": "native"},
+        )
+        assert default.status_code == 200, default.text
+        for target_id in (target_a, target_b):
+            override = await client.put(
+                f"{_SELECTIONS}/claude/local",
+                headers=headers,
+                params={"targetId": target_id},
+                json={"route": "native"},
+            )
+            assert override.status_code == 200, override.text
+
+        listed = await client.get(_SELECTIONS, headers=headers, params={"scope": "all"})
+        assert listed.status_code == 200, listed.text
+        assert sorted(
+            entry["targetId"] or "" for entry in listed.json()["selections"]
+        ) == sorted(["", target_a, target_b])
+
+        # Another user's scope=all view never includes this user's rows.
+        _, other_headers = await _authed_user(client)
+        foreign = await client.get(
+            _SELECTIONS, headers=other_headers, params={"scope": "all"}
+        )
+        assert foreign.status_code == 200
+        assert foreign.json()["selections"] == []
+
+    @pytest.mark.asyncio
+    async def test_scope_all_rejects_target_id(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        user_id, headers = await _authed_user(client)
+        target_id = await _create_target(db_session, owner_user_id=user_id)
+
+        response = await client.get(
+            _SELECTIONS,
+            headers=headers,
+            params={"scope": "all", "targetId": target_id},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_cloud_target_scope"
+
+    @pytest.mark.asyncio
     async def test_idempotent_target_upsert_keeps_revision(
         self,
         client: AsyncClient,

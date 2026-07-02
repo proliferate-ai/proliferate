@@ -2,9 +2,9 @@ import { useState, type FormEvent } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import {
   useAgentApiKeys,
+  useAllRouteSelections,
   useCreateAgentApiKey,
   useRevokeAgentApiKey,
-  useRouteSelections,
 } from "@proliferate/cloud-sdk-react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -35,7 +35,8 @@ export function ApiKeysPane() {
   const showToast = useToastStore((state) => state.show);
 
   const keysQuery = useAgentApiKeys(cloudActive);
-  const selectionsQuery = useRouteSelections(cloudActive);
+  // All scopes, so per-runtime override rows count as usages too.
+  const selectionsQuery = useAllRouteSelections(cloudActive);
   const createKey = useCreateAgentApiKey();
   const revokeKey = useRevokeAgentApiKey();
 

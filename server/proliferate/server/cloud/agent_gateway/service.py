@@ -152,6 +152,20 @@ async def list_route_selections(
     )
 
 
+async def list_all_route_selections(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[AgentAuthRouteSelectionRecord]:
+    """Every scope's rows — default rows plus each target's overrides.
+
+    Consumers that reason across scopes (e.g. "which selections reference
+    this API key?") need both layers; rows carry ``target_id`` to
+    disambiguate. Owner-scoped by ``user_id``, so no target gate applies.
+    """
+    return await agent_gateway_store.list_all_route_selections(db, user_id=user_id)
+
+
 async def upsert_route_selection(
     db: AsyncSession,
     *,

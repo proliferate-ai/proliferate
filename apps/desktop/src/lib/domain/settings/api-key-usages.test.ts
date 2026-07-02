@@ -69,6 +69,33 @@ describe("usagesForApiKey", () => {
     ]);
   });
 
+  it("counts per-runtime override rows and dedupes them against defaults", () => {
+    const selections = [
+      // Default row and two runtime overrides on the same route: one usage.
+      selection({ id: "sel-1", targetId: null }),
+      selection({ id: "sel-2", targetId: "t-1" }),
+      selection({ id: "sel-3", targetId: "t-2" }),
+      // Override-only reference (the default routes elsewhere) still counts.
+      selection({
+        id: "sel-4",
+        harnessKind: "codex",
+        targetId: "t-1",
+      }),
+      selection({
+        id: "sel-5",
+        harnessKind: "codex",
+        targetId: null,
+        route: "native",
+        apiKeyId: null,
+      }),
+    ];
+
+    expect(usagesForApiKey("key-1", selections)).toEqual([
+      { harnessKind: "claude", surface: "local", slot: "primary" },
+      { harnessKind: "codex", surface: "local", slot: "primary" },
+    ]);
+  });
+
   it("returns an empty list when nothing references the key", () => {
     expect(usagesForApiKey("key-1", [])).toEqual([]);
     expect(

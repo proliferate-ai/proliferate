@@ -28,13 +28,20 @@ export function usagesForApiKey(
   apiKeyId: string,
   selections: readonly AgentAuthRouteSelection[],
 ): ApiKeyUsage[] {
-  return selections
-    .filter((selection) => selection.route === "api_key" && selection.apiKeyId === apiKeyId)
-    .map(({ harnessKind, surface, slot }) => ({ harnessKind, surface, slot }))
-    .sort((a, b) =>
-      a.harnessKind.localeCompare(b.harnessKind)
-      || a.surface.localeCompare(b.surface)
-      || a.slot.localeCompare(b.slot));
+  const usages = new Map<string, ApiKeyUsage>();
+  for (const selection of selections) {
+    if (selection.route !== "api_key" || selection.apiKeyId !== apiKeyId) {
+      continue;
+    }
+    // Default rows and per-runtime override rows collapse to one usage per
+    // (harness, surface, slot): the label carries no target axis.
+    const { harnessKind, surface, slot } = selection;
+    usages.set(`${harnessKind} ${surface} ${slot}`, { harnessKind, surface, slot });
+  }
+  return [...usages.values()].sort((a, b) =>
+    a.harnessKind.localeCompare(b.harnessKind)
+    || a.surface.localeCompare(b.surface)
+    || a.slot.localeCompare(b.slot));
 }
 
 // "Claude (local)"; opencode composed slots carry the provider: "OpenCode (cloud, Anthropic)".

@@ -15,6 +15,7 @@ import {
   getAgentGatewayEnrollment,
   listAgentApiKeys,
   listAgentRouteSelections,
+  listAllAgentRouteSelections,
   refreshAgentCatalog,
   revokeAgentApiKey,
   upsertAgentCatalogOverride,
@@ -44,6 +45,7 @@ import {
   agentGatewayCatalogKey,
   agentGatewayCatalogRootKey,
   agentGatewayEnrollmentKey,
+  agentRouteSelectionsAllKey,
   agentRouteSelectionsKey,
   agentRouteSelectionsRootKey,
 } from "../lib/query-keys.js";
@@ -132,6 +134,20 @@ export function useRouteSelections(
   return useQuery<AgentAuthRouteSelectionListResponse>({
     queryKey: agentRouteSelectionsKey(targetId),
     queryFn: () => listAgentRouteSelections({ targetId }, client),
+    enabled,
+  });
+}
+
+/**
+ * Every scope's selections — the default rows plus each enrolled runtime's
+ * override rows (`targetId` set). For consumers that reason across scopes,
+ * e.g. which routes reference an API key.
+ */
+export function useAllRouteSelections(enabled = true) {
+  const client = useCloudClient();
+  return useQuery<AgentAuthRouteSelectionListResponse>({
+    queryKey: agentRouteSelectionsAllKey(),
+    queryFn: () => listAllAgentRouteSelections(client),
     enabled,
   });
 }
