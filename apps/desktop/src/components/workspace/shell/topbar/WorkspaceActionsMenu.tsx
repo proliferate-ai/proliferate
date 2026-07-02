@@ -76,7 +76,7 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           <MoreHorizontal className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="shadow-popover">
+      <DropdownMenuContent align="start">
         <DropdownMenuItem
           disabled={!session.canRename}
           onSelect={session.onRename}
