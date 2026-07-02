@@ -7,13 +7,15 @@ virtual-key fields exist on any model here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
     AgentAuthRouteSelectionRecord,
+    AgentCatalogOverrideRecord,
+    AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
 )
 
@@ -71,6 +73,40 @@ class AgentGatewayCapabilitiesResponse(AgentGatewayBaseModel):
     enrollment_status: str = Field(alias="enrollmentStatus")
 
 
+class AgentGatewayCatalogResponse(AgentGatewayBaseModel):
+    """Layered catalog: latest snapshot (owner else seed) + caller override."""
+
+    harness_kind: str = Field(alias="harnessKind")
+    surface: AgentAuthSurface
+    route: AgentAuthRoute
+    models: list[dict[str, Any]]
+    snapshot_id: str | None = Field(alias="snapshotId")
+    probed_at: str | None = Field(alias="probedAt")
+    source: str | None
+    override_applied: bool = Field(alias="overrideApplied")
+
+
+class AgentGatewayCatalogRefreshRequest(AgentGatewayBaseModel):
+    surface: AgentAuthSurface
+    route: AgentAuthRoute
+    # Local/native probes run on the client runtime (Desktop / AnyHarness);
+    # the client uploads the probe result here. Gateway refreshes are
+    # server-side and must omit it.
+    models_json: str | None = Field(default=None, alias="modelsJson")
+
+
+class AgentGatewayCatalogOverrideUpsertRequest(AgentGatewayBaseModel):
+    patch_json: str = Field(alias="patchJson")
+
+
+class AgentGatewayCatalogOverrideResponse(AgentGatewayBaseModel):
+    id: str
+    harness_kind: str = Field(alias="harnessKind")
+    patch_json: str = Field(alias="patchJson")
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+
+
 class AgentGatewayEnrollmentResponse(AgentGatewayBaseModel):
     id: str
     subject_kind: str = Field(alias="subjectKind")
@@ -107,6 +143,39 @@ def route_selection_payload(
         route=record.route,  # type: ignore[arg-type]
         api_key_id=str(record.api_key_id) if record.api_key_id is not None else None,
         revision=record.revision,
+        created_at=record.created_at.isoformat(),
+        updated_at=record.updated_at.isoformat(),
+    )
+
+
+def catalog_payload(
+    *,
+    harness_kind: str,
+    surface: AgentAuthSurface,
+    route: AgentAuthRoute,
+    models: list[dict[str, Any]],
+    snapshot: AgentCatalogSnapshotRecord | None,
+    override: AgentCatalogOverrideRecord | None,
+) -> AgentGatewayCatalogResponse:
+    return AgentGatewayCatalogResponse(
+        harness_kind=harness_kind,
+        surface=surface,
+        route=route,
+        models=models,
+        snapshot_id=str(snapshot.id) if snapshot is not None else None,
+        probed_at=snapshot.probed_at.isoformat() if snapshot is not None else None,
+        source=snapshot.source if snapshot is not None else None,
+        override_applied=override is not None,
+    )
+
+
+def catalog_override_payload(
+    record: AgentCatalogOverrideRecord,
+) -> AgentGatewayCatalogOverrideResponse:
+    return AgentGatewayCatalogOverrideResponse(
+        id=str(record.id),
+        harness_kind=record.harness_kind,
+        patch_json=record.patch_json,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
     )

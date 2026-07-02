@@ -1,26 +1,35 @@
-"""HTTP routes for agent gateway auth: key pool, route selections, capabilities."""
+"""HTTP routes for agent gateway auth: key pool, selections, catalog."""
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud.agent_gateway import catalog as catalog_service
 from proliferate.server.cloud.agent_gateway import service
 from proliferate.server.cloud.agent_gateway.models import (
     AgentApiKeyCreateRequest,
     AgentApiKeyListResponse,
     AgentApiKeyResponse,
+    AgentAuthRoute,
     AgentAuthRouteSelectionListResponse,
     AgentAuthRouteSelectionResponse,
     AgentAuthRouteSelectionUpsertRequest,
+    AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
+    AgentGatewayCatalogOverrideResponse,
+    AgentGatewayCatalogOverrideUpsertRequest,
+    AgentGatewayCatalogRefreshRequest,
+    AgentGatewayCatalogResponse,
     AgentGatewayEnrollmentResponse,
     api_key_payload,
+    catalog_override_payload,
+    catalog_payload,
     enrollment_payload,
     route_selection_payload,
 )
@@ -134,6 +143,94 @@ async def clear_agent_route_selection_endpoint(
             user_id=user.id,
             harness_kind=harness_kind,
             surface=surface,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.get("/catalog/{harness_kind}", response_model=AgentGatewayCatalogResponse)
+async def get_agent_catalog_endpoint(
+    harness_kind: str,
+    surface: AgentAuthSurface = Query(...),
+    route: AgentAuthRoute = Query("gateway"),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentGatewayCatalogResponse:
+    snapshot, override, models = await catalog_service.get_catalog(
+        db,
+        user_id=user.id,
+        harness_kind=harness_kind,
+        surface=surface,
+        route=route,
+    )
+    return catalog_payload(
+        harness_kind=harness_kind,
+        surface=surface,
+        route=route,
+        models=models,
+        snapshot=snapshot,
+        override=override,
+    )
+
+
+@router.post("/catalog/{harness_kind}/refresh", response_model=AgentGatewayCatalogResponse)
+async def refresh_agent_catalog_endpoint(
+    harness_kind: str,
+    body: AgentGatewayCatalogRefreshRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentGatewayCatalogResponse:
+    try:
+        snapshot, override, models = await catalog_service.refresh_catalog(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
+            surface=body.surface,
+            route=body.route,
+            models_json=body.models_json,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return catalog_payload(
+        harness_kind=harness_kind,
+        surface=body.surface,
+        route=body.route,
+        models=models,
+        snapshot=snapshot,
+        override=override,
+    )
+
+
+@router.put("/catalog/{harness_kind}/override", response_model=AgentGatewayCatalogOverrideResponse)
+async def upsert_agent_catalog_override_endpoint(
+    harness_kind: str,
+    body: AgentGatewayCatalogOverrideUpsertRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentGatewayCatalogOverrideResponse:
+    try:
+        record = await catalog_service.upsert_override(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
+            patch_json=body.patch_json,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return catalog_override_payload(record)
+
+
+@router.delete("/catalog/{harness_kind}/override", status_code=204)
+async def delete_agent_catalog_override_endpoint(
+    harness_kind: str,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> None:
+    try:
+        await catalog_service.delete_override(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
         )
     except CloudApiError as error:
         raise_cloud_error(error)

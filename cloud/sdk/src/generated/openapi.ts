@@ -1241,6 +1241,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Catalog Endpoint */
+        get: operations["get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Agent Catalog Endpoint */
+        post: operations["refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Agent Catalog Override Endpoint */
+        put: operations["upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put"];
+        post?: never;
+        /** Delete Agent Catalog Override Endpoint */
+        delete: operations["delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-gateway/capabilities": {
         parameters: {
             query?: never;
@@ -2345,6 +2397,69 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
+        };
+        /** AgentGatewayCatalogOverrideResponse */
+        AgentGatewayCatalogOverrideResponse: {
+            /** Id */
+            id: string;
+            /** Harnesskind */
+            harnessKind: string;
+            /** Patchjson */
+            patchJson: string;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AgentGatewayCatalogOverrideUpsertRequest */
+        AgentGatewayCatalogOverrideUpsertRequest: {
+            /** Patchjson */
+            patchJson: string;
+        };
+        /** AgentGatewayCatalogRefreshRequest */
+        AgentGatewayCatalogRefreshRequest: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Modelsjson */
+            modelsJson?: string | null;
+        };
+        /**
+         * AgentGatewayCatalogResponse
+         * @description Layered catalog: latest snapshot (owner else seed) + caller override.
+         */
+        AgentGatewayCatalogResponse: {
+            /** Harnesskind */
+            harnessKind: string;
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Models */
+            models: {
+                [key: string]: unknown;
+            }[];
+            /** Snapshotid */
+            snapshotId: string | null;
+            /** Probedat */
+            probedAt: string | null;
+            /** Source */
+            source: string | null;
+            /** Overrideapplied */
+            overrideApplied: boolean;
         };
         /** AgentGatewayEnrollmentResponse */
         AgentGatewayEnrollmentResponse: {
@@ -7270,6 +7385,139 @@ export interface operations {
             path: {
                 harness_kind: string;
                 surface: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__get: {
+        parameters: {
+            query: {
+                surface: "local" | "cloud";
+                route?: "native" | "api_key" | "gateway";
+            };
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentGatewayCatalogRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentGatewayCatalogOverrideUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogOverrideResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
             };
             cookie?: never;
         };

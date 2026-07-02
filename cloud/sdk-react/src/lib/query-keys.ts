@@ -38,6 +38,18 @@ export function agentGatewayEnrollmentKey() {
   return [...agentGatewayRootKey(), "enrollment"] as const;
 }
 
+export function agentGatewayCatalogRootKey() {
+  return [...agentGatewayRootKey(), "catalog"] as const;
+}
+
+export function agentGatewayCatalogKey(
+  harnessKind: string,
+  surface: string,
+  route: string,
+) {
+  return [...agentGatewayCatalogRootKey(), harnessKind, surface, route] as const;
+}
+
 export function cloudPluginInventoryRootKey() {
   return [...cloudRootKey(), "plugin-inventory"] as const;
 }
