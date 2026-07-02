@@ -23,6 +23,16 @@ from proliferate.utils.time import utcnow
 _CACHE_FRESHNESS_SECONDS = 600
 
 
+class GitHubAppInstallationOrganizationConflict(Exception):
+    """Raised when an installation would be rebound to a different organization.
+
+    Defense in depth against cross-tenant IDOR: an installation row that is
+    already owned by one organization must not be silently reassigned to a
+    different organization unless the caller has independently proven the actor
+    controls the installation (``allow_organization_rebind=True``).
+    """
+
+
 @dataclass(frozen=True, repr=False)
 class GitHubAppAuthorizationValue:
     id: UUID
@@ -231,6 +241,7 @@ async def upsert_github_app_installation(
     installation: GitHubAppInstallationPayload,
     organization_id: UUID | None = None,
     installed_by_user_id: UUID | None = None,
+    allow_organization_rebind: bool = False,
 ) -> GitHubAppInstallationValue:
     now = utcnow()
     row = (
@@ -255,6 +266,18 @@ async def upsert_github_app_installation(
             updated_at=now,
         )
         db.add(row)
+    # Never let one organization silently claim an installation already bound to
+    # another. Callers that rebind (e.g. a verified re-install / ownership
+    # transfer) must opt in explicitly after proving control of the installation.
+    if (
+        organization_id is not None
+        and row.organization_id is not None
+        and row.organization_id != organization_id
+        and not allow_organization_rebind
+    ):
+        raise GitHubAppInstallationOrganizationConflict(
+            "GitHub App installation is already bound to a different organization."
+        )
     row.account_login = installation.account_login
     row.account_type = installation.account_type
     row.repository_selection = installation.repository_selection

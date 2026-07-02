@@ -21,6 +21,7 @@ from proliferate.integrations.github import (
     exchange_github_app_code,
     get_github_app_installation,
     list_github_app_installations,
+    list_github_app_user_installations,
 )
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
 from proliferate.server.cloud.errors import CloudApiError
@@ -390,11 +391,23 @@ async def complete_github_app_installation_callback(
             "Could not verify GitHub App installation.",
             status_code=502,
         ) from exc
+    # `get_github_app_installation` authenticates as the App itself (app JWT), so
+    # it succeeds for ANY installation of the Proliferate App regardless of who
+    # is asking. Before binding this installation to the actor's organization we
+    # must prove the actor actually controls it — otherwise an org admin could
+    # claim (and hijack) another tenant's installation by supplying its
+    # enumerable installation_id (cross-tenant IDOR).
+    await _verify_actor_controls_installation(
+        db,
+        actor_user_id=actor_user_id,
+        installation=installation,
+    )
     await github_app_store.upsert_github_app_installation(
         db,
         installation=installation,
         organization_id=organization_id,
         installed_by_user_id=actor_user_id,
+        allow_organization_rebind=True,
     )
     repo_environments = await repositories_store.list_cloud_repo_environments_for_git_owner(
         db,
@@ -406,6 +419,50 @@ async def complete_github_app_installation_callback(
             repo_environment_id=repo_environment.id,
         )
     return return_to or _default_return_after_callback("organization")
+
+
+async def _verify_actor_controls_installation(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    installation: GitHubAppInstallationInfo,
+) -> None:
+    """Confirm the acting user actually controls the GitHub App installation.
+
+    Uses the actor's own user-to-server OAuth token (never the app JWT) to list
+    the installations the user can access and requires the target installation
+    to be one of them, matching both installation id and account. This closes
+    the cross-tenant IDOR where a signed installation `state` for org A is
+    replayed against another tenant's `installation_id`.
+    """
+    authorization = await ensure_fresh_github_app_authorization(db, user_id=actor_user_id)
+    if authorization.access_token is None:
+        raise CloudApiError(
+            "github_app_authorization_required",
+            "Connect your GitHub account before installing the Proliferate GitHub App.",
+            status_code=409,
+        )
+    try:
+        accessible = await list_github_app_user_installations(
+            user_access_token=authorization.access_token,
+        )
+    except GitHubIntegrationError as exc:
+        raise CloudApiError(
+            "github_app_installation_ownership_check_failed",
+            "Could not verify control of this GitHub App installation.",
+            status_code=502,
+        ) from exc
+    for candidate in accessible:
+        if (
+            candidate.github_installation_id == installation.github_installation_id
+            and candidate.account_login.lower() == installation.account_login.lower()
+        ):
+            return
+    raise CloudApiError(
+        "github_app_installation_forbidden",
+        "You do not have access to this GitHub App installation.",
+        status_code=403,
+    )
 
 
 async def get_github_app_installation_status(
