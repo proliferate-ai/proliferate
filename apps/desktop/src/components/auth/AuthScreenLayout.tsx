@@ -2,6 +2,7 @@ import { twMerge } from "tailwind-merge";
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
+import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS } from "@/copy/auth/auth-copy";
@@ -100,9 +101,7 @@ export function AuthScreenLayout({
             aria-hidden={showAuth}
           >
             <div className="flex h-11 w-full items-center justify-center rounded-md border border-border/50 bg-card/30">
-              <span className="thinking-text text-sm" data-text={loadingHint}>
-                {loadingHint}
-              </span>
+              <ThinkingText text={loadingHint} className="text-sm font-normal" />
             </div>
           </div>
 

@@ -21,6 +21,12 @@ export function ThinkingText({
       data-thinking-text
     >
       {text}
+      {/* Codex-style dim band, compositor-only: the band window and its
+          counter-translated glyph copy each animate transform in lockstep,
+          so the sweep cannot jitter while the main thread is busy. */}
+      <span className="thinking-text-band" aria-hidden="true">
+        <span className="thinking-text-band-glyphs">{text}</span>
+      </span>
     </span>
   );
 }

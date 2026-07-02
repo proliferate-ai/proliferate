@@ -13,6 +13,12 @@ type ThinkingTimingKey =
 
 type ThinkingTiming = Record<ThinkingTimingKey, number>;
 
+// PORT PENDING: this lab still emits background-position keyframes for the
+// retired background-clip sweep. The product ThinkingText is now a two-layer
+// compositor sweep (.thinking-text-band / -glyphs) driven by
+// --thinking-text-duration / --thinking-text-easing; the sliders here no
+// longer affect it until the timeline builder is ported to translateX pairs
+// (band = 1.5×bgpos − 17.5, glyphs = −0.5×band).
 const PLAYGROUND_THINKING_ANIMATION_NAME = "playground-thinking-text-sweep";
 
 const DEFAULT_THINKING_TIMING: ThinkingTiming = {

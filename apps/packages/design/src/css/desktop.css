@@ -1751,45 +1751,94 @@ body {
   );
 }
 
-/* Thinking indicator — compositor-only animation. The previous sweep animated
-   background-position on background-clip:text, which repaints on the MAIN
-   thread every step: any main-thread work (stream batches, layout) made it
-   visibly jitter. Opacity animates on the compositor thread, so the pulse
-   stays perfectly smooth even while the main thread is busy. */
-@keyframes thinking-text-pulse {
-  0%,
-  100% {
-    opacity: 0.06;
+/* Thinking indicator — the codex-style dim-band sweep, compositor-only.
+   OWNER RULE: this animation may only use transform/opacity. The old sweep
+   animated background-position on background-clip:text, which repaints on
+   the MAIN thread every step, so it jittered whenever stream batches or
+   layout ran. Here the band is a masked window (.thinking-text-band) whose
+   transform sweeps across the text while the glyph copy inside counter-
+   translates in lockstep — both transforms run on the compositor, and the
+   soft-edge mask is static (rasterized once), so no per-frame paint exists
+   to jitter. Geometry contract: band width 50% of the label; window sweep
+   -100%→200% of band width pairs with glyph counter-sweep 50%→-100% of
+   label width (glyphs = -0.5 × band). Change one, change both. */
+@keyframes thinking-band-sweep {
+  from {
+    transform: translateX(-100%);
   }
-  50% {
-    opacity: 0.85;
+  to {
+    transform: translateX(200%);
+  }
+}
+
+@keyframes thinking-band-glyphs-sweep {
+  from {
+    transform: translateX(50%);
+  }
+  to {
+    transform: translateX(-100%);
   }
 }
 
 .thinking-text {
   position: relative;
-  color: color-mix(in oklab, var(--color-muted-foreground) 72%, transparent);
+  color: color-mix(in srgb, var(--color-foreground) 45%, transparent);
 }
 
-.thinking-text::after {
-  content: attr(data-text);
+.thinking-text-band {
   position: absolute;
-  inset: 0;
+  inset: 0 auto 0 0;
+  width: 50%;
+  overflow: hidden;
   pointer-events: none;
-  color: color-mix(in oklab, var(--color-foreground) 72%, var(--color-muted-foreground) 28%);
-  opacity: 0;
-  will-change: opacity;
-  transform: translateZ(0);
-  animation: var(
-    --thinking-text-animation,
-    thinking-text-pulse 2.2s ease-in-out infinite
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 40%,
+    black 60%,
+    transparent 100%
   );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 40%,
+    black 60%,
+    transparent 100%
+  );
+  will-change: transform;
+  animation: thinking-band-sweep var(--thinking-text-duration, 2s)
+    var(--thinking-text-easing, steps(48, end)) infinite;
+}
+
+.thinking-text-band-glyphs {
+  display: block;
+  /* 200% of the 50%-wide band = exactly the label width, so the copy lays
+     out (and truncates) identically to the base text beneath it. */
+  width: 200%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--color-background) 75%, transparent);
+  will-change: transform;
+  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 2s)
+    var(--thinking-text-easing, steps(48, end)) infinite;
+}
+
+.thinking-text:hover {
+  color: var(--color-muted-foreground);
+}
+
+.thinking-text:hover .thinking-text-band {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thinking-text::after {
-    animation: none;
-    opacity: 0.5;
+  .thinking-text {
+    color: var(--color-muted-foreground);
+  }
+
+  .thinking-text-band {
+    display: none;
   }
 }
 
