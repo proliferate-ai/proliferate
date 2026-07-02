@@ -31,7 +31,7 @@ pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
-pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
+pub use profile::{resolve_profile, AgentRuntimeAuthProfile, OpenCodeCompositeProfile};
 pub use render::{render_profile, RenderedRouteAuth};
 pub use state::{load_state_file, state_file_path, AgentAuthState, AuthRoute, AuthSelection};
 
@@ -46,6 +46,11 @@ pub enum RouteAuthError {
     MalformedStateFile { path: PathBuf, detail: String },
     #[error("no agent-auth route selection for harness '{harness_kind}' at revision {revision}")]
     SelectionMissing { harness_kind: String, revision: i64 },
+    #[error(
+        "conflicting agent-auth selections for harness '{harness_kind}': \
+         {count} entries where one is allowed"
+    )]
+    SelectionConflict { harness_kind: String, count: usize },
     #[error("agent-auth route selection for '{harness_kind}' is incomplete: {detail}")]
     SelectionIncomplete {
         harness_kind: String,
@@ -70,6 +75,7 @@ impl RouteAuthError {
         match self {
             Self::MalformedStateFile { .. } => "AGENT_ROUTE_STATE_MALFORMED",
             Self::SelectionMissing { .. } => "AGENT_ROUTE_SELECTION_MISSING",
+            Self::SelectionConflict { .. } => "AGENT_ROUTE_SELECTION_CONFLICT",
             Self::SelectionIncomplete { .. } => "AGENT_ROUTE_SELECTION_INCOMPLETE",
             Self::UnsupportedRoute { .. } => "AGENT_ROUTE_UNSUPPORTED",
             Self::UnknownHarness { .. } => "AGENT_ROUTE_UNKNOWN_HARNESS",

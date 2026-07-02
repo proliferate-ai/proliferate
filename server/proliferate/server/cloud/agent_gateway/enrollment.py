@@ -29,6 +29,7 @@ from proliferate.db.store.billing_subjects import (
 )
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
+from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,7 @@ async def _sync_enrollment(
                 max_budget=budget,
                 metadata=metadata,
             )
-            return await agent_gateway_store.mark_enrollment_synced(
+            synced = await agent_gateway_store.mark_enrollment_synced(
                 db,
                 enrollment_id=enrollment.id,
                 litellm_team_id=team_id,
@@ -195,20 +196,29 @@ async def _sync_enrollment(
                     key_alias=key_alias,
                 ),
             )
-        # A key already exists (retry after a partial failure); refresh metadata only.
-        return await agent_gateway_store.mark_enrollment_synced(
-            db,
-            enrollment_id=enrollment.id,
-            litellm_team_id=team_id,
-            litellm_user_id=litellm_user_id,
-            virtual_key_id=enrollment.virtual_key_id,
-            virtual_key=None,
-            sync_fingerprint=build_sync_fingerprint(
-                team_id=team_id,
-                budget=budget_raw,
-                key_alias=key_alias,
-            ),
-        )
+        else:
+            # A key already exists (retry after a partial failure); refresh metadata only.
+            synced = await agent_gateway_store.mark_enrollment_synced(
+                db,
+                enrollment_id=enrollment.id,
+                litellm_team_id=team_id,
+                litellm_user_id=litellm_user_id,
+                virtual_key_id=enrollment.virtual_key_id,
+                virtual_key=None,
+                sync_fingerprint=build_sync_fingerprint(
+                    team_id=team_id,
+                    budget=budget_raw,
+                    key_alias=key_alias,
+                ),
+            )
+        if synced.user_id is not None:
+            # A gateway selection may have been waiting on this enrollment;
+            # push fresh agent-auth state into the user's live sandbox.
+            await materialization_service.schedule_materialize_agent_auth(
+                db,
+                user_id=synced.user_id,
+            )
+        return synced
     except LiteLLMIntegrationError as error:
         logger.warning(
             "Agent gateway enrollment sync failed",

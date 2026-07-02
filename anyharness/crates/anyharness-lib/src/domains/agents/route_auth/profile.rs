@@ -9,6 +9,10 @@
 use super::state::{AgentAuthState, AuthRoute, AuthSelection};
 use super::RouteAuthError;
 
+/// Harness kind that composes multiple auth sources (spec §3.3 slot
+/// semantics). Everything else is single-source: exactly one selection.
+const OPENCODE_HARNESS: &str = "opencode";
+
 /// The resolved auth profile for one harness launch (spec §4
 /// `AgentRuntimeAuthProfile`). `Native` means "unchanged legacy behavior"; the
 /// render layer emits nothing for it.
@@ -19,6 +23,16 @@ pub enum AgentRuntimeAuthProfile {
     Native,
     ApiKey(ApiKeyProfile),
     Gateway(GatewayProfile),
+    /// OpenCode's merged multi-slot profile: an optional gateway source plus
+    /// any number of direct provider keys, rendered ADDITIVELY into one launch
+    /// delta (one injected config + per-provider env keys).
+    OpenCodeComposite(OpenCodeCompositeProfile),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenCodeCompositeProfile {
+    pub gateway: Option<GatewayProfile>,
+    pub provider_keys: Vec<ApiKeyProfile>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,7 +60,9 @@ pub struct GatewayProfile {
 /// Resolve the auth profile for `harness_kind` from the loaded state.
 ///
 /// - `state == None` (no file): legacy `Native`.
-/// - state present, has a selection for the harness: profile per its route.
+/// - state present, has selection(s) for the harness: profile per route.
+///   OpenCode merges ALL its selections into one composite profile
+///   (spec §3.3); single-source harnesses error (typed) on more than one.
 /// - state present + scoped (`revision > 0`) but NO selection for the harness:
 ///   fail-closed [`RouteAuthError::SelectionMissing`] (spec §3), mirroring the
 ///   old `AGENT_AUTH_SELECTION_REQUIRED` semantics against the new model.
@@ -59,19 +75,74 @@ pub fn resolve_profile(
     let Some(state) = state else {
         return Ok(AgentRuntimeAuthProfile::Native);
     };
-    match state.selection_for(harness_kind) {
-        Some(selection) => profile_from_selection(harness_kind, selection, state.revision),
-        None => {
-            if state.is_scoped() {
-                Err(RouteAuthError::SelectionMissing {
+    let selections = state.selections_for(harness_kind);
+    if selections.is_empty() {
+        return if state.is_scoped() {
+            Err(RouteAuthError::SelectionMissing {
+                harness_kind: harness_kind.to_string(),
+                revision: state.revision,
+            })
+        } else {
+            Ok(AgentRuntimeAuthProfile::Native)
+        };
+    }
+    if harness_kind == OPENCODE_HARNESS {
+        return resolve_opencode_composite(harness_kind, &selections, state.revision);
+    }
+    if selections.len() > 1 {
+        return Err(RouteAuthError::SelectionConflict {
+            harness_kind: harness_kind.to_string(),
+            count: selections.len(),
+        });
+    }
+    profile_from_selection(harness_kind, selections[0], state.revision)
+}
+
+/// Merge OpenCode's slot entries into one composite profile: at most one
+/// gateway source plus any number of direct provider keys. Native entries are
+/// tolerated (they render nothing); an all-native entry set resolves `Native`.
+fn resolve_opencode_composite(
+    harness_kind: &str,
+    selections: &[&AuthSelection],
+    revision: i64,
+) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
+    let mut gateway: Option<GatewayProfile> = None;
+    let mut provider_keys: Vec<ApiKeyProfile> = Vec::new();
+    for selection in selections {
+        match selection.route {
+            AuthRoute::Native => continue,
+            AuthRoute::ApiKey => {
+                let key = require_key(harness_kind, selection, AuthRoute::ApiKey)?;
+                provider_keys.push(ApiKeyProfile {
                     harness_kind: harness_kind.to_string(),
-                    revision: state.revision,
-                })
-            } else {
-                Ok(AgentRuntimeAuthProfile::Native)
+                    provider: selection.provider.clone(),
+                    key,
+                });
+            }
+            AuthRoute::Gateway => {
+                if gateway.is_some() {
+                    return Err(RouteAuthError::SelectionConflict {
+                        harness_kind: harness_kind.to_string(),
+                        count: selections.len(),
+                    });
+                }
+                gateway = Some(gateway_profile_from_selection(
+                    harness_kind,
+                    selection,
+                    revision,
+                )?);
             }
         }
     }
+    if gateway.is_none() && provider_keys.is_empty() {
+        return Ok(AgentRuntimeAuthProfile::Native);
+    }
+    Ok(AgentRuntimeAuthProfile::OpenCodeComposite(
+        OpenCodeCompositeProfile {
+            gateway,
+            provider_keys,
+        },
+    ))
 }
 
 fn profile_from_selection(
@@ -89,26 +160,34 @@ fn profile_from_selection(
                 key,
             }))
         }
-        AuthRoute::Gateway => {
-            let key = require_key(harness_kind, selection, AuthRoute::Gateway)?;
-            let base_url = selection
-                .base_url
-                .clone()
-                .filter(|url| !url.trim().is_empty())
-                .ok_or_else(|| RouteAuthError::SelectionIncomplete {
-                    harness_kind: harness_kind.to_string(),
-                    route: AuthRoute::Gateway,
-                    detail: "gateway route requires baseUrl".to_string(),
-                })?;
-            Ok(AgentRuntimeAuthProfile::Gateway(GatewayProfile {
-                harness_kind: harness_kind.to_string(),
-                base_url,
-                key,
-                model_catalog: selection.model_catalog.clone(),
-                revision,
-            }))
-        }
+        AuthRoute::Gateway => Ok(AgentRuntimeAuthProfile::Gateway(
+            gateway_profile_from_selection(harness_kind, selection, revision)?,
+        )),
     }
+}
+
+fn gateway_profile_from_selection(
+    harness_kind: &str,
+    selection: &AuthSelection,
+    revision: i64,
+) -> Result<GatewayProfile, RouteAuthError> {
+    let key = require_key(harness_kind, selection, AuthRoute::Gateway)?;
+    let base_url = selection
+        .base_url
+        .clone()
+        .filter(|url| !url.trim().is_empty())
+        .ok_or_else(|| RouteAuthError::SelectionIncomplete {
+            harness_kind: harness_kind.to_string(),
+            route: AuthRoute::Gateway,
+            detail: "gateway route requires baseUrl".to_string(),
+        })?;
+    Ok(GatewayProfile {
+        harness_kind: harness_kind.to_string(),
+        base_url,
+        key,
+        model_catalog: selection.model_catalog.clone(),
+        revision,
+    })
 }
 
 fn require_key(
@@ -153,6 +232,7 @@ mod tests {
             vec![AuthSelection {
                 harness: "codex".into(),
                 route: AuthRoute::Gateway,
+                slot: "primary".into(),
                 provider: None,
                 base_url: Some("https://gw".into()),
                 key: Some("sk".into()),
@@ -180,6 +260,7 @@ mod tests {
             vec![AuthSelection {
                 harness: "claude".into(),
                 route: AuthRoute::Native,
+                slot: "primary".into(),
                 provider: None,
                 base_url: None,
                 key: None,
@@ -197,6 +278,7 @@ mod tests {
             vec![AuthSelection {
                 harness: "claude".into(),
                 route: AuthRoute::Gateway,
+                slot: "primary".into(),
                 provider: None,
                 base_url: Some("https://gw".into()),
                 key: None,
@@ -213,6 +295,7 @@ mod tests {
             vec![AuthSelection {
                 harness: "claude".into(),
                 route: AuthRoute::Gateway,
+                slot: "primary".into(),
                 provider: None,
                 base_url: None,
                 key: Some("sk".into()),
@@ -232,6 +315,7 @@ mod tests {
             vec![AuthSelection {
                 harness: "claude".into(),
                 route: AuthRoute::ApiKey,
+                slot: "primary".into(),
                 provider: Some("anthropic".into()),
                 base_url: None,
                 key: None,
@@ -244,13 +328,183 @@ mod tests {
         ));
     }
 
+    fn slot_selection(
+        harness: &str,
+        route: AuthRoute,
+        slot: &str,
+        provider: Option<&str>,
+        key: Option<&str>,
+        base_url: Option<&str>,
+    ) -> AuthSelection {
+        AuthSelection {
+            harness: harness.into(),
+            route,
+            slot: slot.into(),
+            provider: provider.map(Into::into),
+            base_url: base_url.map(Into::into),
+            key: key.map(Into::into),
+            model_catalog: None,
+        }
+    }
+
+    #[test]
+    fn single_source_harness_with_multiple_entries_is_typed_conflict() {
+        let state = state(
+            4,
+            vec![
+                slot_selection(
+                    "claude",
+                    AuthRoute::Gateway,
+                    "primary",
+                    None,
+                    Some("sk-vk"),
+                    Some("https://gw"),
+                ),
+                slot_selection(
+                    "claude",
+                    AuthRoute::ApiKey,
+                    "anthropic",
+                    Some("anthropic"),
+                    Some("sk-raw"),
+                    None,
+                ),
+            ],
+        );
+        let error = resolve_profile(Some(&state), "claude").expect_err("conflict");
+        assert!(matches!(
+            error,
+            RouteAuthError::SelectionConflict { count: 2, .. }
+        ));
+        assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_CONFLICT");
+    }
+
+    #[test]
+    fn opencode_merges_gateway_and_provider_slots() {
+        let state = state(
+            6,
+            vec![
+                slot_selection(
+                    "opencode",
+                    AuthRoute::Gateway,
+                    "gateway",
+                    None,
+                    Some("sk-vk"),
+                    Some("https://gw"),
+                ),
+                slot_selection(
+                    "opencode",
+                    AuthRoute::ApiKey,
+                    "anthropic",
+                    Some("anthropic"),
+                    Some("sk-ant"),
+                    None,
+                ),
+                slot_selection(
+                    "opencode",
+                    AuthRoute::ApiKey,
+                    "xai",
+                    Some("xai"),
+                    Some("xai-raw"),
+                    None,
+                ),
+            ],
+        );
+        let profile = resolve_profile(Some(&state), "opencode").expect("resolve");
+        match profile {
+            AgentRuntimeAuthProfile::OpenCodeComposite(composite) => {
+                let gateway = composite.gateway.expect("gateway source");
+                assert_eq!(gateway.base_url, "https://gw");
+                assert_eq!(gateway.revision, 6);
+                assert_eq!(
+                    composite
+                        .provider_keys
+                        .iter()
+                        .map(|entry| entry.provider.as_deref().unwrap())
+                        .collect::<Vec<_>>(),
+                    vec!["anthropic", "xai"],
+                );
+            }
+            other => panic!("expected composite, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn opencode_provider_keys_without_gateway_compose() {
+        let state = state(
+            2,
+            vec![slot_selection(
+                "opencode",
+                AuthRoute::ApiKey,
+                "openai",
+                Some("openai"),
+                Some("sk-openai"),
+                None,
+            )],
+        );
+        let profile = resolve_profile(Some(&state), "opencode").expect("resolve");
+        match profile {
+            AgentRuntimeAuthProfile::OpenCodeComposite(composite) => {
+                assert!(composite.gateway.is_none());
+                assert_eq!(composite.provider_keys.len(), 1);
+            }
+            other => panic!("expected composite, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn opencode_double_gateway_entries_are_conflict() {
+        let state = state(
+            3,
+            vec![
+                slot_selection(
+                    "opencode",
+                    AuthRoute::Gateway,
+                    "gateway",
+                    None,
+                    Some("sk-a"),
+                    Some("https://gw"),
+                ),
+                slot_selection(
+                    "opencode",
+                    AuthRoute::Gateway,
+                    "gateway",
+                    None,
+                    Some("sk-b"),
+                    Some("https://gw"),
+                ),
+            ],
+        );
+        let error = resolve_profile(Some(&state), "opencode").expect_err("conflict");
+        assert!(matches!(error, RouteAuthError::SelectionConflict { .. }));
+    }
+
+    #[test]
+    fn opencode_all_native_entries_resolve_native() {
+        let state = state(
+            1,
+            vec![slot_selection(
+                "opencode",
+                AuthRoute::Native,
+                "gateway",
+                None,
+                None,
+                None,
+            )],
+        );
+        let profile = resolve_profile(Some(&state), "opencode").expect("resolve");
+        assert_eq!(profile, AgentRuntimeAuthProfile::Native);
+    }
+
     #[test]
     fn gateway_profile_carries_revision_and_catalog() {
+        // OpenCode resolves through the composite path; its gateway member
+        // still carries the revision + model catalog like a plain profile.
         let state = state(
             9,
             vec![AuthSelection {
                 harness: "opencode".into(),
                 route: AuthRoute::Gateway,
+                slot: "gateway".into(),
                 provider: None,
                 base_url: Some("https://gw".into()),
                 key: Some("sk".into()),
@@ -259,11 +513,12 @@ mod tests {
         );
         let profile = resolve_profile(Some(&state), "opencode").expect("resolve");
         match profile {
-            AgentRuntimeAuthProfile::Gateway(gw) => {
+            AgentRuntimeAuthProfile::OpenCodeComposite(composite) => {
+                let gw = composite.gateway.expect("gateway source");
                 assert_eq!(gw.revision, 9);
                 assert_eq!(gw.model_catalog.as_deref().unwrap().len(), 2);
             }
-            other => panic!("expected gateway, got {other:?}"),
+            other => panic!("expected composite, got {other:?}"),
         }
     }
 }

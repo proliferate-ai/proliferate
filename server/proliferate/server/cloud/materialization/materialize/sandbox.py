@@ -10,6 +10,7 @@ from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import (
+    agent_auth,
     github_credentials,
     secret_set,
 )
@@ -57,3 +58,7 @@ async def _materialize_sandbox(
             ctx=ctx,
             repo_environment=repo_environment,
         )
+    # Last, defensively: agent-auth materialization writes a fail-closed state
+    # even when a selection can't yet be satisfied (e.g. enrollment still
+    # syncing), and the enrollment-sync trigger re-materializes once it lands.
+    await agent_auth.materialize_agent_auth(db, ctx=ctx, user_id=user_id)

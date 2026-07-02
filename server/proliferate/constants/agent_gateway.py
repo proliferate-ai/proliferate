@@ -1,5 +1,7 @@
 """Agent LLM gateway (LiteLLM) schema constants."""
 
+from dataclasses import dataclass
+
 AGENT_API_KEY_PROVIDERS = ("anthropic", "openai", "xai", "google", "other")
 AGENT_API_KEY_STATUS_ACTIVE = "active"
 AGENT_API_KEY_STATUS_REVOKED = "revoked"
@@ -20,6 +22,71 @@ AGENT_AUTH_ROUTES = (
     AGENT_AUTH_ROUTE_NATIVE,
     AGENT_AUTH_ROUTE_API_KEY,
     AGENT_AUTH_ROUTE_GATEWAY,
+)
+
+# Slot semantics (spec §3.3): single-source harnesses keep radio semantics on
+# the one 'primary' slot; OpenCode composes multiple sources, one row per slot.
+AGENT_AUTH_SLOT_PRIMARY = "primary"
+AGENT_AUTH_SLOT_GATEWAY = "gateway"
+AGENT_AUTH_OPENCODE_HARNESS = "opencode"
+# gateway slot must carry the gateway route; provider slots must carry an
+# api_key route whose key belongs to that provider.
+AGENT_AUTH_OPENCODE_SLOTS = (
+    AGENT_AUTH_SLOT_GATEWAY,
+    "openai",
+    "anthropic",
+    "xai",
+    "google",
+)
+
+
+# Provider registry for direct api_key routes. The capabilities endpoint
+# exposes this so UIs never hardcode provider metadata. `harnesses` = which
+# harnesses a direct key of this provider can serve; `recommended_for` = the
+# harnesses for which this provider is the recommended direct key.
+@dataclass(frozen=True)
+class AgentProviderRegistryEntry:
+    id: str
+    label: str
+    env_key: str
+    key_url: str
+    harnesses: tuple[str, ...]
+    recommended_for: tuple[str, ...]
+
+
+AGENT_PROVIDER_REGISTRY: tuple[AgentProviderRegistryEntry, ...] = (
+    AgentProviderRegistryEntry(
+        id="anthropic",
+        label="Anthropic",
+        env_key="ANTHROPIC_API_KEY",
+        key_url="https://console.anthropic.com/settings/keys",
+        harnesses=("claude", "opencode"),
+        recommended_for=("claude", "opencode"),
+    ),
+    AgentProviderRegistryEntry(
+        id="openai",
+        label="OpenAI",
+        env_key="OPENAI_API_KEY",
+        key_url="https://platform.openai.com/api-keys",
+        harnesses=("codex", "opencode"),
+        recommended_for=("codex",),
+    ),
+    AgentProviderRegistryEntry(
+        id="xai",
+        label="xAI",
+        env_key="XAI_API_KEY",
+        key_url="https://console.x.ai",
+        harnesses=("grok", "opencode"),
+        recommended_for=("grok",),
+    ),
+    AgentProviderRegistryEntry(
+        id="google",
+        label="Google",
+        env_key="GEMINI_API_KEY",
+        key_url="https://aistudio.google.com/apikey",
+        harnesses=("gemini", "opencode"),
+        recommended_for=("gemini",),
+    ),
 )
 
 AGENT_GATEWAY_SUBJECT_KIND_USER = "user"

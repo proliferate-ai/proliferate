@@ -10,6 +10,9 @@ SANDBOX_HOME = "/home/user"
 SANDBOX_WORKSPACE_ROOT = f"{SANDBOX_HOME}/workspace"
 SANDBOX_REPOS_ROOT = f"{SANDBOX_WORKSPACE_ROOT}/repos"
 PROLIFERATE_HOME = f"{SANDBOX_HOME}/.proliferate"
+# AnyHarness runtime home inside cloud sandboxes: default_runtime_home() in
+# anyharness-lib resolves $HOME/.proliferate/anyharness for release builds.
+ANYHARNESS_HOME = f"{PROLIFERATE_HOME}/anyharness"
 
 
 def github_root_path() -> str:
@@ -26,6 +29,16 @@ def github_meta_path() -> str:
 
 def github_credential_helper_path() -> str:
     return f"{PROLIFERATE_HOME}/bin/proliferate-git-credential-helper"
+
+
+def agent_auth_state_path() -> str:
+    """Contract file read by AnyHarness (agent-auth-litellm spec §5)."""
+    return f"{ANYHARNESS_HOME}/agent-auth/state.json"
+
+
+def agent_auth_manifest_path() -> str:
+    """Server-owned change-tracking manifest; not part of the AnyHarness contract."""
+    return f"{PROLIFERATE_HOME}/agent-auth/state.manifest.json"
 
 
 def global_env_path() -> str:

@@ -1,7 +1,15 @@
 """Agent auth route selection persistence.
 
 Cross-column legality that SQL CHECKs cannot express cleanly (api_key
-ownership + active status) is enforced here; callers get typed ValueErrors.
+ownership + active status, slot semantics) is enforced here; callers get
+typed ValueErrors.
+
+Slot semantics (spec §3.3): single-source harnesses (claude/codex/grok/
+gemini — and any harness that is not opencode) only ever use slot='primary',
+so their selection keeps radio semantics. OpenCode is additive: one row per
+slot in {'gateway','openai','anthropic','xai','google'} — the gateway slot
+must carry the gateway route, provider slots must carry an api_key route
+whose key belongs to that provider.
 """
 
 from __future__ import annotations
@@ -15,9 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_STATUS_ACTIVE,
     AGENT_AUTH_HARNESS_KINDS,
+    AGENT_AUTH_OPENCODE_HARNESS,
+    AGENT_AUTH_OPENCODE_SLOTS,
     AGENT_AUTH_ROUTE_API_KEY,
+    AGENT_AUTH_ROUTE_GATEWAY,
     AGENT_AUTH_ROUTE_NATIVE,
     AGENT_AUTH_ROUTES,
+    AGENT_AUTH_SLOT_GATEWAY,
+    AGENT_AUTH_SLOT_PRIMARY,
     AGENT_AUTH_SURFACE_CLOUD,
     AGENT_AUTH_SURFACES,
 )
@@ -27,21 +40,30 @@ from proliferate.db.store.agent_gateway.records import AgentAuthRouteSelectionRe
 from proliferate.utils.time import utcnow
 
 
+class AgentApiKeyNotUsableError(ValueError):
+    """The referenced api key is not an active key owned by the caller."""
+
+
 def validate_route_selection(
     *,
     surface: str,
     route: str,
     api_key_id: UUID | None,
     harness_kind: str | None = None,
+    slot: str = AGENT_AUTH_SLOT_PRIMARY,
 ) -> None:
     """Pure legality checks shared by the store and unit tests.
 
     ``harness_kind`` is optional so surface/route legality can be exercised in
-    isolation; when supplied it is checked against the known allowlist so that
-    unbounded path params cannot reach the ``String(64)`` column.
+    isolation; when supplied, slot semantics are enforced first (unknown
+    harnesses behave as single-source, spec §3.3) and the kind is then checked
+    against the known allowlist so that unbounded path params cannot reach the
+    ``String(64)`` column.
     """
-    if harness_kind is not None and harness_kind not in AGENT_AUTH_HARNESS_KINDS:
-        raise ValueError(f"Unknown agent harness kind: {harness_kind}")
+    if harness_kind is not None:
+        _validate_slot(harness_kind=harness_kind, route=route, slot=slot)
+        if harness_kind not in AGENT_AUTH_HARNESS_KINDS:
+            raise ValueError(f"Unknown agent harness kind: {harness_kind}")
     if surface not in AGENT_AUTH_SURFACES:
         raise ValueError(f"Unknown agent auth surface: {surface}")
     if route not in AGENT_AUTH_ROUTES:
@@ -54,6 +76,31 @@ def validate_route_selection(
         raise ValueError("api_key_id is only valid for api_key route selections.")
 
 
+def _validate_slot(*, harness_kind: str, route: str, slot: str) -> None:
+    if harness_kind != AGENT_AUTH_OPENCODE_HARNESS:
+        if slot != AGENT_AUTH_SLOT_PRIMARY:
+            raise ValueError(
+                f"Harness '{harness_kind}' is single-source and only supports "
+                f"the '{AGENT_AUTH_SLOT_PRIMARY}' slot (got '{slot}')."
+            )
+        return
+    if slot not in AGENT_AUTH_OPENCODE_SLOTS:
+        raise ValueError(
+            "OpenCode selections must target one of the slots: "
+            f"{', '.join(AGENT_AUTH_OPENCODE_SLOTS)} (got '{slot}')."
+        )
+    if slot == AGENT_AUTH_SLOT_GATEWAY:
+        if route != AGENT_AUTH_ROUTE_GATEWAY:
+            raise ValueError(
+                f"The opencode 'gateway' slot only carries the gateway route (got '{route}')."
+            )
+        return
+    if route != AGENT_AUTH_ROUTE_API_KEY:
+        raise ValueError(
+            f"The opencode '{slot}' provider slot only carries the api_key route (got '{route}')."
+        )
+
+
 async def upsert_route_selection(
     db: AsyncSession,
     *,
@@ -62,12 +109,14 @@ async def upsert_route_selection(
     surface: str,
     route: str,
     api_key_id: UUID | None = None,
+    slot: str = AGENT_AUTH_SLOT_PRIMARY,
 ) -> AgentAuthRouteSelectionRecord:
     validate_route_selection(
         surface=surface,
         route=route,
         api_key_id=api_key_id,
         harness_kind=harness_kind,
+        slot=slot,
     )
     if api_key_id is not None:
         key_row = (
@@ -80,7 +129,17 @@ async def upsert_route_selection(
             )
         ).scalar_one_or_none()
         if key_row is None:
-            raise ValueError("api_key_id must reference an active key owned by the user.")
+            raise AgentApiKeyNotUsableError(
+                "api_key_id must reference an active key owned by the user."
+            )
+        if (
+            harness_kind == AGENT_AUTH_OPENCODE_HARNESS
+            and slot != AGENT_AUTH_SLOT_GATEWAY
+            and key_row.provider != slot
+        ):
+            raise ValueError(
+                f"The opencode '{slot}' slot requires a {slot} key (got a {key_row.provider} key)."
+            )
 
     # Atomic upsert: two concurrent first writes for the same scope resolve via
     # ON CONFLICT instead of racing a select-then-insert into an IntegrityError.
@@ -91,6 +150,7 @@ async def upsert_route_selection(
         user_id=user_id,
         harness_kind=harness_kind,
         surface=surface,
+        slot=slot,
         route=route,
         api_key_id=api_key_id,
         revision=1,
@@ -125,6 +185,7 @@ async def upsert_route_selection(
                 AgentAuthRouteSelection.user_id == user_id,
                 AgentAuthRouteSelection.harness_kind == harness_kind,
                 AgentAuthRouteSelection.surface == surface,
+                AgentAuthRouteSelection.slot == slot,
             )
             .execution_options(populate_existing=True)
         )
@@ -138,6 +199,7 @@ async def get_route_selection(
     user_id: UUID,
     harness_kind: str,
     surface: str,
+    slot: str = AGENT_AUTH_SLOT_PRIMARY,
 ) -> AgentAuthRouteSelectionRecord | None:
     row = (
         await db.execute(
@@ -145,6 +207,7 @@ async def get_route_selection(
                 AgentAuthRouteSelection.user_id == user_id,
                 AgentAuthRouteSelection.harness_kind == harness_kind,
                 AgentAuthRouteSelection.surface == surface,
+                AgentAuthRouteSelection.slot == slot,
             )
         )
     ).scalar_one_or_none()
@@ -157,6 +220,7 @@ async def delete_route_selection(
     user_id: UUID,
     harness_kind: str,
     surface: str,
+    slot: str = AGENT_AUTH_SLOT_PRIMARY,
 ) -> bool:
     """Clear the selection for a scope. Returns whether a row was deleted."""
     result = await db.execute(
@@ -164,6 +228,7 @@ async def delete_route_selection(
             AgentAuthRouteSelection.user_id == user_id,
             AgentAuthRouteSelection.harness_kind == harness_kind,
             AgentAuthRouteSelection.surface == surface,
+            AgentAuthRouteSelection.slot == slot,
         )
     )
     return (result.rowcount or 0) > 0
@@ -182,6 +247,7 @@ async def list_route_selections(
                 .order_by(
                     AgentAuthRouteSelection.harness_kind,
                     AgentAuthRouteSelection.surface,
+                    AgentAuthRouteSelection.slot,
                 )
             )
         )

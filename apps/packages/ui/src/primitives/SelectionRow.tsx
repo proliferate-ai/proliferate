@@ -23,6 +23,8 @@ export function SelectionRow({
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={selected}
       disabled={disabled}
       title={title}
       onClick={onClick}

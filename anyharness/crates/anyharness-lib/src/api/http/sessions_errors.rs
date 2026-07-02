@@ -116,6 +116,7 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
 pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
     match error {
         RouteAuthError::SelectionMissing { .. }
+        | RouteAuthError::SelectionConflict { .. }
         | RouteAuthError::SelectionIncomplete { .. }
         | RouteAuthError::UnsupportedRoute { .. }
         | RouteAuthError::UnknownHarness { .. } => {

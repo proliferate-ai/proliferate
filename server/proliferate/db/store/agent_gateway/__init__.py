@@ -40,6 +40,7 @@ from proliferate.db.store.agent_gateway.records import (
     OrgAgentPolicyRecord,
 )
 from proliferate.db.store.agent_gateway.route_selections import (
+    AgentApiKeyNotUsableError,
     delete_route_selection,
     get_route_selection,
     list_route_selections,
@@ -53,6 +54,7 @@ from proliferate.db.store.agent_gateway.usage import (
 )
 
 __all__ = [
+    "AgentApiKeyNotUsableError",
     "AgentApiKeyRecord",
     "AgentAuthRouteSelectionRecord",
     "AgentCatalogOverrideRecord",

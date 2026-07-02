@@ -2,6 +2,7 @@ import type { SettingsSection } from "@/config/settings";
 
 export type SettingsNavIconId =
   | "account"
+  | "agent-api-keys"
   | "agent-defaults"
   | "appearance"
   | "archived-chats"
@@ -136,6 +137,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         heading: null,
         items: [
           { kind: "section", id: "agent-defaults", label: "Defaults", iconId: "agent-defaults" },
+          { kind: "section", id: "agent-api-keys", label: "API keys", iconId: "agent-api-keys" },
         ],
       },
     ],

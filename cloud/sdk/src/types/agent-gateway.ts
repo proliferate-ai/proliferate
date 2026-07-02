@@ -9,6 +9,7 @@ export type AgentAuthRouteSelectionListResponse =
 export type UpsertAgentAuthRouteSelectionRequest =
   Schema<"AgentAuthRouteSelectionUpsertRequest">;
 export type AgentGatewayCapabilities = Schema<"AgentGatewayCapabilitiesResponse">;
+export type AgentGatewayProviderInfo = Schema<"AgentGatewayProviderInfo">;
 export type AgentGatewayEnrollment = Schema<"AgentGatewayEnrollmentResponse">;
 export type AgentGatewayCatalog = Schema<"AgentGatewayCatalogResponse">;
 export type RefreshAgentGatewayCatalogRequest =

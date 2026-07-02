@@ -233,6 +233,7 @@ class TestAgentRouteSelections:
         payload = upserted.json()
         assert payload["harnessKind"] == "claude"
         assert payload["surface"] == "cloud"
+        assert payload["slot"] == "primary"
         assert payload["route"] == "api_key"
         assert payload["apiKeyId"] == created["id"]
         assert payload["revision"] == 1
@@ -332,6 +333,82 @@ class TestAgentRouteSelections:
         assert overlong.json()["detail"]["code"] == "invalid_agent_route_selection"
 
     @pytest.mark.asyncio
+    async def test_opencode_slots_compose_and_clear_independently(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        _, headers = await _authed_user(client)
+        created = await _create_key(client, headers)
+
+        gateway = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
+            headers=headers,
+            json={"route": "gateway", "slot": "gateway"},
+        )
+        assert gateway.status_code == 200, gateway.text
+        assert gateway.json()["slot"] == "gateway"
+
+        direct = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
+            headers=headers,
+            json={"route": "api_key", "apiKeyId": created["id"], "slot": "anthropic"},
+        )
+        assert direct.status_code == 200, direct.text
+        assert direct.json()["slot"] == "anthropic"
+
+        listed = await client.get(
+            "/v1/cloud/agent-gateway/route-selections",
+            headers=headers,
+        )
+        assert [entry["slot"] for entry in listed.json()["selections"]] == [
+            "anthropic",
+            "gateway",
+        ]
+
+        cleared = await client.delete(
+            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
+            headers=headers,
+            params={"slot": "anthropic"},
+        )
+        assert cleared.status_code == 204
+        remaining = await client.get(
+            "/v1/cloud/agent-gateway/route-selections",
+            headers=headers,
+        )
+        assert [entry["slot"] for entry in remaining.json()["selections"]] == ["gateway"]
+
+    @pytest.mark.asyncio
+    async def test_slot_validation_errors_are_typed(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        created = await _create_key(client, headers)  # anthropic key
+
+        single_source = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
+            headers=headers,
+            json={"route": "gateway", "slot": "gateway"},
+        )
+        assert single_source.status_code == 400
+        assert single_source.json()["detail"]["code"] == "invalid_agent_route_selection"
+
+        default_slot_for_opencode = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
+            headers=headers,
+            json={"route": "gateway"},
+        )
+        assert default_slot_for_opencode.status_code == 400
+        assert (
+            default_slot_for_opencode.json()["detail"]["code"] == "invalid_agent_route_selection"
+        )
+
+        provider_mismatch = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
+            headers=headers,
+            json={"route": "api_key", "apiKeyId": created["id"], "slot": "openai"},
+        )
+        assert provider_mismatch.status_code == 400
+        assert provider_mismatch.json()["detail"]["code"] == "invalid_agent_route_selection"
+
+    @pytest.mark.asyncio
     async def test_unknown_surface_is_400(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
         response = await client.put(
@@ -359,11 +436,19 @@ class TestAgentGatewayCapabilities:
             headers=headers,
         )
         assert response.status_code == 200
-        assert response.json() == {
-            "gatewayEnabled": False,
-            "publicBaseUrl": None,
-            "enrollmentStatus": "none",
-        }
+        payload = response.json()
+        assert payload["gatewayEnabled"] is False
+        assert payload["publicBaseUrl"] is None
+        assert payload["enrollmentStatus"] == "none"
+        # The provider registry rides along so UIs never hardcode metadata.
+        providers = {entry["id"]: entry for entry in payload["providers"]}
+        assert set(providers) == {"anthropic", "openai", "xai", "google"}
+        anthropic = providers["anthropic"]
+        assert anthropic["label"] == "Anthropic"
+        assert anthropic["envKey"] == "ANTHROPIC_API_KEY"
+        assert anthropic["keyUrl"].startswith("https://")
+        assert "opencode" in anthropic["harnesses"]
+        assert "opencode" in anthropic["recommendedFor"]
 
     @pytest.mark.asyncio
     async def test_capabilities_gateway_on_with_enrollment(
@@ -394,11 +479,11 @@ class TestAgentGatewayCapabilities:
             headers=headers,
         )
         assert response.status_code == 200
-        assert response.json() == {
-            "gatewayEnabled": True,
-            "publicBaseUrl": "https://llm.proliferate.ai",
-            "enrollmentStatus": "pending",
-        }
+        payload = response.json()
+        assert payload["gatewayEnabled"] is True
+        assert payload["publicBaseUrl"] == "https://llm.proliferate.ai"
+        assert payload["enrollmentStatus"] == "pending"
+        assert len(payload["providers"]) == 4
 
 
 class TestAgentGatewayEnrollment:

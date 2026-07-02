@@ -240,6 +240,90 @@ fn opencode_api_key_passthrough_provider_env() {
     assert_eq!(rendered.set.get("ANTHROPIC_API_KEY").unwrap(), "sk-a");
 }
 
+#[test]
+fn opencode_multi_slot_state_merges_into_one_additive_delta() {
+    // Gateway slot + two direct provider slots (spec §3.3): one injected
+    // config for the gateway plus plain env keys for the direct providers,
+    // all in a single launch delta.
+    let home = TempHome::new("opencode-multi-slot");
+    home.write_state_json(&json!({
+        "revision": 11,
+        "user_id": "user-1",
+        "selections": [
+            { "harness": "opencode", "route": "gateway", "slot": "gateway",
+              "base_url": GATEWAY_BASE_URL, "key": VK,
+              "model_catalog": ["claude-haiku-4-5-20251001"] },
+            { "harness": "opencode", "route": "api_key", "slot": "anthropic",
+              "provider": "anthropic", "key": "sk-ant-direct" },
+            { "harness": "opencode", "route": "api_key", "slot": "xai",
+              "provider": "xai", "key": "xai-direct" }
+        ]
+    }));
+
+    let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
+
+    // Gateway slot: injected config + virtual key env.
+    let config_path = rendered
+        .set
+        .get("OPENCODE_CONFIG")
+        .expect("OPENCODE_CONFIG");
+    assert_eq!(rendered.set.get("PROLIFERATE_GATEWAY_KEY").unwrap(), VK);
+    // Direct provider slots: additive plain env keys, no removals.
+    assert_eq!(
+        rendered.set.get("ANTHROPIC_API_KEY").unwrap(),
+        "sk-ant-direct"
+    );
+    assert_eq!(rendered.set.get("XAI_API_KEY").unwrap(), "xai-direct");
+    assert!(rendered.remove.is_empty());
+
+    // The injected config must contain ONLY our provider — no top-level
+    // model/default keys and no other providers — so opencode's config-layer
+    // merge ADDS it to the user's own local providers instead of replacing
+    // them (verified against opencode 1.16.2).
+    let config: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(config_path).expect("read config")).expect("json");
+    let top_level: Vec<&String> = config.as_object().unwrap().keys().collect();
+    assert_eq!(top_level, vec!["provider"]);
+    let providers: Vec<&String> = config["provider"].as_object().unwrap().keys().collect();
+    assert_eq!(providers, vec!["proliferate"]);
+}
+
+#[test]
+fn opencode_provider_slots_without_gateway_render_env_only() {
+    let home = TempHome::new("opencode-direct-only");
+    home.write_state_json(&json!({
+        "revision": 2,
+        "selections": [
+            { "harness": "opencode", "route": "api_key", "slot": "openai",
+              "provider": "openai", "key": "sk-openai-direct" }
+        ]
+    }));
+    let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
+    assert_eq!(
+        rendered.set.get("OPENAI_API_KEY").unwrap(),
+        "sk-openai-direct"
+    );
+    assert!(!rendered.set.contains_key("OPENCODE_CONFIG"));
+    assert!(!rendered.set.contains_key("PROLIFERATE_GATEWAY_KEY"));
+}
+
+#[test]
+fn single_source_harness_with_multiple_entries_errors_end_to_end() {
+    let home = TempHome::new("claude-multi-entry");
+    home.write_state_json(&json!({
+        "revision": 5,
+        "selections": [
+            { "harness": "claude", "route": "gateway", "slot": "primary",
+              "base_url": GATEWAY_BASE_URL, "key": VK },
+            { "harness": "claude", "route": "api_key", "slot": "anthropic",
+              "provider": "anthropic", "key": "sk-raw" }
+        ]
+    }));
+    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("conflict");
+    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_CONFLICT");
+    assert!(matches!(error, RouteAuthError::SelectionConflict { .. }));
+}
+
 // --- grok ------------------------------------------------------------------
 
 #[test]
@@ -410,6 +494,7 @@ fn unknown_harness_in_state_is_typed_error() {
         selections: vec![super::state::AuthSelection {
             harness: "bogus".into(),
             route: AuthRoute::Gateway,
+            slot: "primary".into(),
             provider: None,
             base_url: Some(GATEWAY_BASE_URL.into()),
             key: Some(VK.into()),

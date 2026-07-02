@@ -43,6 +43,7 @@ def route_selection_record(row: AgentAuthRouteSelection) -> AgentAuthRouteSelect
         user_id=row.user_id,
         harness_kind=row.harness_kind,
         surface=row.surface,
+        slot=row.slot,
         route=row.route,
         api_key_id=row.api_key_id,
         revision=row.revision,
