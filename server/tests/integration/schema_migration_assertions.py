@@ -55,6 +55,19 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
     await assert_background_outbox_schema(conn)
     await assert_sso_schema(conn)
 
+    organization_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("organization")
+        }
+    )
+    assert "is_instance" in organization_columns
+    organization_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("organization")
+        }
+    )
+    assert "ux_organization_instance" in organization_indexes
+
     repo_config_columns = await conn.run_sync(
         lambda sync_conn: {
             column["name"] for column in inspect(sync_conn).get_columns("repo_config")
