@@ -4,13 +4,14 @@ import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { EnvironmentSearchSelect } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
 import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   AGENT_API_KEY_PROVIDERS,
   agentApiKeyProviderLabel,
   type AgentApiKeyProviderId,
-} from "./agent-api-key-providers";
+} from "@/config/agent-api-key-providers";
 
 const ADD_NEW_KEY_OPTION_ID = "__add-new-key__";
 
@@ -115,9 +116,12 @@ export function KeyPicker({
       {adding ? (
         <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleAddKey}>
           {provider === undefined ? (
-            <label className="sm:w-40">
-              <span className="sr-only">Provider</span>
+            <div className="sm:w-40">
+              <Label htmlFor="agent-api-key-provider" className="sr-only">
+                Provider
+              </Label>
               <Select
+                id="agent-api-key-provider"
                 aria-label="Provider"
                 value={newProvider}
                 onChange={(event) =>
@@ -129,7 +133,7 @@ export function KeyPicker({
                   </option>
                 ))}
               </Select>
-            </label>
+            </div>
           ) : null}
           <Input
             aria-label="Key name"

@@ -14,13 +14,14 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { ExternalLink } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Tabs } from "@proliferate/ui/primitives/Tabs";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { gatewaySubtitle } from "./agent-auth-copy";
+import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import { KeyPicker } from "./KeyPicker";
 
 const OPENCODE_HARNESS = "opencode";
@@ -167,14 +168,16 @@ export function OpenCodeAuthSection({ displayName }: OpenCodeAuthSectionProps) {
                 <Badge tone="neutral">Recommended</Badge>
               ) : null}
             </div>
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => { void openExternal(provider.keyUrl); }}
             >
               Get an API key
               <ExternalLink className="size-3" />
-            </button>
+            </Button>
           </div>
           <Switch
             aria-label={`${provider.label} key`}

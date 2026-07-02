@@ -18,7 +18,7 @@ import { Tabs } from "@proliferate/ui/primitives/Tabs";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { gatewaySubtitle } from "./agent-auth-copy";
+import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import { KeyPicker } from "./KeyPicker";
 import { OpenCodeAuthSection } from "./OpenCodeAuthSection";
 
