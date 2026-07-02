@@ -107,6 +107,7 @@ apps/packages/
 
   ui/
     src/
+      kit/
       layout/
       primitives/
 
@@ -166,7 +167,7 @@ Use the lowest layer that can own the logic cleanly.
 | Styling | `<app>/src/styles/**`, `<app>/src/index.css` | App-local style entrypoints, native token bridge, app-specific third-party CSS. | Shared tokens or reusable DOM primitives. | [guides/styling.md](guides/styling.md) |
 | Telemetry | `<app>/src/hooks/**`, `<app>/src/lib/**`, `<app>/src/providers/**` | Product event wiring and replay/privacy boundaries at the owning app layer. | Hidden tracking inside shared product UI. | [guides/telemetry.md](guides/telemetry.md) |
 | Design package | `apps/packages/design/**` | Shared tokens, DOM CSS entrypoint, React Native-safe token values. | Product concepts, app code, SDK clients. | [packages/README.md](packages/README.md) |
-| UI package | `apps/packages/ui/**` | Canonical Desktop/Web DOM primitives and layout components. | Product concepts, app code, SDK clients, stores, React Native. | [packages/README.md](packages/README.md) |
+| UI package | `apps/packages/ui/**` | Canonical Desktop/Web DOM primitives and layout components (`kit/` Radix tier + legacy `primitives/`). | Product concepts, app code, SDK clients, stores, React Native. | [packages/README.md](packages/README.md) |
 | Product domain package | `apps/packages/product-domain/**` | Pure shared product rules, vocabulary, validation, projections, view models. | React, DOM, React Native components, SDK clients, query clients, stores, access. | [packages/README.md](packages/README.md) |
 | Product UI package | `apps/packages/product-ui/src/<domain>/<surface>/**` | Shared Desktop/Web product presentation. Props in, callbacks out. | SDK clients, access helpers, query hooks, app stores, routes, Tauri, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |
 | Product surfaces package | `apps/packages/product-surfaces/src/<domain>/<surface>/**` | Shared connected Desktop/Web Cloud surfaces with SDK/query wiring and product UI composition. | Desktop/Web app internals, Tauri, AnyHarness runtime wiring, app stores, app routes, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |

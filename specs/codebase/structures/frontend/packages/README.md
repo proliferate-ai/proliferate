@@ -38,7 +38,7 @@ What promotion *adds* is predictable: a package loses all app internals (stores,
 ```text
 apps/packages/
   design/src/        tokens.ts · css/{dom.css,desktop.css} · react-native.ts
-  ui/src/            primitives/ · layout/
+  ui/src/            kit/ · primitives/ · layout/ · lib/
   product-domain/src/<domain>/
   product-ui/src/<domain>/<surface>/
   product-surfaces/src/<domain>/<surface>/
@@ -70,16 +70,26 @@ Must not hold product copy, product status colors, route concepts, or component 
 The **single DOM primitive system** for Desktop, Web, `product-ui`, and `product-surfaces`. It has no app-local analog — this is the *only* place primitives exist.
 
 ```text
-ui/src/primitives/** · ui/src/layout/**
+ui/src/kit/** · ui/src/primitives/** · ui/src/layout/** · ui/src/lib/utils.ts
 ```
 
 **Hard invariant: no DOM primitive component may be defined outside `apps/packages/ui/**`.** A primitive is any generic reusable control/shell/low-level building block — *including a differently-named wrapper* around a raw DOM control.
 
 Primitives that belong here: `Button`/`IconButton`, `Input`/`Textarea`/`Label`/`Select`, `Checkbox`/`Switch`/radio, `Tabs`/segmented controls, `Menu`/`Popover`/`Tooltip`, `Dialog`/modal shells, badges/pills/separators/scroll-areas/layout shells.
 
+#### `kit/` — the primitive tier going forward
+
+`kit/` holds Radix-backed primitives (`Dialog`, `AlertDialog`, `Popover`, `Tooltip`, `DropdownMenu`, `ContextMenu`, `Checkbox`, `RadioGroup`, `Avatar`, `Separator`, `Skeleton`, `Table`, `Sonner`). The source is shadcn-derived and **we own it** — it is vendored, not a dependency — and every component is styled to the design contract via `design` tokens.
+
+- Import via export-map subpaths: `@proliferate/ui/kit/Dialog` (the `./kit/<Component>` convention; no barrels, same as `primitives/`).
+- `lib/utils.ts` exports `cn()` (tailwind-merge class joiner) at `@proliferate/ui/lib/utils`; kit components use it and callsites may too.
+- **New code imports `kit/` directly** when a kit component exists for the need.
+
+Relationship to `primitives/`: `primitives/` is the legacy tier. Its overlay components (`ModalShell`, `PopoverButton`, `Tooltip`, `ConfirmationDialog`) are thin wrappers that delegate to `kit/` and are being migrated. Four component families currently exist in both tiers — `Checkbox`, `Tooltip`, the Popover family, and the Dialog family. This overlap is **transitional, with `kit/` as the survivor**: do not extend the legacy twin; add capability to the kit component and thin the wrapper.
+
 Rules:
 - Do **not** define primitives in `apps/desktop/src`, `apps/web/src`, `product-ui`, or `product-surfaces`.
-- Do **not** define a second button/input/dialog/menu/select/tabs primitive under another name, or restyle raw DOM controls at callsites to mimic one.
+- Do **not** define a second button/input/dialog/menu/select/tabs primitive under another name, or restyle raw DOM controls at callsites to mimic one. *(Transitional exception: the four `kit/`↔`primitives/` pairs above, resolving toward `kit/`. No new pairs.)*
 - Do **not** render raw `<button>`/`<input>`/`<label>`/`<select>`/`<textarea>` outside `ui`.
 - Need a new size/tone/density/icon-position/loading/destructive/layout mode? **Add the API to `ui` first.**
 - Callsite classes may handle layout/spacing; the primitive owns color, border, radius, typography, focus, hover, disabled, and loading behavior.
@@ -116,7 +126,7 @@ May import Cloud SDK React hooks, `product-domain`, `product-ui`, `ui`, `design`
 
 ## Package rules
 
-- Use concrete export-map subpaths (`@proliferate/ui/primitives/Button`); **no barrels.**
+- Use concrete export-map subpaths (`@proliferate/ui/kit/Dialog`, `@proliferate/ui/primitives/Button`); **no barrels.**
 - Package code must not import app code via `@/` or relative paths into an app, nor app stores/providers/routes/Tauri/AnyHarness wiring unless the map above allows it.
 - No `shared`/`common`/`types`/`utils` buckets. Name files for the rule/primitive/component/surface they own.
 - If sharing needs many app-specific branches, keep it app-local and extract only the pure `product-domain` rule.
