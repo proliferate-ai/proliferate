@@ -101,4 +101,24 @@ describe("buildDelegatedWorkTabIdentity", () => {
     expect(tabIdentity.identity.displayName).toContain("Architecture Review");
     expect(tabIdentity.hoverTitle).toContain("Parent: Main chat");
   });
+
+  it("passes sibling-assigned colorIndex and shapeSalt through to the identity", () => {
+    const base = {
+      id: "link-subagent-1",
+      title: "Explore",
+      source: "subagent" as const,
+      statusLabel: "Working",
+      sessionId: "session-1",
+      sessionLinkId: "link-subagent-1",
+    };
+    const plain = buildDelegatedWorkTabIdentity(base);
+    const assigned = buildDelegatedWorkTabIdentity({
+      ...base,
+      colorIndex: 8,
+      shapeSalt: 1,
+    });
+
+    expect(assigned.identity.colorToken).toBe("delegated-agent-9");
+    expect(assigned.identity.iconSeedHash).not.toBe(plain.identity.iconSeedHash);
+  });
 });

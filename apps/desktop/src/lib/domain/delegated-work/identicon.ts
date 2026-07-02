@@ -1,4 +1,8 @@
-import { mixHash } from "@/lib/domain/delegated-work/identity";
+import {
+  identiconSeedFromSalt,
+  mixHash,
+  stableIndex,
+} from "@/lib/domain/delegated-work/identity";
 
 // Identicon grids are 5x5 with left-right mirror symmetry: columns 0-2 are
 // independent and columns 3-4 mirror columns 1 and 0. That leaves 15 free bits
@@ -29,6 +33,43 @@ export function delegatedAgentIdenticonCells(seedHash: number): boolean[][] {
 // compared and deduped without comparing nested arrays.
 export function identiconKey(cells: boolean[][]): string {
   return cells.flat().map((cell) => (cell ? "1" : "0")).join("");
+}
+
+// With 2^15 shapes and a handful of siblings, probing resolves in one step;
+// the cap only bounds adversarial inputs.
+const MAX_SHAPE_PROBES = 64;
+
+// Sibling-aware shape guard, hash-preferred: every sibling keeps its natural
+// fingerprint (salt 0) unless an EARLIER sibling already drew the exact same
+// grid; only then the salt probes upward until the shape is unique. Unlike
+// the color's pure position index, this must not renumber everyone — a
+// position-based shape would turn the fingerprint into a seat number and
+// break cross-surface consistency. `orderedSeeds` must come in the same
+// stable order (created_at ASC, id ASC) the color pass uses.
+export function assignDistinctIdenticonSeeds(
+  orderedSeeds: readonly string[],
+): Map<string, number> {
+  const usedKeys = new Set<string>();
+  const out = new Map<string, number>();
+  for (const seed of orderedSeeds) {
+    // A repeated seed is the same agent listed twice: reuse its salt instead
+    // of probing it away from itself.
+    if (out.has(seed)) continue;
+    const seedHash = stableIndex(seed);
+    let salt = 0;
+    let key = shapeKeyForSalt(seedHash, salt);
+    while (usedKeys.has(key) && salt < MAX_SHAPE_PROBES) {
+      salt += 1;
+      key = shapeKeyForSalt(seedHash, salt);
+    }
+    usedKeys.add(key);
+    out.set(seed, salt);
+  }
+  return out;
+}
+
+function shapeKeyForSalt(seedHash: number, salt: number): string {
+  return identiconKey(delegatedAgentIdenticonCells(identiconSeedFromSalt(seedHash, salt)));
 }
 
 // The shape must not reuse bits the name index (low bits of the raw seed hash)

@@ -41,6 +41,36 @@ describe("workspace header tab view model derivation", () => {
       .toMatch(/\(.+ [a-z0-9]{6}\)/u);
   });
 
+  it("uses the sibling-assigned color and shape stamped on the hierarchy row", () => {
+    const tabs = buildHeaderChatTabs({
+      groupedTabs: [{
+        sessionId: "working",
+        parentSessionId: "parent",
+        groupRootSessionId: "parent",
+        isChild: true,
+      }],
+      rowsBySessionId: new Map([[
+        "working",
+        {
+          ...delegatedChildRow("working", "Working", false),
+          colorIndex: 8,
+          shapeSalt: 1,
+        },
+      ]]),
+      childrenByParentSessionId: new Map(),
+      resolvedSessionIds: new Set(["parent"]),
+      knownSessions: new Map<string, KnownHeaderSession>([[
+        "parent",
+        placeholder("parent"),
+      ]]),
+      manualGroupByTopLevelSessionId: new Map(),
+    });
+
+    expect(tabs[0]?.delegatedAgent?.identity.colorToken).toBe("delegated-agent-9");
+    expect(tabs[0]?.delegatedAgent?.identity.textColorClassName)
+      .toBe("text-delegated-agent-9");
+  });
+
   it("carries cowork child routing metadata onto child tabs", () => {
     const tabs = buildHeaderChatTabs({
       groupedTabs: [{

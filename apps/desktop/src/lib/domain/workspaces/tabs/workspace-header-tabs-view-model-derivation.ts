@@ -98,6 +98,8 @@ export function buildHeaderChatTabs(args: {
             sessionId: hierarchyChild.sessionId,
             sessionLinkId: hierarchyChild.sessionLinkId,
             parentTitle: parentKnown ? getKnownSessionTitle(parentKnown) : null,
+            colorIndex: hierarchyChild.colorIndex,
+            shapeSalt: hierarchyChild.shapeSalt,
           })
           : null,
       } satisfies HeaderChatTabEntry;

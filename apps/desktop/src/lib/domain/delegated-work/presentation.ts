@@ -135,6 +135,8 @@ export function buildDelegatedWorkTabIdentity(input: {
   sessionId: string;
   sessionLinkId?: string | null;
   parentTitle?: string | null;
+  colorIndex?: number;
+  shapeSalt?: number;
 }): DelegatedWorkTabIdentity {
   const kind = delegatedWorkKindFromSource({
     source: input.source,
@@ -151,6 +153,8 @@ export function buildDelegatedWorkTabIdentity(input: {
     workspaceId: input.workspaceId,
     sessionId: input.sessionId,
     sessionLinkId: input.sessionLinkId,
+    colorIndex: input.colorIndex,
+    shapeSalt: input.shapeSalt,
   });
   const hoverLines = [
     identity.displayName,
