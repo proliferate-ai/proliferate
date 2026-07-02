@@ -15,7 +15,9 @@ the desktop version but can never ship an unofficial build.
 from __future__ import annotations
 
 import os
+import time
 
+import httpx
 from fastapi import APIRouter, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -57,7 +59,38 @@ async def meta() -> MetaResponse:
     )
 
 
+# A pinned desktop version can outpace the published manifests (a server built
+# from a commit whose desktop version has not been released yet, or a release
+# older than versioned-manifest publishing). Probe the versioned manifest and
+# fall back to the flat latest manifest rather than redirecting the whole
+# fleet's update checks to a 404. Probe results are cached briefly so update
+# checks do not hammer the CDN.
+_MANIFEST_PROBE_TTL_SECONDS = 300.0
+_manifest_probe_cache: dict[str, tuple[float, bool]] = {}
+
+
+async def _versioned_manifest_exists(url: str) -> bool:
+    cached = _manifest_probe_cache.get(url)
+    now = time.monotonic()
+    if cached is not None and now - cached[0] < _MANIFEST_PROBE_TTL_SECONDS:
+        return cached[1]
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            response = await client.head(url)
+        exists = response.status_code == 200
+    except httpx.HTTPError:
+        # CDN unreachable from the server: redirect optimistically to the
+        # versioned path (the desktop app talks to the CDN directly and may
+        # well be able to reach it) and do not cache the failure.
+        return True
+    _manifest_probe_cache[url] = (now, exists)
+    return exists
+
+
 @router.get("/desktop/updater/latest.json")
 async def desktop_updater_latest() -> RedirectResponse:
-    target = f"{_desktop_downloads_base_url()}/desktop/stable/{desktop_version()}/latest.json"
+    base = _desktop_downloads_base_url()
+    target = f"{base}/desktop/stable/{desktop_version()}/latest.json"
+    if not await _versioned_manifest_exists(target):
+        target = f"{base}/desktop/stable/latest.json"
     return RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
