@@ -5,6 +5,7 @@ import type {
   AgentAuthRoute,
   AgentAuthRouteSelection,
   AgentAuthRouteSelectionListResponse,
+  AgentAuthState,
   AgentAuthSurface,
   AgentGatewayCapabilities,
   AgentGatewayCatalog,
@@ -93,6 +94,17 @@ export async function clearAgentRouteSelection(
     method: "DELETE",
     path: routeSelectionPath(harnessKind, surface),
     query: { slot },
+  });
+}
+
+export async function getAgentAuthState(
+  surface: AgentAuthSurface,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AgentAuthState> {
+  return client.requestJson<AgentAuthState>({
+    method: "GET",
+    path: "/v1/cloud/agent-gateway/state",
+    query: { surface },
   });
 }
 

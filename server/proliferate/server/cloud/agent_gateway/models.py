@@ -1,7 +1,10 @@
 """Request and response models for the agent gateway auth APIs.
 
-Responses never carry key material: no secret, payload, ciphertext, or
-virtual-key fields exist on any model here.
+Responses never carry key material — with one deliberate exception:
+``AgentAuthStateResponse`` mirrors the AnyHarness state.json contract and
+carries the caller's OWN decrypted keys, exactly as the cloud materializer
+writes them into the caller's own sandbox (same trust model, different
+delivery surface).
 """
 
 from __future__ import annotations
@@ -74,6 +77,35 @@ class AgentAuthRouteSelectionUpsertRequest(AgentGatewayBaseModel):
     # Composition axis (spec §3.3): 'primary' for single-source harnesses;
     # opencode uses per-source slots. Defaults keep pre-slot callers working.
     slot: str = "primary"
+
+
+class AgentAuthStateSelection(AgentGatewayBaseModel):
+    """One rendered selection in the AnyHarness state.json contract shape.
+
+    Field names are the on-disk contract (snake_case, matching the serde
+    structs in ``route_auth/state.rs``) — deliberately NOT camelCased like the
+    rest of this module. ``key`` is decrypted material (see module docstring).
+    """
+
+    harness: str
+    route: AgentAuthRoute
+    slot: str
+    provider: str | None = None
+    base_url: str | None = None
+    key: str | None = None
+    model_catalog: list[str] | None = None
+
+
+class AgentAuthStateResponse(AgentGatewayBaseModel):
+    """The whole state.json document (``route_auth/state.rs::AgentAuthState``).
+
+    ``revision`` 0 with empty ``selections`` is the legacy/native marker: the
+    user has no selections for the surface and the runtime may fall through.
+    """
+
+    revision: int
+    user_id: str
+    selections: list[AgentAuthStateSelection]
 
 
 class AgentGatewayProviderInfo(AgentGatewayBaseModel):
@@ -197,6 +229,16 @@ def route_selection_payload(
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
     )
+
+
+def agent_auth_state_payload(
+    state: dict[str, object] | None,
+    *,
+    user_id: str,
+) -> AgentAuthStateResponse:
+    if state is None:
+        return AgentAuthStateResponse(revision=0, user_id=user_id, selections=[])
+    return AgentAuthStateResponse.model_validate(state)
 
 
 def provider_registry_payload() -> list[AgentGatewayProviderInfo]:

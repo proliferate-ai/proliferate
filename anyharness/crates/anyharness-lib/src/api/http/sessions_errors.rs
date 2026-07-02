@@ -119,7 +119,8 @@ pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
         | RouteAuthError::SelectionConflict { .. }
         | RouteAuthError::SelectionIncomplete { .. }
         | RouteAuthError::UnsupportedRoute { .. }
-        | RouteAuthError::UnknownHarness { .. } => {
+        | RouteAuthError::UnknownHarness { .. }
+        | RouteAuthError::StaleStateRevision { .. } => {
             ApiError::conflict(error.to_string(), error.code())
         }
         RouteAuthError::MalformedStateFile { .. } | RouteAuthError::Materialize { .. } => {

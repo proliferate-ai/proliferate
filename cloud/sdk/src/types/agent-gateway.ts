@@ -18,6 +18,8 @@ export type AgentGatewayCatalogOverride =
   Schema<"AgentGatewayCatalogOverrideResponse">;
 export type UpsertAgentGatewayCatalogOverrideRequest =
   Schema<"AgentGatewayCatalogOverrideUpsertRequest">;
+export type AgentAuthState = Schema<"AgentAuthStateResponse">;
+export type AgentAuthStateSelection = Schema<"AgentAuthStateSelection">;
 export type AgentAuthSurface = AgentAuthRouteSelection["surface"];
 export type AgentAuthRoute = AgentAuthRouteSelection["route"];
 export type OrgAgentPolicy = Schema<"OrgAgentPolicyResponse">;

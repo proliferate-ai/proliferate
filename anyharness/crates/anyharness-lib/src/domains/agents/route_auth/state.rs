@@ -139,6 +139,44 @@ pub fn load_state_file(runtime_home: &Path) -> Result<Option<AgentAuthState>, Ro
     load_state_from_path(&path)
 }
 
+/// Persist a state document pushed by a delivery surface (the desktop local
+/// writer, mirroring what the cloud materialization worker writes into
+/// sandboxes). The write is atomic and 0600 via the shared route-auth private
+/// file helper.
+///
+/// Stale-write protection: a payload whose revision is BELOW the persisted
+/// file's revision is rejected (a delayed push must never roll live
+/// selections back). Equal revisions are accepted — content is authoritative
+/// (e.g. a virtual-key rotation changes the file without a revision bump). A
+/// malformed on-disk file carries no trustworthy revision and is healed by
+/// any valid push.
+pub fn apply_state_file(runtime_home: &Path, state: &AgentAuthState) -> Result<(), RouteAuthError> {
+    let path = state_file_path(runtime_home);
+    let persisted_revision = match load_state_from_path(&path) {
+        Ok(existing) => existing.map(|existing| existing.revision),
+        Err(RouteAuthError::MalformedStateFile { .. }) => None,
+        Err(error) => return Err(error),
+    };
+    if let Some(current) = persisted_revision {
+        if state.revision < current {
+            return Err(RouteAuthError::StaleStateRevision {
+                incoming: state.revision,
+                current,
+            });
+        }
+    }
+    let parent = path.parent().expect("state file path has a parent");
+    fs::create_dir_all(parent).map_err(|error| RouteAuthError::Materialize {
+        detail: format!("failed to create {}: {error}", parent.display()),
+    })?;
+    let mut serialized =
+        serde_json::to_vec_pretty(state).map_err(|error| RouteAuthError::Materialize {
+            detail: format!("failed to serialize agent-auth state: {error}"),
+        })?;
+    serialized.push(b'\n');
+    super::materialize::write_private_file(&path, &serialized)
+}
+
 pub(super) fn load_state_from_path(path: &Path) -> Result<Option<AgentAuthState>, RouteAuthError> {
     let contents = match fs::read(path) {
         Ok(contents) => contents,
@@ -274,6 +312,79 @@ mod tests {
         let serialized = serde_json::to_string(&state).expect("serialize");
         let parsed: AgentAuthState = serde_json::from_str(&serialized).expect("reparse");
         assert_eq!(state, parsed);
+    }
+
+    fn state_with_revision(revision: i64) -> AgentAuthState {
+        AgentAuthState {
+            revision,
+            user_id: Some("user-1".into()),
+            selections: vec![AuthSelection {
+                harness: "claude".into(),
+                route: AuthRoute::Native,
+                slot: SLOT_PRIMARY.into(),
+                provider: None,
+                base_url: None,
+                key: None,
+                model_catalog: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn apply_state_file_writes_private_and_round_trips() {
+        let home = TempHome::new("apply-write");
+        let state = state_with_revision(7);
+        apply_state_file(home.path(), &state).expect("apply");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded, state);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(state_file_path(home.path()))
+                .expect("metadata")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+    }
+
+    #[test]
+    fn apply_state_file_rejects_lower_revision_and_keeps_file() {
+        let home = TempHome::new("apply-stale");
+        apply_state_file(home.path(), &state_with_revision(5)).expect("apply");
+        let error = apply_state_file(home.path(), &state_with_revision(4)).expect_err("stale");
+        assert!(matches!(
+            error,
+            RouteAuthError::StaleStateRevision {
+                incoming: 4,
+                current: 5
+            }
+        ));
+        assert_eq!(error.code(), "AGENT_ROUTE_STATE_STALE");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded.revision, 5);
+    }
+
+    #[test]
+    fn apply_state_file_accepts_equal_and_higher_revisions() {
+        let home = TempHome::new("apply-monotonic");
+        apply_state_file(home.path(), &state_with_revision(5)).expect("apply");
+        // Equal revision: content is authoritative (vkey rotation case).
+        let mut rotated = state_with_revision(5);
+        rotated.selections[0].harness = "codex".into();
+        apply_state_file(home.path(), &rotated).expect("equal revision");
+        apply_state_file(home.path(), &state_with_revision(6)).expect("higher revision");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded.revision, 6);
+    }
+
+    #[test]
+    fn apply_state_file_heals_a_malformed_file() {
+        let home = TempHome::new("apply-heal");
+        home.write_state_raw(b"{ not json");
+        apply_state_file(home.path(), &state_with_revision(3)).expect("heal");
+        let loaded = load_state_file(home.path()).expect("load").expect("state");
+        assert_eq!(loaded.revision, 3);
     }
 
     #[test]

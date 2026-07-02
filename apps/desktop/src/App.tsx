@@ -20,6 +20,7 @@ import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-acti
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-auth-adoption"
+import { useLocalAuthStateSync } from "@/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
 import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
@@ -207,6 +208,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_first_run_auth_adoption")
   useFirstRunAuthAdoption()
   recordBootDiagnosticOnce("app_runtime.render.after.use_first_run_auth_adoption")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
+  useLocalAuthStateSync()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")

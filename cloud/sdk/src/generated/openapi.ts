@@ -1241,6 +1241,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-gateway/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Auth State Endpoint
+         * @description Serve the caller's rendered state.json document for one surface.
+         *
+         *     This is the local-surface twin of the cloud materializer: the desktop
+         *     fetches ``surface=local`` and pushes the payload verbatim to its local
+         *     AnyHarness runtime (``PUT /v1/agent-auth/state``), which persists it at
+         *     ``<runtime_home>/agent-auth/state.json``.
+         *
+         *     Trust model: the response carries the current user's OWN decrypted key
+         *     material (pool keys, gateway virtual key) — the same secrets the cloud
+         *     materializer writes into the user's own sandbox. Auth is the current
+         *     product user; nothing here crosses a user boundary.
+         */
+        get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-gateway/catalog/{harness_kind}": {
         parameters: {
             query?: never;
@@ -2356,6 +2386,48 @@ export interface components {
              * @default primary
              */
             slot: string;
+        };
+        /**
+         * AgentAuthStateResponse
+         * @description The whole state.json document (``route_auth/state.rs::AgentAuthState``).
+         *
+         *     ``revision`` 0 with empty ``selections`` is the legacy/native marker: the
+         *     user has no selections for the surface and the runtime may fall through.
+         */
+        AgentAuthStateResponse: {
+            /** Revision */
+            revision: number;
+            /** User Id */
+            user_id: string;
+            /** Selections */
+            selections: components["schemas"]["AgentAuthStateSelection"][];
+        };
+        /**
+         * AgentAuthStateSelection
+         * @description One rendered selection in the AnyHarness state.json contract shape.
+         *
+         *     Field names are the on-disk contract (snake_case, matching the serde
+         *     structs in ``route_auth/state.rs``) — deliberately NOT camelCased like the
+         *     rest of this module. ``key`` is decrypted material (see module docstring).
+         */
+        AgentAuthStateSelection: {
+            /** Harness */
+            harness: string;
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Slot */
+            slot: string;
+            /** Provider */
+            provider?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Key */
+            key?: string | null;
+            /** Model Catalog */
+            model_catalog?: string[] | null;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
@@ -7618,6 +7690,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get: {
+        parameters: {
+            query: {
+                surface: "local" | "cloud";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentAuthStateResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
