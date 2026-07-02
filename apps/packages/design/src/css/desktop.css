@@ -117,7 +117,7 @@
   --color-card-foreground: #ffffff;
 
   /* -- Popover (Codex elevated-primary) -- */
-  --color-popover: #212121;
+  --color-popover: #2d2d2d; /* codex dropdown surface — one step above panels */
   --color-popover-foreground: #ffffff;
   --color-popover-accent: rgba(255, 255, 255, 0.05);
   --color-popover-ring: rgba(255, 255, 255, 0.084);
