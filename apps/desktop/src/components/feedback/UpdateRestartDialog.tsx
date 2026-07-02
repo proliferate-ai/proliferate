@@ -14,25 +14,30 @@ export function UpdateRestartDialog() {
   } = useUpdater();
   const runningCount = useRunningAgentCount();
 
-  const installed = availableVersion
-    ? `Proliferate ${availableVersion} is installed.`
-    : "The update is installed.";
+  const ready = availableVersion
+    ? `Proliferate ${availableVersion} is ready.`
+    : "The update is ready.";
   const hasRunning = runningCount > 0;
   const runningLabel = runningCount === 1
     ? "1 session is running"
     : `${runningCount} sessions are running`;
   const stopClause = runningCount === 1
-    ? "restarting will stop it."
-    : "restarting will stop them.";
+    ? "restarting stops it."
+    : "restarting stops them.";
+  const deferLabel = runningCount === 1
+    ? "Restart when it finishes"
+    : "Restart when they finish";
 
   return (
     <ModalShell
       open={restartPromptOpen && phase === "ready"}
       onClose={closeRestartPrompt}
-      title="Restart to finish updating"
+      title="Restart to update"
       showCloseButton={false}
       sizeClassName="max-w-[440px]"
-      panelClassName="!rounded-lg border-border/80 bg-card shadow-floating-dark"
+      // animate-dialog-pop-in: ModalShell itself renders static (kit Dialog has
+      // no data-state animations), so the entrance motion rides the panel here.
+      panelClassName="animate-dialog-pop-in !rounded-lg border-border/80 bg-card shadow-floating-dark"
       bodyClassName="px-5 pb-5 pt-0"
       footerClassName="flex shrink-0 items-center justify-end gap-2 px-5 pb-5 pt-0"
       footer={(
@@ -49,7 +54,7 @@ export function UpdateRestartDialog() {
           </Button>
           {hasRunning ? (
             <Button variant="primary" size="sm" onClick={scheduleRestartWhenIdle}>
-              Restart when they finish
+              {deferLabel}
             </Button>
           ) : null}
         </>
@@ -58,10 +63,10 @@ export function UpdateRestartDialog() {
       <p className="text-sm leading-relaxed text-muted-foreground">
         {hasRunning ? (
           <>
-            {installed} <span className="text-foreground">{runningLabel}</span> — {stopClause}
+            {ready} <span className="text-foreground">{runningLabel}</span> — {stopClause}
           </>
         ) : (
-          `${installed} It’s ready to use.`
+          `${ready} Restart now to switch over.`
         )}
       </p>
     </ModalShell>

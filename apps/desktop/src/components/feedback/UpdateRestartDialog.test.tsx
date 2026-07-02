@@ -37,8 +37,8 @@ describe("UpdateRestartDialog", () => {
     render(<UpdateRestartDialog />);
 
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getAllByText("Restart to finish updating").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Proliferate 0\.1\.42 is installed/)).toBeTruthy();
+    expect(screen.getAllByText("Restart to update").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Proliferate 0\.1\.42 is ready\. Restart now to switch over\./)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
@@ -49,17 +49,32 @@ describe("UpdateRestartDialog", () => {
 
     expect(screen.getByRole("button", { name: "Later" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Restart now" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Restart when they finish" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Restart when/ })).toBeNull();
   });
 
-  it("warns about running sessions and offers to defer the restart", () => {
+  it("pluralizes the deferred restart for several running sessions", () => {
     sessionMocks.runningCount = 3;
 
     render(<UpdateRestartDialog />);
 
     expect(screen.getByText(/3 sessions are running/)).toBeTruthy();
+    expect(screen.getByText(/restarting stops them\./)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Restart when it finishes" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Restart when they finish" }));
+    expect(updaterMocks.scheduleRestartWhenIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the singular deferred restart for one running session", () => {
+    sessionMocks.runningCount = 1;
+
+    render(<UpdateRestartDialog />);
+
+    expect(screen.getByText(/1 session is running/)).toBeTruthy();
+    expect(screen.getByText(/restarting stops it\./)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Restart when they finish" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restart when it finishes" }));
     expect(updaterMocks.scheduleRestartWhenIdle).toHaveBeenCalledTimes(1);
   });
 
