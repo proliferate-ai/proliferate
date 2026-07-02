@@ -300,6 +300,77 @@ async def test_complete_github_app_installation_callback_rejects_foreign_install
 
 
 @pytest.mark.asyncio
+async def test_complete_github_app_installation_callback_surfaces_install_context_auth_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unconnected actor gets the install-context 409, not the generic copy."""
+    monkeypatch.setattr(service.settings, "cloud_secret_key", "test-secret")
+    monkeypatch.setattr(service.settings, "frontend_base_url", "https://app.example.test")
+
+    actor_user_id = uuid.uuid4()
+    organization_id = uuid.uuid4()
+    state = service._state_for_installation(
+        user_id=actor_user_id,
+        organization_id=organization_id,
+        return_to=None,
+    )
+    installation = GitHubAppInstallationInfo(
+        github_installation_id="142900805",
+        account_login="proliferate-ai",
+        account_type="Organization",
+        repository_selection="selected",
+        permissions={"contents": "read"},
+    )
+
+    async def fake_get_github_app_installation(
+        *,
+        installation_id: str,
+    ) -> GitHubAppInstallationInfo:
+        assert installation_id == "142900805"
+        return installation
+
+    async def fake_ensure_fresh_github_app_authorization(db: object, *, user_id: uuid.UUID):
+        del db
+        assert user_id == actor_user_id
+        # The helper raises with generic "GitHub Cloud repos" copy.
+        raise CloudApiError(
+            "github_app_authorization_required",
+            "Connect the Proliferate GitHub App before using GitHub Cloud repos.",
+            status_code=409,
+        )
+
+    async def fail_upsert_github_app_installation(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("installation must not be bound when actor is unauthorized")
+
+    monkeypatch.setattr(
+        service,
+        "get_github_app_installation",
+        fake_get_github_app_installation,
+    )
+    monkeypatch.setattr(
+        service,
+        "ensure_fresh_github_app_authorization",
+        fake_ensure_fresh_github_app_authorization,
+    )
+    monkeypatch.setattr(
+        service.github_app_store,
+        "upsert_github_app_installation",
+        fail_upsert_github_app_installation,
+    )
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await service.complete_github_app_installation_callback(
+            object(),
+            installation_id="142900805",
+            setup_action="install",
+            state=state,
+        )
+    assert excinfo.value.code == "github_app_authorization_required"
+    assert excinfo.value.status_code == 409
+    assert "installing the Proliferate GitHub App" in excinfo.value.message
+
+
+@pytest.mark.asyncio
 async def test_upsert_github_app_installation_rejects_cross_org_rebind() -> None:
     """Defense in depth: the store refuses to reassign an installation's org."""
     existing_org_id = uuid.uuid4()

@@ -435,13 +435,22 @@ async def _verify_actor_controls_installation(
     the cross-tenant IDOR where a signed installation `state` for org A is
     replayed against another tenant's `installation_id`.
     """
-    authorization = await ensure_fresh_github_app_authorization(db, user_id=actor_user_id)
-    if authorization.access_token is None:
-        raise CloudApiError(
+    try:
+        authorization = await ensure_fresh_github_app_authorization(db, user_id=actor_user_id)
+    except CloudApiError as exc:
+        # `ensure_fresh_github_app_authorization` raises with generic
+        # "GitHub Cloud repos" copy; surface an install-context message when the
+        # actor simply has no (or an expired) user authorization.
+        if exc.code in {
             "github_app_authorization_required",
-            "Connect your GitHub account before installing the Proliferate GitHub App.",
-            status_code=409,
-        )
+            "github_app_authorization_expired",
+        }:
+            raise CloudApiError(
+                "github_app_authorization_required",
+                "Connect your GitHub account before installing the Proliferate GitHub App.",
+                status_code=409,
+            ) from exc
+        raise
     try:
         accessible = await list_github_app_user_installations(
             user_access_token=authorization.access_token,
