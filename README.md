@@ -8,10 +8,10 @@
 </p>
 
 <p>
-  <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://badgen.net/github/stars/proliferate-ai/proliferate?label=%E2%98%85" /></a>
-  <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://badgen.net/badge/license/AGPL-3.0/45618E" /></a>
-  <a href="https://discord.gg/wCEgUnEuF"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" /></a>
-  <img alt="Platform: macOS" src="https://img.shields.io/badge/macOS-2f363d?logo=apple&logoColor=white" />
+  <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&label=%E2%98%85&color=2f363d" /></a>
+  <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-45618E?style=flat" /></a>
+  <a href="https://discord.gg/wCEgUnEuF"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white" /></a>
+  <img alt="Platform: macOS" src="https://img.shields.io/badge/macOS-2f363d?style=flat&logo=apple&logoColor=white" />
 </p>
 
 <p>
