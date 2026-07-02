@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.server.cloud.materialization import runner
 from proliferate.server.cloud.materialization.materialize import (
+    agent_auth as agent_auth_materializer,
+)
+from proliferate.server.cloud.materialization.materialize import (
     repo_environment as repo_environment_materializer,
 )
 from proliferate.server.cloud.materialization.materialize import (
@@ -58,6 +61,19 @@ async def schedule_materialize_secret_set(
     )
 
 
+async def schedule_materialize_agent_auth(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> None:
+    """Refresh agent-auth state in the user's active cloud sandbox after commit."""
+    await runner.run_after_commit(
+        db,
+        label=f"materialize_agent_auth:{user_id}",
+        task=lambda: _spawn(materialize_agent_auth, user_id=user_id),
+    )
+
+
 async def materialize_sandbox(db: AsyncSession, *, user_id: UUID) -> None:
     await sandbox_materializer.materialize_sandbox(db, user_id=user_id)
 
@@ -75,6 +91,10 @@ async def materialize_repo_environment(
 
 async def materialize_secret_set(db: AsyncSession, *, secret_set_id: UUID) -> None:
     await secret_set_materializer.materialize_secret_set(db, secret_set_id=secret_set_id)
+
+
+async def materialize_agent_auth(db: AsyncSession, *, user_id: UUID) -> None:
+    await agent_auth_materializer.materialize_agent_auth_for_user(db, user_id=user_id)
 
 
 async def _spawn(fn: Callable[..., Awaitable[None]], **kwargs: object) -> None:
