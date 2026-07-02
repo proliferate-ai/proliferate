@@ -203,6 +203,10 @@
       "types": "./dist/settings/SettingsEmptyState.d.ts",
       "import": "./dist/settings/SettingsEmptyState.js"
     },
+    "./settings/SettingsEyebrow": {
+      "types": "./dist/settings/SettingsEyebrow.d.ts",
+      "import": "./dist/settings/SettingsEyebrow.js"
+    },
     "./settings/SettingsScopeTabs": {
       "types": "./dist/settings/SettingsScopeTabs.d.ts",
       "import": "./dist/settings/SettingsScopeTabs.js"

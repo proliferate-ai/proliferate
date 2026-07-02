@@ -6,6 +6,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsSection } from "../settings/SettingsSection";
 import { SettingsRow } from "../settings/SettingsRow";
 import { SettingsPageHeader } from "../settings/SettingsPageHeader";
+import { SettingsEyebrow } from "../settings/SettingsEyebrow";
 
 export interface CloudEnvironmentListItemView {
   id: string;
@@ -136,9 +137,7 @@ function SectionHeading({
   return (
     <div className="flex items-end justify-between gap-3">
       <div className="min-w-0">
-        <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-          {title}
-        </h3>
+        <SettingsEyebrow as="h3">{title}</SettingsEyebrow>
         <p className="mt-1 max-w-2xl text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

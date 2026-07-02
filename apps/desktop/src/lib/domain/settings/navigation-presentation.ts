@@ -162,8 +162,19 @@ const SECTION_TO_SCOPE = new Map<SettingsSection, SettingsScope>(
   ),
 );
 
+/**
+ * Parked sections that are not registered in any scope nav but can still be
+ * reached (e.g. via deep links while their panes are being revived). Mapping
+ * them here keeps the correct scope tab highlighted instead of falling back
+ * to "user".
+ */
+const PARKED_SECTION_SCOPES: Partial<Record<string, SettingsScope>> = {
+  "organization-limits": "org",
+  "slack-bot": "org",
+};
+
 export function getSettingsScopeForSection(section: SettingsSection): SettingsScope {
-  return SECTION_TO_SCOPE.get(section) ?? "user";
+  return SECTION_TO_SCOPE.get(section) ?? PARKED_SECTION_SCOPES[section] ?? "user";
 }
 
 export function getSettingsScopeNav(scope: SettingsScope): SettingsScopeNav {

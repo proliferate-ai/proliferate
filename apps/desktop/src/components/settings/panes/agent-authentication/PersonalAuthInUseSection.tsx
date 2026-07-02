@@ -8,6 +8,7 @@ import type {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
+import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import type {
@@ -95,18 +96,18 @@ export function PersonalAuthInUseSection({
       </div>
 
       <div>
-        <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-3 border-b border-border bg-foreground/5 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+        <SettingsEyebrow className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-3 border-b border-border bg-foreground/5 py-2">
           <span>Harness</span>
           <span>Local sandbox</span>
           <span>Personal cloud</span>
-        </div>
+        </SettingsEyebrow>
         {slots.map((slot) => {
           const slotCredentials = credentialsForAgentAuthSlot(credentials, slot);
           return (
             <div
               key={`${slot.agentKind}-${slot.authSlotId}`}
               id={agentAuthSlotDomId(slot.agentKind, slot.authSlotId)}
-              className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0"
+              className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-3 border-b border-border py-3 last:border-b-0"
             >
               <HarnessIdentity slot={slot} />
               <LocalAuthCell

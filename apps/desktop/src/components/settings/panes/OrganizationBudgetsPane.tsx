@@ -4,6 +4,7 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { OrganizationMemberLlmBudgets } from "@/components/settings/panes/organization/OrganizationMemberLlmBudgets";
+import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
@@ -43,11 +44,11 @@ export function OrganizationBudgetsPane() {
         <div className="text-xs text-muted-foreground">Loading organization...</div>
       ) : null}
 
-      <div className="space-y-5 p-5">
+      <div className="space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">Balances remaining</h2>
+              <SettingsEyebrow as="h2">Balances remaining</SettingsEyebrow>
               <Badge tone="neutral">Mocked UI</Badge>
             </div>
             <p className="max-w-2xl text-xs leading-[1.45] text-muted-foreground">
@@ -74,10 +75,10 @@ export function OrganizationBudgetsPane() {
         </div>
       </div>
 
-      <div className="space-y-5 p-5">
+      <div className="space-y-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-1.5">
-              <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">Total usage</h2>
+              <SettingsEyebrow as="h2">Total usage</SettingsEyebrow>
               <p className="max-w-2xl text-xs leading-[1.45] text-muted-foreground">
                 {USED_COMPUTE_PCUS} PCUs and {USED_LLM_CREDITS.toLocaleString()} LLM credits used in the last 7 days.
               </p>

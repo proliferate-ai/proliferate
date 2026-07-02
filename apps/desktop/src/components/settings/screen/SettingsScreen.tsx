@@ -51,6 +51,7 @@ import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
+import { useToastStore } from "@/stores/toast/toast-store";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { isSettingsScaffoldPageId } from "@/copy/settings/settings-scaffold-copy";
 
@@ -251,6 +252,7 @@ export function SettingsScreen({
   const { activeOrganizationId, organizationsQuery } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
   const { revealInFinder } = useTauriShellActions();
+  const showToast = useToastStore((state) => state.show);
   const {
     phase,
     checkNow,
@@ -299,7 +301,7 @@ export function SettingsScreen({
       const { appConfigDir } = await import("@tauri-apps/api/path");
       await revealInFinder(await appConfigDir());
     } catch {
-      // Best-effort: revealing the on-disk config is not available in this environment.
+      showToast("Couldn't open the config folder.");
     }
   };
 
@@ -335,7 +337,7 @@ export function SettingsScreen({
               size="sm"
               onClick={() => { void handleEditSettingsToml(); }}
             >
-              Edit settings.toml
+              Open config folder
             </Button>
           </div>
         </div>

@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
+import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { AppSidebarFooter } from "@/components/app/sidebar/AppSidebarFooter";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
@@ -69,8 +70,7 @@ const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-3 pb-5 pt-4";
 const SETTINGS_GROUPS_CLASS = "flex flex-col";
 const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
 const SETTINGS_GROUP_SPACING_CLASS = "mt-6";
-const SETTINGS_GROUP_HEADING_CLASS =
-  "px-2.5 pb-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground";
+const SETTINGS_GROUP_HEADING_SPACING_CLASS = "px-2.5 pb-1.5";
 const SETTINGS_ROW_INACTIVE_CLASS =
   "!text-muted-foreground hover:!text-foreground";
 const SETTINGS_ROW_ACTIVE_CLASS =
@@ -293,7 +293,9 @@ export function SettingsSidebar({
               className={`${SETTINGS_GROUP_CLASS} ${index > 0 ? SETTINGS_GROUP_SPACING_CLASS : ""}`}
             >
               {group.heading ? (
-                <div className={SETTINGS_GROUP_HEADING_CLASS}>{group.heading}</div>
+                <SettingsEyebrow className={SETTINGS_GROUP_HEADING_SPACING_CLASS}>
+                  {group.heading}
+                </SettingsEyebrow>
               ) : null}
               {group.items.map((item) => (
                 <Fragment key={item.id}>{renderNavRow(item)}</Fragment>

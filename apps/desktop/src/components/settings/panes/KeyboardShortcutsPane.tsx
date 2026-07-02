@@ -9,6 +9,7 @@ import {
 } from "@/config/shortcuts/composer-shortcuts";
 import { SHORTCUTS, type ShortcutKey } from "@/config/shortcuts/registry";
 import type { ComposerShortcutDef, ShortcutDef } from "@/config/shortcuts/types";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -220,9 +221,7 @@ export function KeyboardShortcutsPane() {
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-8 text-center text-xs text-muted-foreground shadow-subtle">
-            No shortcuts found
-          </div>
+          <SettingsEmptyState size="compact" title="No shortcuts found" />
         )}
       </div>
     </section>

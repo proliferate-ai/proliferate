@@ -1,4 +1,5 @@
 import { type HTMLAttributes, type ReactNode } from "react";
+import { SettingsEyebrow } from "./SettingsEyebrow";
 
 export interface SettingsSectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title?: ReactNode;
@@ -25,11 +26,7 @@ export function SettingsSection({
     <section className={className} {...props}>
       {title || description ? (
         <div className="mb-1.5">
-          {title ? (
-            <div className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-              {title}
-            </div>
-          ) : null}
+          {title ? <SettingsEyebrow>{title}</SettingsEyebrow> : null}
           {description ? (
             <p className="mt-1 max-w-2xl text-[12px] leading-[1.45] text-muted-foreground">{description}</p>
           ) : null}

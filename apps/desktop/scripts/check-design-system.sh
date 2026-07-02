@@ -6,9 +6,9 @@
 # expresses structure through SettingsRow/SettingsSection/SettingsPageHeader/
 # SettingsEmptyState instead of hand-typing the scale.
 #
-# Allowlisted one-offs (structural elements with no primitive): table column
-# headers, status pills, the sidebar group-heading constant, version strings,
-# interactive chrome like the titlebar back button.
+# Allowlisted one-offs (structural elements with no primitive): status pills,
+# shortcut badges, version strings, interactive chrome like the titlebar back
+# button.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -18,12 +18,8 @@ FAIL=0
 ALLOWLIST=(
   "$SETTINGS/sidebar/SettingsSidebar.tsx"
   "$SETTINGS/screen/SettingsScreen.tsx"
-  "$SETTINGS/panes/agent-authentication/AuthenticationMethodsSection.tsx"
-  "$SETTINGS/panes/agent-authentication/PersonalAuthInUseSection.tsx"
   "$SETTINGS/panes/ArchivedChatsPane.tsx"
   "$SETTINGS/panes/ModelRegistryPane.tsx"
-  "$SETTINGS/panes/OrganizationBudgetsPane.tsx"
-  "$SETTINGS/panes/organization/OrganizationMemberLlmBudgets.tsx"
 )
 
 is_allowed() {
@@ -47,9 +43,11 @@ check() {
 }
 
 # Card-era primitives must not come back anywhere in desktop settings.
-if grep -rn "settings/SettingsCard" "$SETTINGS" --include='*.tsx' >/dev/null 2>&1; then
+# Any import path ending in /SettingsCard or /SettingsCardRow fails.
+RETIRED_PRIMITIVE_PATTERN='/SettingsCard(Row)?["'"'"']'
+if grep -rEn "$RETIRED_PRIMITIVE_PATTERN" "$SETTINGS" --include='*.tsx' >/dev/null 2>&1; then
   echo "FAIL [retired card primitive]:"
-  grep -rn "settings/SettingsCard" "$SETTINGS" --include='*.tsx'
+  grep -rEn "$RETIRED_PRIMITIVE_PATTERN" "$SETTINGS" --include='*.tsx'
   FAIL=1
 fi
 
