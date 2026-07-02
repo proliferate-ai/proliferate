@@ -81,10 +81,11 @@ class TestTargetSelectionCrud:
         # The override and the default are distinct rows.
         assert payload["id"] != default.json()["id"]
 
+        # The default list never interleaves target overrides: consumers keep
+        # exactly one row per (harness, surface, slot).
         listed = await client.get(_SELECTIONS, headers=headers)
         assert listed.status_code == 200
-        target_ids = {entry["targetId"] for entry in listed.json()["selections"]}
-        assert target_ids == {None, target_id}
+        assert [entry["targetId"] for entry in listed.json()["selections"]] == [None]
 
         filtered = await client.get(
             _SELECTIONS,
@@ -309,6 +310,105 @@ class TestTargetInheritanceRender:
         assert cleared.status_code == 204
         reverted = await _get_state(client, headers, "local", target_id)
         assert reverted.json()["selections"] == default_doc.json()["selections"]
+
+    @pytest.mark.asyncio
+    async def test_override_delete_never_lowers_document_revision(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """Reverting to inherited defaults strictly supersedes the pushed doc.
+
+        The runtime rejects pushes below its persisted revision, so if
+        deleting an override that carried the strict-max revision lowered the
+        rendered max, the revert would be permanently unpushable and the
+        runtime would keep the deleted credentials.
+        """
+        user_id, headers = await _authed_user(client)
+        target_id = await _create_target(db_session, owner_user_id=user_id)
+        key = await _create_key(client, headers)
+
+        default = await client.put(
+            f"{_SELECTIONS}/claude/local",
+            headers=headers,
+            json={"route": "native"},
+        )
+        assert default.status_code == 200, default.text
+
+        # Edit the override twice so it strictly out-revisions the default row.
+        for body in (
+            {"route": "native"},
+            {"route": "api_key", "apiKeyId": key["id"]},
+            {"route": "native"},
+        ):
+            override = await client.put(
+                f"{_SELECTIONS}/claude/local",
+                headers=headers,
+                params={"targetId": target_id},
+                json=body,
+            )
+            assert override.status_code == 200, override.text
+        assert override.json()["revision"] == 3
+
+        pushed = await _get_state(client, headers, "local", target_id)
+        assert pushed.json()["revision"] == 3
+
+        cleared = await client.delete(
+            f"{_SELECTIONS}/claude/local",
+            headers=headers,
+            params={"targetId": target_id},
+        )
+        assert cleared.status_code == 204
+
+        default_doc = await _get_state(client, headers, "local")
+        reverted = await _get_state(client, headers, "local", target_id)
+        assert reverted.json()["selections"] == default_doc.json()["selections"]
+        assert reverted.json()["selections"] == [
+            {"harness": "claude", "route": "native", "slot": "primary"},
+        ]
+        # The shadowed default row was bumped past the deleted revision.
+        assert reverted.json()["revision"] == 4
+
+    @pytest.mark.asyncio
+    async def test_target_only_override_delete_bumps_a_surviving_basis_row(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """No shadowed default for the deleted slot: another basis row carries it."""
+        user_id, headers = await _authed_user(client)
+        target_id = await _create_target(db_session, owner_user_id=user_id)
+        key = await _create_key(client, headers)
+
+        codex_default = await client.put(
+            f"{_SELECTIONS}/codex/local",
+            headers=headers,
+            json={"route": "native"},
+        )
+        assert codex_default.status_code == 200, codex_default.text
+
+        for body in ({"route": "native"}, {"route": "api_key", "apiKeyId": key["id"]}):
+            override = await client.put(
+                f"{_SELECTIONS}/claude/local",
+                headers=headers,
+                params={"targetId": target_id},
+                json=body,
+            )
+            assert override.status_code == 200, override.text
+        assert override.json()["revision"] == 2
+
+        cleared = await client.delete(
+            f"{_SELECTIONS}/claude/local",
+            headers=headers,
+            params={"targetId": target_id},
+        )
+        assert cleared.status_code == 204
+
+        reverted = await _get_state(client, headers, "local", target_id)
+        assert reverted.json()["selections"] == [
+            {"harness": "codex", "route": "native", "slot": "primary"},
+        ]
+        assert reverted.json()["revision"] == 3
 
     @pytest.mark.asyncio
     async def test_revision_is_monotonic_across_default_and_override_edits(

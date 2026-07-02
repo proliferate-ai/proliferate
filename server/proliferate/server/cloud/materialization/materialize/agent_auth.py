@@ -120,10 +120,12 @@ def resolve_surface_selections(
     edit to EITHER layer advances (or holds) the target document's revision.
     Rendering only the winners' revisions could go backwards — a fresh
     override starts at revision 1 and would undercut an already-pushed default
-    document, tripping the runtime's stale-revision (409) guard. Deleting the
-    single highest-revision row can still lower the max (a pre-existing
-    property of the default surface as well); the runtime accepts
-    equal-revision pushes, so reverts propagate whenever revisions tie.
+    document, tripping the runtime's stale-revision (409) guard. Deletes
+    cannot lower the max either: the store bumps a surviving basis row past a
+    deleted strict-max row's revision
+    (``_preserve_scope_revision_after_delete``), so a revert strictly
+    supersedes the last pushed document. Only deleting a scope's final basis
+    row drops the document to the revision-0 marker.
     """
     default_rows = [
         selection
@@ -292,7 +294,7 @@ async def _load_state_inputs(
     surface: str = AGENT_AUTH_SURFACE_CLOUD,
     target_id: UUID | None = None,
 ) -> AgentAuthStateInputs:
-    selections = tuple(await agent_gateway_store.list_route_selections(db, user_id=user_id))
+    selections = tuple(await agent_gateway_store.list_all_route_selections(db, user_id=user_id))
     effective, _ = resolve_surface_selections(
         selections,
         surface=surface,

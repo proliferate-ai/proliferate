@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import case, delete, select
+from sqlalchemy import Select, case, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
@@ -251,16 +251,103 @@ async def delete_route_selection(
     target_id: UUID | None = None,
 ) -> bool:
     """Clear the selection for a scope. Returns whether a row was deleted."""
-    result = await db.execute(
-        delete(AgentAuthRouteSelection).where(
-            AgentAuthRouteSelection.user_id == user_id,
-            AgentAuthRouteSelection.harness_kind == harness_kind,
-            AgentAuthRouteSelection.surface == surface,
-            _target_scope_filter(target_id),
-            AgentAuthRouteSelection.slot == slot,
+    row = (
+        await db.execute(
+            select(AgentAuthRouteSelection).where(
+                AgentAuthRouteSelection.user_id == user_id,
+                AgentAuthRouteSelection.harness_kind == harness_kind,
+                AgentAuthRouteSelection.surface == surface,
+                _target_scope_filter(target_id),
+                AgentAuthRouteSelection.slot == slot,
+            )
         )
+    ).scalar_one_or_none()
+    if row is None:
+        return False
+    deleted_revision = row.revision
+    await db.delete(row)
+    await db.flush()
+    await _preserve_scope_revision_after_delete(
+        db,
+        user_id=user_id,
+        harness_kind=harness_kind,
+        surface=surface,
+        slot=slot,
+        target_id=target_id,
+        deleted_revision=deleted_revision,
     )
-    return (result.rowcount or 0) > 0
+    return True
+
+
+async def _preserve_scope_revision_after_delete(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    harness_kind: str,
+    surface: str,
+    slot: str,
+    target_id: UUID | None,
+    deleted_revision: int,
+) -> None:
+    """Keep a delete from lowering the affected document's rendered revision.
+
+    The document revision is ``max(revision)`` over the scope's basis rows
+    (``resolve_surface_selections``), and the runtime rejects pushes whose
+    revision is below the persisted one (stale-write guard). If the deleted
+    row carried the strict max, the reverted document would be permanently
+    unpushable — the runtime would keep rendering the deleted selection's
+    credentials. So the row that now carries the revert — the shadowed default
+    for an override delete, else the highest-revision surviving basis row — is
+    bumped past the deleted revision, making the revert strictly supersede the
+    last pushed document. With no surviving basis rows the document disappears
+    entirely (revision-0 marker), and there is nothing to carry.
+    """
+    scope: ColumnElement[bool] = AgentAuthRouteSelection.target_id.is_(None)
+    if target_id is not None:
+        scope = or_(scope, AgentAuthRouteSelection.target_id == target_id)
+    survivors = (
+        (
+            await db.execute(
+                select(AgentAuthRouteSelection).where(
+                    AgentAuthRouteSelection.user_id == user_id,
+                    AgentAuthRouteSelection.surface == surface,
+                    scope,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not survivors or max(row.revision for row in survivors) >= deleted_revision:
+        return
+    shadowed_default = next(
+        (
+            row
+            for row in survivors
+            if target_id is not None
+            and row.target_id is None
+            and row.harness_kind == harness_kind
+            and row.slot == slot
+        ),
+        None,
+    )
+    carrier = shadowed_default or max(
+        survivors,
+        key=lambda row: (row.revision, row.harness_kind, row.slot),
+    )
+    carrier.revision = deleted_revision + 1
+    carrier.updated_at = utcnow()
+    await db.flush()
+
+
+def _selection_list_order(
+    stmt: Select[tuple[AgentAuthRouteSelection]],
+) -> Select[tuple[AgentAuthRouteSelection]]:
+    return stmt.order_by(
+        AgentAuthRouteSelection.harness_kind,
+        AgentAuthRouteSelection.surface,
+        AgentAuthRouteSelection.slot,
+    )
 
 
 async def list_route_selections(
@@ -269,26 +356,32 @@ async def list_route_selections(
     user_id: UUID,
     target_id: UUID | None = None,
 ) -> list[AgentAuthRouteSelectionRecord]:
-    """List the user's selections; ``target_id`` narrows to one target's rows.
+    """List one scope's selections: the default rows, or one target's rows.
 
-    ``target_id`` None returns everything (default rows and every target's
-    overrides) — callers that need only default rows filter on the record's
-    ``target_id``.
+    ``target_id`` None returns only default rows (``target_id`` IS NULL) —
+    never any target's overrides — so callers keep exactly one row per
+    (harness_kind, surface, slot). A target id returns only that target's
+    override rows. Renderers that need both layers use
+    :func:`list_all_route_selections`.
+    """
+    stmt = select(AgentAuthRouteSelection).where(
+        AgentAuthRouteSelection.user_id == user_id,
+        _target_scope_filter(target_id),
+    )
+    rows = (await db.execute(_selection_list_order(stmt))).scalars().all()
+    return [route_selection_record(row) for row in rows]
+
+
+async def list_all_route_selections(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[AgentAuthRouteSelectionRecord]:
+    """List every selection row — default rows plus every target's overrides.
+
+    Feed for the inheritance render (``resolve_surface_selections``), which
+    needs both layers to merge a target document.
     """
     stmt = select(AgentAuthRouteSelection).where(AgentAuthRouteSelection.user_id == user_id)
-    if target_id is not None:
-        stmt = stmt.where(AgentAuthRouteSelection.target_id == target_id)
-    rows = (
-        (
-            await db.execute(
-                stmt.order_by(
-                    AgentAuthRouteSelection.harness_kind,
-                    AgentAuthRouteSelection.surface,
-                    AgentAuthRouteSelection.slot,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
+    rows = (await db.execute(_selection_list_order(stmt))).scalars().all()
     return [route_selection_record(row) for row in rows]
