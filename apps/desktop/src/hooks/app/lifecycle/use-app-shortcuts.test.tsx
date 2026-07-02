@@ -171,7 +171,6 @@ function commandActions(): AppCommandActions {
     openSettings: action(),
     showKeyboardShortcuts: action(),
     goHome: action(),
-    goIntegrations: action(),
     goWorkflows: action(),
     openWebApp: action(),
     openSupport: action(),

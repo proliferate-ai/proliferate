@@ -14,7 +14,6 @@ export type AppNavigationCommandActions = Pick<
   | "openSettings"
   | "showKeyboardShortcuts"
   | "goHome"
-  | "goIntegrations"
   | "goWorkflows"
   | "openWebApp"
   | "openSupport"
@@ -36,9 +35,6 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   }, [openShortcutsDialog]);
   const goHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
-  }, [goToTopLevelRoute]);
-  const goIntegrations = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.integrations);
   }, [goToTopLevelRoute]);
   const goWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
@@ -66,10 +62,6 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
       execute: goHome,
       disabledReason: null,
     },
-    goIntegrations: {
-      execute: goIntegrations,
-      disabledReason: null,
-    },
     goWorkflows: {
       execute: goWorkflows,
       disabledReason: null,
@@ -84,7 +76,6 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     },
   }), [
     goHome,
-    goIntegrations,
     goWorkflows,
     openSettings,
     openSupport,

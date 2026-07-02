@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
@@ -8,7 +7,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
-import { APP_ROUTES } from "@/config/app-routes";
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
@@ -43,7 +41,6 @@ const NEW_WORKSPACE_MODE_OPTIONS: { id: DefaultNewWorkspaceMode; label: string }
   { id: "local", label: "Local" },
 ];
 export function GeneralPane() {
-  const navigate = useNavigate();
   const { data: editors = EMPTY_EDITORS } = useAvailableEditors();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultOpenInTargetId: state.defaultOpenInTargetId,
@@ -177,21 +174,6 @@ export function GeneralPane() {
                 onChange={(value) => preferences.set("turnEndSoundEnabled", value)}
               />
             </div>
-          </SettingsRow>
-      </SettingsSection>
-
-      <SettingsSection title="Integrations">
-          <SettingsRow
-            label="Integrations setup"
-            description="Cloud connectors and plugin packages"
-          >
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(APP_ROUTES.integrations)}
-            >
-              Open integrations
-            </Button>
           </SettingsRow>
       </SettingsSection>
 

@@ -59,17 +59,6 @@ from proliferate.server.cloud.github_app.api import callback_router as github_ap
 from proliferate.server.cloud.github_app.api import (
     setup_callback_router as github_app_setup_callback_router,
 )
-
-# MOBILITY PARKED: old exposure/handoff cleanup imports deleted models.
-# from proliferate.server.cloud.mobility.reconciler import (
-#     start_mobility_cleanup_reconciler,
-#     stop_mobility_cleanup_reconciler,
-# )
-# SETUP MONITOR PARKED: old cloud_workspace_setup_run table was removed.
-# from proliferate.server.cloud.runtime.setup_monitor import (
-#     start_cloud_setup_monitor,
-#     stop_cloud_setup_monitor,
-# )
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
@@ -176,19 +165,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pass
     # AGENT AUTH PARKED.
     # start_agent_gateway_reconciler()
-    # MOBILITY PARKED.
-    # start_mobility_cleanup_reconciler()
-    # SETUP MONITOR PARKED.
-    # start_cloud_setup_monitor()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        # SETUP MONITOR PARKED.
-        # await stop_cloud_setup_monitor()
-        # MOBILITY PARKED.
-        # await stop_mobility_cleanup_reconciler()
         # AGENT AUTH PARKED.
         # await stop_agent_gateway_reconciler()
         # BILLING RECONCILER PARKED.

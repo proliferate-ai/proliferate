@@ -8,13 +8,10 @@ const hookMocks = vi.hoisted(() => ({
   copyText: vi.fn(() => Promise.resolve()),
   openExternal: vi.fn(() => Promise.resolve()),
   showToast: vi.fn(),
-  mobility: {
-    selectionLocked: false,
-    selectedLogicalWorkspace: {
-      cloudWorkspace: { id: "cloud-workspace-1" },
-      mobilityWorkspace: null,
-    },
-  },
+  selectedLogicalWorkspace: {
+    cloudWorkspace: { id: "cloud-workspace-1" },
+    mobilityWorkspace: null,
+  } as { cloudWorkspace: { id: string } | null; mobilityWorkspace: { cloudWorkspaceId: string } | null } | null,
 }));
 
 vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
@@ -24,8 +21,12 @@ vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/derived/mobility/use-workspace-mobility-state", () => ({
-  useWorkspaceMobilityState: () => hookMocks.mobility,
+vi.mock("@/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
+  useSelectedLogicalWorkspace: () => ({
+    selectedLogicalWorkspace: hookMocks.selectedLogicalWorkspace,
+    selectedLogicalWorkspaceId: null,
+    isLoading: false,
+  }),
 }));
 
 vi.mock("@/lib/infra/proliferate-web", () => ({
@@ -42,8 +43,7 @@ describe("useWorkspaceOpenInWebActions", () => {
     hookMocks.copyText.mockClear();
     hookMocks.openExternal.mockClear();
     hookMocks.showToast.mockClear();
-    hookMocks.mobility.selectionLocked = false;
-    hookMocks.mobility.selectedLogicalWorkspace = {
+    hookMocks.selectedLogicalWorkspace = {
       cloudWorkspace: { id: "cloud-workspace-1" },
       mobilityWorkspace: null,
     };
