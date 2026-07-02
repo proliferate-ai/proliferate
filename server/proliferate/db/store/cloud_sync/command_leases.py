@@ -10,7 +10,6 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus, CloudWorkspaceStatus
-from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.runtime_config import (
     SandboxProfileRuntimeConfigCurrent,
@@ -79,21 +78,6 @@ async def lease_next_command(
                 )
             )
         )
-        if CloudCommandKind.refresh_agent_auth_config.value not in supported_kinds:
-            query = query.where(
-                ~and_(
-                    CloudCommand.kind.in_(
-                        (
-                            CloudCommandKind.start_session.value,
-                            CloudCommandKind.send_prompt.value,
-                        )
-                    ),
-                    or_(
-                        CloudCommand.payload_json.contains('"sandboxProfileId"'),
-                        CloudCommand.payload_json.contains('"requiredAgentAuthRevision"'),
-                    ),
-                )
-            )
         row = (
             await db.execute(
                 query.order_by(CloudCommand.created_at.asc())
@@ -164,19 +148,6 @@ async def lease_next_command(
         runtime_config_error = await _runtime_config_lease_blocker(db, row, target=target)
         if runtime_config_error is not None:
             status, code, message = runtime_config_error
-            row.status = status
-            row.error_code = code
-            row.error_message = message
-            if status == CloudCommandStatus.rejected.value:
-                row.rejected_at = now
-            row.updated_at = now
-            await db.flush()
-            if blocked_commands is not None:
-                blocked_commands.append(snapshot_command(row))
-            continue
-        agent_auth_error = await _agent_auth_lease_blocker(db, row, target=target)
-        if agent_auth_error is not None:
-            status, code, message = agent_auth_error
             row.status = status
             row.error_code = code
             row.error_message = message
@@ -327,25 +298,6 @@ async def _runtime_config_lease_blocker(
             "runtime_config_blocked",
             "Launch command runtime config is blocked by resolver errors.",
         )
-    state = (
-        await db.execute(
-            select(SandboxProfileTargetState).where(
-                SandboxProfileTargetState.sandbox_profile_id == profile_id,
-                SandboxProfileTargetState.target_id == row.target_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if (
-        state is None
-        or state.runtime_config_status != "applied"
-        or state.applied_runtime_config_revision_id != str(revision_id)
-        or state.applied_runtime_config_sequence < required_sequence
-    ):
-        return (
-            CloudCommandStatus.superseded.value,
-            "runtime_config_not_ready",
-            "Launch command runtime config was no longer current before dispatch.",
-        )
     return None
 
 
@@ -420,93 +372,3 @@ def _runtime_config_has_blocking_errors(manifest_json: str) -> bool:
     return isinstance(blocking_errors, list) and any(
         isinstance(item, dict) for item in blocking_errors
     )
-
-
-async def _agent_auth_lease_blocker(
-    db: AsyncSession,
-    row: CloudCommand,
-    *,
-    target: CloudTarget | None,
-) -> tuple[str, str, str] | None:
-    if row.kind not in {
-        CloudCommandKind.start_session.value,
-        CloudCommandKind.send_prompt.value,
-    }:
-        return None
-    try:
-        payload = json.loads(row.payload_json or "{}")
-    except json.JSONDecodeError:
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_payload_invalid",
-            "Launch command payload is not valid JSON.",
-        )
-    if not isinstance(payload, dict):
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_payload_invalid",
-            "Launch command payload is invalid.",
-        )
-    sandbox_profile_id = payload.get("sandboxProfileId")
-    required_revision = payload.get("requiredAgentAuthRevision")
-    if sandbox_profile_id is None and required_revision is None:
-        return None
-    try:
-        profile_id = UUID(str(sandbox_profile_id))
-    except (TypeError, ValueError):
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_profile_invalid",
-            "Launch command agent auth profile is invalid.",
-        )
-    if not isinstance(required_revision, int) or isinstance(required_revision, bool):
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_revision_invalid",
-            "Launch command agent auth revision is invalid.",
-        )
-    if target is None or target.sandbox_profile_id != profile_id:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_target_mismatch",
-            "Launch command agent auth target no longer matches.",
-        )
-    profile = await db.get(SandboxProfile, profile_id)
-    if profile is None or profile.archived_at is not None or profile.deleted_at is not None:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_profile_missing",
-            "Launch command agent auth profile is no longer available.",
-        )
-    if required_revision != profile.desired_agent_auth_revision:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_revision_stale",
-            "Launch command agent auth revision was superseded before dispatch.",
-        )
-    state = (
-        await db.execute(
-            select(SandboxProfileTargetState).where(
-                SandboxProfileTargetState.sandbox_profile_id == profile_id,
-                SandboxProfileTargetState.target_id == row.target_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if (
-        state is None
-        or state.agent_auth_status != "applied"
-        or state.applied_agent_auth_revision is None
-        or state.applied_agent_auth_revision < required_revision
-    ):
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_not_ready",
-            "Launch command agent auth config was no longer current before dispatch.",
-        )
-    if state.agent_auth_force_restart_required:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_restart_required",
-            "Launch command agent auth config requires restart before dispatch.",
-        )
-    return None

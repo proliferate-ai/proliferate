@@ -42,7 +42,6 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.repos.service import get_linked_github_account
 from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provision
-from proliferate.server.cloud.sandbox_profiles import service as sandbox_profile_service
 from proliferate.server.cloud.workspaces.access import (
     cloud_workspace_user_can_interact_with_db,
 )
@@ -60,7 +59,6 @@ from proliferate.server.cloud.workspaces.provisioning.models import (
 from proliferate.server.cloud.workspaces.provisioning.preflight import (
     bootstrap_repo_config_tx,
     load_github_app_repo_branches_tx,
-    load_personal_agent_auth_agent_kinds,
     load_repo_config_value_tx,
     raise_if_cloud_workspace_start_denied,
     raise_repo_limit_exceeded,
@@ -121,15 +119,15 @@ def transition_workspace_status(
 async def _ensure_personal_managed_profile(
     user: ActorIdentity,
 ) -> tuple[UUID, UUID]:
-    async with db_session.open_async_transaction() as db:
-        profile = await sandbox_profile_service.ensure_personal(db, user=user)
-    if profile.primary_target_id is None:
-        raise CloudApiError(
-            "cloud_target_not_found",
-            "Managed cloud target could not be prepared.",
-            status_code=500,
-        )
-    return profile.id, profile.primary_target_id
+    # Sandbox profiles were removed with the Bifrost gateway teardown
+    # (specs/codebase/primitives/agent-auth-litellm.md); the legacy
+    # profile-backed managed workspace flow can no longer be provisioned.
+    del user
+    raise CloudApiError(
+        "cloud_target_not_found",
+        "Managed cloud target could not be prepared.",
+        status_code=500,
+    )
 
 
 async def _finalize_managed_cloud_workspace(
@@ -578,20 +576,12 @@ async def start_cloud_workspace(
     )
     raise_if_cloud_workspace_start_denied(authorization)
 
-    selected_agent_kinds = await load_personal_agent_auth_agent_kinds(user.id)
-    if not selected_agent_kinds:
-        raise CloudApiError(
-            "missing_supported_credentials",
-            "Select an agent authentication credential before starting a cloud workspace.",
-            status_code=400,
-        )
     log_cloud_event(
         "cloud workspace start validated",
         workspace_id=workspace.id,
         repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
         base_branch=base_branch,
         branch_name=workspace.git_branch,
-        selected_agent_kinds=",".join(selected_agent_kinds),
         active_sandbox_count=authorization.active_sandbox_count,
     )
 

@@ -2,10 +2,10 @@ import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
-import { AgentAuthTerminalPanel } from "@/components/agents/AgentAuthTerminalPanel";
+import { AgentLoginTerminalPanel } from "@/components/agents/AgentLoginTerminalPanel";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
-import type { AgentAuthTerminalSession } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
+import type { AgentLoginTerminalSession } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
 import {
   badgeToneForAgentStatus,
   configurationDetailForAgent,
@@ -35,7 +35,7 @@ export function AgentConfigurationIssuesSection({
   isReconciling: boolean;
   reconcileResultsByKind: Map<string, ReconcileAgentResult>;
   issueActionsByAgentKind: Record<string, AgentConfigurationIssueAction>;
-  authTerminalSessionsByKind: Record<string, AgentAuthTerminalSession>;
+  authTerminalSessionsByKind: Record<string, AgentLoginTerminalSession>;
   authTerminalConnection: {
     baseUrl: string;
     authToken?: string;
@@ -109,7 +109,7 @@ export function AgentConfigurationIssuesSection({
 
               {authTerminalSession ? (
                 <div className="pl-11">
-                  <AgentAuthTerminalPanel
+                  <AgentLoginTerminalPanel
                     session={authTerminalSession}
                     baseUrl={authTerminalConnection.baseUrl}
                     authToken={authTerminalConnection.authToken}

@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use super::attachment_storage::PromptAttachmentStorage;
 use super::deletion::SessionDeleteWorkflow;
 use super::store::SessionStore;
-use crate::domains::agents::auth::{AgentAuthSelectionRequired, AgentAuthService};
 use crate::domains::agents::catalog::service::AgentCatalogService;
 use crate::domains::workspaces::store::WorkspaceStore;
 
@@ -20,7 +17,6 @@ pub struct SessionService {
     delete_workflow: SessionDeleteWorkflow,
     attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
-    agent_auth_service: Arc<AgentAuthService>,
     catalog_service: AgentCatalogService,
     runtime_home: std::path::PathBuf,
 }
@@ -40,7 +36,6 @@ pub enum CreateSessionError {
         agent_kind: String,
         mode_id: String,
     },
-    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     Invalid(String),
     Internal(anyhow::Error),
 }
@@ -64,7 +59,6 @@ impl SessionService {
         session_store: SessionStore,
         delete_workflow: SessionDeleteWorkflow,
         workspace_store: WorkspaceStore,
-        agent_auth_service: Arc<AgentAuthService>,
         catalog_service: AgentCatalogService,
         runtime_home: std::path::PathBuf,
     ) -> Self {
@@ -73,7 +67,6 @@ impl SessionService {
             delete_workflow,
             attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
-            agent_auth_service,
             catalog_service,
             runtime_home,
         }

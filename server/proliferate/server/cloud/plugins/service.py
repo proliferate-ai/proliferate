@@ -4,7 +4,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_plugins import (
     CloudPluginConfiguredItemSnapshot,
@@ -246,21 +245,10 @@ async def _refresh_personal_runtime_config(
     user_id: UUID,
     reason: str,
 ) -> None:
-    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
-        refresh_profile_runtime_config,
-    )
-
-    profile = await sandbox_profile_store.ensure_personal_sandbox_profile(
-        db,
-        user_id=user_id,
-        created_by_user_id=user_id,
-    )
-    await refresh_profile_runtime_config(
-        db,
-        sandbox_profile_id=profile.id,
-        actor_user_id=user_id,
-        reason=reason,
-    )
+    # PARKED: sandbox profiles were removed with the Bifrost gateway teardown
+    # (specs/codebase/primitives/agent-auth-litellm.md); there is no profile
+    # runtime config left to refresh.
+    del db, user_id, reason
 
 
 async def _refresh_org_runtime_config(
@@ -270,18 +258,7 @@ async def _refresh_org_runtime_config(
     organization_id: UUID,
     reason: str,
 ) -> None:
-    from proliferate.server.cloud.runtime_config.service import (  # noqa: PLC0415
-        refresh_profile_runtime_config,
-    )
-
-    profile = await sandbox_profile_store.ensure_organization_sandbox_profile(
-        db,
-        organization_id=organization_id,
-        created_by_user_id=user_id,
-    )
-    await refresh_profile_runtime_config(
-        db,
-        sandbox_profile_id=profile.id,
-        actor_user_id=user_id,
-        reason=reason,
-    )
+    # PARKED: sandbox profiles were removed with the Bifrost gateway teardown
+    # (specs/codebase/primitives/agent-auth-litellm.md); there is no profile
+    # runtime config left to refresh.
+    del db, user_id, organization_id, reason

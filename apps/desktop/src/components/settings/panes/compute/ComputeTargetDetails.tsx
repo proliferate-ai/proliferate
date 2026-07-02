@@ -5,7 +5,6 @@ import { COMPUTE_COPY } from "@/copy/settings/compute";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useComputeTargetEnrollment } from "@/hooks/settings/workflows/use-compute-target-enrollment";
 import { useSshDirectTargetProfile } from "@/hooks/settings/workflows/use-ssh-direct-target-profile";
-import { useSandboxProfileTargetState } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { useSandboxProfileRuntimeConfig } from "@proliferate/cloud-sdk-react/hooks/runtime-config";
 import {
   resolveComputeTargetAppearance,
@@ -17,7 +16,6 @@ import type {
   ComputeTargetDetail,
   ComputeTargetSummary,
 } from "@/lib/domain/compute/target-types";
-import { ComputeTargetAgentAuthCard } from "./ComputeTargetAgentAuthCard";
 import { EnrollmentCommandBlock } from "./EnrollmentCommandBlock";
 import { ComputeTargetReadiness } from "./ComputeTargetReadiness";
 import { ComputeTargetDetailsHeader } from "@/components/settings/panes/compute/ComputeTargetDetailsHeader";
@@ -50,10 +48,6 @@ export function ComputeTargetDetails({
   const readinessSandboxProfileId = target?.sandboxProfileId ?? null;
   const shouldLoadSandboxReadiness = target?.kind === "managed_cloud"
     && readinessSandboxProfileId !== null;
-  const targetStateQuery = useSandboxProfileTargetState(
-    readinessSandboxProfileId,
-    shouldLoadSandboxReadiness,
-  );
   const runtimeConfigQuery = useSandboxProfileRuntimeConfig(
     readinessSandboxProfileId,
     shouldLoadSandboxReadiness,
@@ -253,15 +247,9 @@ export function ComputeTargetDetails({
 
         <ComputeTargetReadiness
           target={target}
-          sandboxProfileTargetState={targetStateQuery.data ?? null}
           runtimeConfigStatus={runtimeConfigQuery.data ?? null}
-          loadingTargetState={targetStateQuery.isLoading}
           loadingRuntimeConfig={runtimeConfigQuery.isLoading}
         />
-
-        <Divider />
-
-        <ComputeTargetAgentAuthCard target={target} />
 
         <Divider />
 

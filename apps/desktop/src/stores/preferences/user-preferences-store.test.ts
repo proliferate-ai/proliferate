@@ -383,10 +383,6 @@ describe("user preference migration", () => {
     );
   });
 
-  it("defaults runtime input sync off", () => {
-    expect(USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled).toBe(false);
-  });
-
   it("defaults long-paste attachments on", () => {
     expect(USER_PREFERENCE_DEFAULTS.pasteAttachmentsEnabled).toBe(true);
   });
@@ -398,18 +394,6 @@ describe("user preference migration", () => {
     expect(PERSISTED_RECORD_BACKFILL.uiFontSizeId).toBe("default");
     expect(PERSISTED_RECORD_BACKFILL.readableCodeFontSizeId).toBe("default");
     expect(PERSISTED_RECORD_BACKFILL.windowZoomId).toBe("default");
-  });
-
-  it("migrates missing runtime input sync preference to false", () => {
-    const legacy = {
-      ...USER_PREFERENCE_DEFAULTS,
-      cloudRuntimeInputSyncEnabled: undefined,
-    } as unknown as UserPreferences;
-
-    const result = migrateUserPreferences(legacy);
-
-    expect(result.changed).toBe(true);
-    expect(result.preferences.cloudRuntimeInputSyncEnabled).toBe(false);
   });
 
   it("migrates missing long-paste attachment preference to on", () => {

@@ -2,7 +2,6 @@ import type { AgentSummary } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { AgentDefaultComposer } from "@/components/settings/panes/AgentDefaultComposer";
@@ -18,7 +17,7 @@ import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useAgentAuthTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
+import { useAgentLoginTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
 import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
 import {
@@ -27,15 +26,13 @@ import {
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
 import { isReadyAgent } from "@/lib/domain/agents/status";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
 
 export function AgentDefaultsPane() {
-  const navigate = useNavigate();
   const [setupAgent, setSetupAgent] = useState<AgentSummary | null>(null);
   const showToast = useToastStore((state) => state.show);
-  const authTerminalWorkflow = useAgentAuthTerminalWorkflow();
+  const authTerminalWorkflow = useAgentLoginTerminalWorkflow();
   const { reconcileAgents } = useAgentInstallationActions();
   const {
     connectionState,
@@ -119,8 +116,6 @@ export function AgentDefaultsPane() {
       const authTerminalSession = authTerminalWorkflow.sessionsByKind[agent.kind] ?? null;
       const canOpenInlineAuth = agent.readiness === "login_required"
         && agent.supportsLogin;
-      const usesAuthenticationPage = agent.readiness === "credentials_required"
-        || (agent.readiness === "login_required" && !agent.supportsLogin);
       const authActionLabel = authTerminalSession?.isStarting
         ? "Opening..."
         : authTerminalSession?.terminal
@@ -130,24 +125,13 @@ export function AgentDefaultsPane() {
             : "Open auth";
 
       actions[agent.kind] = {
-        label: canOpenInlineAuth
-          ? authActionLabel
-          : usesAuthenticationPage
-            ? "Open auth"
-            : "Review setup",
+        label: canOpenInlineAuth ? authActionLabel : "Review setup",
         loading: authTerminalSession?.isStarting ?? false,
         onClick: () => {
           if (canOpenInlineAuth) {
             void authTerminalWorkflow.openAuthTerminal(agent, {
               restart: Boolean(authTerminalSession),
             });
-            return;
-          }
-          if (usesAuthenticationPage) {
-            navigate(buildSettingsHref({
-              section: "agent-authentication",
-              kind: agent.kind,
-            }));
             return;
           }
           setSetupAgent(agent);
@@ -160,14 +144,13 @@ export function AgentDefaultsPane() {
     agentsNeedingSetup,
     authTerminalWorkflow.openAuthTerminal,
     authTerminalWorkflow.sessionsByKind,
-    navigate,
   ]);
 
   return (
     <section className="space-y-5">
       <SettingsPageHeader
         title="Agent Defaults"
-        description="Configure default harness launch behavior. Local installs and sign-in repair live here; shared credentials live in Agent Authentication."
+        description="Configure default harness launch behavior. Local installs and sign-in repair live here."
         action={
           <Button
             variant="ghost"

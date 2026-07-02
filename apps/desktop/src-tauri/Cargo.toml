@@ -8,7 +8,6 @@ tauri-build.workspace = true
 
 [dependencies]
 tauri.workspace = true
-anyharness-credential-discovery.workspace = true
 tauri-plugin-store.workspace = true
 tauri-plugin-shell.workspace = true
 tauri-plugin-os.workspace = true

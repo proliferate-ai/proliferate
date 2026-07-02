@@ -6,12 +6,11 @@ from datetime import datetime
 from typing import Literal
 
 from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
     CloudRuntimeEnvironmentStatus,
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
-from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
-from proliferate.server.cloud.runtime.credentials.auth_status import RuntimeAuthStateSnapshot
 from proliferate.server.cloud.workspaces.models import (
     LastSessionSummary,
     OriginContext,
@@ -24,7 +23,6 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceExecutionTargetSummary,
     WorkspaceExposureSummary,
     WorkspaceMaterializationSummary,
-    WorkspaceRuntimeAuthState,
     WorkspaceRuntimeSummary,
     WorkspaceSummary,
 )
@@ -88,25 +86,6 @@ def _origin_context_from_legacy_origin(origin: str | None) -> OriginContext | No
     if origin == "cowork_api":
         return OriginContext(kind="api", entrypoint="api")
     return None
-
-
-def runtime_auth_payload(
-    snapshot: RuntimeAuthStateSnapshot | None,
-) -> WorkspaceRuntimeAuthState | None:
-    if snapshot is None:
-        return None
-    return WorkspaceRuntimeAuthState(
-        status=snapshot.status,
-        config_current=snapshot.config_current,
-        target_current=snapshot.target_current,
-        requires_restart=snapshot.requires_restart,
-        desired_revision=snapshot.desired_revision,
-        applied_revision=snapshot.applied_revision,
-        last_error=snapshot.last_error,
-        last_error_at=_to_iso(snapshot.last_error_at),
-        last_attempted_at=_to_iso(snapshot.last_attempted_at),
-        last_applied_at=_to_iso(snapshot.last_applied_at),
-    )
 
 
 def exposure_payload(exposure: WorkspaceExposureRecord | None) -> WorkspaceExposureSummary | None:
@@ -357,7 +336,6 @@ def workspace_summary_payload(
     workspace: WorkspaceRecord,
     *,
     runtime_environment: RuntimeEnvironmentRecord | None = None,
-    runtime_auth: RuntimeAuthStateSnapshot | None = None,
     billing: WorkspaceBillingRecord | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
@@ -421,7 +399,6 @@ def workspace_summary_payload(
                 if runtime_environment is not None
                 else workspace.runtime_generation
             ),
-            runtime_auth=runtime_auth_payload(runtime_auth),
             action_block_kind=action_block_kind,
             action_block_reason=action_block_reason,
         ),
@@ -478,7 +455,6 @@ def workspace_detail_payload(
     ready_agent_kind_values: list[str] | tuple[str, ...],
     *,
     runtime_environment: RuntimeEnvironmentRecord | None = None,
-    runtime_auth: RuntimeAuthStateSnapshot | None = None,
     billing: WorkspaceBillingRecord | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
@@ -494,7 +470,6 @@ def workspace_detail_payload(
     summary = workspace_summary_payload(
         workspace,
         runtime_environment=runtime_environment,
-        runtime_auth=runtime_auth,
         billing=billing,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
@@ -509,7 +484,7 @@ def workspace_detail_payload(
     )
     return WorkspaceDetail(
         **summary.model_dump(),
-        allowed_agent_kinds=allowed_agent_kinds(),
+        allowed_agent_kinds=list(SUPPORTED_CLOUD_AGENTS),
         ready_agent_kinds=sorted(set(ready_agent_kind_values)),
         anyharness_workspace_id=workspace.anyharness_workspace_id,
     )

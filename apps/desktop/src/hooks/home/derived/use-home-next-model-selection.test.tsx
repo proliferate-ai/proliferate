@@ -3,10 +3,7 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSummary } from "@anyharness/sdk";
-import type {
-  CloudTargetSummary,
-  SandboxAgentAuthSelection,
-} from "@proliferate/cloud-sdk";
+import type { CloudTargetSummary } from "@proliferate/cloud-sdk";
 import type { AgentModelRegistry as ModelRegistry } from "@/lib/domain/agents/model-options";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHomeNextModelSelection } from "./use-home-next-model-selection";
@@ -36,12 +33,6 @@ const selectionMocks = vi.hoisted(() => ({
     isError: false,
     error: null as Error | null,
   },
-  sandboxSelectionsQuery: {
-    data: [] as SandboxAgentAuthSelection[],
-    isLoading: false,
-    isError: false,
-    error: null as Error | null,
-  },
 }));
 
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
@@ -58,10 +49,6 @@ vi.mock("@anyharness/sdk-react", () => ({
 
 vi.mock("@/hooks/access/cloud/targets/use-cloud-targets", () => ({
   useCloudTargets: () => selectionMocks.cloudTargetsQuery,
-}));
-
-vi.mock("@proliferate/cloud-sdk-react/hooks/agent-auth", () => ({
-  useSandboxAgentAuthSelections: () => selectionMocks.sandboxSelectionsQuery,
 }));
 
 function agent(kind: string): AgentSummary {
@@ -116,25 +103,6 @@ function cloudTarget(overrides: Partial<CloudTargetSummary> = {}): CloudTargetSu
   } as CloudTargetSummary;
 }
 
-function selection(
-  agentKind: string,
-  status = "active",
-): SandboxAgentAuthSelection {
-  return {
-    id: `${agentKind}-selection`,
-    sandboxProfileId: "profile-1",
-    ownerScope: "personal",
-    agentKind,
-    credentialId: `${agentKind}-credential`,
-    credentialShareId: null,
-    materializationMode: "gateway",
-    selectedRevision: 1,
-    status,
-    lastErrorCode: null,
-    lastErrorMessage: null,
-  } as SandboxAgentAuthSelection;
-}
-
 function registry(kind: string): ModelRegistry {
   return {
     kind,
@@ -181,10 +149,6 @@ function resetMocks() {
   selectionMocks.cloudTargetsQuery.isLoading = false;
   selectionMocks.cloudTargetsQuery.isError = false;
   selectionMocks.cloudTargetsQuery.error = null;
-  selectionMocks.sandboxSelectionsQuery.data = [];
-  selectionMocks.sandboxSelectionsQuery.isLoading = false;
-  selectionMocks.sandboxSelectionsQuery.isError = false;
-  selectionMocks.sandboxSelectionsQuery.error = null;
   useUserPreferencesStore.setState({
     defaultChatAgentKind: "codex",
     defaultChatModelIdByAgentKind: {},
@@ -354,11 +318,10 @@ describe("useHomeNextModelSelection", () => {
       .toEqual(["anthropic/claude-sonnet-4-6"]);
   });
 
-  it("filters cloud launches to agents selected on the managed cloud profile", () => {
+  it("treats all catalog registries as launchable for cloud launches", () => {
     selectionMocks.agentCatalog.readyAgents = [agent("codex"), agent("claude")];
     selectionMocks.modelRegistriesQuery.data = [registry("codex"), registry("claude")];
     selectionMocks.cloudTargetsQuery.data = [cloudTarget()];
-    selectionMocks.sandboxSelectionsQuery.data = [selection("codex")];
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "claude",
       defaultChatModelIdByAgentKind: { claude: "default-model" },
@@ -370,9 +333,9 @@ describe("useHomeNextModelSelection", () => {
       repoLaunchKind: "cloud",
     }));
 
-    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["codex"]);
+    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["claude", "codex"]);
     expect(result.current.effectiveModelSelection).toEqual({
-      kind: "codex",
+      kind: "claude",
       modelId: "default-model",
     });
   });
@@ -402,7 +365,6 @@ describe("useHomeNextModelSelection", () => {
       }],
     };
     selectionMocks.cloudTargetsQuery.data = [cloudTarget()];
-    selectionMocks.sandboxSelectionsQuery.data = [selection("cursor")];
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "cursor",
       defaultChatModelIdByAgentKind: {

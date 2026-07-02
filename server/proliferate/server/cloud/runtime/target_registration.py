@@ -13,7 +13,6 @@ from uuid import UUID
 from proliferate.config import settings
 from proliferate.constants.cloud import CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN, CloudTargetStatus
 from proliferate.db import engine as db_engine
-from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.utils.time import utcnow
@@ -49,15 +48,8 @@ async def ensure_runtime_target_enrollment(
     """
 
     async with db_engine.async_session_factory() as db, db.begin():
-        profile = await agent_auth_store.get_sandbox_profile(db, sandbox_profile_id)
-        if profile is None:
-            return None
-        target = await targets_store.ensure_primary_profile_target(
-            db,
-            sandbox_profile_id=profile.id,
-            created_by_user_id=user_id,
-        )
-        if target.id != target_id:
+        target = await targets_store.get_target_by_id(db, target_id)
+        if target is None or target.sandbox_profile_id != sandbox_profile_id:
             return None
 
         token = secrets.token_urlsafe(48)

@@ -12,10 +12,6 @@ impl SessionStore {
                 "UPDATE sessions
                  SET workspace_id = ?2,
                      native_session_id = NULL,
-                     agent_auth_scope_provider = NULL,
-                     agent_auth_scope_id = NULL,
-                     agent_auth_scope_target_id = NULL,
-                     required_agent_auth_revision = NULL,
                      requested_model_id = ?3,
                      current_model_id = ?4,
                      requested_mode_id = ?5,

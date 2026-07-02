@@ -38,7 +38,6 @@ export interface UserPreferences {
   transparentChromeEnabled: boolean;
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
-  cloudRuntimeInputSyncEnabled: boolean;
   worktreeAutoDeleteLimit: number;
   pasteAttachmentsEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
@@ -64,7 +63,6 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   transparentChromeEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
-  cloudRuntimeInputSyncEnabled: false,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
@@ -92,7 +90,6 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   transparentChromeEnabled: true,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
-  cloudRuntimeInputSyncEnabled: false,
   worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
