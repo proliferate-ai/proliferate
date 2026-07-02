@@ -242,9 +242,7 @@ async def _load_state_inputs(
     surface: str = AGENT_AUTH_SURFACE_CLOUD,
 ) -> AgentAuthStateInputs:
     selections = tuple(await agent_gateway_store.list_route_selections(db, user_id=user_id))
-    surface_selections = [
-        selection for selection in selections if selection.surface == surface
-    ]
+    surface_selections = [selection for selection in selections if selection.surface == surface]
 
     api_key_secrets: dict[UUID, tuple[str, str]] = {}
     for selection in surface_selections:
