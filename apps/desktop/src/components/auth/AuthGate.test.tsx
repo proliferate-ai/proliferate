@@ -225,7 +225,10 @@ describe("AuthScreenLayout", () => {
     const { rerender } = render(<AuthScreenLayout mode="loading" />);
 
     expect(screen.getByText("Let's get your life's work done.")).toBeTruthy();
-    expect(screen.getByText("Restoring your session…")).toBeTruthy();
+    // ThinkingText renders the label twice (base + aria-hidden sweep copy).
+    expect(
+      screen.getByText("Restoring your session…", { selector: "[data-thinking-text]" }),
+    ).toBeTruthy();
     expect(
       screen.getByText("Continue with GitHub").closest("button")?.disabled,
     ).toBe(true);

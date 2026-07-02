@@ -2,19 +2,17 @@ import { describe, expect, it } from "vitest";
 import { createTranscriptState, type TranscriptState, type TurnRecord } from "@anyharness/sdk";
 import {
   lastTopLevelItemIsAssistantProseWithText,
-  lastTopLevelItemIsStreamingAssistantProse,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "./transcript-trailing-status";
 
 describe("transcript trailing status", () => {
-  it("suppresses trailing status while assistant prose is the visible tail", () => {
+  it("suppresses trailing status whenever assistant prose with text is the tail", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", true),
     ]);
 
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
-    expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(true);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
@@ -23,8 +21,10 @@ describe("transcript trailing status", () => {
 
     transcript.itemsById.assistant = assistantItem("assistant", false);
 
+    // OWNER RULE: prose finished and still the tail — the rendered message
+    // must be the last thing in the turn. No "Thinking…" lingering under an
+    // already-finished answer while turn_ended trails the final tokens.
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
-    expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(false);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
@@ -32,7 +32,7 @@ describe("transcript trailing status", () => {
     })).toBe(false);
   });
 
-  it("ignores later transient thoughts when assistant prose is the visible tail", () => {
+  it("suppresses transient thought status while completed prose is the tail", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", false),
       transientThoughtItem("status", "Checking the next action"),
@@ -79,7 +79,6 @@ describe("transcript trailing status", () => {
     ]);
 
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(false);
-    expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(false);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,

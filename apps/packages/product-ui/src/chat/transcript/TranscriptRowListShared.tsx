@@ -47,7 +47,7 @@ export interface TranscriptRowListBaseProps {
   isSessionBusy: boolean;
   pendingPromptText: string | null;
   onLoadOlderHistory: () => void;
-  onScrollSample: () => void;
+  onScrollSample: (sample?: import("./useTranscriptStickToBottom").TranscriptScrollSample) => void;
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
   columnClassName?: string;
   gutterClassName?: string;

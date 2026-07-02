@@ -19,7 +19,6 @@ import {
   resolveTurnPromptTiming,
 } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import {
-  lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "@proliferate/product-domain/chats/transcript/transcript-trailing-status";
@@ -32,6 +31,9 @@ import {
 import {
   latestCompletedTurn,
 } from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
+import {
+  resolveTurnStoppedNotice,
+} from "@proliferate/product-domain/chats/transcript/turn-stopped-presentation";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
@@ -127,11 +129,12 @@ export function TranscriptTurnRow({
             sessionViewState,
           })
         : null;
-  const shouldReserveTurnAssistantActionSlot =
-    isLatestTurnInProgress
-    && !!tailAssistantCopyContent
-    && !trailingStatus
-    && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
+  // ANCHOR INVARIANT: while the latest turn is in progress, the turn's bottom
+  // is ALWAYS a fixed-height tail slot (same h-6 as the completed-turn action
+  // row). "Thinking…" appearing/disappearing, and the completion handoff to
+  // the copy-actions row, are content swaps inside a constant-geometry slot —
+  // the transcript's bottom line never bumps.
+  const showFixedTailSlot = row.isLastTurnRow && isLatestTurnInProgress;
   const trailingStatusClassName = tailAssistantCopyContent
     ? undefined
     : TRAILING_STATUS_MIN_HEIGHT;
@@ -188,9 +191,13 @@ export function TranscriptTurnRow({
     undoDisabledReason,
   ]);
 
+  const stoppedNotice = row.isLastTurnRow ? resolveTurnStoppedNotice(turn) : null;
+
   return (
     <TurnShell isFirst={rowIndex === 0}>
-      <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+      {/* Codex parity: uniform block rhythm from --conversation-tool-assistant-gap
+          (16px at codex's 14px chat font) → 14px at our 13px chat scale. */}
+      <div className={`flex flex-col gap-3.5 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
         <TurnItemSequence
           turn={turn}
           transcript={transcript}
@@ -224,11 +231,21 @@ export function TranscriptTurnRow({
         <TurnAssistantActionRow
           content={tailAssistantCopyContent}
           showCopyButton={row.isLastTurnRow && !!turn.completedAt}
-          reserveSlot={row.isLastTurnRow && shouldReserveTurnAssistantActionSlot}
+          reserveSlot={false}
           timestampLabel={tailAssistantActionTime}
         />
-        {trailingStatus && (
+        {showFixedTailSlot ? (
+          <div className="flex h-6 items-center" data-turn-tail-slot>
+            {trailingStatus}
+          </div>
+        ) : trailingStatus ? (
           <div className={trailingStatusClassName}>{trailingStatus}</div>
+        ) : null}
+        {stoppedNotice && (
+          <div className="flex flex-col items-start gap-2 text-chat text-foreground/60">
+            <span>{stoppedNotice}</span>
+            <div className="w-full border-t border-current/20" />
+          </div>
         )}
       </div>
     </TurnShell>

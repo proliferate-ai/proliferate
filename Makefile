@@ -942,9 +942,18 @@ shared-build:
 	pnpm --filter @proliferate/product-ui build
 	pnpm --filter @proliferate/product-surfaces build
 
+# SKIP_RUST=1 skips both cargo builds — for frontend-only worktrees (UI waves)
+# that run against a shared prebuilt runtime via ANYHARNESS_DEV_RUNTIME_BIN.
+# Both `dev-artifacts-ready` and the `run` target honor that env var, so such a
+# worktree never needs its own runtime build. (`tauri dev` still compiles the
+# desktop shell into the worktree's target/ on first run.)
 build-rust:
-	$(CARGO) build --workspace
-	CARGO_TARGET_DIR="$(DEV_ANYHARNESS_TARGET_DIR)" $(CARGO) build -p anyharness
+	@if [ -n "$(SKIP_RUST)" ]; then \
+		echo "SKIP_RUST set — skipping cargo builds (runtime: $${ANYHARNESS_DEV_RUNTIME_BIN:-<unset>})"; \
+	else \
+		$(CARGO) build --workspace && \
+		CARGO_TARGET_DIR="$(DEV_ANYHARNESS_TARGET_DIR)" $(CARGO) build -p anyharness; \
+	fi
 
 runtime-build: build-rust
 

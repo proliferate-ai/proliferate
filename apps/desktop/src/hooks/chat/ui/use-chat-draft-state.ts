@@ -9,7 +9,31 @@ import {
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
-export function useChatDraftState() {
+/**
+ * Live draft value for the composer editor.
+ *
+ * PERF (render isolation): this is the ONLY hook that subscribes to draft
+ * content, and it belongs in the leaf that renders the textarea
+ * (ChatInputDraftArea). Everything else uses `useChatDraftControls`, which
+ * subscribes to just the `isEmpty` boolean — so a keystroke re-renders the
+ * draft area, not the whole composer dock (model selector, config controls,
+ * footer…).
+ */
+export function useChatDraftValue(workspaceUiKey: string | null): ChatComposerDraft {
+  return useChatInputStore((state) =>
+    workspaceUiKey ? state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT : EMPTY_CHAT_DRAFT,
+  );
+}
+
+/**
+ * Draft controls + emptiness gate WITHOUT subscribing to draft content.
+ *
+ * `isEmpty` is a boolean selector (re-renders consumers only on
+ * empty↔non-empty flips); `getDraft` reads the current draft imperatively for
+ * submit-time serialization. Keystrokes do not re-render consumers of this
+ * hook.
+ */
+export function useChatDraftControls() {
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
@@ -22,13 +46,22 @@ export function useChatDraftState() {
     selectedLogicalWorkspaceId,
     materializedWorkspaceId: selectedWorkspaceId,
   });
-  const draft = useChatInputStore((state) =>
-    workspaceUiKey ? state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT : EMPTY_CHAT_DRAFT,
+  const isEmpty = useChatInputStore((state) =>
+    workspaceUiKey
+      ? isChatDraftEmpty(state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT)
+      : true,
   );
   const setDraftForWorkspace = useChatInputStore((state) => state.setDraft);
   const setDraftTextForWorkspace = useChatInputStore((state) => state.setDraftText);
   const appendDraftTextForWorkspace = useChatInputStore((state) => state.appendDraftText);
   const clearDraftForWorkspace = useChatInputStore((state) => state.clearDraft);
+
+  const getDraft = useCallback((): ChatComposerDraft => {
+    if (!workspaceUiKey) {
+      return EMPTY_CHAT_DRAFT;
+    }
+    return useChatInputStore.getState().draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT;
+  }, [workspaceUiKey]);
 
   const setDraft = useCallback((value: ChatComposerDraft) => {
     if (!workspaceUiKey) {
@@ -65,11 +98,11 @@ export function useChatDraftState() {
   return {
     workspaceUiKey,
     materializedWorkspaceId,
-    draft,
+    getDraft,
     setDraft,
     setDraftText,
     appendDraftText,
     clearDraft,
-    isEmpty: isChatDraftEmpty(draft),
+    isEmpty,
   };
 }

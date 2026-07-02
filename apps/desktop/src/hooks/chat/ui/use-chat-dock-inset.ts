@@ -5,7 +5,6 @@ import {
   computeChatSurfaceBottomInsetPx,
 } from "@/config/chat-layout";
 
-const CHAT_DOCK_RESIZE_SETTLE_MS = 90;
 
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
@@ -54,21 +53,17 @@ export function useChatDockInset() {
       return;
     }
 
-    let settleTimer: number | null = null;
+    // Composer growth (new line typed) must shift the transcript on the very
+    // next frame — a settle delay here reads as input lag. rAF coalesces
+    // multi-observer bursts within a frame without adding visible latency.
     const scheduleMeasure = () => {
-      if (settleTimer !== null) {
-        window.clearTimeout(settleTimer);
+      if (frameId !== null) {
+        return;
       }
-      settleTimer = window.setTimeout(() => {
-        settleTimer = null;
-        if (frameId !== null) {
-          window.cancelAnimationFrame(frameId);
-        }
-        frameId = window.requestAnimationFrame(() => {
-          frameId = null;
-          measure();
-        });
-      }, CHAT_DOCK_RESIZE_SETTLE_MS);
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        measure();
+      });
     };
 
     const observer = new ResizeObserver(() => {
@@ -87,9 +82,6 @@ export function useChatDockInset() {
 
     return () => {
       observer.disconnect();
-      if (settleTimer !== null) {
-        window.clearTimeout(settleTimer);
-      }
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }

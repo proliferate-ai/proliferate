@@ -1,5 +1,7 @@
 import {
+  memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -13,11 +15,13 @@ import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
+  recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
+import { useTypingActivityStore } from "@/lib/infra/interaction/typing-activity-store";
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import type {
   PendingPromptEntry,
@@ -27,7 +31,9 @@ import type { SessionViewState } from "@proliferate/product-domain/sessions/acti
 import {
   ChatTranscriptView,
   type ChatTranscriptPendingPromptRenderInput,
+  type ChatTranscriptPendingStatusInput,
   type ChatTranscriptTurnRowRenderInput,
+  type ChatTranscriptTurnStatusInput,
 } from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
 import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
 import {
@@ -40,6 +46,16 @@ import { TranscriptTurnRow } from "./TranscriptTurnRow";
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
+
+// INPUT-PRIORITY (the "typing must never be laggy" rule): WHILE THE USER IS
+// TYPING, the transcript view renders from a DEFERRED copy of the view state,
+// so keystrokes preempt stream-driven transcript re-renders and consecutive
+// stream batches coalesce. When the user is NOT typing, the fresh copy renders
+// urgently — deferring unconditionally starved the transcript while an agent
+// streamed (each ~80-250ms batch restarted the in-flight deferred pass;
+// measured 6.6s from prompt submit to first transcript commit), which read as
+// "I sent a message and nothing happened".
+const DeferredChatTranscriptView = memo(ChatTranscriptView);
 
 interface MessageListProps {
   activeSessionId: string;
@@ -115,8 +131,27 @@ export function MessageList({
     sessionViewState,
     transcript,
   ]);
+  const deferredTranscriptViewState = useDeferredValue(transcriptViewState);
+  const typingActive = useTypingActivityStore((state) => state.typingActive);
+  const effectiveTranscriptViewState = typingActive
+    ? deferredTranscriptViewState
+    : transcriptViewState;
 
-  const handleTranscriptScroll = useCallback(() => {
+  const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
+    // Tag the scroll source: a persistent stream of `source.programmatic`
+    // samples (with no user input) means a stick-to-bottom snap / virtualizer
+    // measurement feedback loop — the difference between "user scrolled" and
+    // "we are scrolling ourselves in circles".
+    recordMeasurementMetric({
+      type: "diagnostic",
+      category: "transcript_scroll",
+      label: sample === undefined
+        ? "source.unknown"
+        : sample.programmatic
+          ? "source.programmatic"
+          : "source.user",
+      count: 1,
+    });
     const operationId = startMeasurementOperation({
       kind: "transcript_scroll",
       sampleKey: "transcript",
@@ -186,6 +221,26 @@ export function MessageList({
     openFile,
     openGitReviewPane,
   ]);
+  // Stable renderer identities — required for DeferredChatTranscriptView's
+  // memo to bail out on urgent (typing) passes.
+  const renderPendingPromptTrailingStatusRow = useCallback(
+    (input: ChatTranscriptPendingStatusInput) =>
+      resolvePendingPromptTrailingStatus(
+        input.queuedAt,
+        input.sessionViewState,
+        input.forceWorking,
+      ),
+    [],
+  );
+  const renderTurnTrailingStatusRow = useCallback(
+    (input: ChatTranscriptTurnStatusInput) =>
+      resolveTurnTrailingStatus(
+        input.startedAt,
+        input.sessionViewState,
+        input.transientStatusText,
+      ),
+    [],
+  );
 
   return (
     <DebugProfiler id="transcript-list">
@@ -196,24 +251,14 @@ export function MessageList({
           canOpenSession={canOpenSession}
         >
           <DebugProfiler id="transcript-row-list-router">
-            <ChatTranscriptView
-              state={transcriptViewState}
+            <DeferredChatTranscriptView
+              state={effectiveTranscriptViewState}
               outboxActions={outboxActions}
               onScrollSample={handleTranscriptScroll}
               renderPendingPromptRow={renderPendingPromptRow}
               renderTurnRow={renderTurnRow}
-              renderPendingPromptTrailingStatus={(input) =>
-                resolvePendingPromptTrailingStatus(
-                  input.queuedAt,
-                  input.sessionViewState,
-                  input.forceWorking,
-                )}
-              renderTurnTrailingStatus={(input) =>
-                resolveTurnTrailingStatus(
-                  input.startedAt,
-                  input.sessionViewState,
-                  input.transientStatusText,
-                )}
+              renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
+              renderTurnTrailingStatus={renderTurnTrailingStatusRow}
             />
           </DebugProfiler>
         </TranscriptContextProviders>

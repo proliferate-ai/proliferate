@@ -37,7 +37,12 @@ describe("ChatLaunchIntentPane", () => {
     render(<ChatLaunchIntentPane bottomInsetPx={0} />);
 
     expect(screen.getByText("Start cowork")).not.toBeNull();
-    expect(screen.getByText("Thinking").closest("[data-chat-user-message]")).toBeNull();
+    // ThinkingText renders the label twice (base + aria-hidden sweep copy).
+    expect(
+      screen
+        .getByText("Thinking", { selector: "[data-thinking-text]" })
+        .closest("[data-chat-user-message]"),
+    ).toBeNull();
   });
 });
 
