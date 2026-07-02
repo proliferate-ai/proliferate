@@ -24,7 +24,8 @@ export function SidebarRowSurface({
       ? "text-sidebar-muted-foreground"
       : "text-sidebar-foreground hover:bg-sidebar-accent";
 
-  const rowClassName = `group relative flex w-full min-w-0 items-center rounded-lg text-left font-[430] transition-[background-color,color,opacity] duration-150 ${
+  // Codex sidebar row geometry (UX spec §0.1): 30px rows, 10px radius.
+  const rowClassName = `group relative flex w-full min-w-0 items-center rounded-[10px] text-left font-[430] transition-[background-color,color,opacity] duration-150 ${
     interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
   } ${
     disabled ? "cursor-not-allowed opacity-60" : ""

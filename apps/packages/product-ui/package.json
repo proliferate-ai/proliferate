@@ -287,6 +287,10 @@
       "types": "./dist/workspaces/RecentWorkStatusDot.d.ts",
       "import": "./dist/workspaces/RecentWorkStatusDot.js"
     },
+    "./workspaces/PrStatusBadge": {
+      "types": "./dist/workspaces/PrStatusBadge.d.ts",
+      "import": "./dist/workspaces/PrStatusBadge.js"
+    },
     "./workspaces/CloudWorkspaceList": {
       "types": "./dist/workspaces/CloudWorkspaceList.d.ts",
       "import": "./dist/workspaces/CloudWorkspaceList.js"
@@ -298,6 +302,10 @@
     "./workspaces/WorkspacesSurface": {
       "types": "./dist/workspaces/WorkspacesSurface.d.ts",
       "import": "./dist/workspaces/WorkspacesSurface.js"
+    },
+    "./workspaces/WorkspacesCommandList": {
+      "types": "./dist/workspaces/WorkspacesCommandList.d.ts",
+      "import": "./dist/workspaces/WorkspacesCommandList.js"
     },
     "./support/SupportSurface": {
       "types": "./dist/support/SupportSurface.d.ts",

@@ -9,6 +9,11 @@ interface WorkspaceSidebarHeaderControlsProps {
   iconTone?: "sidebar";
   phase: UpdaterPhase;
   downloadProgress: number | null;
+  /**
+   * The update pill moved into the sidebar bottom account row (UX spec §2.5).
+   * Header chrome only shows it when the sidebar (and its footer) is hidden.
+   */
+  showUpdatePill?: boolean;
   onToggleSidebar: () => void;
   onDownloadUpdate: () => void;
   onOpenRestartPrompt: () => void;
@@ -20,6 +25,7 @@ export function WorkspaceSidebarHeaderControls({
   iconTone,
   phase,
   downloadProgress,
+  showUpdatePill = true,
   onToggleSidebar,
   onDownloadUpdate,
   onOpenRestartPrompt,
@@ -35,12 +41,14 @@ export function WorkspaceSidebarHeaderControls({
       >
         <SplitPanel className="size-4" />
       </IconButton>
-      <SidebarUpdatePill
-        phase={phase}
-        downloadProgress={downloadProgress}
-        onDownloadUpdate={onDownloadUpdate}
-        onOpenRestartPrompt={onOpenRestartPrompt}
-      />
+      {showUpdatePill && (
+        <SidebarUpdatePill
+          phase={phase}
+          downloadProgress={downloadProgress}
+          onDownloadUpdate={onDownloadUpdate}
+          onOpenRestartPrompt={onOpenRestartPrompt}
+        />
+      )}
     </div>
   );
 }

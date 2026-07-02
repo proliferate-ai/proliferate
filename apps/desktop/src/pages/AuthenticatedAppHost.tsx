@@ -6,6 +6,7 @@ import { IntegrationsPage } from "@/pages/IntegrationsPage";
 import { MainPage } from "@/pages/MainPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { WorkflowsPage } from "@/pages/WorkflowsPage";
+import { WorkspacesPage } from "@/pages/WorkspacesPage";
 import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
@@ -67,7 +68,7 @@ export function AuthenticatedAppHost({
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
           <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} extractLastSegment />} />
-          <Route path="workspaces" element={<Navigate to={APP_ROUTES.home} replace />} />
+          <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceId" element={<DesktopWorkspaceDeepLinkPage />} />
           <Route path="*" element={<Navigate to={APP_ROUTES.home} replace />} />
         </Routes>

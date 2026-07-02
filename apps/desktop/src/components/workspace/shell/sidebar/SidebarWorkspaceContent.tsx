@@ -206,6 +206,7 @@ export function SidebarWorkspaceContent({
                 detailIndicators={item.detailIndicators}
                 cloudStatus={item.cloudStatus}
                 lastInteracted={item.lastInteracted}
+                branchName={item.branchName}
                 shortcutLabel={shortcutLabelByWorkspaceId.get(item.id) ?? null}
                 shortcutRevealVisible={shortcutRevealVisible}
                 onSelect={() => onSelectWorkspace(item.id)}

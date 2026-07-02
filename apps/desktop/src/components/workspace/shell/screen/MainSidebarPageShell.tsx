@@ -64,11 +64,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
             >
               <SplitPanel className="size-4" />
             </IconButton>
-            <SidebarUpdatePill
-              phase={updaterPhase}
-              onDownloadUpdate={downloadUpdate}
-              onOpenRestartPrompt={openRestartPrompt}
-            />
+            {/* Update pill lives in the sidebar bottom account row (§2.5);
+                header only carries it when the sidebar is hidden. */}
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
