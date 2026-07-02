@@ -32,6 +32,7 @@ vi.mock("@/lib/access/anyharness/agent-auth", () => ({
 
 const LOOPBACK_URL = "http://127.0.0.1:8457";
 const TUNNEL_URL = "http://127.0.0.1:52001";
+const REATTACHED_TUNNEL_URL = "http://127.0.0.1:52002";
 
 interface StateDocEntry {
   data: AgentAuthState | undefined;
@@ -86,11 +87,15 @@ function arrange(options: {
   });
 }
 
-function attachTarget(targetId: string, authToken: string | null) {
+function attachTarget(
+  targetId: string,
+  authToken: string | null,
+  baseUrl = TUNNEL_URL,
+) {
   act(() => {
     useDirectRuntimeConnectionStore.getState().dispatchConnectionEvent(targetId, {
       type: "attached",
-      baseUrl: TUNNEL_URL,
+      baseUrl,
       authToken,
     });
   });
@@ -201,6 +206,124 @@ describe("useDirectAuthStateSync", () => {
       { runtimeUrl: TUNNEL_URL, authToken: "bearer-1" },
       doc(2, "t1-override"),
     );
+  });
+
+  it("re-pushes an unchanged document after a detach and re-attach", async () => {
+    arrange({ targets: [{ id: "t1", kind: "ssh", status: "online" }] });
+    setStateDoc(null, doc(1, "default"));
+    setStateDoc("t1", doc(1, "shared"));
+
+    renderHook(() => useDirectAuthStateSync());
+    attachTarget("t1", "bearer-1");
+    await waitFor(() => {
+      expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(2);
+    });
+
+    // A re-imaged + re-enrolled box keeps its target id but comes back with
+    // state.json wiped; the observed detach must forget the fingerprint so
+    // the re-attach re-delivers the document.
+    act(() => {
+      useDirectRuntimeConnectionStore.getState().dispatchConnectionEvent("t1", {
+        type: "detached",
+      });
+    });
+    await flushEffects();
+    attachTarget("t1", "bearer-2");
+
+    await waitFor(() => {
+      expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(3);
+    });
+    expect(mocks.applyAgentAuthState).toHaveBeenLastCalledWith(
+      { runtimeUrl: TUNNEL_URL, authToken: "bearer-2" },
+      doc(1, "shared"),
+    );
+  });
+
+  it("retries when a trigger fired while the failing push was in flight", async () => {
+    arrange();
+    let rejectPush!: (error: Error) => void;
+    mocks.applyAgentAuthState.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectPush = reject;
+        }),
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setStateDoc(null, doc(1, "default"));
+
+    const { rerender } = renderHook(() => useDirectAuthStateSync());
+    await waitFor(() => {
+      expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(1);
+    });
+
+    // A refetch of the identical document while the push is in flight is
+    // skipped as a duplicate, not double-pushed.
+    setStateDoc(null, doc(1, "default"), 2);
+    rerender();
+    await flushEffects();
+    expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(1);
+
+    // The failure must replay the suppressed trigger, not consume it.
+    await act(async () => {
+      rejectPush(new Error("push failed"));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(2);
+    });
+    warn.mockRestore();
+  });
+
+  it("pushes to a re-attached connection while the old push is in flight", async () => {
+    arrange({ targets: [{ id: "t1", kind: "ssh", status: "online" }] });
+    let rejectOldTunnelPush!: (error: Error) => void;
+    mocks.applyAgentAuthState.mockImplementation(
+      (connection: { runtimeUrl: string }) => {
+        if (connection.runtimeUrl === TUNNEL_URL) {
+          return new Promise((_resolve, reject) => {
+            rejectOldTunnelPush = reject;
+          });
+        }
+        return Promise.resolve(undefined);
+      },
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setStateDoc(null, doc(1, "default"));
+    setStateDoc("t1", doc(1, "shared"));
+
+    renderHook(() => useDirectAuthStateSync());
+    attachTarget("t1", "bearer-1");
+    await waitFor(() => {
+      expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(2);
+    });
+
+    // The tunnel drops mid-push; a session flow re-ensures it at a new local
+    // port. The re-attached connection must be served without waiting for
+    // the doomed original push to settle.
+    act(() => {
+      useDirectRuntimeConnectionStore.getState().dispatchConnectionEvent("t1", {
+        type: "connect_started",
+      });
+    });
+    await flushEffects();
+    attachTarget("t1", "bearer-1", REATTACHED_TUNNEL_URL);
+
+    await waitFor(() => {
+      expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(3);
+    });
+    expect(mocks.applyAgentAuthState).toHaveBeenLastCalledWith(
+      { runtimeUrl: REATTACHED_TUNNEL_URL, authToken: "bearer-1" },
+      doc(1, "shared"),
+    );
+
+    // The orphaned push settling later must not force a fourth push.
+    await act(async () => {
+      rejectOldTunnelPush(new Error("tunnel dropped"));
+      await Promise.resolve();
+    });
+    await flushEffects();
+    expect(mocks.applyAgentAuthState).toHaveBeenCalledTimes(3);
+    warn.mockRestore();
   });
 
   it("retries a failed push on the next state change", async () => {
