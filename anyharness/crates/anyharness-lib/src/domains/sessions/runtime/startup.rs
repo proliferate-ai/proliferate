@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
+use crate::domains::agents::route_auth::resolve_launch_route_auth;
 use crate::domains::sessions::extensions::SessionTurnFinishedContext;
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
@@ -157,6 +158,7 @@ impl SessionRuntime {
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
                 }
+                StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     EnsureLiveSessionError::Internal(error)
                 }
@@ -323,6 +325,22 @@ impl SessionRuntime {
             record.requested_model_id.as_deref(),
         )
         .map_err(StartSessionError::Internal)?;
+        // Agent-auth render plane: read the declarative state file fresh and
+        // render the route layer for this harness. Absent file = empty layer
+        // (legacy/native); a scoped file with no selection fails the launch
+        // closed with a typed error (spec §3).
+        let route_auth = resolve_launch_route_auth(&self.runtime_home, &record.agent_kind)
+            .map_err(|error| {
+                tracing::warn!(
+                    session_id = %record.id,
+                    workspace_id = %record.workspace_id,
+                    agent_kind = %record.agent_kind,
+                    code = error.code(),
+                    error = %error,
+                    "agent-auth route resolution failed; refusing launch"
+                );
+                StartSessionError::RouteAuth(error)
+            })?;
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
@@ -345,6 +363,7 @@ impl SessionRuntime {
             workspace_path,
             workspace_env,
             session_env: session_launch_env,
+            route_auth,
             mcp_servers: mcp_launch.mcp_servers,
             startup: startup_strategy,
             every_prompt_append: mcp_launch.system_prompt_append,
@@ -400,6 +419,7 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
             anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
         }
         StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
+        StartSessionError::RouteAuth(error) => anyhow::Error::new(error),
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
     }
 }
@@ -449,6 +469,7 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
         StartSessionError::RestartRequired(detail) => {
             CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
         }
+        StartSessionError::RouteAuth(error) => CreateAndStartSessionError::RouteAuth(error),
         StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
         StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
     }
