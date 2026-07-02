@@ -182,7 +182,6 @@ impl PlanRuntime {
                     None,
                     Vec::new(),
                     None,
-                    None,
                     true,
                     None,
                     None,

@@ -516,22 +516,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/runtime-config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_runtime_config"];
-        put: operations["apply_runtime_config"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -1940,18 +1924,6 @@ export interface components {
             fromVersion?: string | null;
             toVersion?: string | null;
         };
-        ApplyRuntimeConfigRequest: {
-            artifactPayloads?: components["schemas"]["RuntimeArtifactPayload"][];
-            credentialValues?: components["schemas"]["RuntimeCredentialValue"][];
-            manifest: components["schemas"]["RuntimeConfigManifest"];
-            revision: components["schemas"]["RuntimeConfigRevision"];
-            source: components["schemas"]["RuntimeConfigSource"];
-        };
-        ApplyRuntimeConfigResponse: {
-            applied: boolean;
-            revision: components["schemas"]["RuntimeConfigRevision"];
-            status: string;
-        };
         ArtifactStatus: {
             installed: boolean;
             message?: string | null;
@@ -2275,7 +2247,6 @@ export interface components {
         CreateSessionRequest: {
             agentAuthScope?: null | components["schemas"]["AgentAuthExternalScope"];
             agentKind: string;
-            expectedRuntimeConfigRevision?: null | components["schemas"]["RuntimeConfigRevisionExpectation"];
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
@@ -3167,7 +3138,6 @@ export interface components {
         };
         PromptSessionRequest: {
             blocks: components["schemas"]["PromptInputBlock"][];
-            expectedRuntimeConfigRevision?: null | components["schemas"]["RuntimeConfigRevisionExpectation"];
             promptId?: string | null;
         };
         PromptSessionResponse: {
@@ -3388,9 +3358,7 @@ export interface components {
             repoRoot: components["schemas"]["RepoRoot"];
             workspace: components["schemas"]["Workspace"];
         };
-        ResumeSessionRequest: {
-            expectedRuntimeConfigRevision?: null | components["schemas"]["RuntimeConfigRevisionExpectation"];
-        };
+        ResumeSessionRequest: Record<string, never>;
         RetryReviewAssignmentRequest: {
             modelId?: string | null;
         };
@@ -3539,71 +3507,8 @@ export interface components {
             rows: components["schemas"]["WorktreeRetentionRunRow"][];
             skippedCount: number;
         };
-        RuntimeArtifactPayload: {
-            /** Format: int64 */
-            byteSize: number;
-            content: string;
-            contentType: string;
-            displayName?: string | null;
-            hash: string;
-            resourceId?: string | null;
-            sourceRef?: string | null;
-        };
-        RuntimeArtifactRef: {
-            /** Format: int64 */
-            byteSize: number;
-            contentType: string;
-            displayName?: string | null;
-            hash: string;
-            resourceId?: string | null;
-            sourceRef?: string | null;
-        };
-        RuntimeArtifactStatus: {
-            /** Format: int64 */
-            byteSize: number;
-            cached: boolean;
-            contentType: string;
-            displayName?: string | null;
-            hash: string;
-            resourceId?: string | null;
-            sourceRef?: string | null;
-        };
         RuntimeCapabilities: {
             replay: boolean;
-        };
-        RuntimeConfigExternalScope: {
-            id: string;
-            provider: string;
-            targetId?: string | null;
-        };
-        RuntimeConfigManifest: {
-            artifacts?: components["schemas"]["RuntimeArtifactRef"][];
-            directAttachAuth?: null | components["schemas"]["RuntimeDirectAttachAuthConfig"];
-            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][];
-            mcpServers?: components["schemas"]["RuntimeMcpServer"][];
-            skills?: components["schemas"]["RuntimeSkill"][];
-            warnings?: unknown[];
-        };
-        RuntimeConfigRevision: {
-            contentHash: string;
-            externalScope?: null | components["schemas"]["RuntimeConfigExternalScope"];
-            id: string;
-            /** Format: int64 */
-            sequence: number;
-        };
-        RuntimeConfigRevisionExpectation: {
-            contentHash: string;
-            externalScope?: null | components["schemas"]["RuntimeConfigExternalScope"];
-            revisionId: string;
-            /** Format: int64 */
-            sequence?: number | null;
-        };
-        /** @enum {string} */
-        RuntimeConfigSource: "desktop" | "worker" | "test";
-        RuntimeConfigStatusResponse: {
-            artifacts?: components["schemas"]["RuntimeArtifactStatus"][];
-            currentRevision?: null | components["schemas"]["RuntimeConfigRevision"];
-            manifest?: null | components["schemas"]["RuntimeConfigManifest"];
         };
         RuntimeCpuPressure: {
             /** Format: double */
@@ -3614,79 +3519,6 @@ export interface components {
             logicalCoreCount: number;
             /** Format: double */
             normalizedPercent: number;
-        };
-        RuntimeCredentialRef: {
-            credentialRef: string;
-            fieldName: string;
-            mcpServerId?: string | null;
-            usedIn: components["schemas"]["RuntimeCredentialUse"];
-        };
-        /** @enum {string} */
-        RuntimeCredentialUse: "mcp_launch" | "mcp_launch_header" | "mcp_launch_query" | "mcp_launch_arg" | "mcp_launch_env" | "skill_binding";
-        RuntimeCredentialValue: {
-            credentialRef: string;
-            value: string;
-        };
-        RuntimeDirectAttachAuthConfig: {
-            audience: string;
-            issuer: string;
-            targetId?: string | null;
-            verificationKeys?: components["schemas"]["RuntimeJwtVerificationKey"][];
-        };
-        RuntimeJwtVerificationKey: {
-            algorithm: string;
-            kid: string;
-            publicKeyPem: string;
-        };
-        RuntimeMcpLaunch: {
-            headers?: components["schemas"]["RuntimeMcpNamedValue"][];
-            /** @enum {string} */
-            kind: "http";
-            query?: components["schemas"]["RuntimeMcpNamedValue"][];
-            url: components["schemas"]["RuntimeMcpValue"];
-        } | {
-            args?: components["schemas"]["RuntimeMcpValue"][];
-            command: components["schemas"]["RuntimeMcpValue"];
-            env?: components["schemas"]["RuntimeMcpNamedValue"][];
-            /** @enum {string} */
-            kind: "stdio";
-        };
-        RuntimeMcpNamedValue: {
-            name: string;
-            value: components["schemas"]["RuntimeMcpValue"];
-        };
-        RuntimeMcpServer: {
-            catalogEntryId?: string | null;
-            connectionId: string;
-            credentialRefs?: components["schemas"]["RuntimeCredentialRef"][];
-            id: string;
-            launch: components["schemas"]["RuntimeMcpLaunch"];
-            serverName: string;
-            transport: components["schemas"]["RuntimeMcpTransport"];
-        };
-        RuntimeMcpTemplatePart: {
-            /** @enum {string} */
-            kind: "literal";
-            value: string;
-        } | {
-            credentialRef: string;
-            /** @enum {string} */
-            kind: "credential";
-        };
-        /** @enum {string} */
-        RuntimeMcpTransport: "http" | "stdio";
-        RuntimeMcpValue: {
-            /** @enum {string} */
-            kind: "literal";
-            value: string;
-        } | {
-            credentialRef: string;
-            /** @enum {string} */
-            kind: "credential";
-        } | {
-            /** @enum {string} */
-            kind: "template";
-            parts: components["schemas"]["RuntimeMcpTemplatePart"][];
         };
         RuntimeMemoryPressure: {
             /** Format: int64 */
@@ -3710,18 +3542,6 @@ export interface components {
             /** Format: double */
             pressurePercent?: number | null;
         };
-        RuntimeSkill: {
-            credentialRefs?: string[];
-            description: string;
-            displayName: string;
-            id: string;
-            instructionArtifact: components["schemas"]["RuntimeArtifactRef"];
-            requiredMcpServerIds?: string[];
-            resources?: components["schemas"]["RuntimeArtifactRef"][];
-            sourceKind: components["schemas"]["RuntimeSkillSourceKind"];
-        };
-        /** @enum {string} */
-        RuntimeSkillSourceKind: "catalog" | "plugin" | "user";
         ScheduleSubagentWakeRequest: Record<string, never>;
         ScheduleSubagentWakeResponse: {
             alreadyScheduled: boolean;
@@ -5702,59 +5522,6 @@ export interface operations {
             };
             /** @description Review run not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_runtime_config: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Current runtime config */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RuntimeConfigStatusResponse"];
-                };
-            };
-        };
-    };
-    apply_runtime_config: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApplyRuntimeConfigRequest"];
-            };
-        };
-        responses: {
-            /** @description Applied runtime config */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApplyRuntimeConfigResponse"];
-                };
-            };
-            /** @description Invalid runtime config */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };

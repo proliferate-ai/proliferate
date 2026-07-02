@@ -1,8 +1,6 @@
 use std::time::Instant;
 
-use anyharness_contract::v1::{
-    AgentAuthExternalScope, RuntimeConfigRevisionExpectation, SessionMcpBindingSummary,
-};
+use anyharness_contract::v1::{AgentAuthExternalScope, SessionMcpBindingSummary};
 
 use crate::domains::sessions::mcp_bindings::assembly::join_system_prompt_append;
 use crate::domains::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
@@ -26,7 +24,6 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
-        expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
         subagents_enabled: bool,
         agent_auth_scope: Option<AgentAuthExternalScope>,
         required_agent_auth_revision: Option<i64>,
@@ -63,11 +60,6 @@ impl SessionRuntime {
             required_agent_auth_revision,
             origin,
         )?;
-        if let Some(expected) = expected_runtime_config_revision.as_ref() {
-            self.runtime_config_service
-                .bind_session_to_expected(&record.id, expected)
-                .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
-        }
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
