@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -19,11 +20,14 @@ from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations.health import list_integration_health
 from proliferate.server.cloud.integrations.models import (
     AdminIntegrationDefinitionResponse,
     AuthenticateIntegrationRequest,
     AuthenticateIntegrationResponse,
     CreateAdminIntegrationDefinitionRequest,
+    IntegrationHealthItem,
+    IntegrationHealthResponse,
     IntegrationOAuthFlowStatusResponse,
     SetIntegrationEnabledRequest,
 )
@@ -63,6 +67,18 @@ def _flow_status_response(status: OAuthFlowStatus) -> IntegrationOAuthFlowStatus
 # --------------------------------------------------------------------------- #
 # User routes
 # --------------------------------------------------------------------------- #
+
+
+@router.get("/health", response_model=IntegrationHealthResponse)
+async def list_integration_health_endpoint(
+    organization_id: UUID | None = Query(default=None, alias="organizationId"),
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> IntegrationHealthResponse:
+    health = await list_integration_health(db, user_id=user.id, organization_id=organization_id)
+    return IntegrationHealthResponse(
+        items=[IntegrationHealthItem(**dataclasses.asdict(item)) for item in health]
+    )
 
 
 @router.post("/authentications", response_model=AuthenticateIntegrationResponse)
