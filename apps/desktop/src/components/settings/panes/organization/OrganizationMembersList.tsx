@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Check, Mail, MoreHorizontal, Trash } from "@proliferate/ui/icons";
+import { Check, Copy, Mail, MoreHorizontal, Trash } from "@proliferate/ui/icons";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
@@ -8,6 +8,8 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Avatar } from "@/components/settings/panes/organization/OrganizationLogo";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
 import {
   membershipStatusBadge,
   type OrganizationInvitationRecord,
@@ -15,6 +17,7 @@ import {
   type OrganizationRole,
 } from "@/lib/domain/organizations/organization-records";
 import type { MemberListRow } from "@/lib/domain/organizations/member-list-rows";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 const PEOPLE_GRID_CLASS =
   "grid grid-cols-[minmax(0,1fr)_6.75rem_5.25rem_8rem_2.25rem] items-center gap-x-3";
@@ -177,6 +180,21 @@ function InvitationRow({
   updating: boolean;
   onRevokeInvitation?: (invitationId: string) => void;
 }) {
+  const { copyText } = useTauriShellActions();
+  const showToast = useToastStore((state) => state.show);
+
+  async function handleCopyInviteLink() {
+    const url = buildProliferateApiUrl(
+      `/register?token=${invitation.id}&email=${encodeURIComponent(invitation.email)}`,
+    );
+    try {
+      await copyText(url);
+      showToast("Invite link copied.", "info");
+    } catch {
+      showToast("Invite link could not be copied.");
+    }
+  }
+
   return (
     <div className={`${PEOPLE_GRID_CLASS} min-h-[5.25rem] border-b border-border py-5 last:border-b-0`}>
       <div className="flex min-w-0 items-center gap-3">
@@ -202,15 +220,25 @@ function InvitationRow({
           disabled={!canManage || !onRevokeInvitation}
         >
           {(close) => (
-            <PopoverMenuItem
-              label="Rescind invitation"
-              icon={<Trash className="size-3.5" />}
-              disabled={!onRevokeInvitation || updating}
-              onClick={() => {
-                onRevokeInvitation?.(invitation.id);
-                close();
-              }}
-            />
+            <>
+              <PopoverMenuItem
+                label="Copy invite link"
+                icon={<Copy className="size-3.5" />}
+                onClick={() => {
+                  void handleCopyInviteLink();
+                  close();
+                }}
+              />
+              <PopoverMenuItem
+                label="Rescind invitation"
+                icon={<Trash className="size-3.5" />}
+                disabled={!onRevokeInvitation || updating}
+                onClick={() => {
+                  onRevokeInvitation?.(invitation.id);
+                  close();
+                }}
+              />
+            </>
           )}
         </RowActionMenu>
       </div>
