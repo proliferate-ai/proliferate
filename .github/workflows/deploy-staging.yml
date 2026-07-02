@@ -46,6 +46,7 @@ jobs:
       dry_run: ${{ steps.meta.outputs.dry_run }}
       server: ${{ steps.detect.outputs.server }}
       workers: ${{ steps.detect.outputs.workers }}
+      litellm: ${{ steps.detect.outputs.litellm }}
       e2b: ${{ steps.detect.outputs.e2b }}
       web: ${{ steps.detect.outputs.web }}
       mobile: ${{ steps.detect.outputs.mobile }}
@@ -164,6 +165,7 @@ jobs:
             echo "| --- | --- |"
             echo "| server | \`${{ steps.detect.outputs.server }}\` |"
             echo "| workers | \`${{ steps.detect.outputs.workers }}\` |"
+            echo "| litellm | \`${{ steps.detect.outputs.litellm }}\` |"
             echo "| e2b | \`${{ steps.detect.outputs.e2b }}\` |"
             echo "| web | \`${{ steps.detect.outputs.web }}\` |"
             echo "| mobile | \`${{ steps.detect.outputs.mobile }}\` |"
@@ -201,6 +203,16 @@ jobs:
       environment: staging
       git_sha: ${{ needs.plan.outputs.head_sha }}
       enabled: ${{ needs.plan.outputs.workers == 'true' }}
+    secrets: inherit
+
+  deploy-litellm:
+    needs: [plan]
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
+    uses: ./.github/workflows/_deploy-litellm.yml
+    with:
+      environment: staging
+      git_sha: ${{ needs.plan.outputs.head_sha }}
+      enabled: ${{ needs.plan.outputs.litellm == 'true' }}
     secrets: inherit
 
   deploy-web:
@@ -244,6 +256,7 @@ jobs:
       - deploy-e2b
       - deploy-server
       - deploy-workers
+      - deploy-litellm
       - deploy-web
       - deploy-mobile
       - deploy-desktop
@@ -263,6 +276,7 @@ jobs:
             echo "- E2B: \`${{ needs.deploy-e2b.result }}\`"
             echo "- Server: \`${{ needs.deploy-server.result }}\`"
             echo "- Workers: \`${{ needs.deploy-workers.result }}\`"
+            echo "- LiteLLM: \`${{ needs.deploy-litellm.result }}\`"
             echo "- Web: \`${{ needs.deploy-web.result }}\`"
             echo "- Mobile: \`${{ needs.deploy-mobile.result }}\`"
             echo "- Desktop: \`${{ needs.deploy-desktop.result }}\`"
