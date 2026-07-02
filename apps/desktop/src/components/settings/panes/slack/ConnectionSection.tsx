@@ -37,43 +37,44 @@ export function ConnectionSection({
       title="Connection"
       description="Connect one Slack workspace to this organization."
     >
-        <SettingsRow
-          label={connection?.slackTeamName ?? "Slack workspace"}
-          description={connection
-            ? `Installed ${formatDate(connection.installedAt)}${installedBy ? ` by ${installedBy}` : ""}.`
-            : loading
-              ? "Checking Slack installation..."
-              : "Install the bot to enable Slack mentions for this organization."}
-        >
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <SlackConnectionStatusBadge status={connection?.status ?? null} />
-            <Button
-              type="button"
-              variant="secondary"
-              loading={opening}
-              disabled={!canManage}
-              onClick={onOpenOAuth}
-            >
-              {installLabel}
-            </Button>
-          </div>
-        </SettingsRow>
-        {connection ? (
-          <SettingsRow
-            label="Disconnect"
-            description="Disconnecting revokes this organization connection and stops new Slack-triggered work."
+      <SettingsRow
+        label={connection?.slackTeamName ?? "Slack workspace"}
+        description={connection
+          ? `Installed ${formatDate(connection.installedAt)}${installedBy ? ` by ${installedBy}` : ""}.`
+          : loading
+            ? "Checking Slack installation…"
+            : "Install the bot to enable Slack mentions for this organization."}
+      >
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <SlackConnectionStatusBadge status={connection?.status ?? null} />
+          <Button
+            type="button"
+            variant="secondary"
+            loading={opening}
+            disabled={!canManage}
+            onClick={onOpenOAuth}
           >
-            <Button
-              type="button"
-              variant="destructive"
-              loading={disconnecting}
-              disabled={!canManage}
-              onClick={() => setConfirmDisconnectOpen(true)}
-            >
-              Disconnect
-            </Button>
-          </SettingsRow>
-        ) : null}
+            {installLabel}
+          </Button>
+        </div>
+      </SettingsRow>
+      {connection ? (
+        <SettingsRow
+          label="Disconnect"
+          description="Disconnecting revokes this organization connection and stops new Slack-triggered work."
+        >
+          <Button
+            type="button"
+            variant="outline"
+            className="text-destructive"
+            loading={disconnecting}
+            disabled={!canManage}
+            onClick={() => setConfirmDisconnectOpen(true)}
+          >
+            Disconnect
+          </Button>
+        </SettingsRow>
+      ) : null}
       <ConfirmationDialog
         open={confirmDisconnectOpen}
         title="Disconnect Slack?"

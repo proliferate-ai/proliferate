@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { OrganizationMembersList } from "@/components/settings/panes/organization/OrganizationMembersList";
 import { OrganizationSelectMenu } from "@/components/settings/panes/organization/OrganizationSelectMenu";
 import { buildMemberRows } from "@/lib/domain/organizations/member-list-rows";
@@ -22,7 +22,7 @@ const ROLE_FILTER_OPTIONS = [
 ];
 
 const STATUS_FILTER_OPTIONS = [
-  { value: "all", label: "All status" },
+  { value: "all", label: "All statuses" },
   { value: "active", label: "Active" },
   { value: "invited", label: "Invited" },
 ];
@@ -62,9 +62,9 @@ export function OrganizationMembersSection({
   });
 
   return (
-    <OrganizationSection
-      title="People"
-      description="Review active members and pending invitations for this organization."
+    <SettingsSection
+      title="Members"
+      description="Active members and pending invitations"
     >
       <div className="space-y-3">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
@@ -74,7 +74,7 @@ export function OrganizationMembersSection({
               value={search}
               onChange={(event) => setSearch(event.currentTarget.value)}
               placeholder="Search by name or email"
-              aria-label="Search organization people"
+              aria-label="Search members"
               className="pl-9"
             />
           </div>
@@ -106,6 +106,6 @@ export function OrganizationMembersSection({
           onRevokeInvitation={onRevokeInvitation}
         />
       </div>
-    </OrganizationSection>
+    </SettingsSection>
   );
 }

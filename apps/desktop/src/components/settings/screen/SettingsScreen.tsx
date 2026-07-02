@@ -10,7 +10,6 @@ import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
 import { AgentAuthenticationPane } from "@/components/settings/panes/AgentAuthenticationPane";
 import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
-import { ArchivedChatsPane } from "@/components/settings/panes/ArchivedChatsPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
@@ -213,9 +212,6 @@ function renderSettingsSection(
   if (activeSection === "worktrees") {
     return <WorktreesPane />;
   }
-  if (activeSection === "archived-chats") {
-    return <ArchivedChatsPane />;
-  }
   return (
     <EnvironmentsPane
       repositories={repositories}
@@ -347,13 +343,9 @@ export function SettingsScreen({
         <div className="relative min-w-0 flex-1 bg-background">
           <AutoHideScrollArea className="h-full" viewportClassName="px-10 pb-12 pt-10">
             <div className="flex justify-center pb-8">
-              <div
-                className={`w-full space-y-6 ${
-                  effectiveActiveSection === "worktrees"
-                    ? "max-w-[58rem]"
-                    : "max-w-[50rem]"
-                }`}
-              >
+              {/* The single settings page-width contract: panes never set their
+                  own max-w — they inherit this container's. */}
+              <div className="w-full max-w-[50rem] space-y-6">
                 <SettingsContentBoundary section={effectiveActiveSection}>
                   {renderSettingsSection(
                     effectiveActiveSection,

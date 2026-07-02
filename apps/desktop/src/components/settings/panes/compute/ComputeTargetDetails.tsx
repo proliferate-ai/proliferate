@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Archive } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useComputeTargetEnrollment } from "@/hooks/settings/workflows/use-compute-target-enrollment";
@@ -128,7 +129,7 @@ export function ComputeTargetDetails({
         <div className="h-4 w-48 rounded-full bg-foreground/10" />
         <div className="h-24 rounded-md bg-foreground/5" />
         <div className="h-24 rounded-md bg-foreground/5" />
-        <p className="text-sm text-muted-foreground">Loading target details...</p>
+        <div className="text-ui-sm text-muted-foreground">Loading target details…</div>
       </div>
     );
   }
@@ -239,7 +240,7 @@ export function ComputeTargetDetails({
         onSave={() => { void handleSave(); }}
       />
 
-      <div className="space-y-5 p-4">
+      <div className="space-y-6">
         <ComputeTargetAppearanceSection
           displayName={displayName}
           iconId={iconId}
@@ -249,8 +250,6 @@ export function ComputeTargetDetails({
           onColorChange={setColorId}
         />
 
-        <Divider />
-
         <ComputeTargetReadiness
           target={target}
           sandboxProfileTargetState={targetStateQuery.data ?? null}
@@ -259,11 +258,7 @@ export function ComputeTargetDetails({
           loadingRuntimeConfig={runtimeConfigQuery.isLoading}
         />
 
-        <Divider />
-
         <ComputeTargetAgentAuthCard target={target} />
-
-        <Divider />
 
         <ComputeTargetDirectSshSection
           targetKind={target.kind}
@@ -294,24 +289,21 @@ export function ComputeTargetDetails({
         )}
 
         {target.status !== "archived" && (
-          <>
-            <Divider />
-            <div className="flex justify-start">
-              <Button
-                type="button"
-                variant="ghost"
-                loading={archiving}
-                onClick={() => {
-                  if (window.confirm(COMPUTE_COPY.archiveConfirm)) {
-                    onArchive(target.id);
-                  }
-                }}
-              >
-                <Archive className="size-3.5" />
-                {COMPUTE_COPY.archiveTarget}
-              </Button>
-            </div>
-          </>
+          <SettingsRow label="Archive target">
+            <Button
+              type="button"
+              variant="ghost"
+              loading={archiving}
+              onClick={() => {
+                if (window.confirm(COMPUTE_COPY.archiveConfirm)) {
+                  onArchive(target.id);
+                }
+              }}
+            >
+              <Archive className="size-3.5" />
+              {COMPUTE_COPY.archiveTarget}
+            </Button>
+          </SettingsRow>
         )}
       </div>
     </div>
@@ -320,8 +312,4 @@ export function ComputeTargetDetails({
 
 function validPortOrDefault(value: number, fallback: number): number {
   return Number.isInteger(value) && value > 0 && value <= 65_535 ? value : fallback;
-}
-
-function Divider() {
-  return <div className="-mx-4 h-px bg-border" />;
 }

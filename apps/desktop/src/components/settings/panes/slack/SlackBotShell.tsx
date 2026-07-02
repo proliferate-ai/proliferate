@@ -16,7 +16,7 @@ export function SlackBotShell({ children }: { children: ReactNode }) {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Slack bot"
-        description="Install and configure Slack as a team automation entrypoint."
+        description="Install and configure the Slack bot for this organization."
       />
       {children}
     </section>
@@ -58,7 +58,7 @@ export function OrganizationSelector({
 export function SlackBotOrganizationsLoadingState() {
   return (
     <SlackBotShell>
-      <SettingsEmptyState size="compact" title="Loading organizations..." />
+      <SettingsEmptyState size="compact" title="Loading organizations…" />
     </SlackBotShell>
   );
 }
@@ -68,7 +68,8 @@ export function SlackBotNoOrganizationState() {
     <SlackBotShell>
       <SettingsEmptyState
         size="compact"
-        title="Join or create an organization before configuring Slack."
+        title="No organization yet"
+        description="Create or join an organization to configure Slack."
       />
     </SlackBotShell>
   );
@@ -78,7 +79,7 @@ export function SlackBotAdminLoadingState(props: OrganizationSelectorProps) {
   return (
     <SlackBotShell>
       <OrganizationSelector {...props} />
-      <SettingsEmptyState size="compact" title="Checking admin access..." />
+      <SettingsEmptyState size="compact" title="Checking admin access…" />
     </SlackBotShell>
   );
 }

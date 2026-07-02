@@ -50,8 +50,6 @@ export function ComputeTargetDetailsHeader({
             <p className="mt-0.5 truncate text-sm text-muted-foreground">
               {computeTargetKindLabel(target.kind)}
               {" · "}
-              {computeTargetStatusLabel(target.status).toLowerCase()}
-              {" · "}
               {computeTargetOwnerLabel(target.ownerScope)}
               {target.statusDetail?.lastHeartbeatAt
                 ? ` · last heartbeat ${target.statusDetail.lastHeartbeatAt}`

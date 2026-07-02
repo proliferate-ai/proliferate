@@ -16,7 +16,7 @@ export function CloudUnavailablePane() {
       />
 
       <SettingsEmptyState
-        title="Cloud is unavailable right now."
+        title="Cloud is unavailable right now"
         description={CAPABILITY_COPY.cloudDisabledDetails}
         action={
           <Button

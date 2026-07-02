@@ -307,12 +307,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("resolves the archived chats settings section", () => {
+  it("falls retired archived-chats settings links back to general", () => {
     expect(resolveSettingsSelection({
       rawSection: "archived-chats",
       repositories: [],
     })).toEqual({
-      activeSection: "archived-chats",
+      activeSection: "general",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,

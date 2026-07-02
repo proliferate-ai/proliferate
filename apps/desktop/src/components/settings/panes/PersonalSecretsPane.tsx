@@ -6,7 +6,7 @@ export function PersonalSecretsPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Personal secrets"
-        description="Manage secrets available in your personal cloud sandbox."
+        description="Secrets available in your personal cloud sandbox"
       />
 
       <CloudSecretsSettingsSurface scope={{ kind: "personal" }} />

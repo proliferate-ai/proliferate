@@ -9,6 +9,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import type {
@@ -75,29 +76,25 @@ export function PersonalAuthInUseSection({
   const credentials = [...credentialsByProvider.values()].flat();
   const slots = agentAuthSlotDefinitions(capabilities);
   return (
-    <section className="space-y-3">
-      <div className="flex items-end justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="text-sm font-medium text-foreground">In use</h2>
-          <p className="max-w-2xl text-sm leading-5 text-muted-foreground">
-            Pick the credential each harness uses in local and personal cloud sandboxes.
-          </p>
-        </div>
+    <SettingsSection
+      title="In use"
+      description="Pick the credential each agent uses in local and personal cloud sandboxes."
+      action={
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="sm"
           loading={rescanning}
           onClick={() => onRescan()}
         >
           <RefreshCw className="size-3.5" />
-          Re-scan
+          Rescan
         </Button>
-      </div>
-
+      }
+    >
       <div>
         <SettingsEyebrow className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-3 border-b border-border bg-foreground/5 py-2">
-          <span>Harness</span>
+          <span>Agent</span>
           <span>Local sandbox</span>
           <span>Personal cloud</span>
         </SettingsEyebrow>
@@ -136,7 +133,7 @@ export function PersonalAuthInUseSection({
           );
         })}
       </div>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -147,10 +144,10 @@ function HarnessIdentity({ slot }: { slot: AgentAuthSlotDefinition }) {
         <ProviderIcon kind={slot.agentKind} className="size-4" />
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-foreground">
+        <span className="block text-ui font-medium text-foreground">
           {agentAuthSlotLabel(slot)}
         </span>
-        <span className="mt-0.5 block truncate text-sm text-muted-foreground">
+        <span className="mt-0.5 block truncate text-ui-sm text-muted-foreground">
           {agentAuthHarnessDescription(slot.agentKind)}
         </span>
       </span>
@@ -239,7 +236,7 @@ function PersonalCloudAuthCell({
   if (credentialsLoading) {
     return (
       <Button type="button" variant="outline" size="sm" disabled className="w-full justify-start">
-        Loading...
+        Loading…
       </Button>
     );
   }
@@ -264,7 +261,7 @@ function PersonalCloudAuthCell({
         }}
       >
         <ProviderIcon kind={slot.authSlotId} className="size-3.5 shrink-0 text-muted-foreground" />
-        {canUseFreeCredits ? "Use free credits" : "No credential"}
+        {canUseFreeCredits ? "Use free credits" : "Set up credential"}
       </Button>
     );
   }

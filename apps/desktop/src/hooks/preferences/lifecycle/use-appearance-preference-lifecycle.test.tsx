@@ -17,7 +17,6 @@ function resetAppearanceState() {
     _persistedMetadata: {},
   });
   const root = document.documentElement;
-  delete root.dataset.theme;
   delete root.dataset.mode;
   delete root.dataset.uiFontSize;
   delete root.dataset.readableCodeFontSize;
@@ -67,13 +66,12 @@ describe("useAppearancePreferenceLifecycle", () => {
     resetAppearanceState();
   });
 
-  it("applies default mono appearance tokens on mount", async () => {
+  it("applies default appearance tokens on mount", async () => {
     installMatchMediaStub(true);
 
     renderHook(() => useAppearancePreferenceLifecycle());
 
     await waitFor(() => {
-      expect(document.documentElement.dataset.theme).toBe("mono");
       expect(document.documentElement.dataset.mode).toBe("dark");
       expect(document.documentElement.dataset.uiFontSize).toBe("default");
       expect(document.documentElement.dataset.readableCodeFontSize).toBe("default");
@@ -83,14 +81,13 @@ describe("useAppearancePreferenceLifecycle", () => {
     });
   });
 
-  it("tracks store changes for theme and size tokens", async () => {
+  it("tracks store changes for size tokens", async () => {
     installMatchMediaStub(true);
 
     renderHook(() => useAppearancePreferenceLifecycle());
 
     act(() => {
       useUserPreferencesStore.getState().setMultiple({
-        themePreset: "tbpn",
         uiFontSizeId: "large",
         readableCodeFontSizeId: "xlarge",
         windowZoomId: "zoom90",
@@ -98,7 +95,6 @@ describe("useAppearancePreferenceLifecycle", () => {
     });
 
     await waitFor(() => {
-      expect(document.documentElement.dataset.theme).toBe("tbpn");
       expect(document.documentElement.dataset.mode).toBe("dark");
       expect(document.documentElement.dataset.uiFontSize).toBe("large");
       expect(document.documentElement.dataset.readableCodeFontSize).toBe("xlarge");

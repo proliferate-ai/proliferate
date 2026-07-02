@@ -34,7 +34,7 @@ describe("CloudAgentAuthLibrary", () => {
 
     render(<CloudAgentAuthLibrary />);
 
-    expect(screen.queryByRole("button", { name: "Loading..." })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Loading…" })).toBeNull();
     expect(screen.queryAllByRole("button", { name: /Choose credential/i }).length)
       .toBeGreaterThan(0);
   });

@@ -38,43 +38,43 @@ export function BotStatusSection({
       title="Bot status"
       description="Control whether the bot responds to allowed Slack mentions."
     >
-        <SettingsRow
-          label="Connection health"
-          description={connection?.lastValidatedAt
-            ? `Last validated ${formatDate(connection.lastValidatedAt)}.`
-            : connection
-              ? "Connection has not been validated from this device yet."
-              : "Install Slack before validation is available."}
-        >
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <SlackConnectionStatusBadge status={connection?.status ?? null} />
-            <Button
-              type="button"
-              variant="outline"
-              loading={validating}
-              disabled={!canManage || !connection}
-              onClick={onValidate}
-            >
-              Validate now
-            </Button>
-          </div>
-        </SettingsRow>
-        <SettingsRow
-          label="Respond to mentions"
-          description={config
-            ? "When enabled, Slack mentions can create shared unclaimed cloud work."
-            : "Install Slack before enabling the bot."}
-        >
-          <div className="flex items-center justify-end gap-2">
-            <SlackEnabledBadge enabled={config ? enabled : null} />
-            <Switch
-              checked={enabled}
-              disabled={!canManage || !config || saving}
-              aria-label="Enable Slack bot"
-              onChange={(nextEnabled) => onUpdateConfig({ enabled: nextEnabled })}
-            />
-          </div>
-        </SettingsRow>
+      <SettingsRow
+        label="Connection health"
+        description={connection?.lastValidatedAt
+          ? `Last validated ${formatDate(connection.lastValidatedAt)}.`
+          : connection
+            ? "Connection has not been validated from this device yet."
+            : "Install Slack before validation is available."}
+      >
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <SlackConnectionStatusBadge status={connection?.status ?? null} />
+          <Button
+            type="button"
+            variant="outline"
+            loading={validating}
+            disabled={!canManage || !connection}
+            onClick={onValidate}
+          >
+            Validate now
+          </Button>
+        </div>
+      </SettingsRow>
+      <SettingsRow
+        label="Respond to mentions"
+        description={config
+          ? "When enabled, Slack mentions can create cloud work for this organization."
+          : "Install Slack before enabling the bot."}
+      >
+        <div className="flex items-center justify-end gap-2">
+          <SlackEnabledBadge enabled={config ? enabled : null} />
+          <Switch
+            checked={enabled}
+            disabled={!canManage || !config || saving}
+            aria-label="Enable Slack bot"
+            onChange={(nextEnabled) => onUpdateConfig({ enabled: nextEnabled })}
+          />
+        </div>
+      </SettingsRow>
     </SettingsSection>
   );
 }

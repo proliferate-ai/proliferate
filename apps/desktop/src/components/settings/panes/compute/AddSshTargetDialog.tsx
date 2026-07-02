@@ -104,11 +104,11 @@ export function AddSshTargetDialog({
     >
       <form className="space-y-4" onSubmit={submit}>
         <div>
-          <Label htmlFor="compute-target-name">Display name</Label>
+          <Label htmlFor="compute-target-name">Name</Label>
           <Input
             id="compute-target-name"
             value={displayName}
-            placeholder="Staging SSH Box"
+            placeholder="Staging SSH box"
             onChange={(event) => setDisplayName(event.target.value)}
             disabled={isCreating || Boolean(enrollment)}
             required
@@ -126,11 +126,11 @@ export function AddSshTargetDialog({
             >
               <option value="personal">Personal cloud</option>
               <option value="organization">
-                {activeOrganization ? `${activeOrganization.name} organization cloud` : "Team cloud"}
+                {activeOrganization ? `${activeOrganization.name} organization cloud` : "Organization cloud"}
               </option>
             </Select>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              Team targets can be used by organization workflows, Slack, and claimed organization workspaces.
+              Organization targets can be used by organization workflows, Slack, and claimed organization workspaces.
             </p>
           </div>
         )}
@@ -233,7 +233,7 @@ export function AddSshTargetDialog({
           />
         </div>
         <div>
-          <Label htmlFor="compute-target-runtime-port">Remote AnyHarness port</Label>
+          <Label htmlFor="compute-target-runtime-port">Runtime port</Label>
           <Input
             id="compute-target-runtime-port"
             value={remoteAnyHarnessPort}
@@ -243,7 +243,7 @@ export function AddSshTargetDialog({
           />
         </div>
         <div>
-          <Label htmlFor="compute-target-root">Default workspace root</Label>
+          <Label htmlFor="compute-target-root">Workspace root</Label>
           <Input
             id="compute-target-root"
             value={workspaceRoot}

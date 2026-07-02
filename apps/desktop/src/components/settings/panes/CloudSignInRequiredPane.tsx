@@ -21,7 +21,7 @@ export function CloudSignInRequiredPane() {
       />
 
       <SettingsEmptyState
-        title="Sign in to use cloud workspaces."
+        title="Sign in to use cloud workspaces"
         description={CAPABILITY_COPY.cloudSignInDetails}
         action={
           <>

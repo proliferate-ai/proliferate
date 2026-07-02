@@ -169,7 +169,7 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
       </EnvironmentField>
 
       <EnvironmentField
-        label="Local action command"
+        label="Run command"
         description="Command launched by the workspace header Run button for this environment"
       >
         <div className="space-y-2">

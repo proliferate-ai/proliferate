@@ -1,7 +1,7 @@
 export const SETTINGS_CONTENT_SECTIONS = [
+  "account",
   "general",
   "appearance",
-  "account",
   "personal-secrets",
   "organization",
   "organization-secrets",
@@ -13,7 +13,6 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "environments",
   "compute",
   "worktrees",
-  "archived-chats",
   "agent-authentication",
   "agent-defaults",
   // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
@@ -29,10 +28,12 @@ export const SETTINGS_DEFAULT_SECTION: SettingsSection = "general";
 
 export const TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION = false;
 
+// User scope numbering: ⌘1 account, ⌘2 general, ⌘3 appearance,
+// ⌘4 personal secrets, ⌘5 pruning (worktrees).
 export const SETTINGS_SHORTCUT_SECTION_ORDER = [
+  "account",
   "general",
   "appearance",
-  "account",
   "personal-secrets",
   "organization",
   "organization-secrets",
@@ -44,7 +45,6 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "environments",
   "compute",
   "worktrees",
-  "archived-chats",
   "agent-authentication",
   "agent-defaults",
   // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.

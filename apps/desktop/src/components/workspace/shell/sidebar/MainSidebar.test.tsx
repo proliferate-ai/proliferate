@@ -254,12 +254,6 @@ function renderMainSidebar() {
 }
 
 describe("MainSidebar support window", () => {
-  it("does not mark Support as tbr", () => {
-    renderMainSidebar();
-
-    expect(screen.queryByText("tbr")).toBeNull();
-  });
-
   it("opens the support report window from Support", async () => {
     renderMainSidebar();
 

@@ -1,3 +1,4 @@
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { AgentHarnessConfigComposer } from "@/components/settings/shared/AgentHarnessConfigComposer";
 import type {
   DesktopAgentLaunchAgent,
@@ -38,13 +39,10 @@ export function SessionDefaultsSection({
   const disabled = !canManage || !config || saving || loading;
 
   return (
-    <section className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">Session defaults</h2>
-        <p className="text-sm text-muted-foreground">
-          Configure the agent, model, and modes Slack-created sessions use.
-        </p>
-      </div>
+    <SettingsSection
+      title="Session defaults"
+      description="Configure the agent, model, and modes Slack-created sessions use."
+    >
       <AgentHarnessConfigComposer
         agentKind={selectedAgent?.kind ?? null}
         agentDisplayName={selectedAgent?.displayName ?? null}
@@ -67,6 +65,6 @@ export function SessionDefaultsSection({
         onSelectModel={onSelectModel}
         onAction={onSave}
       />
-    </section>
+    </SettingsSection>
   );
 }

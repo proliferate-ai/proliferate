@@ -19,27 +19,27 @@ export function SharedReadinessSection({
       title="Organization readiness"
       description="Slack-created work uses organization cloud runtime."
     >
-        <SettingsRow
-          label="Compute targets"
-          description={loadingTargets
-            ? "Checking organization cloud target inventory..."
-            : targetCount > 0
-              ? "Open Compute to review runtime, auth, and sandbox readiness."
-              : "Set up organization cloud compute before enabling Slack for the team."}
-        >
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Badge tone={targetCount > 0 ? "success" : "warning"}>
-              {loadingTargets
-                ? "Checking"
-                : targetCount > 0
-                  ? `${targetCount.toLocaleString()} target${targetCount === 1 ? "" : "s"}`
-                  : "Setup needed"}
-            </Badge>
-            <Button type="button" variant="outline" onClick={onOpenCompute}>
-              Open Compute
-            </Button>
-          </div>
-        </SettingsRow>
+      <SettingsRow
+        label="Compute targets"
+        description={loadingTargets
+          ? "Checking organization cloud target inventory…"
+          : targetCount > 0
+            ? "Open compute settings to review runtime, auth, and sandbox readiness."
+            : "Set up organization cloud compute before enabling Slack for the team."}
+      >
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Badge tone={targetCount > 0 ? "success" : "warning"}>
+            {loadingTargets
+              ? "Checking"
+              : targetCount > 0
+                ? `${targetCount.toLocaleString()} target${targetCount === 1 ? "" : "s"}`
+                : "Setup needed"}
+          </Badge>
+          <Button type="button" variant="outline" onClick={onOpenCompute}>
+            Open compute settings
+          </Button>
+        </div>
+      </SettingsRow>
     </SettingsSection>
   );
 }

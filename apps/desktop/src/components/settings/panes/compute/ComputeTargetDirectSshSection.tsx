@@ -1,5 +1,6 @@
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 import type { ComputeTargetKind } from "@/lib/domain/compute/target-types";
 
@@ -33,15 +34,12 @@ export function ComputeTargetDirectSshSection({
   onWorkspaceRootChange: (value: string) => void;
 }) {
   return (
-    <section className="space-y-3">
-      <div>
-        <div className="text-sm font-medium text-foreground">Direct SSH access</div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {targetKind === "ssh"
-            ? COMPUTE_COPY.directSshHelp
-            : COMPUTE_COPY.directSshUnavailable}
-        </p>
-      </div>
+    <SettingsSection
+      title="Direct SSH access"
+      description={targetKind === "ssh"
+        ? COMPUTE_COPY.directSshHelp
+        : COMPUTE_COPY.directSshUnavailable}
+    >
       {targetKind === "ssh" ? (
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
@@ -114,6 +112,6 @@ export function ComputeTargetDirectSshSection({
           {COMPUTE_COPY.directSshNotSshTarget}
         </div>
       )}
-    </section>
+    </SettingsSection>
   );
 }
