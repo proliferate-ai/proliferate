@@ -19,10 +19,11 @@ function authUser(id: string): AuthUser {
 }
 
 // The enrollment guard is module-level state, so each test loads the hook
-// (and the auth store it observes) from a fresh module registry.
+// (and the stores it observes) from a fresh module registry.
 async function loadEnrollmentHarness() {
   vi.resetModules();
   const { useAuthStore } = await import("@/stores/auth/auth-store");
+  const { useOrganizationStore } = await import("@/stores/organizations/organization-store");
   const { useDesktopWorkerEnrollment } = await import("./use-desktop-worker-enrollment");
   useAuthStore.setState({
     status: "bootstrapping",
@@ -30,12 +31,20 @@ async function loadEnrollmentHarness() {
     user: null,
     error: null,
   });
+  useOrganizationStore.setState({
+    activeOrganizationId: null,
+    activeOrganizationValidated: false,
+  });
   const rendered = renderHook(() => useDesktopWorkerEnrollment());
   return {
     ...rendered,
     signIn: (id: string) =>
       useAuthStore.setState({ status: "authenticated", user: authUser(id) }),
     signOut: () => useAuthStore.setState({ status: "anonymous", user: null }),
+    setOrganization: (organizationId: string | null) =>
+      useOrganizationStore.getState().setActiveOrganizationId(organizationId, {
+        validated: true,
+      }),
     nudgeRender: () => useAuthStore.setState({ error: "nudge a re-render" }),
   };
 }
@@ -94,9 +103,67 @@ describe("useDesktopWorkerEnrollment", () => {
     });
   });
 
+  it("re-enrolls when a different user signs in under the same organization", async () => {
+    const harness = await loadEnrollmentHarness();
+
+    harness.setOrganization("org-1");
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    harness.signIn("user-b");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+    });
+    expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
+  });
+
+  it("re-enrolls on an org->org change without tearing down itself", async () => {
+    // The destructive part of an org->org switch (confirm dialog, closing
+    // local sessions, teardownDesktopWorker) runs in the organization switch
+    // action before the store changes; the guard only re-enrolls.
+    const harness = await loadEnrollmentHarness();
+
+    harness.setOrganization("org-1");
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    harness.setOrganization("org-2");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+    });
+    expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
+  });
+
+  it("adopts a first organization in place: plain re-enroll, no teardown", async () => {
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    // Org-less user gains their first organization: the guard key updates
+    // and the worker re-enrolls without disturbing anything.
+    harness.setOrganization("org-1");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+    });
+    expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
+
+    // Same (user, org) again is a no-op.
+    harness.setOrganization("org-1");
+    await flushEffects();
+    expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+  });
+
   it("tears down on sign-out and re-enrolls on the next login", async () => {
     const harness = await loadEnrollmentHarness();
 
+    harness.setOrganization("org-1");
     harness.signIn("user-a");
     await waitFor(() => {
       expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);

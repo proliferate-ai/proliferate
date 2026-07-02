@@ -43,6 +43,7 @@ import type {
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
 const PROLIFERATE_DISCORD_URL = "https://discord.gg/wCEgUnEuF";
@@ -108,6 +109,7 @@ export function SidebarAccountFooter() {
   const actions = useOrganizationActions(activeOrganizationId);
   const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? [];
   const [acceptTarget, setAcceptTarget] = useState<OrganizationInvitationRecord | null>(null);
+  const [switchTarget, setSwitchTarget] = useState<OrganizationRecord | null>(null);
 
   const displayName = user?.display_name?.trim() || user?.email || "Account";
   const initials = displayName.trim().slice(0, 2).toUpperCase() || "PR";
@@ -229,7 +231,16 @@ export function SidebarAccountFooter() {
                           : undefined
                       }
                       onClick={() => {
-                        setActiveOrganizationId(organization.id);
+                        // Org->org is semi-destructive (worker identity
+                        // rotates), so it confirms first; gaining a first
+                        // organization adopts it in place.
+                        if (organization.id !== activeOrganizationId) {
+                          if (activeOrganizationId) {
+                            setSwitchTarget(organization);
+                          } else {
+                            setActiveOrganizationId(organization.id);
+                          }
+                        }
                         close();
                       }}
                     />
@@ -361,6 +372,10 @@ export function SidebarAccountFooter() {
         onConfirm={() => {
           void handleAcceptInvitation();
         }}
+      />
+      <OrganizationSwitchDialog
+        target={switchTarget}
+        onClose={() => setSwitchTarget(null)}
       />
     </div>
   );

@@ -3750,6 +3750,8 @@ export interface components {
         DesktopWorkerEnrollmentRequest: {
             /** Desktopinstallid */
             desktopInstallId: string;
+            /** Organizationid */
+            organizationId?: string | null;
         };
         /** DesktopWorkerEnrollmentResponse */
         DesktopWorkerEnrollmentResponse: {
