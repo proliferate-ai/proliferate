@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.desktop.models import (
     AuthCodeCreated,
+    AuthMethodsResponse,
     AuthorizeParams,
     OAuthAvailabilityResponse,
     PendingTokenRequest,
@@ -36,6 +37,7 @@ from proliferate.auth.desktop.service import (
     finish_github_desktop_callback,
     github_csrf_cookie_secure,
     github_oauth_enabled,
+    mint_desktop_tokens,
     refresh_desktop_access_token,
     validate_desktop_redirect_uri,
 )
@@ -44,6 +46,11 @@ from proliferate.auth.desktop.service import (
 )
 from proliferate.auth.desktop.service import (
     poll_desktop_auth as poll_desktop_auth_service,
+)
+from proliferate.auth.identity.models import PasswordLoginRequest
+from proliferate.auth.identity.password import (
+    authenticate_password_user,
+    request_client_ip,
 )
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.auth.users import UserManager, get_user_manager
@@ -56,6 +63,53 @@ from proliferate.constants.auth import (
 from proliferate.db.engine import get_async_session
 
 router = APIRouter(prefix="/desktop", tags=["desktop-auth"])
+
+
+# ── Public probe: which sign-in methods does this server offer? ──
+
+
+@router.get("/methods", response_model=AuthMethodsResponse)
+async def desktop_auth_methods() -> AuthMethodsResponse:
+    """Advertise available desktop sign-in methods (unauthenticated).
+
+    The desktop login screen reads this to decide which sign-in surface to
+    show: the email/password form becomes the default when GitHub OAuth is not
+    configured (the standard self-hosted posture).
+    """
+    return AuthMethodsResponse(
+        password_login=settings.password_auth_enabled,
+        github=github_oauth_enabled(),
+    )
+
+
+# ── Direct email/password login from the desktop app ──
+
+
+@router.post("/password/login", response_model=TokenResponse)
+async def desktop_password_login(
+    body: PasswordLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+) -> TokenResponse:
+    """Authenticate email+password and issue desktop session tokens.
+
+    Same policy as the web/mobile password routes (kill switch, rate limits,
+    generic failure copy, ADMIN_EMAILS floor), but the response carries the
+    desktop token pair the GitHub callback flow issues.
+    """
+    try:
+        user = await authenticate_password_user(
+            db,
+            email=body.email,
+            password=body.password,
+            client_ip=request_client_ip(request),
+        )
+    except HTTPException:
+        # Persist rate-limit failure counters before surfacing the error.
+        await db.commit()
+        raise
+    await db.commit()
+    return await mint_desktop_tokens(user)
 
 
 # ── Debug endpoint: create an auth code after browser login ──

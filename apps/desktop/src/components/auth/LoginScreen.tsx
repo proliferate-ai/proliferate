@@ -1,5 +1,6 @@
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
+import { PasswordSignInForm } from "@/components/auth/PasswordSignInForm";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS } from "@/copy/auth/auth-copy";
@@ -14,6 +15,11 @@ interface LoginScreenProps {
   onGitHubSignIn: () => void;
   onContinueLocally: () => void;
   canContinueLocally: boolean;
+  // Email/password sign-in: the default surface when the server reports
+  // GitHub OAuth is not configured (self-hosted posture).
+  passwordSignInAvailable?: boolean;
+  passwordSubmitting?: boolean;
+  onPasswordSignIn?: (email: string, password: string) => void;
 }
 
 export function LoginScreen({
@@ -26,7 +32,13 @@ export function LoginScreen({
   onGitHubSignIn,
   onContinueLocally,
   canContinueLocally,
+  passwordSignInAvailable = false,
+  passwordSubmitting = false,
+  onPasswordSignIn,
 }: LoginScreenProps) {
+  const showPasswordForm = passwordSignInAvailable
+    && !githubSignInChecking
+    && !githubSignInAvailable;
   return (
     <AuthAppearanceBoundary
       className="flex min-h-screen flex-col items-center justify-center bg-background p-8"
@@ -64,20 +76,30 @@ export function LoginScreen({
         </div>
 
         <div className="space-y-4">
-          <Button
-            type="button"
-            size="md"
-            loading={submitting}
-            onClick={onGitHubSignIn}
-            disabled={busy || githubSignInChecking || !githubSignInAvailable}
-            className="h-11 w-full"
-          >
-            {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
-            {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
-            {!submitting && <ArrowRight className="h-4 w-4" />}
-          </Button>
+          {showPasswordForm
+            ? (
+              <PasswordSignInForm
+                submitting={passwordSubmitting}
+                disabled={busy}
+                onSubmit={(email, password) => onPasswordSignIn?.(email, password)}
+              />
+            )
+            : (
+              <Button
+                type="button"
+                size="md"
+                loading={submitting}
+                onClick={onGitHubSignIn}
+                disabled={busy || githubSignInChecking || !githubSignInAvailable}
+                className="h-11 w-full"
+              >
+                {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
+                {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
+                {!submitting && <ArrowRight className="h-4 w-4" />}
+              </Button>
+            )}
 
-          {!githubSignInChecking && !githubSignInAvailable && (
+          {!showPasswordForm && !githubSignInChecking && !githubSignInAvailable && (
             <p className="text-sm text-muted-foreground">
               {githubSignInUnavailableDescription}
             </p>
