@@ -363,6 +363,29 @@ async def get_active_membership(
     return membership_record(membership) if membership is not None else None
 
 
+async def get_membership_for_user(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+) -> MembershipRecord | None:
+    """Load a user's membership in an organization regardless of status.
+
+    Callers that must distinguish "never joined" from "removed by an admin"
+    (the membership policy, login reactivation guards) need the row even when
+    it is no longer active.
+    """
+    membership = (
+        await db.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return membership_record(membership) if membership is not None else None
+
+
 async def create_pending_team_checkout_intent(
     db: AsyncSession,
     *,

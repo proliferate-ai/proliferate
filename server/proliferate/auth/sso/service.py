@@ -60,7 +60,10 @@ from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment,
 )
 from proliferate.server.organizations.admin_emails import ensure_admin_email_role
-from proliferate.server.organizations.membership_policy import place_new_identity
+from proliferate.server.organizations.membership_policy import (
+    ensure_instance_membership_not_removed,
+    place_new_identity,
+)
 
 
 @dataclass(frozen=True)
@@ -321,7 +324,13 @@ async def _resolve_sso_user(
         elif connection.jit_policy == SsoJitPolicy.DISABLED:
             raise HTTPException(status_code=403, detail="SSO user provisioning is disabled.")
         _ensure_active_user(user)
-        await place_new_identity(db, user)
+        # Single-org mode honors the connection's default role for JIT
+        # placement; hosted mode ignores it (personal org owner as always).
+        # The policy never reactivates an admin-removed instance membership:
+        # a kicked user gets a clear 403 here instead of regaining access
+        # (ADMIN_EMAILS-listed emails excepted; that floor is the documented
+        # lockout-recovery path).
+        await place_new_identity(db, user, default_role=connection.default_role)
 
     await _attach_sso_identity(db, user=user, connection=connection, verified=verified)
     return user
@@ -385,7 +394,7 @@ async def _resolve_organization_sso_user(
             display_name=verified.display_name,
             avatar_url=verified.avatar_url,
         )
-        await place_new_identity(db, user)
+        await place_new_identity(db, user, default_role=connection.default_role)
     _ensure_active_user(user)
     membership = await organization_store.get_active_membership(
         db,
@@ -410,6 +419,16 @@ async def _resolve_organization_sso_user(
             return user
     if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
         raise HTTPException(status_code=403, detail="SSO user is not a team member.")
+    # Single-org mode only (no-op in hosted mode): JIT must not silently
+    # reactivate an instance-org membership an admin removed. ADMIN_EMAILS
+    # listed emails are excepted; that floor is the documented
+    # lockout-recovery path.
+    await ensure_instance_membership_not_removed(
+        db,
+        organization_id=connection.organization_id,
+        user_id=user.id,
+        email=verified.email,
+    )
     membership = await sso_store.ensure_sso_organization_membership(
         db,
         organization_id=connection.organization_id,

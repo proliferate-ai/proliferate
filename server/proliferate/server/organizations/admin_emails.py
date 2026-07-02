@@ -79,7 +79,11 @@ async def ensure_admin_email_role(db: AsyncSession, user: AdminEmailUser) -> Non
     if membership is None:
         # Listed users always belong to the instance org: reinstate a removed
         # (or never-created) membership at the floor role. This is the
-        # lockout-recovery path when in-product management locked someone out.
+        # DELIBERATE lockout-recovery semantic: login paths never reactivate a
+        # removed membership on their own (they 403 instead, see the membership
+        # policy), but the operator's env wins for listed emails. The flip side
+        # is that offboarding someone requires removing them from ADMIN_EMAILS
+        # too, or they are reinstated as admin at their next login.
         await organization_store.add_active_membership(
             db,
             organization_id=instance_organization.id,

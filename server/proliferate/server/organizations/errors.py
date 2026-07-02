@@ -27,6 +27,27 @@ class InstanceOrganizationAlreadyClaimed(OrganizationServiceError):
         )
 
 
+class InstanceOrganizationAccessRemoved(OrganizationServiceError):
+    """Raised when a removed instance-org member tries to regain access.
+
+    An admin removed this user's membership from the instance organization.
+    Login and read paths fail closed with this error instead of silently
+    reactivating the membership. The only reinstatement paths are a fresh
+    invitation from an admin and the ADMIN_EMAILS floor (the documented
+    lockout-recovery mechanism).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="instance_access_removed",
+            message=(
+                "Your access to this instance has been removed. "
+                "Contact an admin of this instance to be re-invited."
+            ),
+            status_code=403,
+        )
+
+
 class InstanceOrganizationNotClaimed(OrganizationServiceError):
     """Raised when single-org mode is on but the instance org does not exist yet.
 

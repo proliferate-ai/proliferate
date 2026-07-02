@@ -58,6 +58,7 @@ from proliferate.server.organizations.domain.profile import (
 from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.join_links import organization_join_url
 from proliferate.server.organizations.landing import build_join_landing_html
+from proliferate.server.organizations.membership_policy import place_new_identity
 from proliferate.utils.time import utcnow
 
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
@@ -206,10 +207,14 @@ async def list_organizations(
     actor_user: OrganizationActor,
 ) -> OrganizationMembershipRecords:
     if settings.single_org_mode:
-        # Single-org mode: placement is owned by the membership policy seam
-        # (first-run claim and invited registration). Listing must never mint
-        # a personal organization for a member who does not own one, so this
-        # skips the hosted ensure-default path entirely.
+        # Single-org mode: never mint a personal org from a list/read path.
+        # A user without an active membership is routed through the membership
+        # policy seam, which joins the instance organization or fails closed
+        # (503 before the first-run claim, 403 after an admin removed them).
+        records = await organization_store.list_organizations_for_user(db, actor_user.id)
+        if records:
+            return records
+        await place_new_identity(db, actor_user)
         return await organization_store.list_organizations_for_user(db, actor_user.id)
     return await organization_store.ensure_default_organization_for_user(
         db,
