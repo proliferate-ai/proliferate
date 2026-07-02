@@ -330,6 +330,9 @@ class Settings(BaseSettings):
     agent_gateway_litellm_public_base_url: str = ""
     agent_gateway_litellm_master_key: str = ""
     agent_gateway_litellm_timeout_seconds: float = 30.0
+    agent_gateway_default_user_budget_usd: str = "5"
+    agent_gateway_default_org_budget_usd: str = "0"
+    agent_gateway_backfill_interval_seconds: float = 300.0
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
