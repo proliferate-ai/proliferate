@@ -38,7 +38,8 @@ describe("UpdateRestartDialog", () => {
 
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.getAllByText("Restart to update").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Proliferate 0\.1\.42 is ready\. Restart now to switch over\./)).toBeTruthy();
+    expect(screen.getByText(/Proliferate 0\.1\.42 is ready\./)).toBeTruthy();
+    expect(screen.getByText(/Restart now to switch over\./)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 

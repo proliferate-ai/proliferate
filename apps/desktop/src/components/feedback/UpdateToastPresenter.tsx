@@ -198,6 +198,11 @@ export function UpdateToastPresenter() {
           dismissedKeyRef.current = dismissalKey;
         },
       },
+      // Sonner defaults every button to a 28px start margin; the pair should
+      // read as one control cluster, so the action hugs the cancel.
+      classNames: {
+        actionButton: "!ml-2",
+      },
     });
   }, [
     availableVersion,
