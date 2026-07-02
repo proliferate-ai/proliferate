@@ -27,7 +27,6 @@ use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
-use crate::domains::plugins::mcp::auth::SkillsMcpAuth;
 use crate::domains::repo_roots::service::RepoRootService;
 use crate::domains::repo_roots::store::RepoRootStore;
 use crate::domains::reviews::hooks::ReviewSessionHooks;
@@ -35,15 +34,13 @@ use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
-use crate::domains::runtime_config::service::RuntimeConfigService;
-use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunchExtension;
-use crate::domains::runtime_config::store::RuntimeConfigStore;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
 use crate::domains::sessions::links::completions::LinkCompletionStore;
 use crate::domains::sessions::links::service::SessionLinkService;
 use crate::domains::sessions::links::store::SessionLinkStore;
 use crate::domains::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
+use crate::domains::sessions::mcp_bindings::integration_gateway::IntegrationGatewaySessionLaunchExtension;
 use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
@@ -100,7 +97,6 @@ pub struct AppState {
     pub catalog_sync_service: Arc<CatalogSyncService>,
     pub agent_auth_service: Arc<AgentAuthService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
-    pub runtime_config_service: Arc<RuntimeConfigService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub workspace_setup_runtime: Arc<WorkspaceSetupRuntime>,
@@ -118,6 +114,7 @@ pub struct AppState {
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
     pub review_service: Arc<ReviewService>,
     pub review_session_hooks: Arc<ReviewSessionHooks>,
+    pub integration_gateway_session_launch_extension: Arc<IntegrationGatewaySessionLaunchExtension>,
     pub review_runtime: Arc<ReviewRuntime>,
     pub product_mcp_endpoint_registry: Arc<ProductMcpEndpointRegistry>,
     pub session_service: Arc<SessionService>,
@@ -184,14 +181,6 @@ impl AppState {
             session_data_cipher.clone(),
             runtime_home.clone(),
         ));
-        let runtime_config_service = Arc::new(RuntimeConfigService::new(RuntimeConfigStore::new(
-            db.clone(),
-        )));
-        if let Ok(status) = runtime_config_service.status() {
-            if let (Some(revision), Some(manifest)) = (status.current_revision, status.manifest) {
-                auth_manager.apply_runtime_config(&revision, &manifest);
-            }
-        }
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -293,14 +282,9 @@ impl AppState {
             review_hook_event_tx,
             review_service.clone(),
         ));
-        let skills_mcp_auth = Arc::new(SkillsMcpAuth::new(runtime_home.clone()));
-        let runtime_config_session_launch_extension =
-            Arc::new(RuntimeConfigSessionLaunchExtension::new(
-                runtime_config_service.clone(),
-                runtime_base_url.clone(),
-                bearer_token.clone(),
-                skills_mcp_auth.clone(),
-            ));
+        let integration_gateway_session_launch_extension = Arc::new(
+            IntegrationGatewaySessionLaunchExtension::new(runtime_home.clone()),
+        );
         let product_mcp_launch_catalog =
             product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
                 runtime_base_url: runtime_base_url.clone(),
@@ -316,7 +300,7 @@ impl AppState {
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
-            runtime_config_session_launch_extension,
+            integration_gateway_session_launch_extension.clone(),
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -327,7 +311,6 @@ impl AppState {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
-            runtime_config_service.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
@@ -417,8 +400,6 @@ impl AppState {
                 cowork_artifact_runtime: cowork_artifact_runtime.clone(),
                 cowork_runtime: cowork_runtime.clone(),
                 cowork_mcp_auth,
-                runtime_config_service: runtime_config_service.clone(),
-                skills_mcp_auth,
             })
             .map_err(AppStateInitError::InvalidProductMcpRegistry)?;
         #[cfg(not(test))]
@@ -439,7 +420,6 @@ impl AppState {
             catalog_sync_service,
             agent_auth_service,
             agent_reconcile_service,
-            runtime_config_service,
             repo_root_service,
             workspace_runtime,
             workspace_setup_runtime,
@@ -457,6 +437,7 @@ impl AppState {
             subagent_session_hooks,
             review_service,
             review_session_hooks,
+            integration_gateway_session_launch_extension,
             review_runtime,
             product_mcp_endpoint_registry,
             session_service,

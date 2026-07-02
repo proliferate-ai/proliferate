@@ -3,9 +3,7 @@ use super::super::state::{
     ASSISTANT_MESSAGE_COMPLETED_EVENT, TRANSIENT_STATUS_EVENT,
 };
 
-pub(in crate::live::sessions::sink) fn parse_meta(
-    meta: Option<&serde_json::Value>,
-) -> ParsedMeta {
+pub(in crate::live::sessions::sink) fn parse_meta(meta: Option<&serde_json::Value>) -> ParsedMeta {
     meta.and_then(|value| serde_json::from_value(value.clone()).ok())
         .unwrap_or_default()
 }

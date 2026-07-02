@@ -1,9 +1,9 @@
 use super::*;
-use crate::live::sessions::model::SessionStartupStrategy;
 use crate::live::sessions::driver::session_lifecycle::start_new_session;
 use crate::live::sessions::driver::types::{
     NativeSessionStartupDisposition, NativeSessionStartupState,
 };
+use crate::live::sessions::model::SessionStartupStrategy;
 use anyharness_contract::v1::SessionActionCapabilities;
 
 pub(in crate::live::sessions) fn build_system_prompt_meta(

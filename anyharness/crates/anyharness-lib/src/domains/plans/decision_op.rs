@@ -233,9 +233,7 @@ impl SessionOpFinish for PlanDecisionFinish {
                     );
                     (
                         ProposedPlanNativeResolutionState::Failed,
-                        Some(format!(
-                            "Failed to resolve native interaction: {error:?}"
-                        )),
+                        Some(format!("Failed to resolve native interaction: {error:?}")),
                     )
                 }
             },
@@ -275,7 +273,10 @@ impl SessionOpFinish for PlanDecisionFinish {
     }
 }
 
-fn done(result: Result<PlanRecord, PlanDecisionError>, linked_request_id: Option<String>) -> SessionOpStep {
+fn done(
+    result: Result<PlanRecord, PlanDecisionError>,
+    linked_request_id: Option<String>,
+) -> SessionOpStep {
     SessionOpStep::Done(Box::new(PlanDecisionOpOutput {
         result,
         linked_request_id,

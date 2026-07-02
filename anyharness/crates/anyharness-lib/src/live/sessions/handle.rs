@@ -2,15 +2,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope,
-    SessionExecutionPhase, SessionExecutionSummary,
+    ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope, SessionExecutionPhase,
+    SessionExecutionSummary,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 
 pub use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, ForkSessionCommandResult, Resolution, PromptAcceptError,
-    PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
-    SetConfigOptionCommandError,
+    ForkSessionCommandError, ForkSessionCommandResult, PromptAcceptError, PromptAcceptance,
+    QueueMutationError, Resolution, ResolveInteractionCommandError, SetConfigOptionCommandError,
 };
 
 use crate::domains::sessions::prompt::PromptPayload;
@@ -143,11 +142,7 @@ impl LiveSessionHandle {
     /// Mirror a plan linkage into the pending-interaction snapshot. Safe to
     /// call after resolution (no-op when the interaction is gone); used by
     /// the plans runtime after a decision op reports a (re)link.
-    pub async fn link_pending_interaction_to_plan(
-        &self,
-        request_id: &str,
-        plan_id: &str,
-    ) {
+    pub async fn link_pending_interaction_to_plan(&self, request_id: &str, plan_id: &str) {
         let mut execution = self.execution.write().await;
         let Some(pending) = execution
             .pending_interactions
@@ -299,13 +294,15 @@ impl LiveSessionHandle {
     pub async fn run_domain_op(
         &self,
         op: Box<dyn crate::live::sessions::model::SessionDomainOp>,
-    ) -> Result<Box<dyn std::any::Any + Send>, LiveSessionCommandError<std::convert::Infallible>> {
+    ) -> Result<Box<dyn std::any::Any + Send>, LiveSessionCommandError<std::convert::Infallible>>
+    {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.command_tx
             .send(SessionCommand::RunDomainOp { op, respond_to: tx })
             .await
             .map_err(|_| LiveSessionCommandError::ActorUnavailable)?;
-        rx.await.map_err(|_| LiveSessionCommandError::ResponseDropped)
+        rx.await
+            .map_err(|_| LiveSessionCommandError::ResponseDropped)
     }
 
     pub async fn verify_fork_ready(

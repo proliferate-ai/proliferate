@@ -3,10 +3,6 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 
-use anyharness_contract::v1::{
-    RuntimeConfigExternalScope, RuntimeConfigManifest, RuntimeConfigRevision,
-    RuntimeDirectAttachAuthConfig, RuntimeJwtVerificationKey,
-};
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
@@ -17,6 +13,7 @@ use sha2::{Digest, Sha256};
 use tower::util::ServiceExt;
 use uuid::Uuid;
 
+use super::auth::{DirectAttachAuthConfig, DirectAttachVerificationKey};
 use super::router::build_router;
 use crate::{
     app::{test_support, AppState},
@@ -101,35 +98,18 @@ fn install_fake_managed_registry_npm_binary(
 }
 
 fn configure_direct_attach_auth(state: &AppState, target_id: &str) {
-    state.auth_manager.apply_runtime_config(
-        &RuntimeConfigRevision {
-            id: "rev-direct-attach".to_string(),
-            sequence: 1,
-            content_hash: "sha256:direct-attach".to_string(),
-            external_scope: Some(RuntimeConfigExternalScope {
-                provider: "proliferate-cloud".to_string(),
-                id: "profile-1".to_string(),
-                target_id: Some(target_id.to_string()),
-            }),
-        },
-        &RuntimeConfigManifest {
-            mcp_servers: Vec::new(),
-            mcp_binding_summaries: Vec::new(),
-            skills: Vec::new(),
-            artifacts: Vec::new(),
-            direct_attach_auth: Some(RuntimeDirectAttachAuthConfig {
-                issuer: "https://api.test.proliferate".to_string(),
-                audience: "anyharness".to_string(),
-                target_id: Some(target_id.to_string()),
-                verification_keys: vec![RuntimeJwtVerificationKey {
-                    kid: "test-kid".to_string(),
-                    algorithm: "RS256".to_string(),
-                    public_key_pem: TEST_PUBLIC_KEY.to_string(),
-                }],
-            }),
-            warnings: Vec::new(),
-        },
-    );
+    state
+        .auth_manager
+        .apply_direct_attach_auth(Some(&DirectAttachAuthConfig {
+            issuer: "https://api.test.proliferate".to_string(),
+            audience: "anyharness".to_string(),
+            target_id: Some(target_id.to_string()),
+            verification_keys: vec![DirectAttachVerificationKey {
+                kid: "test-kid".to_string(),
+                algorithm: "RS256".to_string(),
+                public_key_pem: TEST_PUBLIC_KEY.to_string(),
+            }],
+        }));
 }
 
 fn direct_attach_token(workspace_id: &str, session_id: Option<&str>, jti: &str) -> String {
@@ -334,7 +314,7 @@ async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/v1/runtime-config")
+                .uri("/v1/catalogs/agents")
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .body(Body::empty())
                 .expect("expected request"),

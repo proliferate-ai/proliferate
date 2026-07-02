@@ -10,11 +10,6 @@ import {
   fetchSessionHistory,
   resumeSession,
 } from "@/lib/access/anyharness/session-runtime";
-import {
-  assertDirectSessionCreateRuntimeConfigStamped,
-  prepareLocalRuntimeConfigForTarget,
-  prepareLocalSessionRuntimeConfig,
-} from "@/lib/access/anyharness/session-runtime-config";
 import type { SessionStreamHandle } from "@anyharness/sdk";
 import {
   createEmptySessionRecord,
@@ -149,66 +144,6 @@ describe("fetchSessionHistory", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-describe("assertDirectSessionCreateRuntimeConfigStamped", () => {
-  it("allows local direct session creation", () => {
-    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
-      anyharnessWorkspaceId: "workspace-1",
-      baseUrl: "http://localhost:6174",
-      location: "local",
-      runtimeGeneration: 0,
-    })).not.toThrow();
-  });
-
-  it("allows cloud sandbox gateway session creation", () => {
-    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
-      anyharnessWorkspaceId: "sandbox-workspace-1",
-      baseUrl: "http://api.local/v1/gateway/cloud-sandbox/anyharness",
-      location: "cloud",
-      runtimeGeneration: 1,
-      runtimeAccessKind: "proliferate-gateway",
-      authToken: "product-token",
-    })).not.toThrow();
-  });
-
-  it("fails closed for direct remote session creation", () => {
-    expect(() => assertDirectSessionCreateRuntimeConfigStamped({
-      anyharnessWorkspaceId: "workspace-1",
-      baseUrl: "https://runtime.example.test",
-      location: "cloud",
-      runtimeGeneration: 1,
-      authToken: "token",
-    })).toThrow(/runtime config stamping/i);
-  });
-});
-
-describe("prepareLocalSessionRuntimeConfig", () => {
-  const connection = {
-    runtimeUrl: "http://localhost:6174",
-    anyharnessWorkspaceId: "workspace-1",
-  };
-
-  it("does not require a cloud runtime-config preflight for local session creation", async () => {
-    await expect(prepareLocalSessionRuntimeConfig(connection)).resolves.toBeNull();
-  });
-
-  it("does not require old cloud preflight endpoints for cloud sandbox gateway targets", async () => {
-    const gatewayConnection = {
-      runtimeUrl: "http://api.local/v1/gateway/cloud-sandbox/anyharness",
-      authToken: "product-token",
-      anyharnessWorkspaceId: "sandbox-workspace-1",
-    };
-
-    await expect(prepareLocalRuntimeConfigForTarget({
-      anyharnessWorkspaceId: "sandbox-workspace-1",
-      baseUrl: gatewayConnection.runtimeUrl,
-      location: "cloud",
-      runtimeAccessKind: "proliferate-gateway",
-      runtimeGeneration: 1,
-      authToken: "product-token",
-    }, gatewayConnection)).resolves.toBeNull();
   });
 });
 

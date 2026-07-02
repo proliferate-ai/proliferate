@@ -62,7 +62,6 @@ impl PendingSessionActor {
     }
 }
 
-
 pub fn spawn_session_actor_pending(
     mut config: SessionActorConfig,
 ) -> anyhow::Result<PendingSessionActor> {

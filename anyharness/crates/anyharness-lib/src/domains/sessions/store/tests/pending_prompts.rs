@@ -58,9 +58,7 @@ fn batched_page_queries_match_single_session_queries() {
             "pending prompts diverge for {id}"
         );
 
-        let single_config = store
-            .find_live_config_snapshot(id)
-            .expect("single config");
+        let single_config = store.find_live_config_snapshot(id).expect("single config");
         assert_eq!(
             format!("{:?}", batched_configs.get(id)),
             format!("{:?}", single_config.as_ref()),

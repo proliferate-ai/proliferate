@@ -331,7 +331,6 @@ impl InteractionRendezvous {
         PendingMcpElicitationWait { rx }
     }
 
-
     pub async fn resolve_with_decision(
         &self,
         session_id: &str,

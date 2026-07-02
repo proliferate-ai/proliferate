@@ -5,12 +5,10 @@ use crate::domains::cowork::mcp::{
     self as cowork_mcp, auth::CoworkMcpAuth, tools as cowork_mcp_tools, CoworkProductMcpServer,
 };
 use crate::domains::cowork::runtime::CoworkRuntime;
-use crate::domains::plugins::mcp::{auth::SkillsMcpAuth, SkillsProductMcpServer};
 use crate::domains::reviews::mcp::{
     self as review_mcp, auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
-use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::domains::sessions::mcp_bindings::product_launch::{
     ProductMcpLaunchRegistration, ProductMcpSelectionContext,
@@ -46,8 +44,6 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
     pub(super) cowork_runtime: Arc<CoworkRuntime>,
     pub(super) cowork_mcp_auth: Arc<CoworkMcpAuth>,
-    pub(super) runtime_config_service: Arc<RuntimeConfigService>,
-    pub(super) skills_mcp_auth: Arc<SkillsMcpAuth>,
 }
 
 pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> ProductMcpLaunchCatalog {
@@ -130,8 +126,6 @@ pub(super) fn build_product_mcp_endpoint_registry(
         cowork_artifact_runtime,
         cowork_runtime,
         cowork_mcp_auth,
-        runtime_config_service,
-        skills_mcp_auth,
     } = deps;
 
     let product_mcp_endpoint_registrations = vec![
@@ -158,14 +152,6 @@ pub(super) fn build_product_mcp_endpoint_registry(
             )),
             Some(WorkspaceOperationKind::CoworkWrite),
             cowork_mcp_tools::MUTATING_TOOL_NAMES,
-        ))),
-        ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-            Arc::new(SkillsProductMcpServer::new(
-                runtime_config_service,
-                skills_mcp_auth,
-            )),
-            None,
-            &[],
         ))),
     ];
     ProductMcpEndpointRegistry::new(product_mcp_endpoint_registrations).map(Arc::new)

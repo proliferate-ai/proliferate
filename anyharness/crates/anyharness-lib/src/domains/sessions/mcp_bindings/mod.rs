@@ -2,6 +2,7 @@ pub mod acp;
 pub mod assembly;
 pub mod contract;
 pub mod crypto;
+pub mod integration_gateway;
 pub mod model;
 pub mod product_catalog;
 pub mod product_launch;

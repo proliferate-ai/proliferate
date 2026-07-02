@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use anyharness_contract::v1::{
-    RuntimeConfigManifest, RuntimeConfigRevision, RuntimeDirectAttachAuthConfig,
-};
 use axum::http::Method;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
@@ -105,23 +102,15 @@ impl AuthManager {
             .and_then(|state| state.runtime_target_id.clone())
     }
 
-    pub fn apply_runtime_config(
-        &self,
-        revision: &RuntimeConfigRevision,
-        manifest: &RuntimeConfigManifest,
-    ) {
+    /// Applies (or clears) the direct-attach user-claim verification config.
+    ///
+    /// `Some` installs the issuer, audience, target, and verification keys used
+    /// to validate direct-attach JWTs; `None` clears them.
+    pub fn apply_direct_attach_auth(&self, config: Option<&DirectAttachAuthConfig>) {
         let Ok(mut state) = self.inner.write() else {
             return;
         };
-        if let Some(target_id) = revision
-            .external_scope
-            .as_ref()
-            .and_then(|scope| scope.target_id.as_ref())
-            .filter(|value| !value.trim().is_empty())
-        {
-            state.runtime_target_id = Some(target_id.trim().to_string());
-        }
-        match manifest.direct_attach_auth.as_ref() {
+        match config {
             Some(config) => apply_direct_attach_config_to_state(&mut state, config),
             None => clear_direct_attach_config_from_state(&mut state),
         }
@@ -383,9 +372,26 @@ fn require_session_permission(
     require_session_claim_scope(claim, session_id)
 }
 
+/// Direct-attach user-claim JWT verification config, decoupled from any
+/// over-the-wire runtime-config transport.
+#[derive(Debug, Clone)]
+pub struct DirectAttachAuthConfig {
+    pub issuer: String,
+    pub audience: String,
+    pub target_id: Option<String>,
+    pub verification_keys: Vec<DirectAttachVerificationKey>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DirectAttachVerificationKey {
+    pub kid: String,
+    pub algorithm: String,
+    pub public_key_pem: String,
+}
+
 fn apply_direct_attach_config_to_state(
     state: &mut AuthManagerState,
-    config: &RuntimeDirectAttachAuthConfig,
+    config: &DirectAttachAuthConfig,
 ) {
     state.issuer = Some(config.issuer.clone());
     state.audience = config.audience.clone();
