@@ -1,3 +1,5 @@
+import { Button } from "@proliferate/ui/primitives/Button";
+
 export interface SettingsScopeTabItem<Id extends string = string> {
   id: Id;
   label: string;
@@ -22,9 +24,11 @@ export function SettingsScopeTabs<Id extends string>({
       {items.map((item) => {
         const active = item.id === value;
         return (
-          <button
+          <Button
             key={item.id}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             role="tab"
             aria-selected={active}
             onClick={() => onChange(item.id)}
@@ -35,7 +39,7 @@ export function SettingsScopeTabs<Id extends string>({
             }`}
           >
             {item.label}
-          </button>
+          </Button>
         );
       })}
     </div>
