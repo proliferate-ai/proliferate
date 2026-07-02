@@ -59,6 +59,7 @@ from proliferate.integrations.sso.oidc import (
 from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment,
 )
+from proliferate.server.cloud.agent_gateway import signup_hook
 from proliferate.server.organizations.registration import ensure_default_organization_for_account
 
 
@@ -254,6 +255,7 @@ async def complete_oidc_sso_callback(
         state=challenge.client_state,
         redirect_uri=challenge.redirect_uri,
     )
+    signup_hook.schedule_agent_gateway_user_enrollment(user.id, db=db)
     return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
 
 
@@ -393,6 +395,9 @@ async def _resolve_organization_sso_user(
                 organization_id=accepted.organization.id,
                 membership_id=accepted.membership.id,
             )
+            signup_hook.schedule_agent_gateway_org_enrollment(
+                accepted.organization.id, user.id, db=db
+            )
             return user
     if connection.jit_policy != SsoJitPolicy.CREATE_MEMBER:
         raise HTTPException(status_code=403, detail="SSO user is not a team member.")
@@ -407,6 +412,7 @@ async def _resolve_organization_sso_user(
         organization_id=connection.organization_id,
         membership_id=membership.id,
     )
+    signup_hook.schedule_agent_gateway_org_enrollment(connection.organization_id, user.id, db=db)
     return user
 
 
