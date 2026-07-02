@@ -1888,17 +1888,13 @@ body {
 
 /* First-appearance chip entrance (codex overshoot): slides in from the
    lower-left with a slight overshoot, then settles. Transform/opacity only. */
+/* Owner rev 2026-07-02: plain fade — no translate/scale on entrances. */
 @keyframes update-pill-in {
-  0% {
+  from {
     opacity: 0;
-    transform: translate(-8px, 4px) scale(0.92);
   }
-  70% {
+  to {
     opacity: 1;
-    transform: translate(1px, -1px) scale(1.02);
-  }
-  100% {
-    transform: none;
   }
 }
 
@@ -2093,14 +2089,13 @@ body {
    Compositor-only entrance for centered Radix dialog panels. The keyframes
    restate the -translate-x/y-1/2 centering because `animation` overrides the
    utility transform while it plays. */
+/* Owner rev 2026-07-02: plain fade — the centering transform stays constant. */
 @keyframes dialog-pop-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
   }
 }
 
