@@ -9,6 +9,7 @@ interface WorkspaceSidebarHeaderControlsProps {
   iconTone?: "sidebar";
   phase: UpdaterPhase;
   downloadProgress: number | null;
+  restartWhenIdle: boolean;
   onToggleSidebar: () => void;
   onDownloadUpdate: () => void;
   onOpenRestartPrompt: () => void;
@@ -20,6 +21,7 @@ export function WorkspaceSidebarHeaderControls({
   iconTone,
   phase,
   downloadProgress,
+  restartWhenIdle,
   onToggleSidebar,
   onDownloadUpdate,
   onOpenRestartPrompt,
@@ -41,6 +43,7 @@ export function WorkspaceSidebarHeaderControls({
       <SidebarUpdatePill
         phase={phase}
         downloadProgress={downloadProgress}
+        restartWhenIdle={restartWhenIdle}
         onDownloadUpdate={onDownloadUpdate}
         onOpenRestartPrompt={onOpenRestartPrompt}
       />

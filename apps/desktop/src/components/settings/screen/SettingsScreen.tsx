@@ -339,8 +339,6 @@ export function SettingsScreen({
           }}
           onCheckForUpdates={() => { void checkNow(); }}
           updateActionState={{
-            isChecking: phase === "checking",
-            hasAvailableUpdate: phase === "available" || phase === "ready",
             phase,
             updatesSupported,
           }}

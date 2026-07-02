@@ -31,6 +31,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   });
   const {
     phase: updaterPhase,
+    downloadProgress,
+    restartWhenIdle,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -68,6 +70,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
                 sidebar toggle. */}
             <SidebarUpdatePill
               phase={updaterPhase}
+              downloadProgress={downloadProgress}
+              restartWhenIdle={restartWhenIdle}
               onDownloadUpdate={downloadUpdate}
               onOpenRestartPrompt={openRestartPrompt}
             />
@@ -107,6 +111,8 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
               </IconButton>
               <SidebarUpdatePill
                 phase={updaterPhase}
+                downloadProgress={downloadProgress}
+                restartWhenIdle={restartWhenIdle}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}
               />

@@ -1843,6 +1843,79 @@ body {
   }
 }
 
+/* ---- Sidebar update pill ---- */
+/* One-shot "ready" text sweep. Reuses the thinking-band compositor recipe
+   above (masked window whose transform sweeps the label while the glyph copy
+   inside counter-translates — transform-only, no per-frame paint) and its
+   keyframes, but runs exactly once when the pill enters the ready phase.
+   Same geometry contract as .thinking-text-band: band width 50% of the
+   label; window sweep -100%→200% pairs with glyph counter-sweep 50%→-100%. */
+.update-pill-ready-sweep {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 40%,
+    black 60%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 40%,
+    black 60%,
+    transparent 100%
+  );
+  will-change: transform;
+  animation: thinking-band-sweep 0.7s ease-in-out 1 both;
+}
+
+.update-pill-ready-sweep-glyphs {
+  display: block;
+  /* 200% of the 50%-wide band = exactly the label width, so the copy lays
+     out identically to the base text beneath it. */
+  width: 200%;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--color-foreground);
+  will-change: transform;
+  animation: thinking-band-glyphs-sweep 0.7s ease-in-out 1 both;
+}
+
+/* First-appearance chip entrance (codex overshoot): slides in from the
+   lower-left with a slight overshoot, then settles. Transform/opacity only. */
+@keyframes update-pill-in {
+  0% {
+    opacity: 0;
+    transform: translate(-8px, 4px) scale(0.92);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(1px, -1px) scale(1.02);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.animate-update-pill-in {
+  animation: update-pill-in 0.28s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-pill-ready-sweep {
+    display: none;
+  }
+
+  .animate-update-pill-in {
+    animation: none;
+  }
+}
+
 /* ---- Loading illustration animations ---- */
 @keyframes loading-line {
   0%, 100% { opacity: 0.15; transform: scaleX(0.7); }
@@ -2014,6 +2087,31 @@ body {
 
 .animate-toast-in {
   animation: toast-in 0.2s ease-out;
+}
+
+/* ---- Dialog pop-in (update restart confirm) ----
+   Compositor-only entrance for centered Radix dialog panels. The keyframes
+   restate the -translate-x/y-1/2 centering because `animation` overrides the
+   utility transform while it plays. */
+@keyframes dialog-pop-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.animate-dialog-pop-in {
+  animation: dialog-pop-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-dialog-pop-in {
+    animation: none;
+  }
 }
 
 /* ---- Turn-end celebration ---- */

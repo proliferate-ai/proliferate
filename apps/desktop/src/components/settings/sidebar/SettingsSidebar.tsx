@@ -56,8 +56,6 @@ interface SettingsSidebarProps {
   onSelectSection: (section: SettingsSection) => void;
   onCheckForUpdates: () => void;
   updateActionState: {
-    isChecking: boolean;
-    hasAvailableUpdate: boolean;
     phase: UpdaterPhase;
     updatesSupported: boolean;
   };
@@ -135,13 +133,15 @@ function settingsItemStatus(
 
   if (item.kind === "action" && item.id === "checkForUpdates") {
     if (!updateActionState.updatesSupported) {
-      statusItems.push(<span key="updates">Packaged only</span>);
-    } else if (updateActionState.isChecking) {
-      statusItems.push(<span key="updates">Checking...</span>);
+      statusItems.push(<span key="updates">Packaged app only</span>);
+    } else if (updateActionState.phase === "checking") {
+      statusItems.push(<span key="updates">Checking…</span>);
     } else if (updateActionState.phase === "downloading") {
       statusItems.push(<span key="updates">Downloading</span>);
-    } else if (updateActionState.hasAvailableUpdate) {
+    } else if (updateActionState.phase === "available") {
       statusItems.push(<span key="updates">Available</span>);
+    } else if (updateActionState.phase === "ready") {
+      statusItems.push(<span key="updates">Restart to update</span>);
     }
   }
 
@@ -164,7 +164,7 @@ function settingsItemDisabledReason(
     return undefined;
   }
   if (item.kind === "action" && item.id === "checkForUpdates" && !updateActionState.updatesSupported) {
-    return "Desktop updates are available in packaged builds.";
+    return "Updates only work in the packaged app.";
   }
   return undefined;
 }

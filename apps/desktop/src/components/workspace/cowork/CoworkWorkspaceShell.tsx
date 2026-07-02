@@ -70,6 +70,7 @@ export function CoworkWorkspaceShell({
   const {
     phase: updaterPhase,
     downloadProgress,
+    restartWhenIdle,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -143,6 +144,7 @@ export function CoworkWorkspaceShell({
               <SidebarUpdatePill
                 phase={updaterPhase}
                 downloadProgress={downloadProgress}
+                restartWhenIdle={restartWhenIdle}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}
               />
@@ -183,6 +185,7 @@ export function CoworkWorkspaceShell({
                 <SidebarUpdatePill
                   phase={updaterPhase}
                   downloadProgress={downloadProgress}
+                  restartWhenIdle={restartWhenIdle}
                   onDownloadUpdate={downloadUpdate}
                   onOpenRestartPrompt={openRestartPrompt}
                 />
