@@ -44,4 +44,6 @@ docker compose "${COMPOSE_ARGS[@]}" up -d db
 docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
 docker compose "${COMPOSE_ARGS[@]}" up -d api caddy
 
+# Waits for /health, then prints the first-run setup token and claim URL when
+# the instance is still unclaimed.
 "$SCRIPT_DIR/wait-for-health.sh"
