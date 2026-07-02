@@ -16,5 +16,6 @@ from . import sandboxes as sandboxes  # noqa: F401
 from . import secrets as secrets  # noqa: F401
 from . import skills as skills  # noqa: F401
 from . import slack as slack  # noqa: F401
+from . import targets as targets  # noqa: F401
 from . import workspaces as workspaces  # noqa: F401
 from . import worktree_policy as worktree_policy  # noqa: F401

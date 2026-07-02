@@ -19,6 +19,7 @@ from uuid import UUID
 from sqlalchemy import case, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_STATUS_ACTIVE,
@@ -32,6 +33,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_AUTH_SLOT_GATEWAY,
     AGENT_AUTH_SLOT_PRIMARY,
     AGENT_AUTH_SURFACE_CLOUD,
+    AGENT_AUTH_SURFACE_LOCAL,
     AGENT_AUTH_SURFACES,
 )
 from proliferate.db.models.cloud.agent_gateway import AgentApiKey, AgentAuthRouteSelection
@@ -51,6 +53,7 @@ def validate_route_selection(
     api_key_id: UUID | None,
     harness_kind: str | None = None,
     slot: str = AGENT_AUTH_SLOT_PRIMARY,
+    target_id: UUID | None = None,
 ) -> None:
     """Pure legality checks shared by the store and unit tests.
 
@@ -70,10 +73,18 @@ def validate_route_selection(
         raise ValueError(f"Unknown agent auth route: {route}")
     if surface == AGENT_AUTH_SURFACE_CLOUD and route == AGENT_AUTH_ROUTE_NATIVE:
         raise ValueError("The native route is not available on the cloud surface.")
+    if target_id is not None and surface != AGENT_AUTH_SURFACE_LOCAL:
+        raise ValueError("target_id is only valid for local-surface selections.")
     if route == AGENT_AUTH_ROUTE_API_KEY and api_key_id is None:
         raise ValueError("An api_key route selection requires an api_key_id.")
     if route != AGENT_AUTH_ROUTE_API_KEY and api_key_id is not None:
         raise ValueError("api_key_id is only valid for api_key route selections.")
+
+
+def _target_scope_filter(target_id: UUID | None) -> ColumnElement[bool]:
+    if target_id is None:
+        return AgentAuthRouteSelection.target_id.is_(None)
+    return AgentAuthRouteSelection.target_id == target_id
 
 
 def _validate_slot(*, harness_kind: str, route: str, slot: str) -> None:
@@ -110,6 +121,7 @@ async def upsert_route_selection(
     route: str,
     api_key_id: UUID | None = None,
     slot: str = AGENT_AUTH_SLOT_PRIMARY,
+    target_id: UUID | None = None,
 ) -> AgentAuthRouteSelectionRecord:
     validate_route_selection(
         surface=surface,
@@ -117,6 +129,7 @@ async def upsert_route_selection(
         api_key_id=api_key_id,
         harness_kind=harness_kind,
         slot=slot,
+        target_id=target_id,
     )
     if api_key_id is not None:
         key_row = (
@@ -144,12 +157,16 @@ async def upsert_route_selection(
     # Atomic upsert: two concurrent first writes for the same scope resolve via
     # ON CONFLICT instead of racing a select-then-insert into an IntegrityError.
     # The revision (and updated_at) only advance when route/api_key_id actually
-    # change, preserving the prior idempotent semantics.
+    # change, preserving the prior idempotent semantics. Uniqueness is a pair
+    # of partial indexes split on target_id nullity (NULLs are pairwise
+    # distinct in one plain unique index), so the conflict target is the
+    # matching index arbiter rather than a named constraint.
     now = utcnow()
     insert_stmt = pg_insert(AgentAuthRouteSelection).values(
         user_id=user_id,
         harness_kind=harness_kind,
         surface=surface,
+        target_id=target_id,
         slot=slot,
         route=route,
         api_key_id=api_key_id,
@@ -160,9 +177,16 @@ async def upsert_route_selection(
     changed = AgentAuthRouteSelection.route.is_distinct_from(
         insert_stmt.excluded.route
     ) | AgentAuthRouteSelection.api_key_id.is_distinct_from(insert_stmt.excluded.api_key_id)
+    if target_id is None:
+        index_elements = ["user_id", "harness_kind", "surface", "slot"]
+        index_where = AgentAuthRouteSelection.target_id.is_(None)
+    else:
+        index_elements = ["user_id", "harness_kind", "surface", "target_id", "slot"]
+        index_where = AgentAuthRouteSelection.target_id.is_not(None)
     await db.execute(
         insert_stmt.on_conflict_do_update(
-            constraint="uq_agent_auth_route_selection_scope",
+            index_elements=index_elements,
+            index_where=index_where,
             set_={
                 "route": insert_stmt.excluded.route,
                 "api_key_id": insert_stmt.excluded.api_key_id,
@@ -185,6 +209,7 @@ async def upsert_route_selection(
                 AgentAuthRouteSelection.user_id == user_id,
                 AgentAuthRouteSelection.harness_kind == harness_kind,
                 AgentAuthRouteSelection.surface == surface,
+                _target_scope_filter(target_id),
                 AgentAuthRouteSelection.slot == slot,
             )
             .execution_options(populate_existing=True)
@@ -200,6 +225,7 @@ async def get_route_selection(
     harness_kind: str,
     surface: str,
     slot: str = AGENT_AUTH_SLOT_PRIMARY,
+    target_id: UUID | None = None,
 ) -> AgentAuthRouteSelectionRecord | None:
     row = (
         await db.execute(
@@ -207,6 +233,7 @@ async def get_route_selection(
                 AgentAuthRouteSelection.user_id == user_id,
                 AgentAuthRouteSelection.harness_kind == harness_kind,
                 AgentAuthRouteSelection.surface == surface,
+                _target_scope_filter(target_id),
                 AgentAuthRouteSelection.slot == slot,
             )
         )
@@ -221,6 +248,7 @@ async def delete_route_selection(
     harness_kind: str,
     surface: str,
     slot: str = AGENT_AUTH_SLOT_PRIMARY,
+    target_id: UUID | None = None,
 ) -> bool:
     """Clear the selection for a scope. Returns whether a row was deleted."""
     result = await db.execute(
@@ -228,6 +256,7 @@ async def delete_route_selection(
             AgentAuthRouteSelection.user_id == user_id,
             AgentAuthRouteSelection.harness_kind == harness_kind,
             AgentAuthRouteSelection.surface == surface,
+            _target_scope_filter(target_id),
             AgentAuthRouteSelection.slot == slot,
         )
     )
@@ -238,13 +267,21 @@ async def list_route_selections(
     db: AsyncSession,
     *,
     user_id: UUID,
+    target_id: UUID | None = None,
 ) -> list[AgentAuthRouteSelectionRecord]:
+    """List the user's selections; ``target_id`` narrows to one target's rows.
+
+    ``target_id`` None returns everything (default rows and every target's
+    overrides) — callers that need only default rows filter on the record's
+    ``target_id``.
+    """
+    stmt = select(AgentAuthRouteSelection).where(AgentAuthRouteSelection.user_id == user_id)
+    if target_id is not None:
+        stmt = stmt.where(AgentAuthRouteSelection.target_id == target_id)
     rows = (
         (
             await db.execute(
-                select(AgentAuthRouteSelection)
-                .where(AgentAuthRouteSelection.user_id == user_id)
-                .order_by(
+                stmt.order_by(
                     AgentAuthRouteSelection.harness_kind,
                     AgentAuthRouteSelection.surface,
                     AgentAuthRouteSelection.slot,

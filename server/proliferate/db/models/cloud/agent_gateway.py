@@ -19,7 +19,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -68,24 +67,45 @@ class AgentApiKey(Base):
 
 
 class AgentAuthRouteSelection(Base):
-    """Server-side auth route per (user, harness, surface, slot).
+    """Server-side auth route per (user, harness, surface, target, slot).
 
     Single-source harnesses only ever use slot='primary'; OpenCode composes
     one row per slot (gateway + direct provider keys, simultaneously).
+    ``target_id`` NULL is the default direct-surface (and every cloud) row; a
+    non-NULL value scopes a local-surface row to one enrolled runtime, which
+    overrides the default per (harness, slot) at render time. Uniqueness is a
+    pair of partial indexes because NULLs are pairwise distinct inside a plain
+    unique constraint (duplicate default rows would break the upsert).
     """
 
     __tablename__ = "agent_auth_route_selection"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_agent_auth_route_selection_default",
             "user_id",
             "harness_kind",
             "surface",
             "slot",
-            name="uq_agent_auth_route_selection_scope",
+            unique=True,
+            postgresql_where=text("target_id IS NULL"),
+        ),
+        Index(
+            "uq_agent_auth_route_selection_target",
+            "user_id",
+            "harness_kind",
+            "surface",
+            "target_id",
+            "slot",
+            unique=True,
+            postgresql_where=text("target_id IS NOT NULL"),
         ),
         CheckConstraint(
             "surface IN ('local', 'cloud')",
             name="ck_agent_auth_route_selection_surface",
+        ),
+        CheckConstraint(
+            "target_id IS NULL OR surface = 'local'",
+            name="ck_agent_auth_route_selection_target_surface",
         ),
         CheckConstraint(
             "route IN ('native', 'api_key', 'gateway')",
@@ -108,6 +128,15 @@ class AgentAuthRouteSelection(Base):
     )
     harness_kind: Mapped[str] = mapped_column(String(64))
     surface: Mapped[str] = mapped_column(String(16))
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "cloud_targets.id",
+            ondelete="CASCADE",
+            name="fk_agent_auth_route_selection_target_id",
+        ),
+        index=True,
+        nullable=True,
+    )
     slot: Mapped[str] = mapped_column(String(32), default="primary", server_default="primary")
     route: Mapped[str] = mapped_column(String(16))
     api_key_id: Mapped[uuid.UUID | None] = mapped_column(

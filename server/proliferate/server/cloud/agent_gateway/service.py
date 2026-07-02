@@ -17,6 +17,7 @@ from proliferate.constants.agent_gateway import (
     AGENT_API_KEY_PROVIDERS,
     AGENT_AUTH_SLOT_PRIMARY,
     AGENT_AUTH_SURFACE_CLOUD,
+    AGENT_AUTH_SURFACE_LOCAL,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import (
@@ -30,6 +31,7 @@ from proliferate.server.cloud.materialization import service as materialization_
 from proliferate.server.cloud.materialization.materialize.agent_auth import (
     build_agent_auth_state,
 )
+from proliferate.server.cloud.targets.access import require_visible_target
 
 _ENROLLMENT_STATUS_NONE = "none"
 _MAX_DISPLAY_NAME_LENGTH = 255
@@ -112,12 +114,42 @@ async def revoke_api_key(
     return record
 
 
+async def _require_target_scope(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    surface: str | None,
+    target_id: UUID | None,
+) -> None:
+    """Gate a target-scoped call: local surface only, caller-visible target.
+
+    The visibility check reuses the canonical targets gate (404 for unknown
+    AND foreign ids alike, so target ids cannot be probed). ``surface`` None
+    skips the surface rule for calls that are not surface-scoped.
+    """
+    if target_id is None:
+        return
+    if surface is not None and surface != AGENT_AUTH_SURFACE_LOCAL:
+        raise CloudApiError(
+            "invalid_cloud_target_scope",
+            "targetId is only permitted with the local surface.",
+            status_code=400,
+        )
+    await require_visible_target(db, target_id=target_id, user_id=user_id)
+
+
 async def list_route_selections(
     db: AsyncSession,
     *,
     user_id: UUID,
+    target_id: UUID | None = None,
 ) -> list[AgentAuthRouteSelectionRecord]:
-    return await agent_gateway_store.list_route_selections(db, user_id=user_id)
+    await _require_target_scope(db, user_id=user_id, surface=None, target_id=target_id)
+    return await agent_gateway_store.list_route_selections(
+        db,
+        user_id=user_id,
+        target_id=target_id,
+    )
 
 
 async def upsert_route_selection(
@@ -129,7 +161,9 @@ async def upsert_route_selection(
     route: str,
     api_key_id: UUID | None,
     slot: str = AGENT_AUTH_SLOT_PRIMARY,
+    target_id: UUID | None = None,
 ) -> AgentAuthRouteSelectionRecord:
+    await _require_target_scope(db, user_id=user_id, surface=surface, target_id=target_id)
     try:
         agent_gateway_store.validate_route_selection(
             harness_kind=harness_kind,
@@ -137,6 +171,7 @@ async def upsert_route_selection(
             route=route,
             api_key_id=api_key_id,
             slot=slot,
+            target_id=target_id,
         )
     except ValueError as error:
         raise CloudApiError(
@@ -153,6 +188,7 @@ async def upsert_route_selection(
             route=route,
             api_key_id=api_key_id,
             slot=slot,
+            target_id=target_id,
         )
     except agent_gateway_store.AgentApiKeyNotUsableError as error:
         raise CloudApiError(
@@ -173,6 +209,7 @@ async def upsert_route_selection(
         user_id=str(user_id),
         harness_kind=harness_kind,
         surface=surface,
+        target_id=str(target_id) if target_id is not None else None,
         slot=slot,
         route=route,
         api_key_id=str(api_key_id) if api_key_id is not None else None,
@@ -190,13 +227,16 @@ async def clear_route_selection(
     harness_kind: str,
     surface: str,
     slot: str = AGENT_AUTH_SLOT_PRIMARY,
+    target_id: UUID | None = None,
 ) -> None:
+    await _require_target_scope(db, user_id=user_id, surface=surface, target_id=target_id)
     deleted = await agent_gateway_store.delete_route_selection(
         db,
         user_id=user_id,
         harness_kind=harness_kind,
         surface=surface,
         slot=slot,
+        target_id=target_id,
     )
     if not deleted:
         raise CloudApiError(
@@ -209,6 +249,7 @@ async def clear_route_selection(
         user_id=str(user_id),
         harness_kind=harness_kind,
         surface=surface,
+        target_id=str(target_id) if target_id is not None else None,
         slot=slot,
     )
     if surface == AGENT_AUTH_SURFACE_CLOUD:
@@ -234,13 +275,17 @@ async def get_auth_state(
     *,
     user_id: UUID,
     surface: str,
+    target_id: UUID | None = None,
 ) -> dict[str, object] | None:
-    """Render the user's state.json document for one surface.
+    """Render the user's state.json document for one surface (and target scope).
 
     Same render path as the cloud materializer; ``None`` means the user has no
-    selections for the surface at all (legacy/native fall-through).
+    selections for the scope at all (legacy/native fall-through). A target
+    scope renders per-target overrides over the inherited defaults (design
+    §3.1); revision semantics live in ``resolve_surface_selections``.
     """
-    state, _ = await build_agent_auth_state(db, user_id, surface=surface)
+    await _require_target_scope(db, user_id=user_id, surface=surface, target_id=target_id)
+    state, _ = await build_agent_auth_state(db, user_id, surface=surface, target_id=target_id)
     return state
 
 

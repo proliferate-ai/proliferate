@@ -26,6 +26,7 @@ def _selection(
     api_key_id: uuid.UUID | None = None,
     revision: int = 1,
     slot: str = "primary",
+    target_id: uuid.UUID | None = None,
 ) -> AgentAuthRouteSelectionRecord:
     return AgentAuthRouteSelectionRecord(
         id=uuid.uuid4(),
@@ -38,6 +39,7 @@ def _selection(
         created_at=NOW,
         updated_at=NOW,
         slot=slot,
+        target_id=target_id,
     )
 
 
@@ -48,6 +50,7 @@ def _inputs(
     enrollment_sync_status: str | None = "synced",
     gateway_virtual_key: str | None = "sk-litellm-vk",
     gateway_base_url: str | None = "https://llm.proliferate.ai",
+    target_id: uuid.UUID | None = None,
 ) -> agent_auth.AgentAuthStateInputs:
     return agent_auth.AgentAuthStateInputs(
         user_id=USER_ID,
@@ -56,6 +59,7 @@ def _inputs(
         enrollment_sync_status=enrollment_sync_status,
         gateway_virtual_key=gateway_virtual_key,
         gateway_base_url=gateway_base_url,
+        target_id=target_id,
     )
 
 
@@ -331,9 +335,7 @@ class TestRenderLocalSurface:
 
     def test_native_selection_never_carries_key_material(self) -> None:
         state, _ = agent_auth.render_agent_auth_state(
-            _inputs(
-                (_selection(harness="claude", surface="local", route="native", revision=3),)
-            ),
+            _inputs((_selection(harness="claude", surface="local", route="native", revision=3),)),
             surface="local",
         )
         assert state is not None
@@ -423,7 +425,13 @@ class TestMaterializeAgentAuth:
         selections = (_selection(harness="claude", route="gateway", revision=4),)
         inputs = _inputs(selections)
 
-        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+        async def fake_load(
+            db: object,
+            *,
+            user_id: uuid.UUID,
+            surface: str = "cloud",
+            target_id: uuid.UUID | None = None,
+        ) -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -451,7 +459,13 @@ class TestMaterializeAgentAuth:
         inputs = _inputs(selections)
         _, fingerprint = agent_auth.render_agent_auth_state(inputs)
 
-        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+        async def fake_load(
+            db: object,
+            *,
+            user_id: uuid.UUID,
+            surface: str = "cloud",
+            target_id: uuid.UUID | None = None,
+        ) -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -469,7 +483,13 @@ class TestMaterializeAgentAuth:
     ) -> None:
         inputs = _inputs((_selection(harness="claude", surface="local", route="native"),))
 
-        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+        async def fake_load(
+            db: object,
+            *,
+            user_id: uuid.UUID,
+            surface: str = "cloud",
+            target_id: uuid.UUID | None = None,
+        ) -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -503,7 +523,13 @@ class TestMaterializeAgentAuth:
             gateway_virtual_key=None,
         )
 
-        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+        async def fake_load(
+            db: object,
+            *,
+            user_id: uuid.UUID,
+            surface: str = "cloud",
+            target_id: uuid.UUID | None = None,
+        ) -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
@@ -539,7 +565,13 @@ class TestMaterializeAgentAuth:
             gateway_virtual_key=None,
         )
 
-        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+        async def fake_load(
+            db: object,
+            *,
+            user_id: uuid.UUID,
+            surface: str = "cloud",
+            target_id: uuid.UUID | None = None,
+        ) -> Any:
             return inputs
 
         monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)

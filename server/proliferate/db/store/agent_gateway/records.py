@@ -33,6 +33,7 @@ class AgentAuthRouteSelectionRecord:
     created_at: datetime
     updated_at: datetime
     slot: str = "primary"
+    target_id: UUID | None = None
 
 
 @dataclass(frozen=True)

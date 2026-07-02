@@ -55,6 +55,9 @@ class AgentAuthRouteSelectionResponse(AgentGatewayBaseModel):
     id: str
     harness_kind: str = Field(alias="harnessKind")
     surface: AgentAuthSurface
+    # None = default direct-surface (or cloud) row; set = one enrolled
+    # runtime's override row (local surface only, design §3.1).
+    target_id: str | None = Field(alias="targetId")
     slot: str
     route: AgentAuthRoute
     api_key_id: str | None = Field(alias="apiKeyId")
@@ -189,6 +192,7 @@ def route_selection_payload(
         id=str(record.id),
         harness_kind=record.harness_kind,
         surface=record.surface,  # type: ignore[arg-type]
+        target_id=str(record.target_id) if record.target_id is not None else None,
         slot=record.slot,
         route=record.route,  # type: ignore[arg-type]
         api_key_id=str(record.api_key_id) if record.api_key_id is not None else None,

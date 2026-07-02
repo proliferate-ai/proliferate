@@ -1255,12 +1255,15 @@ export interface paths {
          *     This is the local-surface twin of the cloud materializer: the desktop
          *     fetches ``surface=local`` and pushes the payload verbatim to its local
          *     AnyHarness runtime (``PUT /v1/agent-auth/state``), which persists it at
-         *     ``<runtime_home>/agent-auth/state.json``.
+         *     ``<runtime_home>/agent-auth/state.json``. ``targetId`` (local surface
+         *     only, caller-visible targets only) scopes the document to one enrolled
+         *     direct runtime: per-target overrides over inherited defaults.
          *
          *     Trust model: the response carries the current user's OWN decrypted key
          *     material (pool keys, gateway virtual key) — the same secrets the cloud
          *     materializer writes into the user's own sandbox. Auth is the current
-         *     product user; nothing here crosses a user boundary.
+         *     product user; nothing here crosses a user boundary (targetId is
+         *     ownership-checked against the visible-target gate).
          */
         get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get"];
         put?: never;
@@ -2126,6 +2129,8 @@ export interface components {
              * @enum {string}
              */
             surface: "local" | "cloud";
+            /** Targetid */
+            targetId: string | null;
             /** Slot */
             slot: string;
             /**
@@ -7423,7 +7428,9 @@ export interface operations {
     };
     list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get: {
         parameters: {
-            query?: never;
+            query?: {
+                targetId?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7439,11 +7446,22 @@ export interface operations {
                     "application/json": components["schemas"]["AgentAuthRouteSelectionListResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put: {
         parameters: {
-            query?: never;
+            query?: {
+                targetId?: string | null;
+            };
             header?: never;
             path: {
                 harness_kind: string;
@@ -7481,6 +7499,7 @@ export interface operations {
         parameters: {
             query?: {
                 slot?: string;
+                targetId?: string | null;
             };
             header?: never;
             path: {
@@ -7513,6 +7532,7 @@ export interface operations {
         parameters: {
             query: {
                 surface: "local" | "cloud";
+                targetId?: string | null;
             };
             header?: never;
             path?: never;

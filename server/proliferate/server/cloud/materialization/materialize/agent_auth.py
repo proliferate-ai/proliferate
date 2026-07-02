@@ -95,6 +95,53 @@ class AgentAuthStateInputs:
     enrollment_sync_status: str | None
     gateway_virtual_key: str | None
     gateway_base_url: str | None
+    # Direct-runtime scope: None renders the default document; a target id
+    # renders that runtime's document (per-target overrides falling back per
+    # (harness, slot) to the default rows — design §3.1 inheritance rule).
+    target_id: UUID | None = None
+
+
+def resolve_surface_selections(
+    selections: tuple[AgentAuthRouteSelectionRecord, ...],
+    *,
+    surface: str,
+    target_id: UUID | None,
+) -> tuple[list[AgentAuthRouteSelectionRecord], list[AgentAuthRouteSelectionRecord]]:
+    """Resolve a scope's (effective, revision-basis) selections.
+
+    ``target_id`` None yields the default document's rows (``target_id`` IS
+    NULL only — a target's overrides never leak into the default document).
+    A target id yields the inheritance merge: per (harness_kind, slot) the
+    target-scoped row wins, every other default row is inherited, so a target
+    with zero overrides renders byte-identical to the default document.
+
+    The revision basis is the *union* of default and target rows, not just the
+    winners: the document revision is ``max(revision)`` over the basis so an
+    edit to EITHER layer advances (or holds) the target document's revision.
+    Rendering only the winners' revisions could go backwards — a fresh
+    override starts at revision 1 and would undercut an already-pushed default
+    document, tripping the runtime's stale-revision (409) guard. Deleting the
+    single highest-revision row can still lower the max (a pre-existing
+    property of the default surface as well); the runtime accepts
+    equal-revision pushes, so reverts propagate whenever revisions tie.
+    """
+    default_rows = [
+        selection
+        for selection in selections
+        if selection.surface == surface and selection.target_id is None
+    ]
+    if target_id is None:
+        return default_rows, default_rows
+    target_rows = [
+        selection
+        for selection in selections
+        if selection.surface == surface and selection.target_id == target_id
+    ]
+    merged = {(selection.harness_kind, selection.slot): selection for selection in default_rows}
+    merged.update(
+        {(selection.harness_kind, selection.slot): selection for selection in target_rows}
+    )
+    return list(merged.values()), default_rows + target_rows
 
 
 def render_agent_auth_state(
@@ -102,12 +149,12 @@ def render_agent_auth_state(
     *,
     surface: str = AGENT_AUTH_SURFACE_CLOUD,
 ) -> tuple[dict[str, object] | None, str]:
-    """Render (state, fingerprint) for one surface from inputs.
+    """Render (state, fingerprint) for one surface (and target scope).
 
     Returns ``(None, "")`` only when the user has **no selections for the
-    surface at all** — the state file is then deleted (cloud) or served as a
+    scope at all** — the state file is then deleted (cloud) or served as a
     revision-0 legacy marker (local) and the reader may fall through to
-    native. When surface selections exist but none currently resolve (revoked
+    native. When scope selections exist but none currently resolve (revoked
     ``api_key``, unsynced gateway, missing config), a fail-closed marker with
     an empty ``selections`` list is returned so the file is still written and
     the reader refuses per-harness instead of falling through.
@@ -119,15 +166,17 @@ def render_agent_auth_state(
     a single bad selection can never abort the reconcile and leave stale key
     material behind.
     """
-    surface_selections = [
-        selection for selection in inputs.selections if selection.surface == surface
-    ]
-    if not surface_selections:
+    effective, revision_basis = resolve_surface_selections(
+        inputs.selections,
+        surface=surface,
+        target_id=inputs.target_id,
+    )
+    if not effective:
         return None, ""
 
     rendered: list[dict[str, object]] = []
     for selection in sorted(
-        surface_selections,
+        effective,
         key=lambda item: (item.harness_kind, item.slot),
     ):
         entry: dict[str, object] | None = None
@@ -140,12 +189,12 @@ def render_agent_auth_state(
         if entry is not None:
             rendered.append(entry)
 
-    # Surface selections exist: always emit a state file. An empty
+    # Scope selections exist: always emit a state file. An empty
     # ``selections`` list is a deliberate fail-closed marker (not a deletion)
     # so revoked/stale secret material is purged and the reader refuses
-    # per-harness.
+    # per-harness. Revision semantics: see resolve_surface_selections.
     state: dict[str, object] = {
-        "revision": max(selection.revision for selection in surface_selections),
+        "revision": max(selection.revision for selection in revision_basis),
         "user_id": str(inputs.user_id),
         "selections": rendered,
     }
@@ -229,9 +278,10 @@ async def build_agent_auth_state(
     user_id: UUID,
     *,
     surface: str = AGENT_AUTH_SURFACE_CLOUD,
+    target_id: UUID | None = None,
 ) -> tuple[dict[str, object] | None, str]:
-    """Load the user's auth material for a surface and render (state, fingerprint)."""
-    inputs = await _load_state_inputs(db, user_id=user_id, surface=surface)
+    """Load the user's auth material for a scope and render (state, fingerprint)."""
+    inputs = await _load_state_inputs(db, user_id=user_id, surface=surface, target_id=target_id)
     return render_agent_auth_state(inputs, surface=surface)
 
 
@@ -240,14 +290,17 @@ async def _load_state_inputs(
     *,
     user_id: UUID,
     surface: str = AGENT_AUTH_SURFACE_CLOUD,
+    target_id: UUID | None = None,
 ) -> AgentAuthStateInputs:
     selections = tuple(await agent_gateway_store.list_route_selections(db, user_id=user_id))
-    surface_selections = [
-        selection for selection in selections if selection.surface == surface
-    ]
+    effective, _ = resolve_surface_selections(
+        selections,
+        surface=surface,
+        target_id=target_id,
+    )
 
     api_key_secrets: dict[UUID, tuple[str, str]] = {}
-    for selection in surface_selections:
+    for selection in effective:
         if selection.route != AGENT_AUTH_ROUTE_API_KEY or selection.api_key_id is None:
             continue
         resolved = await agent_gateway_store.get_agent_api_key_decrypted(
@@ -261,9 +314,7 @@ async def _load_state_inputs(
 
     enrollment_sync_status: str | None = None
     gateway_virtual_key: str | None = None
-    needs_gateway = any(
-        selection.route == AGENT_AUTH_ROUTE_GATEWAY for selection in surface_selections
-    )
+    needs_gateway = any(selection.route == AGENT_AUTH_ROUTE_GATEWAY for selection in effective)
     if needs_gateway:
         enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
         if enrollment is not None:
@@ -280,6 +331,7 @@ async def _load_state_inputs(
         enrollment_sync_status=enrollment_sync_status,
         gateway_virtual_key=gateway_virtual_key,
         gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
+        target_id=target_id,
     )
 
 

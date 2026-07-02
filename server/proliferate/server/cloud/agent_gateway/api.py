@@ -48,6 +48,18 @@ def _parse_uuid(value: str, *, code: str, message: str, status_code: int) -> UUI
         raise CloudApiError(code, message, status_code=status_code) from error
 
 
+def _parse_target_id(value: str | None) -> UUID | None:
+    """Parse the optional ?targetId= param up front so junk never reaches SQL."""
+    if value is None:
+        return None
+    return _parse_uuid(
+        value,
+        code="invalid_cloud_target_id",
+        message="targetId must be a UUID.",
+        status_code=400,
+    )
+
+
 @router.get("/api-keys", response_model=AgentApiKeyListResponse)
 async def list_agent_api_keys_endpoint(
     db: AsyncSession = Depends(get_async_session),
@@ -91,10 +103,18 @@ async def revoke_agent_api_key_endpoint(
 
 @router.get("/route-selections", response_model=AgentAuthRouteSelectionListResponse)
 async def list_agent_route_selections_endpoint(
+    target_id: str | None = Query(None, alias="targetId"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentAuthRouteSelectionListResponse:
-    records = await service.list_route_selections(db, user_id=user.id)
+    try:
+        records = await service.list_route_selections(
+            db,
+            user_id=user.id,
+            target_id=_parse_target_id(target_id),
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
     return AgentAuthRouteSelectionListResponse(
         selections=[route_selection_payload(record) for record in records],
     )
@@ -108,6 +128,7 @@ async def upsert_agent_route_selection_endpoint(
     harness_kind: str,
     surface: str,
     body: AgentAuthRouteSelectionUpsertRequest,
+    target_id: str | None = Query(None, alias="targetId"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentAuthRouteSelectionResponse:
@@ -128,6 +149,7 @@ async def upsert_agent_route_selection_endpoint(
             route=body.route,
             api_key_id=api_key_id,
             slot=body.slot,
+            target_id=_parse_target_id(target_id),
         )
     except CloudApiError as error:
         raise_cloud_error(error)
@@ -139,6 +161,7 @@ async def clear_agent_route_selection_endpoint(
     harness_kind: str,
     surface: str,
     slot: str = Query("primary"),
+    target_id: str | None = Query(None, alias="targetId"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> None:
@@ -149,6 +172,7 @@ async def clear_agent_route_selection_endpoint(
             harness_kind=harness_kind,
             surface=surface,
             slot=slot,
+            target_id=_parse_target_id(target_id),
         )
     except CloudApiError as error:
         raise_cloud_error(error)
@@ -161,6 +185,7 @@ async def clear_agent_route_selection_endpoint(
 )
 async def get_agent_auth_state_endpoint(
     surface: AgentAuthSurface = Query(...),
+    target_id: str | None = Query(None, alias="targetId"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentAuthStateResponse:
@@ -169,14 +194,25 @@ async def get_agent_auth_state_endpoint(
     This is the local-surface twin of the cloud materializer: the desktop
     fetches ``surface=local`` and pushes the payload verbatim to its local
     AnyHarness runtime (``PUT /v1/agent-auth/state``), which persists it at
-    ``<runtime_home>/agent-auth/state.json``.
+    ``<runtime_home>/agent-auth/state.json``. ``targetId`` (local surface
+    only, caller-visible targets only) scopes the document to one enrolled
+    direct runtime: per-target overrides over inherited defaults.
 
     Trust model: the response carries the current user's OWN decrypted key
     material (pool keys, gateway virtual key) — the same secrets the cloud
     materializer writes into the user's own sandbox. Auth is the current
-    product user; nothing here crosses a user boundary.
+    product user; nothing here crosses a user boundary (targetId is
+    ownership-checked against the visible-target gate).
     """
-    state = await service.get_auth_state(db, user_id=user.id, surface=surface)
+    try:
+        state = await service.get_auth_state(
+            db,
+            user_id=user.id,
+            surface=surface,
+            target_id=_parse_target_id(target_id),
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
     return agent_auth_state_payload(state, user_id=str(user.id))
 
 
