@@ -1796,6 +1796,23 @@ body {
   animation: ripple-spin 6s linear infinite;
 }
 
+/* Turn-tail status crossfade — the shimmer / transient-thought / needs-input
+   marker share one slot; a state change fades the incoming content in over
+   150ms instead of a hard swap. Compositor-only (opacity), and gated behind
+   motion-safe: at the call site so reduced-motion gets an instant swap. */
+@keyframes status-crossfade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-status-crossfade {
+  animation: status-crossfade 150ms ease-out;
+}
+
 /* Thinking indicator — codex-grade shimmer, compositor-only.
    OWNER RULE: this animation may only use transform/opacity. Codex's own
    .loading-shimmer animates background-position on background-clip:text,

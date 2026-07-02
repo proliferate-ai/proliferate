@@ -79,13 +79,34 @@ describe("thinking shimmer css contract", () => {
 });
 
 describe("StreamingIndicator", () => {
-  it("uses Thinking text without elapsed seconds or braille canaries", () => {
+  it("defaults to the agent-work label with no elapsed suffix under 10s", () => {
     const html = renderToStaticMarkup(
-      <StreamingIndicator startedAt={new Date(Date.now() - 12_000).toISOString()} />,
+      <StreamingIndicator startedAt={new Date(Date.now() - 2_000).toISOString()} />,
     );
 
     expect(html).toContain("Thinking");
-    expect(html).not.toContain("12s");
+    // Below the 10s threshold: no elapsed suffix and no jank canary.
+    expect(html).not.toContain("·");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
+  });
+
+  it("appends an elapsed suffix once the wait passes 10s", () => {
+    const html = renderToStaticMarkup(
+      <StreamingIndicator startedAt={new Date(Date.now() - 34_000).toISOString()} />,
+    );
+
+    expect(html).toContain("Thinking");
+    expect(html).toContain("34s");
+    expect(html).toContain("tabular-nums");
+  });
+
+  it("threads a context label instead of the universal Thinking", () => {
+    const html = renderToStaticMarkup(
+      <StreamingIndicator label="Sending…" startedAt={null} />,
+    );
+
+    expect(html).toContain("Sending…");
+    expect(html).not.toContain(">Thinking<");
+    expect(html).not.toContain("·");
   });
 });

@@ -104,7 +104,9 @@ describe("TranscriptItemBlock", () => {
     expect(container.innerHTML).toContain("data-transcript-activity-block");
     expect(container.innerHTML).toContain("data-transcript-activity-shell");
     expect(activityBlockClassName(container)).toBe("");
-    expect(container.textContent).toContain("Thinking");
+    // Completed reasoning is labeled "Thought" so the animated status owns
+    // the live word "Thinking".
+    expect(container.textContent).toContain("Thought");
   });
 });
 

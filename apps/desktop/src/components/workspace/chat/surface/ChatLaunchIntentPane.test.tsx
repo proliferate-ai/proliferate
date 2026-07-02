@@ -31,16 +31,17 @@ afterEach(() => {
 
 describe("ChatLaunchIntentPane", () => {
 
-  it("renders pending thinking outside the right-aligned user message", () => {
+  it("renders the pending 'Sending…' status outside the right-aligned user message", () => {
     useChatLaunchIntentStore.getState().begin(intent());
 
     render(<ChatLaunchIntentPane bottomInsetPx={0} />);
 
     expect(screen.getByText("Start cowork")).not.toBeNull();
-    // ThinkingText renders the label twice (base + aria-hidden sweep copy).
+    // Launch dispatch says "Sending…", not the agent-work "Thinking". The
+    // ThinkingText shimmer renders the label on a data-thinking-text span.
     expect(
       screen
-        .getByText("Thinking", { selector: "[data-thinking-text]" })
+        .getByText("Sending…", { selector: "[data-thinking-text]" })
         .closest("[data-chat-user-message]"),
     ).toBeNull();
   });

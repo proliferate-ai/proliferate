@@ -150,7 +150,19 @@ export function useLatestTranscriptLiveStatus({
     showDelayedLatestLiveStatus,
   ]);
 
+  // SINGLE-SHIMMER RULE: a live exploration/work block (or any active tool)
+  // renders its own CollapsedActions shimmer. The delayed-visibility state
+  // above lags one render behind the synchronous eligibility, so a freshly
+  // started tool could otherwise leave the tail shimmer mounted for a frame
+  // alongside the summary shimmer — two sweeps in one viewport. Re-checking the
+  // synchronous conditions here hides the tail in the same render, so there is
+  // never more than one shimmer.
+  const hasCompetingLiveShimmer =
+    !!latestLiveExplorationBlock
+    || !!latestLiveWorkBlock
+    || latestTurnHasActiveToolWork;
   const latestLiveStatus = latestTurn
+    && !hasCompetingLiveShimmer
     && (showDelayedLatestLiveStatus || shouldShowImmediateOutboxLiveStatus)
       ? renderTurnTrailingStatus?.({
           startedAt: latestTurnTiming?.startedAt ?? latestTurn.startedAt,
