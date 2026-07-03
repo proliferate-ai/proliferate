@@ -4,7 +4,7 @@ import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerModelConfigSelector } from "./ComposerModelConfigSelector";
 import type { ModelSelector } from "./ModelSelector";
 import type { SessionConfigControls } from "./SessionConfigControls";
-import { ComposerIntegrationReauthChip } from "./ComposerIntegrationReauthChip";
+import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
 import { RuntimePressureIndicator } from "./RuntimePressureIndicator";
 import { SessionModeControl } from "./SessionModeControl";
 import {
@@ -105,7 +105,7 @@ export function ChatInputControlRow({
       )}
       trailing={(
         <>
-          <ComposerIntegrationReauthChip />
+          <ComposerIntegrationsControl />
           <RuntimePressureIndicator />
           <div
             className={`flex min-w-0 items-center gap-1 ${

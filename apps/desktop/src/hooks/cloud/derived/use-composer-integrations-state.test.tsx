@@ -3,7 +3,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IntegrationHealthItem } from "@proliferate/cloud-sdk/client/integrations";
-import { useIntegrationReauthState } from "./use-integration-reauth-state";
+import { useComposerIntegrationsState } from "./use-composer-integrations-state";
 
 const mocks = vi.hoisted(() => ({
   useIntegrationHealth: vi.fn(),
@@ -53,50 +53,41 @@ afterEach(() => {
   mocks.cloudActive = true;
 });
 
-describe("useIntegrationReauthState", () => {
+describe("useComposerIntegrationsState", () => {
   it("is hidden while health has not loaded", () => {
     stubHealth(undefined);
-    const { result } = renderHook(() => useIntegrationReauthState());
+    const { result } = renderHook(() => useComposerIntegrationsState());
 
-    expect(result.current).toEqual({ providerNames: [], label: null, visible: false });
+    expect(result.current.mode).toBe("hidden");
+    expect(result.current.connectedCount).toBe(0);
   });
 
-  it("is hidden when every connected provider is healthy", () => {
+  it("is quiet when every connected provider is healthy", () => {
     stubHealth([
       makeHealthItem(),
-      makeHealthItem({ definitionId: "def-2", accountId: null, health: "needs_auth" }),
+      makeHealthItem({ definitionId: "def-2", displayName: "Notion", accountId: null, health: "needs_auth" }),
     ]);
-    const { result } = renderHook(() => useIntegrationReauthState());
+    const { result } = renderHook(() => useComposerIntegrationsState());
 
-    expect(result.current.visible).toBe(false);
-    expect(result.current.label).toBeNull();
+    expect(result.current.mode).toBe("quiet");
+    expect(result.current.connectedCount).toBe(1);
+    expect(result.current.reauthLabel).toBeNull();
   });
 
-  it("names the single provider needing reauth", () => {
+  it("is urgent and names the provider needing reauth", () => {
     stubHealth([
       makeHealthItem(),
       makeHealthItem({ definitionId: "def-2", displayName: "Notion", health: "needs_reauth" }),
     ]);
-    const { result } = renderHook(() => useIntegrationReauthState());
+    const { result } = renderHook(() => useComposerIntegrationsState());
 
-    expect(result.current.visible).toBe(true);
-    expect(result.current.providerNames).toEqual(["Notion"]);
-    expect(result.current.label).toBe("Notion needs re-authentication");
-  });
-
-  it("collapses several providers into a count", () => {
-    stubHealth([
-      makeHealthItem({ health: "needs_reauth" }),
-      makeHealthItem({ definitionId: "def-2", displayName: "Notion", health: "needs_reauth" }),
-    ]);
-    const { result } = renderHook(() => useIntegrationReauthState());
-
-    expect(result.current.label).toBe("2 integrations need re-authentication");
+    expect(result.current.mode).toBe("urgent");
+    expect(result.current.reauthLabel).toBe("Notion needs re-authentication");
   });
 
   it("scopes the health query to the active organization and stays quiet on cadence", () => {
     stubHealth([]);
-    renderHook(() => useIntegrationReauthState());
+    renderHook(() => useComposerIntegrationsState());
 
     expect(mocks.useIntegrationHealth).toHaveBeenCalledWith("org-1", {
       enabled: true,
@@ -108,7 +99,7 @@ describe("useIntegrationReauthState", () => {
   it("disables the query when cloud is inactive", () => {
     mocks.cloudActive = false;
     stubHealth([]);
-    renderHook(() => useIntegrationReauthState());
+    renderHook(() => useComposerIntegrationsState());
 
     expect(mocks.useIntegrationHealth).toHaveBeenCalledWith(
       "org-1",
