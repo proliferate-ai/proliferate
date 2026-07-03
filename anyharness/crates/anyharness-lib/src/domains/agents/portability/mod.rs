@@ -731,6 +731,77 @@ mod tests {
     }
 
     #[test]
+    fn collect_codex_artifacts_canonicalizes_runtime_home_under_home_dir() {
+        // Regression: in a cloud sandbox the runtime home lives UNDER the user
+        // home (~/.proliferate/anyharness), so a route-authed codex rollout at
+        // <home>/.proliferate/anyharness/agent-auth/codex-local/sessions/... is
+        // itself under home_dir. The collected relative_path must still be the
+        // canonical .codex/sessions/... (not the on-disk path stripped of home),
+        // or install rejects it as escaping .codex/sessions. The prior
+        // read_file_relative_to_home shortcut produced the wrong path here.
+        let home = TempDirGuard::new("codex-home-with-nested-runtime");
+        let runtime_home = home.path().join(".proliferate").join("anyharness");
+        let session = codex_session("native-123");
+        let rollout_dir = runtime_home
+            .join("agent-auth")
+            .join("codex-local")
+            .join("sessions")
+            .join("2026");
+        fs::create_dir_all(&rollout_dir).expect("create nested runtime rollout dir");
+        fs::write(rollout_dir.join("rollout-native-123.jsonl"), b"nested\n")
+            .expect("write nested rollout");
+
+        let artifacts =
+            codex::collect_codex_artifacts(home.path(), Some(&runtime_home), &session)
+                .expect("collect nested runtime rollout artifact");
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(
+            artifacts[0].relative_path,
+            ".codex/sessions/2026/rollout-native-123.jsonl"
+        );
+        assert_eq!(artifacts[0].content, b"nested\n");
+    }
+
+    #[test]
+    fn collect_codex_artifacts_reroots_codex_local_home_nested_under_home_dir() {
+        // Regression guard for the cloud round-trip: in a real sandbox the
+        // runtime home (and thus the codex-local CODEX_HOME) lives UNDER $HOME
+        // (`/home/user/.proliferate/anyharness/agent-auth/codex-local`), unlike
+        // the local test which spawns the runtime in a scratch dir outside
+        // $HOME. A collect that shortcut through read_file_relative_to_home
+        // whenever the rollout path lived under home_dir mis-rooted it as
+        // `.proliferate/anyharness/agent-auth/codex-local/sessions/…` instead of
+        // the canonical `.codex/sessions/…`, and the cloud->local install then
+        // rejected it as escaping `.codex/sessions`. The path must always be
+        // re-rooted from the CODEX_HOME it was found under.
+        let home = TempDirGuard::new("codex-nested-home");
+        let runtime_home = home.path().join(".proliferate").join("anyharness");
+        let session = codex_session("native-123");
+        let rollout_dir = runtime_home
+            .join("agent-auth")
+            .join("codex-local")
+            .join("sessions")
+            .join("2026");
+        fs::create_dir_all(&rollout_dir).expect("create nested runtime rollout dir");
+        fs::write(rollout_dir.join("rollout-native-123.jsonl"), b"nested\n")
+            .expect("write nested rollout");
+
+        let artifacts =
+            codex::collect_codex_artifacts(home.path(), Some(runtime_home.as_path()), &session)
+                .expect("collect nested runtime rollout artifact");
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(
+            artifacts[0].relative_path,
+            ".codex/sessions/2026/rollout-native-123.jsonl",
+            "a codex-local rollout nested under $HOME must re-root as .codex/…, \
+             not a $HOME-relative .proliferate/… path"
+        );
+        assert_eq!(artifacts[0].content, b"nested\n");
+    }
+
+    #[test]
     fn install_codex_artifacts_writes_to_runtime_local_and_ambient_roots() {
         // Install must be symmetric with collect's codex_artifact_roots: a
         // migrated rollout lands in BOTH the runtime-local codex-local home
