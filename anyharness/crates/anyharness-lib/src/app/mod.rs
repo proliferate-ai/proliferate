@@ -15,6 +15,8 @@ use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::runtime::AgentRuntime;
+use crate::domains::activity::feeds::FeedService;
+use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
 use crate::domains::activity::service::ActivityService;
 use crate::domains::activity::store::ActivityStore;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
@@ -29,6 +31,9 @@ use crate::domains::goals::hooks::GoalSessionHooks;
 use crate::domains::goals::runtime::GoalRuntime;
 use crate::domains::goals::service::GoalService;
 use crate::domains::goals::store::GoalStore;
+use crate::domains::loops::hooks::LoopSessionHooks;
+use crate::domains::loops::runtime::{LoopRuntime, SessionLoopFireExecutor};
+use crate::domains::loops::scheduler::LoopScheduler;
 use crate::domains::loops::service::LoopService;
 use crate::domains::loops::store::LoopStore;
 use crate::domains::mobility::service::MobilityService;
@@ -141,7 +146,10 @@ pub struct AppState {
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
     pub loop_service: Arc<LoopService>,
+    pub loop_runtime: Arc<LoopRuntime>,
     pub activity_service: Arc<ActivityService>,
+    pub activity_runtime: Arc<ActivityRuntime>,
+    pub feed_service: FeedService,
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
@@ -227,6 +235,7 @@ impl AppState {
         let goal_service = Arc::new(GoalService::new(GoalStore::new(db.clone())));
         let loop_service = Arc::new(LoopService::new(LoopStore::new(db.clone())));
         let activity_service = Arc::new(ActivityService::new(ActivityStore::new(db.clone())));
+        let feed_service = FeedService::new(ActivityStore::new(db.clone()));
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
@@ -320,6 +329,28 @@ impl AppState {
             workspace_access_gate.clone(),
         ));
         let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
+        // Loops: the emulated scheduler + its session-facing fire executor, the
+        // write-path runtime, and the attach/turn-finished/closing hooks.
+        let loop_fire_executor = Arc::new(SessionLoopFireExecutor::new(
+            loop_service.clone(),
+            acp_manager.clone(),
+        ));
+        let loop_scheduler = Arc::new(LoopScheduler::new(loop_fire_executor));
+        let loop_runtime = Arc::new(LoopRuntime::new(
+            loop_service.clone(),
+            session_service.clone(),
+            acp_manager.clone(),
+            workspace_access_gate.clone(),
+            loop_scheduler.clone(),
+        ));
+        let loop_session_hooks = Arc::new(LoopSessionHooks::new(loop_runtime.clone()));
+        // Activity: read-only roster reconcile-on-attach.
+        let activity_runtime = Arc::new(ActivityRuntime::new(
+            activity_service.clone(),
+            session_service.clone(),
+            acp_manager.clone(),
+        ));
+        let activity_session_hooks = Arc::new(ActivitySessionHooks::new(activity_runtime.clone()));
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -328,6 +359,8 @@ impl AppState {
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
+            loop_session_hooks,
+            activity_session_hooks,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -432,6 +465,9 @@ impl AppState {
                 cowork_mcp_auth,
             })
             .map_err(AppStateInitError::InvalidProductMcpRegistry)?;
+        // Drive the emulated-loop scheduler (fires only live+idle sessions).
+        #[cfg(not(test))]
+        loop_scheduler.clone().spawn();
         #[cfg(not(test))]
         workspace_retention_service.clone().spawn_startup_pass();
         // Hydrate the bundled agent seed (if pending) and run an installed-only
@@ -485,7 +521,10 @@ impl AppState {
             goal_service,
             goal_runtime,
             loop_service,
+            loop_runtime,
             activity_service,
+            activity_runtime,
+            feed_service,
             acp_manager,
             terminal_service,
             agent_login_terminal_service,
