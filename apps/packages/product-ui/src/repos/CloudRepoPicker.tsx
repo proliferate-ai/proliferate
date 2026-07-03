@@ -2,11 +2,11 @@ import { type FormEvent } from "react";
 import {
   Archive,
   Check,
-  Cloud,
   Lock,
   RotateCw,
   ShieldAlert,
 } from "lucide-react";
+import { GitHub } from "@proliferate/ui/icons";
 
 import {
   Dialog,
@@ -277,7 +277,7 @@ function RepositoryRow({
         {repo.ownerAvatarUrl ? (
           <img src={repo.ownerAvatarUrl} alt="" className="size-full object-cover" />
         ) : (
-          <Cloud size={12} aria-hidden />
+          <GitHub aria-hidden className="size-3" />
         )}
       </span>
       <span className="min-w-0 flex-1">
