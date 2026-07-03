@@ -1,16 +1,10 @@
-import type { CSSProperties } from "react";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { PlaygroundThinkingTimingControls } from "@/components/playground/loading/PlaygroundThinkingTimingControls";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { renderChatTabIcon } from "@/components/workspace/shell/tabs/tab-rendering";
-
-/** Stagger sibling skeleton rows so the sweep reads top-down (120ms/row). */
-function shimmerDelay(row: number): CSSProperties {
-  return { "--shimmer-delay": `${row * 120}ms` } as CSSProperties;
-}
 
 export function PlaygroundLoadingStates() {
   return (

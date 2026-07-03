@@ -167,8 +167,48 @@ body {
   animation-delay: var(--shimmer-delay, 0s);
 }
 
+/* Reduced motion: drop the travelling sweep and breathe the block's opacity
+   instead — a calm fade rather than a static grey slab or a moving band. */
+@keyframes skeleton-fade {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton-shimmer::before {
+    animation: none;
+  }
+  .skeleton-shimmer {
+    animation: skeleton-fade 2s ease-in-out infinite;
+    animation-delay: var(--shimmer-delay, 0s);
+  }
+}
+
+/* ---- Content fade-in ----
+   Shared one-shot entrance for content that replaces a loading state. Opacity
+   only (never transform/size) so it can never contribute to layout shift; the
+   element's resting opacity is 1, so with the animation disabled it stays
+   visible. */
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-content-fade-in {
+  animation: content-fade-in 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-content-fade-in {
     animation: none;
   }
 }

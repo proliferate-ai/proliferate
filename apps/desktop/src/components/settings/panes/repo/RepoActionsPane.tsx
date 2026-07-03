@@ -9,6 +9,7 @@ import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSectio
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
 import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
@@ -206,9 +207,9 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
             className="sm:flex-col sm:items-stretch"
           >
             {isDetecting ? (
-              <div className="flex animate-pulse flex-col gap-2">
-                <div className="h-4 w-32 rounded bg-muted" />
-                <div className="h-4 w-56 rounded bg-muted" />
+              <div className="flex flex-col gap-2" role="status" aria-label="Detecting setup commands">
+                <SkeletonBlock className="h-4 w-32" style={shimmerDelay(0)} />
+                <SkeletonBlock className="h-4 w-56" style={shimmerDelay(1)} />
               </div>
             ) : (
               <div className="w-full space-y-4">

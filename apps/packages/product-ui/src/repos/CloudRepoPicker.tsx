@@ -18,6 +18,7 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
+import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
 
 export type CloudRepoConfigState = "missing" | "disabled" | "configured";
 
@@ -223,10 +224,13 @@ function LoadingRepositoryRows() {
     <div role="status" aria-label="Loading GitHub repositories">
       {Array.from({ length: 3 }).map((_, index) => (
         <div key={index} className="flex items-center gap-2.5 px-2 py-2">
-          <div className="size-6 shrink-0 animate-pulse rounded-[5px] bg-muted" />
+          <SkeletonBlock className="size-6 shrink-0" style={shimmerDelay(index)} />
           <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="h-2.5 w-1/2 animate-pulse rounded-full bg-muted" />
-            <div className="h-2 w-1/3 animate-pulse rounded-full bg-muted/75" />
+            <SkeletonBlock className="h-2.5 w-1/2 rounded-full" style={shimmerDelay(index)} />
+            <SkeletonBlock
+              className="h-2 w-1/3 rounded-full bg-muted/45"
+              style={shimmerDelay(index)}
+            />
           </div>
         </div>
       ))}
