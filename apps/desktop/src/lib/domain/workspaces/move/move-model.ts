@@ -1,4 +1,4 @@
-import type { WorkspaceKind } from "@anyharness/sdk";
+import type { WorkspaceKind, WorkspaceMobilityRuntimeState } from "@anyharness/sdk";
 import type {
   WorkspaceMoveCanonicalSide,
   WorkspaceMovePhase,
@@ -53,6 +53,23 @@ export type MoveSourceFate = "destroy" | "mark_remote_owned";
  */
 export function sourceFateForWorkspaceKind(workspaceKind: WorkspaceKind): MoveSourceFate {
   return workspaceKind === "worktree" ? "destroy" : "mark_remote_owned";
+}
+
+/**
+ * Recovers a stale move id from the source workspace's own runtime-state when this
+ * app session's in-memory record of it (`workspace-move-store.ts`) has been lost --
+ * e.g. Desktop was killed mid-move and restarted. Mirrors spec section 2.2's recovery
+ * story: "a stale non-terminal row + engine preflight tells Desktop exactly what to
+ * offer". The source is only ever frozen (`{mode: frozen_for_handoff, handoffOpId}`)
+ * for the duration of its own in-flight move (step 3 of section 2.3's local->cloud
+ * flow, cleared by cutover cleanup), so a frozen runtime-state's `handoffOpId` is
+ * always that move's id.
+ */
+export function resolveHandoffMoveId(
+  runtimeState: Pick<WorkspaceMobilityRuntimeState, "mode" | "handoffOpId"> | null | undefined,
+): string | null {
+  if (!runtimeState || runtimeState.mode !== "frozen_for_handoff") return null;
+  return runtimeState.handoffOpId ?? null;
 }
 
 // ---- Readiness (see move-readiness.ts for the resolver) ----

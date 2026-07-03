@@ -10,12 +10,29 @@ import {
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { buildSidebarNewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
 import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
-import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type {
+  SidebarIndicatorAction,
+  SidebarStatusIndicator,
+} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
+import { useWorkspaceMoveStore } from "@/stores/workspaces/workspace-move-store";
 import { RepoGroup, type RepoGroupEnvironmentKind } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
 import { WorkspaceItem } from "./WorkspaceItem";
+
+// Status kinds that mean an agent turn is actively running or waiting on the user --
+// the sidebar-level approximation of the move dialog's own "blocked" readiness (spec
+// section 2.6 entry point: hidden while a turn is running). The full blocker set
+// (detached head, conflicts, behind-upstream, ...) is still surfaced by the dialog's
+// own readiness resolver once opened; this is just the cheap, already-computed signal
+// available per sidebar row without an extra query.
+const MOVE_TO_CLOUD_BLOCKING_STATUS_KINDS = new Set<SidebarStatusIndicator["kind"]>([
+  "iterating",
+  "waiting_input",
+  "waiting_plan",
+  "queued_prompt",
+]);
 
 interface SidebarWorkspaceContentProps {
   emptyState: SidebarEmptyState;
@@ -96,6 +113,7 @@ export function SidebarWorkspaceContent({
   onOpenRepoSettings,
 }: SidebarWorkspaceContentProps) {
   const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
+  const activeMoveIdByWorkspaceId = useWorkspaceMoveStore((state) => state.activeMoveIdByWorkspaceId);
 
   if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
@@ -242,6 +260,8 @@ export function SidebarWorkspaceContent({
                   (item.variant === "local" || item.variant === "worktree")
                     && !item.archived
                     && item.localWorkspaceId
+                    && !activeMoveIdByWorkspaceId[item.localWorkspaceId]
+                    && (!item.statusIndicator || !MOVE_TO_CLOUD_BLOCKING_STATUS_KINDS.has(item.statusIndicator.kind))
                     ? () => onMoveWorkspaceToCloud(item.localWorkspaceId!)
                     : undefined
                 }

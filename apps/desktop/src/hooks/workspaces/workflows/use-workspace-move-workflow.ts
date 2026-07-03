@@ -26,6 +26,7 @@ import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-work
 import {
   isMovePostCutover,
   isNonTerminalMovePhase,
+  resolveHandoffMoveId,
   type MovePhase,
   type MoveReadiness,
 } from "@/lib/domain/workspaces/move/move-model";
@@ -83,13 +84,20 @@ export function useWorkspaceMoveWorkflow({
   enabled,
 }: UseWorkspaceMoveWorkflowOptions) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const trackedMoveId = useWorkspaceMoveStore((state) =>
+  const storedMoveId = useWorkspaceMoveStore((state) =>
     workspaceId ? state.activeMoveIdByWorkspaceId[workspaceId] ?? null : null);
 
   const gitStatusQuery = useGitStatusQuery({ workspaceId, enabled });
   const preflightQuery = useWorkspaceMobilityPreflightQuery(workspaceId, { enabled });
   const repositoriesQuery = useRepositories(enabled);
   const { data: workspaceCollections } = useWorkspaces({ enabled });
+
+  // Falls back to the source's own frozen runtime-state when this app session never
+  // learned the move id (or forgot it across a restart) -- see resolveHandoffMoveId's
+  // docstring and the locked "resume/abandon" decision: reopening the dialog after
+  // Desktop was killed mid-move must still offer resume/abandon, not silently drop
+  // into a fresh "readiness" check against a still-frozen source.
+  const trackedMoveId = storedMoveId ?? resolveHandoffMoveId(preflightQuery.data?.runtimeState);
 
   const [runningPhase, setRunningPhase] = useState<MovePhase | "running" | null>(null);
   const activeMoveQuery = useWorkspaceMove(trackedMoveId, {
