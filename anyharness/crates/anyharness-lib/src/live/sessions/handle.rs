@@ -305,6 +305,21 @@ impl LiveSessionHandle {
             .map_err(|_| LiveSessionCommandError::ResponseDropped)
     }
 
+    /// Send an ACP extension-method request to the agent, serialized through
+    /// the actor loop, and return its raw JSON result.
+    pub async fn call_agent_ext_method(
+        &self,
+        method: String,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, LiveSessionCommandError<anyhow::Error>> {
+        self.send_request(|respond_to| SessionCommand::CallAgentExtMethod {
+            method,
+            params,
+            respond_to,
+        })
+        .await
+    }
+
     pub async fn verify_fork_ready(
         &self,
     ) -> Result<(), LiveSessionCommandError<ForkSessionCommandError>> {

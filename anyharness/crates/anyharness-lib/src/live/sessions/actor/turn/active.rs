@@ -184,6 +184,10 @@ impl SessionActor {
                                 let result = self.run_domain_op_cmd(op).await;
                                 let _ = respond_to.send(result);
                             }
+                            Some(SessionCommand::CallAgentExtMethod { method, params, respond_to }) => {
+                                let result = self.call_agent_ext_method(&method, params).await;
+                                let _ = respond_to.send(result);
+                            }
                             Some(SessionCommand::VerifyForkReady { respond_to }) => {
                                 let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                             }

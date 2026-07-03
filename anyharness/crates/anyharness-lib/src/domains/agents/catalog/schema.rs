@@ -199,6 +199,12 @@ impl AgentCatalogAuthSignal {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentCatalogSession {
+    /// Curation-owned: the pinned harness version implements the GoalPort
+    /// (native goals; claude >= 2.1.139, codex >= 0.133). Version-level
+    /// declaration only — the runtime capability is the sidecar's
+    /// initialize `_meta.anyharness.goals` advertisement.
+    #[serde(default)]
+    pub supports_goals: bool,
     /// The control universe: every key/value any model of this harness might
     /// support. Per-model matrices are subsets of this.
     #[serde(default)]
