@@ -213,29 +213,150 @@ body {
   }
 }
 
-/* ---- Proliferate icon: one-shot resolve animation ---- */
-@keyframes proliferate-resolve {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
+/* Thinking indicator — codex-grade shimmer, compositor-only.
+   OWNER RULE: this animation may only use transform/opacity. Codex's own
+   .loading-shimmer animates background-position on background-clip:text,
+   which repaints on the MAIN thread every frame; here the same look rides
+   codex's cadencedShimmer architecture instead — a masked band window
+   (.thinking-text-band) whose transform sweeps across the text while the
+   glyph copy inside counter-translates in lockstep. Both transforms run on
+   the compositor and the soft-edge mask is static (rasterized once), so no
+   per-frame paint exists to jitter.
+   Geometry contract: band window and glyph copy are both exactly the label
+   width; the glyph sweep is the negation of the band sweep (-50%→125%
+   pairs with 50%→-125%), so the copy stays glyph-aligned under any easing.
+   Change one, change both.
+   Color math (codex .loading-shimmer): base text = the ~50%-of-foreground
+   description color (--color-faint) at 45% dark / 55% light — dimmer and
+   calmer than body text. Band contrast: in dark the band is a soft SHADOW
+   (#0009 — darker than the base, a shadow passing through gray text, not a
+   shine); in light it is #ffffffbf. Motion is a smooth continuous sweep —
+   never steps(): the old cadence read as stutter at this size.
+   Hover is intentionally inert (no color or band change): the previous
+   shimmer deleted the band and recolored on mouse-over, which flickered
+   whenever the pointer crossed the transcript. */
+@keyframes thinking-band-sweep {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(125%);
+  }
 }
 
-.animate-resolve-0 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0s forwards; }
-.animate-resolve-1 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.05s forwards; }
-.animate-resolve-2 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.1s forwards; }
-.animate-resolve-3 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.15s forwards; }
-.animate-resolve-4 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.2s forwards; }
-.animate-resolve-5 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.25s forwards; }
-.animate-resolve-6 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.3s forwards; }
-.animate-resolve-7 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.35s forwards; }
-.animate-resolve-8 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.4s forwards; }
-
-@keyframes brand-mark-fade-out {
-  0% { opacity: 1; }
-  100% { opacity: 0; }
+@keyframes thinking-band-glyphs-sweep {
+  from {
+    transform: translateX(50%);
+  }
+  to {
+    transform: translateX(-125%);
+  }
 }
 
-.animate-brand-mark-fade-out {
-  animation: brand-mark-fade-out 0.22s ease-out forwards;
+.thinking-text {
+  position: relative;
+  color: color-mix(in srgb, var(--color-faint) 45%, transparent);
+}
+
+:root[data-mode="light"] .thinking-text {
+  color: color-mix(in srgb, var(--color-faint) 55%, transparent);
+}
+
+.thinking-text-band {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  /* Codex cadencedShimmer mask: soft-edged band, solid core 20–30%,
+     nothing beyond 50% — the sweep reads as a gentle pass, not a wipe. */
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    black 20%,
+    black 30%,
+    transparent 50%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    black 20%,
+    black 30%,
+    transparent 50%
+  );
+  will-change: transform;
+  animation: thinking-band-sweep var(--thinking-text-duration, 2.2s)
+    var(--thinking-text-easing, linear) infinite;
+}
+
+.thinking-text-band-glyphs {
+  display: block;
+  /* Same width as the label, so the copy lays out (and truncates)
+     identically to the base text beneath it. */
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgb(0 0 0 / 0.6);
+  will-change: transform;
+  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 2.2s)
+    var(--thinking-text-easing, linear) infinite;
+}
+
+:root[data-mode="light"] .thinking-text-band-glyphs {
+  color: rgb(255 255 255 / 0.75);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-text {
+    color: var(--color-muted-foreground);
+  }
+
+  .thinking-text-band {
+    display: none;
+  }
+}
+/* ---- end thinking indicator ---- */
+
+/* ---- Brand mark breathe (auth / pre-app loading) ----
+   The living mark is the plain brand icon, quietly alive: a slow opacity
+   breathe while the app resolves, settling to full presence when done.
+   Opacity-only (compositor), no scale — the mark must feel patient, not
+   busy. Reduced motion renders the static icon (no classes applied). */
+@keyframes brand-mark-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-brand-mark-breathe {
+  animation: brand-mark-breathe 2.6s ease-in-out infinite;
+}
+
+/* One-shot settle: eases the mark from mid-breathe back to full opacity
+   when the session check resolves, so stopping the loop never snaps. */
+@keyframes brand-mark-settle {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-brand-mark-settle {
+  animation: brand-mark-settle 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-brand-mark-breathe,
+  .animate-brand-mark-settle {
+    animation: none;
+  }
 }
 
 @keyframes web-sidebar-panel-slide-in {

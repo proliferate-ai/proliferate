@@ -16,13 +16,13 @@ const domCss = readFileSync(
   "utf8",
 );
 
-/** The shimmer block: from its first keyframes to the next css section. */
+/** The shimmer block (dom.css — shared with web): first keyframes to marker. */
 function thinkingSection(): string {
-  const start = desktopCss.indexOf("@keyframes thinking-band-sweep");
-  const end = desktopCss.indexOf("/* ---- Loading illustration animations ---- */");
+  const start = domCss.indexOf("@keyframes thinking-band-sweep");
+  const end = domCss.indexOf("/* ---- end thinking indicator ---- */");
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  return desktopCss.slice(start, end);
+  return domCss.slice(start, end);
 }
 
 describe("ThinkingText", () => {
@@ -53,6 +53,7 @@ describe("thinking shimmer css contract", () => {
 
   it("is inert on hover — no hover rules on the shimmer", () => {
     expect(thinkingSection()).not.toContain(":hover");
+    expect(domCss).not.toContain(".thinking-text:hover");
     expect(desktopCss).not.toContain(".thinking-text:hover");
   });
 

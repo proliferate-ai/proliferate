@@ -227,6 +227,10 @@
       "types": "./dist/primitives/Switch.d.ts",
       "import": "./dist/primitives/Switch.js"
     },
+    "./primitives/ThinkingText": {
+      "types": "./dist/primitives/ThinkingText.d.ts",
+      "import": "./dist/primitives/ThinkingText.js"
+    },
     "./primitives/Tabs": {
       "types": "./dist/primitives/Tabs.d.ts",
       "import": "./dist/primitives/Tabs.js"
