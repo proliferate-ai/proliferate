@@ -65,6 +65,7 @@ export function SessionActivityBar() {
       onClear={goalActions.clearGoal}
       onDismiss={goalActions.dismissResult}
       onCancelCompose={goalActions.cancelComposing}
+      onSetNewGoal={goalActions.beginComposing}
       chips={chips.length > 0 ? (
         <ActivityChips
           chips={chips}

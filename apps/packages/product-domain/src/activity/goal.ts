@@ -230,3 +230,65 @@ export function truncateGoalObjective(
   }
   return `${collapsed.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
+
+/**
+ * Label for the goal bar's expand-popover "why" section — varies by outcome
+ * so it always reads naturally instead of a generic "Reason" for every
+ * terminal state (live feedback 2026-07-03).
+ */
+export function goalResultWhyLabel(outcome: GoalResultOutcome): string {
+  switch (outcome) {
+    case "met":
+      return "Why it's met";
+    case "blocked":
+      return "Why it's blocked";
+    case "failed":
+      return "Why it stopped";
+  }
+}
+
+export interface GoalStat {
+  key: "iterations" | "tokensUsed" | "timeUsedSeconds";
+  text: string;
+}
+
+/**
+ * Compact usage stats for the goal bar's expand popover — only the fields
+ * the harness actually reported (Claude sends `iterations`; both harnesses
+ * send `tokensUsed`/`timeUsedSeconds` where budgets are tracked). Empty when
+ * the goal carries no usage data at all, so the caller can skip the row.
+ */
+export function goalResultStats(
+  goal: Pick<GoalWire, "iterations" | "tokensUsed" | "timeUsedSeconds">,
+): GoalStat[] {
+  const stats: GoalStat[] = [];
+  if (goal.iterations !== null) {
+    stats.push({
+      key: "iterations",
+      text: `${goal.iterations} ${goal.iterations === 1 ? "iteration" : "iterations"}`,
+    });
+  }
+  if (goal.tokensUsed !== null) {
+    stats.push({ key: "tokensUsed", text: `${goal.tokensUsed.toLocaleString()} tokens` });
+  }
+  if (goal.timeUsedSeconds !== null) {
+    stats.push({ key: "timeUsedSeconds", text: humanizeGoalDurationSeconds(goal.timeUsedSeconds) });
+  }
+  return stats;
+}
+
+/** Compact duration label for the stats row: `"45s"`, `"3m 12s"`, `"1h 4m"`. */
+export function humanizeGoalDurationSeconds(totalSeconds: number): string {
+  const total = Math.max(0, Math.round(totalSeconds));
+  if (total < 60) {
+    return `${total}s`;
+  }
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes < 60) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remMinutes = minutes % 60;
+  return remMinutes > 0 ? `${hours}h ${remMinutes}m` : `${hours}h`;
+}

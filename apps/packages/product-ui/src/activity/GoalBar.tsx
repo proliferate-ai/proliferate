@@ -1,15 +1,28 @@
 import { useState, type ReactNode } from "react";
-import { CircleAlert, CircleCheck, Pause, Pencil, Play, Target, Trash2, X } from "lucide-react";
+import {
+  ChevronUp,
+  CircleAlert,
+  CircleCheck,
+  Pause,
+  Pencil,
+  Play,
+  Target,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   deriveGoalBarState,
   goalStatusLabel,
   type GoalCapabilities,
   type GoalWire,
 } from "@proliferate/product-domain/activity/goal";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { ComposerPopoverSurface } from "../chat/composer/ComposerPopoverSurface";
 import { GoalBarIconAction } from "./GoalBarIconAction";
 import { GoalBarObjectiveEditor } from "./GoalBarObjectiveEditor";
+import { GoalBarResultPopover } from "./GoalBarResultPopover";
 
 const PAUSE_UNSUPPORTED_TOOLTIP = "Not supported by this agent";
 const SET_GOAL_PLACEHOLDER = "Describe the goal to pursue";
@@ -38,6 +51,14 @@ export interface GoalBarProps {
   /** Leave create mode without setting a goal. */
   onCancelCompose?: () => void;
   /**
+   * The sticky result popover's "Set new goal" footer action: opens the
+   * bar's compose/edit state over the result (same blank editor as the
+   * empty-state "set a goal" affordance). Omitted hides that action.
+   */
+  onSetNewGoal?: () => void;
+  /** Playground/dev: start the sticky result's expand popover already open. */
+  defaultResultExpanded?: boolean;
+  /**
    * Compact activity chips (`⟳ loops · ▸ terminals · ⑂ agents`) that stack on
    * the same bar row (session-activity-architecture §Locked decisions #5).
    * When there is no live goal state and the bar isn't composing, the chips
@@ -49,14 +70,20 @@ export interface GoalBarProps {
 /**
  * Slim goal bar docked directly above the composer surface. Ever-present
  * while goal state is live (`◎ Pursuing goal <objective>` + pause/edit/
- * delete), a sticky result on met/blocked/failed, hidden otherwise.
- * Display + controls only — mutations round-trip through the callbacks.
+ * delete), a sticky result on met/blocked/failed, hidden otherwise. The
+ * sticky result's collapsed line shows the OBJECTIVE (never the raw met/
+ * blocked reason — evaluator reasons quote tool output and truncate
+ * uselessly) and expands to a popover with the full objective, full reason,
+ * and usage stats (live feedback 2026-07-03; session-activity-architecture
+ * §Locked decisions #5). Display + controls only — mutations round-trip
+ * through the callbacks.
  */
 export function GoalBar({
   goal,
   capabilities,
   composing = false,
   defaultEditing = false,
+  defaultResultExpanded = false,
   pendingWrite = false,
   onEdit,
   onPause,
@@ -64,9 +91,15 @@ export function GoalBar({
   onClear,
   onDismiss,
   onCancelCompose,
+  onSetNewGoal,
   chips,
 }: GoalBarProps) {
   const [editing, setEditing] = useState(defaultEditing);
+  // Forces the result popover open on mount (playground/dev only); cleared
+  // the moment it's genuinely closed so it behaves like ordinary
+  // click-to-toggle state afterward — same "seed, then free" shape as
+  // `defaultEditing`.
+  const [resultForceOpen, setResultForceOpen] = useState(defaultResultExpanded);
   const state = deriveGoalBarState(goal);
 
   // Goal content only renders when the capability supports it AND there is
@@ -81,7 +114,7 @@ export function GoalBar({
   // Editing/composing swaps the fixed single-row layout for a tall,
   // auto-growing textarea (Conductor reference): the glyph aligns with the
   // textarea's first line instead of a fixed-height row.
-  const isEditingLayout = goalVisible && (state.kind === "hidden" || (state.kind === "live" && editing));
+  const isEditingLayout = goalVisible && (composing || (state.kind === "live" && editing));
   // Chips are suppressed while the multi-line editor is showing — its
   // absolute-positioned commit/cancel icons already crowd that row.
   const showChips = Boolean(chips) && !isEditingLayout;
@@ -89,7 +122,11 @@ export function GoalBar({
   let content: ReactNode = null;
   if (!goalVisible) {
     // Chips-only bar: no goal capability, or no live/composing goal state.
-  } else if (state.kind === "hidden") {
+  } else if (composing && state.kind !== "live") {
+    // The empty-state "set a goal" affordance AND the sticky result's
+    // "Set new goal" popover action both land here — same blank editor
+    // either way. (Composing never overrides an already-live goal — the
+    // composer's "Set a goal" row is only offered when nothing is live.)
     content = (
       <GoalBarObjectiveEditor
         initialValue=""
@@ -152,18 +189,61 @@ export function GoalBar({
         </span>
       </>
     );
-  } else {
+  } else if (state.kind === "result") {
+    // Sticky met/blocked/failed outcome. The whole non-button area of the
+    // row (glyph, headline, objective) is the expand trigger — only the
+    // dismiss (×) button sits outside it. Esc/click-outside close the
+    // popover via the underlying Radix primitive.
     content = (
       <>
-        <span className="shrink-0 text-ui font-medium text-foreground">
-          {state.headline}
-        </span>
-        {state.detail && (
-          <span className="min-w-0 flex-1 truncate text-ui text-muted-foreground" data-telemetry-mask>
-            — {state.detail}
-          </span>
-        )}
-        <span className="ml-auto flex shrink-0 items-center">
+        <PopoverButton
+          trigger={(
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left"
+              aria-label={`${state.headline} — show details`}
+            >
+              <GoalBarGlyph state={state} />
+              <span className="shrink-0 text-ui font-medium text-foreground">
+                {state.headline}
+              </span>
+              <span
+                className="min-w-0 flex-1 truncate text-ui text-muted-foreground"
+                data-telemetry-mask
+              >
+                — {state.goal.objective}
+              </span>
+              <ChevronUp className="size-3.5 shrink-0 text-faint" aria-hidden />
+            </button>
+          )}
+          side="top"
+          align="start"
+          offset={8}
+          externalOpen={resultForceOpen ? true : undefined}
+          onOpenChange={(open) => {
+            if (!open) {
+              setResultForceOpen(false);
+            }
+          }}
+          className="w-auto border-0 bg-transparent p-0 shadow-none"
+        >
+          {(close) => (
+            <ComposerPopoverSurface className="p-0" data-telemetry-mask>
+              <GoalBarResultPopover
+                state={state}
+                onDismiss={() => {
+                  onDismiss();
+                  close();
+                }}
+                onSetNewGoal={onSetNewGoal ? () => {
+                  onSetNewGoal();
+                  close();
+                } : undefined}
+              />
+            </ComposerPopoverSurface>
+          )}
+        </PopoverButton>
+        <span className="ml-1 flex shrink-0 items-center">
           <GoalBarIconAction
             label="Dismiss goal result"
             icon={<X className="size-3.5" />}
@@ -186,7 +266,11 @@ export function GoalBar({
           isEditingLayout ? "items-start py-1.5" : "h-9 items-center",
         )}
       >
-        {goalVisible && <GoalBarGlyph state={state} raised={isEditingLayout} />}
+        {/* The result row renders its own glyph inside the expand trigger
+            button so the whole row (glyph included) is clickable. */}
+        {goalVisible && state.kind !== "result" && (
+          <GoalBarGlyph state={state} raised={isEditingLayout} />
+        )}
         {content}
         {showChips && (
           <span className={twMerge("flex shrink-0 items-center", goalVisible && "ml-1")}>

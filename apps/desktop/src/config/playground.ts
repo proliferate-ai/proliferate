@@ -83,7 +83,10 @@ export type ScenarioKey =
   | "goal-editing-multiline"
   | "goal-composing"
   | "goal-met-sticky"
+  | "goal-met-long-objective"
+  | "goal-met-expanded"
   | "goal-blocked-sticky"
+  | "goal-blocked-expanded"
   | "goal-failed-budget"
   | "goal-pending-write"
   | "goal-empty"
@@ -189,7 +192,10 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "goal-editing-multiline": { label: "Goal editing (multi-line)" },
   "goal-composing": { label: "Goal composing" },
   "goal-met-sticky": { label: "Goal met" },
+  "goal-met-long-objective": { label: "Goal met (long objective)" },
+  "goal-met-expanded": { label: "Goal met (expanded)" },
   "goal-blocked-sticky": { label: "Goal blocked" },
+  "goal-blocked-expanded": { label: "Goal blocked (expanded)" },
   "goal-failed-budget": { label: "Goal failed (budget)" },
   "goal-pending-write": { label: "Goal pending write" },
   "goal-empty": { label: "Goal empty" },
