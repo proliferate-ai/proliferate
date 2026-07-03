@@ -21,6 +21,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/desktop/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Desktop Auth Methods
+         * @description Advertise available desktop sign-in methods (unauthenticated).
+         *
+         *     The desktop login screen reads this to decide which sign-in surface to
+         *     show: the email/password form becomes the default when GitHub OAuth is not
+         *     configured (the standard self-hosted posture).
+         */
+        get: operations["desktop_auth_methods_auth_desktop_methods_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/desktop/password/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desktop Password Login
+         * @description Authenticate email+password and issue desktop session tokens.
+         *
+         *     Same policy as the web/mobile password routes (kill switch, rate limits,
+         *     generic failure copy, ADMIN_EMAILS floor), but the response carries the
+         *     desktop token pair the GitHub callback flow issues.
+         */
+        post: operations["desktop_password_login_auth_desktop_password_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/desktop/authorize": {
         parameters: {
             query?: never;
@@ -543,6 +591,60 @@ export interface paths {
         get: operations["health_health_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Meta */
+        get: operations["meta_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/desktop/updater/latest.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Desktop Updater Latest */
+        get: operations["desktop_updater_latest_desktop_updater_latest_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register With Password
+         * @description Create an account for an invited email, joining the instance organization.
+         */
+        post: operations["register_with_password_auth_password_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1532,6 +1634,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/integrations/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integration Catalog Endpoint */
+        get: operations["list_integration_catalog_endpoint_v1_cloud_integrations_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integrations/health": {
         parameters: {
             query?: never;
@@ -2308,6 +2427,8 @@ export interface components {
             policyEnabled?: boolean | null;
             /** Effectiveenabled */
             effectiveEnabled: boolean;
+            /** Authdetection */
+            authDetection?: ("detected" | "none" | "unreachable" | "forced") | null;
         };
         /** AgentApiKeyCreateRequest */
         AgentApiKeyCreateRequest: {
@@ -3043,6 +3164,16 @@ export interface components {
             /** Brandlabel */
             brandLabel?: string | null;
         };
+        /**
+         * AuthMethodsResponse
+         * @description Sign-in methods this server offers the desktop app (public probe).
+         */
+        AuthMethodsResponse: {
+            /** Password Login */
+            password_login: boolean;
+            /** Github */
+            github: boolean;
+        };
         /** AuthPasswordCredential */
         AuthPasswordCredential: {
             /** Enabled */
@@ -3567,6 +3698,12 @@ export interface components {
             namespace: string;
             /** Mcpurl */
             mcpUrl: string;
+            /**
+             * Authkind
+             * @default auto
+             * @enum {string}
+             */
+            authKind: "auto" | "none" | "oauth2";
         };
         /** CreateCloudWorkspaceRequest */
         CreateCloudWorkspaceRequest: {
@@ -3747,10 +3884,7 @@ export interface components {
              * @default ok
              */
             status: string;
-            /**
-             * Version
-             * @default 0.1.0
-             */
+            /** Version */
             version: string;
         };
         /** IntegrationAccountResponse */
@@ -3775,6 +3909,82 @@ export interface components {
             status: string;
             /** Enabled */
             enabled: boolean;
+        };
+        /** IntegrationCatalogItem */
+        IntegrationCatalogItem: {
+            /**
+             * Definitionid
+             * Format: uuid
+             */
+            definitionId: string;
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description?: string | null;
+            /** Authkind */
+            authKind: string;
+            connectSchema: components["schemas"]["IntegrationConnectSchema"];
+        };
+        /** IntegrationCatalogResponse */
+        IntegrationCatalogResponse: {
+            /** Items */
+            items: components["schemas"]["IntegrationCatalogItem"][];
+        };
+        /** IntegrationCatalogSecretField */
+        IntegrationCatalogSecretField: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Helpertext */
+            helperText?: string | null;
+            /** Prefixhint */
+            prefixHint?: string | null;
+        };
+        /** IntegrationCatalogSettingField */
+        IntegrationCatalogSettingField: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["IntegrationCatalogSettingOption"][];
+            /** Default */
+            default?: string | boolean | null;
+        };
+        /** IntegrationCatalogSettingOption */
+        IntegrationCatalogSettingOption: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /** IntegrationConnectSchema */
+        IntegrationConnectSchema: {
+            /**
+             * Secretfields
+             * @default []
+             */
+            secretFields: components["schemas"]["IntegrationCatalogSecretField"][];
+            /**
+             * Settingsfields
+             * @default []
+             */
+            settingsFields: components["schemas"]["IntegrationCatalogSettingField"][];
         };
         /**
          * IntegrationGatewayConfig
@@ -3843,6 +4053,17 @@ export interface components {
             callbackSurface: string;
             /** Finalsurface */
             finalSurface: string;
+        };
+        /** MetaResponse */
+        MetaResponse: {
+            /** Serverversion */
+            serverVersion: string;
+            /** Desktopversion */
+            desktopVersion: string;
+            /** Runtimeversion */
+            runtimeVersion: string;
+            /** Mindesktopversion */
+            minDesktopVersion: string;
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -4329,6 +4550,14 @@ export interface components {
             enabled: boolean;
             /** Setat */
             setAt?: string | null;
+            /** Accesstoken */
+            accessToken?: string | null;
+            /** Refreshtoken */
+            refreshToken?: string | null;
+            /** Expiresin */
+            expiresIn?: number | null;
+            /** Tokentype */
+            tokenType?: "bearer" | null;
         };
         /** PasswordLoginRequest */
         PasswordLoginRequest: {
@@ -4336,6 +4565,22 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** PasswordRegisterRequest */
+        PasswordRegisterRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Invitationtoken */
+            invitationToken: string;
+        };
+        /** PasswordRegisterResponse */
+        PasswordRegisterResponse: {
+            /** Email */
+            email: string;
+            /** Organizationname */
+            organizationName: string;
         };
         /** PasswordSetRequest */
         PasswordSetRequest: {
@@ -5131,6 +5376,59 @@ export interface operations {
             };
         };
     };
+    desktop_auth_methods_auth_desktop_methods_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMethodsResponse"];
+                };
+            };
+        };
+    };
+    desktop_password_login_auth_desktop_password_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_desktop_auth_code_auth_desktop_authorize_post: {
         parameters: {
             query: {
@@ -5841,7 +6139,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                proliferate_web_refresh?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -6008,6 +6308,7 @@ export interface operations {
             };
             path?: never;
             cookie?: {
+                proliferate_web_refresh?: string | null;
                 proliferate_web_csrf?: string | null;
             };
         };
@@ -6104,6 +6405,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    meta_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetaResponse"];
+                };
+            };
+        };
+    };
+    desktop_updater_latest_desktop_updater_latest_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    register_with_password_auth_password_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordRegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8373,6 +8747,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_integration_catalog_endpoint_v1_cloud_integrations_catalog_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -10,10 +10,13 @@ import {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { Select } from "@proliferate/ui/primitives/Select";
 import { integrationApiErrorMessage } from "@/hooks/access/cloud/integrations/use-admin-integration-definitions";
 import {
+  CUSTOM_INTEGRATION_AUTH_OPTIONS,
   customIntegrationSubmitError,
   validateCustomIntegrationForm,
+  type CustomIntegrationAuthChoice,
   type CustomIntegrationFormErrors,
   type CustomIntegrationFormInput,
 } from "@/lib/domain/settings/org-integrations-presentation";
@@ -40,6 +43,7 @@ export function AddCustomIntegrationDialog({
   const [displayName, setDisplayName] = useState("");
   const [namespace, setNamespace] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
+  const [authKind, setAuthKind] = useState<CustomIntegrationAuthChoice>("auto");
   const [fieldErrors, setFieldErrors] = useState<CustomIntegrationFormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -51,6 +55,7 @@ export function AddCustomIntegrationDialog({
     setDisplayName("");
     setNamespace("");
     setMcpUrl("");
+    setAuthKind("auto");
     setFieldErrors({});
     setSubmitError(null);
   }, [open]);
@@ -63,6 +68,7 @@ export function AddCustomIntegrationDialog({
       displayName: displayName.trim(),
       namespace: namespace.trim(),
       mcpUrl: mcpUrl.trim(),
+      authKind,
     };
     const errors = validateCustomIntegrationForm(input);
     setFieldErrors(errors ?? {});
@@ -149,6 +155,29 @@ export function AddCustomIntegrationDialog({
             {fieldErrors.mcpUrl ? (
               <p className="mt-1 text-xs text-destructive">{fieldErrors.mcpUrl}</p>
             ) : null}
+          </div>
+
+          <div>
+            <Label htmlFor="custom-integration-auth-kind">Authentication</Label>
+            <Select
+              id="custom-integration-auth-kind"
+              value={authKind}
+              onChange={(event) =>
+                setAuthKind(event.target.value as CustomIntegrationAuthChoice)
+              }
+            >
+              {CUSTOM_INTEGRATION_AUTH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Auto-detect probes the server when you add it. OAuth servers
+              register a client automatically (Dynamic Client Registration);
+              members then connect with their own accounts. API keys are not
+              yet supported for custom servers.
+            </p>
           </div>
 
           {submitError ? (
