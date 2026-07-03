@@ -90,7 +90,7 @@ impl ActivityRuntime {
         let op = Box::new(ActivityReconcileOp {
             activity_service: self.activity_service.clone(),
             processes: listed.processes,
-            agents: listed.agents,
+            agents: listed.subagents,
         });
         let reply = handle.run_domain_op(op).await.map_err(|error| match error {
             LiveSessionCommandError::ActorUnavailable => {

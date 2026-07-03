@@ -26,8 +26,12 @@ pub const ACTIVITY_LIST_EXT_METHOD: &str = "_anyharness/activity/list";
 pub struct ActivityListWireResult {
     #[serde(default)]
     pub processes: Vec<ActivityProcessWire>,
-    #[serde(default)]
-    pub agents: Vec<ActivitySubagentWire>,
+    /// Both forks return the roster under `subagents` (claude-agent-acp's
+    /// `activity/list`), not `agents`; the old key silently degraded the
+    /// reconcile pull to an empty agent list. `alias` keeps any legacy
+    /// emitter working.
+    #[serde(default, alias = "agents")]
+    pub subagents: Vec<ActivitySubagentWire>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -181,5 +185,23 @@ mod tests {
                 url: "http://127.0.0.1:9000/session/child-2/events".to_string()
             })
         );
+    }
+
+    #[test]
+    fn activity_list_wire_reads_subagents_key_and_agents_alias() {
+        // Forks return the roster under `subagents`.
+        let via_subagents: ActivityListWireResult = serde_json::from_value(serde_json::json!({
+            "processes": [],
+            "subagents": [{ "id": "child-1", "background": true, "status": "running" }]
+        }))
+        .expect("parse subagents");
+        assert_eq!(via_subagents.subagents.len(), 1);
+
+        // Legacy `agents` key still accepted via alias.
+        let via_alias: ActivityListWireResult = serde_json::from_value(serde_json::json!({
+            "agents": [{ "id": "child-1", "background": true, "status": "running" }]
+        }))
+        .expect("parse agents alias");
+        assert_eq!(via_alias.subagents.len(), 1);
     }
 }

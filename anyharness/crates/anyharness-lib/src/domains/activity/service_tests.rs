@@ -222,7 +222,7 @@ fn observer_ingests_subagent_upserted_chunk() {
         "anyharness": {
             "schemaVersion": 1,
             "transcriptEvent": "subagent_upserted",
-            "agent": {
+            "subagent": {
                 "id": "agent-1",
                 "background": false,
                 "status": "completed",
