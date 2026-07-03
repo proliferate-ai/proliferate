@@ -198,31 +198,39 @@ function GoalBarPauseAction({
   onResume: () => void;
 }) {
   const label = paused ? "Resume goal" : "Pause goal";
-  const action = (
-    <GoalBarIconAction
-      label={label}
-      icon={paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-      disabled={!pauseSupported}
-      onClick={paused ? onResume : onPause}
-    />
-  );
+  const icon = paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />;
   if (pauseSupported) {
-    return action;
+    return (
+      <GoalBarIconAction label={label} icon={icon} onClick={paused ? onResume : onPause} />
+    );
   }
-  return <Tooltip content={PAUSE_UNSUPPORTED_TOOLTIP}>{action}</Tooltip>;
+  // Pause is unsupported for this agent. Keep the control focusable
+  // (aria-disabled, not the native `disabled` attribute that drops it from the
+  // tab order) so keyboard and screen-reader users can reach the tooltip that
+  // explains why, and fold the reason into the accessible name for AT.
+  return (
+    <Tooltip content={PAUSE_UNSUPPORTED_TOOLTIP}>
+      <GoalBarIconAction label={`${label} — ${PAUSE_UNSUPPORTED_TOOLTIP}`} icon={icon} inert />
+    </Tooltip>
+  );
 }
 
 function GoalBarIconAction({
   label,
   icon,
   onClick,
-  disabled = false,
+  inert = false,
   destructive = false,
 }: {
   label: string;
   icon: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
+  onClick?: () => void;
+  /**
+   * Render disabled-looking but still focusable (aria-disabled, click blocked)
+   * rather than natively `disabled` — a native-disabled button leaves the tab
+   * order, which would hide a wrapping tooltip from keyboard/AT users.
+   */
+  inert?: boolean;
   destructive?: boolean;
 }) {
   return (
@@ -230,13 +238,14 @@ function GoalBarIconAction({
       type="button"
       variant="ghost"
       size="icon-sm"
-      disabled={disabled}
-      onClick={onClick}
+      aria-disabled={inert || undefined}
+      onClick={inert ? undefined : onClick}
       aria-label={label}
-      title={disabled ? undefined : label}
+      title={inert ? undefined : label}
       className={twMerge(
         "h-6 w-6 text-muted-foreground hover:text-foreground",
         destructive && "hover:text-destructive",
+        inert && "cursor-default opacity-50 hover:text-muted-foreground",
       )}
     >
       {icon}
