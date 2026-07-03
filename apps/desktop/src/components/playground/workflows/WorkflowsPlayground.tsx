@@ -1,4 +1,6 @@
 import { WorkflowStepCardFixtures } from "./WorkflowStepCardFixtures";
+import { WorkflowEditorFixtures } from "./WorkflowEditorFixtures";
+import { WorkflowFormsFixtures } from "./WorkflowFormsFixtures";
 import { WorkflowRunTimelineFixtures } from "./WorkflowRunTimelineFixtures";
 
 /**
@@ -18,6 +20,8 @@ export function WorkflowsPlayground() {
         </p>
       </header>
       <WorkflowStepCardFixtures />
+      <WorkflowEditorFixtures />
+      <WorkflowFormsFixtures />
       <WorkflowRunTimelineFixtures />
     </div>
   );

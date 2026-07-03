@@ -2,6 +2,7 @@ import type { WorkflowStep } from "@proliferate/product-domain/workflows/definit
 import { WorkflowStepCard } from "@proliferate/product-ui/workflows/WorkflowStepCard";
 import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
 import { WorkflowStepGlyphStrip } from "@proliferate/product-ui/workflows/WorkflowStepGlyphStrip";
+import { WorkflowStepConnector } from "@/components/workflows/editor/WorkflowStepConnector";
 import { workflowStepStrip } from "@proliferate/product-domain/workflows/presentation";
 import { WORKFLOW_TEMPLATES } from "@proliferate/product-domain/workflows/templates";
 
@@ -70,6 +71,7 @@ const STEP_CARDS: Labeled[] = [
   { label: "Notify (Slack)", step: NOTIFY_STEP },
   { label: "Approval", step: APPROVAL_STEP },
   { label: "Selected", step: GOAL_STEP, selected: true },
+  { label: "Empty content (preview box collapses)", step: { ...PROMPT_STEP, prompt: "" } },
   { label: "Invalid (needs attention)", step: { ...PROMPT_STEP, prompt: "" }, invalid: true },
 ];
 
@@ -103,18 +105,16 @@ export function WorkflowStepCardFixtures() {
       </Section>
 
       <Section title="Editor rail (connected chain)">
-        <div className="relative flex w-[24rem] flex-col">
+        <div className="flex w-[24rem] flex-col">
           {[SHELL_STEP, GOAL_STEP, PR_STEP].map((step, index, all) => (
-            <div key={index} className="relative pb-3">
+            <div key={index}>
               <WorkflowStepCard
                 step={step}
                 index={index}
                 selected={index === 1}
                 onSelect={() => undefined}
               />
-              {index < all.length - 1 ? (
-                <div className="ml-6 h-3 w-px bg-border" aria-hidden />
-              ) : null}
+              {index < all.length - 1 ? <WorkflowStepConnector /> : null}
             </div>
           ))}
         </div>
