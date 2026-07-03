@@ -1,6 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type {
-  CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { isCloudWorkspaceFailedBeforeReady } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
@@ -11,8 +10,6 @@ import {
 } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildLocalSlotLogicalWorkspaceId,
-  buildRemoteLogicalWorkspaceId,
-  normalizeLogicalWorkspaceBranchKey,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import { resolvePreferredLogicalWorkspaceMaterialization } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
@@ -28,11 +25,9 @@ import {
 import {
   cloudDefaultDisplayName,
   cloudWorkspaceMatchesSelection,
-  effectiveOwnerHintForWorkspace,
   inferLifecycle,
   latestUpdatedAt,
   localDefaultDisplayName,
-  mobilityDefaultDisplayName,
   preferCloudWorkspaceForLogicalSlot,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-slot";
 
@@ -178,14 +173,9 @@ export function buildLogicalWorkspaces(args: {
   localWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
   cloudWorkspaces: CloudWorkspaceSummary[];
-  cloudMobilityWorkspaces?: CloudMobilityWorkspaceSummary[];
   currentSelectionId?: string | null;
 }): LogicalWorkspace[] {
   const repoRootsById = new Map(args.repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
-  const cloudWorkspacesById = new Map(args.cloudWorkspaces.map((workspace) => [
-    workspace.id,
-    workspace,
-  ]));
   const repoRootsByRemoteKey = new Map(
     args.repoRoots
       .filter((repoRoot) => (
@@ -201,7 +191,6 @@ export function buildLogicalWorkspaces(args: {
   const byId = new Map<string, {
     localWorkspace: Workspace | null;
     cloudWorkspace: CloudWorkspaceSummary | null;
-    mobilityWorkspace: CloudMobilityWorkspaceSummary | null;
     aliasIds: string[];
   }>();
 
@@ -231,7 +220,6 @@ export function buildLogicalWorkspaces(args: {
       byId.set(logicalId, {
         localWorkspace: workspace,
         cloudWorkspace: null,
-        mobilityWorkspace: null,
         aliasIds: collapsed.aliasIds,
       });
     });
@@ -251,7 +239,6 @@ export function buildLogicalWorkspaces(args: {
       byId.set(logicalId, {
         localWorkspace: null,
         cloudWorkspace: workspace,
-        mobilityWorkspace: null,
         aliasIds: [],
       });
       continue;
@@ -264,45 +251,12 @@ export function buildLogicalWorkspaces(args: {
     );
   }
 
-  for (const workspace of args.cloudMobilityWorkspaces ?? []) {
-    const logicalId = buildRemoteLogicalWorkspaceId(
-      workspace.repo.provider,
-      workspace.repo.owner,
-      workspace.repo.name,
-      normalizeLogicalWorkspaceBranchKey(workspace.repo.branch),
-    );
-    const current = byId.get(logicalId);
-    if (!current) {
-      byId.set(logicalId, {
-        localWorkspace: null,
-        cloudWorkspace: workspace.cloudWorkspaceId
-          ? cloudWorkspacesById.get(workspace.cloudWorkspaceId) ?? null
-          : null,
-        mobilityWorkspace: workspace,
-        aliasIds: [],
-      });
-      continue;
-    }
-
-    if (workspace.cloudWorkspaceId) {
-      current.cloudWorkspace = cloudWorkspacesById.get(workspace.cloudWorkspaceId)
-        ?? current.cloudWorkspace;
-    }
-    current.mobilityWorkspace = workspace;
-  }
-
   return Array.from(byId.entries())
     .map(([id, entry]) => {
-      const effectiveOwnerHint = effectiveOwnerHintForWorkspace(
-        entry.mobilityWorkspace?.owner,
-        entry.cloudWorkspace,
-      );
       const materialization = resolvePreferredLogicalWorkspaceMaterialization(
         entry.localWorkspace,
         entry.cloudWorkspace,
-        entry.mobilityWorkspace,
         args.currentSelectionId ?? null,
-        effectiveOwnerHint,
       );
       const repoRoot = entry.localWorkspace
         ? resolveLocalWorkspaceRepoRoot(entry.localWorkspace, repoRootsById, repoRootsByRemoteKey)
@@ -314,24 +268,14 @@ export function buildLogicalWorkspaces(args: {
               entry.cloudWorkspace.repo.name,
             )!,
           ) ?? null
-          : entry.mobilityWorkspace
-            ? repoRootsByRemoteKey.get(
-              remoteRepoKey(
-                entry.mobilityWorkspace.repo.provider,
-                entry.mobilityWorkspace.repo.owner,
-                entry.mobilityWorkspace.repo.name,
-              )!,
-            ) ?? null
-            : null;
+          : null;
       const repoKey = entry.localWorkspace
         ? repoRoot
           ? repoRootGroupKey(repoRoot)
           : localWorkspaceGroupKey(entry.localWorkspace)
         : entry.cloudWorkspace
           ? cloudWorkspaceGroupKey(entry.cloudWorkspace)
-          : entry.mobilityWorkspace
-            ? cloudWorkspaceGroupKey(entry.mobilityWorkspace)
-            : id;
+          : id;
       const sourceRoot = repoRoot?.path
         ?? entry.localWorkspace?.repoRootId
         ?? entry.localWorkspace?.path
@@ -340,9 +284,7 @@ export function buildLogicalWorkspaces(args: {
         ? localDefaultDisplayName(entry.localWorkspace)
         : entry.cloudWorkspace
           ? cloudDefaultDisplayName(entry.cloudWorkspace)
-          : entry.mobilityWorkspace
-            ? mobilityDefaultDisplayName(entry.mobilityWorkspace)
-            : id;
+          : id;
 
       return {
         id,
@@ -352,42 +294,34 @@ export function buildLogicalWorkspaces(args: {
         provider:
           repoRoot?.remoteProvider
           ?? entry.cloudWorkspace?.repo.provider
-          ?? entry.mobilityWorkspace?.repo.provider
           ?? null,
         owner:
           repoRoot?.remoteOwner
           ?? entry.cloudWorkspace?.repo.owner
-          ?? entry.mobilityWorkspace?.repo.owner
           ?? null,
         repoName:
           repoRoot?.remoteRepoName
           ?? entry.cloudWorkspace?.repo.name
-          ?? entry.mobilityWorkspace?.repo.name
           ?? null,
         branchKey: entry.localWorkspace
           ? workspaceBranchKey(entry.localWorkspace)
           : entry.cloudWorkspace
             ? cloudBranchKey(entry.cloudWorkspace)
-            : entry.mobilityWorkspace
-              ? normalizeLogicalWorkspaceBranchKey(entry.mobilityWorkspace.repo.branch)
-              : "HEAD",
+            : "HEAD",
         displayName,
         localWorkspace: entry.localWorkspace,
         cloudWorkspace: entry.cloudWorkspace,
-        mobilityWorkspace: entry.mobilityWorkspace,
         aliasIds: entry.aliasIds,
         preferredMaterializationId: materialization.workspaceId,
-        effectiveOwner: effectiveOwnerHint ?? materialization.owner,
+        effectiveOwner: materialization.owner,
         lifecycle: inferLifecycle(
           entry.localWorkspace,
           entry.cloudWorkspace,
-          entry.mobilityWorkspace,
           materialization.owner,
         ),
         updatedAt: latestUpdatedAt(
           entry.localWorkspace,
           entry.cloudWorkspace,
-          entry.mobilityWorkspace,
         ),
       } satisfies LogicalWorkspace;
     })

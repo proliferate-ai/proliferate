@@ -20,7 +20,7 @@ export function timestampMs(value: string | null | undefined): number {
 export function resolveLogicalWorkspaceRecency(
   workspace: Pick<
     LogicalWorkspace,
-    "id" | "updatedAt" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
+    "id" | "updatedAt" | "localWorkspace" | "cloudWorkspace" | "preferredMaterializationId"
   >,
   workspaceActivityAt: Record<string, string>,
 ): LogicalWorkspaceRecency {

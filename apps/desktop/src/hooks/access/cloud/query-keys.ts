@@ -5,7 +5,6 @@ export {
   cloudBillingKey,
   cloudRepoBranchesKey,
   cloudWorktreeRetentionPolicyKey,
-  cloudMobilityWorkspacesKey,
   cloudWorkspaceConnectionKey,
   isCloudWorkspaceConnectionQueryKey,
 } from "@proliferate/cloud-sdk-react/lib/query-keys";

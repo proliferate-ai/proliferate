@@ -30,7 +30,6 @@ function makeLogicalWorkspace(overrides: Partial<LogicalWorkspace>): LogicalWork
     displayName: "Branch Fallback Label",
     localWorkspace: null,
     cloudWorkspace: null,
-    mobilityWorkspace: null,
     preferredMaterializationId: null,
     effectiveOwner: "local",
     lifecycle: "local_active",

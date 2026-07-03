@@ -18,7 +18,6 @@ function makeLogicalWorkspace(overrides: Partial<LogicalWorkspace> = {}): Logica
     displayName: "Proliferate",
     localWorkspace: null,
     cloudWorkspace: null,
-    mobilityWorkspace: null,
     aliasIds: [],
     preferredMaterializationId: null,
     effectiveOwner: "local",
@@ -92,37 +91,5 @@ describe("workspaceCopyMetadataForLogicalWorkspace", () => {
       toastLabel: "Repository",
     });
     expect(metadata.branchName).toBe("pablo/cloud");
-  });
-
-  it("uses mobility workspace repository metadata when direct cloud metadata is absent", () => {
-    const metadata = workspaceCopyMetadataForLogicalWorkspace(makeLogicalWorkspace({
-      owner: null,
-      repoName: null,
-      effectiveOwner: "cloud",
-      lifecycle: "cloud_active",
-      mobilityWorkspace: {
-        id: "mobility-1",
-        displayName: null,
-        repo: {
-          provider: "github",
-          owner: "proliferate-ai",
-          name: "runtime",
-          branch: "pablo/runtime",
-        },
-        owner: "cloud",
-        lifecycleState: "cloud_active",
-        statusDetail: null,
-        lastError: null,
-        cloudWorkspaceId: "cloud-1",
-        cloudLostAt: null,
-        cloudLostReason: null,
-        activeHandoff: null,
-        updatedAt: "2026-05-22T00:00:00Z",
-        createdAt: "2026-05-22T00:00:00Z",
-      },
-    }));
-
-    expect(metadata.workspaceLocation?.value).toBe("proliferate-ai/runtime");
-    expect(metadata.branchName).toBe("pablo/runtime");
   });
 });

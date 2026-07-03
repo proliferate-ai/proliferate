@@ -153,7 +153,6 @@ function logicalWorkspace(): LogicalWorkspace {
     id: "logical:repo",
     localWorkspace: { id: "workspace-local" },
     cloudWorkspace: { id: "cloud-1" },
-    mobilityWorkspace: null,
     preferredMaterializationId: "workspace-local",
   } as LogicalWorkspace;
 }

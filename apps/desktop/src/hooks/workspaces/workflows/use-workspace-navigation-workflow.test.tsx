@@ -161,7 +161,6 @@ describe("useWorkspaceNavigationWorkflow", () => {
     logicalWorkspaceMocks.logicalWorkspaces = [{
       id: "logical-unclaimed",
       localWorkspace: null,
-      mobilityWorkspace: null,
       cloudWorkspace: {
         id: "cloud-unclaimed-1",
         visibility: "shared_unclaimed",

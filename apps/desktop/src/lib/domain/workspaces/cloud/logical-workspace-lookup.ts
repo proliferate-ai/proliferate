@@ -36,7 +36,6 @@ export function logicalWorkspaceRelatedIds(
     | "id"
     | "localWorkspace"
     | "cloudWorkspace"
-    | "mobilityWorkspace"
     | "aliasIds"
     | "preferredMaterializationId"
   >,
@@ -68,7 +67,6 @@ export function expandLogicalWorkspaceRelatedIdSet(
     | "id"
     | "localWorkspace"
     | "cloudWorkspace"
-    | "mobilityWorkspace"
     | "aliasIds"
     | "preferredMaterializationId"
   >[],
@@ -95,7 +93,6 @@ export function latestLogicalWorkspaceTimestamp(
     | "id"
     | "localWorkspace"
     | "cloudWorkspace"
-    | "mobilityWorkspace"
     | "aliasIds"
     | "preferredMaterializationId"
   >,

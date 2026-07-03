@@ -53,7 +53,6 @@ describe("runWorkspaceSelection", () => {
         id: "workspace-1",
       } as never,
       cloudWorkspace: null,
-      mobilityWorkspace: null,
       preferredMaterializationId: "workspace-1",
       effectiveOwner: "local",
       lifecycle: "local_active",
@@ -134,9 +133,6 @@ describe("runWorkspaceSelection", () => {
           displayName: "seal",
           localWorkspace: null,
           cloudWorkspace: null,
-          mobilityWorkspace: {
-            id: "mobility-1",
-          } as never,
           preferredMaterializationId: null,
           effectiveOwner: "local",
           lifecycle: "moving_to_cloud",

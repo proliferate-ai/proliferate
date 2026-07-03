@@ -45,43 +45,8 @@ function makeExecutionSummary(args: {
   };
 }
 
-function makeMobilityWorkspace(args: {
-  id?: string;
-  owner: "local" | "cloud" | "personal_cloud";
-  branch?: string;
-  cloudWorkspaceId?: string | null;
-}) {
-  const {
-    id = "mobility-1",
-    owner,
-    branch = "main",
-    cloudWorkspaceId = "cloud-1",
-  } = args;
-
-  return {
-    id,
-    displayName: branch,
-    repo: {
-      provider: "github" as const,
-      owner: "proliferate-ai",
-      name: "proliferate",
-      branch,
-    },
-    owner,
-    lifecycleState: owner === "cloud" ? "cloud_active" as const : "local_active" as const,
-    statusDetail: null,
-    lastError: null,
-    cloudWorkspaceId,
-    cloudLostAt: null,
-    cloudLostReason: null,
-    activeHandoff: null,
-    updatedAt: "2026-04-13T00:00:00Z",
-    createdAt: "2026-04-13T00:00:00Z",
-  };
-}
-
 describe("logical workspace duplicate local records", () => {
-  it("splits duplicate local workspaces while merging cloud and mobility only with canonical", () => {
+  it("splits duplicate local workspaces while merging cloud only with canonical", () => {
     const repoRoot = makeRepoRoot();
     const olderLocal = makeWorkspace({
       id: "local-older",
@@ -101,12 +66,6 @@ describe("logical workspace duplicate local records", () => {
       id: "cloud-main",
       branch: "main",
     });
-    const mobilityWorkspace = makeMobilityWorkspace({
-      id: "mobility-main",
-      owner: "local",
-      branch: "main",
-      cloudWorkspaceId: cloudWorkspace.id,
-    });
     const canonicalId = buildRemoteLogicalWorkspaceId(
       "github",
       "proliferate-ai",
@@ -119,7 +78,6 @@ describe("logical workspace duplicate local records", () => {
       localWorkspaces: [newerLocal, olderLocal],
       repoRoots: [repoRoot],
       cloudWorkspaces: [cloudWorkspace],
-      cloudMobilityWorkspaces: [mobilityWorkspace],
       currentSelectionId: null,
     });
 
@@ -129,10 +87,8 @@ describe("logical workspace duplicate local records", () => {
     expect(logicalWorkspaces).toHaveLength(2);
     expect(canonical?.localWorkspace?.id).toBe(olderLocal.id);
     expect(canonical?.cloudWorkspace?.id).toBe(cloudWorkspace.id);
-    expect(canonical?.mobilityWorkspace?.id).toBe(mobilityWorkspace.id);
     expect(slot?.localWorkspace?.id).toBe(newerLocal.id);
     expect(slot?.cloudWorkspace).toBeNull();
-    expect(slot?.mobilityWorkspace).toBeNull();
     expect(logicalWorkspaceRelatedIds(canonical!)).toContain(
       buildLocalSlotLogicalWorkspaceId(olderLocal.id),
     );
@@ -298,12 +254,6 @@ describe("logical workspace duplicate local records", () => {
       localWorkspaces: [newerLocal],
       repoRoots: [makeRepoRoot()],
       cloudWorkspaces: [makeCloudWorkspace({ id: "cloud-main", branch: "main" })],
-      cloudMobilityWorkspaces: [makeMobilityWorkspace({
-        id: "mobility-main",
-        owner: "local",
-        branch: "main",
-        cloudWorkspaceId: "cloud-main",
-      })],
       currentSelectionId: null,
     });
     const promoted = findLogicalWorkspace(afterDeletion, staleSlotId);
@@ -311,7 +261,6 @@ describe("logical workspace duplicate local records", () => {
     expect(promoted?.id).toBe("remote:github:proliferate-ai:proliferate:main");
     expect(promoted?.localWorkspace?.id).toBe(newerLocal.id);
     expect(promoted?.cloudWorkspace?.id).toBe("cloud-main");
-    expect(promoted?.mobilityWorkspace?.id).toBe("mobility-main");
     expect(afterDeletion.some((workspace) => workspace.id === staleSlotId)).toBe(false);
   });
 });

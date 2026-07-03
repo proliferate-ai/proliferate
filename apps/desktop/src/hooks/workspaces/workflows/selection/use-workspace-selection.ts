@@ -45,7 +45,6 @@ export function useWorkspaceSelection() {
     ) => {
       const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       const {
-        cloudMobilityWorkspaces,
         coworkStatus,
         workspaceCollections,
       } = getWorkspaceSelectionSnapshot(runtimeUrl);
@@ -62,7 +61,6 @@ export function useWorkspaceSelection() {
           localWorkspaces: standardProjection?.localWorkspaces ?? [],
           repoRoots: standardProjection?.repoRoots ?? [],
           cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
-          cloudMobilityWorkspaces,
           currentSelectionId: useSessionSelectionStore.getState().selectedWorkspaceId,
         })
         : [];

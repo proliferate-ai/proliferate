@@ -1,6 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type {
-  CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
@@ -16,7 +15,6 @@ export interface LogicalWorkspace {
   displayName: string;
   localWorkspace: Workspace | null;
   cloudWorkspace: CloudWorkspaceSummary | null;
-  mobilityWorkspace: CloudMobilityWorkspaceSummary | null;
   aliasIds?: string[];
   preferredMaterializationId: string | null;
   effectiveOwner: "local" | "cloud";

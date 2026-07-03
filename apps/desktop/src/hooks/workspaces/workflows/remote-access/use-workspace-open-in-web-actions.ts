@@ -10,7 +10,6 @@ export function useWorkspaceOpenInWebActions() {
   const { copyText, openExternal } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const cloudWorkspaceId = selectedLogicalWorkspace?.cloudWorkspace?.id
-    ?? selectedLogicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
     ?? null;
   const url = useMemo(() => (
     cloudWorkspaceId

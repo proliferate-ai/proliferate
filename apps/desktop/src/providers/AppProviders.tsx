@@ -4,7 +4,6 @@ import {
   anyHarnessCoworkStatusKey,
 } from "@anyharness/sdk-react";
 import type { CoworkStatus, TerminalWebSocketAuthTransport } from "@anyharness/sdk";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { getProliferateClient } from "@/lib/access/cloud/client";
 import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -26,7 +25,6 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
-import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { resolveRouteScopedWorkspaceProviderId } from "@/lib/domain/workspaces/selection/workspace-provider-scope";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -92,9 +90,6 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
         runtimeUrl,
         authStatus === "authenticated" ? authUserId : null,
       );
-      const cloudMobilityWorkspaces = appQueryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
-        cloudMobilityWorkspacesKey(),
-      );
       const coworkStatus = appQueryClient.getQueryData<CoworkStatus>(
         anyHarnessCoworkStatusKey(runtimeUrl),
       );
@@ -111,7 +106,6 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
           localWorkspaces: standardProjection?.localWorkspaces ?? [],
           repoRoots: standardProjection?.repoRoots ?? [],
           cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
-          cloudMobilityWorkspaces,
           currentSelectionId: selectedWorkspaceId,
         })
         : [];

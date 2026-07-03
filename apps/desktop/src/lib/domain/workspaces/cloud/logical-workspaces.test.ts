@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildLogicalWorkspaces,
@@ -26,41 +25,6 @@ import {
   makeRepoRoot,
   makeWorkspace,
 } from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
-
-function makeMobilityWorkspace(args: {
-  id?: string;
-  owner: "local" | "cloud" | "personal_cloud";
-  branch?: string;
-  cloudWorkspaceId?: string | null;
-}): CloudMobilityWorkspaceSummary {
-  const {
-    id = "mobility-1",
-    owner,
-    branch = "main",
-    cloudWorkspaceId = "cloud-1",
-  } = args;
-
-  return {
-    id,
-    displayName: branch,
-    repo: {
-      provider: "github",
-      owner: "proliferate-ai",
-      name: "proliferate",
-      branch,
-    },
-    owner,
-    lifecycleState: owner === "cloud" ? "cloud_active" : "local_active",
-    statusDetail: null,
-    lastError: null,
-    cloudWorkspaceId,
-    cloudLostAt: null,
-    cloudLostReason: null,
-    activeHandoff: null,
-    updatedAt: "2026-04-13T00:00:00Z",
-    createdAt: "2026-04-13T00:00:00Z",
-  };
-}
 
 describe("logical workspaces", () => {
   it("omits non-selected cloud workspaces that failed before readiness", () => {
@@ -117,78 +81,6 @@ describe("logical workspaces", () => {
 
     expect(logicalWorkspaces).toHaveLength(1);
     expect(logicalWorkspaces[0]?.cloudWorkspace?.id).toBe("cloud-ready-error");
-  });
-
-  it("keeps mobility-only placeholders without throwing", () => {
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      cloudMobilityWorkspaces: [
-        {
-          id: "mobility-1",
-          displayName: "seal",
-          repo: {
-            provider: "github",
-            owner: "proliferate-ai",
-            name: "landing",
-            branch: "seal",
-          },
-          owner: "local",
-          lifecycleState: "moving_to_cloud",
-          statusDetail: "Preparing cloud workspace",
-          lastError: null,
-          cloudWorkspaceId: null,
-          cloudLostAt: null,
-          cloudLostReason: null,
-          activeHandoff: null,
-          updatedAt: "2026-04-13T00:00:00Z",
-          createdAt: "2026-04-13T00:00:00Z",
-        },
-      ],
-      currentSelectionId: null,
-    });
-
-    expect(logicalWorkspaces).toHaveLength(1);
-    expect(logicalWorkspaces[0]?.preferredMaterializationId).toBeNull();
-    expect(resolveLogicalWorkspaceMaterializationId(logicalWorkspaces[0]!)).toBeNull();
-  });
-
-  it("groups mobility-only placeholders by repository identity instead of branch identity", () => {
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      cloudMobilityWorkspaces: [
-        makeMobilityWorkspace({
-          id: "mobility-1",
-          owner: "cloud",
-          branch: "twilight",
-          cloudWorkspaceId: "cloud-1",
-        }),
-        makeMobilityWorkspace({
-          id: "mobility-2",
-          owner: "cloud",
-          branch: "ember",
-          cloudWorkspaceId: "cloud-2",
-        }),
-      ],
-      currentSelectionId: null,
-    });
-
-    expect(logicalWorkspaces).toHaveLength(2);
-    expect(logicalWorkspaces.map((workspace) => workspace.repoKey)).toEqual([
-      "github:proliferate-ai:proliferate",
-      "github:proliferate-ai:proliferate",
-    ]);
-    expect(logicalWorkspaces.map((workspace) => workspace.repoName)).toEqual([
-      "proliferate",
-      "proliferate",
-    ]);
-    expect(logicalWorkspaces.map((workspace) => workspace.branchKey).sort()).toEqual([
-      "ember",
-      "twilight",
-    ]);
   });
 
   it("keeps detached worktree materializations distinct by original branch", () => {
@@ -257,39 +149,6 @@ describe("logical workspaces", () => {
       "local-ant",
       "subagent-polecat",
     ]);
-  });
-
-  it("merges a matching local repo root with mobility-only placeholders in one sidebar group", () => {
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [],
-      repoRoots: [makeRepoRoot({ sourceRoot: "/tmp/proliferate" })],
-      cloudWorkspaces: [],
-      cloudMobilityWorkspaces: [
-        makeMobilityWorkspace({
-          id: "mobility-1",
-          owner: "cloud",
-          branch: "twilight",
-          cloudWorkspaceId: "cloud-1",
-        }),
-        makeMobilityWorkspace({
-          id: "mobility-2",
-          owner: "cloud",
-          branch: "ember",
-          cloudWorkspaceId: "cloud-2",
-        }),
-      ],
-      currentSelectionId: null,
-    });
-
-    const groups = buildGroups({
-      repoRoots: [makeRepoRoot({ sourceRoot: "/tmp/proliferate" })],
-      logicalWorkspaces,
-    });
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.sourceRoot).toBe("/tmp/proliferate");
-    expect(groups[0]?.name).toBe("proliferate");
-    expect(groups[0]?.items.map((item) => item.id)).toHaveLength(2);
   });
 
   it("canonicalizes repo-root-backed local workspaces before merging cloud materializations", () => {
@@ -372,110 +231,6 @@ describe("logical workspaces", () => {
       "remote:github:proliferate-ai:proliferate:porcupine",
       "remote:github:proliferate-ai:proliferate:raven",
     ]);
-  });
-
-  it("honors a local mobility owner over a stale selected cloud materialization", () => {
-    const repoRoot = makeRepoRoot();
-    const localWorkspace = makeWorkspace({
-      id: "local-1",
-      branch: "gannet",
-    });
-    const cloudWorkspace = makeCloudWorkspace({
-      id: "cloud-1",
-      branch: "gannet",
-    });
-    const staleCloudSelectionId = cloudWorkspaceSyntheticId(cloudWorkspace.id);
-
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [localWorkspace],
-      repoRoots: [repoRoot],
-      cloudWorkspaces: [cloudWorkspace],
-      cloudMobilityWorkspaces: [
-        makeMobilityWorkspace({
-          owner: "local",
-          branch: "gannet",
-          cloudWorkspaceId: cloudWorkspace.id,
-        }),
-      ],
-      currentSelectionId: staleCloudSelectionId,
-    });
-
-    expect(logicalWorkspaces).toHaveLength(1);
-    expect(logicalWorkspaces[0]?.preferredMaterializationId).toBe(localWorkspace.id);
-    expect(logicalWorkspaces[0]?.effectiveOwner).toBe("local");
-    expect(resolveLogicalWorkspaceMaterializationId(
-      logicalWorkspaces[0]!,
-      staleCloudSelectionId,
-    )).toBe(localWorkspace.id);
-  });
-
-  it("honors a cloud mobility owner over a stale selected local materialization", () => {
-    const repoRoot = makeRepoRoot();
-    const localWorkspace = makeWorkspace({
-      id: "local-1",
-      branch: "gannet",
-    });
-    const cloudWorkspace = makeCloudWorkspace({
-      id: "cloud-1",
-      branch: "gannet",
-    });
-    const cloudSelectionId = cloudWorkspaceSyntheticId(cloudWorkspace.id);
-
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [localWorkspace],
-      repoRoots: [repoRoot],
-      cloudWorkspaces: [cloudWorkspace],
-      cloudMobilityWorkspaces: [
-        makeMobilityWorkspace({
-          owner: "cloud",
-          branch: "gannet",
-          cloudWorkspaceId: cloudWorkspace.id,
-        }),
-      ],
-      currentSelectionId: localWorkspace.id,
-    });
-
-    expect(logicalWorkspaces).toHaveLength(1);
-    expect(logicalWorkspaces[0]?.preferredMaterializationId).toBe(cloudSelectionId);
-    expect(logicalWorkspaces[0]?.effectiveOwner).toBe("cloud");
-    expect(resolveLogicalWorkspaceMaterializationId(
-      logicalWorkspaces[0]!,
-      localWorkspace.id,
-    )).toBe(cloudSelectionId);
-  });
-
-  it("prefers the mobility-linked cloud workspace over an archived duplicate branch", () => {
-    const archivedCloudWorkspace = makeCloudWorkspace({
-      id: "cloud-archived",
-      branch: "main",
-      status: "archived",
-      productLifecycle: "archived",
-      updatedAt: "2026-04-13T11:00:00Z",
-    });
-    const activeCloudWorkspace = makeCloudWorkspace({
-      id: "cloud-active",
-      branch: "main",
-      updatedAt: "2026-04-13T10:00:00Z",
-    });
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [],
-      repoRoots: [],
-      cloudWorkspaces: [activeCloudWorkspace, archivedCloudWorkspace],
-      cloudMobilityWorkspaces: [
-        makeMobilityWorkspace({
-          owner: "cloud",
-          branch: "main",
-          cloudWorkspaceId: activeCloudWorkspace.id,
-        }),
-      ],
-      currentSelectionId: cloudWorkspaceSyntheticId(archivedCloudWorkspace.id),
-    });
-
-    expect(logicalWorkspaces).toHaveLength(1);
-    expect(logicalWorkspaces[0]?.cloudWorkspace?.id).toBe(activeCloudWorkspace.id);
-    expect(logicalWorkspaces[0]?.preferredMaterializationId).toBe(
-      cloudWorkspaceSyntheticId(activeCloudWorkspace.id),
-    );
   });
 
   it("prefers an active cloud workspace over a selected archived duplicate", () => {
@@ -610,13 +365,6 @@ describe("logical workspaces", () => {
       localWorkspaces: [localWorkspace],
       repoRoots: [repoRoot],
       cloudWorkspaces: [cloudWorkspace],
-      cloudMobilityWorkspaces: [
-        makeMobilityWorkspace({
-          owner: "personal_cloud",
-          branch: "main",
-          cloudWorkspaceId: cloudWorkspace.id,
-        }),
-      ],
       currentSelectionId: cloudAliasId,
     })[0]!;
 

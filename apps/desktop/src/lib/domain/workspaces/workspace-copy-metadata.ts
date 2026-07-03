@@ -45,7 +45,6 @@ export function workspaceCopyMetadataForLogicalWorkspace(
   const branchName = firstTrimmed([
     localWorkspace ? workspaceCurrentBranchName(localWorkspace) : null,
     workspace?.cloudWorkspace?.repo.branch,
-    workspace?.mobilityWorkspace?.repo.branch,
     workspace?.branchKey,
   ]);
 
@@ -59,11 +58,6 @@ function resolveRepositoryIdentity(workspace: LogicalWorkspace): string | null {
   const cloudRepo = formatRepoIdentity(workspace.cloudWorkspace?.repo);
   if (cloudRepo) {
     return cloudRepo;
-  }
-
-  const mobilityRepo = formatRepoIdentity(workspace.mobilityWorkspace?.repo);
-  if (mobilityRepo) {
-    return mobilityRepo;
   }
 
   const owner = workspace.owner?.trim();

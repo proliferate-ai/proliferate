@@ -5,8 +5,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
-import { cloudBillingKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
+import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
@@ -16,7 +15,6 @@ import {
 
 export interface WorkspaceSelectionCacheSnapshot {
   workspaceCollections: WorkspaceCollections | undefined;
-  cloudMobilityWorkspaces: CloudMobilityWorkspaceSummary[] | undefined;
   coworkStatus: CoworkStatus | undefined;
 }
 
@@ -39,9 +37,6 @@ export function useWorkspaceSelectionCache() {
       queryClient,
       runtimeUrl,
       authStatus === "authenticated" ? authUserId : null,
-    ),
-    cloudMobilityWorkspaces: queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
-      cloudMobilityWorkspacesKey(),
     ),
     coworkStatus: queryClient.getQueryData<CoworkStatus>(
       anyHarnessCoworkStatusKey(runtimeUrl),

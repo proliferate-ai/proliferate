@@ -23,9 +23,7 @@ export function logicalWorkspaceTargetMaterializationId(
 export function resolvePreferredLogicalWorkspaceMaterialization(
   localWorkspace: LogicalWorkspace["localWorkspace"],
   cloudWorkspace: LogicalWorkspace["cloudWorkspace"],
-  mobilityWorkspace: LogicalWorkspace["mobilityWorkspace"],
   currentSelectionId: string | null,
-  effectiveOwnerHint: "local" | "cloud" | null,
 ): { workspaceId: string | null; owner: "local" | "cloud" } {
   const cloudWorkspaceUsesRuntime = cloudWorkspace
     ? cloudWorkspaceUsesCloudRuntime(cloudWorkspace)
@@ -33,28 +31,13 @@ export function resolvePreferredLogicalWorkspaceMaterialization(
   const directTargetId = cloudWorkspace
     ? logicalWorkspaceTargetMaterializationId({ cloudWorkspace })
     : null;
-  const managedCloudId = cloudWorkspace
-    ? cloudWorkspaceUsesRuntime
-      ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
-      : null
-    : mobilityWorkspace?.cloudWorkspaceId
-      ? cloudWorkspaceSyntheticId(mobilityWorkspace.cloudWorkspaceId)
-      : null;
+  const managedCloudId = cloudWorkspace && cloudWorkspaceUsesRuntime
+    ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
+    : null;
   const cloudId = directTargetId ?? managedCloudId;
   const fallbackOwner = cloudWorkspace && !cloudWorkspaceUsesRuntime
     ? "local"
     : "cloud";
-
-  if (effectiveOwnerHint === "local" && localWorkspace) {
-    return { workspaceId: localWorkspace.id, owner: "local" };
-  }
-
-  if (effectiveOwnerHint === "cloud" && cloudId) {
-    return {
-      workspaceId: cloudId,
-      owner: "cloud",
-    };
-  }
 
   if (localWorkspace && currentSelectionId === localWorkspace.id) {
     return { workspaceId: localWorkspace.id, owner: "local" };
@@ -83,29 +66,19 @@ export function resolveLogicalWorkspaceMaterializationId(
   const selected = resolvePreferredLogicalWorkspaceMaterialization(
     workspace.localWorkspace,
     workspace.cloudWorkspace,
-    workspace.mobilityWorkspace,
     currentSelectionId ?? null,
-    workspace.mobilityWorkspace?.owner === "local" || workspace.mobilityWorkspace?.owner === "cloud"
-      ? workspace.mobilityWorkspace.owner
-      : null,
   );
   return selected.workspaceId;
 }
 
 export function logicalWorkspaceCloudMaterializationId(
-  workspace: Pick<LogicalWorkspace, "cloudWorkspace" | "mobilityWorkspace">,
+  workspace: Pick<LogicalWorkspace, "cloudWorkspace">,
 ): string | null {
-  if (workspace.cloudWorkspace) {
-    return cloudWorkspaceSyntheticId(workspace.cloudWorkspace.id);
-  }
-  if (workspace.mobilityWorkspace?.cloudWorkspaceId) {
-    return cloudWorkspaceSyntheticId(workspace.mobilityWorkspace.cloudWorkspaceId);
-  }
-  return null;
+  return workspace.cloudWorkspace ? cloudWorkspaceSyntheticId(workspace.cloudWorkspace.id) : null;
 }
 
 export function logicalWorkspaceCloudRuntimeMaterializationId(
-  workspace: Pick<LogicalWorkspace, "cloudWorkspace" | "mobilityWorkspace">,
+  workspace: Pick<LogicalWorkspace, "cloudWorkspace">,
 ): string | null {
   if (workspace.cloudWorkspace && !cloudWorkspaceUsesCloudRuntime(workspace.cloudWorkspace)) {
     return null;

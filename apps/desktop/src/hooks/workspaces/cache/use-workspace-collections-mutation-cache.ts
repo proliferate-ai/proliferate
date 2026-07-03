@@ -2,10 +2,8 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type {
-  CloudMobilityWorkspaceSummary,
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
-import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import {
   buildWorkspaceCollections,
   type WorkspaceCollections,
@@ -103,22 +101,6 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
 
   const upsertCloudWorkspace = useCallback((workspace: CloudWorkspaceDetail) => {
     upsertCloudWorkspaceForRuntime(queryClient, runtimeUrl, workspace, authUserId);
-    queryClient.setQueryData<CloudMobilityWorkspaceSummary[] | undefined>(
-      cloudMobilityWorkspacesKey(),
-      (workspaces) => workspaces?.map((candidate) => (
-        candidate.cloudWorkspaceId === workspace.id
-          ? {
-            ...candidate,
-            displayName: workspace.displayName,
-            repo: {
-              ...candidate.repo,
-              branch: workspace.repo.branch,
-            },
-            updatedAt: workspace.updatedAt,
-          }
-          : candidate
-      )),
-    );
   }, [authUserId, queryClient, runtimeUrl]);
 
   return {

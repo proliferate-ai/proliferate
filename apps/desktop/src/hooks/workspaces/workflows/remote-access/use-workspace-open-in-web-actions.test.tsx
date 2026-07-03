@@ -10,8 +10,7 @@ const hookMocks = vi.hoisted(() => ({
   showToast: vi.fn(),
   selectedLogicalWorkspace: {
     cloudWorkspace: { id: "cloud-workspace-1" },
-    mobilityWorkspace: null,
-  } as { cloudWorkspace: { id: string } | null; mobilityWorkspace: { cloudWorkspaceId: string } | null } | null,
+  } as { cloudWorkspace: { id: string } | null } | null,
 }));
 
 vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
@@ -45,7 +44,6 @@ describe("useWorkspaceOpenInWebActions", () => {
     hookMocks.showToast.mockClear();
     hookMocks.selectedLogicalWorkspace = {
       cloudWorkspace: { id: "cloud-workspace-1" },
-      mobilityWorkspace: null,
     };
   });
 
