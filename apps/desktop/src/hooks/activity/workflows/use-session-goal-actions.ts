@@ -33,9 +33,21 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
   const activeSessionId = useActiveSessionId();
   const setGoalMutation = useSetSessionGoalMutation();
   const clearGoalMutation = useClearSessionGoalMutation();
-  const beginComposing = useGoalBarStore((state) => state.beginComposing);
-  const endComposing = useGoalBarStore((state) => state.endComposing);
+  const beginComposingInStore = useGoalBarStore((state) => state.beginComposing);
+  const endComposingInStore = useGoalBarStore((state) => state.endComposing);
   const dismissResultInStore = useGoalBarStore((state) => state.dismissResult);
+
+  const beginComposing = useCallback(() => {
+    if (activeSessionId) {
+      beginComposingInStore(activeSessionId);
+    }
+  }, [activeSessionId, beginComposingInStore]);
+
+  const endComposing = useCallback(() => {
+    if (activeSessionId) {
+      endComposingInStore(activeSessionId);
+    }
+  }, [activeSessionId, endComposingInStore]);
 
   const resolveGoalTarget = useCallback(() => {
     if (!activeSessionId) {
@@ -67,7 +79,7 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
       })
       .then((response) => {
         patchSessionRecord(target.clientSessionId, { activeGoal: response.goal });
-        endComposing();
+        endComposingInStore(target.clientSessionId);
       })
       .catch((error) => {
         logLatency("session.goal.set.failed", {
@@ -75,7 +87,7 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
           message: error instanceof Error ? error.message : String(error),
         });
       });
-  }, [endComposing, resolveGoalTarget, setGoalMutation]);
+  }, [endComposing, endComposingInStore, resolveGoalTarget, setGoalMutation]);
 
   const setArmState = useCallback((status: GoalArmState) => {
     const target = resolveGoalTarget();
@@ -130,11 +142,11 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
   }, [clearGoalMutation, resolveGoalTarget]);
 
   const dismissResult = useCallback(() => {
-    if (!goal) {
+    if (!goal || !activeSessionId) {
       return;
     }
-    dismissResultInStore(goalResultDismissKey(goal.status, goal.updatedAtMs));
-  }, [dismissResultInStore, goal]);
+    dismissResultInStore(activeSessionId, goalResultDismissKey(goal.status, goal.updatedAtMs));
+  }, [activeSessionId, dismissResultInStore, goal]);
 
   const pendingWrite = setGoalMutation.isPending || clearGoalMutation.isPending;
 

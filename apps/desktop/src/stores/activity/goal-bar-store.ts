@@ -1,28 +1,59 @@
 import { create } from "zustand";
 
 interface GoalBarState {
-  /** The composer's "Set a goal" affordance opened the empty-state editor. */
-  composing: boolean;
   /**
-   * Identity of the sticky met/blocked/failed result the user dismissed.
-   * A new goal (new updatedAtMs) produces a new key, so the bar returns.
+   * Per-session compose flag: the composer's "Set a goal" affordance opened
+   * the empty-state editor for that session. Keyed by client session id so
+   * opening compose on one session tab never leaks the editor onto another.
    */
-  dismissedResultKey: string | null;
-  beginComposing: () => void;
-  endComposing: () => void;
-  dismissResult: (key: string) => void;
+  composingBySessionId: Record<string, boolean>;
+  /**
+   * Per-session identity of the sticky met/blocked/failed result the user
+   * dismissed. A new goal (new updatedAtMs) produces a new key, so the bar
+   * returns. Keyed by client session id so a dismissal on one session cannot
+   * suppress another session's result.
+   */
+  dismissedResultKeyBySessionId: Record<string, string | null>;
+  beginComposing: (sessionId: string) => void;
+  endComposing: (sessionId: string) => void;
+  dismissResult: (sessionId: string, key: string) => void;
 }
 
 export const useGoalBarStore = create<GoalBarState>((set) => ({
-  composing: false,
-  dismissedResultKey: null,
+  composingBySessionId: {},
+  dismissedResultKeyBySessionId: {},
 
-  beginComposing: () => set({ composing: true }),
+  beginComposing: (sessionId) =>
+    set((state) => ({
+      composingBySessionId: { ...state.composingBySessionId, [sessionId]: true },
+    })),
 
-  endComposing: () => set({ composing: false }),
+  endComposing: (sessionId) =>
+    set((state) => ({
+      composingBySessionId: { ...state.composingBySessionId, [sessionId]: false },
+    })),
 
-  dismissResult: (key) => set({ dismissedResultKey: key }),
+  dismissResult: (sessionId, key) =>
+    set((state) => ({
+      dismissedResultKeyBySessionId: {
+        ...state.dismissedResultKeyBySessionId,
+        [sessionId]: key,
+      },
+    })),
 }));
+
+/** Whether the given session's empty-state goal editor is open. */
+export function selectComposing(state: GoalBarState, sessionId: string | null): boolean {
+  return sessionId ? state.composingBySessionId[sessionId] ?? false : false;
+}
+
+/** The dismissed sticky-result key for the given session, if any. */
+export function selectDismissedResultKey(
+  state: GoalBarState,
+  sessionId: string | null,
+): string | null {
+  return sessionId ? state.dismissedResultKeyBySessionId[sessionId] ?? null : null;
+}
 
 export function goalResultDismissKey(status: string, updatedAtMs: number): string {
   return `${status}:${updatedAtMs}`;
