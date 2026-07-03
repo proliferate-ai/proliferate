@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useContext } from "react";
 import type { AnyHarnessClientConnection } from "../lib/client-cache.js";
 
-interface AnyHarnessRuntimeContextValue {
+export interface AnyHarnessRuntimeContextValue {
   runtimeUrl: string | null;
   authToken?: string | null;
 }

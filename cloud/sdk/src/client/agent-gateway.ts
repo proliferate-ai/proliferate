@@ -10,6 +10,7 @@ import type {
   AgentGatewayCatalogOverride,
   AgentGatewayEnrollment,
   CreateAgentApiKeyRequest,
+  MirrorAgentGatewayCatalogRequest,
   OrgAgentPolicy,
   OrgAgentPolicyViolationListResponse,
   PutAuthSelectionsRequest,
@@ -123,6 +124,18 @@ export async function refreshAgentCatalog(
   return client.requestJson<AgentGatewayCatalog>({
     method: "POST",
     path: `${catalogPath(harnessKind)}/refresh`,
+    body: input,
+  });
+}
+
+export async function mirrorAgentCatalog(
+  harnessKind: string,
+  input: MirrorAgentGatewayCatalogRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AgentGatewayCatalog> {
+  return client.requestJson<AgentGatewayCatalog>({
+    method: "POST",
+    path: `${catalogPath(harnessKind)}/mirror`,
     body: input,
   });
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   catalogRouteForSurface,
   defaultRouteForSurface,
+  normalizeGatewayModels,
 } from "./harness-catalog";
 
 function selection(
@@ -62,5 +63,39 @@ describe("catalogRouteForSurface", () => {
       selection({ id: "other-harness", harnessKind: "codex", sourceKind: "gateway", apiKeyId: null, envVarName: null }),
     ]);
     expect(route).toBe("native");
+  });
+});
+
+describe("normalizeGatewayModels", () => {
+  it("treats every runtime-resolved model id as enabled with no display metadata", () => {
+    expect(normalizeGatewayModels(["claude-sonnet-4-5", "claude-haiku-4-5"])).toEqual([
+      {
+        id: "claude-sonnet-4-5",
+        displayName: "claude-sonnet-4-5",
+        description: null,
+        provider: null,
+        enabled: true,
+      },
+      {
+        id: "claude-haiku-4-5",
+        displayName: "claude-haiku-4-5",
+        description: null,
+        provider: null,
+        enabled: true,
+      },
+    ]);
+  });
+
+  it("drops empty ids and returns an empty list for no models", () => {
+    expect(normalizeGatewayModels(["", "gpt-5.5"])).toEqual([
+      {
+        id: "gpt-5.5",
+        displayName: "gpt-5.5",
+        description: null,
+        provider: null,
+        enabled: true,
+      },
+    ]);
+    expect(normalizeGatewayModels([])).toEqual([]);
   });
 });

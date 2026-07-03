@@ -329,18 +329,27 @@ impl SessionRuntime {
         // render the route layer for this harness. Absent file = empty layer
         // (legacy/native); a scoped file with no selection fails the launch
         // closed with a typed error (spec §3).
-        let route_auth = resolve_launch_route_auth(&self.runtime_home, &record.agent_kind)
-            .map_err(|error| {
-                tracing::warn!(
-                    session_id = %record.id,
-                    workspace_id = %record.workspace_id,
-                    agent_kind = %record.agent_kind,
-                    code = error.code(),
-                    error = %error,
-                    "agent-auth route resolution failed; refusing launch"
-                );
-                StartSessionError::RouteAuth(error)
-            })?;
+        let route_auth = resolve_launch_route_auth(
+            &self.runtime_home,
+            &record.agent_kind,
+            self.gateway_model_resolver.as_ref(),
+        )
+        .map_err(|error| {
+            tracing::warn!(
+                session_id = %record.id,
+                workspace_id = %record.workspace_id,
+                agent_kind = %record.agent_kind,
+                code = error.code(),
+                error = %error,
+                "agent-auth route resolution failed; refusing launch"
+            );
+            StartSessionError::RouteAuth(error)
+        })?;
+        // Launch-time lazy trigger (spec §2c): if the current revision has no
+        // probe row, kick a background probe so the next launch has fresh data.
+        // Never blocks this launch — it already used seed data above.
+        self.gateway_model_resolver
+            .schedule_launch_probe_if_stale(&record.agent_kind, &self.runtime_home);
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,

@@ -116,6 +116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{kind}/catalog/gateway-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_gateway_models"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/catalog/refresh-gateway": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_gateway_models"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{kind}/install": {
         parameters: {
             query?: never;
@@ -2351,6 +2383,15 @@ export interface components {
         };
         /** @enum {string} */
         ForkSessionTargetType: "before_user_message";
+        /** @description Resolved gateway model plan for the local surface. */
+        GatewayModelsResponse: {
+            /** @description The resolved, provider-filtered model ids (probe rows or catalog seed). */
+            models: string[];
+            /** @description When a probe supplied the list (RFC3339); absent for seed. */
+            probedAt?: string | null;
+            /** @description `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list). */
+            source: string;
+        };
         /** @description Response payload for fetching the current live session config snapshot. */
         GetSessionLiveConfigResponse: {
             liveConfig?: null | components["schemas"]["SessionLiveConfigSnapshot"];
@@ -3259,6 +3300,16 @@ export interface components {
         ReconcileJobStatus: "idle" | "queued" | "running" | "completed" | "failed";
         /** @enum {string} */
         ReconcileOutcome: "installed" | "already_installed" | "skipped" | "failed";
+        /** @description Result of a manual gateway refresh. */
+        RefreshGatewayResponse: {
+            /**
+             * @description The freshly probed model ids (unfiltered — exactly what the gateway
+             *     returned; the resolver applies provider filtering when building plans).
+             */
+            models: string[];
+            /** @description The probe timestamp (RFC3339). */
+            probedAt: string;
+        };
         RenameWorkspaceFileEntryRequest: {
             newPath: string;
             path: string;
@@ -4563,6 +4614,70 @@ export interface operations {
             };
             /** @description Agent not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_gateway_models: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved gateway model plan (probe or seed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GatewayModelsResponse"];
+                };
+            };
+        };
+    };
+    refresh_gateway_models: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gateway re-probed and recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshGatewayResponse"];
+                };
+            };
+            /** @description No gateway selection for this harness */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Gateway probe failed */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

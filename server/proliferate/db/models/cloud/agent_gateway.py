@@ -243,7 +243,7 @@ class AgentCatalogSnapshot(Base):
             name="ck_agent_catalog_snapshot_route",
         ),
         CheckConstraint(
-            "source IN ('probe', 'seed', 'override')",
+            "source IN ('probe', 'seed', 'override', 'runtime-mirror')",
             name="ck_agent_catalog_snapshot_source",
         ),
         Index(

@@ -71,6 +71,12 @@ export type {
 } from "./types/agents.js";
 
 export type {
+  GatewayModelSource,
+  GatewayModelsResponse,
+  RefreshGatewayModelsResponse,
+} from "./types/agent-gateway-catalog.js";
+
+export type {
   RepoRootKind,
   RepoRoot,
   ResolveRepoRootFromPathRequest,

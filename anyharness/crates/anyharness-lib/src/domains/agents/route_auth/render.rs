@@ -21,30 +21,9 @@ use serde_json::json;
 use crate::domains::agents::model::AgentKind;
 
 use super::materialize::{self, FileSpec, PathFamily};
+use super::plan::GatewayModelPlan;
 use super::profile::{AgentRuntimeAuthProfile, GatewayProfile, HarnessSources, ResolvedSource};
 use super::RouteAuthError;
-
-/// A sensible default small/fast model for Claude's sidecar calls when the
-/// gateway route is active. Versioned so the proxy model_list resolves it (see
-/// HARNESS-MATRIX.md §3: the CLI's ambient small-fast model is otherwise not in
-/// the gateway config and 400s). Dies in P3, not P1.
-const CLAUDE_DEFAULT_SMALL_FAST_MODEL: &str = "claude-haiku-4-5-20251001";
-
-/// Default model written into the codex gateway config.toml. Codex refuses to
-/// launch without a `model` and otherwise falls back to a codex-native default
-/// id the gateway does not serve (HARNESS-MATRIX codex recipe). A
-/// gateway-served versioned Anthropic id is used. Dies in P3, not P1.
-const CODEX_DEFAULT_MODEL: &str = "claude-sonnet-4-5-20250929";
-
-/// The OpenCode gateway model list. P1 always uses this static list (the
-/// runtime catalog that would populate it lands in P3). Mirrors the gateway
-/// config's Anthropic entries so a bare launch resolves at least one model.
-const OPENCODE_FALLBACK_MODELS: &[&str] = &[
-    "claude-sonnet-4-5",
-    "claude-sonnet-4-5-20250929",
-    "claude-haiku-4-5",
-    "claude-haiku-4-5-20251001",
-];
 
 /// The rendered launch delta for a route-auth profile (two-phase, contract §4).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -74,20 +53,23 @@ impl RenderedRouteAuth {
 /// described in [`RenderedRouteAuth::files`] for the launcher to apply.
 pub fn render_profile(
     profile: &AgentRuntimeAuthProfile,
+    plan: &GatewayModelPlan,
     runtime_home: &Path,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     match profile {
         AgentRuntimeAuthProfile::Native => Ok(RenderedRouteAuth::default()),
-        AgentRuntimeAuthProfile::Sources(sources) => render_sources(sources, runtime_home),
+        AgentRuntimeAuthProfile::Sources(sources) => render_sources(sources, plan, runtime_home),
     }
 }
 
 /// Compose a harness's enabled sources into one additive launch delta. Each
 /// `api_key` source rides its free-form env var; each `gateway` source runs the
-/// per-harness recipe. The server validated legality, so ordering/count are
+/// per-harness recipe (consuming the catalog-resolved [`GatewayModelPlan`] for
+/// model values, spec §3). The server validated legality, so ordering/count are
 /// trusted here.
 fn render_sources(
     sources: &HarnessSources,
+    plan: &GatewayModelPlan,
     runtime_home: &Path,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let mut rendered = RenderedRouteAuth::default();
@@ -100,6 +82,7 @@ fn render_sources(
             ResolvedSource::Gateway(profile) => render_gateway(
                 &sources.harness_kind,
                 profile,
+                plan,
                 sources.revision,
                 runtime_home,
                 &mut rendered,
@@ -122,15 +105,20 @@ fn parse_harness(harness_kind: &str) -> Result<AgentKind, RouteAuthError> {
 fn render_gateway(
     harness_kind: &str,
     profile: &GatewayProfile,
+    plan: &GatewayModelPlan,
     revision: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
     let kind = parse_harness(harness_kind)?;
     match kind {
-        AgentKind::Claude => render_claude_gateway(profile, revision, runtime_home, rendered),
-        AgentKind::Codex => render_codex_gateway(profile, revision, runtime_home, rendered),
-        AgentKind::OpenCode => render_opencode_gateway(profile, revision, runtime_home, rendered),
+        AgentKind::Claude => render_claude_gateway(profile, plan, revision, runtime_home, rendered),
+        AgentKind::Codex => {
+            render_codex_gateway(harness_kind, profile, plan, revision, runtime_home, rendered)
+        }
+        AgentKind::OpenCode => {
+            render_opencode_gateway(harness_kind, profile, plan, revision, runtime_home, rendered)
+        }
         AgentKind::Grok => render_grok_gateway(profile, revision, runtime_home, rendered),
         AgentKind::Cursor => Err(RouteAuthError::UnsupportedRoute {
             harness_kind: harness_kind.to_string(),
@@ -141,6 +129,7 @@ fn render_gateway(
 
 fn render_claude_gateway(
     profile: &GatewayProfile,
+    plan: &GatewayModelPlan,
     revision: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
@@ -149,10 +138,13 @@ fn render_claude_gateway(
     // root (the CLI hits POST /v1/messages under ANTHROPIC_BASE_URL).
     rendered.set("ANTHROPIC_BASE_URL", trim_trailing_slash(&profile.base_url));
     rendered.set("ANTHROPIC_AUTH_TOKEN", &profile.key);
-    rendered.set(
-        "ANTHROPIC_SMALL_FAST_MODEL",
-        CLAUDE_DEFAULT_SMALL_FAST_MODEL,
-    );
+    // Small/fast sidecar model: the catalog's `gatewayPolicy.roles.small_fast`
+    // pin (HARNESS-MATRIX.md §3: the CLI's ambient small-fast model is otherwise
+    // not in the gateway config and 400s). Skip the var entirely when the
+    // catalog carries no pin — an absent override lets the CLI use its default.
+    if let Some(small_fast) = plan.small_fast_model.as_deref() {
+        rendered.set("ANTHROPIC_SMALL_FAST_MODEL", small_fast);
+    }
     // Point CLAUDE_CONFIG_DIR at an isolated dir (materialized) so the CLI does
     // not read an ambient `~/.claude` that could carry stale provider/auth
     // settings and defeat the env sanitization below. Not revision-keyed — it
@@ -200,11 +192,25 @@ fn sanitize_claude_ambient(rendered: &mut RenderedRouteAuth) {
 }
 
 fn render_codex_gateway(
+    harness_kind: &str,
     profile: &GatewayProfile,
+    plan: &GatewayModelPlan,
     revision: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
+    // Codex refuses to launch without a `model` and otherwise falls back to a
+    // codex-native id the gateway cannot serve, so the catalog MUST carry the
+    // gateway default (`defaults["gateway"]`, spec §3). Error rather than write
+    // a config the CLI will reject.
+    let default_model = plan.default_model.as_deref().ok_or_else(|| {
+        RouteAuthError::SelectionIncomplete {
+            harness_kind: harness_kind.to_string(),
+            detail: "codex gateway requires a default model from the catalog \
+                     gatewayPolicy (defaults[\"gateway\"])"
+                .to_string(),
+        }
+    })?;
     // Isolated CODEX_HOME with a config.toml pointing at the proliferate
     // provider (wire_api=responses). The provider config references
     // PROLIFERATE_GATEWAY_KEY via env_key, so no `codex login` is needed.
@@ -222,18 +228,20 @@ fn render_codex_gateway(
     rendered.files.push(FileSpec {
         path_family: PathFamily::CodexHome,
         revision,
-        contents: Some(codex_config_toml(&profile.base_url).into_bytes()),
+        contents: Some(codex_config_toml(&profile.base_url, default_model).into_bytes()),
     });
     Ok(())
 }
 
 /// Build the codex gateway config.toml. Written by hand (small, deterministic)
-/// so the snapshot test can assert exact content without a toml serializer.
-fn codex_config_toml(base_url: &str) -> String {
+/// so the snapshot test can assert exact content without a toml serializer. The
+/// `default_model` is the catalog-resolved gateway default (spec §3), never a
+/// Rust constant.
+fn codex_config_toml(base_url: &str, default_model: &str) -> String {
     let base_url = format!("{}/v1", trim_trailing_slash(base_url));
     format!(
         "model_provider = \"proliferate\"\n\
-         model = \"{CODEX_DEFAULT_MODEL}\"\n\
+         model = \"{default_model}\"\n\
          \n\
          [model_providers.proliferate]\n\
          name = \"Proliferate Gateway\"\n\
@@ -244,11 +252,25 @@ fn codex_config_toml(base_url: &str) -> String {
 }
 
 fn render_opencode_gateway(
+    harness_kind: &str,
     profile: &GatewayProfile,
+    plan: &GatewayModelPlan,
     revision: i64,
     runtime_home: &Path,
     rendered: &mut RenderedRouteAuth,
 ) -> Result<(), RouteAuthError> {
+    // opencode requires an explicit models map in-config; the catalog-resolved
+    // plan supplies it (latest probe rows else gatewayPolicy.seedModels, spec
+    // §3). An empty list means the harness has no launchable model — error
+    // rather than write a config with an empty provider.
+    if plan.models.is_empty() {
+        return Err(RouteAuthError::SelectionIncomplete {
+            harness_kind: harness_kind.to_string(),
+            detail: "opencode gateway requires at least one model (catalog \
+                     gatewayPolicy.seedModels or a live gateway probe)"
+                .to_string(),
+        });
+    }
     // opencode reads config from an explicit file path via OPENCODE_CONFIG. We
     // materialize opencode.json (provider proliferate, openai-compatible,
     // baseURL, apiKey {env:PROLIFERATE_GATEWAY_KEY}, explicit models map) into
@@ -276,19 +298,20 @@ fn render_opencode_gateway(
     rendered.files.push(FileSpec {
         path_family: PathFamily::OpencodeConfig,
         revision,
-        contents: Some(opencode_config_json(&profile.base_url)?),
+        contents: Some(opencode_config_json(&profile.base_url, &plan.models)?),
     });
     Ok(())
 }
 
-/// Build the opencode gateway config JSON. The models map is the static P1
-/// fallback list (the runtime catalog lands in P3). Contains ONLY our provider
-/// so opencode's config-layer merge ADDS it to the user's own local providers.
-fn opencode_config_json(base_url: &str) -> Result<Vec<u8>, RouteAuthError> {
+/// Build the opencode gateway config JSON. The models map is the catalog-resolved
+/// plan list (latest probe rows else `gatewayPolicy.seedModels`, spec §3), never
+/// a Rust constant. Contains ONLY our provider so opencode's config-layer merge
+/// ADDS it to the user's own local providers.
+fn opencode_config_json(base_url: &str, models: &[String]) -> Result<Vec<u8>, RouteAuthError> {
     let base_url = format!("{}/v1", trim_trailing_slash(base_url));
-    let models_map: serde_json::Map<String, serde_json::Value> = OPENCODE_FALLBACK_MODELS
+    let models_map: serde_json::Map<String, serde_json::Value> = models
         .iter()
-        .map(|model| ((*model).to_string(), json!({})))
+        .map(|model| (model.clone(), json!({})))
         .collect();
     let config = json!({
         "provider": {

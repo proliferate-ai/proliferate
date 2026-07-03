@@ -43,6 +43,22 @@ export function normalizeCatalogModels(
   return normalized;
 }
 
+// The runtime's resolved gateway model list (contract §5) is just ids — no
+// display metadata and no override layering (the runtime doesn't know about
+// cloud catalog overrides). Treat every resolved model as enabled; the grid
+// disables the toggle for this source (see HarnessAllModelsSection).
+export function normalizeGatewayModels(modelIds: readonly string[]): HarnessCatalogModel[] {
+  return modelIds
+    .filter((id) => id.length > 0)
+    .map((id) => ({
+      id,
+      displayName: id,
+      description: null,
+      provider: null,
+      enabled: true,
+    }));
+}
+
 // Overrides have no GET endpoint, so the enabled-set is reconstructed from the
 // layered catalog (this pane is the only override writer) and re-upserted as a
 // whole `update` patch on every toggle.

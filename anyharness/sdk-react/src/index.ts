@@ -28,6 +28,7 @@ export {
   anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessReconcileAgentsMutationKey,
+  anyHarnessAgentGatewayModelsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
@@ -88,6 +89,11 @@ export {
   useCloseAgentLoginTerminalMutation,
   useReconcileAgentsMutation,
 } from "./hooks/agents.js";
+export {
+  useAgentGatewayModelsQuery,
+  useAgentGatewayModelsQueries,
+  useRefreshAgentGatewayModelsMutation,
+} from "./hooks/agent-gateway-catalog.js";
 export {
   useRepoRootsQuery,
   useReadRepoRootFileMutation,
