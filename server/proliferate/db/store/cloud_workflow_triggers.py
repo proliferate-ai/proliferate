@@ -319,7 +319,10 @@ async def disable_trigger_with_reason(
     if row is None:
         return
     row.enabled = False
-    row.next_run_at = None
+    # Keep the cursor: a schedule trigger must always carry next_run_at (the
+    # ck_workflow_trigger_schedule_fields CHECK forbids NULL). Disabling is done via
+    # enabled=False alone — the due-selection queries already filter on enabled — so
+    # nulling next_run_at is both unnecessary and constraint-violating.
     row.last_skipped_at = now
     row.last_skip_reason = reason
     row.updated_at = utcnow()

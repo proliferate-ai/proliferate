@@ -184,7 +184,13 @@ async def _fire_due_triggers(
         due_ids = await trigger_store.list_due_schedule_trigger_ids(db, now=now, limit=batch_size)
     created = 0
     for trigger_id in due_ids:
-        created += await _fire_one_trigger(session_factory, trigger_id=trigger_id, now=now)
+        try:
+            created += await _fire_one_trigger(session_factory, trigger_id=trigger_id, now=now)
+        except Exception:
+            # One trigger blowing up must not stall the rest of the beat (mirrors the
+            # per-run isolation in _deliver_pending_runs). The trigger keeps its slot
+            # and is retried next tick.
+            logger.exception("workflow scheduled trigger fire failed trigger_id=%s", trigger_id)
     return created
 
 

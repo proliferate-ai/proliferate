@@ -406,6 +406,40 @@ async def test_tick_skip_policy_records_skip(
     assert trigger.next_run_at is not None and trigger.next_run_at > utcnow()
 
 
+async def test_tick_disables_trigger_when_workflow_archived(
+    session_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A due schedule trigger whose workflow was archived is disabled cleanly.
+
+    Regression: disabling must NOT null out next_run_at — the
+    ck_workflow_trigger_schedule_fields CHECK requires a schedule trigger to always
+    carry a cursor, so nulling it raised an IntegrityError that aborted the whole
+    beat. Disabling via enabled=False alone stops scheduling.
+    """
+    trigger_id, workflow_id = await _seed_trigger(session_factory, concurrency="skip")
+    async with session_factory() as db, db.begin():
+        await store.archive_workflow(db, workflow_id)
+    await _make_due(session_factory, trigger_id)
+    _patch_gateway(monkeypatch)
+    seen = _patch_client(monkeypatch, lambda req: httpx.Response(202))
+
+    # Must not raise (previously an IntegrityError from a NULL next_run_at).
+    result = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
+
+    assert result.created_runs == 0
+    assert result.delivered_runs == 0
+    assert len(seen) == 0
+    async with session_factory() as db:
+        trigger = await trigger_store.get_trigger(db, trigger_id)
+    assert trigger is not None
+    assert trigger.enabled is False  # disabled -> no longer scheduled
+    assert trigger.next_run_at is not None  # cursor preserved (CHECK invariant)
+    assert trigger.last_skip_reason == "Workflow was archived."
+    # A disabled trigger is no longer selected as due, so a second tick is a no-op.
+    again = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
+    assert again.created_runs == 0 and again.delivered_runs == 0
+
+
 async def test_tick_queue_policy_defers_then_delivers(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
