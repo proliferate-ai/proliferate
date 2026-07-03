@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterIntegrationsByQuery,
   integrationAuthKindLabel,
   integrationHealthBadge,
+  integrationMatchesQuery,
   integrationOauthReturnToast,
   integrationRowActions,
   integrationToolCountLabel,
@@ -76,6 +78,50 @@ describe("integrationRowActions", () => {
       reconnect: false,
       disconnect: true,
     });
+  });
+});
+
+describe("integrationMatchesQuery", () => {
+  const linear = { displayName: "Linear", namespace: "linear" };
+
+  it("matches on display name, case-insensitively", () => {
+    expect(integrationMatchesQuery(linear, "lin")).toBe(true);
+    expect(integrationMatchesQuery(linear, "LIN")).toBe(true);
+  });
+
+  it("matches on namespace", () => {
+    expect(integrationMatchesQuery({ displayName: "Custom Tool", namespace: "acme-crm" }, "acme")).toBe(true);
+  });
+
+  it("rejects non-matching queries", () => {
+    expect(integrationMatchesQuery(linear, "slack")).toBe(false);
+  });
+
+  it("treats an empty or whitespace query as matching everything", () => {
+    expect(integrationMatchesQuery(linear, "")).toBe(true);
+    expect(integrationMatchesQuery(linear, "   ")).toBe(true);
+  });
+});
+
+describe("filterIntegrationsByQuery", () => {
+  const items = [
+    { displayName: "Linear", namespace: "linear" },
+    { displayName: "Slack", namespace: "slack" },
+    { displayName: "Acme CRM", namespace: "acme-crm" },
+  ];
+
+  it("narrows the list to matches", () => {
+    expect(filterIntegrationsByQuery(items, "crm")).toEqual([
+      { displayName: "Acme CRM", namespace: "acme-crm" },
+    ]);
+  });
+
+  it("returns everything for an empty query", () => {
+    expect(filterIntegrationsByQuery(items, "")).toEqual(items);
+  });
+
+  it("returns an empty array when nothing matches", () => {
+    expect(filterIntegrationsByQuery(items, "notfound")).toEqual([]);
   });
 });
 

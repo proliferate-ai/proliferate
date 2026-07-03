@@ -82,6 +82,37 @@ export interface IntegrationOauthReturnToast {
   type: "info" | "error";
 }
 
+/** Below this row count the list is scannable without a filter input. */
+export const INTEGRATIONS_SEARCH_THRESHOLD = 6;
+
+export interface IntegrationSearchable {
+  displayName: string;
+  namespace: string;
+}
+
+/** Case-insensitive substring match against display name or namespace. */
+export function integrationMatchesQuery(item: IntegrationSearchable, query: string): boolean {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) {
+    return true;
+  }
+  return (
+    item.displayName.toLocaleLowerCase().includes(normalized) ||
+    item.namespace.toLocaleLowerCase().includes(normalized)
+  );
+}
+
+/** Shared filter predicate for the user and org integrations panes. */
+export function filterIntegrationsByQuery<T extends IntegrationSearchable>(
+  items: readonly T[],
+  query: string,
+): T[] {
+  if (!query.trim()) {
+    return [...items];
+  }
+  return items.filter((item) => integrationMatchesQuery(item, query));
+}
+
 /**
  * Toast for an OAuth completion, used both by in-app flow polling and by the
  * browser deep-link return (`?status=...&failureCode=...`). Non-terminal or
