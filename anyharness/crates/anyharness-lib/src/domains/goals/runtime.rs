@@ -28,7 +28,9 @@ use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::live::sessions::model::{
     SessionDomainOp, SessionObserverContext, SessionOpEmitter, SessionOpStep,
 };
-use crate::live::sessions::{LiveSessionCommandError, LiveSessionHandle, LiveSessionManager};
+use crate::live::sessions::{
+    AgentExtMethodError, LiveSessionCommandError, LiveSessionHandle, LiveSessionManager,
+};
 
 /// How long a mutation waits for its native notification to round-trip
 /// before reporting the write unconfirmed (claude confirmations ride the
@@ -51,6 +53,8 @@ pub enum GoalOpError {
     NotConfirmed,
     #[error("agent rejected goal operation: {0}")]
     Rejected(String),
+    #[error("agent could not service the goal operation: {0}")]
+    AgentUnavailable(String),
     #[error(transparent)]
     Store(#[from] anyhow::Error),
 }
@@ -308,7 +312,17 @@ fn map_ext_call_error(error: LiveSessionCommandError<anyhow::Error>) -> GoalOpEr
         LiveSessionCommandError::ActorUnavailable | LiveSessionCommandError::ResponseDropped => {
             GoalOpError::SessionNotLive
         }
-        LiveSessionCommandError::Rejected(error) => GoalOpError::Rejected(error.to_string()),
+        LiveSessionCommandError::Rejected(error) => {
+            // A hung sidecar or a sidecar-internal error is a server-side
+            // failure, not a client rejection — surface it as unavailable
+            // (5xx) rather than a 400 so retry/alerting can tell them apart.
+            match error.downcast_ref::<AgentExtMethodError>() {
+                Some(ext_error) if ext_error.is_agent_unavailable() => {
+                    GoalOpError::AgentUnavailable(error.to_string())
+                }
+                _ => GoalOpError::Rejected(error.to_string()),
+            }
+        }
     }
 }
 

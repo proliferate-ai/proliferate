@@ -2,6 +2,7 @@ use agent_client_protocol as acp;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::live::sessions::actor::command::{Resolution, SessionCommand};
+use crate::live::sessions::AgentExtMethodError;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::active::ActivePromptRequest;
@@ -230,13 +231,33 @@ impl SessionActor {
         let params: std::sync::Arc<serde_json::value::RawValue> =
             serde_json::value::to_raw_value(&params)?.into();
         let ext = acp::schema::ExtRequest::new(method.to_string(), params);
-        let response = tokio::time::timeout(
+        // Classify the failure so callers can distinguish a hung/broken sidecar
+        // (Timeout) and a sidecar-internal error from a client-side rejection
+        // instead of folding everything into a 400.
+        let response = match tokio::time::timeout(
             EXT_METHOD_TIMEOUT,
             conn.send_request(acp::AgentRequest::ExtMethodRequest(ext))
                 .block_task(),
         )
         .await
-        .map_err(|_| anyhow::anyhow!("agent did not answer {method} within {}s", EXT_METHOD_TIMEOUT.as_secs()))??;
+        {
+            Err(_elapsed) => {
+                return Err(AgentExtMethodError::Timeout {
+                    method: method.to_string(),
+                    timeout_secs: EXT_METHOD_TIMEOUT.as_secs(),
+                }
+                .into());
+            }
+            Ok(Err(rpc_error)) => {
+                return Err(AgentExtMethodError::Rpc {
+                    method: method.to_string(),
+                    code: i32::from(rpc_error.code),
+                    message: rpc_error.to_string(),
+                }
+                .into());
+            }
+            Ok(Ok(response)) => response,
+        };
         Ok(serde_json::to_value(&response)?)
     }
 }

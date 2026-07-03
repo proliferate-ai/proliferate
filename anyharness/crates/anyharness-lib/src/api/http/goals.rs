@@ -89,6 +89,10 @@ fn map_goal_op_error(error: GoalOpError) -> ApiError {
         GoalOpError::Rejected(detail) => {
             ApiError::bad_request(format!("Agent rejected goal operation: {detail}"), "GOAL_REJECTED")
         }
+        GoalOpError::AgentUnavailable(detail) => ApiError::service_unavailable(
+            format!("The agent could not service the goal operation: {detail}"),
+            "AGENT_UNAVAILABLE",
+        ),
         GoalOpError::Store(error) => ApiError::internal(error.to_string()),
     }
 }

@@ -96,6 +96,20 @@ impl ApiError {
         )
     }
 
+    pub fn service_unavailable(detail: impl Into<String>, code: &str) -> Self {
+        Self(
+            StatusCode::SERVICE_UNAVAILABLE,
+            ProblemDetails {
+                type_url: "about:blank".into(),
+                title: "Service unavailable".into(),
+                status: 503,
+                detail: Some(detail.into()),
+                instance: None,
+                code: Some(code.into()),
+            },
+        )
+    }
+
     pub fn internal(detail: impl Into<String>) -> Self {
         let detail = detail.into();
         // tower_http only logs the status code on failure; this is the one
