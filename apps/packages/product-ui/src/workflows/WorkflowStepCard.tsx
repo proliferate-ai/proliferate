@@ -93,7 +93,7 @@ export function WorkflowStepCard({
             {dragHandle}
           </span>
         ) : null}
-        <span className="font-mono text-[10px] leading-none tabular-nums text-faint">
+        <span className="font-mono text-xs leading-none tabular-nums text-faint">
           {index + 1}
         </span>
       </div>
@@ -116,8 +116,8 @@ export function WorkflowStepCard({
           <div className="rounded-lg border border-border bg-surface-elevated-secondary/60 px-2.5 py-1.5">
             <p
               className={twMerge(
-                "line-clamp-2 break-words text-ui-sm text-muted-foreground",
-                mono ? "font-mono text-xs" : "",
+                "line-clamp-2 break-words text-sm text-muted-foreground",
+                mono ? "font-mono" : "",
               )}
               data-telemetry-mask
             >
@@ -125,11 +125,11 @@ export function WorkflowStepCard({
             </p>
           </div>
         ) : (
-          <p className="text-ui-sm text-faint">{WORKFLOW_STEP_META[step.kind].hint}</p>
+          <p className="text-sm text-faint">{WORKFLOW_STEP_META[step.kind].hint}</p>
         )}
 
         {goalLine ? (
-          <p className="flex min-w-0 items-center gap-1.5 truncate text-ui-sm text-muted-foreground">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-muted-foreground">
             <span aria-hidden className="font-mono text-info">
               {goalLine.glyph}
             </span>

@@ -50,7 +50,7 @@ export function WorkflowStepKindBadge({
   return (
     <span
       className={twMerge(
-        "inline-flex select-none items-center gap-1.5 rounded-full px-2 py-0.5 text-ui-sm font-medium leading-none",
+        "inline-flex select-none items-center gap-1.5 rounded-full px-2 py-0.5 text-sm font-medium leading-none",
         tint,
         iconOnly ? "px-1 py-1" : "",
         className,

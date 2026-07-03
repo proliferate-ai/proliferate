@@ -64,7 +64,7 @@ export function TemplateVarTextarea({
         {gutter ? (
           <div
             aria-hidden
-            className="shrink-0 select-none border-r border-border px-2.5 py-2 font-mono text-ui-sm leading-[1.45] text-faint"
+            className="shrink-0 select-none border-r border-border px-2.5 py-2 font-mono text-sm leading-[1.45] text-faint"
           >
             {gutter}
           </div>
@@ -80,7 +80,7 @@ export function TemplateVarTextarea({
           spellCheck={mono ? false : undefined}
           className={twMerge(
             "w-full flex-1 resize-y border-none bg-transparent px-3 py-2 text-sm leading-[1.45] text-foreground outline-none placeholder:text-muted-foreground focus:ring-0",
-            mono ? "font-mono text-ui-sm" : "",
+            mono ? "font-mono" : "",
           )}
         />
       </div>

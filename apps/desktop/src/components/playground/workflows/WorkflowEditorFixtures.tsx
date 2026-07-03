@@ -66,7 +66,7 @@ export function WorkflowEditorFixtures() {
   return (
     <div className="flex flex-wrap gap-10">
       <section className="flex flex-col gap-3">
-        <h2 className="text-ui-sm font-semibold text-muted-foreground">Editor rail — connectors + add step</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">Editor rail — connectors + add step</h2>
         <div className="w-[440px] rounded-xl bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] p-5 [background-size:16px_16px]">
           {RAIL.map((step, index) => (
             <div key={index}>
@@ -100,7 +100,7 @@ export function WorkflowEditorFixtures() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-ui-sm font-semibold text-muted-foreground">Edit panel — per kind</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">Edit panel — per kind</h2>
         <div className="flex flex-wrap gap-6">
           <PanelHost title="Script (shell) — one bordered command field, $-gutter inside" initial={SHELL_STEP} />
           <PanelHost title="Prompt + goal attachment" initial={PROMPT_STEP} />

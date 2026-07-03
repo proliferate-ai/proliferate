@@ -38,7 +38,7 @@ export interface WorkflowStepPanelProps {
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <Label className="text-ui-sm">{children}</Label>;
+  return <Label>{children}</Label>;
 }
 
 export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
@@ -233,7 +233,7 @@ function OpenPrEditor({
         />
       </div>
       <label className="flex items-center justify-between gap-2">
-        <span className="text-ui-sm text-foreground">Open as draft</span>
+        <span className="text-sm text-foreground">Open as draft</span>
         <Switch checked={step.draft ?? false} onChange={(draft) => onChange({ ...step, draft })} />
       </label>
     </div>

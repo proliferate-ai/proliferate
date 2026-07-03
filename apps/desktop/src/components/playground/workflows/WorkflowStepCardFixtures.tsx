@@ -78,7 +78,7 @@ const STEP_CARDS: Labeled[] = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex min-w-[22rem] flex-col gap-3">
-      <h2 className="text-ui-sm font-semibold text-muted-foreground">{title}</h2>
+      <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
       {children}
     </section>
   );
@@ -133,7 +133,7 @@ export function WorkflowStepCardFixtures() {
             {WORKFLOW_TEMPLATES.map((template) => (
               <div key={template.id} className="flex items-center gap-2">
                 <WorkflowStepGlyphStrip glyphs={workflowStepStrip(template.definition)} />
-                <span className="text-ui-sm text-muted-foreground">{template.name}</span>
+                <span className="text-sm text-muted-foreground">{template.name}</span>
               </div>
             ))}
           </div>

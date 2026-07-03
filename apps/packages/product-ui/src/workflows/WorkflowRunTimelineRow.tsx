@@ -100,7 +100,7 @@ export function WorkflowRunTimelineRow({
       <div className="min-w-0 flex-1 pb-4">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <WorkflowStepKindBadge kind={view.kind} />
-          <span className="text-ui-sm text-muted-foreground">{stepRunStatusLabel(view.status)}</span>
+          <span className="text-sm text-muted-foreground">{stepRunStatusLabel(view.status)}</span>
           {durationLabel ? (
             <span className="text-xs tabular-nums text-faint">· {durationLabel}</span>
           ) : null}
@@ -109,7 +109,7 @@ export function WorkflowRunTimelineRow({
           ))}
         </div>
         {goal ? (
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-ui-sm text-muted-foreground">
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
             <span aria-hidden className="font-mono text-info">
               ◎
             </span>
@@ -131,7 +131,7 @@ export function WorkflowRunTimelineRow({
           <button
             type="button"
             onClick={() => onOpenSession(view.sessionLink!)}
-            className="mt-1.5 inline-flex items-center gap-1 text-ui-sm text-info hover:underline"
+            className="mt-1.5 inline-flex items-center gap-1 text-sm text-info hover:underline"
           >
             Open session
             <ArrowUpRight className="size-3.5" aria-hidden />

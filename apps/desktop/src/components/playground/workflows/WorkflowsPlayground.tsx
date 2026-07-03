@@ -14,7 +14,7 @@ export function WorkflowsPlayground() {
     <div className="flex h-full w-full flex-col gap-12 overflow-auto bg-background p-8 text-foreground">
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Workflows — component playground</h1>
-        <p className="text-ui-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Fixture-only. Every step card, the goal two-line treatment, the editor rail chain, and
           all run-timeline states.
         </p>

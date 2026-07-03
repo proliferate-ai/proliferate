@@ -122,7 +122,7 @@ function RunTimeline({ scenario }: { scenario: RunScenario }) {
 export function WorkflowRunTimelineFixtures() {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-ui-sm font-semibold text-muted-foreground">
+      <h2 className="text-sm font-semibold text-muted-foreground">
         Run timeline — every state
       </h2>
       <div className="flex flex-wrap gap-6">

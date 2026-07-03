@@ -38,7 +38,7 @@ export function WorkflowGoalAttachment({
 }: WorkflowGoalAttachmentProps) {
   if (!supportsGoals) {
     return (
-      <p className="rounded-md border border-dashed border-border px-3 py-2 text-ui-sm text-faint">
+      <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-faint">
         Goal iteration: not supported by {harnessLabel}
       </p>
     );
@@ -54,7 +54,7 @@ export function WorkflowGoalAttachment({
   return (
     <div className="rounded-[10px] border border-border p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-ui-sm font-medium text-foreground">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <span aria-hidden className="font-mono text-info">
             ◎
           </span>
@@ -83,7 +83,7 @@ export function WorkflowGoalAttachment({
 
           <div className="grid grid-cols-3 gap-2">
             <div className="flex flex-col gap-1">
-              <Label className="text-xs">Max turns</Label>
+              <Label>Max turns</Label>
               <Input
                 type="number"
                 min={1}
@@ -92,7 +92,7 @@ export function WorkflowGoalAttachment({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs">Max minutes</Label>
+              <Label>Max minutes</Label>
               <Input
                 type="number"
                 min={1}
@@ -101,7 +101,7 @@ export function WorkflowGoalAttachment({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs">Max tokens</Label>
+              <Label>Max tokens</Label>
               <Input
                 type="number"
                 min={1}
@@ -126,7 +126,7 @@ export function WorkflowGoalAttachment({
 
           <div className="rounded-md border border-border/70 p-2.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-ui-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Verify (runs when the agent claims the goal is met)
               </span>
               <Switch
@@ -137,7 +137,7 @@ export function WorkflowGoalAttachment({
             {goal.verify ? (
               <div className="mt-2 flex items-center gap-2">
                 <Input
-                  className="flex-1 font-mono text-ui-sm"
+                  className="flex-1 font-mono"
                   value={goal.verify.shell}
                   placeholder="make test"
                   onChange={(event) =>

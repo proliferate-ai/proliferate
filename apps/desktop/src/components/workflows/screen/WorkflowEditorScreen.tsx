@@ -236,7 +236,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
           <button
             type="button"
             onClick={() => navigate("/workflows")}
-            className="inline-flex items-center gap-1.5 text-ui-sm text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="size-3.5" />
             Workflows
@@ -262,7 +262,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                     {issues.map((issue, index) => (
                       <li
                         key={index}
-                        className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-ui-sm text-popover-foreground"
+                        className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm text-popover-foreground"
                       >
                         <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" />
                         <span className="min-w-0">{issue.message}</span>
