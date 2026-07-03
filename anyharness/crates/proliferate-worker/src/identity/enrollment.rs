@@ -16,7 +16,8 @@ pub fn build_enroll_request(config: &WorkerConfig) -> Result<EnrollRequest, Work
         machine_fingerprint: Some(fingerprint::machine_fingerprint()),
         hostname: fingerprint::hostname(),
         worker_version: versions::worker_version(),
-        anyharness_version: None,
+        // None until a launcher exports the env; see versions::anyharness_version.
+        anyharness_version: versions::anyharness_version(),
     })
 }
 

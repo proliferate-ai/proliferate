@@ -79,6 +79,10 @@ class RuntimeWorkerValue:
     cloud_sandbox_id: UUID | None
     desktop_install_id: str | None
     status: str
+    worker_version: str | None
+    anyharness_version: str | None
+    hostname: str | None
+    machine_fingerprint: str | None
     enrolled_at: datetime
     last_seen_at: datetime | None
 
@@ -121,6 +125,10 @@ def _worker_value(row: CloudRuntimeWorker) -> RuntimeWorkerValue:
         cloud_sandbox_id=row.cloud_sandbox_id,
         desktop_install_id=row.desktop_install_id,
         status=row.status,
+        worker_version=row.worker_version,
+        anyharness_version=row.anyharness_version,
+        hostname=row.hostname,
+        machine_fingerprint=row.machine_fingerprint,
         enrolled_at=row.enrolled_at,
         last_seen_at=row.last_seen_at,
     )
@@ -272,6 +280,10 @@ async def create_worker(
     *,
     enrollment: RuntimeWorkerEnrollmentValue,
     token_hash: str,
+    worker_version: str | None = None,
+    anyharness_version: str | None = None,
+    hostname: str | None = None,
+    machine_fingerprint: str | None = None,
 ) -> RuntimeWorkerValue:
     now = utcnow()
     row = CloudRuntimeWorker(
@@ -282,6 +294,10 @@ async def create_worker(
         desktop_install_id=enrollment.desktop_install_id,
         token_hash=token_hash,
         status="online",
+        worker_version=worker_version,
+        anyharness_version=anyharness_version,
+        hostname=hostname,
+        machine_fingerprint=machine_fingerprint,
         enrolled_at=now,
         last_seen_at=now,
     )
@@ -328,13 +344,24 @@ async def touch_worker_heartbeat(
     db: AsyncSession,
     *,
     worker_id: UUID,
+    worker_version: str | None = None,
+    anyharness_version: str | None = None,
 ) -> None:
+    """Stamp liveness and, when self-reported, the running component versions.
+
+    Versions only move forward on report (post-swap); an omitted field never
+    clears what enrollment or a prior heartbeat recorded.
+    """
     row = await db.get(CloudRuntimeWorker, worker_id)
     if row is None or row.status == "revoked":
         return
     now = utcnow()
     row.status = "online"
     row.last_seen_at = now
+    if worker_version is not None and worker_version != row.worker_version:
+        row.worker_version = worker_version
+    if anyharness_version is not None and anyharness_version != row.anyharness_version:
+        row.anyharness_version = anyharness_version
     row.updated_at = now
     await db.flush()
 

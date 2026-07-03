@@ -19,6 +19,7 @@ _PIN_ENV_VARS = (
     "SERVER_VERSION",
     "DESKTOP_VERSION",
     "RUNTIME_VERSION",
+    "WORKER_VERSION",
     "MIN_DESKTOP_VERSION",
     "DESKTOP_DOWNLOADS_BASE_URL",
 )
@@ -41,6 +42,7 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
     monkeypatch.setenv("SERVER_VERSION", "0.3.0")
     monkeypatch.setenv("DESKTOP_VERSION", "0.3.2")
     monkeypatch.setenv("RUNTIME_VERSION", "0.3.1")
+    monkeypatch.setenv("WORKER_VERSION", "0.3.4")
     monkeypatch.setenv("MIN_DESKTOP_VERSION", "0.3.0")
 
     body = _client().get("/meta").json()
@@ -49,6 +51,7 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
         "serverVersion": "0.3.0",
         "desktopVersion": "0.3.2",
         "runtimeVersion": "0.3.1",
+        "workerVersion": "0.3.4",
         "minDesktopVersion": "0.3.0",
     }
 
@@ -62,6 +65,7 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
         "serverVersion",
         "desktopVersion",
         "runtimeVersion",
+        "workerVersion",
         "minDesktopVersion",
     }
     for value in body.values():
@@ -76,6 +80,7 @@ def test_meta_pins_fall_back_to_server_version(monkeypatch) -> None:  # type: ig
 
     assert body["desktopVersion"] == "1.2.3"
     assert body["runtimeVersion"] == "1.2.3"
+    assert body["workerVersion"] == "1.2.3"
     assert body["minDesktopVersion"] == "1.2.3"
 
 

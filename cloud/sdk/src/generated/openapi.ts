@@ -1656,6 +1656,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/download/{target}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Worker Artifact Download Endpoint
+         * @description 302 to the pinned worker binary (or its ``.sha256``) on the downloads CDN.
+         *
+         *     Unauthenticated by design, like the desktop updater redirect: install
+         *     scripts fetch the binary before any worker identity exists, and the CDN
+         *     artifacts are public.
+         */
+        get: operations["worker_artifact_download_endpoint_v1_cloud_worker_download__target___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integration-gateway/mcp": {
         parameters: {
             query?: never;
@@ -4114,6 +4138,8 @@ export interface components {
             desktopVersion: string;
             /** Runtimeversion */
             runtimeVersion: string;
+            /** Workerversion */
+            workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
         };
@@ -5077,6 +5103,16 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /**
+         * WorkerDesiredVersions
+         * @description The component versions this server pins; workers converge onto these.
+         */
+        WorkerDesiredVersions: {
+            /** Worker */
+            worker?: string | null;
+            /** Anyharness */
+            anyharness: string;
+        };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
             /** Enrollmenttoken */
@@ -5104,6 +5140,10 @@ export interface components {
         WorkerHeartbeatRequest: {
             /** Status */
             status?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
         };
         /** WorkerHeartbeatResponse */
         WorkerHeartbeatResponse: {
@@ -5116,6 +5156,7 @@ export interface components {
             serverTime: string;
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
+            desiredVersions: components["schemas"]["WorkerDesiredVersions"];
         };
         /** WorkspaceCloudAccessSummary */
         WorkspaceCloudAccessSummary: {
@@ -8798,6 +8839,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerHeartbeatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_artifact_download_endpoint_v1_cloud_worker_download__target___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

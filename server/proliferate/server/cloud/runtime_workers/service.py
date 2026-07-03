@@ -21,18 +21,37 @@ from proliferate.constants.cloud import (
     CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
 )
 from proliferate.db.store import runtime_workers as store
+from proliferate.integrations.desktop_downloads import (
+    downloads_base_url,
+    versioned_manifest_exists,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentResponse,
     DesktopWorkerRevokeResponse,
     IntegrationGatewayConfig,
+    WorkerDesiredVersions,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatResponse,
 )
+from proliferate.server.version import runtime_version as pinned_runtime_version
+from proliferate.server.version import worker_version_pin as pinned_worker_version
 from proliferate.utils.time import utcnow
 
 _TOKEN_BYTES = 48
+
+# Platform tokens the target install script uses when fetching binaries.
+_WORKER_ARTIFACT_TARGETS = frozenset(
+    {
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64",
+    }
+)
+# The binary plus its checksum, published alongside on the downloads CDN.
+_WORKER_ARTIFACT_ASSETS = frozenset({"proliferate-worker", "proliferate-worker.sha256"})
 
 
 def worker_cloud_base_url() -> str:
@@ -164,6 +183,10 @@ async def enroll_worker(
         db,
         enrollment=enrollment,
         token_hash=store.hash_worker_token(worker_token),
+        worker_version=request.worker_version,
+        anyharness_version=request.anyharness_version,
+        hostname=request.hostname,
+        machine_fingerprint=request.machine_fingerprint,
     )
 
     gateway_token = secrets.token_urlsafe(_TOKEN_BYTES)
@@ -185,10 +208,52 @@ async def record_heartbeat(
     db: AsyncSession,
     *,
     worker_id: UUID,
+    worker_version: str | None = None,
+    anyharness_version: str | None = None,
 ) -> WorkerHeartbeatResponse:
-    await store.touch_worker_heartbeat(db, worker_id=worker_id)
+    await store.touch_worker_heartbeat(
+        db,
+        worker_id=worker_id,
+        worker_version=worker_version,
+        anyharness_version=anyharness_version,
+    )
     return WorkerHeartbeatResponse(
         worker_id=str(worker_id),
         server_time=utcnow(),
         heartbeat_interval_seconds=CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+        desired_versions=WorkerDesiredVersions(
+            worker=pinned_worker_version(),
+            anyharness=pinned_runtime_version(),
+        ),
     )
+
+
+async def worker_artifact_redirect_url(*, target: str, asset: str) -> str:
+    """Resolve the downloads-CDN URL for a pinned worker binary (or checksum).
+
+    Mirrors the desktop updater redirect: the server carries only the version
+    pin, never the artifact itself, and falls back to the unpinned ``stable``
+    path when the pinned artifact has not been published yet.
+
+    Each call resolves the pinned-vs-fallback path independently, so two calls
+    (binary then checksum) can straddle a CDN publish and disagree. A worker
+    converging its binary must therefore resolve the version path *once* — it
+    fetches the binary here, then derives its ``.sha256`` URL from that
+    redirect's resolved location (same directory, same version) instead of
+    resolving the checksum through a second redirect (see
+    ``proliferate-worker``'s ``self_update`` module). The per-asset resolution
+    below remains for the install script, which fetches a fresh pair.
+    """
+    if target not in _WORKER_ARTIFACT_TARGETS or asset not in _WORKER_ARTIFACT_ASSETS:
+        raise CloudApiError(
+            "cloud_worker_artifact_unknown",
+            "Unknown worker artifact target or asset.",
+            status_code=404,
+        )
+    base = downloads_base_url()
+    pin = pinned_worker_version()
+    if pin is not None:
+        pinned = f"{base}/worker/stable/{pin}/{target}/{asset}"
+        if await versioned_manifest_exists(pinned):
+            return pinned
+    return f"{base}/worker/stable/{target}/{asset}"
