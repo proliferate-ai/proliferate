@@ -1,10 +1,18 @@
+import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   deriveGoalBarState,
   type GoalCapabilities,
   type GoalWire,
 } from "@proliferate/product-domain/activity/goal";
 import { resolveGoalFixture } from "@/lib/domain/chat/__fixtures__/playground/goal-fixtures";
+import {
+  goalCapabilitiesForSession,
+  goalWireFromMirror,
+} from "@/lib/domain/sessions/goal-mirror";
+import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
 import { goalResultDismissKey, useGoalBarStore } from "@/stores/activity/goal-bar-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 export interface SessionGoalState {
   goal: GoalWire | null;
@@ -12,22 +20,42 @@ export interface SessionGoalState {
 }
 
 /**
- * STUB — fixture-backed until the goals mirror is live.
- *
- * Live wiring (integration pass): read the active session's mirrored goal +
- * goal capability flags from the AnyHarness SDK session view
- * (SessionView.activity.goal / SessionActionCapabilities.supports_goals with
- * the pause flag from the harness capability advertisement) via an access
- * hook, keyed by the active session id. Until then this returns null in
- * production; in dev builds `VITE_PROLIFERATE_GOAL_FIXTURE=<key>` renders a
- * fixture goal (keys in lib/domain/chat/__fixtures__/playground/goal-fixtures.ts).
+ * The active session's mirrored goal + goal capability flags, read from the
+ * session directory slot (seeded by session summaries, transitioned by the
+ * runtime's goal_updated/goal_met/goal_cleared stream events — confirmed
+ * native state only, never optimistic). In dev builds
+ * `VITE_PROLIFERATE_GOAL_FIXTURE=<key>` overrides with a fixture goal (keys
+ * in lib/domain/chat/__fixtures__/playground/goal-fixtures.ts).
  */
 export function useSessionGoal(): SessionGoalState | null {
-  if (!import.meta.env.DEV) {
-    return null;
-  }
-  const fixture = resolveGoalFixture(import.meta.env.VITE_PROLIFERATE_GOAL_FIXTURE);
-  return fixture ?? null;
+  const activeSessionId = useActiveSessionId();
+  const slot = useSessionDirectoryStore(useShallow((state) => {
+    const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
+    if (!entry) {
+      return null;
+    }
+    return {
+      activeGoal: entry.activeGoal,
+      actionCapabilities: entry.actionCapabilities,
+      agentKind: entry.agentKind,
+    };
+  }));
+
+  return useMemo(() => {
+    if (import.meta.env.DEV) {
+      const fixture = resolveGoalFixture(import.meta.env.VITE_PROLIFERATE_GOAL_FIXTURE);
+      if (fixture) {
+        return fixture;
+      }
+    }
+    if (!slot) {
+      return null;
+    }
+    return {
+      goal: slot.activeGoal ? goalWireFromMirror(slot.activeGoal) : null,
+      capabilities: goalCapabilitiesForSession(slot.actionCapabilities, slot.agentKind),
+    };
+  }, [slot]);
 }
 
 export interface SessionGoalBarModel {

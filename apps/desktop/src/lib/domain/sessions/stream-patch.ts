@@ -1,4 +1,5 @@
 import type {
+  Goal,
   InteractionPayload,
   PendingInteractionPayloadSummary,
   SessionEventEnvelope,
@@ -30,6 +31,7 @@ export interface SessionStreamPatch {
   modeId?: string | null;
   title?: string | null;
   status?: SessionStatus | null;
+  activeGoal?: Goal | null;
 }
 
 export interface SessionStreamBatchPatchInput {
@@ -81,6 +83,17 @@ export function buildSessionStreamPatch({
 
   if (event.type === "session_info_update" && event.title !== undefined) {
     patch.title = event.title ?? null;
+  }
+
+  // Goal mirror transitions: the runtime emits these only after the native
+  // notification round-trips, so the slot reflects confirmed state. Cleared
+  // matches the read-side (latest non-cleared goal) by dropping the mirror.
+  if (event.type === "goal_updated" || event.type === "goal_met") {
+    patch.activeGoal = event.goal;
+  }
+
+  if (event.type === "goal_cleared") {
+    patch.activeGoal = null;
   }
 
   if (
