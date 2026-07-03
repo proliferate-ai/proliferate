@@ -1563,6 +1563,129 @@ export interface paths {
         patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
         trace?: never;
     };
+    "/v1/cloud/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflows Endpoint */
+        get: operations["list_workflows_endpoint_v1_cloud_workflows_get"];
+        put?: never;
+        /** Create Workflow Endpoint */
+        post: operations["create_workflow_endpoint_v1_cloud_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs Endpoint */
+        get: operations["list_runs_endpoint_v1_cloud_workflows_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Endpoint */
+        get: operations["get_run_endpoint_v1_cloud_workflows_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/delivered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Run Delivered Endpoint */
+        post: operations["mark_run_delivered_endpoint_v1_cloud_workflows_runs__run_id__delivered_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report Run Status Endpoint */
+        post: operations["report_run_status_endpoint_v1_cloud_workflows_runs__run_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Endpoint */
+        get: operations["get_workflow_endpoint_v1_cloud_workflows__workflow_id__get"];
+        put?: never;
+        post?: never;
+        /** Archive Workflow Endpoint */
+        delete: operations["archive_workflow_endpoint_v1_cloud_workflows__workflow_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Workflow Endpoint */
+        patch: operations["update_workflow_endpoint_v1_cloud_workflows__workflow_id__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Runs Endpoint */
+        get: operations["list_workflow_runs_endpoint_v1_cloud_workflows__workflow_id__runs_get"];
+        put?: never;
+        /** Start Run Endpoint */
+        post: operations["start_run_endpoint_v1_cloud_workflows__workflow_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workers/desktop/enrollment": {
         parameters: {
             query?: never;
@@ -4695,6 +4818,32 @@ export interface components {
             /** Basebranch */
             baseBranch: string;
         };
+        /** RunStatusRequest */
+        RunStatusRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "waiting_approval" | "completed" | "failed" | "cancelled";
+            /** Stepcursor */
+            stepCursor?: number | null;
+            /** Stepoutputs */
+            stepOutputs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Anyharnesssessionids */
+            anyharnessSessionIds?: string[] | null;
+            /** Costusd */
+            costUsd?: number | null;
+            /** Costtokens */
+            costTokens?: number | null;
+        };
         /** SaveRepoEnvironmentRequest */
         SaveRepoEnvironmentRequest: {
             kind: components["schemas"]["RepoEnvironmentKind"];
@@ -4779,6 +4928,20 @@ export interface components {
              * Format: date-time
              */
             expiresAt: string;
+        };
+        /** StartRunRequest */
+        StartRunRequest: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Targetmode
+             * @enum {string}
+             */
+            targetMode: "local" | "personal_cloud";
+            /** Versionid */
+            versionId?: string | null;
         };
         /** StartSsoAuthRequest */
         StartSsoAuthRequest: {
@@ -5032,6 +5195,136 @@ export interface components {
             serverTime: string;
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
+        };
+        /** WorkflowCreateRequest */
+        WorkflowCreateRequest: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowDetailResponse */
+        WorkflowDetailResponse: {
+            workflow: components["schemas"]["WorkflowResponse"];
+            currentVersion: components["schemas"]["WorkflowVersionResponse"] | null;
+            /** Versions */
+            versions: components["schemas"]["WorkflowVersionResponse"][];
+        };
+        /** WorkflowListResponse */
+        WorkflowListResponse: {
+            /** Workflows */
+            workflows: components["schemas"]["WorkflowResponse"][];
+        };
+        /** WorkflowResponse */
+        WorkflowResponse: {
+            /** Id */
+            id: string;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Createdbyuserid */
+            createdByUserId: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Currentversionid */
+            currentVersionId: string | null;
+            /** Archivedat */
+            archivedAt: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** WorkflowRunListResponse */
+        WorkflowRunListResponse: {
+            /** Runs */
+            runs: components["schemas"]["WorkflowRunResponse"][];
+        };
+        /** WorkflowRunResponse */
+        WorkflowRunResponse: {
+            /** Id */
+            id: string;
+            /** Workflowid */
+            workflowId: string;
+            /** Workflowversionid */
+            workflowVersionId: string;
+            /** Triggerkind */
+            triggerKind: string;
+            /** Executoruserid */
+            executorUserId: string;
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+            /** Targetmode */
+            targetMode: string;
+            /** Resolvedplan */
+            resolvedPlan: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Stepcursor */
+            stepCursor: number | null;
+            /** Stepoutputs */
+            stepOutputs: {
+                [key: string]: unknown;
+            } | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Anyharnesssessionids */
+            anyharnessSessionIds: string[] | null;
+            /** Errorcode */
+            errorCode: string | null;
+            /** Errormessage */
+            errorMessage: string | null;
+            /** Costusd */
+            costUsd: string | null;
+            /** Costtokens */
+            costTokens: number | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Deliveredat */
+            deliveredAt: string | null;
+            /** Startedat */
+            startedAt: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+        };
+        /** WorkflowUpdateRequest */
+        WorkflowUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowVersionResponse */
+        WorkflowVersionResponse: {
+            /** Id */
+            id: string;
+            /** Workflowid */
+            workflowId: string;
+            /** Versionn */
+            versionN: number;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Createdbyuserid */
+            createdByUserId: string;
+            /** Createdat */
+            createdAt: string;
         };
         /** WorkspaceCloudAccessSummary */
         WorkspaceCloudAccessSummary: {
@@ -8547,6 +8840,361 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentRunConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflows_endpoint_v1_cloud_workflows_get: {
+        parameters: {
+            query?: {
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_endpoint_v1_cloud_workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_runs_endpoint_v1_cloud_workflows_runs_get: {
+        parameters: {
+            query?: {
+                workflowId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_endpoint_v1_cloud_workflows_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_run_delivered_endpoint_v1_cloud_workflows_runs__run_id__delivered_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_run_status_endpoint_v1_cloud_workflows_runs__run_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_endpoint_v1_cloud_workflows__workflow_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_workflow_endpoint_v1_cloud_workflows__workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_endpoint_v1_cloud_workflows__workflow_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_runs_endpoint_v1_cloud_workflows__workflow_id__runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_run_endpoint_v1_cloud_workflows__workflow_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
                 };
             };
             /** @description Validation Error */
