@@ -12,13 +12,13 @@ import type {
 import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/interpolation";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { X } from "@proliferate/ui/icons";
 import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
 import { TemplateVarTextarea } from "./TemplateVarTextarea";
 import { WorkflowGoalAttachment } from "./WorkflowGoalAttachment";
+import { WorkflowSelect } from "./WorkflowSelect";
 
 export interface EditorAgent {
   kind: string;
@@ -97,37 +97,29 @@ function PromptEditor({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <FieldLabel>Model</FieldLabel>
-          <Select
+          <WorkflowSelect
+            ariaLabel="Model"
             value={step.modelOverride ?? ""}
-            onChange={(event) =>
-              onChange({ ...step, modelOverride: event.target.value || undefined })
-            }
-          >
-            <option value="">inherit</option>
-            {modelOptions.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.label}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "", label: "inherit" },
+              ...modelOptions.map((model) => ({ value: model.id, label: model.label })),
+            ]}
+            onChange={(value) => onChange({ ...step, modelOverride: value || undefined })}
+          />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <FieldLabel>Harness</FieldLabel>
-          <Select
+          <WorkflowSelect
+            ariaLabel="Harness"
             value={step.harnessOverride ?? ""}
-            onChange={(event) =>
-              onChange({ ...step, harnessOverride: event.target.value || undefined })
-            }
-          >
-            <option value="">inherit</option>
-            {agents.map((agent) => (
-              <option key={agent.kind} value={agent.kind}>
-                {agent.displayName}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "", label: "inherit" },
+              ...agents.map((agent) => ({ value: agent.kind, label: agent.displayName })),
+            ]}
+            onChange={(value) => onChange({ ...step, harnessOverride: value || undefined })}
+          />
         </div>
       </div>
       {step.harnessOverride ? (
@@ -159,26 +151,25 @@ function ScriptEditor({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <FieldLabel>Command</FieldLabel>
-        <div className="flex items-start gap-2 rounded-md border border-border bg-foreground/[0.02] p-2">
-          <span className="mt-1.5 font-mono text-ui-sm text-faint">$</span>
-          <TemplateVarTextarea
-            value={step.command}
-            onChange={(command) => onChange({ ...step, command })}
-            suggestions={suggestions}
-            rows={3}
-            mono
-            ariaLabel="Command"
-            placeholder="make test"
-            invalid={step.command.trim() === ""}
-          />
-        </div>
+        <TemplateVarTextarea
+          value={step.command}
+          onChange={(command) => onChange({ ...step, command })}
+          suggestions={suggestions}
+          rows={3}
+          mono
+          gutter="$"
+          ariaLabel="Command"
+          placeholder="make test"
+          invalid={step.command.trim() === ""}
+        />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <FieldLabel>Timeout (seconds)</FieldLabel>
           <Input
             type="number"
             min={1}
+            className="w-32"
             value={step.timeoutSecs ?? ""}
             placeholder="none"
             onChange={(event) =>
@@ -189,7 +180,7 @@ function ScriptEditor({
             }
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <FieldLabel>Output name</FieldLabel>
           <Input
             value={step.outputName ?? ""}
@@ -264,15 +255,20 @@ function NotifyEditor({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <FieldLabel>Channel</FieldLabel>
-        <Select
+        <WorkflowSelect
+          ariaLabel="Channel"
           value={step.channel}
-          onChange={(event) => onChange({ ...step, channel: event.target.value as WorkflowNotifyChannel })}
-        >
-          <option value="in_app">In-app</option>
-          <option value="slack" disabled={!slackConnected}>
-            Slack{slackConnected ? "" : " (connect to enable)"}
-          </option>
-        </Select>
+          options={[
+            { value: "in_app", label: "In-app" },
+            {
+              value: "slack",
+              label: `Slack${slackConnected ? "" : " (connect to enable)"}`,
+              triggerLabel: "Slack",
+              disabled: !slackConnected,
+            },
+          ]}
+          onChange={(value) => onChange({ ...step, channel: value as WorkflowNotifyChannel })}
+        />
         <p className="text-xs text-faint">Always recorded in-app and in run history.</p>
       </div>
       <div className="flex flex-col gap-1.5">
@@ -317,22 +313,19 @@ function ApprovalEditor({
       </div>
       <div className="flex flex-col gap-1.5">
         <FieldLabel>On timeout</FieldLabel>
-        <Select
+        <WorkflowSelect
+          ariaLabel="On timeout"
           value={step.onTimeout}
-          onChange={(event) => onChange({ ...step, onTimeout: event.target.value as WorkflowApprovalOnTimeout })}
-        >
-          {timeoutOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
+          options={timeoutOptions.map((option) => ({ value: option.value, label: option.label }))}
+          onChange={(value) => onChange({ ...step, onTimeout: value as WorkflowApprovalOnTimeout })}
+        />
       </div>
       <div className="flex flex-col gap-1.5">
         <FieldLabel>Timeout (seconds)</FieldLabel>
         <Input
           type="number"
           min={1}
+          className="w-32"
           value={step.timeoutSecs ?? ""}
           placeholder="none"
           onChange={(event) =>

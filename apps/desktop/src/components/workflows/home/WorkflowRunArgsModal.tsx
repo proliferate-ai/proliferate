@@ -5,8 +5,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
+import { WorkflowSelect } from "../editor/WorkflowSelect";
 
 type TargetMode = WorkflowTargetMode;
 type ArgValue = string | number | boolean;
@@ -157,16 +157,12 @@ export function WorkflowRunArgsModal({
                 onChange={(checked) => setValue(arg.name, checked)}
               />
             ) : arg.type === "enum" ? (
-              <Select
+              <WorkflowSelect
+                ariaLabel={`${arg.name} value`}
                 value={String(values[arg.name] ?? "")}
-                onChange={(event) => setValue(arg.name, event.target.value)}
-              >
-                {(arg.enum ?? []).map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </Select>
+                options={(arg.enum ?? []).map((option) => ({ value: option, label: option }))}
+                onChange={(value) => setValue(arg.name, value)}
+              />
             ) : (
               <Input
                 type={arg.type === "number" ? "number" : "text"}
@@ -180,32 +176,28 @@ export function WorkflowRunArgsModal({
 
         <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
           <Label>Run location</Label>
-          <Select
+          <WorkflowSelect
+            ariaLabel="Run location"
             value={targetMode}
-            onChange={(event) => setTargetMode(event.target.value as TargetMode)}
-          >
-            <option value="local">On this Mac</option>
-            {cloudAvailable ? <option value="personal_cloud">Cloud</option> : null}
-          </Select>
+            options={[
+              { value: "local", label: "On this Mac" },
+              ...(cloudAvailable ? [{ value: "personal_cloud", label: "Cloud" }] : []),
+            ]}
+            onChange={(value) => setTargetMode(value as TargetMode)}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label>Workspace</Label>
           {targetOptions.length > 0 ? (
-            <Select
+            <WorkflowSelect
+              ariaLabel="Workspace"
               value={targetMode === "local" ? localWorkspaceId : cloudWorkspaceId}
-              onChange={(event) =>
-                targetMode === "local"
-                  ? setLocalWorkspaceId(event.target.value)
-                  : setCloudWorkspaceId(event.target.value)
+              options={targetOptions.map((option) => ({ value: option.id, label: option.label }))}
+              onChange={(value) =>
+                targetMode === "local" ? setLocalWorkspaceId(value) : setCloudWorkspaceId(value)
               }
-            >
-              {targetOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+            />
           ) : (
             <p className="text-ui-sm text-faint">
               {targetMode === "local"

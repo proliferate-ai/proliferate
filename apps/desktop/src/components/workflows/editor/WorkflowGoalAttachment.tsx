@@ -6,9 +6,9 @@ import {
 import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/interpolation";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { TemplateVarTextarea } from "./TemplateVarTextarea";
+import { WorkflowSelect } from "./WorkflowSelect";
 
 export interface WorkflowGoalAttachmentProps {
   goal: WorkflowGoal | undefined;
@@ -116,13 +116,12 @@ export function WorkflowGoalAttachment({
 
           <div className="flex flex-col gap-1.5">
             <Label>When blocked</Label>
-            <Select value={goal.onBlocked} onChange={(event) => patch({ onBlocked: event.target.value as WorkflowGoalOnBlocked })}>
-              {ON_BLOCKED_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+            <WorkflowSelect
+              ariaLabel="When blocked"
+              value={goal.onBlocked}
+              options={ON_BLOCKED_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+              onChange={(value) => patch({ onBlocked: value as WorkflowGoalOnBlocked })}
+            />
           </div>
 
           <div className="rounded-md border border-border/70 p-2.5">

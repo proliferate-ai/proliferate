@@ -1,9 +1,13 @@
-import { useState } from "react";
 import type { WorkflowOnFail, WorkflowStep } from "@proliferate/product-domain/workflows/definition";
 import { WorkflowStepCard } from "@proliferate/product-ui/workflows/WorkflowStepCard";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { MoreHorizontal } from "@proliferate/ui/icons";
+import {
+  POPOVER_SURFACE_CLASS,
+  PopoverButton,
+} from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { WorkflowSelect } from "./WorkflowSelect";
 
 type OnFailValue = "stop" | "retry" | "continue";
 
@@ -11,9 +15,11 @@ function toOnFail(value: OnFailValue): WorkflowOnFail {
   return value === "retry" ? { kind: "retry", n: 1 } : { kind: value };
 }
 
-function stop(event: { stopPropagation: () => void }) {
-  event.stopPropagation();
-}
+const ON_FAIL_OPTIONS = [
+  { value: "stop", label: "Stop", triggerLabel: "Stop on fail" },
+  { value: "retry", label: "Retry ×1", triggerLabel: "Retry ×1 on fail" },
+  { value: "continue", label: "Continue", triggerLabel: "Continue on fail" },
+];
 
 export interface WorkflowStepRailCardProps {
   step: WorkflowStep;
@@ -30,7 +36,7 @@ export interface WorkflowStepRailCardProps {
   onMoveDown: () => void;
 }
 
-/** A rail step card: the shared card + an on-fail footer select and a kebab. */
+/** A rail step card: the shared card + an on-fail popover chip and a kebab menu. */
 export function WorkflowStepRailCard({
   step,
   index,
@@ -45,48 +51,58 @@ export function WorkflowStepRailCard({
   onMoveUp,
   onMoveDown,
 }: WorkflowStepRailCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const footer = (
-    <span onClick={stop} className="inline-flex items-center gap-1.5">
-      <span className="text-xs text-faint">On fail</span>
-      <Select
-        value={step.onFail.kind}
-        onChange={(event) => onChange({ ...step, onFail: toOnFail(event.target.value as OnFailValue) })}
-        className="h-7 py-0 text-xs"
-      >
-        <option value="stop">Stop</option>
-        <option value="retry">Retry ×1</option>
-        <option value="continue">Continue</option>
-      </Select>
-    </span>
+  const onFailControl = (
+    <WorkflowSelect
+      variant="chip"
+      ariaLabel="On fail"
+      value={step.onFail.kind}
+      options={ON_FAIL_OPTIONS}
+      align="end"
+      menuWidthClassName="w-44"
+      onChange={(value) => onChange({ ...step, onFail: toOnFail(value as OnFailValue) })}
+    />
   );
 
   const menu = (
-    <span onClick={stop} className="relative inline-flex">
-      <Button variant="ghost" size="icon-sm" aria-label="Step options" onClick={() => setMenuOpen((v) => !v)}>
-        <MoreHorizontal className="size-4" />
-      </Button>
-      {menuOpen ? (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-          <div className="absolute right-0 top-7 z-20 w-36 rounded-md border border-border bg-background p-1 text-ui-sm shadow-md">
-            <button type="button" className="block w-full rounded px-2 py-1 text-left hover:bg-foreground/[0.05]" onClick={() => { setMenuOpen(false); onDuplicate(); }}>
-              Duplicate
-            </button>
-            <button type="button" disabled={!canMoveUp} className="block w-full rounded px-2 py-1 text-left hover:bg-foreground/[0.05] disabled:opacity-40" onClick={() => { setMenuOpen(false); onMoveUp(); }}>
-              Move up
-            </button>
-            <button type="button" disabled={!canMoveDown} className="block w-full rounded px-2 py-1 text-left hover:bg-foreground/[0.05] disabled:opacity-40" onClick={() => { setMenuOpen(false); onMoveDown(); }}>
-              Move down
-            </button>
-            <button type="button" className="block w-full rounded px-2 py-1 text-left text-destructive hover:bg-destructive/10" onClick={() => { setMenuOpen(false); onDelete(); }}>
-              Delete
-            </button>
-          </div>
-        </>
-      ) : null}
-    </span>
+    <PopoverButton
+      stopPropagation
+      align="end"
+      side="bottom"
+      className={`w-40 ${POPOVER_SURFACE_CLASS}`}
+      trigger={(
+        <Button variant="ghost" size="icon-sm" aria-label="Step options">
+          <MoreHorizontal className="size-4" />
+        </Button>
+      )}
+    >
+      {(close) => (
+        <div className="p-1">
+          <PopoverMenuItem
+            density="compact"
+            label="Duplicate"
+            onClick={() => { close(); onDuplicate(); }}
+          />
+          <PopoverMenuItem
+            density="compact"
+            label="Move up"
+            disabled={!canMoveUp}
+            onClick={() => { close(); onMoveUp(); }}
+          />
+          <PopoverMenuItem
+            density="compact"
+            label="Move down"
+            disabled={!canMoveDown}
+            onClick={() => { close(); onMoveDown(); }}
+          />
+          <PopoverMenuItem
+            density="compact"
+            label="Delete"
+            className="text-destructive hover:bg-destructive/10 focus:bg-destructive/10"
+            onClick={() => { close(); onDelete(); }}
+          />
+        </div>
+      )}
+    </PopoverButton>
   );
 
   return (
@@ -96,9 +112,9 @@ export function WorkflowStepRailCard({
       selected={selected}
       invalid={invalid}
       onSelect={onSelect}
-      dragHandle={<span className="cursor-grab select-none font-mono leading-none" aria-hidden>⠿</span>}
+      dragHandle={<span className="cursor-grab select-none font-mono text-xs leading-none" aria-hidden>⠿</span>}
       menu={menu}
-      footer={footer}
+      onFailControl={onFailControl}
     />
   );
 }

@@ -7,7 +7,6 @@ import {
 } from "@proliferate/product-domain/workflows/definition";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronDown, ChevronRight, Plus, X } from "@proliferate/ui/icons";
@@ -16,6 +15,7 @@ import {
   type AgentHarnessModelGroup,
 } from "@/components/agents/AgentHarnessModelSelector";
 import type { EditorAgent } from "./WorkflowStepPanel";
+import { WorkflowSelect } from "./WorkflowSelect";
 
 export interface WorkflowSetupCardProps {
   setup: WorkflowSetup;
@@ -60,11 +60,15 @@ function ArgRow({
           className="flex-1 font-mono text-ui-sm"
           onChange={(event) => onChange({ ...arg, name: event.target.value })}
         />
-        <Select
+        <WorkflowSelect
+          ariaLabel="Argument type"
           value={arg.type}
           className="w-28"
-          onChange={(event) => {
-            const type = event.target.value as WorkflowArgType;
+          menuWidthClassName="w-32"
+          align="end"
+          options={ARG_TYPES.map((type) => ({ value: type, label: type }))}
+          onChange={(value) => {
+            const type = value as WorkflowArgType;
             const next: WorkflowArgSpec = { ...arg, type };
             if (type === "enum" && !next.enum) {
               next.enum = [];
@@ -74,13 +78,7 @@ function ArgRow({
             }
             onChange(next);
           }}
-        >
-          {ARG_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </Select>
+        />
         <Button variant="ghost" size="icon-sm" aria-label="Remove argument" onClick={onRemove}>
           <X className="size-4" />
         </Button>
@@ -146,11 +144,11 @@ export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsCh
   };
 
   return (
-    <div className="rounded-[12px] border border-border bg-background">
+    <div className="rounded-xl border border-border bg-background shadow-sm">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-left transition-colors hover:bg-list-hover"
       >
         <span className="flex min-w-0 flex-col">
           <span className="text-ui-sm font-medium text-foreground">Setup</span>
@@ -177,15 +175,17 @@ export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsCh
 
           <div className="flex flex-col gap-1.5">
             <Label>Session</Label>
-            <Select
+            <WorkflowSelect
+              ariaLabel="Session"
               value={setup.sessionBinding}
-              onChange={(event) =>
-                onSetupChange({ ...setup, sessionBinding: event.target.value as WorkflowSessionBinding })
+              options={[
+                { value: "fresh", label: "Fresh (visible)" },
+                { value: "headless", label: "Headless" },
+              ]}
+              onChange={(value) =>
+                onSetupChange({ ...setup, sessionBinding: value as WorkflowSessionBinding })
               }
-            >
-              <option value="fresh">Fresh (visible)</option>
-              <option value="headless">Headless</option>
-            </Select>
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

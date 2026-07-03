@@ -20,9 +20,9 @@ import type { WorkflowRunTargetOption } from "@/components/workflows/home/Workfl
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Plus } from "@proliferate/ui/icons";
+import { WorkflowSelect } from "./WorkflowSelect";
 
 type ArgValue = string | number | boolean;
 type Concurrency = "skip" | "queue";
@@ -166,7 +166,7 @@ export function WorkflowTriggersCard({
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-[12px] border border-border bg-background p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 shadow-sm">
       <span className="text-ui-sm font-medium text-foreground">Triggers</span>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -240,16 +240,12 @@ export function WorkflowTriggersCard({
 
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Cloud workspace</Label>
-            <Select
+            <WorkflowSelect
+              ariaLabel="Cloud workspace"
               value={draft.workspaceId}
-              onChange={(event) => patchDraft({ workspaceId: event.target.value })}
-            >
-              {cloudWorkspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.label}
-                </option>
-              ))}
-            </Select>
+              options={cloudWorkspaces.map((workspace) => ({ value: workspace.id, label: workspace.label }))}
+              onChange={(value) => patchDraft({ workspaceId: value })}
+            />
           </div>
 
           {args.length > 0 ? (
@@ -270,18 +266,14 @@ export function WorkflowTriggersCard({
                       }
                     />
                   ) : arg.type === "enum" ? (
-                    <Select
+                    <WorkflowSelect
+                      ariaLabel={`${arg.name} value`}
                       value={String(draft.argValues[arg.name] ?? "")}
-                      onChange={(event) =>
-                        patchDraft({ argValues: { ...draft.argValues, [arg.name]: event.target.value } })
+                      options={(arg.enum ?? []).map((option) => ({ value: option, label: option }))}
+                      onChange={(value) =>
+                        patchDraft({ argValues: { ...draft.argValues, [arg.name]: value } })
                       }
-                    >
-                      {(arg.enum ?? []).map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </Select>
+                    />
                   ) : (
                     <Input
                       type={arg.type === "number" ? "number" : "text"}
@@ -300,14 +292,16 @@ export function WorkflowTriggersCard({
           <div className="flex items-end gap-3 border-t border-border/60 pt-2">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">If still running when triggered again</Label>
-              <Select
+              <WorkflowSelect
+                ariaLabel="Concurrency policy"
                 value={draft.concurrency}
                 className="w-40"
-                onChange={(event) => patchDraft({ concurrency: event.target.value as Concurrency })}
-              >
-                <option value="skip">Skip</option>
-                <option value="queue">Queue</option>
-              </Select>
+                options={[
+                  { value: "skip", label: "Skip" },
+                  { value: "queue", label: "Queue" },
+                ]}
+                onChange={(value) => patchDraft({ concurrency: value as Concurrency })}
+              />
             </div>
             <label className="mb-1.5 flex items-center gap-2 text-xs text-foreground">
               <Switch checked={draft.enabled} onChange={(enabled) => patchDraft({ enabled })} />
