@@ -220,3 +220,61 @@ def test_parse_does_not_mutate_input() -> None:
     before = copy.deepcopy(definition)
     parse_definition(definition)
     assert definition == before
+
+
+# --- agent.config step (agent/model config is its own step) --------------------
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"kind": "agent.config", "harness": "codex"},
+        {"kind": "agent.config", "model": "opus"},
+        {"kind": "agent.config", "harness": "codex", "model": "opus"},
+    ],
+)
+def test_agent_config_step_parses(config: dict) -> None:
+    definition = _valid_definition()
+    definition["steps"].insert(0, config)
+    canonical, _ = parse_definition(definition)
+    step = canonical["steps"][0]
+    assert step["kind"] == "agent.config"
+    assert step["on_fail"] == {"kind": "stop"}
+    for key in ("harness", "model"):
+        if key in config:
+            assert step[key] == config[key]
+        else:
+            assert key not in step
+
+
+def test_agent_config_requires_harness_or_model() -> None:
+    definition = _valid_definition()
+    definition["steps"].insert(0, {"kind": "agent.config"})
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "invalid_definition"
+
+
+def test_agent_config_rejects_empty_harness() -> None:
+    definition = _valid_definition()
+    definition["steps"].insert(0, {"kind": "agent.config", "harness": "  "})
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "invalid_definition"
+
+
+def test_agent_config_rejects_unknown_field() -> None:
+    definition = _valid_definition()
+    definition["steps"].insert(0, {"kind": "agent.config", "harness": "codex", "temperature": 1})
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+@pytest.mark.parametrize("field", ["model_override", "harness_override"])
+def test_agent_prompt_rejects_removed_overrides(field: str) -> None:
+    definition = _valid_definition()
+    definition["steps"][0][field] = "opus"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"

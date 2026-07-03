@@ -25,6 +25,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_ON_FAIL_STOP,
     WORKFLOW_SESSION_BINDING_FRESH,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
+    WORKFLOW_STEP_AGENT_CONFIG,
     WORKFLOW_STEP_AGENT_PROMPT,
     WORKFLOW_STEP_HUMAN_APPROVAL,
     WORKFLOW_STEP_NOTIFY,
@@ -277,20 +278,33 @@ def _parse_goal(raw: object, *, field: str) -> dict[str, object]:
 
 
 def _parse_agent_prompt(step: dict[str, object], *, field: str) -> dict[str, object]:
-    _reject_unknown_keys(
-        step,
-        {"kind", "on_fail", "prompt", "model_override", "harness_override", "goal"},
-        field=field,
-    )
+    _reject_unknown_keys(step, {"kind", "on_fail", "prompt", "goal"}, field=field)
     canonical: dict[str, object] = {"prompt": _require_str(step, "prompt", field=field)}
-    model_override = _optional_str(step, "model_override", field=field)
-    if model_override is not None:
-        canonical["model_override"] = model_override
-    harness_override = _optional_str(step, "harness_override", field=field)
-    if harness_override is not None:
-        canonical["harness_override"] = harness_override
     if "goal" in step and step["goal"] is not None:
         canonical["goal"] = _parse_goal(step["goal"], field=field)
+    return canonical
+
+
+def _parse_agent_config(step: dict[str, object], *, field: str) -> dict[str, object]:
+    """Agent config step: sets the harness and/or model for the steps below it.
+
+    At least one of ``harness`` / ``model`` must be present; each, when present,
+    must be a non-empty string.
+    """
+
+    _reject_unknown_keys(step, {"kind", "on_fail", "harness", "model"}, field=field)
+    canonical: dict[str, object] = {}
+    for key in ("harness", "model"):
+        value = _optional_str(step, key, field=field)
+        if value is not None:
+            if not value.strip():
+                raise _err("invalid_definition", f"'{field}.{key}' must be a non-empty string.")
+            canonical[key] = value
+    if not canonical:
+        raise _err(
+            "invalid_definition",
+            f"'{field}' requires at least one of 'harness' or 'model'.",
+        )
     return canonical
 
 
@@ -360,6 +374,7 @@ def _parse_human_approval(step: dict[str, object], *, field: str) -> dict[str, o
 
 
 _STEP_PARSERS = {
+    WORKFLOW_STEP_AGENT_CONFIG: _parse_agent_config,
     WORKFLOW_STEP_AGENT_PROMPT: _parse_agent_prompt,
     WORKFLOW_STEP_SHELL_RUN: _parse_shell_run,
     WORKFLOW_STEP_SCM_OPEN_PR: _parse_scm_open_pr,

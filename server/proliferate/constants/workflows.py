@@ -111,6 +111,7 @@ WORKFLOW_RUN_OBSERVABLE_STATUSES: Final = frozenset(
 )
 
 # --- Step kinds (spec 3.3). ----------------------------------------------------
+WORKFLOW_STEP_AGENT_CONFIG: Final = "agent.config"
 WORKFLOW_STEP_AGENT_PROMPT: Final = "agent.prompt"
 WORKFLOW_STEP_SHELL_RUN: Final = "shell.run"
 WORKFLOW_STEP_SCM_OPEN_PR: Final = "scm.open_pr"
@@ -118,6 +119,7 @@ WORKFLOW_STEP_NOTIFY: Final = "notify"
 WORKFLOW_STEP_HUMAN_APPROVAL: Final = "human.approval"
 SUPPORTED_WORKFLOW_STEP_KINDS: Final = frozenset(
     {
+        WORKFLOW_STEP_AGENT_CONFIG,
         WORKFLOW_STEP_AGENT_PROMPT,
         WORKFLOW_STEP_SHELL_RUN,
         WORKFLOW_STEP_SCM_OPEN_PR,
