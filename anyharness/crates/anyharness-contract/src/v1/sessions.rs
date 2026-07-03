@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use super::OriginContext;
 use super::{
     ContentPart, Goal, InteractionKind, McpElicitationInteractionPayload,
-    PermissionInteractionContext, PermissionInteractionOption, PromptProvenance,
+    PermissionInteractionContext, PermissionInteractionOption, PromptProvenance, SessionActivity,
     SessionLiveConfigSnapshot, SessionMcpBindingSummary, UserInputQuestion,
 };
 
@@ -123,8 +123,15 @@ pub struct Session {
     pub pending_prompts: Vec<PendingPromptSummary>,
     #[serde(default)]
     pub action_capabilities: SessionActionCapabilities,
+    /// Deprecated in favor of `activity.goal` — kept for existing SDK
+    /// consumers; every write still moves this field too.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_goal: Option<Goal>,
+    /// `SessionActivity` (turn/goal/loops/processes/agents) — the
+    /// session-activity-architecture aggregate. `None` when the runtime has
+    /// not yet assembled it for this read path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activity: Option<SessionActivity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
 }
@@ -138,6 +145,13 @@ pub struct SessionActionCapabilities {
     pub targeted_fork: bool,
     #[serde(default)]
     pub supports_goals: bool,
+    #[serde(default)]
+    pub supports_loops: bool,
+    /// Whether loops ride native harness state (Claude session crons) or are
+    /// runtime-emulated (Codex `LoopSchedulerExtension`). Meaningless when
+    /// `supports_loops` is `false`.
+    #[serde(default)]
+    pub loops_native: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -718,6 +732,7 @@ mod tests {
             dismissed_at: None,
             pending_prompts: vec![],
             active_goal: None,
+            activity: None,
             origin: None,
         };
 
