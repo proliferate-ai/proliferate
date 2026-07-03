@@ -2,19 +2,17 @@ use tokio::time::sleep;
 use tracing::{info, warn};
 
 use crate::{
-    cloud_client::CloudClient,
-    config::WorkerConfig,
-    error::WorkerError,
-    identity, integration_gateway, lifecycle,
-    process_lock::WorkerProcessLock,
-    store::WorkerStore,
+    cloud_client::CloudClient, config::WorkerConfig, error::WorkerError, identity,
+    identity::credentials::WorkerIdentity, integration_gateway, lifecycle,
+    process_lock::WorkerProcessLock, self_update, store::WorkerStore,
 };
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     let _process_lock = WorkerProcessLock::acquire(&config.worker_db_path)?;
     let store = WorkerStore::open(config.worker_db_path.clone())?;
     let cloud = CloudClient::new(&config)?;
-    let (identity, integration_gateway) = identity::ensure_enrolled(&config, &store, &cloud).await?;
+    let (identity, integration_gateway) =
+        identity::ensure_enrolled(&config, &store, &cloud).await?;
     info!(worker_id = %identity.worker_id, "proliferate worker started");
 
     // Write the integration-gateway dotfile on every (re)enroll.
@@ -26,16 +24,50 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
         );
     }
 
-    if let Err(error) = lifecycle::heartbeat::send_once(&cloud, &identity).await {
-        warn!(?error, "worker heartbeat failed");
-    }
+    heartbeat_and_converge(&config, &cloud, &identity, once).await;
     if once {
         return Ok(());
     }
     loop {
         sleep(lifecycle::heartbeat::interval(&config)).await;
-        if let Err(error) = lifecycle::heartbeat::send_once(&cloud, &identity).await {
+        heartbeat_and_converge(&config, &cloud, &identity, false).await;
+    }
+}
+
+/// One heartbeat plus whatever the ack demands. Never fails the worker loop:
+/// a missed heartbeat or a failed self-update leaves the current binary
+/// serving, and the next tick retries. In `--once` mode a pending update is
+/// only reported (dry run), never executed.
+async fn heartbeat_and_converge(
+    config: &WorkerConfig,
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    dry_run: bool,
+) {
+    let response = match lifecycle::heartbeat::send_once(cloud, identity).await {
+        Ok(response) => response,
+        Err(error) => {
             warn!(?error, "worker heartbeat failed");
+            return;
         }
+    };
+    let Some(update) = self_update::plan(config, &response) else {
+        return;
+    };
+    if dry_run {
+        info!(
+            desired = %update.desired_version,
+            "self-update pending; skipped in --once mode"
+        );
+        return;
+    }
+    // On success this never returns: converge ends by exec'ing the swapped
+    // binary in place of this process.
+    if let Err(error) = self_update::converge(cloud, &update).await {
+        warn!(
+            ?error,
+            desired = %update.desired_version,
+            "worker self-update failed; staying on the current version"
+        );
     }
 }

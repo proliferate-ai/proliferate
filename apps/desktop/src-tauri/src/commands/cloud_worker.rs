@@ -353,6 +353,10 @@ fn write_worker_config(
         "integration_gateway_home = {}",
         toml_string(&integration_gateway_home.to_string_lossy())
     ));
+    // The desktop app bundle owns the worker binary; the worker must never
+    // self-swap here. Explicit (the worker also defaults to false) so the
+    // on-disk config documents the gate.
+    lines.push("self_update_enabled = false".to_string());
     app_config::write_string_file_atomic(path, &format!("{}\n", lines.join("\n")))?;
     set_private_file_permissions(path)
 }

@@ -52,6 +52,27 @@ pub struct IntegrationGatewayConfig {
 pub struct HeartbeatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+    // Self-reported so the server row tracks what actually runs, including
+    // right after a self-swap.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worker_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anyharness_version: Option<String>,
+}
+
+/// Component versions the server pins; self-managed workers converge onto
+/// these. Every field is optional so acks from older servers (or future shape
+/// changes) never break heartbeating.
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DesiredVersions {
+    #[serde(default)]
+    pub worker: Option<String>,
+    // Parsed for completeness; the worker only swaps its own binary today.
+    // AnyHarness convergence is owned by whoever launches the runtime.
+    #[allow(dead_code)]
+    #[serde(default)]
+    pub anyharness: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -64,6 +85,9 @@ pub struct HeartbeatResponse {
     pub status: Option<String>,
     #[serde(default)]
     pub server_time: Option<String>,
+    // Absent on servers that predate version convergence.
+    #[serde(default)]
+    pub desired_versions: Option<DesiredVersions>,
 }
 
 impl CloudClient {
@@ -106,7 +130,36 @@ impl CloudClient {
             .await?;
         parse_json_response(response).await
     }
+
+    /// Fetch a pinned worker artifact (binary or its `.sha256`) via the
+    /// server's redirect endpoint. Unauthenticated by design (the CDN
+    /// artifacts are public); reqwest follows the 302 to the downloads CDN.
+    /// Uses a per-request timeout because a binary download can legitimately
+    /// outlive the client's default 30s cap on slow links.
+    pub async fn download_worker_artifact(
+        &self,
+        target: &str,
+        asset: &str,
+    ) -> Result<Vec<u8>, WorkerError> {
+        let response = self
+            .http
+            .get(format!(
+                "{}/v1/cloud/worker/download/{target}/{asset}",
+                self.base_url
+            ))
+            .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud { status, body });
+        }
+        Ok(response.bytes().await?.to_vec())
+    }
 }
+
+const ARTIFACT_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 
 async fn parse_json_response<T: DeserializeOwned>(
     response: reqwest::Response,
@@ -140,21 +193,72 @@ mod tests {
         assert_eq!(response.worker_token, "token");
         assert_eq!(response.heartbeat_interval_seconds, 30);
         assert_eq!(response.integration_gateway.url, "http://127.0.0.1:8300");
-        assert_eq!(response.integration_gateway.authorization, "Bearer gw-secret");
+        assert_eq!(
+            response.integration_gateway.authorization,
+            "Bearer gw-secret"
+        );
     }
 
     #[test]
     fn heartbeat_response_parses_minimal_ack() {
-        // Mirrors the real server body: workerId + serverTime + interval, no status.
+        // Mirrors an older server's body: workerId + serverTime + interval,
+        // no status and no desiredVersions.
         let payload = br#"{
             "workerId": "worker",
             "serverTime": "2026-07-01T00:00:00Z",
             "heartbeatIntervalSeconds": 30
         }"#;
-        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
-            .expect("minimal heartbeat ack");
+        let response =
+            serde_json::from_slice::<HeartbeatResponse>(payload).expect("minimal heartbeat ack");
         assert_eq!(response.worker_id, "worker");
         assert_eq!(response.status, None);
-        assert_eq!(response.server_time.as_deref(), Some("2026-07-01T00:00:00Z"));
+        assert_eq!(
+            response.server_time.as_deref(),
+            Some("2026-07-01T00:00:00Z")
+        );
+        assert!(response.desired_versions.is_none());
+    }
+
+    #[test]
+    fn heartbeat_response_parses_desired_versions() {
+        let payload = br#"{
+            "workerId": "worker",
+            "serverTime": "2026-07-01T00:00:00Z",
+            "heartbeatIntervalSeconds": 30,
+            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"}
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("heartbeat ack with desiredVersions");
+        let desired = response.desired_versions.expect("desiredVersions present");
+        assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
+        assert_eq!(desired.anyharness.as_deref(), Some("0.2.16"));
+    }
+
+    #[test]
+    fn heartbeat_response_tolerates_partial_desired_versions() {
+        // Future shape changes must never break heartbeating.
+        let payload = br#"{
+            "workerId": "worker",
+            "desiredVersions": {"worker": "0.2.16"}
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("heartbeat ack with partial desiredVersions");
+        let desired = response.desired_versions.expect("desiredVersions present");
+        assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
+        assert_eq!(desired.anyharness, None);
+    }
+
+    #[test]
+    fn heartbeat_request_serializes_versions_camel_case() {
+        let request = super::HeartbeatRequest {
+            status: Some("online".to_string()),
+            worker_version: Some("0.1.0".to_string()),
+            anyharness_version: None,
+        };
+        let value = serde_json::to_value(&request).expect("serialize heartbeat request");
+        assert_eq!(value["status"], "online");
+        assert_eq!(value["workerVersion"], "0.1.0");
+        // Absent versions are omitted entirely, not sent as null.
+        assert!(value.get("anyharnessVersion").is_none());
     }
 }

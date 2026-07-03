@@ -17,6 +17,13 @@ pub struct WorkerConfig {
     pub integration_gateway_home: Option<PathBuf>,
     #[serde(default = "default_heartbeat_interval_seconds")]
     pub heartbeat_interval_seconds: u64,
+    /// Whether this worker converges its own binary onto the server's pinned
+    /// version (heartbeat `desiredVersions`). Default false: only launchers
+    /// that own no update mechanism of their own (the sandbox sidecar) opt
+    /// in. The desktop app bundle owns its worker binary and must leave this
+    /// off.
+    #[serde(default)]
+    pub self_update_enabled: bool,
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
 }
@@ -144,4 +151,28 @@ fn default_config_path() -> PathBuf {
         .join(".proliferate")
         .join("worker")
         .join("config.toml")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WorkerConfig;
+
+    const MINIMAL_CONFIG: &str = r#"
+cloud_base_url = "https://cloud.test"
+worker_db_path = "/tmp/worker.sqlite3"
+"#;
+
+    #[test]
+    fn self_update_defaults_off() {
+        // Desktop configs predate (and must never enable) self-update.
+        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
+        assert!(!config.self_update_enabled);
+    }
+
+    #[test]
+    fn self_update_opt_in_parses() {
+        let contents = format!("{MINIMAL_CONFIG}self_update_enabled = true\n");
+        let config: WorkerConfig = toml::from_str(&contents).expect("opt-in config");
+        assert!(config.self_update_enabled);
+    }
 }
