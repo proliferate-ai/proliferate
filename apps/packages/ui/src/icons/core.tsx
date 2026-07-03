@@ -25,6 +25,20 @@ export function ChevronUpDown({ className, ...props }: IconProps) {
   );
 }
 
+/**
+ * Converging double chevron (top points down, bottom points up) — the
+ * "collapse all" affordance. Inverse of {@link ChevronUpDown}, which diverges
+ * for "expand all".
+ */
+export function ChevronDownUp({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m7 20 5-5 5 5" />
+      <path d="m7 4 5 5 5-5" />
+    </svg>
+  );
+}
+
 export function Minus({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
