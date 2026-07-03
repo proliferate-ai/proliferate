@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { connectFeed, type FeedStreamHandle } from "@anyharness/sdk";
 import type { FeedRefWire } from "@proliferate/product-domain/activity/process";
 import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
+import { appendCappedFeedContent } from "@/hooks/activity/derived/feed-content-buffer";
 
 export interface FeedStreamState {
   /** Accumulated feed content (terminal bytes decoded as UTF-8, or text lines). */
@@ -58,12 +59,18 @@ export function useFeedStream(
           onBytes: (bytes) => {
             if (!cancelled) {
               const chunk = decoder.decode(bytes, { stream: true });
-              setState((prev) => ({ ...prev, content: prev.content + chunk }));
+              setState((prev) => ({
+                ...prev,
+                content: appendCappedFeedContent(prev.content, chunk),
+              }));
             }
           },
           onText: (text) => {
             if (!cancelled) {
-              setState((prev) => ({ ...prev, content: `${prev.content}${text}\n` }));
+              setState((prev) => ({
+                ...prev,
+                content: appendCappedFeedContent(prev.content, `${text}\n`),
+              }));
             }
           },
           onError: () => {
