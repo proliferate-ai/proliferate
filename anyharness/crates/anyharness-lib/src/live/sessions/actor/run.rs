@@ -190,19 +190,28 @@ impl SessionActor {
     /// Sends one ACP extension-method request on the agent connection. The
     /// wire method name is serialized verbatim (outbound ext routing does not
     /// gate on the `_` prefix); the raw JSON result is returned untouched.
+    ///
+    /// The await is bounded: ext calls are handled inline on the actor loop,
+    /// so an agent that never answers (e.g. a goal write queued behind a turn
+    /// blocked on a pending interaction) must not wedge the actor — the
+    /// deadline exceeds every sidecar-internal confirmation window (30s).
     pub(in crate::live::sessions::actor) async fn call_agent_ext_method(
         &self,
         method: &str,
         params: serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
+        const EXT_METHOD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
         let params: std::sync::Arc<serde_json::value::RawValue> =
             serde_json::value::to_raw_value(&params)?.into();
         let ext = acp::schema::ExtRequest::new(method.to_string(), params);
-        let response = self
-            .conn
-            .send_request(acp::AgentRequest::ExtMethodRequest(ext))
-            .block_task()
-            .await?;
+        let response = tokio::time::timeout(
+            EXT_METHOD_TIMEOUT,
+            self.conn
+                .send_request(acp::AgentRequest::ExtMethodRequest(ext))
+                .block_task(),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("agent did not answer {method} within {}s", EXT_METHOD_TIMEOUT.as_secs()))??;
         Ok(serde_json::to_value(&response)?)
     }
 }
