@@ -54,6 +54,14 @@ const LOOP_CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(15);
 /// feature, not synthetic harness behavior, and only Codex is in scope in v1.
 const EMULATED_LOOP_AGENT_KINDS: &[&str] = &["codex"];
 
+/// Whether the runtime emulates loops for this agent kind. The single source
+/// of truth shared by [`LoopRuntime::support_for`] and the session-start
+/// capability advertisement (an emulated kind supports loops even though its
+/// sidecar omits `loops` from `_meta`).
+pub(crate) fn is_emulated_loop_agent_kind(agent_kind: &str) -> bool {
+    EMULATED_LOOP_AGENT_KINDS.contains(&agent_kind)
+}
+
 /// The `PromptProvenance` label carried by an emulated loop fire so the UI can
 /// attribute the turn. Maps to the public `System { label }` provenance — no
 /// contract/SDK surface is added.

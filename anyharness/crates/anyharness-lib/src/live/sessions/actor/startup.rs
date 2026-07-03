@@ -130,8 +130,14 @@ impl SessionActor {
             )
             .await?;
 
-            persist_session_action_capabilities(config.caps.state.as_ref(), &session_id, &init_response);
-            let action_capabilities = action_capabilities_from_acp(&init_response);
+            persist_session_action_capabilities(
+                config.caps.state.as_ref(),
+                &session_id,
+                &source_agent_kind,
+                &init_response,
+            );
+            let action_capabilities =
+                action_capabilities_from_acp(&source_agent_kind, &init_response);
 
             let native = start_native_session(
                 &conn,
@@ -451,9 +457,10 @@ async fn dispatch_startup_drain(
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
     store: &dyn SessionStateDurable,
     session_id: &str,
+    agent_kind: &str,
     init_response: &acp::schema::InitializeResponse,
 ) {
-    let capabilities = action_capabilities_from_acp(init_response);
+    let capabilities = action_capabilities_from_acp(agent_kind, init_response);
     let Ok(json) = serialize_action_capabilities(capabilities) else {
         tracing::warn!(
             session_id,
@@ -472,6 +479,7 @@ pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
 }
 
 pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
+    agent_kind: &str,
     init_response: &acp::schema::InitializeResponse,
 ) -> SessionActionCapabilities {
     let agent_capabilities = &init_response.agent_capabilities;
@@ -487,7 +495,17 @@ pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
             "agent advertises edit-safe targeted fork metadata; public targeted fork remains disabled until runtime target dispatch is implemented"
         );
     }
-    let (supports_loops, loops_native) = loops_capability_from_init_meta(init_response.meta.as_ref());
+    let (mut supports_loops, loops_native) =
+        loops_capability_from_init_meta(init_response.meta.as_ref());
+    // Runtime-emulated loops (Codex) never advertise `loops` in `_meta` — the
+    // sidecar has no LoopPort — but the runtime scheduler fully drives them.
+    // Advertise support so the ⟳ loops chip is reachable; `loops_native` stays
+    // false, marking the emulated (non-mirror) path.
+    if !supports_loops
+        && crate::domains::loops::runtime::is_emulated_loop_agent_kind(agent_kind)
+    {
+        supports_loops = true;
+    }
     SessionActionCapabilities {
         fork,
         targeted_fork: false,
@@ -697,9 +715,25 @@ mod tests {
                 "loops": { "supported": true, "native": true }
             }
         })));
-        let capabilities = action_capabilities_from_acp(&init_response);
+        let capabilities = action_capabilities_from_acp("claude", &init_response);
         assert!(capabilities.supports_goals);
         assert!(capabilities.supports_loops);
         assert!(capabilities.loops_native);
+    }
+
+    #[test]
+    fn action_capabilities_from_acp_advertises_emulated_loops_for_codex() {
+        // codex-acp omits `loops` from `_meta` entirely, but the runtime
+        // emulates loops for it — the capability must still report supported so
+        // the ⟳ loops chip is reachable, with loops_native=false.
+        let init_response =
+            acp::schema::InitializeResponse::new(acp::schema::ProtocolVersion::V1);
+        let capabilities = action_capabilities_from_acp("codex", &init_response);
+        assert!(capabilities.supports_loops);
+        assert!(!capabilities.loops_native);
+
+        // A non-emulated kind with no `loops` meta stays unsupported.
+        let claude = action_capabilities_from_acp("claude", &init_response);
+        assert!(!claude.supports_loops);
     }
 }
