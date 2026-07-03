@@ -6,6 +6,7 @@ use anyharness_contract::v1::{
     McpElicitationSubmittedField, SessionMcpBindingSummary, UserInputSubmittedAnswer,
 };
 
+use super::active_goals::ActiveGoalResolver;
 use super::links::model::SessionLinkRecord;
 use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
@@ -50,6 +51,7 @@ pub struct SessionRuntime {
     /// Catalog-driven gateway model resolver (spec §3): supplies the render
     /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
     gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+    active_goal_resolver: Arc<dyn ActiveGoalResolver>,
 }
 
 impl SessionRuntime {
@@ -272,6 +274,7 @@ impl SessionRuntime {
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+        active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     ) -> Self {
         Self {
             session_service,
@@ -286,6 +289,7 @@ impl SessionRuntime {
             plan_reference_resolver,
             plan_interaction_link_resolver,
             gateway_model_resolver,
+            active_goal_resolver,
         }
     }
 

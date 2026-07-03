@@ -130,13 +130,8 @@ impl SessionActor {
             )
             .await?;
 
-            persist_session_action_capabilities(
-                config.caps.state.as_ref(),
-                &session_id,
-                &init_response.agent_capabilities,
-            );
-            let action_capabilities =
-                action_capabilities_from_acp(&init_response.agent_capabilities);
+            persist_session_action_capabilities(config.caps.state.as_ref(), &session_id, &init_response);
+            let action_capabilities = action_capabilities_from_acp(&init_response);
 
             let native = start_native_session(
                 &conn,
@@ -456,9 +451,9 @@ async fn dispatch_startup_drain(
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
     store: &dyn SessionStateDurable,
     session_id: &str,
-    agent_capabilities: &acp::schema::AgentCapabilities,
+    init_response: &acp::schema::InitializeResponse,
 ) {
-    let capabilities = action_capabilities_from_acp(agent_capabilities);
+    let capabilities = action_capabilities_from_acp(init_response);
     let Ok(json) = serialize_action_capabilities(capabilities) else {
         tracing::warn!(
             session_id,
@@ -477,8 +472,9 @@ pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
 }
 
 pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
-    agent_capabilities: &acp::schema::AgentCapabilities,
+    init_response: &acp::schema::InitializeResponse,
 ) -> SessionActionCapabilities {
+    let agent_capabilities = &init_response.agent_capabilities;
     let fork_capability = agent_capabilities.session_capabilities.fork.as_ref();
     let fork = agent_capabilities.load_session && fork_capability.is_some();
     let adapter_targeted_fork_ready = fork
@@ -494,7 +490,33 @@ pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
     SessionActionCapabilities {
         fork,
         targeted_fork: false,
+        supports_goals: supports_goals_from_init_meta(init_response.meta.as_ref()),
     }
+}
+
+/// `InitializeResponse._meta.anyharness.goals` — the GoalPort capability
+/// advertisement (wire contract v1). Anything short of an explicit
+/// `{ schemaVersion: 1, goals: { supported: true } }` degrades to
+/// unsupported: stale sidecars must never break.
+fn supports_goals_from_init_meta(meta: Option<&acp::schema::Meta>) -> bool {
+    let Some(anyharness) = meta
+        .and_then(|meta| meta.get("anyharness"))
+        .and_then(|value| value.as_object())
+    else {
+        return false;
+    };
+    if anyharness
+        .get("schemaVersion")
+        .and_then(|value| value.as_u64())
+        != Some(1)
+    {
+        return false;
+    }
+    anyharness
+        .get("goals")
+        .and_then(|goals| goals.get("supported"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
 }
 
 #[cfg(all(test, unix))]
@@ -523,5 +545,46 @@ mod tests {
         assert!(error
             .to_string()
             .contains("Failed to locate codex-acp binary"));
+    }
+
+    fn init_meta(value: serde_json::Value) -> acp::schema::Meta {
+        let serde_json::Value::Object(map) = value else {
+            panic!("meta fixture must be an object");
+        };
+        acp::schema::Meta::from_iter(map)
+    }
+
+    #[test]
+    fn supports_goals_requires_schema_version_and_supported_flag() {
+        assert!(supports_goals_from_init_meta(Some(&init_meta(
+            serde_json::json!({
+                "anyharness": {
+                    "schemaVersion": 1,
+                    "goals": { "supported": true, "native": true }
+                }
+            })
+        ))));
+        assert!(!supports_goals_from_init_meta(Some(&init_meta(
+            serde_json::json!({
+                "anyharness": {
+                    "schemaVersion": 2,
+                    "goals": { "supported": true }
+                }
+            })
+        ))));
+        assert!(!supports_goals_from_init_meta(Some(&init_meta(
+            serde_json::json!({
+                "anyharness": { "schemaVersion": 1 }
+            })
+        ))));
+        assert!(!supports_goals_from_init_meta(Some(&init_meta(
+            serde_json::json!({
+                "anyharness": {
+                    "schemaVersion": 1,
+                    "goals": { "supported": false }
+                }
+            })
+        ))));
+        assert!(!supports_goals_from_init_meta(None));
     }
 }

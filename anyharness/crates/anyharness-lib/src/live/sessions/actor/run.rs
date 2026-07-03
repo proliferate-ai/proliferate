@@ -121,6 +121,15 @@ impl SessionActor {
                 let _ = respond_to.send(result);
                 None
             }
+            SessionCommand::CallAgentExtMethod {
+                method,
+                params,
+                respond_to,
+            } => {
+                let result = self.call_agent_ext_method(&method, params).await;
+                let _ = respond_to.send(result);
+                None
+            }
             SessionCommand::InjectRuntimeEvent { event, respond_to } => {
                 let result = self.inject_runtime_event(event).await;
                 let _ = respond_to.send(result);
@@ -176,5 +185,24 @@ impl SessionActor {
                 None
             }
         }
+    }
+
+    /// Sends one ACP extension-method request on the agent connection. The
+    /// wire method name is serialized verbatim (outbound ext routing does not
+    /// gate on the `_` prefix); the raw JSON result is returned untouched.
+    pub(in crate::live::sessions::actor) async fn call_agent_ext_method(
+        &self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> anyhow::Result<serde_json::Value> {
+        let params: std::sync::Arc<serde_json::value::RawValue> =
+            serde_json::value::to_raw_value(&params)?.into();
+        let ext = acp::schema::ExtRequest::new(method.to_string(), params);
+        let response = self
+            .conn
+            .send_request(acp::AgentRequest::ExtMethodRequest(ext))
+            .block_task()
+            .await?;
+        Ok(serde_json::to_value(&response)?)
     }
 }

@@ -229,7 +229,16 @@ impl SessionEventSink {
 /// Adapter meta tags whose chunks must not become transcript items. These
 /// are anyharness protocol vocabulary (set by our own agent adapters), not
 /// product meaning — product interpretation happens in the observers.
-const NON_TRANSCRIPT_CHUNK_EVENTS: &[&str] = &["proposed_plan_delta", "proposed_plan_completed"];
+const NON_TRANSCRIPT_CHUNK_EVENTS: &[&str] = &[
+    "proposed_plan_delta",
+    "proposed_plan_completed",
+    "goal_updated",
+    "goal_met",
+    "goal_cleared",
+    "loop_updated",
+    "loop_fired",
+    "loop_cleared",
+];
 
 fn is_non_transcript_chunk(meta: Option<&serde_json::Value>) -> bool {
     meta.and_then(|meta| meta.get("anyharness"))

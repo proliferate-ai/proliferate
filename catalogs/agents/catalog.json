@@ -90,6 +90,7 @@
         }
       ],
       "session": {
+        "supportsGoals": true,
         "controls": [
           {
             "key": "model",
@@ -1051,6 +1052,7 @@
         }
       ],
       "session": {
+        "supportsGoals": true,
         "controls": [
           {
             "key": "model",

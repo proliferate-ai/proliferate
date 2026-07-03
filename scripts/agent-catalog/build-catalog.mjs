@@ -93,6 +93,16 @@ const AGENT_SESSION_DEFAULTS = {
   grok: { "xai-api": "grok-4.20-0309-non-reasoning" },
 };
 
+// Native goal support per harness (session.supportsGoals, curation-owned):
+// the pinned harness version implements the GoalPort (claude >= 2.1.139,
+// codex >= 0.133). The runtime capability stays ACP-advertised at initialize;
+// this flag is the version-level declaration for surfaces without a live
+// handshake.
+const AGENT_SUPPORTS_GOALS = {
+  claude: true,
+  codex: true,
+};
+
 // Display-name curation: probe snapshots carry pretty names for some models
 // and raw ids for others. When a display name has no uppercase at all we
 // title-case it with a brand-aware token map (matching the existing
@@ -568,7 +578,13 @@ for (const [kind, runs] of byAgent) {
           ? { signals: AUTH_CONTEXT_SIGNALS[kind][run.data.authContext] }
           : {}),
       })),
-    session: { controls, models, defaults: AGENT_SESSION_DEFAULTS[kind] ?? {}, observedDefaults },
+    session: {
+      supportsGoals: AGENT_SUPPORTS_GOALS[kind] ?? false,
+      controls,
+      models,
+      defaults: AGENT_SESSION_DEFAULTS[kind] ?? {},
+      observedDefaults,
+    },
     provenance: {
       probedAt: runs.map((r) => r.data.probedAt).sort().at(-1),
       attestation,
