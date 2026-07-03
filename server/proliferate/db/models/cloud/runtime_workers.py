@@ -9,7 +9,7 @@ AnyHarness reads from a dotfile to reach the Cloud integration gateway.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -52,13 +52,30 @@ class CloudRuntimeWorker(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     runtime_kind: Mapped[str] = mapped_column(String(32))
-    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     desktop_install_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="online")
+    # Self-reported at enrollment/heartbeat; all nullable because pre-versions
+    # workers never report them.
+    worker_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    anyharness_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    machine_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
     enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -88,14 +105,28 @@ class CloudRuntimeWorkerEnrollment(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     runtime_kind: Mapped[str] = mapped_column(String(32))
-    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     desktop_install_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending")
-    created_by_user_id: Mapped[uuid.UUID] = mapped_column()
+    # Attribution, not ownership: NO ACTION (only owner_user_id cascades).
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id"),
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -123,11 +154,25 @@ class CloudIntegrationGatewayToken(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    runtime_worker_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    # Pure derivative of its worker (hash-only row, revoked alongside it):
+    # cascade so a hard delete reaching the worker (e.g. via its sandbox)
+    # never trips over a token, which carries no sandbox FK of its own.
+    runtime_worker_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_runtime_worker.id", ondelete="CASCADE"),
+        index=True,
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="active")
+    # Not stamped on the request hot path; kept for manual revocation forensics.
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

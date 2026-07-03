@@ -115,6 +115,64 @@ async def test_health_reports_needs_reauth_when_oauth_refresh_fails(
 
 
 @pytest.mark.asyncio
+async def test_health_isolates_non_cloud_probe_failure(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A non-CloudApiError from the probe path (e.g. a provider/network timeout
+    # or a DB error on the probe session) must not 500 the whole endpoint: it
+    # is isolated to that one account as a generic error while every other
+    # integration still reports its health.
+    auth = await _authed(client, db_session, prefix="health-probe-crash")
+    definition = await definitions_store.get_seed_by_namespace(db_session, "linear")
+    account = await accounts_store.upsert_account(
+        db_session,
+        user_id=uuid.UUID(auth.user_id),
+        definition_id=definition.id,
+        auth_kind="oauth2",
+        status="ready",
+    )
+    await accounts_store.set_account_credentials(
+        db_session,
+        account_id=account.id,
+        credential_ciphertext=encrypt_json(
+            {
+                "issuer": "https://auth.linear.app",
+                "resource": "https://mcp.linear.app/mcp",
+                "clientId": "c",
+                "accessToken": "tok",
+                "refreshToken": "r",
+                "expiresAt": "2000-01-01T00:00:00+00:00",
+                "scopes": [],
+                "tokenEndpoint": "https://auth.linear.app/oauth/token",
+                "redirectUri": "https://api.example.com/cb",
+            }
+        ),
+        credential_format="oauth-bundle-v1",
+        auth_status="ready",
+        token_expires_at=None,
+    )
+    await db_session.commit()
+
+    async def _boom(*_args: object, **_kwargs: object) -> None:
+        # Not a CloudApiError — the exact failure the gather default would
+        # otherwise propagate out of the whole health response.
+        raise TimeoutError("provider timed out")
+
+    monkeypatch.setattr(
+        "proliferate.server.cloud.integrations.health.ensure_provider_access", _boom
+    )
+
+    response = await client.get(HEALTH_URL, headers=auth.headers)
+    assert response.status_code == 200, response.text
+    items = {i["namespace"]: i for i in response.json()["items"]}
+    # The crashing OAuth probe is isolated to an error verdict...
+    assert items["linear"]["health"] == "error"
+    assert items["linear"]["lastErrorCode"] == "probe_failed"
+    # ...while unrelated integrations still report normally.
+    assert items["context7"]["health"] == "needs_auth"
+
+
+@pytest.mark.asyncio
 async def test_health_rejects_non_member_org_id(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
