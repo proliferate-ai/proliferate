@@ -16,6 +16,7 @@ import {
   terminalItem,
   thoughtItem,
 } from "./transcript-presentation-test-fixtures";
+import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
 
 describe("buildTranscriptRowModel", () => {
   it("creates stable turn rows for large transcripts", () => {
@@ -290,6 +291,89 @@ describe("buildTranscriptRowModel", () => {
       { kind: "outbox_prompt", key: "prompt:prompt-1", clientPromptId: "prompt-1" },
     ]);
   });
+
+  describe("goal event rows", () => {
+    it("leads the row list with an event before any turn started", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(1, "set")],
+      });
+
+      expect(rows).toEqual([
+        { kind: "goal_event", key: "goal-event:1", event: goalEvent(1, "set") },
+        expect.objectContaining({ kind: "turn", turnId: "turn-1" }),
+      ]);
+    });
+
+    it("places an event right after the last turn whose content had already started", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 1);
+      addTurn(transcript, "turn-2", true);
+      addAssistantItems(transcript, "turn-2", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-2",
+        latestTurnHasAssistantRenderableContent: true,
+        // seq 5 landed after turn-1 started (seq 1) but before turn-2 (seq 10).
+        goalEvents: [goalEvent(5, "met")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content",
+        "goal-event:5",
+        "turn:turn-2:block:content",
+      ]);
+    });
+
+    it("orders multiple events on the same turn by seq", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 1);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(9, "met"), goalEvent(3, "set")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content",
+        "goal-event:3",
+        "goal-event:9",
+      ]);
+    });
+
+    it("defaults to no goal rows when goalEvents is omitted", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addAssistantItems(transcript, "turn-1", 1, 1);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+      });
+
+      expect(rows.every((row) => row.kind !== "goal_event")).toBe(true);
+    });
+  });
 });
 
 describe("resolveVirtualBottomDistance", () => {
@@ -381,7 +465,11 @@ function addAssistantItems(
     throw new Error(`missing test turn ${turnId}`);
   }
   for (let index = 0; index < count; index += 1) {
-    const itemId = `item-${index}`;
+    // Namespaced by turnId: item ids must stay unique across turns within a
+    // test transcript, or a later turn's addAssistantItems call overwrites
+    // an earlier turn's item in `itemsById` (both `item-0`) while the
+    // earlier turn's `itemOrder` still points at that now-clobbered id.
+    const itemId = `item-${turnId}-${index}`;
     turn.itemOrder.push(itemId);
     transcript.itemsById[itemId] = {
       kind: "assistant_prose",
@@ -464,5 +552,16 @@ function pendingPrompt(): PendingPromptEntry {
     contentParts: [],
     queuedAt: "2026-01-01T00:00:00.000Z",
     promptProvenance: null,
+  };
+}
+
+function goalEvent(seq: number, kind: GoalTranscriptEvent["kind"]): GoalTranscriptEvent {
+  return {
+    id: String(seq),
+    seq,
+    turnId: null,
+    kind,
+    objective: "ship the thing",
+    detail: null,
   };
 }

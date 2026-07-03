@@ -34,6 +34,9 @@ export const DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
 
 const ESTIMATED_TURN_HEIGHT_PX = 360;
 const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
+// Goal lifecycle rows are quiet single-line system rows, not turn content —
+// a much smaller virtualization estimate than the generic turn fallback.
+const ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX = 28;
 
 export interface TranscriptRowListBaseProps {
   rows: readonly TranscriptVirtualRow[];
@@ -164,9 +167,13 @@ export function estimateRenderableRowsHeight(
 export function estimateRenderableRowHeight(
   row: TranscriptRenderableRow | undefined,
 ): number {
-  return row?.kind === "history_loader"
-    ? ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX
-    : ESTIMATED_TURN_HEIGHT_PX;
+  if (row?.kind === "history_loader") {
+    return ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX;
+  }
+  if (row?.kind === "transcript" && row.row.kind === "goal_event") {
+    return ESTIMATED_GOAL_EVENT_ROW_HEIGHT_PX;
+  }
+  return ESTIMATED_TURN_HEIGHT_PX;
 }
 
 export function TranscriptScrollToBottomButton({
