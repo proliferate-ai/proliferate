@@ -1649,6 +1649,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workflows/runs/{run_id}/deliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeliver Run Endpoint
+         * @description Retry cloud delivery for a run stuck in ``pending_delivery`` (idempotent).
+         */
+        post: operations["redeliver_run_endpoint_v1_cloud_workflows_runs__run_id__deliver_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Refresh Run Endpoint
+         * @description Pull observed state for a cloud run from the sandbox and sync the ledger.
+         *
+         *     Cloud runs have no worker→server push channel in v1, so the UI polls this to
+         *     keep the run view fresh; local runs stay fresh via the desktop relay.
+         */
+        get: operations["refresh_run_endpoint_v1_cloud_workflows_runs__run_id__refresh_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workflows/{workflow_id}": {
         parameters: {
             query?: never;
@@ -4942,6 +4985,8 @@ export interface components {
             targetMode: "local" | "personal_cloud";
             /** Versionid */
             versionId?: string | null;
+            /** Targetworkspaceid */
+            targetWorkspaceId?: string | null;
         };
         /** StartSsoAuthRequest */
         StartSsoAuthRequest: {
@@ -9024,6 +9069,68 @@ export interface operations {
                 "application/json": components["schemas"]["RunStatusRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeliver_run_endpoint_v1_cloud_workflows_runs__run_id__deliver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_run_endpoint_v1_cloud_workflows_runs__run_id__refresh_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
