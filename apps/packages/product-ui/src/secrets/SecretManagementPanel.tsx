@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KeyRound, Plus } from "lucide-react";
 
 import { Badge } from "@proliferate/ui/primitives/Badge";
@@ -64,6 +64,9 @@ export function SecretManagementPanel({
 }: SecretManagementPanelProps) {
   const [editorState, setEditorState] = useState<SecretEditorDialogState | null>(null);
   const [deleteState, setDeleteState] = useState<SecretDeleteDialogState | null>(null);
+  // Keep the editor open until a submitted save settles: close on success,
+  // stay open (showing the error) on failure so the user keeps their input.
+  const [submitPhase, setSubmitPhase] = useState<"idle" | "submitted" | "saving">("idle");
   const envItems = useMemo(
     () => envVars.map((item) => secretMetadataToListItem(item, item.name ?? "")),
     [envVars],
@@ -72,6 +75,8 @@ export function SecretManagementPanel({
     () => files.map((item) => secretMetadataToListItem(item, item.path ?? "")),
     [files],
   );
+  const existingEnvKeys = useMemo(() => envItems.map((item) => item.label), [envItems]);
+  const existingFileKeys = useMemo(() => fileItems.map((item) => item.label), [fileItems]);
   const status = error ? "error" : materialization?.status ?? "pending";
 
   function handleEditorSave(input: SecretEditorSaveInput) {
@@ -82,8 +87,27 @@ export function SecretManagementPanel({
     } else {
       onSaveFile(input.nameOrPath, { content: input.content });
     }
-    setEditorState(null);
+    setSubmitPhase("submitted");
   }
+
+  useEffect(() => {
+    if (submitPhase === "idle") {
+      return;
+    }
+    if (saving) {
+      // Wait until we've observed the in-flight save before deciding to close.
+      if (submitPhase !== "saving") {
+        setSubmitPhase("saving");
+      }
+      return;
+    }
+    if (submitPhase === "saving") {
+      setSubmitPhase("idle");
+      if (!error) {
+        setEditorState(null);
+      }
+    }
+  }, [submitPhase, saving, error]);
 
   function handleDeleteConfirm() {
     if (!deleteState) {
@@ -130,6 +154,9 @@ export function SecretManagementPanel({
         <div className="w-full max-w-xl">
           <SecretList
             emptyLabel="No environment variables yet."
+            emptyDescription="Add your first key to inject it into every cloud sandbox in this scope."
+            addLabel="Add variable"
+            onAdd={() => setEditorState({ mode: "create", kind: "env" })}
             items={envItems}
             canManage={canManage}
             onEdit={(item) => setEditorState({ mode: "edit", kind: "env", nameOrPath: item.label })}
@@ -142,6 +169,9 @@ export function SecretManagementPanel({
         <div className="w-full max-w-xl">
           <SecretList
             emptyLabel="No file secrets yet."
+            emptyDescription="Write a config or credential file straight into the sandbox filesystem."
+            addLabel="Add file"
+            onAdd={() => setEditorState({ mode: "create", kind: "file" })}
             items={fileItems}
             canManage={canManage}
             onEdit={(item) => setEditorState({ mode: "edit", kind: "file", nameOrPath: item.label })}
@@ -162,6 +192,9 @@ export function SecretManagementPanel({
         open={Boolean(editorState)}
         state={editorState}
         filePathMode={filePathMode}
+        scopeDescription={description}
+        existingEnvKeys={existingEnvKeys}
+        existingFileKeys={existingFileKeys}
         saving={saving}
         error={error}
         onClose={() => setEditorState(null)}
