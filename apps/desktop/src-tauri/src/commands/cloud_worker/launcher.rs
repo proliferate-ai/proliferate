@@ -69,6 +69,23 @@ pub(super) fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
         }
     }
 
+    // In dev, prefer `cargo run` over any scanned binary: it guarantees the
+    // worker matches the checked-out enroll contract (a no-op rebuild when the
+    // tree is already fresh), whereas a `target/debug/proliferate-worker` picked
+    // up by the beside-exe / dev-candidate / PATH scans can be arbitrarily stale
+    // — a weeks-old build launched against a new server dies on enroll with a
+    // decode error. Fall through to the scans when cargo or the workspace root
+    // is unavailable. Release builds skip this and keep the scan-first order.
+    if cfg!(debug_assertions) {
+        if let (Some(cargo), Some(workspace_root)) = (which::which("cargo").ok(), workspace_root())
+        {
+            return Some(WorkerLauncher::CargoRun {
+                cargo,
+                workspace_root,
+            });
+        }
+    }
+
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             let target = current_target_triple();
@@ -92,16 +109,6 @@ pub(super) fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
     if let Ok(path) = which::which("proliferate-worker") {
         if let Some(path) = usable_worker_binary(&path) {
             return Some(WorkerLauncher::Binary(path));
-        }
-    }
-
-    if cfg!(debug_assertions) {
-        if let (Some(cargo), Some(workspace_root)) = (which::which("cargo").ok(), workspace_root())
-        {
-            return Some(WorkerLauncher::CargoRun {
-                cargo,
-                workspace_root,
-            });
         }
     }
 

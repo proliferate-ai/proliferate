@@ -11,7 +11,7 @@ use tauri::State;
 use tokio::{
     process::Child,
     sync::Mutex,
-    time::{sleep, Duration},
+    time::{sleep, Duration, Instant},
 };
 
 use crate::{app_config, sidecar::resolve_shell_path};
@@ -175,21 +175,50 @@ pub async fn ensure_desktop_dispatch_worker(
         pid = child.id(),
         "Proliferate Worker spawned"
     );
-    sleep(Duration::from_millis(150)).await;
-    if let Some(status) = child
-        .try_wait()
-        .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
-    {
+    // Watch the worker across its first moments so an early crash surfaces as an
+    // error instead of a phantom "started". A fresh enrollment must survive the
+    // first cloud roundtrip — that's where an enroll-contract mismatch (e.g. a
+    // stale binary rejecting the request with a serde decode error) dies — so we
+    // give it a generous window; a plain re-attach only needs to clear the local
+    // spawn. A child still alive at the end of the window is a success: with a
+    // `cargo run` launcher the child is cargo, which may legitimately still be
+    // compiling, and we deliberately do NOT extend the window to wait it out.
+    let startup_window = if enrollment_token.is_some() {
+        Duration::from_millis(3000)
+    } else {
+        Duration::from_millis(500)
+    };
+    let startup_deadline = Instant::now() + startup_window;
+    let startup_exit = loop {
+        let status = child
+            .try_wait()
+            .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?;
+        if let Some(status) = status {
+            break Some(status);
+        }
+        if Instant::now() >= startup_deadline {
+            break None;
+        }
+        sleep(Duration::from_millis(100)).await;
+    };
+    if let Some(status) = startup_exit {
+        let log_tail = read_worker_log_tail(&paths.log, 12);
         tracing::error!(
             launcher = %launcher,
             %status,
             log_path = %paths.log.display(),
+            log_tail = %log_tail,
             "Proliferate Worker exited during startup"
         );
-        return Err(format!(
+        let mut message = format!(
             "Proliferate Worker exited during startup with {status}. See {} for output.",
             paths.log.display()
-        ));
+        );
+        if !log_tail.is_empty() {
+            message.push_str("\n\nLast worker log lines:\n");
+            message.push_str(&log_tail);
+        }
+        return Err(message);
     }
 
     let result = EnsureDesktopDispatchWorkerResult {
@@ -417,6 +446,19 @@ fn open_worker_log(path: &Path) -> Result<(std::fs::File, std::fs::File), String
     Ok((file, clone))
 }
 
+/// Reads the last `max_lines` lines of the worker log so a startup-crash cause
+/// (e.g. the serde enroll-contract decode error) can be attached to the failure
+/// surfaced to the caller instead of a bare "see log" pointer. Returns an empty
+/// string when the log is missing or unreadable — the tail is best-effort.
+fn read_worker_log_tail(path: &Path, max_lines: usize) -> String {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return String::new();
+    };
+    let lines: Vec<&str> = contents.lines().collect();
+    let start = lines.len().saturating_sub(max_lines);
+    lines[start..].join("\n")
+}
+
 fn toml_string(value: &str) -> String {
     format!(
         "\"{}\"",
@@ -473,4 +515,53 @@ fn set_private_dir_permissions(path: &Path) -> Result<(), String> {
 #[cfg(not(unix))]
 fn set_private_dir_permissions(_path: &Path) -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_worker_log_tail;
+    use std::path::PathBuf;
+
+    fn unique_temp_path(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "proliferate-cloud-worker-test-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ))
+    }
+
+    #[test]
+    fn read_worker_log_tail_returns_empty_when_missing() {
+        let path = unique_temp_path("missing");
+        assert!(!path.exists());
+        assert_eq!(read_worker_log_tail(&path, 12), "");
+    }
+
+    #[test]
+    fn read_worker_log_tail_returns_last_lines_only() {
+        let path = unique_temp_path("tail");
+        let body = (1..=20)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&path, format!("{body}\n")).expect("write log");
+
+        let tail = read_worker_log_tail(&path, 3);
+        assert_eq!(tail, "line 18\nline 19\nline 20");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn read_worker_log_tail_returns_whole_file_when_shorter_than_limit() {
+        let path = unique_temp_path("short");
+        std::fs::write(&path, "only line").expect("write log");
+
+        assert_eq!(read_worker_log_tail(&path, 12), "only line");
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

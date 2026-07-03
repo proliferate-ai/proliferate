@@ -5,6 +5,12 @@ import {
   stopDesktopDispatchWorker,
 } from "@/lib/access/tauri/cloud-worker";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import { useToastStore } from "@/stores/toast/toast-store";
+
+function describeWorkerError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return message.trim().length > 0 ? message.trim() : "unknown error";
+}
 
 // ensureDesktopWorker and teardownDesktopWorker both mutate the single
 // physical worker process, but their callers dispatch them fire-and-forget.
@@ -40,6 +46,14 @@ export function ensureDesktopWorker(): Promise<boolean> {
           domain: "cloud",
         },
       });
+      // The worker backs the integration-gateway MCP, so a silent failure
+      // strands local sessions without their integrations. Surface the cause
+      // (the Tauri command now appends the worker's crash log tail to its error)
+      // so a stale-binary / enroll-contract mismatch is visible instead of only
+      // landing in telemetry.
+      useToastStore
+        .getState()
+        .show(`Cloud integrations worker failed to start: ${describeWorkerError(error)}`, "error");
       return false;
     }
   });
