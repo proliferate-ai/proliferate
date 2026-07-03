@@ -14,8 +14,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
+from proliferate.constants.workflows import WORKFLOW_TARGET_MODE_PERSONAL_CLOUD
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
     StartRunRequest,
@@ -104,6 +106,34 @@ async def report_run_status_endpoint(
     return run_payload(await report_run_status(db, user, run_id, body))
 
 
+@router.post("/runs/{run_id}/deliver", response_model=WorkflowRunResponse)
+async def redeliver_run_endpoint(
+    run_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowRunResponse:
+    """Retry cloud delivery for a run stuck in ``pending_delivery`` (idempotent)."""
+
+    run = await get_run(db, user, run_id)
+    return run_payload(await deliver_cloud_run(db, user, run))
+
+
+@router.get("/runs/{run_id}/refresh", response_model=WorkflowRunResponse)
+async def refresh_run_endpoint(
+    run_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowRunResponse:
+    """Pull observed state for a cloud run from the sandbox and sync the ledger.
+
+    Cloud runs have no worker→server push channel in v1, so the UI polls this to
+    keep the run view fresh; local runs stay fresh via the desktop relay.
+    """
+
+    run = await get_run(db, user, run_id)
+    return run_payload(await refresh_cloud_run(db, user, run))
+
+
 @router.get("/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow_endpoint(
     workflow_id: UUID,
@@ -148,7 +178,13 @@ async def start_run_endpoint(
         args=body.args,
         target_mode=body.target_mode,
         version_id=body.version_id,
+        target_workspace_id=body.target_workspace_id,
     )
+    # Cloud lane: the server delivers gateway-direct to sandbox anyharness in the
+    # request (wake + POST). Local lane: the desktop client delivers to its own
+    # local runtime and calls /delivered itself.
+    if run.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        run = await deliver_cloud_run(db, user, run)
     return run_payload(run)
 
 

@@ -189,6 +189,16 @@ WORKFLOW_MAX_ARGS: Final = 25
 # --- Free-plan cap (spec 6: 1 non-archived workflow per user). -----------------
 FREE_PLAN_MAX_WORKFLOWS_PER_USER: Final = 1
 
+# --- Cloud delivery (spec 3.2 cloud lane). -------------------------------------
+# The server delivers the resolved plan gateway-direct to sandbox anyharness. A
+# typed delivery failure is recorded on the still-pending run (non-terminal, so a
+# re-deliver stays possible) rather than moving the run to a terminal state.
+WORKFLOW_DELIVERY_ERROR_CODE: Final = "delivery_failed"
+# Wake latency budget: the gateway helper wakes the sandbox before returning an
+# upstream url, so the POST itself is fast; the whole handshake stays bounded.
+WORKFLOW_CLOUD_DELIVERY_TIMEOUT_SECONDS: Final = 60.0
+WORKFLOW_CLOUD_REFRESH_TIMEOUT_SECONDS: Final = 15.0
+
 # --- Goal cap defaults (spec 3.6: 25 turns / 90m / 400k tokens). ---------------
 WORKFLOW_GOAL_DEFAULT_MAX_TURNS: Final = 25
 WORKFLOW_GOAL_DEFAULT_MAX_WALL_SECS: Final = 90 * 60

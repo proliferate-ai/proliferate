@@ -4,10 +4,16 @@ import {
   parseWorkflowDefinition,
   type WorkflowDefinition,
 } from "@proliferate/product-domain/workflows/definition";
+import {
+  coerceRunStatus,
+  isTerminalRunStatus,
+} from "@proliferate/product-domain/workflows/run-status";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
 import { useWorkflowDetail, useWorkflowRun } from "@/hooks/access/cloud/workflows/use-workflows";
+import { useCloudRunRefreshPoll } from "@/hooks/access/cloud/workflows/use-cloud-run-refresh";
+import { useResolveWorkflowApproval } from "@/hooks/access/cloud/workflows/use-workflow-approval";
 import { WorkflowRunView } from "../run/WorkflowRunView";
 
 export interface WorkflowRunScreenProps {
@@ -19,9 +25,18 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
   const navigate = useNavigate();
   const runQuery = useWorkflowRun(runId);
   const detailQuery = useWorkflowDetail(workflowId);
+  const approvalMutation = useResolveWorkflowApproval();
 
   const run = runQuery.data ?? null;
   const workflowName = detailQuery.data?.workflow.name ?? null;
+
+  const isCloudRun = run?.targetMode === "personal_cloud";
+  const isLocalRun = run?.targetMode === "local";
+  const terminal = run ? isTerminalRunStatus(coerceRunStatus(run.status)) : false;
+
+  // Cloud runs have no push channel — poll the refresh endpoint while non-terminal
+  // (local runs stay fresh via the desktop relay writing the server /status).
+  useCloudRunRefreshPoll(runId, Boolean(isCloudRun) && !terminal);
 
   // The resolved plan carried by the run IS the (interpolated) definition, so
   // the timeline needs no separate version fetch.
@@ -47,6 +62,10 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
             run={run}
             definition={definition}
             workflowName={workflowName}
+            approvalEnabled={isLocalRun}
+            approvalBusy={approvalMutation.isPending}
+            onApprove={() => approvalMutation.mutate({ runId, approve: true })}
+            onDeny={() => approvalMutation.mutate({ runId, approve: false })}
             onBack={() => navigate("/workflows")}
             onOpenSession={(link) => {
               if (link.workspaceId) {

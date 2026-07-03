@@ -22,9 +22,11 @@ from proliferate.constants.workflows import (
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_STATUS_RUNNING,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
+    WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
     WORKFLOW_TRIGGER_MANUAL,
 )
 from proliferate.db.store import cloud_workflows as store
+from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store.cloud_workflows import (
     WorkflowRecord,
     WorkflowRunRecord,
@@ -205,6 +207,36 @@ def _resolve_plan(
     }
 
 
+async def _resolve_cloud_target_workspace_id(
+    db: AsyncSession, *, user: ActorIdentity, target_workspace_id: UUID | None
+) -> str:
+    """Validate ownership of the cloud workspace a ``personal_cloud`` run targets.
+
+    Returns its sandbox (anyharness) workspace id — the delivery destination.
+    """
+
+    if target_workspace_id is None:
+        raise CloudApiError(
+            "target_workspace_required",
+            "A cloud workspace is required to run this workflow in the cloud.",
+            status_code=400,
+        )
+    workspace = await cloud_workspace_store.get_cloud_workspace_for_user(
+        db, user.id, target_workspace_id
+    )
+    if workspace is None or workspace.archived_at is not None:
+        raise CloudApiError(
+            "target_workspace_not_found", "Cloud workspace not found.", status_code=404
+        )
+    if not workspace.anyharness_workspace_id:
+        raise CloudApiError(
+            "target_workspace_not_ready",
+            "This cloud workspace is still materializing; try again shortly.",
+            status_code=409,
+        )
+    return workspace.anyharness_workspace_id
+
+
 async def start_run(
     db: AsyncSession,
     user: ActorIdentity,
@@ -214,6 +246,7 @@ async def start_run(
     target_mode: str,
     trigger_kind: str = WORKFLOW_TRIGGER_MANUAL,
     version_id: UUID | None = None,
+    target_workspace_id: UUID | None = None,
 ) -> WorkflowRunRecord:
     if target_mode not in SUPPORTED_WORKFLOW_TARGET_MODES:
         raise CloudApiError(
@@ -228,6 +261,15 @@ async def start_run(
     if workflow.archived_at is not None:
         raise CloudApiError(
             "workflow_archived", "Cannot run an archived workflow.", status_code=409
+        )
+
+    # Cloud runs must name an owned, materialized workspace up front — resolve its
+    # sandbox workspace id before creating the run so a bad target never records a
+    # dangling pending_delivery row.
+    cloud_anyharness_workspace_id: str | None = None
+    if target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        cloud_anyharness_workspace_id = await _resolve_cloud_target_workspace_id(
+            db, user=user, target_workspace_id=target_workspace_id
         )
 
     if version_id is not None:
@@ -277,6 +319,7 @@ async def start_run(
         args_json=coerced_args,
         target_mode=target_mode,
         resolved_plan_json=resolved_plan,
+        anyharness_workspace_id=cloud_anyharness_workspace_id,
     )
 
 
@@ -298,6 +341,8 @@ async def mark_run_delivered(
         run_id=run_id,
         status=WORKFLOW_RUN_STATUS_DELIVERED,
         delivered_at=utcnow(),
+        # A landed delivery clears any prior delivery_failed marker from a retry.
+        clear_error=True,
     )
     assert updated is not None
     return updated
