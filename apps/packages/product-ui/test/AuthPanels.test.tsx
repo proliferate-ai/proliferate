@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -20,14 +20,6 @@ describe("auth product panels", () => {
     cleanup();
     vi.useRealTimers();
   });
-
-  function readVisibleBrailleDots(container: HTMLElement) {
-    return Array.from(
-      container.querySelectorAll<HTMLElement>('[data-braille-dot][data-visible="true"]'),
-    )
-      .map((element) => element.dataset.brailleDot)
-      .join(",");
-  }
 
   it("renders the shared provider order and sign-in copy", () => {
     render(
@@ -128,10 +120,8 @@ describe("auth product panels", () => {
     expect(screen.getByText("access_denied")).toBeTruthy();
   });
 
-  it("resolves the handoff mark after the outgoing braille sweep", () => {
-    vi.useFakeTimers();
-
-    const { container } = render(
+  it("renders the breathing brand mark on the handoff screen", () => {
+    render(
       <RedirectCallbackScreen
         title="Checking your session"
         description="Opening Proliferate."
@@ -141,33 +131,10 @@ describe("auth product panels", () => {
     );
 
     const mark = screen.getByTestId("redirect-callback-living-mark");
-    expect(mark.className).toContain("relative size-12");
-    expect(mark.className).toContain("overflow-hidden");
-    expect(screen.getByTestId("redirect-callback-braille-layer").className).toContain(
-      "absolute inset-0 flex items-center justify-center",
-    );
-
-    const seenDotFrames = new Set<string>([readVisibleBrailleDots(container)]);
-    for (let frame = 1; frame < 13; frame += 1) {
-      act(() => {
-        vi.advanceTimersByTime(60);
-      });
-      seenDotFrames.add(readVisibleBrailleDots(container));
-    }
-
-    expect(readVisibleBrailleDots(container)).toBe("0");
-
-    act(() => {
-      vi.advanceTimersByTime(120);
-    });
-
+    expect(mark.className).toContain("size-12");
+    expect(mark.dataset.brandMark).toBe("breathing");
     expect(screen.getByTestId("redirect-callback-icon-layer").className).toContain(
-      "absolute inset-0 flex items-center justify-center",
+      "animate-brand-mark-breathe",
     );
-    expect(screen.queryByTestId("redirect-callback-braille-layer")).toBeNull();
-    expect(seenDotFrames).toContain("0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15");
-    expect(seenDotFrames).toContain("0,1,2,4,5,8");
-    expect(seenDotFrames).not.toContain("15");
-    expect(container.querySelector(".animate-resolve-0")).toBeTruthy();
   });
 });

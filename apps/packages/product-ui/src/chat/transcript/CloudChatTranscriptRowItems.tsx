@@ -6,6 +6,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ThinkingText } from "@proliferate/ui/primitives/ThinkingText";
 import type { CloudChatTranscriptRowView } from "./CloudChatTranscriptTypes";
 import { MarkdownBody as CloudChatMarkdownRenderer } from "./MarkdownBody";
 import {
@@ -22,18 +23,21 @@ import {
 } from "./CloudChatTranscriptPresentation";
 
 export function CloudChatAssistantLoadingRow({ row }: { row: CloudChatTranscriptRowView }) {
+  // The live "Thinking…" voice: same band-sweep treatment as the desktop
+  // transcript (shared ThinkingText). Opacity/transform-only — the band is
+  // absolutely positioned over the label, so the row's geometry is byte-for-
+  // byte the static text it replaces.
   return (
     <article
       aria-label="Assistant response loading"
       className="flex justify-start py-0.5"
       data-chat-transcript-ignore
     >
-      <div
-        className="max-w-full truncate text-chat italic leading-[var(--text-chat--line-height)] text-muted-foreground/80"
+      <ThinkingText
+        text={loadingStatusLabel(row)}
+        className="block max-w-full truncate font-normal"
         data-telemetry-mask
-      >
-        {loadingStatusLabel(row)}
-      </div>
+      />
     </article>
   );
 }
@@ -41,14 +45,27 @@ export function CloudChatAssistantLoadingRow({ row }: { row: CloudChatTranscript
 export function CloudChatThoughtRow({ row }: { row: CloudChatTranscriptRowView }) {
   const body = row.body?.trim() ?? "";
   const hint = row.detail ?? firstLine(body);
+  const status = resolveActionStatus(row);
+  const labelText = row.title ?? "Thinking";
 
   return (
     <article className="flex justify-start">
       <CloudTranscriptActionRow
         icon={<Brain size={12} />}
-        label={row.title ?? "Thinking"}
+        label={
+          status === "running" ? (
+            // Live reasoning: the label carries the shared thinking sweep
+            // (desktop CollapsedActions parity); completed rows go static.
+            <ThinkingText
+              text={labelText}
+              className="block max-w-full truncate font-normal leading-[inherit]"
+            />
+          ) : (
+            labelText
+          )
+        }
         hint={hint}
-        status={resolveActionStatus(row)}
+        status={status}
         defaultExpanded={false}
       >
         {body ? (

@@ -260,17 +260,17 @@ describe("buildCloudLaunchComposerControls", () => {
 describe("resolveCloudHarnessAvailability", () => {
   it("intersects catalog agents with workspace-allowed agent kinds", () => {
     expect(resolveCloudHarnessAvailability({
-      catalogAgentKinds: ["claude", "codex", "gemini"],
-      allowedAgentKinds: ["codex", "gemini", "opencode"],
+      catalogAgentKinds: ["claude", "codex", "opencode"],
+      allowedAgentKinds: ["codex", "opencode", "grok"],
     })).toMatchObject({
-      launchableAgentKinds: ["codex", "gemini"],
+      launchableAgentKinds: ["codex", "opencode"],
       message: null,
     });
   });
 
   it("treats missing inputs as fully launchable", () => {
     expect(resolveCloudHarnessAvailability({})).toMatchObject({
-      launchableAgentKinds: ["claude", "codex", "gemini", "opencode", "grok"],
+      launchableAgentKinds: ["claude", "codex", "opencode", "grok"],
       message: null,
     });
   });

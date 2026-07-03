@@ -21,7 +21,7 @@
   versions work needs on ``cloud_runtime_worker``.
 
 Revision ID: ab12cd34ef56
-Revises: c3f7a1e9d2b4
+Revises: d2e3f4a5b6c8
 Create Date: 2026-07-02 00:00:00.000000
 
 """
@@ -33,7 +33,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "ab12cd34ef56"
-down_revision: str | None = "c3f7a1e9d2b4"
+down_revision: str | None = "d2e3f4a5b6c8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

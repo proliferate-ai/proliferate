@@ -16,7 +16,6 @@ const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, ComponentType<IconPro
   chat: MessageSquareFilled,
   claude: ClaudeProviderIcon,
   edit: EditModeFilled,
-  gemini: GeminiProviderIcon,
   openai: OpenAIProviderIcon,
   opencodeBuild: OpencodeBuildModeFilled,
   opencodePlan: OpencodePlanModeFilled,
@@ -135,8 +134,4 @@ function ClaudeProviderIcon({ className, ...props }: IconProps) {
 
 function OpenAIProviderIcon({ className, ...props }: IconProps) {
   return <ProviderIcon kind="openai" className={className} {...props} />;
-}
-
-function GeminiProviderIcon({ className, ...props }: IconProps) {
-  return <ProviderIcon kind="gemini" className={className} {...props} />;
 }

@@ -49,20 +49,20 @@ function render(ui: ReactNode, options?: RenderOptions) {
 describe("ModelSelector", () => {
   it("does not show new-chat badges inside the current provider group", () => {
     const groups = [{
-      kind: "gemini",
-      providerDisplayName: "Gemini",
+      kind: "grok",
+      providerDisplayName: "Grok",
       models: [
         {
-          kind: "gemini",
-          modelId: "gemini-3-pro",
-          displayName: "Gemini 3 Pro",
+          kind: "grok",
+          modelId: "grok-4",
+          displayName: "Grok 4",
           actionKind: "open_new_chat" as const,
           isSelected: false,
         },
         {
-          kind: "gemini",
-          modelId: "gemini-3-flash",
-          displayName: "Gemini 3 Flash",
+          kind: "grok",
+          modelId: "grok-4-fast",
+          displayName: "Grok 4 Fast",
           actionKind: "select" as const,
           isSelected: true,
         },
@@ -79,8 +79,8 @@ describe("ModelSelector", () => {
       <ModelSelector
         connectionState="healthy"
         currentModel={{
-          kind: "gemini",
-          displayName: "Gemini 3 Flash",
+          kind: "grok",
+          displayName: "Grok 4 Fast",
           pendingState: null,
         }}
         groups={groups}
@@ -90,27 +90,27 @@ describe("ModelSelector", () => {
       />,
     );
 
-    expect(screen.getByText("Gemini 3 Pro")).toBeTruthy();
-    expect(screen.getAllByText("Gemini 3 Flash").length).toBeGreaterThan(0);
+    expect(screen.getByText("Grok 4")).toBeTruthy();
+    expect(screen.getAllByText("Grok 4 Fast").length).toBeGreaterThan(0);
     expect(screen.queryByText("New chat")).toBeNull();
   });
 
   it("does not show new-chat badges inside the current provider group when the checked row is absent", () => {
     const groups = [{
-      kind: "gemini",
-      providerDisplayName: "Gemini",
+      kind: "grok",
+      providerDisplayName: "Grok",
       models: [
         {
-          kind: "gemini",
-          modelId: "gemini-2.5-pro",
-          displayName: "Gemini 2.5 Pro",
+          kind: "grok",
+          modelId: "grok-3",
+          displayName: "Grok 3",
           actionKind: "open_new_chat" as const,
           isSelected: false,
         },
         {
-          kind: "gemini",
-          modelId: "gemini-3-pro",
-          displayName: "Gemini 3 Pro",
+          kind: "grok",
+          modelId: "grok-4",
+          displayName: "Grok 4",
           actionKind: "open_new_chat" as const,
           isSelected: false,
         },
@@ -127,8 +127,8 @@ describe("ModelSelector", () => {
       <ModelSelector
         connectionState="healthy"
         currentModel={{
-          kind: "gemini",
-          displayName: "Gemini 3 Flash",
+          kind: "grok",
+          displayName: "Grok 4 Fast",
           pendingState: null,
         }}
         groups={groups}
@@ -138,20 +138,20 @@ describe("ModelSelector", () => {
       />,
     );
 
-    expect(screen.getByText("Gemini 2.5 Pro")).toBeTruthy();
-    expect(screen.getByText("Gemini 3 Pro")).toBeTruthy();
+    expect(screen.getByText("Grok 3")).toBeTruthy();
+    expect(screen.getByText("Grok 4")).toBeTruthy();
     expect(screen.queryByText("New chat")).toBeNull();
   });
 
   it("keeps the new-chat badge for other provider groups", () => {
     const groups = [
       {
-        kind: "gemini",
-        providerDisplayName: "Gemini",
+        kind: "grok",
+        providerDisplayName: "Grok",
         models: [{
-          kind: "gemini",
-          modelId: "gemini-3-flash",
-          displayName: "Gemini 3 Flash",
+          kind: "grok",
+          modelId: "grok-4-fast",
+          displayName: "Grok 4 Fast",
           actionKind: "select" as const,
           isSelected: true,
         }],
@@ -179,8 +179,8 @@ describe("ModelSelector", () => {
       <ModelSelector
         connectionState="healthy"
         currentModel={{
-          kind: "gemini",
-          displayName: "Gemini 3 Flash",
+          kind: "grok",
+          displayName: "Grok 4 Fast",
           pendingState: null,
         }}
         groups={groups}

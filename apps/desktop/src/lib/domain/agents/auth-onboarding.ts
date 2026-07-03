@@ -4,26 +4,26 @@ import { agentNeedsInstall } from "@/lib/domain/agents/status";
 /**
  * First-run auth adoption (spec §9, PR 12).
  *
- * When the user has NO route selections yet, the desktop adopts what the
- * local AnyHarness credential scan already detected:
- * - each harness with detected native auth → (harness, local, native)
- * - nothing detected → preselect the managed gateway for installed
- *   harnesses (only when the gateway is enabled for the account)
+ * When the user has NO selection rows yet, the desktop adopts what the local
+ * AnyHarness credential scan already detected:
+ * - each harness with detected native auth → nothing to write (native is the
+ *   implicit empty state; the CLI's own login is used)
+ * - nothing detected → preselect the managed gateway for installed harnesses
+ *   (only when the gateway is enabled for the account)
  *
- * The plan is only produced when zero selections exist, which makes the
- * whole flow idempotent: after the first write (or any manual choice in
+ * The plan is only produced when zero selections exist, which keeps the whole
+ * flow idempotent: after the first gateway write (or any manual choice in
  * settings) later runs are a no-op.
  */
 
 export interface AuthAdoptionAction {
   harnessKind: string;
   surface: "local";
-  route: "native" | "gateway";
 }
 
 export interface FirstRunAuthAdoptionInput {
   agents: AgentSummary[];
-  /** Existing route selections across all surfaces. */
+  /** Existing selection rows across all surfaces (enabled or not). */
   selectionCount: number;
   gatewayEnabled: boolean;
 }
@@ -61,13 +61,12 @@ export function planFirstRunAuthAdoption(
     return [];
   }
 
+  // Detected native creds need no wiring — native is the implicit empty state,
+  // so a harness the scan already trusts is left alone (and blocks a gateway
+  // preselection for the rest, matching the pre-rebuild adoption).
   const detected = input.agents.filter(hasDetectedNativeAuth);
   if (detected.length > 0) {
-    return detected.map((agent) => ({
-      harnessKind: agent.kind,
-      surface: "local",
-      route: "native",
-    }));
+    return [];
   }
 
   if (!input.gatewayEnabled) {
@@ -79,6 +78,5 @@ export function planFirstRunAuthAdoption(
     .map((agent) => ({
       harnessKind: agent.kind,
       surface: "local",
-      route: "gateway",
     }));
 }

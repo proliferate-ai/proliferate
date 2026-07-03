@@ -109,7 +109,7 @@ pub enum AgentCatalogArtifactSource {
         #[serde(default)]
         sha256: Option<String>,
         /// ACP-mode launch args baked into the managed launcher (e.g.
-        /// `["--acp"]` for gemini).
+        /// `["agent", "stdio"]` for grok).
         #[serde(default)]
         args: Vec<String>,
     },
@@ -212,6 +212,34 @@ pub struct AgentCatalogSession {
     /// auth context. Curation input only, never consumed by the runtime.
     #[serde(default)]
     pub observed_defaults: BTreeMap<String, String>,
+    /// Per-harness gateway curation (present on gateway-capable agents). Carries
+    /// the compat-group `providers` filter, model-role pins (`roles`, e.g.
+    /// `small_fast`) that used to live in Rust consts, and `seedModels` — the
+    /// pre-probe fallback model list. The gateway model default itself lives in
+    /// `defaults["gateway"]`. Consumed by the runtime gateway resolver.
+    #[serde(default)]
+    pub gateway_policy: Option<AgentCatalogGatewayPolicy>,
+}
+
+/// Gateway-route curation for one harness (spec §1). All fields optional:
+/// `providers` empty/absent means "all providers"; `roles` and `seed_models`
+/// default empty.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogGatewayPolicy {
+    /// The compat group the gateway serves for this harness (e.g.
+    /// `["anthropic"]` for claude, `["anthropic","openai"]` for codex). Empty
+    /// means no filter — every probed/seed model is offered.
+    #[serde(default)]
+    pub providers: Vec<String>,
+    /// Model-role pins formerly hard-coded in Rust (currently only claude's
+    /// `small_fast`). Keyed by role name.
+    #[serde(default)]
+    pub roles: BTreeMap<String, String>,
+    /// The fallback model ids used before the first live gateway probe
+    /// succeeds (opencode's four-entry Anthropic fallback list).
+    #[serde(default)]
+    pub seed_models: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -357,7 +385,7 @@ mod tests {
             probed_against.registry_version.as_deref(),
             Some(bundled_registry_version().as_str())
         );
-        assert_eq!(catalog.agents.len(), 6);
+        assert_eq!(catalog.agents.len(), 5);
 
         let claude = &catalog.agents[0];
         assert_eq!(claude.kind, "claude");
@@ -376,7 +404,27 @@ mod tests {
                 .iter()
                 .map(|context| context.id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["bedrock", "anthropic-api", "anthropic-oauth"]
+            vec!["bedrock", "anthropic-api", "anthropic-oauth", "gateway"]
+        );
+        // The gateway context is route-engaged: it references the registry
+        // gateway slot but carries no detection signals (never classifier-active).
+        let gateway_context = claude
+            .auth_contexts
+            .iter()
+            .find(|context| context.id == "gateway")
+            .expect("claude gateway auth context");
+        assert_eq!(gateway_context.auth_slot_id.as_deref(), Some("gateway"));
+        assert!(gateway_context.signals.is_none());
+        // gatewayPolicy carries the small-fast role pin that used to be a Rust const.
+        let policy = claude
+            .session
+            .gateway_policy
+            .as_ref()
+            .expect("claude gatewayPolicy");
+        assert_eq!(policy.providers, vec!["anthropic"]);
+        assert_eq!(
+            policy.roles.get("small_fast").map(String::as_str),
+            Some("claude-haiku-4-5-20251001")
         );
         let first = &claude.session.models[0];
         assert_eq!(first.id, "default");
@@ -442,7 +490,7 @@ mod tests {
             .iter()
             .any(|variant| variant.starts_with(&format!("{}[", with_variants.id))));
 
-        let opencode = &catalog.agents[5];
+        let opencode = &catalog.agents[4];
         assert!(opencode
             .auth_contexts
             .iter()

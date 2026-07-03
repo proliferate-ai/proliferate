@@ -16,7 +16,6 @@ export type MobileChatIconName =
   | "claude"
   | "cloud"
   | "controls"
-  | "gemini"
   | "monitor"
   | "openai"
   | "sessions"

@@ -90,7 +90,7 @@ describe("canonical plan derivation", () => {
     const transcript = transcriptWithItems({
       "assistant-1": {
         kind: "assistant_prose",
-        sourceAgentKind: "gemini",
+        sourceAgentKind: "opencode",
         startedSeq: 2,
         text: "Plan:\n1. Add route\n2. Add tests\n3. Deploy",
       },

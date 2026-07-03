@@ -246,26 +246,23 @@ mod tests {
     }
 
     #[test]
-    fn resolve_login_command_uses_managed_gemini_registry_npm_without_path() {
+    fn resolve_login_command_uses_managed_grok_registry_npm_without_path() {
         let _env_lock = env_lock();
-        let gemini = descriptor_for_kind("gemini");
-        let runtime_home = make_temp_dir("anyharness-login-managed-gemini-npm-test");
-        let binary_path = artifact_root(
-            &runtime_home,
-            &AgentKind::Gemini,
-            &ArtifactRole::AgentProcess,
-        )
-        .join("registry_npm")
-        .join("node_modules")
-        .join(".bin")
-        .join("gemini");
+        let grok = descriptor_for_kind("grok");
+        let runtime_home = make_temp_dir("anyharness-login-managed-grok-npm-test");
+        let binary_path =
+            artifact_root(&runtime_home, &AgentKind::Grok, &ArtifactRole::AgentProcess)
+                .join("registry_npm")
+                .join("node_modules")
+                .join(".bin")
+                .join("grok");
         std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
             .expect("create registry npm bin dir");
         std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
         make_executable(&binary_path).expect("make binary executable");
         let _guard = PathEnvGuard::clear();
 
-        let resolved = resolve_login_command(&gemini, &runtime_home).expect("resolve login");
+        let resolved = resolve_login_command(&grok, &runtime_home).expect("resolve login");
 
         assert_eq!(resolved.command.program, binary_path.display().to_string());
         assert!(resolved.env.iter().any(|(key, value)| key == "PATH"
@@ -277,21 +274,21 @@ mod tests {
     #[test]
     fn resolve_login_command_uses_path_only_when_binary_exists() {
         let _env_lock = env_lock();
-        let mut gemini = descriptor_for_kind("gemini");
-        gemini.auth.slots[0]
+        let mut grok = descriptor_for_kind("grok");
+        grok.auth.slots[0]
             .login
             .as_mut()
             .expect("login")
             .command
-            .program = "anyharness-test-gemini".into();
+            .program = "anyharness-test-grok".into();
         let runtime_home = make_temp_dir("anyharness-login-path-test");
         let bin_dir = make_temp_dir("anyharness-login-path-bin-test");
-        let binary_path = bin_dir.join("anyharness-test-gemini");
+        let binary_path = bin_dir.join("anyharness-test-grok");
         std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
         make_executable(&binary_path).expect("make executable");
         let _guard = PathEnvGuard::set(&bin_dir);
 
-        let resolved = resolve_login_command(&gemini, &runtime_home).expect("resolve login");
+        let resolved = resolve_login_command(&grok, &runtime_home).expect("resolve login");
 
         assert_eq!(resolved.command.program, binary_path.display().to_string());
         assert!(resolved
@@ -306,19 +303,19 @@ mod tests {
     #[test]
     fn resolve_login_command_errors_when_command_is_missing() {
         let _env_lock = env_lock();
-        let mut gemini = descriptor_for_kind("gemini");
-        gemini.auth.slots[0]
+        let mut grok = descriptor_for_kind("grok");
+        grok.auth.slots[0]
             .login
             .as_mut()
             .expect("login")
             .command
-            .program = format!("missing-gemini-{}", uuid::Uuid::new_v4());
+            .program = format!("missing-grok-{}", uuid::Uuid::new_v4());
         let runtime_home = make_temp_dir("anyharness-login-missing-test");
         let _guard = PathEnvGuard::clear();
 
-        let error = resolve_login_command(&gemini, &runtime_home).expect_err("missing command");
+        let error = resolve_login_command(&grok, &runtime_home).expect_err("missing command");
 
-        assert!(matches!(error, AgentLoginError::CommandNotFound(kind) if kind == "gemini"));
+        assert!(matches!(error, AgentLoginError::CommandNotFound(kind) if kind == "grok"));
 
         let _ = std::fs::remove_dir_all(runtime_home);
     }

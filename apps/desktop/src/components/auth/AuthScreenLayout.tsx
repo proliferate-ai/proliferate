@@ -9,8 +9,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS } from "@/copy/auth/auth-copy";
 
 // Shared shell for the initial page (loading -> auth). The SAME element tree is
-// rendered in both modes so React never re-mounts the living mark — its braille
-// animation stays cleanly persistent and keeps running across the transition.
+// rendered in both modes so React never re-mounts the living mark — its
+// breathing animation stays cleanly persistent across the transition.
 // The mark + one-line heading sit in a fixed-height block, and the actions area
 // reserves its height in BOTH modes, so the mark never moves; only the contents
 // of the reserved slot cross-fade (loading skeleton -> GitHub button).

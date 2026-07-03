@@ -123,10 +123,10 @@ export interface CloudWorkspaceRuntimeSummary {
   actionBlockReason?: string | null;
 }
 
-export type CloudAgentKind = "claude" | "codex" | "opencode" | "gemini" | "grok";
+export type CloudAgentKind = "claude" | "codex" | "opencode" | "grok";
 
 export function isCloudAgentKind(value: string): value is CloudAgentKind {
-  return value === "claude" || value === "codex" || value === "opencode" || value === "gemini" || value === "grok";
+  return value === "claude" || value === "codex" || value === "opencode" || value === "grok";
 }
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.

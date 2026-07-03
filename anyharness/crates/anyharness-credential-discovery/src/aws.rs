@@ -42,7 +42,7 @@ pub(crate) struct AwsChainPaths {
 impl AwsChainPaths {
     /// `AWS_SHARED_CREDENTIALS_FILE` is a path override (not a credential),
     /// honored only when `home_dir` is the process home — mirroring how the
-    /// `LocalAuthState` detectors treat `CODEX_HOME`/`GEMINI_CLI_HOME`.
+    /// `LocalAuthState` detectors treat `CODEX_HOME`.
     pub(crate) fn resolve(home_dir: &Path) -> Self {
         let default_credentials_file = home_dir.join(".aws").join("credentials");
         Self {

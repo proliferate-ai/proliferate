@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -32,6 +33,7 @@ async def create_catalog_snapshot(
     owner_user_id: UUID | None,
     models_json: str,
     source: str = "probe",
+    probed_at: datetime | None = None,
 ) -> AgentCatalogSnapshotRecord:
     # One active snapshot per (owner, harness, surface, route): deactivate the
     # prior active row(s) so refreshes replace rather than accumulate (else the
@@ -61,6 +63,11 @@ async def create_catalog_snapshot(
         source=source,
         status=AGENT_CATALOG_SNAPSHOT_STATUS_ACTIVE,
     )
+    if probed_at is not None:
+        # Runtime-mirror pushes carry the timestamp of the probe itself (which
+        # ran client-side, possibly moments before this fire-and-forget push);
+        # everything else keeps the column's insert-time default.
+        row.probed_at = probed_at
     db.add(row)
     await db.flush()
     return catalog_snapshot_record(row)

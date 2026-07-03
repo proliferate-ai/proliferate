@@ -17,21 +17,19 @@ from typing import Final, Literal
 # Supported cloud agent kinds
 # ---------------------------------------------------------------------------
 
-CloudAgentKind = Literal["claude", "codex", "opencode", "gemini", "grok"]
-AgentCredentialProviderId = Literal["anthropic", "openai", "gemini", "cursor", "xai"]
+CloudAgentKind = Literal["claude", "codex", "opencode", "grok"]
+AgentCredentialProviderId = Literal["anthropic", "openai", "cursor", "xai"]
 
 SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = (
     "claude",
     "codex",
     "opencode",
-    "gemini",
     "grok",
 )
 
 SUPPORTED_AGENT_CREDENTIAL_PROVIDERS: tuple[AgentCredentialProviderId, ...] = (
     "anthropic",
     "openai",
-    "gemini",
     "cursor",
     "xai",
 )
@@ -40,7 +38,6 @@ SUPPORTED_AGENT_CREDENTIAL_PROVIDERS: tuple[AgentCredentialProviderId, ...] = (
 SUPPORTED_CLOUD_CREDENTIAL_SYNC_AGENTS: tuple[CloudAgentKind, ...] = (
     "claude",
     "codex",
-    "gemini",
 )
 
 ANYHARNESS_RESERVED_ENV_PREFIX: str = "ANYHARNESS_"
@@ -62,7 +59,6 @@ RESERVED_CLOUD_REPO_ENV_VARS: frozenset[str] = frozenset(
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "GOOGLE_GEMINI_BASE_URL",
-        "GOOGLE_GENAI_USE_VERTEXAI",
         "GROK_API_KEY",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL",
