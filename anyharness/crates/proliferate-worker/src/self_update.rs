@@ -10,8 +10,11 @@
 //! - the artifact and its `.sha256` both come from the server's pinned
 //!   artifact redirect; the download is rejected unless the digest matches;
 //! - the new binary is staged next to the current one, preflighted with
-//!   `--version`, then atomically renamed over the current path — a crash at
-//!   any point leaves a runnable binary on disk;
+//!   `--version` — which must both succeed and report the pinned version, so
+//!   the unpinned `stable` fallback artifact serving an older build aborts
+//!   the swap instead of silently downgrading the worker — then atomically
+//!   renamed over the current path; a crash at any point leaves a runnable
+//!   binary on disk (stale staged files are swept on the next attempt);
 //! - the swap finishes with an `exec` of the (replaced) binary path rather
 //!   than an exit: the sandbox sidecar is launched with plain `nohup`, so an
 //!   exiting worker would never come back. `exec` replaces the process image
@@ -20,9 +23,14 @@
 //!   explicit release: it is an `flock` on a file descriptor Rust opened with
 //!   `O_CLOEXEC`, so the kernel closes the fd (releasing the lock) exactly at
 //!   the exec boundary and the new image re-acquires it during startup;
-//! - an env marker carried across the re-exec prevents a hot swap loop when
-//!   the published artifact does not actually carry the pinned version (e.g.
-//!   the server fell back to an unpinned `stable` artifact).
+//! - an env marker carried across the re-exec remains as a backstop against
+//!   a hot swap loop if an exec'd binary somehow still reports a diverged
+//!   version (the preflight version check catches the ordinary case — a
+//!   fallback artifact lagging the pin — before any swap happens).
+//!
+//! A lagging artifact does mean one download + aborted preflight per
+//! heartbeat until the pinned artifact publishes; that matches the existing
+//! behavior when the artifact 404s outright, and self-heals on publish.
 
 use std::path::{Path, PathBuf};
 
@@ -111,8 +119,9 @@ pub async fn converge(cloud: &CloudClient, update: &UpdatePlan) -> Result<(), Wo
     // /proc/self/exe stops resolving cleanly once the original inode is
     // replaced underneath the running process.
     let exe_path = std::env::current_exe().map_err(WorkerError::SelfUpdateCurrentExe)?;
+    sweep_stale_staged(&exe_path);
     let staged = stage_binary(&binary, &exe_path)?;
-    if let Err(error) = preflight(&staged).and_then(|()| {
+    if let Err(error) = preflight(&staged, &update.desired_version).and_then(|()| {
         std::fs::rename(&staged, &exe_path).map_err(|source| WorkerError::SelfUpdateSwap {
             path: exe_path.clone(),
             source,
@@ -172,6 +181,34 @@ pub(crate) fn verify_sha256(bytes: &[u8], checksum_file: &str) -> Result<(), Wor
     Ok(())
 }
 
+/// Remove leftover staged binaries from earlier update attempts. Staged
+/// files are pid-suffixed, so a worker that died between stage and rename
+/// (or errored before the in-call cleanup) leaks a full binary copy under a
+/// name no later process reuses — a crash loop would accumulate one per
+/// attempt forever. Best-effort: a sweep failure never blocks the update.
+fn sweep_stale_staged(exe_path: &Path) {
+    let Some(file_name) = exe_path.file_name().and_then(|value| value.to_str()) else {
+        return;
+    };
+    let Some(dir) = exe_path.parent() else {
+        return;
+    };
+    let prefix = format!(".{file_name}.next.");
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with(&prefix) {
+            warn!(staged = %entry.path().display(), "removing stale staged worker binary");
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Write the verified bytes to a temp path in the same directory as the
 /// running binary (same filesystem, so the final rename is atomic) and mark
 /// it executable.
@@ -195,10 +232,15 @@ fn stage_binary(bytes: &[u8], exe_path: &Path) -> Result<PathBuf, WorkerError> {
     Ok(staged)
 }
 
-/// Cheap sanity check that the staged file is actually a runnable worker
-/// before it replaces the binary we know works: a checksum only proves we
-/// downloaded what was published, not that what was published runs here.
-fn preflight(staged: &Path) -> Result<(), WorkerError> {
+/// Sanity check that the staged file is a runnable worker *carrying the
+/// pinned version* before it replaces the binary we know works: a checksum
+/// only proves we downloaded what was published, not that what was published
+/// runs here — and the server's unpinned `stable` fallback can serve an
+/// artifact that lags the pin, which would otherwise silently downgrade the
+/// worker and then (via the attempt marker) block convergence until the next
+/// pin bump or restart. Aborting instead lets a later heartbeat retry once
+/// the real artifact publishes.
+fn preflight(staged: &Path, desired_version: &str) -> Result<(), WorkerError> {
     let output = std::process::Command::new(staged)
         .arg("--version")
         .output()
@@ -210,7 +252,26 @@ fn preflight(staged: &Path) -> Result<(), WorkerError> {
             detail: format!("--version exited with {}", output.status),
         });
     }
+    let reported = String::from_utf8_lossy(&output.stdout);
+    if !version_output_matches(&reported, desired_version) {
+        return Err(WorkerError::SelfUpdatePreflight {
+            detail: format!(
+                "staged binary reports {:?}, expected version {desired_version}; \
+                 the published artifact likely lags the pin — not swapping",
+                reported.trim()
+            ),
+        });
+    }
     Ok(())
+}
+
+/// `--version` prints e.g. `proliferate-worker 0.3.0`; match on whitespace
+/// tokens (tolerating a leading `v`) rather than the exact line so the check
+/// survives formatting changes.
+fn version_output_matches(output: &str, desired: &str) -> bool {
+    output
+        .split_whitespace()
+        .any(|token| token == desired || token.strip_prefix('v') == Some(desired))
 }
 
 /// Replace this process image with the swapped binary, preserving argv. Only
@@ -242,7 +303,7 @@ fn reexec(_exe_path: &Path, _desired_version: &str) -> WorkerError {
 mod tests {
     use sha2::{Digest, Sha256};
 
-    use super::{plan_for_versions, verify_sha256};
+    use super::{plan_for_versions, verify_sha256, version_output_matches};
     use crate::error::WorkerError;
 
     fn digest_hex(bytes: &[u8]) -> String {
@@ -273,6 +334,32 @@ mod tests {
         assert_eq!(plan_for_versions("0.2.16", "0.3.0", Some("0.3.0")), None);
         // A newer pin supersedes the stale attempt marker.
         assert!(plan_for_versions("0.2.16", "0.4.0", Some("0.3.0")).is_some());
+    }
+
+    #[test]
+    fn version_output_matches_clap_style_output() {
+        assert!(version_output_matches(
+            "proliferate-worker 0.3.0\n",
+            "0.3.0"
+        ));
+        assert!(version_output_matches("proliferate-worker v0.3.0", "0.3.0"));
+        assert!(version_output_matches("0.3.0", "0.3.0"));
+    }
+
+    #[test]
+    fn version_output_matches_rejects_diverged_and_junk_output() {
+        // The unpinned `stable` fallback serving an older build must abort.
+        assert!(!version_output_matches(
+            "proliferate-worker 0.2.15",
+            "0.3.0"
+        ));
+        // Substrings must not match: 0.3.0 vs 0.3.0-rc1 are different pins.
+        assert!(!version_output_matches(
+            "proliferate-worker 0.3.0-rc1",
+            "0.3.0"
+        ));
+        assert!(!version_output_matches("", "0.3.0"));
+        assert!(!version_output_matches("<html>404</html>", "0.3.0"));
     }
 
     #[test]
