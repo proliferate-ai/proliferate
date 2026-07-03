@@ -71,8 +71,10 @@ export type {
 } from "./types/agents.js";
 
 export type {
+  GatewayModelEntry,
   GatewayModelSource,
   GatewayModelsResponse,
+  ModelEffort,
   RefreshGatewayModelsResponse,
 } from "./types/agent-gateway-catalog.js";
 

@@ -199,6 +199,10 @@
       "types": "./dist/settings/ModelConfigGrid.d.ts",
       "import": "./dist/settings/ModelConfigGrid.js"
     },
+    "./settings/ModelTable": {
+      "types": "./dist/settings/ModelTable.d.ts",
+      "import": "./dist/settings/ModelTable.js"
+    },
     "./settings/SettingsPageHeader": {
       "types": "./dist/settings/SettingsPageHeader.d.ts",
       "import": "./dist/settings/SettingsPageHeader.js"

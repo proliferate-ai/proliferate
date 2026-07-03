@@ -13,7 +13,7 @@ import {
 } from "@anyharness/sdk-react";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ModelConfigGrid, type ModelConfigGridItem } from "@proliferate/product-ui/settings/ModelConfigGrid";
+import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/settings/ModelTable";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
@@ -79,16 +79,19 @@ export function HarnessAllModelsSection({
         : normalizeCatalogModels(catalogQuery.data?.models ?? []),
     [isRuntimeGateway, gatewayModelsQuery.data?.models, catalogQuery.data?.models],
   );
-  // Model entries carry their own provider id; fall back to the harness name
-  // when a catalog row omits one. Runtime-resolved gateway models have no
-  // override endpoint yet, so their toggle is read-only.
-  const gridItems: ModelConfigGridItem[] = models.map((model) => ({
+  // Each row carries its own enriched metadata (contract §1); probe-only models
+  // stay sparse (Provider "—" when unmatched — no harness-name fallback).
+  // Runtime-resolved gateway models have no override endpoint yet, so their
+  // toggle is read-only.
+  const rows: ModelTableRow[] = models.map((model) => ({
     id: model.id,
-    name: model.displayName,
-    provider: model.provider ?? displayName,
-    version: model.description ?? undefined,
+    displayName: model.displayName,
+    provider: model.provider,
+    status: model.status,
+    effort: model.effort,
+    fastMode: model.fastMode,
     enabled: model.enabled,
-    disabled: isRuntimeGateway || upsertOverride.isPending,
+    toggleDisabled: isRuntimeGateway || upsertOverride.isPending,
   }));
 
   if (!cloudActive) {
@@ -203,7 +206,7 @@ export function HarnessAllModelsSection({
             {HARNESS_PANE_COPY.allModelsEmpty}
           </p>
         ) : (
-          <ModelConfigGrid models={gridItems} onToggle={handleToggle} />
+          <ModelTable models={rows} onToggle={handleToggle} />
         )}
       </div>
     </SettingsSection>

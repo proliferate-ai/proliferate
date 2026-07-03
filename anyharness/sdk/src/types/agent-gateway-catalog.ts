@@ -20,6 +20,16 @@ import type { components } from "../generated/openapi.js";
  */
 export type GatewayModelSource = "seed" | "probe";
 
+/**
+ * One enriched gateway model row: a catalog-known id carries the joined
+ * display metadata (`displayName`/`description`/`provider`/`status`/`effort`/
+ * `fastMode`); a probe-only id emits just `{ id, provider? }`.
+ */
+export type GatewayModelEntry = components["schemas"]["GatewayModelEntry"];
+
+/** The thinking/effort control for a model (`values` + observed `default`). */
+export type ModelEffort = components["schemas"]["ModelEffort"];
+
 /** Resolved gateway model plan for the local surface (probe-or-seed). */
 export type GatewayModelsResponse = components["schemas"]["GatewayModelsResponse"];
 

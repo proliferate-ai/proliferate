@@ -79,15 +79,14 @@ export function useRefreshAgentGatewayModelsMutation() {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.agentGatewayCatalog.refreshGatewayModels(kind.trim());
     },
-    onSuccess: async (response, kind) => {
-      queryClient.setQueryData(
-        anyHarnessAgentGatewayModelsKey(runtimeUrl, kind.trim()),
-        {
-          models: response.models,
-          source: "probe" as const,
-          probedAt: response.probedAt,
-        },
-      );
+    onSuccess: async (_response, kind) => {
+      // The refresh endpoint returns bare probed ids; the enriched (catalog-
+      // joined) rows come from the gateway-models GET, which reads the same
+      // freshly-recorded probe. Invalidate so the next read re-enriches instead
+      // of caching a sparse id-only list.
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentGatewayModelsKey(runtimeUrl, kind.trim()),
+      });
     },
   });
 }

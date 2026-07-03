@@ -12,7 +12,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::gateway_probe::{probe_gateway_models, GatewayProbeStore};
-use super::schema::AgentCatalogGatewayPolicy;
+use super::schema::{AgentCatalogGatewayPolicy, AgentCatalogModel};
 use super::sync::CatalogSyncService;
 use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
 use crate::domains::agents::route_auth::{load_state_file, GatewayModelPlan, GatewayModelResolve};
@@ -31,17 +31,28 @@ pub enum GatewayModelSource {
     Probe { probed_at: String },
 }
 
-/// Provider-id -> model-id prefix/family matcher. The long-term home is
+/// Model-id -> provider-id prefix/family matcher. The long-term home is
 /// provider-tagged catalog model entries; until then this tiny table maps the
-/// known gateway provider ids to their id patterns so `gatewayPolicy.providers`
-/// can filter a probed/seed list. A provider not in the table matches nothing.
-fn model_matches_provider(provider: &str, model_id: &str) -> bool {
-    match provider {
-        "anthropic" => model_id.starts_with("claude-"),
-        "openai" => model_id.starts_with("gpt-") || model_id.starts_with('o'),
-        "xai" => model_id.starts_with("grok-"),
-        _ => false,
+/// known gateway model id patterns to their provider id. Used both to filter a
+/// probed/seed list by `gatewayPolicy.providers` and to tag enriched
+/// gateway-model / launch-option rows with a provider. Returns `None` when no
+/// family matches (the caller omits `provider`).
+pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
+    if model_id.starts_with("claude-") {
+        Some("anthropic")
+    } else if model_id.starts_with("gpt-") || model_id.starts_with('o') {
+        Some("openai")
+    } else if model_id.starts_with("grok-") {
+        Some("xai")
+    } else {
+        None
     }
+}
+
+/// Does `provider` serve `model_id`? A provider not in the family table (or a
+/// model matching no family) matches nothing.
+fn model_matches_provider(provider: &str, model_id: &str) -> bool {
+    provider_for_model(model_id) == Some(provider)
 }
 
 /// Filter `models` to those served by any of `providers`. Empty `providers`
@@ -79,6 +90,22 @@ impl GatewayModelResolver {
 
     pub fn probe_store(&self) -> &GatewayProbeStore {
         &self.probe_store
+    }
+
+    /// The bundled catalog's model rows for a harness kind (empty when the
+    /// harness is unknown). The HTTP layer joins these onto the resolved
+    /// gateway model ids to enrich the gateway-models response — the render
+    /// plane still consumes plain ids, so the join lives at the transport
+    /// boundary, not in [`GatewayModelPlan`].
+    pub fn catalog_models(&self, harness_kind: &str) -> Vec<AgentCatalogModel> {
+        self.catalog_sync
+            .active()
+            .document
+            .agents
+            .iter()
+            .find(|agent| agent.kind == harness_kind)
+            .map(|agent| agent.session.models.clone())
+            .unwrap_or_default()
     }
 
     /// The catalog's gateway policy + default model for a harness, if the
