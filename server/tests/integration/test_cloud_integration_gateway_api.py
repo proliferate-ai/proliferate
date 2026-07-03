@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
     ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_STATUS_ACTIVE,
 )
@@ -433,6 +434,102 @@ async def test_orgless_grant_ignores_other_orgs_policies(
 
     listed = await _tool_call(client, headers, name="integrations.list_providers", arguments={})
     assert [p["provider"] for p in listed["structuredContent"]["providers"]] == ["context7"]
+
+
+@pytest.mark.asyncio
+async def test_cross_org_custom_definition_hidden_from_other_org_grant(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    auth = await _authed_user(client, db_session, prefix="gw-cross-custom")
+    org_a_id = await _create_org_with_member(db_session, user_id=auth.user_id)
+    org_b_id = await _create_org_with_member(db_session, user_id=auth.user_id)
+
+    definition = await definitions_store.create_org_custom_definition(
+        db_session,
+        organization_id=uuid.UUID(org_a_id),
+        namespace="acme-internal",
+        display_name="Acme Internal",
+        description=None,
+        auth_kind="api_key",
+        oauth_client_mode=None,
+        config_json="{}",
+    )
+    account = await accounts_store.upsert_account(
+        db_session,
+        user_id=uuid.UUID(auth.user_id),
+        definition_id=definition.id,
+        auth_kind="api_key",
+        status="ready",
+    )
+    await accounts_store.set_account_credentials(
+        db_session,
+        account_id=account.id,
+        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "secret"}}),
+        credential_format="secret-fields-v1",
+        auth_status="ready",
+        token_expires_at=None,
+    )
+    await db_session.commit()
+
+    # Under org A's scope the custom definition is served...
+    bearer_a = await _enroll_gateway_bearer(
+        client, auth, prefix="gw-cross-custom-a", organization_id=org_a_id
+    )
+    listed = await _tool_call(
+        client,
+        {"Authorization": f"Bearer {bearer_a}"},
+        name="integrations.list_providers",
+        arguments={},
+    )
+    providers = [p["provider"] for p in listed["structuredContent"]["providers"]]
+    assert providers == ["acme-internal"]
+
+    # ...but a grant scoped to org B (whose admins can neither see nor
+    # policy-control org A's custom definition) must not expose it.
+    bearer_b = await _enroll_gateway_bearer(
+        client, auth, prefix="gw-cross-custom-b", organization_id=org_b_id
+    )
+    hidden = await _tool_call(
+        client,
+        {"Authorization": f"Bearer {bearer_b}"},
+        name="integrations.list_providers",
+        arguments={},
+    )
+    assert hidden["structuredContent"]["providers"] == []
+
+
+@pytest.mark.asyncio
+async def test_org_scoped_grant_stops_serving_after_membership_removal(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    auth = await _authed_user(client, db_session, prefix="gw-membership")
+    org_id = await _create_org_with_member(db_session, user_id=auth.user_id)
+    bearer = await _enroll_gateway_bearer(
+        client, auth, prefix="gw-membership", organization_id=org_id
+    )
+    headers = {"Authorization": f"Bearer {bearer}"}
+    request_body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+
+    ok = await client.post(GATEWAY_URL, headers=headers, json=request_body)
+    assert ok.status_code == 200, ok.text
+
+    # Remove the owner from the org: the long-lived org-scoped grant must stop
+    # serving immediately, not at the next re-enrollment.
+    from sqlalchemy import select
+
+    membership = (
+        await db_session.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == uuid.UUID(org_id),
+                OrganizationMembership.user_id == uuid.UUID(auth.user_id),
+            )
+        )
+    ).scalar_one()
+    membership.status = ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
+    await db_session.commit()
+
+    revoked = await client.post(GATEWAY_URL, headers=headers, json=request_body)
+    assert revoked.status_code == 401
 
 
 @pytest.mark.asyncio
