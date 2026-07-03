@@ -369,30 +369,30 @@ class TestOrgAgentPolicyViolations:
             for item in after.json()["violations"]
         }
 
-        # Consistency fix: a member can select an ARBITRARY harness_kind (route
-        # selections accept any kind), and the admin can allow-list that exact
-        # kind to resolve the violation — previously impossible because the
-        # allow-list only accepted SUPPORTED_CLOUD_AGENTS.
-        arbitrary = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/clippy/cloud",
+        # A member can select any REGISTERED harness kind (route-selection
+        # writes validate against AGENT_AUTH_HARNESS_KINDS), and the admin can
+        # allow-list that exact kind to resolve the violation. Opencode's
+        # gateway selection lives in its 'gateway' slot (spec §3.3).
+        opencode_selection = await client.put(
+            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
             headers=member_headers,
-            json={"route": "gateway"},
+            json={"route": "gateway", "slot": "gateway"},
         )
-        assert arbitrary.status_code == 200, arbitrary.text
-        flagged_arbitrary = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "clippy", "cloud", "gateway") in {
+        assert opencode_selection.status_code == 200, opencode_selection.text
+        flagged_opencode = await client.get(violations_path, headers=owner_headers)
+        assert (member_id, "opencode", "cloud", "gateway") in {
             (item["userId"], item["harnessKind"], item["surface"], item["route"])
-            for item in flagged_arbitrary.json()["violations"]
+            for item in flagged_opencode.json()["violations"]
         }
 
-        allow_clippy = await client.put(
+        allow_opencode = await client.put(
             _policy_path(organization_id),
             headers=owner_headers,
-            json={"allowedRoutes": ["gateway"], "allowedHarnesses": ["claude", "clippy"]},
+            json={"allowedRoutes": ["gateway"], "allowedHarnesses": ["claude", "opencode"]},
         )
-        assert allow_clippy.status_code == 200, allow_clippy.text
+        assert allow_opencode.status_code == 200, allow_opencode.text
         resolved = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "clippy", "cloud", "gateway") not in {
+        assert (member_id, "opencode", "cloud", "gateway") not in {
             (item["userId"], item["harnessKind"], item["surface"], item["route"])
             for item in resolved.json()["violations"]
         }
