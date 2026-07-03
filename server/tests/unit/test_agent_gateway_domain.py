@@ -65,7 +65,7 @@ class TestRouteSelectionLegality:
 
 class TestSlotLegality:
     def test_single_source_harnesses_only_use_primary(self) -> None:
-        for harness in ("claude", "codex", "grok", "gemini"):
+        for harness in ("claude", "codex", "grok"):
             validate_route_selection(
                 harness_kind=harness,
                 surface="local",

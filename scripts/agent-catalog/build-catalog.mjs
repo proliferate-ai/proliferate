@@ -23,7 +23,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const generatedDir = join(here, "generated");
 const outPath = join(here, "catalog.draft.json");
 
-const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
+const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
 // Which registry auth slot satisfies each probe auth context (curation-owned).
 // Per-agent context -> registry auth slot. Slot ids MUST be slots the
 // registry declares for that agent (the runtime classifier skips contexts
@@ -33,7 +33,6 @@ const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini"
 const AUTH_CONTEXT_SLOTS = {
   claude: { "anthropic-api": "anthropic", "anthropic-oauth": "anthropic", "bedrock": "anthropic" },
   codex: { "openai-api": "openai", "openai-oauth": "openai", "bedrock": "openai" },
-  gemini: { "gemini-api": "gemini", "google-oauth": "gemini" },
   cursor: { "cursor-login": "cursor" },
   opencode: {
     "anthropic-api": "anthropic",
@@ -59,10 +58,6 @@ const AUTH_CONTEXT_SIGNALS = {
   codex: {
     "openai-oauth": { anyOf: [{ discovery: "codex-auth-json-oauth" }, { discovery: "codex-keychain" }] },
     "openai-api": { anyOf: [{ env: "OPENAI_API_KEY" }, { env: "CODEX_API_KEY" }, { discovery: "codex-auth-json-api-key" }] },
-  },
-  gemini: {
-    "gemini-api": { anyOf: [{ env: "GEMINI_API_KEY" }, { env: "GOOGLE_API_KEY" }] },
-    "google-oauth": { anyOf: [{ discovery: "gemini-oauth-creds" }, { discovery: "gemini-keychain" }] },
   },
   cursor: {
     "cursor-login": { anyOf: [{ env: "CURSOR_API_KEY" }, { discovery: "cursor-keychain" }] },
@@ -93,7 +88,6 @@ const AGENT_SESSION_DEFAULTS = {
     "openai-oauth": "gpt-5.5",
     "bedrock": "openai.gpt-5.5",
   },
-  gemini: { "gemini-api": "auto", "google-oauth": "auto" },
   cursor: { "cursor-login": "default" },
   opencode: { "baseline": "opencode/big-pickle" },
   grok: { "xai-api": "grok-4.20-0309-non-reasoning" },
@@ -123,7 +117,6 @@ const CONTROL_MAPPINGS = {
     reasoning_effort: { liveConfigId: "reasoning_effort" },
     fast_mode: { liveConfigId: "fast_mode" },
   },
-  gemini: { mode: { createField: "modeId", liveConfigId: "mode" } },
   cursor: { mode: { createField: "modeId", liveConfigId: "mode" } },
   opencode: { mode: { createField: "modeId", liveConfigId: "mode" } },
   grok: { mode: { createField: "modeId", liveConfigId: "mode" } },
@@ -190,7 +183,6 @@ function prettifyDisplayName(name) {
 const AUTH_CONTEXT_PRECEDENCE = {
   claude: ["bedrock", "anthropic-api", "anthropic-oauth"],
   codex: ["bedrock", "openai-oauth", "openai-api"],
-  gemini: ["gemini-api", "google-oauth"],
   cursor: ["cursor-login"],
   opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline"],
   grok: ["xai-api"],
@@ -254,8 +246,8 @@ function versionedDisplayName(name, description, modelId) {
     : `${name.slice(0, paren)} ${version}${name.slice(paren)}`;
 }
 
-// Derive a `mode` control from the legacy ACP modes block (harnesses like
-// gemini report modes there and have no config options at all).
+// Derive a `mode` control from the legacy ACP modes block (some harnesses
+// report modes there and have no config options at all).
 function modesBlockMatrix(modes) {
   if (!modes?.availableModes?.length) return {};
   return {
@@ -421,8 +413,8 @@ for (const [kind, runs] of byAgent) {
   let variantSyntax = null;
   for (const run of runs) {
     const ctx = run.data.authContext;
-    // Harnesses that never re-emit config options on model switch (cursor,
-    // gemini) leave per-model captures null — fall back to the session
+    // Harnesses that never re-emit config options on model switch (e.g.
+    // cursor) leave per-model captures null — fall back to the session
     // baseline options, then to the legacy modes block, so uniform controls
     // (e.g. cursor's agent/plan/ask modes) still reach the catalog.
     const fallback = run.data.baselineConfigOptions

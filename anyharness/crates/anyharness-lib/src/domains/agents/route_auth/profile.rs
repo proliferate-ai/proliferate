@@ -52,7 +52,7 @@ pub struct GatewayProfile {
     /// Explicit model list for adapters that require it in-config (OpenCode).
     pub model_catalog: Option<Vec<String>>,
     /// The revision that produced this profile — carried so switch-time
-    /// materialization (codex/grok/gemini isolated homes) can key directory
+    /// materialization (codex/grok isolated homes) can key directory
     /// names and clean up stale ones.
     pub revision: i64,
 }

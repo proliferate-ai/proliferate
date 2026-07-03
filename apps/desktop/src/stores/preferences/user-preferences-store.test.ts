@@ -275,7 +275,7 @@ describe("user preference migration", () => {
       defaultChatModelIdByAgentKind: {
         claude: "sonnet",
         codex: " gpt-5.4 ",
-        gemini: "",
+        opencode: "",
         cursor: null,
       },
     });

@@ -19,7 +19,6 @@ const HARNESS_OPTIONS = [
   { value: "claude", label: "Claude Code" },
   { value: "codex", label: "Codex" },
   { value: "opencode", label: "OpenCode" },
-  { value: "gemini", label: "Gemini CLI" },
   { value: "grok", label: "Grok CLI" },
 ] as const;
 

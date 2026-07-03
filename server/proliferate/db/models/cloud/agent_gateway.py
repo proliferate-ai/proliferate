@@ -398,9 +398,11 @@ class LlmCreditGrant(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Indexed via the explicit Index in __table_args__; ``index=True`` here
+    # would auto-generate a second Index under the SAME conventional name and
+    # make ``Base.metadata.create_all`` fail with DuplicateTableError.
     billing_subject_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("billing_subject.id", ondelete="CASCADE"),
-        index=True,
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"),

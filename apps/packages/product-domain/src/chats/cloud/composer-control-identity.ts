@@ -6,8 +6,6 @@ export function agentModelIcon(agentKind: string): SessionControlIconKey {
       return "claude";
     case "codex":
       return "openai";
-    case "gemini":
-      return "gemini";
     case "opencode":
       return "opencodeBuild";
     default:

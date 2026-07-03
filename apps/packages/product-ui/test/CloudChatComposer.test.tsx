@@ -67,7 +67,7 @@ describe("CloudChatComposer", () => {
                   id: "agents",
                   options: [
                     { id: "claude", label: "Claude", selected: true },
-                    { id: "gemini", label: "Gemini" },
+                    { id: "opencode", label: "OpenCode" },
                   ],
                 },
               ],
@@ -79,9 +79,9 @@ describe("CloudChatComposer", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Agent: Claude" }));
-    fireEvent.click(screen.getByText("Gemini"));
+    fireEvent.click(screen.getByText("OpenCode"));
 
-    expect(onSelect).toHaveBeenCalledWith("gemini");
+    expect(onSelect).toHaveBeenCalledWith("opencode");
   });
 
   it("shows every agent model group directly in the model menu", () => {

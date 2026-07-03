@@ -56,7 +56,7 @@ impl RenderedRouteAuth {
 }
 
 /// Render the env delta for a resolved profile. `runtime_home` is where
-/// isolated harness homes (codex/grok/gemini) are materialized when a route
+/// isolated harness homes (codex/grok) are materialized when a route
 /// needs them; nothing is written for `Native` or for pure-env routes.
 pub fn render_profile(
     profile: &AgentRuntimeAuthProfile,
@@ -143,9 +143,6 @@ fn render_api_key(
         AgentKind::Grok => {
             rendered.set("XAI_API_KEY", &profile.key);
         }
-        AgentKind::Gemini => {
-            rendered.set("GEMINI_API_KEY", &profile.key);
-        }
         AgentKind::Cursor => {
             return Err(RouteAuthError::UnsupportedRoute {
                 harness_kind: profile.harness_kind.clone(),
@@ -183,7 +180,6 @@ fn render_gateway(
         AgentKind::Codex => render_codex_gateway(profile, runtime_home, &mut rendered)?,
         AgentKind::OpenCode => render_opencode_gateway(profile, runtime_home, &mut rendered)?,
         AgentKind::Grok => render_grok_gateway(profile, runtime_home, &mut rendered)?,
-        AgentKind::Gemini => render_gemini_gateway(profile, runtime_home, &mut rendered)?,
         AgentKind::Cursor => {
             return Err(RouteAuthError::UnsupportedRoute {
                 harness_kind: profile.harness_kind.clone(),
@@ -338,25 +334,6 @@ fn render_grok_gateway(
         format!("{}/v1", trim_trailing_slash(&profile.base_url)),
     );
     rendered.set("XAI_API_KEY", &profile.key);
-    Ok(())
-}
-
-fn render_gemini_gateway(
-    profile: &GatewayProfile,
-    runtime_home: &Path,
-    rendered: &mut RenderedRouteAuth,
-) -> Result<(), RouteAuthError> {
-    // ROOT /v1beta genai facade — GOOGLE_GEMINI_BASE_URL is the proxy root, no
-    // /gemini prefix (HARNESS-MATRIX.md §gemini). Isolated home carries
-    // settings.json selectedType=gemini-api-key.
-    let gemini_home = materialize::materialize_gemini_home(runtime_home, profile)?;
-    rendered.set("HOME", gemini_home.to_string_lossy().into_owned());
-    rendered.set(
-        "GOOGLE_GEMINI_BASE_URL",
-        trim_trailing_slash(&profile.base_url).to_string(),
-    );
-    rendered.set("GEMINI_API_KEY", &profile.key);
-    rendered.set("GEMINI_CLI_TRUST_WORKSPACE", "true");
     Ok(())
 }
 

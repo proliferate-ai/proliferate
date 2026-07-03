@@ -1,5 +1,5 @@
 //! Switch-time filesystem materialization for gateway routes that need
-//! isolated harness state (codex CODEX_HOME, grok/gemini HOME).
+//! isolated harness state (codex CODEX_HOME, grok HOME).
 //!
 //! Bookkeeping is filesystem-only (spec §4): the applied revision is carried in
 //! the directory name (`codex-home-<rev>`, `grok-home-<rev>`, ...), so no new
@@ -28,7 +28,6 @@ const ROUTE_AUTH_DIR: &str = "agent-auth";
 /// Directory family prefixes; the applied revision is appended (`-<rev>`).
 const CODEX_HOME_PREFIX: &str = "codex-home";
 const GROK_HOME_PREFIX: &str = "grok-home";
-const GEMINI_HOME_PREFIX: &str = "gemini-home";
 const OPENCODE_CONFIG_PREFIX: &str = "opencode-config";
 
 /// Isolated CLAUDE_CONFIG_DIR family. Claude Code reads `~/.claude` (settings,
@@ -145,28 +144,6 @@ pub(super) fn materialize_grok_home(
     profile: &GatewayProfile,
 ) -> Result<PathBuf, RouteAuthError> {
     prepare_revision_dir(runtime_home, GROK_HOME_PREFIX, profile.revision)
-}
-
-/// Materialize an isolated HOME for the gemini CLI with
-/// ~/.gemini/settings.json {security.auth.selectedType = "gemini-api-key"}.
-pub(super) fn materialize_gemini_home(
-    runtime_home: &Path,
-    profile: &GatewayProfile,
-) -> Result<PathBuf, RouteAuthError> {
-    let home = prepare_revision_dir(runtime_home, GEMINI_HOME_PREFIX, profile.revision)?;
-    let gemini_dir = home.join(".gemini");
-    fs::create_dir_all(&gemini_dir).map_err(|error| RouteAuthError::Materialize {
-        detail: format!("failed to create {}: {error}", gemini_dir.display()),
-    })?;
-    let settings = json!({
-        "security": { "auth": { "selectedType": "gemini-api-key" } }
-    });
-    let serialized =
-        serde_json::to_vec_pretty(&settings).map_err(|error| RouteAuthError::Materialize {
-            detail: format!("failed to serialize gemini settings: {error}"),
-        })?;
-    write_private_file(&gemini_dir.join("settings.json"), &serialized)?;
-    Ok(home)
 }
 
 /// Create (idempotently) the revision-keyed directory for a family, removing

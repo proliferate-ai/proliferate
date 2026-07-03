@@ -15,7 +15,6 @@ const HARNESS_LABELS: Record<string, string> = {
   claude: "Claude",
   codex: "Codex",
   cursor: "Cursor",
-  gemini: "Gemini",
   grok: "Grok",
   opencode: "OpenCode",
 };

@@ -331,9 +331,7 @@ class TestRenderLocalSurface:
 
     def test_native_selection_never_carries_key_material(self) -> None:
         state, _ = agent_auth.render_agent_auth_state(
-            _inputs(
-                (_selection(harness="claude", surface="local", route="native", revision=3),)
-            ),
+            _inputs((_selection(harness="claude", surface="local", route="native", revision=3),)),
             surface="local",
         )
         assert state is not None

@@ -31,7 +31,6 @@ const UNLOCK_PHRASES_BY_CONTEXT_ID: Record<string, string> = {
   "openai-api": "add an OpenAI API key",
   "openai-oauth": "sign in with ChatGPT/Codex",
   "gemini-api": "add a Gemini API key",
-  "google-oauth": "sign in with Google",
   "cursor-login": "sign in to Cursor",
   [BASELINE_AUTH_CONTEXT_ID]: "available without credentials",
 };

@@ -67,7 +67,7 @@ describe("planFirstRunAuthAdoption", () => {
       agents: [
         agent({ kind: "claude" }),
         agent({ kind: "codex" }),
-        agent({ kind: "gemini", credentialState: "login_required" }),
+        agent({ kind: "grok", credentialState: "login_required" }),
       ],
       selectionCount: 0,
       gatewayEnabled: true,

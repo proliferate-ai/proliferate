@@ -6,7 +6,6 @@ use std::path::PathBuf;
 pub enum AgentKind {
     Claude,
     Codex,
-    Gemini,
     Cursor,
     OpenCode,
     Grok,
@@ -17,7 +16,6 @@ impl AgentKind {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
-            Self::Gemini => "gemini",
             Self::Cursor => "cursor",
             Self::OpenCode => "opencode",
             Self::Grok => "grok",
@@ -28,7 +26,6 @@ impl AgentKind {
         match self {
             Self::Claude => "Claude",
             Self::Codex => "Codex",
-            Self::Gemini => "Gemini",
             Self::Cursor => "Cursor",
             Self::OpenCode => "OpenCode",
             Self::Grok => "Grok",
@@ -39,7 +36,6 @@ impl AgentKind {
         &[
             Self::Claude,
             Self::Codex,
-            Self::Gemini,
             Self::Cursor,
             Self::OpenCode,
             Self::Grok,
@@ -50,7 +46,6 @@ impl AgentKind {
         match s {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
-            "gemini" => Some(Self::Gemini),
             "cursor" => Some(Self::Cursor),
             "opencode" => Some(Self::OpenCode),
             "grok" => Some(Self::Grok),
@@ -276,8 +271,6 @@ pub enum CredentialDiscoveryKind {
     Claude,
     /// Check Codex-specific auth.json (API key + OAuth).
     Codex,
-    /// Check Gemini-specific OAuth cache files.
-    Gemini,
     /// Check OpenCode-specific auth.json (multi-provider), while leaving
     /// readiness provider-managed when no local auth file exists.
     OpenCode,
