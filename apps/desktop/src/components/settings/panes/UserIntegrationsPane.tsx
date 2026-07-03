@@ -22,8 +22,8 @@ import {
 import { buildSettingsHref, type SettingsFocus } from "@/lib/domain/settings/navigation";
 import {
   filterIntegrationsByQuery,
-  INTEGRATIONS_SEARCH_THRESHOLD,
   integrationOauthReturnToast,
+  integrationSearchState,
 } from "@/lib/domain/settings/integrations-presentation";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -62,9 +62,13 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
     flowId: string;
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Derive the bar's visibility and the effective query together: if the list
+  // shrinks below the threshold the input hides and filtering resets to empty
+  // in the same render, so a phantom "No integrations found" can never show.
+  const { showSearch, activeQuery } = integrationSearchState(integrations.length, searchQuery);
   const filteredIntegrations = useMemo(
-    () => filterIntegrationsByQuery(integrations, searchQuery),
-    [integrations, searchQuery],
+    () => filterIntegrationsByQuery(integrations, activeQuery),
+    [integrations, activeQuery],
   );
 
   // Poll the in-flight OAuth flow while the browser handoff is pending.
@@ -213,7 +217,7 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
         <SettingsEmptyState size="compact" title="No integrations are available yet." />
       ) : (
         <SettingsSection title="Available integrations">
-          {integrations.length > INTEGRATIONS_SEARCH_THRESHOLD ? (
+          {showSearch ? (
             <Input
               aria-label="Search integrations"
               className="mb-2 h-8 px-2"

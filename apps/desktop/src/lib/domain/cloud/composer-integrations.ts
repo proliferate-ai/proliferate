@@ -113,5 +113,13 @@ export function composerIntegrationHealthDot(
       return { className: "bg-muted-foreground/50", label: "Disabled" };
     case "disabled_by_org":
       return { className: "bg-muted-foreground/50", label: "Disabled by organization" };
+    default: {
+      // Exhaustiveness guard: a new verdict must add a case above or this
+      // fails to compile. Fall back to a neutral dot rather than throwing in
+      // UI code.
+      const _exhaustive: never = health;
+      void _exhaustive;
+      return { className: "bg-muted-foreground/50", label: "Unknown" };
+    }
   }
 }

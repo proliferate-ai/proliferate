@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   filterIntegrationsByQuery,
+  INTEGRATIONS_SEARCH_THRESHOLD,
   integrationAuthKindLabel,
   integrationHealthBadge,
   integrationMatchesQuery,
   integrationOauthReturnToast,
   integrationRowActions,
+  integrationSearchState,
   integrationToolCountLabel,
 } from "@/lib/domain/settings/integrations-presentation";
 
@@ -122,6 +124,31 @@ describe("filterIntegrationsByQuery", () => {
 
   it("returns an empty array when nothing matches", () => {
     expect(filterIntegrationsByQuery(items, "notfound")).toEqual([]);
+  });
+});
+
+describe("integrationSearchState", () => {
+  it("hides the input and keeps the raw query while the list is short", () => {
+    expect(integrationSearchState(INTEGRATIONS_SEARCH_THRESHOLD, "")).toEqual({
+      showSearch: false,
+      activeQuery: "",
+    });
+  });
+
+  it("shows the input and filters by the query once the list is long", () => {
+    expect(integrationSearchState(INTEGRATIONS_SEARCH_THRESHOLD + 1, "linear")).toEqual({
+      showSearch: true,
+      activeQuery: "linear",
+    });
+  });
+
+  it("resets the effective query when a filtered list shrinks below the threshold", () => {
+    // The bar was visible with a query set; the list then shrinks so the input
+    // hides. The effective query must drop to empty so the shrunk list is not
+    // filtered behind a gone input (the phantom "No integrations found" bug).
+    const shrunk = integrationSearchState(2, "no-match-xyz");
+    expect(shrunk.showSearch).toBe(false);
+    expect(shrunk.activeQuery).toBe("");
   });
 });
 

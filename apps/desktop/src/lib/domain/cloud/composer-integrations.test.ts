@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { IntegrationHealthItem } from "@proliferate/cloud-sdk/client/integrations";
+import type {
+  IntegrationHealthItem,
+  IntegrationHealthVerdict,
+} from "@proliferate/cloud-sdk/client/integrations";
 import {
   composerIntegrationHealthDot,
   deriveComposerIntegrationsModel,
@@ -112,5 +115,16 @@ describe("composerIntegrationHealthDot", () => {
 
   it("maps error to a destructive dot", () => {
     expect(composerIntegrationHealthDot("error").className).toBe("bg-destructive");
+  });
+
+  it("falls back to a neutral dot for an unknown verdict instead of throwing", () => {
+    // A verdict outside the union (e.g. a new server value the desktop has not
+    // shipped a case for) must not crash the composer: the exhaustiveness guard
+    // returns a neutral dot at runtime. The compile-time `never` guard keeps
+    // this branch unreachable for known verdicts.
+    const dot = composerIntegrationHealthDot(
+      "brand_new_verdict" as unknown as IntegrationHealthVerdict,
+    );
+    expect(dot).toEqual({ className: "bg-muted-foreground/50", label: "Unknown" });
   });
 });

@@ -96,4 +96,27 @@ describe("OrganizationIntegrationsPane search", () => {
 
     expect(screen.getByText("No integrations found")).toBeTruthy();
   });
+
+  it("drops the stale query and shows every row when the list shrinks below the threshold", () => {
+    definitionsState.data = Array.from({ length: 8 }, (_, index) =>
+      definition({ definitionId: `def-${index}`, displayName: `Provider ${index}`, namespace: `provider-${index}` }),
+    );
+    const { rerender } = render(<OrganizationIntegrationsPane />);
+
+    const input = screen.getByPlaceholderText("Search integrations");
+    fireEvent.change(input, { target: { value: "no-match-xyz" } });
+    expect(screen.getByText("No integrations found")).toBeTruthy();
+
+    // The list shrinks below the threshold: the input hides and the stale query
+    // must stop filtering so the short list is not left showing a phantom
+    // "No integrations found" with no visible cause.
+    definitionsState.data = [
+      definition({ definitionId: "def-0", displayName: "Provider 0", namespace: "provider-0" }),
+    ];
+    rerender(<OrganizationIntegrationsPane />);
+
+    expect(screen.queryByPlaceholderText("Search integrations")).toBeNull();
+    expect(screen.queryByText("No integrations found")).toBeNull();
+    expect(screen.getByText("Provider 0")).toBeTruthy();
+  });
 });

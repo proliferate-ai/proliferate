@@ -17,7 +17,7 @@ import {
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import {
   filterIntegrationsByQuery,
-  INTEGRATIONS_SEARCH_THRESHOLD,
+  integrationSearchState,
 } from "@/lib/domain/settings/integrations-presentation";
 import {
   adminIntegrationAuthKindLabel,
@@ -70,9 +70,13 @@ export function OrganizationIntegrationsPane() {
   }
 
   const definitions = definitionsQuery.data ?? [];
+  // Derive the bar's visibility and the effective query together: if the list
+  // shrinks below the threshold the input hides and filtering resets to empty
+  // in the same render, so a phantom "No integrations found" can never show.
+  const { showSearch, activeQuery } = integrationSearchState(definitions.length, searchQuery);
   const filteredDefinitions = useMemo(
-    () => filterIntegrationsByQuery(definitions, searchQuery),
-    [definitions, searchQuery],
+    () => filterIntegrationsByQuery(definitions, activeQuery),
+    [definitions, activeQuery],
   );
 
   return (
@@ -120,7 +124,7 @@ export function OrganizationIntegrationsPane() {
         <SettingsEmptyState size="compact" title="No integrations are available yet." />
       ) : (
         <SettingsSection title="Available integrations">
-          {definitions.length > INTEGRATIONS_SEARCH_THRESHOLD ? (
+          {showSearch ? (
             <Input
               aria-label="Search integrations"
               className="mb-2 h-8 px-2"
