@@ -11,21 +11,19 @@ const state = vi.hoisted(() => ({
     data: { gatewayEnabled: true } as { gatewayEnabled: boolean } | undefined,
   },
   selections: {
-    data: { selections: [] as Array<Record<string, unknown>> } as
-      | { selections: Array<Record<string, unknown>> }
-      | undefined,
+    data: [] as Array<Record<string, unknown>> | undefined,
   },
   agents: [] as AgentSummary[],
   agentsLoading: false,
   reconcileSnapshot: {} as Record<string, unknown> | null,
   reconcileStatus: "completed" as string,
 }));
-const upsertMutate = vi.hoisted(() => vi.fn());
+const putMutate = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentGatewayCapabilities: () => state.capabilities,
-  useRouteSelections: () => state.selections,
-  useUpsertRouteSelection: () => ({ mutate: upsertMutate, isPending: false }),
+  useAuthSelections: () => state.selections,
+  usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
 }));
 
 vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
@@ -53,12 +51,14 @@ function agent(overrides: Partial<AgentSummary> = {}): AgentSummary {
   } as AgentSummary;
 }
 
+const GATEWAY_BODY = { sources: [{ sourceKind: "gateway", enabled: true }] };
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   state.cloudActive = true;
   state.capabilities.data = { gatewayEnabled: true };
-  state.selections.data = { selections: [] };
+  state.selections.data = [];
   state.agents = [];
   state.agentsLoading = false;
   state.reconcileSnapshot = {};
@@ -66,7 +66,7 @@ afterEach(() => {
 });
 
 describe("useFirstRunAuthAdoption", () => {
-  it("adopts detected native auth when no selections exist", () => {
+  it("writes nothing when native creds are detected (native is implicit)", () => {
     state.agents = [
       agent({ kind: "claude" }),
       agent({ kind: "codex", credentialState: "login_required" }),
@@ -74,26 +74,18 @@ describe("useFirstRunAuthAdoption", () => {
 
     renderHook(() => useFirstRunAuthAdoption());
 
-    expect(upsertMutate).toHaveBeenCalledTimes(1);
-    expect(upsertMutate).toHaveBeenCalledWith(
-      {
-        harnessKind: "claude",
-        surface: "local",
-        body: { route: "native" },
-      },
-      expect.anything(),
-    );
+    expect(putMutate).not.toHaveBeenCalled();
   });
 
   it("is a no-op when selections already exist", () => {
-    state.agents = [agent({ kind: "claude" })];
-    state.selections.data = {
-      selections: [{ harnessKind: "claude", surface: "local", route: "gateway" }],
-    };
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
+    state.selections.data = [
+      { harnessKind: "claude", surface: "local", sourceKind: "gateway", enabled: true },
+    ];
 
     renderHook(() => useFirstRunAuthAdoption());
 
-    expect(upsertMutate).not.toHaveBeenCalled();
+    expect(putMutate).not.toHaveBeenCalled();
   });
 
   it("preselects the gateway when nothing is detected and the gateway is enabled", () => {
@@ -101,13 +93,9 @@ describe("useFirstRunAuthAdoption", () => {
 
     renderHook(() => useFirstRunAuthAdoption());
 
-    expect(upsertMutate).toHaveBeenCalledTimes(1);
-    expect(upsertMutate).toHaveBeenCalledWith(
-      {
-        harnessKind: "claude",
-        surface: "local",
-        body: { route: "gateway" },
-      },
+    expect(putMutate).toHaveBeenCalledTimes(1);
+    expect(putMutate).toHaveBeenCalledWith(
+      { harnessKind: "claude", surface: "local", body: GATEWAY_BODY },
       expect.anything(),
     );
   });
@@ -118,74 +106,62 @@ describe("useFirstRunAuthAdoption", () => {
 
     renderHook(() => useFirstRunAuthAdoption());
 
-    expect(upsertMutate).not.toHaveBeenCalled();
+    expect(putMutate).not.toHaveBeenCalled();
   });
 
   it("waits for selections to load and then runs only once", () => {
-    state.agents = [agent({ kind: "claude" })];
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
     state.selections.data = undefined;
 
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
-    expect(upsertMutate).not.toHaveBeenCalled();
+    expect(putMutate).not.toHaveBeenCalled();
 
-    state.selections.data = { selections: [] };
+    state.selections.data = [];
     rerender();
-    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    expect(putMutate).toHaveBeenCalledTimes(1);
 
     rerender();
-    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    expect(putMutate).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for reconcile hydration to settle before deciding, then adopts freshly-hydrated native creds", () => {
-    // Mid-hydration: the reconcile job is still running and Codex has not yet
-    // had its native credentials detected (reads login_required for now).
+  it("waits for reconcile hydration to settle before deciding", () => {
+    // Mid-hydration: the reconcile job is still running, so the one-shot
+    // decision must not fire off a stale snapshot.
     state.reconcileStatus = "running";
-    state.agents = [
-      agent({ kind: "claude", credentialState: "login_required" }),
-      agent({ kind: "codex", credentialState: "login_required" }),
-    ];
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
-    // A mid-hydration snapshot must NOT drive the one-shot decision.
-    expect(upsertMutate).not.toHaveBeenCalled();
+    expect(putMutate).not.toHaveBeenCalled();
 
-    // Reconcile settles and Codex's native creds are now detected.
     state.reconcileStatus = "completed";
-    state.agents = [
-      agent({ kind: "claude", credentialState: "login_required" }),
-      agent({ kind: "codex", credentialState: "ready" }),
-    ];
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
     rerender();
 
-    expect(upsertMutate).toHaveBeenCalledTimes(1);
-    expect(upsertMutate).toHaveBeenCalledWith(
-      {
-        harnessKind: "codex",
-        surface: "local",
-        body: { route: "native" },
-      },
+    expect(putMutate).toHaveBeenCalledTimes(1);
+    expect(putMutate).toHaveBeenCalledWith(
+      { harnessKind: "claude", surface: "local", body: GATEWAY_BODY },
       expect.anything(),
     );
   });
 
   it("waits until a reconcile snapshot exists before deciding", () => {
     state.reconcileSnapshot = null;
-    state.agents = [agent({ kind: "claude" })];
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     const { rerender } = renderHook(() => useFirstRunAuthAdoption());
-    expect(upsertMutate).not.toHaveBeenCalled();
+    expect(putMutate).not.toHaveBeenCalled();
 
     state.reconcileSnapshot = {};
     rerender();
-    expect(upsertMutate).toHaveBeenCalledTimes(1);
+    expect(putMutate).toHaveBeenCalledTimes(1);
   });
 
   it("does nothing while cloud is inactive", () => {
     state.cloudActive = false;
-    state.agents = [agent({ kind: "claude" })];
+    state.agents = [agent({ kind: "claude", credentialState: "login_required" })];
 
     renderHook(() => useFirstRunAuthAdoption());
 
-    expect(upsertMutate).not.toHaveBeenCalled();
+    expect(putMutate).not.toHaveBeenCalled();
   });
 });

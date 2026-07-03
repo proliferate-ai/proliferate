@@ -180,7 +180,7 @@ export function OrganizationAgentPolicySection({
                 <th className="py-1 pr-4 font-medium">Member</th>
                 <th className="py-1 pr-4 font-medium">Harness</th>
                 <th className="py-1 pr-4 font-medium">Surface</th>
-                <th className="py-1 font-medium">Route</th>
+                <th className="py-1 font-medium">Source</th>
               </tr>
             </thead>
             <tbody>
@@ -194,7 +194,7 @@ export function OrganizationAgentPolicySection({
                   </td>
                   <td className="py-1.5 pr-4">{harnessLabel(violation.harnessKind)}</td>
                   <td className="py-1.5 pr-4 capitalize">{violation.surface}</td>
-                  <td className="py-1.5">{routeLabel(violation.route)}</td>
+                  <td className="py-1.5">{routeLabel(violation.sourceKind)}</td>
                 </tr>
               ))}
             </tbody>

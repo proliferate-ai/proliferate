@@ -1,9 +1,11 @@
 """Agent LLM gateway ORM models (LiteLLM-era agent auth).
 
-Schema follows specs/codebase/primitives/agent-auth-litellm.md section 3.3:
-personal API key pool, per-(user, harness, surface) route selections, eager
-LiteLLM enrollment state, catalog snapshots/overrides, flag-only org policy,
-and the slim usage-event ledger fed by the spend-log importer.
+The auth model (P1 rebuild, see codex/p1-auth-contract.md §1): a titled
+personal API key vault (``agent_api_key``) plus per-(user, harness, surface)
+wiring rows (``agent_auth_selection``). Each selection row is either the
+gateway or a single direct api_key; there is no native source (native == the
+empty state). Alongside: eager LiteLLM enrollment state, catalog
+snapshots/overrides, flag-only org policy, and the slim usage-event ledger.
 """
 
 import uuid
@@ -12,11 +14,11 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
-    Integer,
     Numeric,
     String,
     Text,
@@ -29,14 +31,14 @@ from proliferate.db.models.base import Base, utcnow
 
 
 class AgentApiKey(Base):
-    """A raw provider API key in a user's personal key pool."""
+    """A titled secret in a user's personal key vault.
+
+    Provider-agnostic: the key is bound to a provider only when a selection row
+    references it under a specific ``env_var_name`` (see AgentAuthSelection).
+    """
 
     __tablename__ = "agent_api_key"
     __table_args__ = (
-        CheckConstraint(
-            "provider IN ('anthropic', 'openai', 'xai', 'google', 'other')",
-            name="ck_agent_api_key_provider",
-        ),
         CheckConstraint(
             "status IN ('active', 'revoked')",
             name="ck_agent_api_key_status",
@@ -49,56 +51,66 @@ class AgentApiKey(Base):
         ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
     )
-    provider: Mapped[str] = mapped_column(String(32))
-    display_name: Mapped[str] = mapped_column(String(255))
-    payload_ciphertext: Mapped[str] = mapped_column(Text)
-    payload_ciphertext_key_id: Mapped[str] = mapped_column(String(255))
-    redacted_hint: Mapped[str] = mapped_column(String(64))
-    status: Mapped[str] = mapped_column(String(16), default="active")
-    last_validated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
+    title: Mapped[str] = mapped_column(Text)
+    value_ciphertext: Mapped[str] = mapped_column(Text)
+    encryption_key_id: Mapped[str] = mapped_column(Text)
+    redacted_hint: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utcnow,
         onupdate=utcnow,
     )
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class AgentAuthRouteSelection(Base):
-    """Server-side auth route per (user, harness, surface, slot).
+class AgentAuthSelection(Base):
+    """One wiring row per (user, harness, surface, source_kind, env_var_name).
 
-    Single-source harnesses only ever use slot='primary'; OpenCode composes
-    one row per slot (gateway + direct provider keys, simultaneously).
+    A row is either the gateway (``source_kind='gateway'``, no key/env) or a
+    single direct api_key (``source_kind='api_key'``, both api_key_id and
+    env_var_name set). Native == the empty state (zero enabled rows for a
+    scope). Single-source harnesses keep exactly one enabled row; OpenCode
+    composes the gateway plus any number of api_key rows. ``provider_hint`` is
+    display-only (a registry provider id) with zero launch semantics; the
+    renderer never puts it on the wire.
     """
 
-    __tablename__ = "agent_auth_route_selection"
+    __tablename__ = "agent_auth_selection"
     __table_args__ = (
         UniqueConstraint(
             "user_id",
             "harness_kind",
             "surface",
-            "slot",
-            name="uq_agent_auth_route_selection_scope",
+            "source_kind",
+            "env_var_name",
+            name="uq_agent_auth_selection_scope",
         ),
         CheckConstraint(
             "surface IN ('local', 'cloud')",
-            name="ck_agent_auth_route_selection_surface",
+            name="ck_agent_auth_selection_surface",
         ),
         CheckConstraint(
-            "route IN ('native', 'api_key', 'gateway')",
-            name="ck_agent_auth_route_selection_route",
+            "source_kind IN ('gateway', 'api_key')",
+            name="ck_agent_auth_selection_source_kind",
         ),
         CheckConstraint(
-            "surface != 'cloud' OR route != 'native'",
-            name="ck_agent_auth_route_selection_cloud_route",
+            "source_kind != 'api_key' OR (api_key_id IS NOT NULL AND env_var_name IS NOT NULL)",
+            name="ck_agent_auth_selection_api_key_shape",
         ),
         CheckConstraint(
-            "(route != 'api_key') OR (api_key_id IS NOT NULL)",
-            name="ck_agent_auth_route_selection_api_key_ref",
+            "source_kind != 'gateway' OR (api_key_id IS NULL AND env_var_name IS NULL)",
+            name="ck_agent_auth_selection_gateway_shape",
+        ),
+        # The scope UNIQUE treats gateway rows (env_var_name IS NULL) as
+        # distinct, so enforce "at most one gateway per scope" separately.
+        Index(
+            "ux_agent_auth_selection_gateway",
+            "user_id",
+            "harness_kind",
+            "surface",
+            unique=True,
+            postgresql_where=text("source_kind = 'gateway'"),
         ),
     )
 
@@ -108,18 +120,23 @@ class AgentAuthRouteSelection(Base):
         index=True,
     )
     harness_kind: Mapped[str] = mapped_column(String(64))
-    surface: Mapped[str] = mapped_column(String(16))
-    slot: Mapped[str] = mapped_column(String(32), default="primary", server_default="primary")
-    route: Mapped[str] = mapped_column(String(16))
+    surface: Mapped[str] = mapped_column(Text)
+    source_kind: Mapped[str] = mapped_column(Text)
     api_key_id: Mapped[uuid.UUID | None] = mapped_column(
-        # CASCADE (not SET NULL): the ck_..._api_key_ref check forbids a NULL
-        # api_key_id on an api_key-route row, so a deleted key must take its
+        # CASCADE (not SET NULL): the api_key_shape check forbids a NULL
+        # api_key_id on an api_key row, so a deleted key must take its
         # referencing selections with it rather than orphan them.
         ForeignKey("agent_api_key.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
     )
-    revision: Mapped[int] = mapped_column(Integer, default=1)
+    env_var_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_hint: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -20,6 +20,7 @@ from proliferate.db.models.billing import BillingEntitlement
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from tests.helpers.desktop_auth import mint_desktop_token_payload
+from tests.integration.test_agent_gateway_api import _create_key, _put_selections
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -319,18 +320,30 @@ class TestOrgAgentPolicyViolations:
         assert empty.status_code == 200
         assert empty.json() == {"violations": []}
 
-        # Member selections: one route conflict, one harness conflict, one
-        # compliant. Outsider selections never count.
-        for headers, harness, surface, route in (
-            (member_headers, "claude", "local", "native"),
-            (member_headers, "codex", "cloud", "gateway"),
-            (member_headers, "claude", "cloud", "gateway"),
-            (outsider_headers, "claude", "local", "native"),
+        member_key = await _create_key(client, member_headers)
+        outsider_key = await _create_key(client, outsider_headers)
+
+        def api_key(key_id: str) -> dict[str, object]:
+            return {
+                "sourceKind": "api_key",
+                "apiKeyId": key_id,
+                "envVarName": "ANTHROPIC_API_KEY",
+                "enabled": True,
+            }
+
+        gateway = {"sourceKind": "gateway", "enabled": True}
+
+        # Member selections: one source-kind conflict (api_key not in [gateway]),
+        # one harness conflict (codex not in [claude]), one compliant. Outsider
+        # selections never count.
+        for headers, harness, surface, sources in (
+            (member_headers, "claude", "local", [api_key(str(member_key["id"]))]),
+            (member_headers, "codex", "cloud", [gateway]),
+            (member_headers, "claude", "cloud", [gateway]),
+            (outsider_headers, "claude", "local", [api_key(str(outsider_key["id"]))]),
         ):
-            response = await client.put(
-                f"/v1/cloud/agent-gateway/route-selections/{harness}/{surface}",
-                headers=headers,
-                json={"route": route},
+            response = await _put_selections(
+                client, headers, harness=harness, surface=surface, sources=sources
             )
             assert response.status_code == 200, response.text
 
@@ -345,43 +358,45 @@ class TestOrgAgentPolicyViolations:
         assert response.status_code == 200, response.text
         violations = response.json()["violations"]
         flagged = {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
+            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
             for item in violations
         }
         assert flagged == {
-            (member_id, "claude", "local", "native"),
+            (member_id, "claude", "local", "api_key"),
             (member_id, "codex", "cloud", "gateway"),
         }
         assert all(item["email"] for item in violations)
         assert outsider_id not in {item["userId"] for item in violations}
 
-        # Flag-only: a member can still select a violating route afterwards.
-        still_allowed = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/grok/local",
-            headers=member_headers,
-            json={"route": "native"},
+        # Flag-only: a member can still select a violating source afterwards.
+        still_allowed = await _put_selections(
+            client,
+            member_headers,
+            harness="grok",
+            surface="local",
+            sources=[api_key(str(member_key["id"]))],
         )
         assert still_allowed.status_code == 200, still_allowed.text
 
         after = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "grok", "local", "native") in {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
+        assert (member_id, "grok", "local", "api_key") in {
+            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
             for item in after.json()["violations"]
         }
 
-        # A member can select any REGISTERED harness kind (route-selection
-        # writes validate against AGENT_AUTH_HARNESS_KINDS), and the admin can
-        # allow-list that exact kind to resolve the violation. Opencode's
-        # gateway selection lives in its 'gateway' slot (spec §3.3).
-        opencode_selection = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
-            headers=member_headers,
-            json={"route": "gateway", "slot": "gateway"},
+        # A member can select any REGISTERED harness kind, and the admin can
+        # allow-list that exact kind to resolve the violation.
+        opencode_selection = await _put_selections(
+            client,
+            member_headers,
+            harness="opencode",
+            surface="cloud",
+            sources=[gateway],
         )
         assert opencode_selection.status_code == 200, opencode_selection.text
         flagged_opencode = await client.get(violations_path, headers=owner_headers)
         assert (member_id, "opencode", "cloud", "gateway") in {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
+            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
             for item in flagged_opencode.json()["violations"]
         }
 
@@ -393,6 +408,6 @@ class TestOrgAgentPolicyViolations:
         assert allow_opencode.status_code == 200, allow_opencode.text
         resolved = await client.get(violations_path, headers=owner_headers)
         assert (member_id, "opencode", "cloud", "gateway") not in {
-            (item["userId"], item["harnessKind"], item["surface"], item["route"])
+            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
             for item in resolved.json()["violations"]
         }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from proliferate.db.models.cloud.agent_gateway import (
     AgentApiKey,
-    AgentAuthRouteSelection,
+    AgentAuthSelection,
     AgentCatalogOverride,
     AgentCatalogSnapshot,
     AgentGatewayEnrollment,
@@ -14,7 +14,7 @@ from proliferate.db.models.cloud.agent_gateway import (
 )
 from proliferate.db.store.agent_gateway.records import (
     AgentApiKeyRecord,
-    AgentAuthRouteSelectionRecord,
+    AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
     AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
@@ -28,27 +28,25 @@ def api_key_record(row: AgentApiKey) -> AgentApiKeyRecord:
     return AgentApiKeyRecord(
         id=row.id,
         user_id=row.user_id,
-        provider=row.provider,
-        display_name=row.display_name,
+        title=row.title,
         redacted_hint=row.redacted_hint,
         status=row.status,
-        last_validated_at=row.last_validated_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
-        revoked_at=row.revoked_at,
     )
 
 
-def route_selection_record(row: AgentAuthRouteSelection) -> AgentAuthRouteSelectionRecord:
-    return AgentAuthRouteSelectionRecord(
+def selection_record(row: AgentAuthSelection) -> AgentAuthSelectionRecord:
+    return AgentAuthSelectionRecord(
         id=row.id,
         user_id=row.user_id,
         harness_kind=row.harness_kind,
         surface=row.surface,
-        slot=row.slot,
-        route=row.route,
+        source_kind=row.source_kind,
         api_key_id=row.api_key_id,
-        revision=row.revision,
+        env_var_name=row.env_var_name,
+        provider_hint=row.provider_hint,
+        enabled=row.enabled,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

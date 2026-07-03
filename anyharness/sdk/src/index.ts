@@ -43,7 +43,8 @@ export type {
 } from "./types/replay.js";
 
 export type {
-  AgentAuthStateSelection,
+  AgentAuthStateSource,
+  AgentAuthStateHarness,
   AgentAuthStateDocument,
   ApplyAgentAuthStateResponse,
 } from "./types/agent-auth.js";
