@@ -11,7 +11,7 @@ export interface WorkflowMetaCardProps {
 
 export function WorkflowMetaCard({ name, description, onNameChange, onDescriptionChange }: WorkflowMetaCardProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-[12px] border border-border bg-background p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 shadow-sm">
       <div className="flex flex-col gap-1.5">
         <Label>Name</Label>
         <Input value={name} placeholder="Untitled workflow" onChange={(event) => onNameChange(event.target.value)} />

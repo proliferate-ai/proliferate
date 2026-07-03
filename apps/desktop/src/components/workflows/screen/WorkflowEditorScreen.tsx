@@ -16,7 +16,14 @@ import { stepIssues, validateWorkflowDefinition } from "@proliferate/product-dom
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
-import { ArrowLeft, Plus } from "@proliferate/ui/icons";
+import { ArrowLeft, CircleAlert, Plus } from "@proliferate/ui/icons";
+import {
+  POPOVER_SURFACE_CLASS,
+  PopoverButton,
+} from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
+import { WorkflowStepConnector } from "../editor/WorkflowStepConnector";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
@@ -234,13 +241,38 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
             <ArrowLeft className="size-3.5" />
             Workflows
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {issues.length > 0 ? (
-              <span className="text-xs text-destructive">
-                {issues.length} {issues.length === 1 ? "issue" : "issues"}
-              </span>
+              <PopoverButton
+                align="end"
+                side="bottom"
+                className={`w-80 ${POPOVER_SURFACE_CLASS}`}
+                trigger={(
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/15"
+                  >
+                    <CircleAlert className="size-3.5" />
+                    {issues.length} {issues.length === 1 ? "issue" : "issues"}
+                  </button>
+                )}
+              >
+                {() => (
+                  <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto p-1.5">
+                    {issues.map((issue, index) => (
+                      <li
+                        key={index}
+                        className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-ui-sm text-popover-foreground"
+                      >
+                        <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                        <span className="min-w-0">{issue.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </PopoverButton>
             ) : saved ? (
-              <span className="text-xs text-success">Saved</span>
+              <span className="text-xs font-medium text-success">Saved</span>
             ) : null}
             <Button size="sm" onClick={handleSave} loading={updateMutation.isPending} disabled={!canSave}>
               Save
@@ -274,64 +306,68 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
               <div className="flex flex-col">
                 {definition.steps.map((step, index) => (
-                  <div
-                    key={index}
-                    draggable
-                    onDragStart={() => setDragIndex(index)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => {
-                      if (dragIndex !== null) {
-                        reorder(dragIndex, index);
-                      }
-                      setDragIndex(null);
-                    }}
-                    className="pb-3"
-                  >
-                    <WorkflowStepRailCard
-                      step={step}
-                      index={index}
-                      selected={selectedStep === index}
-                      invalid={stepIssues(issues, index).length > 0}
-                      canMoveUp={index > 0}
-                      canMoveDown={index < definition.steps.length - 1}
-                      onSelect={() => setSelectedStep(index)}
-                      onChange={(next) => updateStep(index, next)}
-                      onDuplicate={() => duplicateStep(index)}
-                      onDelete={() => deleteStep(index)}
-                      onMoveUp={() => reorder(index, index - 1)}
-                      onMoveDown={() => reorder(index, index + 1)}
-                    />
-                    {index < definition.steps.length - 1 ? (
-                      <div className="ml-6 h-3 w-px bg-border" aria-hidden />
-                    ) : null}
+                  <div key={index}>
+                    <div
+                      draggable
+                      onDragStart={() => setDragIndex(index)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => {
+                        if (dragIndex !== null) {
+                          reorder(dragIndex, index);
+                        }
+                        setDragIndex(null);
+                      }}
+                    >
+                      <WorkflowStepRailCard
+                        step={step}
+                        index={index}
+                        selected={selectedStep === index}
+                        invalid={stepIssues(issues, index).length > 0}
+                        canMoveUp={index > 0}
+                        canMoveDown={index < definition.steps.length - 1}
+                        onSelect={() => setSelectedStep(index)}
+                        onChange={(next) => updateStep(index, next)}
+                        onDuplicate={() => duplicateStep(index)}
+                        onDelete={() => deleteStep(index)}
+                        onMoveUp={() => reorder(index, index - 1)}
+                        onMoveDown={() => reorder(index, index + 1)}
+                      />
+                    </div>
+                    <WorkflowStepConnector />
                   </div>
                 ))}
 
-                <div className="relative">
-                  <Button variant="secondary" size="sm" onClick={() => setAddOpen((v) => !v)}>
-                    <Plus className="size-3.5" />
-                    Add step
-                  </Button>
-                  {addOpen ? (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setAddOpen(false)} aria-hidden />
-                      <div className="absolute left-0 z-20 mt-1 w-44 rounded-md border border-border bg-background p-1 shadow-md">
+                <div className="flex justify-start pl-[4px]">
+                  <PopoverButton
+                    align="start"
+                    side="bottom"
+                    externalOpen={addOpen}
+                    onOpenChange={setAddOpen}
+                    className={`w-48 ${POPOVER_SURFACE_CLASS}`}
+                    trigger={(
+                      <button
+                        type="button"
+                        aria-label="Add step"
+                        className="flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm outline-none transition-colors hover:border-border-heavy hover:text-foreground data-[state=open]:border-border-heavy data-[state=open]:text-foreground"
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    )}
+                  >
+                    {(close) => (
+                      <div className="p-1">
                         {STEP_KINDS.map((kind) => (
-                          <button
+                          <PopoverMenuItem
                             key={kind}
-                            type="button"
-                            onClick={() => addStep(kind)}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-ui-sm hover:bg-foreground/[0.05]"
-                          >
-                            <span aria-hidden className="w-4 text-center font-mono text-muted-foreground">
-                              {WORKFLOW_STEP_META[kind].glyph}
-                            </span>
-                            {WORKFLOW_STEP_META[kind].label}
-                          </button>
+                            density="compact"
+                            icon={<WorkflowStepKindBadge kind={kind} iconOnly className="bg-transparent p-0" />}
+                            label={WORKFLOW_STEP_META[kind].label}
+                            onClick={() => { close(); addStep(kind); }}
+                          />
                         ))}
                       </div>
-                    </>
-                  ) : null}
+                    )}
+                  </PopoverButton>
                 </div>
               </div>
             </div>
