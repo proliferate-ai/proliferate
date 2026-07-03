@@ -44,6 +44,47 @@ pub enum LoopStatus {
     Cleared,
 }
 
+/// Arm-or-edit a loop through `PUT /v1/sessions/{id}/loops` (create) or
+/// `PUT /v1/sessions/{id}/loops/{loop_id}` (edit). On native harnesses (Claude
+/// session crons) this drives `_anyharness/loop/set`; on emulation-eligible
+/// harnesses (Codex) it arms a runtime-owned loop (`native: false`) in the
+/// [`crate::v1`] loop scheduler.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSessionLoopRequest {
+    pub prompt: String,
+    pub schedule: LoopSchedule,
+    /// Fire indefinitely (default) or once. Native crons are recurring.
+    #[serde(default = "default_recurring")]
+    pub recurring: bool,
+    /// Optional cap on total fires (emulated loops only). `None` = uncapped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_fires: Option<i64>,
+}
+
+fn default_recurring() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLoopResponse {
+    pub r#loop: Loop,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLoopsResponse {
+    pub loops: Vec<Loop>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearSessionLoopsResponse {
+    /// How many loops were cleared (0 when the target was already gone).
+    pub cleared: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

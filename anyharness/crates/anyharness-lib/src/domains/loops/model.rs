@@ -21,6 +21,13 @@ pub struct LoopRecord {
     pub last_fired_at_ms: Option<i64>,
     pub fire_count: i64,
     pub native_state_json: Option<String>,
+    /// Optional fire cap for emulated (`native = false`) loops; `None` =
+    /// uncapped. Native crons ignore this (the harness owns their lifecycle).
+    pub max_fires: Option<i64>,
+    /// The emulated scheduler's persisted next-fire instant, so an armed loop
+    /// re-arms with the correct cadence after a session attach. `None` for
+    /// native loops and for cleared loops.
+    pub next_fire_at_ms: Option<i64>,
     pub created_at: String,
     pub updated_at_ms: i64,
 }
