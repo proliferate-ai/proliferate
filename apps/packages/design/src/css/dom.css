@@ -48,6 +48,15 @@
      chat font size — including runtime text-scale changes — but always sits
      one step below it. */
   --text-chat-meta: calc(var(--text-chat, 12px) - 2px);
+  /* Message body prose (assistant + user transcript bodies) reads at the
+     composer size, so typed text and sent text match. Secondary chrome
+     (tool/action rows, plans, work history) stays on --text-chat. Declared as
+     an alias of --text-composer rather than a separate scale entry so it
+     tracks the composer across every appearance preset with no drift lock to
+     keep in sync. Message surfaces opt in via --prose-text-size (below);
+     everything else falls back to --text-chat. */
+  --text-message: var(--text-composer);
+  --text-message--line-height: var(--text-composer--line-height);
 }
 
 * {

@@ -31,7 +31,10 @@ export function AssistantMessage({
   renderCodeBlock,
 }: AssistantMessageProps) {
   return (
-    <div className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
+    // Opt this message body into the composer-matched prose size. Both the
+    // stable and live MarkdownBody below inherit --prose-text-size from here,
+    // so the reserved height is identical between streaming and settled states.
+    <div className="[--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)] text-[length:var(--prose-text-size)] leading-[var(--prose-text-line-height)] select-text text-foreground">
       <AssistantMessageContent
         content={content}
         isStreaming={isStreaming}
