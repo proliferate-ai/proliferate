@@ -232,6 +232,26 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
     } <= secret_set_columns
     assert "cloud_repo_config_id" not in secret_set_columns
 
+    runtime_worker_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("cloud_runtime_worker")
+        }
+    )
+    assert {
+        "worker_version",
+        "anyharness_version",
+        "hostname",
+        "machine_fingerprint",
+    } <= runtime_worker_columns
+
+    tool_cache_foreign_keys = await conn.run_sync(
+        lambda sync_conn: {
+            fk["referred_table"]
+            for fk in inspect(sync_conn).get_foreign_keys("cloud_integration_tool_schema_cache")
+        }
+    )
+    assert "cloud_integration_account" in tool_cache_foreign_keys
+
     github_app_installation_columns = await conn.run_sync(
         lambda sync_conn: {
             column["name"] for column in inspect(sync_conn).get_columns("github_app_installations")

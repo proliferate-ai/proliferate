@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
 from proliferate.db.store.integrations.tool_cache import (
     get_tool_cache,
     upsert_tool_cache,
@@ -41,16 +42,20 @@ async def get_or_refresh_tool_cache(
 ) -> list[dict[str, Any]]:
     """Return the account's tool schema, refreshing the cache when stale.
 
-    Serves a ``ready`` cache whose ``auth_version`` matches the account; else
-    fetches ``tools/list`` from the remote MCP server, upserts the cache as
-    ``ready``, and returns it. On failure the cache is marked ``error`` and the
-    originating error is re-raised.
+    Serves a ``ready`` cache whose ``auth_version`` matches the account and
+    whose ``fetched_at`` is within the TTL; else fetches ``tools/list`` from
+    the remote MCP server, upserts the cache as ``ready``, and returns it. On
+    failure the cache is marked ``error`` and the originating error is
+    re-raised.
     """
     cache = await get_tool_cache(db, account_record.id)
+    now = utcnow()
     if (
         cache is not None
         and cache.status == "ready"
         and cache.auth_version == account_record.auth_version
+        and cache.fetched_at is not None
+        and (now - cache.fetched_at).total_seconds() <= CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
     ):
         return _decode_tools(cache.tools_json)
 

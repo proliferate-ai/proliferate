@@ -284,3 +284,85 @@ async def test_gateway_get_returns_method_not_allowed(client: AsyncClient) -> No
     response = await client.get(GATEWAY_URL)
     assert response.status_code == 405
     assert response.headers.get("allow") == "POST"
+
+
+@pytest.mark.asyncio
+async def test_gateway_grant_resolves_without_stamping_last_used(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    bearer = await _gateway_bearer(client, db_session, prefix="gw-grant")
+    init = await client.post(
+        GATEWAY_URL,
+        headers={"Authorization": f"Bearer {bearer}"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+    )
+    assert init.status_code == 200, init.text
+
+    from sqlalchemy import select
+
+    from proliferate.db.models.cloud.runtime_workers import CloudIntegrationGatewayToken
+
+    token = (await db_session.execute(select(CloudIntegrationGatewayToken))).scalars().one()
+    assert token.status == "active"
+    # The hot path no longer stamps last_used_at per request.
+    assert token.last_used_at is None
+
+
+@pytest.mark.asyncio
+async def test_list_tools_cache_refetches_after_ttl(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bearer = await _gateway_bearer(client, db_session, prefix="gw-ttl")
+    headers = {"Authorization": f"Bearer {bearer}"}
+
+    from sqlalchemy import select, update
+
+    from proliferate.db.models.cloud.runtime_workers import CloudRuntimeWorker
+
+    worker = (await db_session.execute(select(CloudRuntimeWorker))).scalars().first()
+    assert worker is not None
+    await _seed_ready_account(db_session, user_id=str(worker.owner_user_id), namespace="context7")
+
+    calls = {"count": 0}
+
+    async def fake_list_tools(*, url, headers, query=None):
+        calls["count"] += 1
+        return [{"name": "resolve-library-id", "inputSchema": {"type": "object"}}]
+
+    monkeypatch.setattr(
+        "proliferate.server.cloud.integrations.tools.mcp_remote.list_tools",
+        fake_list_tools,
+    )
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "integrations.list_tools", "arguments": {"provider": "context7"}},
+    }
+    first = await client.post(GATEWAY_URL, headers=headers, json=payload)
+    assert first.status_code == 200, first.text
+    assert calls["count"] == 1
+
+    # A fresh, version-matching cache is served without refetching.
+    second = await client.post(GATEWAY_URL, headers=headers, json=payload)
+    assert second.status_code == 200, second.text
+    assert calls["count"] == 1
+
+    # Backdating the fetch beyond the TTL makes the cache stale again.
+    from datetime import UTC, datetime, timedelta
+
+    from proliferate.constants.cloud import CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
+    from proliferate.db.models.cloud.integrations import CloudIntegrationToolSchemaCache
+
+    await db_session.execute(
+        update(CloudIntegrationToolSchemaCache).values(
+            fetched_at=datetime.now(UTC)
+            - timedelta(seconds=CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS + 60)
+        )
+    )
+    await db_session.commit()
+
+    third = await client.post(GATEWAY_URL, headers=headers, json=payload)
+    assert third.status_code == 200, third.text
+    assert calls["count"] == 2
