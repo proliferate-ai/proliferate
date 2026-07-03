@@ -15,6 +15,7 @@ import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-o
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
+import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION } from "@/config/settings";
 import {
   type OrganizationInvitationRecord,
@@ -35,7 +36,6 @@ export function OrganizationMembersPane() {
     activeOrganizationId,
     organizations,
     organizationsQuery,
-    setActiveOrganizationId,
   } = useActiveOrganization();
   const actions = useOrganizationActions(activeOrganizationId);
   const admin = useIsAdmin(activeOrganizationId);
@@ -53,6 +53,7 @@ export function OrganizationMembersPane() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const joinFlow = useOrganizationJoinInvitationFlow();
+  const { activateJoinedOrganization } = useJoinedOrganizationActivation();
 
   const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
   const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
@@ -68,7 +69,7 @@ export function OrganizationMembersPane() {
     joinFlow.setStatusMessage(null);
     try {
       const response = await actions.acceptCurrentInvitation(invitationId);
-      setActiveOrganizationId(response.organization.id);
+      await activateJoinedOrganization(response.organization.id);
       joinFlow.clearJoinTarget();
       joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
       showToast(`Joined ${response.organization.name}.`, "info");

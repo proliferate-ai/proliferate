@@ -31,6 +31,7 @@ import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
+import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
@@ -107,6 +108,8 @@ export function SidebarAccountFooter() {
     authStatus === "authenticated",
   );
   const actions = useOrganizationActions(activeOrganizationId);
+  const { activateJoinedOrganization, activatingJoinedOrganization } =
+    useJoinedOrganizationActivation();
   const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? [];
   const [acceptTarget, setAcceptTarget] = useState<OrganizationInvitationRecord | null>(null);
   const [switchTarget, setSwitchTarget] = useState<OrganizationRecord | null>(null);
@@ -130,7 +133,7 @@ export function SidebarAccountFooter() {
     }
     try {
       const response = await actions.acceptCurrentInvitation(acceptTarget.id);
-      setActiveOrganizationId(response.organization.id);
+      await activateJoinedOrganization(response.organization.id);
       setAcceptTarget(null);
       showToast(`Joined ${response.organization.name}.`, "info");
     } catch {
@@ -363,11 +366,12 @@ export function SidebarAccountFooter() {
         description={
           acceptTarget
             ? `Accept this invitation for ${acceptTarget.email} and join as ${acceptTarget.role}.`
+              + (activeOrganizationId ? " Joining switches your active organization and closes your running local sessions." : "")
             : "Accept this invitation and join the organization."
         }
         confirmLabel="Accept invitation"
-        loading={actions.acceptingCurrentInvitation}
-        disableClose={actions.acceptingCurrentInvitation}
+        loading={actions.acceptingCurrentInvitation || activatingJoinedOrganization}
+        disableClose={actions.acceptingCurrentInvitation || activatingJoinedOrganization}
         onClose={() => setAcceptTarget(null)}
         onConfirm={() => {
           void handleAcceptInvitation();
