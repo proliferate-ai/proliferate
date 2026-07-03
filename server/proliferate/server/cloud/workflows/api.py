@@ -27,21 +27,31 @@ from proliferate.server.cloud.workflows.models import (
     WorkflowResponse,
     WorkflowRunListResponse,
     WorkflowRunResponse,
+    WorkflowTriggerCreateRequest,
+    WorkflowTriggerListResponse,
+    WorkflowTriggerResponse,
+    WorkflowTriggerUpdateRequest,
     WorkflowUpdateRequest,
     run_payload,
+    trigger_payload,
     workflow_detail_payload,
     workflow_payload,
 )
 from proliferate.server.cloud.workflows.service import (
     archive_workflow,
+    create_trigger,
     create_workflow,
+    delete_trigger,
     get_run,
+    get_trigger,
     get_workflow_detail,
     list_runs,
+    list_triggers,
     list_workflows,
     mark_run_delivered,
     report_run_status,
     start_run,
+    update_trigger,
     update_workflow,
 )
 
@@ -196,3 +206,57 @@ async def list_workflow_runs_endpoint(
 ) -> WorkflowRunListResponse:
     runs = await list_runs(db, user, workflow_id=workflow_id)
     return WorkflowRunListResponse(runs=[run_payload(r) for r in runs])
+
+
+# --- triggers (spec 3.5) -------------------------------------------------------
+
+
+@router.get("/{workflow_id}/triggers", response_model=WorkflowTriggerListResponse)
+async def list_triggers_endpoint(
+    workflow_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowTriggerListResponse:
+    triggers = await list_triggers(db, user, workflow_id)
+    return WorkflowTriggerListResponse(triggers=[trigger_payload(t) for t in triggers])
+
+
+@router.post("/{workflow_id}/triggers", response_model=WorkflowTriggerResponse)
+async def create_trigger_endpoint(
+    workflow_id: UUID,
+    body: WorkflowTriggerCreateRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowTriggerResponse:
+    return trigger_payload(await create_trigger(db, user, workflow_id, body))
+
+
+@router.get("/{workflow_id}/triggers/{trigger_id}", response_model=WorkflowTriggerResponse)
+async def get_trigger_endpoint(
+    workflow_id: UUID,
+    trigger_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowTriggerResponse:
+    return trigger_payload(await get_trigger(db, user, workflow_id, trigger_id))
+
+
+@router.patch("/{workflow_id}/triggers/{trigger_id}", response_model=WorkflowTriggerResponse)
+async def update_trigger_endpoint(
+    workflow_id: UUID,
+    trigger_id: UUID,
+    body: WorkflowTriggerUpdateRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowTriggerResponse:
+    return trigger_payload(await update_trigger(db, user, workflow_id, trigger_id, body))
+
+
+@router.delete("/{workflow_id}/triggers/{trigger_id}", status_code=204)
+async def delete_trigger_endpoint(
+    workflow_id: UUID,
+    trigger_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> None:
+    await delete_trigger(db, user, workflow_id, trigger_id)

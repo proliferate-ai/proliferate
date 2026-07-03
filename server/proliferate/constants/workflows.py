@@ -181,6 +181,38 @@ SUPPORTED_WORKFLOW_SESSION_BINDINGS: Final = frozenset(
     {WORKFLOW_SESSION_BINDING_FRESH, WORKFLOW_SESSION_BINDING_HEADLESS}
 )
 
+# --- Trigger records (workflow_trigger table; spec 3.5). -----------------------
+# A trigger is *only* a trigger: it pins target + schedule + concurrency and calls
+# the same StartRun (no interpreter, no special execution path). The kind
+# vocabulary is intentionally open (webhook/api later); v1 ships schedule only.
+WORKFLOW_TRIGGER_KIND_SCHEDULE: Final = "schedule"
+SUPPORTED_WORKFLOW_TRIGGER_TYPES: Final = frozenset({WORKFLOW_TRIGGER_KIND_SCHEDULE})
+
+# --- Concurrency policy (spec 3.5: simple skip | queue, no batch/parallel). -----
+# skip:  a due tick is dropped (recorded with a reason) while a prior run of the
+#        same trigger is still non-terminal.
+# queue: a due tick always creates the run, but the scheduler defers *delivery*
+#        until the trigger's prior run reaches a terminal state (FIFO by slot).
+WORKFLOW_CONCURRENCY_SKIP: Final = "skip"
+WORKFLOW_CONCURRENCY_QUEUE: Final = "queue"
+SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES: Final = frozenset(
+    {WORKFLOW_CONCURRENCY_SKIP, WORKFLOW_CONCURRENCY_QUEUE}
+)
+
+# Skip-tick surfacing is stored inline on the trigger (last_skipped_at +
+# last_skip_reason) rather than a separate tick log — one row, no fan-out.
+WORKFLOW_TRIGGER_SKIP_REASON_MAX_LENGTH: Final = 255
+WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY: Final = (
+    "A previous run of this trigger was still running."
+)
+
+# --- Scheduler tick bounds (mirrors the automations beat; spec 3.5). -----------
+WORKFLOW_SCHEDULER_DEFAULT_INTERVAL_SECONDS: Final = 15.0
+WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE: Final = 100
+# Each cloud delivery wakes a sandbox, so cap wakes per beat to keep it bounded
+# (the house automation loop bounds its per-tick work the same way).
+WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK: Final = 25
+
 # --- Sizing / abuse limits. ----------------------------------------------------
 WORKFLOW_SHORT_TEXT_MAX_LENGTH: Final = 255
 WORKFLOW_MAX_STEPS: Final = 50

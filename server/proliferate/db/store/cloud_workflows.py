@@ -10,7 +10,12 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.workflows import WORKFLOW_RUN_STATUS_PENDING_DELIVERY
+from proliferate.constants.workflows import (
+    WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
+    WORKFLOW_RUN_TERMINAL_STATUSES,
+    WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+    WORKFLOW_TRIGGER_SCHEDULE,
+)
 from proliferate.db.models.cloud.workflows import Workflow, WorkflowRun, WorkflowVersion
 from proliferate.utils.time import utcnow
 
@@ -44,6 +49,8 @@ class WorkflowRunRecord:
     workflow_id: UUID
     workflow_version_id: UUID
     trigger_kind: str
+    trigger_id: UUID | None
+    scheduled_for: datetime | None
     executor_user_id: UUID
     args_json: dict[str, object]
     target_mode: str
@@ -95,6 +102,8 @@ def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
         workflow_id=row.workflow_id,
         workflow_version_id=row.workflow_version_id,
         trigger_kind=row.trigger_kind,
+        trigger_id=row.trigger_id,
+        scheduled_for=row.scheduled_for,
         executor_user_id=row.executor_user_id,
         args_json=dict(row.args_json or {}),
         target_mode=row.target_mode,
@@ -280,6 +289,8 @@ async def create_run(
     target_mode: str,
     resolved_plan_json: dict[str, object],
     anyharness_workspace_id: str | None = None,
+    trigger_id: UUID | None = None,
+    scheduled_for: datetime | None = None,
 ) -> WorkflowRunRecord:
     now = utcnow()
     row = WorkflowRun(
@@ -287,6 +298,8 @@ async def create_run(
         workflow_id=workflow_id,
         workflow_version_id=workflow_version_id,
         trigger_kind=trigger_kind,
+        trigger_id=trigger_id,
+        scheduled_for=scheduled_for,
         executor_user_id=executor_user_id,
         args_json=args_json,
         target_mode=target_mode,
@@ -391,3 +404,77 @@ async def update_run(
     row.updated_at = utcnow()
     await db.flush()
     return _run_record(row)
+
+
+# --- scheduler-lane run queries (W5) -------------------------------------------
+#
+# "Non-terminal" spans pending_delivery/delivered/running/waiting_approval — every
+# status a trigger's prior run can occupy before it is done. The scheduler uses
+# these to enforce concurrency (skip) and to order FIFO delivery (queue).
+
+# FIFO ordering key for a trigger's runs: by the schedule slot, then creation.
+_RUN_ORDER = (WorkflowRun.scheduled_for.asc(), WorkflowRun.created_at.asc(), WorkflowRun.id.asc())
+
+
+async def has_non_terminal_run_for_trigger(db: AsyncSession, *, trigger_id: UUID) -> bool:
+    """True if this trigger has a run that has not yet reached a terminal state."""
+
+    found = (
+        await db.execute(
+            select(WorkflowRun.id)
+            .where(
+                WorkflowRun.trigger_id == trigger_id,
+                WorkflowRun.status.notin_(tuple(WORKFLOW_RUN_TERMINAL_STATUSES)),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return found is not None
+
+
+async def earliest_non_terminal_run_id_for_trigger(
+    db: AsyncSession, *, trigger_id: UUID
+) -> UUID | None:
+    """The FIFO-first non-terminal run for a trigger (its "active" run), if any."""
+
+    return (
+        await db.execute(
+            select(WorkflowRun.id)
+            .where(
+                WorkflowRun.trigger_id == trigger_id,
+                WorkflowRun.status.notin_(tuple(WORKFLOW_RUN_TERMINAL_STATUSES)),
+            )
+            .order_by(*_RUN_ORDER)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def list_pending_scheduled_cloud_runs(
+    db: AsyncSession, *, limit: int
+) -> tuple[WorkflowRunRecord, ...]:
+    """Scheduled cloud runs still awaiting delivery, FIFO-ordered.
+
+    The scheduler tick delivers only those whose trigger has no earlier
+    non-terminal run (see ``earliest_non_terminal_run_id_for_trigger``), which is
+    how ``queue`` defers a run behind its predecessor.
+    """
+
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowRun)
+                .where(
+                    WorkflowRun.status == WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
+                    WorkflowRun.trigger_kind == WORKFLOW_TRIGGER_SCHEDULE,
+                    WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+                    WorkflowRun.trigger_id.is_not(None),
+                )
+                .order_by(*_RUN_ORDER)
+                .limit(max(1, limit))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_run_record(row) for row in rows)

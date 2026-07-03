@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -126,6 +127,24 @@ class WorkflowRun(Base):
             "created_at",
             postgresql_where=text("status = 'pending_delivery'"),
         ),
+        # Scheduler-lane indexes (W5). Concurrency + FIFO-delivery scans hit runs
+        # by their originating trigger; keep them partial so manual/chat runs
+        # (trigger_id IS NULL) never touch these indexes.
+        Index(
+            "ix_workflow_run_trigger_id",
+            "trigger_id",
+            "created_at",
+            postgresql_where=text("trigger_id IS NOT NULL"),
+        ),
+        # One scheduled run per (trigger, slot): the scheduler advances the trigger
+        # under a row lock, but this is the hard DB guarantee against a double-fire.
+        Index(
+            "uq_workflow_run_trigger_slot",
+            "trigger_id",
+            "scheduled_for",
+            unique=True,
+            postgresql_where=text("trigger_id IS NOT NULL AND scheduled_for IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -136,6 +155,17 @@ class WorkflowRun(Base):
         ForeignKey("workflow_version.id", ondelete="RESTRICT"),
     )
     trigger_kind: Mapped[str] = mapped_column(String(32))
+    # Set only for runs a trigger produced (scheduled runs today). Null for
+    # manual/chat/agent runs. SET NULL on trigger delete keeps run history intact.
+    trigger_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workflow_trigger.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # The trigger occurrence (RRULE slot) this run fires for — the dedup + FIFO key.
+    scheduled_for: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     # Always equals the workflow owner in v1 (no "Run as"); kept for future
     # team/service-account executors.
     executor_user_id: Mapped[uuid.UUID] = mapped_column(
@@ -165,3 +195,102 @@ class WorkflowRun(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WorkflowTrigger(Base):
+    """A trigger fires a workflow: it pins target + schedule + concurrency, then
+    calls the *same* ``StartRun`` as every other trigger source (spec 3.5).
+
+    It owns no execution — no interpreter, no special path — only *when* and
+    *where* a run starts and *with which* argument values. The ``kind`` vocabulary
+    is intentionally open (webhook/api arrive later); v1 persists ``schedule``.
+    """
+
+    __tablename__ = "workflow_trigger"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('schedule')",
+            name="ck_workflow_trigger_kind",
+        ),
+        CheckConstraint(
+            "concurrency_policy IN ('skip', 'queue')",
+            name="ck_workflow_trigger_concurrency_policy",
+        ),
+        CheckConstraint(
+            "target_mode IN ('local', 'personal_cloud')",
+            name="ck_workflow_trigger_target_mode",
+        ),
+        # StartRun's own rule, pinned at the trigger: a cloud target names a
+        # workspace; a local target must not.
+        CheckConstraint(
+            "(target_mode = 'personal_cloud' AND target_workspace_id IS NOT NULL) "
+            "OR (target_mode = 'local' AND target_workspace_id IS NULL)",
+            name="ck_workflow_trigger_target_workspace",
+        ),
+        # A schedule trigger must carry a complete, cursor-able schedule.
+        CheckConstraint(
+            "kind <> 'schedule' OR ("
+            "schedule_rrule IS NOT NULL "
+            "AND schedule_timezone IS NOT NULL "
+            "AND next_run_at IS NOT NULL"
+            ")",
+            name="ck_workflow_trigger_schedule_fields",
+        ),
+        Index("ix_workflow_trigger_workflow_id", "workflow_id"),
+        Index("ix_workflow_trigger_target_workspace_id", "target_workspace_id"),
+        # The scheduler's due scan: enabled schedule triggers whose slot has passed.
+        Index(
+            "ix_workflow_trigger_scheduler_due",
+            "next_run_at",
+            postgresql_where=text(
+                "enabled = true AND kind = 'schedule' AND next_run_at IS NOT NULL"
+            ),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workflow_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow.id", ondelete="CASCADE"),
+    )
+    kind: Mapped[str] = mapped_column(String(32), default="schedule")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Concurrency + target are pinned on the trigger, not per-run: two schedule
+    # triggers on one workflow may target different workspaces and run in parallel.
+    concurrency_policy: Mapped[str] = mapped_column(String(16))
+    target_mode: Mapped[str] = mapped_column(String(32))
+    # Cloud workspace the scheduled run delivers into (required for personal_cloud).
+    # CASCADE keeps the target-workspace NOT-NULL invariant true if a workspace is
+    # ever hard-deleted (they are normally archived, not deleted).
+    target_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_workspace.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    # Schedule cursor (reuses the automations RRULE house rules). Nullable at the
+    # column level so future non-schedule kinds fit; the CHECK ties them to kind.
+    schedule_rrule: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Trusted invariant: the service validates this as an IANA timezone before write.
+    schedule_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    schedule_summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    # Skip-tick surfacing (concurrency skip, or a StartRun error at fire time).
+    last_skipped_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_skip_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The argument values a fired run runs with, validated against the workflow's
+    # arg schema (same coercion as a manual StartRun) at create/update.
+    args_json: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )

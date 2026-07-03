@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
 from proliferate.db.store.cloud_workflows import (
     WorkflowRecord,
     WorkflowRunRecord,
@@ -20,6 +21,8 @@ WorkflowTriggerKind = Literal["manual", "schedule", "chat", "agent", "api"]
 WorkflowRunObservableStatus = Literal[
     "running", "waiting_approval", "completed", "failed", "cancelled"
 ]
+WorkflowTriggerConcurrency = Literal["skip", "queue"]
+WorkflowTriggerTargetMode = Literal["local", "personal_cloud"]
 
 
 class WorkflowBaseModel(BaseModel):
@@ -103,6 +106,9 @@ class WorkflowRunResponse(WorkflowBaseModel):
     workflow_id: str = Field(alias="workflowId")
     workflow_version_id: str = Field(alias="workflowVersionId")
     trigger_kind: str = Field(alias="triggerKind")
+    # Set for scheduled runs — links a run to the trigger occurrence that fired it.
+    trigger_id: str | None = Field(alias="triggerId")
+    scheduled_for: str | None = Field(alias="scheduledFor")
     executor_user_id: str = Field(alias="executorUserId")
     args: dict[str, object]
     target_mode: str = Field(alias="targetMode")
@@ -181,6 +187,8 @@ def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
         workflow_id=str(record.workflow_id),
         workflow_version_id=str(record.workflow_version_id),
         trigger_kind=record.trigger_kind,
+        trigger_id=str(record.trigger_id) if record.trigger_id else None,
+        scheduled_for=_iso(record.scheduled_for),
         executor_user_id=str(record.executor_user_id),
         args=record.args_json,
         target_mode=record.target_mode,
@@ -199,4 +207,98 @@ def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
         delivered_at=_iso(record.delivered_at),
         started_at=_iso(record.started_at),
         finished_at=_iso(record.finished_at),
+    )
+
+
+# --- triggers (spec 3.5) -------------------------------------------------------
+
+
+class TriggerScheduleRequest(WorkflowBaseModel):
+    """The RRULE + IANA timezone a schedule trigger fires on (house RRULE rules)."""
+
+    rrule: str
+    timezone: str
+
+
+class WorkflowTriggerCreateRequest(WorkflowBaseModel):
+    # v1 vocabulary is schedule-only; the field exists so webhook/api slot in later.
+    kind: Literal["schedule"] = "schedule"
+    enabled: bool = True
+    concurrency_policy: WorkflowTriggerConcurrency = Field(alias="concurrencyPolicy")
+    target_mode: WorkflowTriggerTargetMode = Field(alias="targetMode")
+    target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
+    schedule: TriggerScheduleRequest
+    args: dict[str, object] = Field(default_factory=dict)
+
+
+class WorkflowTriggerUpdateRequest(WorkflowBaseModel):
+    """Partial update: only supplied fields change, then the whole trigger is
+    re-validated as a unit (schedule ⋈ target ⋈ args are interdependent)."""
+
+    enabled: bool | None = None
+    concurrency_policy: WorkflowTriggerConcurrency | None = Field(
+        default=None, alias="concurrencyPolicy"
+    )
+    target_mode: WorkflowTriggerTargetMode | None = Field(default=None, alias="targetMode")
+    target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
+    schedule: TriggerScheduleRequest | None = None
+    args: dict[str, object] | None = None
+
+
+class TriggerScheduleResponse(WorkflowBaseModel):
+    rrule: str
+    timezone: str
+    summary: str | None
+
+
+class WorkflowTriggerResponse(WorkflowBaseModel):
+    id: str
+    workflow_id: str = Field(alias="workflowId")
+    kind: str
+    enabled: bool
+    concurrency_policy: str = Field(alias="concurrencyPolicy")
+    target_mode: str = Field(alias="targetMode")
+    target_workspace_id: str | None = Field(alias="targetWorkspaceId")
+    schedule: TriggerScheduleResponse | None
+    next_run_at: str | None = Field(alias="nextRunAt")
+    last_scheduled_at: str | None = Field(alias="lastScheduledAt")
+    last_skipped_at: str | None = Field(alias="lastSkippedAt")
+    last_skip_reason: str | None = Field(alias="lastSkipReason")
+    args: dict[str, object]
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+
+
+class WorkflowTriggerListResponse(WorkflowBaseModel):
+    triggers: list[WorkflowTriggerResponse]
+
+
+def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
+    schedule = (
+        TriggerScheduleResponse(
+            rrule=record.schedule_rrule,
+            timezone=record.schedule_timezone,
+            summary=record.schedule_summary,
+        )
+        if record.schedule_rrule is not None and record.schedule_timezone is not None
+        else None
+    )
+    return WorkflowTriggerResponse(
+        id=str(record.id),
+        workflow_id=str(record.workflow_id),
+        kind=record.kind,
+        enabled=record.enabled,
+        concurrency_policy=record.concurrency_policy,
+        target_mode=record.target_mode,
+        target_workspace_id=(
+            str(record.target_workspace_id) if record.target_workspace_id else None
+        ),
+        schedule=schedule,
+        next_run_at=_iso(record.next_run_at),
+        last_scheduled_at=_iso(record.last_scheduled_at),
+        last_skipped_at=_iso(record.last_skipped_at),
+        last_skip_reason=record.last_skip_reason,
+        args=record.args_json,
+        created_at=record.created_at.isoformat(),
+        updated_at=record.updated_at.isoformat(),
     )

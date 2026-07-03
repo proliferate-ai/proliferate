@@ -14,6 +14,7 @@ from proliferate.integrations.sentry import (
     init_server_sentry,
 )
 from proliferate.server.automations.worker.scheduler import run_scheduler_loop
+from proliferate.server.cloud.workflows.scheduler import run_workflow_scheduler_loop
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -42,11 +43,22 @@ async def _amain(args: argparse.Namespace) -> None:
     stop_event = asyncio.Event()
     _install_signal_handlers(stop_event)
     try:
-        await run_scheduler_loop(
-            interval_seconds=args.interval_seconds,
-            batch_size=args.batch_size,
-            stop_event=stop_event,
-            validate_schema=_validate_schema,
+        # Two independent beats in one scheduler process: the automation scheduler
+        # (single-prompt runs) and the workflow schedule-trigger scheduler (spec
+        # 3.5). They own different tables and back off independently; the schema is
+        # validated once by the automation loop before either does real work.
+        await asyncio.gather(
+            run_scheduler_loop(
+                interval_seconds=args.interval_seconds,
+                batch_size=args.batch_size,
+                stop_event=stop_event,
+                validate_schema=_validate_schema,
+            ),
+            run_workflow_scheduler_loop(
+                interval_seconds=args.interval_seconds,
+                batch_size=args.batch_size,
+                stop_event=stop_event,
+            ),
         )
     finally:
         flush_server_sentry()

@@ -8,6 +8,7 @@ a ``pending_delivery`` run whose id is the delivery idempotency key.
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
 
@@ -15,22 +16,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.workflows import (
+    SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES,
     SUPPORTED_WORKFLOW_TARGET_MODES,
     SUPPORTED_WORKFLOW_TRIGGER_KINDS,
+    SUPPORTED_WORKFLOW_TRIGGER_TYPES,
     WORKFLOW_RUN_OBSERVABLE_STATUSES,
     WORKFLOW_RUN_STATUS_DELIVERED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_STATUS_RUNNING,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
+    WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+    WORKFLOW_TRIGGER_KIND_SCHEDULE,
     WORKFLOW_TRIGGER_MANUAL,
 )
+from proliferate.db.store import cloud_workflow_triggers as trigger_store
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
+from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
 from proliferate.db.store.cloud_workflows import (
     WorkflowRecord,
     WorkflowRunRecord,
     WorkflowVersionRecord,
+)
+from proliferate.server.automations.domain.schedule import (
+    AutomationScheduleError,
+    ParsedAutomationSchedule,
+    normalize_schedule,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows.domain.definition import (
@@ -38,6 +50,7 @@ from proliferate.server.cloud.workflows.domain.definition import (
     parse_definition,
 )
 from proliferate.server.cloud.workflows.domain.interpolation import (
+    ArgSpec,
     ArgumentError,
     coerce_arguments,
     interpolate_args,
@@ -53,10 +66,18 @@ from proliferate.server.cloud.workflows.domain.run_status import (
 )
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
+    TriggerScheduleRequest,
     WorkflowCreateRequest,
+    WorkflowTriggerCreateRequest,
+    WorkflowTriggerUpdateRequest,
     WorkflowUpdateRequest,
 )
 from proliferate.utils.time import utcnow
+
+_TRIGGER_LOCAL_UNSUPPORTED_MESSAGE = (
+    "Scheduled local runs are coming; run this workflow manually, or schedule it "
+    "on a cloud workspace."
+)
 
 
 def _clean_name(value: str) -> str:
@@ -80,13 +101,54 @@ def _validated_definition(raw: dict[str, object]) -> dict[str, object]:
     return canonical
 
 
-async def _visible_workflow(
+async def visible_workflow(
     db: AsyncSession, *, user: ActorIdentity, workflow_id: UUID
 ) -> WorkflowRecord:
+    """Fetch a workflow the actor owns, or raise a 404 (owner-scoped visibility)."""
+
     workflow = await store.get_workflow(db, workflow_id)
     if workflow is None or workflow.owner_user_id != user.id:
         raise CloudApiError("workflow_not_found", "Workflow not found.", status_code=404)
     return workflow
+
+
+# Back-compat alias for the private call sites in this module.
+_visible_workflow = visible_workflow
+
+
+def workflow_arg_specs(version: WorkflowVersionRecord) -> list[ArgSpec]:
+    """Parsed arg schema of a stored (already-validated) version."""
+
+    try:
+        _canonical, arg_specs = parse_definition(version.definition_json)
+    except WorkflowDefinitionError as exc:  # pragma: no cover - stored defs are valid
+        raise CloudApiError(exc.code, exc.message, status_code=400) from exc
+    return arg_specs
+
+
+async def ensure_cloud_workspace_owned(
+    db: AsyncSession, *, user: ActorIdentity, target_workspace_id: UUID | None
+) -> None:
+    """Validate the actor owns a live cloud workspace (ownership only).
+
+    Used at trigger create/update: the workspace must exist and be un-archived,
+    but need not be materialized yet — materialization is re-checked at fire time
+    by ``start_run`` (a workspace can finish provisioning after the trigger is set).
+    """
+
+    if target_workspace_id is None:
+        raise CloudApiError(
+            "target_workspace_required",
+            "A cloud workspace is required to run this workflow in the cloud.",
+            status_code=400,
+        )
+    workspace = await cloud_workspace_store.get_cloud_workspace_for_user(
+        db, user.id, target_workspace_id
+    )
+    if workspace is None or workspace.archived_at is not None:
+        raise CloudApiError(
+            "target_workspace_not_found", "Cloud workspace not found.", status_code=404
+        )
 
 
 async def _visible_run(
@@ -247,6 +309,8 @@ async def start_run(
     trigger_kind: str = WORKFLOW_TRIGGER_MANUAL,
     version_id: UUID | None = None,
     target_workspace_id: UUID | None = None,
+    trigger_id: UUID | None = None,
+    scheduled_for: datetime | None = None,
 ) -> WorkflowRunRecord:
     if target_mode not in SUPPORTED_WORKFLOW_TARGET_MODES:
         raise CloudApiError(
@@ -320,6 +384,8 @@ async def start_run(
         target_mode=target_mode,
         resolved_plan_json=resolved_plan,
         anyharness_workspace_id=cloud_anyharness_workspace_id,
+        trigger_id=trigger_id,
+        scheduled_for=scheduled_for,
     )
 
 
@@ -415,3 +481,214 @@ async def list_runs(
 
 async def get_run(db: AsyncSession, user: ActorIdentity, run_id: UUID) -> WorkflowRunRecord:
     return await _visible_run(db, user=user, run_id=run_id)
+
+
+# --- triggers (spec 3.5) -------------------------------------------------------
+#
+# A trigger pins target + schedule + concurrency and funnels to the *same*
+# StartRun above — it owns no execution. Validation reuses the house pieces:
+# schedule RRULE/timezone via ``automations.domain.schedule.normalize_schedule``
+# (identical hourly/daily cursor rules), arg coverage via ``coerce_arguments``
+# (so required args must be covered), workspace ownership via the helper above.
+#
+# Local schedule decision (v1): **rejected at create**. The workflow local lane is
+# entirely client-initiated (the desktop calls StartRun, hands the plan to its own
+# runtime, and relays state); there is no server→desktop claim protocol for
+# workflow runs and no repo/workspace binding to tell an executor *where* to run.
+# Building that is the automations claim machinery again — out of scope — so
+# scheduled runs are cloud-only until it lands.
+
+
+def _validate_trigger_kind(kind: str) -> None:
+    if kind not in SUPPORTED_WORKFLOW_TRIGGER_TYPES:
+        raise CloudApiError(
+            "invalid_trigger_kind", f"Unsupported trigger kind '{kind}'.", status_code=400
+        )
+
+
+def _validate_concurrency(policy: str) -> None:
+    if policy not in SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES:
+        allowed = sorted(SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES)
+        raise CloudApiError(
+            "invalid_concurrency_policy",
+            f"concurrency_policy must be one of {allowed}.",
+            status_code=400,
+        )
+
+
+def _validate_trigger_target_mode(mode: str) -> None:
+    if mode == WORKFLOW_TARGET_MODE_LOCAL:
+        # Locked v1 decision — reject cleanly rather than record a run nobody delivers.
+        raise CloudApiError(
+            "schedule_local_unsupported", _TRIGGER_LOCAL_UNSUPPORTED_MESSAGE, status_code=400
+        )
+    if mode != WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        raise CloudApiError(
+            "invalid_target_mode",
+            "target_mode must be 'personal_cloud' for scheduled triggers.",
+            status_code=400,
+        )
+
+
+def _normalize_trigger_schedule(schedule: TriggerScheduleRequest) -> ParsedAutomationSchedule:
+    try:
+        return normalize_schedule(
+            rrule_text=schedule.rrule, timezone=schedule.timezone, now=utcnow()
+        )
+    except AutomationScheduleError as exc:
+        raise CloudApiError("invalid_schedule", str(exc), status_code=400) from exc
+
+
+async def _coerce_trigger_args(
+    db: AsyncSession, *, workflow_current_version_id: UUID | None, args: dict[str, object]
+) -> dict[str, object]:
+    if workflow_current_version_id is None:
+        raise CloudApiError(
+            "workflow_no_version",
+            "Add at least one step before scheduling this workflow.",
+            status_code=409,
+        )
+    version = await store.get_version(db, workflow_current_version_id)
+    if version is None:
+        raise CloudApiError(
+            "workflow_version_not_found", "Workflow version not found.", status_code=404
+        )
+    try:
+        return coerce_arguments(workflow_arg_specs(version), args)
+    except ArgumentError as exc:
+        raise CloudApiError(exc.code, exc.message, status_code=400) from exc
+
+
+async def _visible_trigger(
+    db: AsyncSession, *, user: ActorIdentity, workflow_id: UUID, trigger_id: UUID
+) -> WorkflowTriggerRecord:
+    await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    trigger = await trigger_store.get_trigger(db, trigger_id)
+    if trigger is None or trigger.workflow_id != workflow_id:
+        raise CloudApiError("trigger_not_found", "Trigger not found.", status_code=404)
+    return trigger
+
+
+async def create_trigger(
+    db: AsyncSession,
+    user: ActorIdentity,
+    workflow_id: UUID,
+    body: WorkflowTriggerCreateRequest,
+) -> WorkflowTriggerRecord:
+    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    if workflow.archived_at is not None:
+        raise CloudApiError(
+            "workflow_archived", "Cannot schedule an archived workflow.", status_code=409
+        )
+    _validate_trigger_kind(body.kind)
+    _validate_concurrency(body.concurrency_policy)
+    _validate_trigger_target_mode(body.target_mode)
+    await ensure_cloud_workspace_owned(db, user=user, target_workspace_id=body.target_workspace_id)
+    parsed = _normalize_trigger_schedule(body.schedule)
+    coerced_args = await _coerce_trigger_args(
+        db, workflow_current_version_id=workflow.current_version_id, args=body.args
+    )
+    return await trigger_store.create_trigger(
+        db,
+        workflow_id=workflow_id,
+        created_by_user_id=user.id,
+        kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
+        concurrency_policy=body.concurrency_policy,
+        target_mode=body.target_mode,
+        target_workspace_id=body.target_workspace_id,
+        schedule_rrule=parsed.rrule_text,
+        schedule_timezone=parsed.timezone,
+        schedule_summary=parsed.summary,
+        next_run_at=parsed.next_run_at,
+        args_json=coerced_args,
+        enabled=body.enabled,
+    )
+
+
+async def list_triggers(
+    db: AsyncSession, user: ActorIdentity, workflow_id: UUID
+) -> list[WorkflowTriggerRecord]:
+    await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    return list(await trigger_store.list_triggers_for_workflow(db, workflow_id=workflow_id))
+
+
+async def get_trigger(
+    db: AsyncSession, user: ActorIdentity, workflow_id: UUID, trigger_id: UUID
+) -> WorkflowTriggerRecord:
+    return await _visible_trigger(db, user=user, workflow_id=workflow_id, trigger_id=trigger_id)
+
+
+async def update_trigger(
+    db: AsyncSession,
+    user: ActorIdentity,
+    workflow_id: UUID,
+    trigger_id: UUID,
+    body: WorkflowTriggerUpdateRequest,
+) -> WorkflowTriggerRecord:
+    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    existing = await _visible_trigger(
+        db, user=user, workflow_id=workflow_id, trigger_id=trigger_id
+    )
+
+    # Merge onto the existing config, then re-validate the whole trigger.
+    target_mode = body.target_mode if body.target_mode is not None else existing.target_mode
+    concurrency = (
+        body.concurrency_policy
+        if body.concurrency_policy is not None
+        else existing.concurrency_policy
+    )
+    enabled = body.enabled if body.enabled is not None else existing.enabled
+    _validate_concurrency(concurrency)
+    _validate_trigger_target_mode(target_mode)
+
+    # Cloud target needs an owned workspace (new one if supplied, else the pinned one).
+    target_workspace_id = (
+        body.target_workspace_id
+        if body.target_workspace_id is not None
+        else existing.target_workspace_id
+    )
+    await ensure_cloud_workspace_owned(db, user=user, target_workspace_id=target_workspace_id)
+
+    # Schedule: recompute the cursor only when it would otherwise be stale — the
+    # RRULE/timezone changed, or the trigger is (re-)entering the due scan. An
+    # args-/concurrency-only edit on a running trigger must NOT shift next_run_at,
+    # and a dormant past slot must not fire the instant it re-enables.
+    schedule_changed = body.schedule is not None and (
+        body.schedule.rrule.strip() != (existing.schedule_rrule or "")
+        or body.schedule.timezone.strip() != (existing.schedule_timezone or "")
+    )
+    schedule_source = body.schedule or TriggerScheduleRequest(
+        rrule=existing.schedule_rrule or "", timezone=existing.schedule_timezone or ""
+    )
+    parsed = _normalize_trigger_schedule(schedule_source)
+    becoming_enabled = enabled and not existing.enabled
+    recompute_cursor = schedule_changed or becoming_enabled or existing.next_run_at is None
+    next_run_at = parsed.next_run_at if recompute_cursor else None
+
+    args = body.args if body.args is not None else existing.args_json
+    coerced_args = await _coerce_trigger_args(
+        db, workflow_current_version_id=workflow.current_version_id, args=args
+    )
+
+    updated = await trigger_store.update_trigger(
+        db,
+        trigger_id=trigger_id,
+        enabled=enabled,
+        concurrency_policy=concurrency,
+        target_mode=target_mode,
+        target_workspace_id=target_workspace_id,
+        schedule_rrule=parsed.rrule_text,
+        schedule_timezone=parsed.timezone,
+        schedule_summary=parsed.summary,
+        next_run_at=next_run_at,
+        args_json=coerced_args,
+    )
+    assert updated is not None
+    return updated
+
+
+async def delete_trigger(
+    db: AsyncSession, user: ActorIdentity, workflow_id: UUID, trigger_id: UUID
+) -> None:
+    await _visible_trigger(db, user=user, workflow_id=workflow_id, trigger_id=trigger_id)
+    await trigger_store.delete_trigger(db, trigger_id)
