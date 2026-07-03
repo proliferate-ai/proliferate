@@ -165,14 +165,24 @@ impl FeedService {
         active.fetch_add(1, Ordering::SeqCst);
         tokio::spawn(async move {
             loop {
-                match broadcast_rx.recv().await {
-                    Ok(frame) => {
-                        if tx.send(frame).await.is_err() {
-                            break; // watcher gone
+                tokio::select! {
+                    biased;
+                    // The demux broadcast Sender lives in the (never-evicted)
+                    // FeedDemux map, so `recv()` never returns Closed — a
+                    // watcher that disconnects while the child feed is idle
+                    // would otherwise park this task forever (unlike
+                    // tail_file_loop, which polls `tx.is_closed()`). Exit
+                    // promptly on the mpsc close instead.
+                    _ = tx.closed() => break,
+                    received = broadcast_rx.recv() => match received {
+                        Ok(frame) => {
+                            if tx.send(frame).await.is_err() {
+                                break; // watcher gone
+                            }
                         }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
             active.fetch_sub(1, Ordering::SeqCst);
@@ -383,6 +393,28 @@ mod tests {
             .push("feed-1", FeedFrame::Text("line-2".to_string()));
         let live = stream.live.recv().await.expect("live frame");
         assert_eq!(live, FeedFrame::Text("line-2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn demux_producer_exits_when_idle_watcher_disconnects() {
+        let (service, _) = feed_service_with_binding(FeedTransport::AcpChildDemux {
+            thread_id: "child-1".to_string(),
+        });
+        let binding = service.resolve("feed-1").unwrap().unwrap();
+        let stream = service.open(&binding).expect("open demux");
+        assert_eq!(service.active_producer_count(), 1);
+
+        // Drop the watcher's receiver with NO frame ever arriving — the idle
+        // case that previously parked the producer task forever.
+        drop(stream);
+
+        for _ in 0..200 {
+            if service.active_producer_count() == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(service.active_producer_count(), 0);
     }
 
     #[tokio::test]
