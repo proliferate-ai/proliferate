@@ -19,3 +19,7 @@ export function workflowRunsKey(workflowId: string | null) {
 export function workflowRunDetailKey(runId: string | null) {
   return [...workflowsRootKey(), "run", runId] as const;
 }
+
+export function workflowTriggersKey(workflowId: string | null) {
+  return [...workflowsRootKey(), "triggers", workflowId] as const;
+}

@@ -19,8 +19,10 @@ import { Spinner } from "@proliferate/ui/primitives/Spinner";
 import { ArrowLeft, Plus } from "@proliferate/ui/icons";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
 import { useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
+import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
@@ -74,6 +76,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const navigate = useNavigate();
   const detailQuery = useWorkflowDetail(workflowId);
   const catalogQuery = useCloudAgentCatalog();
+  const cloudTargetsQuery = useCloudRunTargetWorkspaces();
   const { updateMutation } = useWorkflowMutations();
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -102,6 +105,17 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
         models: agent.models.map((model) => ({ id: model.id, label: model.displayName ?? model.id })),
       })),
     [catalogQuery.data],
+  );
+
+  const cloudWorkspaceOptions = useMemo<WorkflowRunTargetOption[]>(
+    () =>
+      (cloudTargetsQuery.data ?? [])
+        .filter((workspace) => workspace.status === "ready")
+        .map((workspace) => ({
+          id: workspace.id,
+          label: workspace.displayName ?? workspace.repo.branch,
+        })),
+    [cloudTargetsQuery.data],
   );
 
   const issues = useMemo(
@@ -252,7 +266,11 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 }}
               />
               <WorkflowSetupCard setup={definition.setup} args={definition.args} agents={agents} onSetupChange={setSetup} onArgsChange={setArgs} />
-              <WorkflowTriggersCard />
+              <WorkflowTriggersCard
+                workflowId={workflowId}
+                args={definition.args}
+                cloudWorkspaces={cloudWorkspaceOptions}
+              />
 
               <div className="flex flex-col">
                 {definition.steps.map((step, index) => (

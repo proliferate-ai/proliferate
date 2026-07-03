@@ -23,6 +23,10 @@ export type WorkflowCreateRequest = Schemas["WorkflowCreateRequest"];
 export type WorkflowUpdateRequest = Schemas["WorkflowUpdateRequest"];
 export type StartRunRequest = Schemas["StartRunRequest"];
 export type RunStatusRequest = Schemas["RunStatusRequest"];
+export type WorkflowTriggerResponse = Schemas["WorkflowTriggerResponse"];
+export type WorkflowTriggerListResponse = Schemas["WorkflowTriggerListResponse"];
+export type WorkflowTriggerCreateRequest = Schemas["WorkflowTriggerCreateRequest"];
+export type WorkflowTriggerUpdateRequest = Schemas["WorkflowTriggerUpdateRequest"];
 
 export async function listWorkflows(includeArchived = false): Promise<WorkflowListResponse> {
   return getProliferateClient().requestJson<WorkflowListResponse>({
@@ -137,5 +141,53 @@ export async function refreshWorkflowRun(runId: string): Promise<WorkflowRunResp
     method: "GET",
     path: "/v1/cloud/workflows/runs/{run_id}/refresh",
     pathParams: { run_id: runId },
+  });
+}
+
+// --- triggers (spec 3.5) -------------------------------------------------------
+
+export async function listWorkflowTriggers(
+  workflowId: string,
+): Promise<WorkflowTriggerListResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerListResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers",
+    pathParams: { workflow_id: workflowId },
+  });
+}
+
+export async function createWorkflowTrigger(
+  workflowId: string,
+  body: WorkflowTriggerCreateRequest,
+): Promise<WorkflowTriggerResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers",
+    pathParams: { workflow_id: workflowId },
+    body,
+  });
+}
+
+export async function updateWorkflowTrigger(
+  workflowId: string,
+  triggerId: string,
+  body: WorkflowTriggerUpdateRequest,
+): Promise<WorkflowTriggerResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerResponse>({
+    method: "PATCH",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}",
+    pathParams: { workflow_id: workflowId, trigger_id: triggerId },
+    body,
+  });
+}
+
+export async function deleteWorkflowTrigger(
+  workflowId: string,
+  triggerId: string,
+): Promise<void> {
+  await getProliferateClient().requestJson<void>({
+    method: "DELETE",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}",
+    pathParams: { workflow_id: workflowId, trigger_id: triggerId },
   });
 }
