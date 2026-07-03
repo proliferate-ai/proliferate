@@ -96,15 +96,16 @@ def upgrade() -> None:
 
     # credential_format is only meaningful next to a ciphertext; accounts that
     # have not stored credentials carry NULL instead of a bogus 'json-v1'.
-    op.execute(
-        "UPDATE cloud_integration_account "
-        "SET credential_format = NULL WHERE credential_ciphertext IS NULL"
-    )
+    # Drop NOT NULL FIRST — the backfill UPDATE writes NULLs.
     op.alter_column(
         "cloud_integration_account",
         "credential_format",
         existing_type=sa.String(length=64),
         nullable=True,
+    )
+    op.execute(
+        "UPDATE cloud_integration_account "
+        "SET credential_format = NULL WHERE credential_ciphertext IS NULL"
     )
 
     op.add_column(
