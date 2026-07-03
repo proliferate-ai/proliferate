@@ -87,6 +87,7 @@ export type ScenarioKey =
   | "goal-failed-budget"
   | "goal-pending-write"
   | "goal-empty"
+  | "goal-transcript-lifecycle"
   | "loading-states";
 
 interface Scenario {
@@ -182,6 +183,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "goal-failed-budget": { label: "Goal failed (budget)" },
   "goal-pending-write": { label: "Goal pending write" },
   "goal-empty": { label: "Goal empty" },
+  "goal-transcript-lifecycle": { label: "Goal lifecycle in transcript" },
   "loading-states": { label: "Loading states" },
 };
 

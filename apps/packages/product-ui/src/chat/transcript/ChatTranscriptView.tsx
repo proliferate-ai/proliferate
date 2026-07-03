@@ -9,6 +9,7 @@ import { useChatTranscriptRowRenderer } from "./useChatTranscriptRowRenderer";
 import { useChatTranscriptViewModel } from "./useChatTranscriptViewModel";
 
 export type {
+  ChatTranscriptGoalEventRenderInput,
   ChatTranscriptOutboxActions,
   ChatTranscriptPendingPromptRenderInput,
   ChatTranscriptPendingStatusInput,
@@ -31,6 +32,7 @@ export function ChatTranscriptView({
   renderTurnRow,
   renderPendingPromptTrailingStatus,
   renderTurnTrailingStatus,
+  renderGoalEventRow,
 }: ChatTranscriptViewProps) {
   const selectionRootRef = useRef<HTMLDivElement>(null);
   const model = useChatTranscriptViewModel({
@@ -56,6 +58,7 @@ export function ChatTranscriptView({
     outboxStartedAtByPromptId: model.outboxStartedAtByPromptId,
     renderPendingPromptRow,
     renderTurnRow,
+    renderGoalEventRow,
     selectedWorkspaceId: model.selectedWorkspaceId,
     sessionViewState: model.sessionViewState,
     transcript: model.transcript,

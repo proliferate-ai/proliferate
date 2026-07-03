@@ -11,6 +11,10 @@
       "types": "./dist/activity/goal.d.ts",
       "import": "./dist/activity/goal.js"
     },
+    "./activity/goal-transcript-events": {
+      "types": "./dist/activity/goal-transcript-events.d.ts",
+      "import": "./dist/activity/goal-transcript-events.js"
+    },
     "./auth/model": {
       "types": "./dist/auth/model.d.ts",
       "import": "./dist/auth/model.js"
