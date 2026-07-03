@@ -34,7 +34,9 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
-    AGENT_AUTH_ROUTE_GATEWAY,
+    AGENT_AUTH_SOURCE_GATEWAY as AGENT_AUTH_ROUTE_GATEWAY,
+)
+from proliferate.constants.agent_gateway import (
     AGENT_HARNESS_KIND_MAX_LENGTH,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store

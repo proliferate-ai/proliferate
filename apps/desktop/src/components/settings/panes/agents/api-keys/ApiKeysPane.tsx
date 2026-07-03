@@ -1,54 +1,50 @@
 import { useState, type FormEvent } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
   useAgentApiKeys,
   useCreateAgentApiKey,
   useRevokeAgentApiKey,
-  useRouteSelections,
 } from "@proliferate/cloud-sdk-react";
-import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import {
-  AGENT_API_KEY_PROVIDERS,
-  agentApiKeyProviderLabel,
-  type AgentApiKeyProviderId,
-} from "@/config/agent-api-key-providers";
 import { AGENT_API_KEYS_COPY } from "@/copy/settings/agent-api-keys-copy";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "@/stores/toast/toast-store";
-import {
-  buildRevokeConfirmation,
-  formatApiKeyUsages,
-  formatLastValidated,
-  usagesForApiKey,
-} from "@/lib/domain/settings/api-key-usages";
+
+// A 409 from the revoke endpoint carries the harnesses whose enabled selections
+// still wire the key (contract §5); surface them so the user knows what to
+// disable first.
+function revokeConflictHarnesses(error: unknown): string[] | null {
+  if (error instanceof ProliferateClientError && error.status === 409) {
+    const harnesses = error.details.harnesses;
+    if (Array.isArray(harnesses) && harnesses.every((h) => typeof h === "string")) {
+      return harnesses as string[];
+    }
+  }
+  return null;
+}
 
 export function ApiKeysPane() {
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
 
   const keysQuery = useAgentApiKeys(cloudActive);
-  const selectionsQuery = useRouteSelections(cloudActive);
   const createKey = useCreateAgentApiKey();
   const revokeKey = useRevokeAgentApiKey();
 
-  const [provider, setProvider] = useState<AgentApiKeyProviderId>("anthropic");
-  const [displayName, setDisplayName] = useState("");
-  const [secret, setSecret] = useState("");
+  const [title, setTitle] = useState("");
+  const [value, setValue] = useState("");
   const [pendingRevoke, setPendingRevoke] = useState<AgentApiKey | null>(null);
 
-  const keys = keysQuery.data?.keys ?? [];
-  const selections = selectionsQuery.data?.selections ?? [];
-  const canSubmit = displayName.trim().length > 0
-    && secret.trim().length > 0
-    && !createKey.isPending;
+  const keys = keysQuery.data ?? [];
+  const canSubmit =
+    title.trim().length > 0 && value.trim().length > 0 && !createKey.isPending;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,16 +52,12 @@ export function ApiKeysPane() {
       return;
     }
     createKey.mutate(
-      {
-        provider,
-        displayName: displayName.trim(),
-        secret: secret.trim(),
-      },
+      { title: title.trim(), value: value.trim() },
       {
         onSuccess: (created) => {
-          setDisplayName("");
-          setSecret("");
-          showToast(`Added API key ${created.displayName}.`, "info");
+          setTitle("");
+          setValue("");
+          showToast(`Added API key ${created.title}.`, "info");
         },
         onError: (error) => {
           showToast(error.message || AGENT_API_KEYS_COPY.addError);
@@ -85,7 +77,12 @@ export function ApiKeysPane() {
       },
       onError: (error) => {
         setPendingRevoke(null);
-        showToast(error.message || AGENT_API_KEYS_COPY.revokeError);
+        const harnesses = revokeConflictHarnesses(error);
+        showToast(
+          harnesses
+            ? AGENT_API_KEYS_COPY.revokeReferencedError(harnesses)
+            : error.message || AGENT_API_KEYS_COPY.revokeError,
+        );
       },
     });
   }
@@ -136,16 +133,12 @@ export function ApiKeysPane() {
               key={key.id}
               label={
                 <span className="flex min-w-0 items-center gap-2">
-                  <Badge tone="neutral">{agentApiKeyProviderLabel(key.provider)}</Badge>
-                  <span className="truncate">{key.displayName}</span>
+                  <span className="truncate">{key.title}</span>
                   <span className="font-mono text-xs font-normal text-muted-foreground">
                     {key.redactedHint}
                   </span>
                 </span>
               }
-              description={`${formatLastValidated(key.lastValidatedAt)} · ${
-                formatApiKeyUsages(usagesForApiKey(key.id, selections))
-              }`}
             >
               <Button
                 type="button"
@@ -165,38 +158,25 @@ export function ApiKeysPane() {
         description={AGENT_API_KEYS_COPY.addSectionDescription}
       >
         <form className="flex flex-col gap-2 pt-2 sm:flex-row" onSubmit={handleSubmit}>
-          <div className="sm:w-44">
-            <Label htmlFor="agent-api-key-provider" className="sr-only">
-              {AGENT_API_KEYS_COPY.providerLabel}
+          <div className="sm:flex-1">
+            <Label htmlFor="agent-api-key-title" className="sr-only">
+              {AGENT_API_KEYS_COPY.titleLabel}
             </Label>
-            <Select
-              id="agent-api-key-provider"
-              aria-label={AGENT_API_KEYS_COPY.providerLabel}
-              value={provider}
-              onChange={(event) =>
-                setProvider(event.target.value as AgentApiKeyProviderId)}
-            >
-              {AGENT_API_KEY_PROVIDERS.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.label}
-                </option>
-              ))}
-            </Select>
+            <Input
+              id="agent-api-key-title"
+              aria-label={AGENT_API_KEYS_COPY.titleLabel}
+              placeholder={AGENT_API_KEYS_COPY.titlePlaceholder}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
           </div>
           <Input
-            aria-label={AGENT_API_KEYS_COPY.nameLabel}
-            placeholder={AGENT_API_KEYS_COPY.namePlaceholder}
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            className="sm:flex-1"
-          />
-          <Input
-            aria-label={AGENT_API_KEYS_COPY.secretLabel}
-            placeholder={AGENT_API_KEYS_COPY.secretPlaceholder}
+            aria-label={AGENT_API_KEYS_COPY.valueLabel}
+            placeholder={AGENT_API_KEYS_COPY.valuePlaceholder}
             type="password"
             autoComplete="off"
-            value={secret}
-            onChange={(event) => setSecret(event.target.value)}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
             className="sm:flex-1"
           />
           <Button
@@ -215,10 +195,7 @@ export function ApiKeysPane() {
         open={pendingRevoke !== null}
         title={AGENT_API_KEYS_COPY.revokeTitle}
         description={pendingRevoke
-          ? buildRevokeConfirmation(
-            pendingRevoke,
-            usagesForApiKey(pendingRevoke.id, selections),
-          )
+          ? AGENT_API_KEYS_COPY.revokeDescription(pendingRevoke.title)
           : ""}
         confirmLabel={AGENT_API_KEYS_COPY.revokeConfirmLabel}
         confirmVariant="destructive"

@@ -211,11 +211,9 @@ function formatAgentKind(agentKind: string): string {
     ? "Claude"
     : normalized === "codex"
       ? "Codex"
-      : normalized === "gemini"
-        ? "Gemini"
-        : normalized === "opencode"
-          ? "OpenCode"
-          : normalized.replace(/[_-]+/g, " ");
+      : normalized === "opencode"
+        ? "OpenCode"
+        : normalized.replace(/[_-]+/g, " ");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

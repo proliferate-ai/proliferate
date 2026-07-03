@@ -167,7 +167,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Codex",
       "OpenCode",
       "Grok",
-      "Gemini",
       "API keys",
       "Defaults",
     ];

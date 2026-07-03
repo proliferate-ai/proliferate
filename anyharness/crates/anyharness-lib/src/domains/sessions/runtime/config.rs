@@ -87,11 +87,10 @@ impl SessionRuntime {
         let apply_state = match live_result {
             Ok(apply_state) => apply_state,
             // Live-or-relaunch (decision 10): when the harness has no live
-            // mechanism for a catalog-authorized model (gemini exposes no
-            // config options; an adapter may refuse a foreign id), the
-            // SESSION still never recreates — persist the model on the
-            // record, retire the agent process, and relaunch it under the
-            // same session with the new launch env.
+            // mechanism for a catalog-authorized model (an adapter may refuse
+            // a foreign id), the SESSION still never recreates — persist the
+            // model on the record, retire the agent process, and relaunch it
+            // under the same session with the new launch env.
             Err(LiveSessionCommandError::Rejected(SetConfigOptionCommandError::Rejected(
                 detail,
             ))) if catalog_authorized_model => {

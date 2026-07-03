@@ -326,49 +326,4 @@ describe("buildModelSelectorGroups dynamic models", () => {
       },
     ]);
   });
-
-  it("matches Gemini preview runtime ids to catalog rows", () => {
-    const groups = buildModelSelectorGroups(
-      [
-        launchAgent(
-          "gemini",
-          [
-            model("auto-gemini-3", "Auto (Gemini 3)", true),
-            model("gemini-3-flash", "Gemini 3 Flash", false),
-            model("gemini-3-pro", "Gemini 3 Pro", false),
-          ],
-          {
-            displayName: "Gemini",
-          },
-        ),
-      ],
-      { kind: "gemini", modelId: "gemini-3-flash-preview" },
-      { kind: "gemini", modelId: "gemini-3-flash-preview" },
-      null,
-    );
-
-    expect(groups[0]?.models).toEqual([
-      {
-        kind: "gemini",
-        modelId: "auto-gemini-3",
-        displayName: "Auto (Gemini 3)",
-        actionKind: "update_current_chat",
-        isSelected: false,
-      },
-      {
-        kind: "gemini",
-        modelId: "gemini-3-flash",
-        displayName: "Gemini 3 Flash",
-        actionKind: "select",
-        isSelected: true,
-      },
-      {
-        kind: "gemini",
-        modelId: "gemini-3-pro",
-        displayName: "Gemini 3 Pro",
-        actionKind: "update_current_chat",
-        isSelected: false,
-      },
-    ]);
-  });
 });

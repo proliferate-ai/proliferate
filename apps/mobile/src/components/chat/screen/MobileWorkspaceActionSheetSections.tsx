@@ -144,8 +144,6 @@ function controlIcon(control: CloudChatComposerControlView): MobileIconName {
       return "claude";
     case "openai":
       return "openai";
-    case "gemini":
-      return "gemini";
     case "opencodeBuild":
     case "bot":
       return "sparkles";

@@ -1,4 +1,4 @@
-export const CLOUD_AGENT_KIND_ORDER = ["claude", "codex", "gemini", "opencode", "grok"] as const;
+export const CLOUD_AGENT_KIND_ORDER = ["claude", "codex", "opencode", "grok"] as const;
 export const DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS = ["claude", "codex"] as const;
 
 export interface CloudHarnessAvailability {

@@ -2,16 +2,14 @@ import { useMemo } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
   useAgentCatalog,
-  useAgentGatewayCapabilities,
   useRefreshAgentCatalog,
-  useRouteSelections,
+  useAuthSelections,
   useUpsertCatalogOverride,
 } from "@proliferate/cloud-sdk-react";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ModelConfigGrid, type ModelConfigGridItem } from "@proliferate/product-ui/settings/ModelConfigGrid";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { agentApiKeyProviderLabel } from "@/config/agent-api-key-providers";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -35,12 +33,11 @@ export function HarnessAllModelsSection({
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
 
-  const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
-  const selectionsQuery = useRouteSelections(cloudActive);
+  const selectionsQuery = useAuthSelections(null, cloudActive);
   const route = catalogRouteForSurface(
     harnessKind,
     surface,
-    selectionsQuery.data?.selections ?? [],
+    selectionsQuery.data ?? [],
   );
   const catalogQuery = useAgentCatalog({ harnessKind, surface, route }, cloudActive);
   const refreshCatalog = useRefreshAgentCatalog();
@@ -50,20 +47,12 @@ export function HarnessAllModelsSection({
     () => normalizeCatalogModels(catalogQuery.data?.models ?? []),
     [catalogQuery.data?.models],
   );
-  // Which provider's keys serve this harness directly (registry-driven); used
-  // as the grid's provider badge when a model entry does not name its own.
-  const directProvider = (capabilitiesQuery.data?.providers ?? []).find(
-    (provider) => provider.harnesses.includes(harnessKind),
-  );
-  const fallbackProviderLabel = directProvider
-    ? agentApiKeyProviderLabel(directProvider.id)
-    : displayName;
+  // Model entries carry their own provider id; fall back to the harness name
+  // when a catalog row omits one.
   const gridItems: ModelConfigGridItem[] = models.map((model) => ({
     id: model.id,
     name: model.displayName,
-    provider: model.provider
-      ? agentApiKeyProviderLabel(model.provider)
-      : fallbackProviderLabel,
+    provider: model.provider ?? displayName,
     version: model.description ?? undefined,
     enabled: model.enabled,
     disabled: upsertOverride.isPending,

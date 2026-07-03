@@ -1,25 +1,16 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { EnvironmentSearchSelect } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
-import { Select } from "@proliferate/ui/primitives/Select";
 import { useToastStore } from "@/stores/toast/toast-store";
-import {
-  AGENT_API_KEY_PROVIDERS,
-  agentApiKeyProviderLabel,
-  type AgentApiKeyProviderId,
-} from "@/config/agent-api-key-providers";
 
 const ADD_NEW_KEY_OPTION_ID = "__add-new-key__";
 
 export interface KeyPickerProps {
-  /** The caller's key pool (usually `useAgentApiKeys().data.keys`). */
+  /** The caller's vault (usually `useAgentApiKeys().data`). */
   keys: AgentApiKey[];
-  /** Restrict the pool (and inline creation) to one provider. */
-  provider?: string;
   selectedKeyId: string | null;
   disabled?: boolean;
   /** Called with the chosen (or freshly created) key id. */
@@ -27,13 +18,12 @@ export interface KeyPickerProps {
 }
 
 /**
- * Reusable searchable picker over the personal API key pool: display name +
- * provider + redacted hint, secrets never re-shown. "+ Add new key" pastes a
- * new secret inline, saves it to the pool, and attaches it in one step.
+ * Searchable picker over the titled key vault (contract §7): title + redacted
+ * hint, secrets never re-shown. "New API key…" saves a new secret to the vault
+ * and wires it in one step — vault entries have no provider.
  */
 export function KeyPicker({
   keys,
-  provider,
   selectedKeyId,
   disabled = false,
   onSelect,
@@ -42,38 +32,31 @@ export function KeyPicker({
   const showToast = useToastStore((state) => state.show);
 
   const [adding, setAdding] = useState(false);
-  const [newProvider, setNewProvider] = useState<AgentApiKeyProviderId>("anthropic");
-  const [displayName, setDisplayName] = useState("");
-  const [secret, setSecret] = useState("");
+  const [title, setTitle] = useState("");
+  const [value, setValue] = useState("");
 
-  const pool = useMemo(
-    () =>
-      keys.filter(
-        (key) => key.status === "active" && (!provider || key.provider === provider),
-      ),
-    [keys, provider],
-  );
+  const pool = keys.filter((key) => key.status === "active");
   const selected = pool.find((key) => key.id === selectedKeyId) ?? null;
 
   const options = [
     ...pool.map((key) => ({
       id: key.id,
-      label: key.displayName,
-      detail: `${agentApiKeyProviderLabel(key.provider)} · ${key.redactedHint}`,
+      label: key.title,
+      detail: key.redactedHint,
       selected: key.id === selectedKeyId,
-      searchValues: [key.provider, key.redactedHint],
+      searchValues: [key.redactedHint],
       onSelect: () => onSelect(key.id),
     })),
     {
       id: ADD_NEW_KEY_OPTION_ID,
-      label: "+ Add new key",
-      detail: "Paste a key to save it to your pool and attach it here.",
+      label: "New API key…",
+      detail: "Save a new secret to your vault and wire it here.",
       onSelect: () => setAdding(true),
     },
   ];
 
   const canSubmit =
-    displayName.trim().length > 0 && secret.trim().length > 0 && !createKey.isPending;
+    title.trim().length > 0 && value.trim().length > 0 && !createKey.isPending;
 
   function handleAddKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,16 +64,12 @@ export function KeyPicker({
       return;
     }
     createKey.mutate(
-      {
-        provider: provider ?? newProvider,
-        displayName: displayName.trim(),
-        secret: secret.trim(),
-      },
+      { title: title.trim(), value: value.trim() },
       {
         onSuccess: (created) => {
           setAdding(false);
-          setDisplayName("");
-          setSecret("");
+          setTitle("");
+          setValue("");
           onSelect(created.id);
         },
         onError: (error) => {
@@ -103,52 +82,32 @@ export function KeyPicker({
   return (
     <div className="space-y-2">
       <EnvironmentSearchSelect
+        className="w-full"
+        menuClassName="w-72"
         label={selected
-          ? `${selected.displayName} (${selected.redactedHint})`
+          ? `${selected.title} (${selected.redactedHint})`
           : "Select an API key"}
         options={options}
         searchPlaceholder="Search keys..."
-        emptyLabel={provider
-          ? `No ${agentApiKeyProviderLabel(provider)} keys in your pool.`
-          : "No API keys in your pool."}
+        emptyLabel="No API keys in your vault."
         disabled={disabled}
       />
       {adding ? (
         <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleAddKey}>
-          {provider === undefined ? (
-            <div className="sm:w-40">
-              <Label htmlFor="agent-api-key-provider" className="sr-only">
-                Provider
-              </Label>
-              <Select
-                id="agent-api-key-provider"
-                aria-label="Provider"
-                value={newProvider}
-                onChange={(event) =>
-                  setNewProvider(event.target.value as AgentApiKeyProviderId)}
-              >
-                {AGENT_API_KEY_PROVIDERS.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          ) : null}
           <Input
-            aria-label="Key name"
-            placeholder="Key name"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
+            aria-label="Key title"
+            placeholder="Key title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
             className="sm:flex-1"
           />
           <Input
-            aria-label="Secret"
-            placeholder="Secret"
+            aria-label="Value"
+            placeholder="Value"
             type="password"
             autoComplete="off"
-            value={secret}
-            onChange={(event) => setSecret(event.target.value)}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
             className="sm:flex-1"
           />
           <Button

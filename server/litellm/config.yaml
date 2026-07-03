@@ -11,7 +11,16 @@
 # Provider keys come from the container environment:
 #   ANTHROPIC_API_KEY  (deploy: from AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY)
 #   OPENAI_API_KEY     (deploy: from AGENT_GATEWAY_MANAGED_OPENAI_API_KEY)
-#   GEMINI_API_KEY     (optional; gemini entries 401 upstream until it is set)
+#   XAI_API_KEY        (deploy: from AGENT_GATEWAY_MANAGED_XAI_API_KEY)
+#
+# Aliasing rule: a model_name may only be re-pointed at a different upstream
+# model id when both are served by the SAME provider (e.g. grok-build below
+# aliases to a cheaper xAI model, same as the dated/bare Anthropic pairs
+# above). Never alias one provider's model_name to another provider's
+# upstream — that silently swaps the model a harness thinks it is talking to.
+# This file is the one deployed config (dev and prod both run it as-is): any
+# dev-only shim/mock (LiteLLM `mock_response`, cross-provider test aliases)
+# belongs in a docker-compose dev overlay, never here.
 
 model_list:
   # Anthropic
@@ -58,28 +67,33 @@ model_list:
       model: openai/gpt-5-mini
       api_key: os.environ/OPENAI_API_KEY
 
-  # Grok CLI aliases. The grok CLI discovers models via GET /v1/models and
-  # speaks plain chat/completions, so grok-named entries can point at any
-  # upstream; we alias them to Anthropic Haiku (see HARNESS-MATRIX.md).
-  # grok-build is the CLI's interactive/title-gen model — cheap to keep.
+  # xAI. The grok CLI discovers models via GET /v1/models and speaks plain
+  # chat/completions, so it will send whatever model_name we advertise here —
+  # these ids are ours to choose, but litellm_params.model must be a REAL id
+  # LiteLLM's xai provider serves (verified against LiteLLM's own
+  # model_prices_and_context_window.json; never invented):
+  #   - xai/grok-4 exists as-is.
+  #   - there is no plain "xai/grok-4-fast"; xai/grok-4-1-fast is the current
+  #     (non-deprecated) fast-tier model, so grok-4-fast resolves there.
+  #   - xai/grok-code-fast-1 exists as-is.
+  - model_name: grok-4
+    litellm_params:
+      model: xai/grok-4
+      api_key: os.environ/XAI_API_KEY
   - model_name: grok-4-fast
     litellm_params:
-      model: anthropic/claude-haiku-4-5-20251001
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: xai/grok-4-1-fast
+      api_key: os.environ/XAI_API_KEY
+  - model_name: grok-code-fast-1
+    litellm_params:
+      model: xai/grok-code-fast-1
+      api_key: os.environ/XAI_API_KEY
+  # grok-build is the CLI's interactive/title-gen model — cheap to keep.
+  # Same-provider alias only (never cross-provider): a small xAI model.
   - model_name: grok-build
     litellm_params:
-      model: anthropic/claude-haiku-4-5-20251001
-      api_key: os.environ/ANTHROPIC_API_KEY
-
-  # Google (genai facade at the ROOT /v1beta path). Gemini model names MUST
-  # map to a real Google upstream: LiteLLM's genai->anthropic translation
-  # sends temperature+top_p together, which Anthropic rejects (see
-  # HARNESS-MATRIX.md). These entries return upstream auth errors until
-  # GEMINI_API_KEY is provided to the proxy environment.
-  - model_name: gemini-3.5-flash
-    litellm_params:
-      model: gemini/gemini-3.5-flash
-      api_key: os.environ/GEMINI_API_KEY
+      model: xai/grok-3-mini-latest
+      api_key: os.environ/XAI_API_KEY
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
