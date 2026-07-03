@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
 from proliferate.db.store.integrations.tool_cache import (
     get_tool_cache,
     upsert_tool_cache,
@@ -28,6 +30,8 @@ if TYPE_CHECKING:
     from proliferate.db.store.integrations.accounts import IntegrationAccountRecord
     from proliferate.db.store.integrations.definitions import IntegrationDefinitionRecord
 
+logger = logging.getLogger(__name__)
+
 
 def _content_hash(tools_json: str) -> str:
     return hashlib.sha256(tools_json.encode("utf-8")).hexdigest()
@@ -41,16 +45,24 @@ async def get_or_refresh_tool_cache(
 ) -> list[dict[str, Any]]:
     """Return the account's tool schema, refreshing the cache when stale.
 
-    Serves a ``ready`` cache whose ``auth_version`` matches the account; else
-    fetches ``tools/list`` from the remote MCP server, upserts the cache as
-    ``ready``, and returns it. On failure the cache is marked ``error`` and the
-    originating error is re-raised.
+    Serves a ``ready`` cache whose ``auth_version`` matches the account and
+    whose ``fetched_at`` is within the TTL; else fetches ``tools/list`` from
+    the remote MCP server, upserts the cache as ``ready``, and returns it. On
+    failure the cache is marked ``error`` and the originating error is
+    re-raised — unless the failure is a transient provider error
+    (``McpRemoteError``) and a version-matching cached schema exists, in which
+    case the stale schema is served (stale-while-error) so a provider outage
+    never breaks an already-cached account. Auth/config-shaped failures
+    (``CloudApiError``) always raise: they need user action, not a retry.
     """
     cache = await get_tool_cache(db, account_record.id)
+    now = utcnow()
     if (
         cache is not None
         and cache.status == "ready"
         and cache.auth_version == account_record.auth_version
+        and cache.fetched_at is not None
+        and (now - cache.fetched_at).total_seconds() <= CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
     ):
         return _decode_tools(cache.tools_json)
 
@@ -59,6 +71,9 @@ async def get_or_refresh_tool_cache(
         tools = await mcp_remote.list_tools(url=url, headers=headers, query=query or None)
     except (McpRemoteError, CloudApiError) as exc:
         error_code = getattr(exc, "code", None) or "tool_fetch_failed"
+        # The failure is recorded either way (status='error' + error_code), so
+        # the next call retries the fetch; a usable stale schema just keeps
+        # the agent-facing call alive in the meantime.
         await upsert_tool_cache(
             db,
             account_id=account_record.id,
@@ -69,6 +84,18 @@ async def get_or_refresh_tool_cache(
             fetched_at=cache.fetched_at if cache is not None else None,
             error_code=str(error_code)[:64],
         )
+        if (
+            isinstance(exc, McpRemoteError)
+            and cache is not None
+            and cache.fetched_at is not None
+            and cache.auth_version == account_record.auth_version
+        ):
+            logger.warning(
+                "integration tool refetch failed (%s); serving stale cached schema for account %s",
+                error_code,
+                account_record.id,
+            )
+            return _decode_tools(cache.tools_json)
         raise
 
     tools_json = json.dumps(tools, separators=(",", ":"))

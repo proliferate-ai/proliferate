@@ -319,6 +319,9 @@ CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS: Final = 900
 CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS: Final = 30
 CLOUD_RUNTIME_WORKER_OFFLINE_THRESHOLD_SECONDS: Final = 90
 CLOUD_INTEGRATION_GATEWAY_MCP_PATH: Final = "/v1/cloud/integration-gateway/mcp"
+# A ready tools/list cache is also considered stale once its fetched_at is
+# older than this, so provider-side tool changes surface within a day.
+CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS: Final = 86_400
 
 
 # ---------------------------------------------------------------------------

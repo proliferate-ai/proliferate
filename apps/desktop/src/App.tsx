@@ -10,6 +10,7 @@ import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter
 import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
+import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
@@ -192,6 +193,10 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.after.use_export_running_agent_count")
   useUpdateRestartWatcher()
   useDebugSessionActivity()
+  // Mounted here (not in AuthenticatedAppHost, which unmounts on sign-out) so
+  // the enrollment hook observes the authenticated -> anonymous transition and
+  // can tear the worker down.
+  useDesktopWorkerEnrollment()
   useDevDesktopHandoff()
   useOrganizationJoinAuthLaunch()
   recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")

@@ -229,6 +229,7 @@ pub fn run() {
             runtime::get_runtime_info,
             runtime::restart_runtime,
             cloud_worker::ensure_desktop_dispatch_worker,
+            cloud_worker::stop_desktop_dispatch_worker,
             desktop_identity::get_desktop_install_id,
             workspace_scratch::read_workspace_scratch_pad,
             workspace_scratch::write_workspace_scratch_pad,
