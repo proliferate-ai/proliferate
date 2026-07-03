@@ -99,7 +99,7 @@ export function WorkflowRunTimelineRow({
       </div>
       <div className="min-w-0 flex-1 pb-4">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <WorkflowStepKindBadge kind={view.kind} glyph={view.glyph} />
+          <WorkflowStepKindBadge kind={view.kind} />
           <span className="text-ui-sm text-muted-foreground">{stepRunStatusLabel(view.status)}</span>
           {durationLabel ? (
             <span className="text-xs tabular-nums text-faint">· {durationLabel}</span>
