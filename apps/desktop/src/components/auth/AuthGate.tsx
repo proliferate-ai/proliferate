@@ -6,7 +6,7 @@ import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode"
 import { useAuthStore } from "@/stores/auth/auth-store"
 
 // Where the gate resolves to once auth state is known:
-//   loading -> still bootstrapping (mark sweeping)
+//   loading -> still bootstrapping (mark breathing)
 //   app     -> reveal the workspace (authenticated, or auth not required)
 //   login   -> stay on the sign-in screen (anonymous + auth required)
 type GateDestination = "loading" | "app" | "login"

@@ -21,6 +21,7 @@ import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-acti
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-auth-adoption"
+import { useGatewayCatalogMirrorSync } from "@/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync"
 import { useLocalAuthStateSync } from "@/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
@@ -216,6 +217,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
   useLocalAuthStateSync()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_gateway_catalog_mirror_sync")
+  useGatewayCatalogMirrorSync()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_gateway_catalog_mirror_sync")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")

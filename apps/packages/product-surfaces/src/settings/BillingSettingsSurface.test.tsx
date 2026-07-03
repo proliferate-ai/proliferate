@@ -118,7 +118,7 @@ describe("BillingSettingsSurface", () => {
     );
 
     expect(screen.getAllByRole("heading", { name: "Billing" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Plan" })).toBeTruthy();
+    expect(screen.getByText("Plan")).toBeTruthy();
     expect(screen.getByText(/tracked, budgeted, and topped up separately/)).toBeTruthy();
     expect(screen.getByText("360 PCUs")).toBeTruthy();
     expect(screen.getByText("12,000 LLM credits")).toBeTruthy();

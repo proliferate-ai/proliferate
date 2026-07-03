@@ -1,12 +1,12 @@
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
-import { CloudIcon, Monitor, Terminal, Tree } from "@proliferate/ui/icons";
+import { CloudIcon, GitBranch, Monitor, Terminal } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 
 const VARIANT_ICONS: Record<SidebarWorkspaceVariant, typeof Monitor> = {
   local: Monitor,
-  worktree: Tree,
+  worktree: GitBranch,
   cloud: CloudIcon,
   ssh: Terminal,
 };

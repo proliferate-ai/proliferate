@@ -21,6 +21,7 @@
 //! own login owns auth.
 
 mod materialize;
+pub mod plan;
 pub mod profile;
 pub mod render;
 pub mod state;
@@ -32,6 +33,7 @@ pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
+pub use plan::{GatewayModelPlan, GatewayModelResolve};
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use render::{render_profile, RenderedRouteAuth};
 pub use state::{apply_state_file, load_state_file, state_file_path, AgentAuthState};
@@ -84,19 +86,25 @@ impl RouteAuthError {
 }
 
 /// End-to-end at launch: load the state file, resolve the profile for
-/// `harness_kind`, render its env delta (PURE), then apply the rendered file
-/// specs to disk (materializing isolated homes). Absent file → an empty
-/// (native) delta. This is the single entry point the session runtime calls.
+/// `harness_kind`, resolve the catalog-driven [`GatewayModelPlan`], render its
+/// env delta (PURE), then apply the rendered file specs to disk (materializing
+/// isolated homes). Absent file → an empty (native) delta. This is the single
+/// entry point the session runtime calls.
 ///
-/// Two-phase (contract §4): [`render_profile`] performs no I/O; the launcher
-/// (here) writes the [`RenderedRouteAuth::files`] via the materialize helpers.
+/// Render consumes ONLY the plan for model values (spec §3): no constants, no
+/// lookups. Two-phase (contract §4): [`render_profile`] performs no I/O; the
+/// launcher (here) writes the [`RenderedRouteAuth::files`] via the materialize
+/// helpers.
 pub fn resolve_launch_route_auth(
     runtime_home: &Path,
     harness_kind: &str,
+    resolver: &dyn GatewayModelResolve,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let state = load_state_file(runtime_home)?;
+    let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
     let profile = resolve_profile(state.as_ref(), harness_kind)?;
-    let rendered = render_profile(&profile, runtime_home)?;
+    let plan = resolver.resolve_gateway_models(harness_kind, revision);
+    let rendered = render_profile(&profile, &plan, runtime_home)?;
     for spec in &rendered.files {
         materialize::apply_file_spec(runtime_home, spec)?;
     }

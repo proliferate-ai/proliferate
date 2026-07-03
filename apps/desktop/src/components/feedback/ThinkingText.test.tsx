@@ -16,17 +16,17 @@ const domCss = readFileSync(
   "utf8",
 );
 
-/** The shimmer block: from its first keyframes to the next css section. */
+/** The gleam block (dom.css — shared with web): first keyframes to marker. */
 function thinkingSection(): string {
-  const start = desktopCss.indexOf("@keyframes thinking-band-sweep");
-  const end = desktopCss.indexOf("/* ---- Loading illustration animations ---- */");
+  const start = domCss.indexOf("@keyframes thinking-band-sweep");
+  const end = domCss.indexOf("/* ---- end thinking indicator ---- */");
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  return desktopCss.slice(start, end);
+  return domCss.slice(start, end);
 }
 
 describe("ThinkingText", () => {
-  it("renders static Thinking text with the shimmer class hook", () => {
+  it("renders static Thinking text with the gleam class hook", () => {
     const html = renderToStaticMarkup(<ThinkingText />);
 
     expect(html).toContain("Thinking");
@@ -39,20 +39,20 @@ describe("ThinkingText", () => {
 
     expect(html).toContain("thinking-text-band");
     expect(html).toContain("thinking-text-band-glyphs");
-    // The label renders twice: base text + band glyph copy, hidden from AT
-    // (a third match would only be the data-text attribute).
+    // The label renders twice: base text + band glyph copy, hidden from AT.
     expect(html.match(/>Searching</g)).toHaveLength(2);
     expect(html).toContain('aria-hidden="true"');
   });
 });
 
-describe("thinking shimmer css contract", () => {
-  it("sweeps smoothly — no steps() cadence anywhere in the shimmer block", () => {
+describe("thinking gleam css contract", () => {
+  it("sweeps smoothly — no steps() cadence anywhere in the block", () => {
     expect(thinkingSection()).not.toContain("steps(");
   });
 
-  it("is inert on hover — no hover rules on the shimmer", () => {
+  it("is inert on hover — no hover rules on the gleam", () => {
     expect(thinkingSection()).not.toContain(":hover");
+    expect(domCss).not.toContain(".thinking-text:hover");
     expect(desktopCss).not.toContain(".thinking-text:hover");
   });
 
@@ -60,6 +60,13 @@ describe("thinking shimmer css contract", () => {
     const section = thinkingSection();
     expect(section).toContain("var(--thinking-text-duration");
     expect(section).toContain("var(--thinking-text-easing");
+  });
+
+  it("is a light gleam, not a dark band: reaches full foreground", () => {
+    const section = thinkingSection();
+    expect(section).toContain("color: var(--color-foreground)");
+    // The old dark shadow band must not come back.
+    expect(section).not.toContain("rgb(0 0 0");
   });
 
   it("stays compositor-only: keyframes animate transform, never background-position", () => {

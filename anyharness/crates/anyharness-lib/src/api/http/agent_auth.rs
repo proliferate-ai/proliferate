@@ -10,6 +10,7 @@ use axum::{body::Bytes, extract::State, Json};
 
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::agents::route_auth::state::SOURCE_KIND_GATEWAY;
 use crate::domains::agents::route_auth::{apply_state_file, AgentAuthState, RouteAuthError};
 
 #[utoipa::path(
@@ -44,10 +45,43 @@ pub async fn put_agent_auth_state(
         ));
     }
     apply_state_file(&state.runtime_home, &document).map_err(map_route_auth_error)?;
+    // Revision-accepted trigger (spec §2a): schedule a non-blocking gateway
+    // probe for every harness that just landed a gateway source, keyed by the
+    // accepted revision. Fire-and-forget — a slow/unreachable gateway must
+    // never delay the state apply response.
+    schedule_gateway_probes(&state, &document);
     Ok(Json(ApplyAgentAuthStateResponse {
         applied: true,
         revision: document.revision,
     }))
+}
+
+/// Kick a background probe per gateway source in the just-applied document.
+fn schedule_gateway_probes(state: &AppState, document: &AgentAuthState) {
+    let revision = document.revision;
+    for harness in &document.harnesses {
+        for source in &harness.sources {
+            if source.kind != SOURCE_KIND_GATEWAY {
+                continue;
+            }
+            let (Some(base_url), Some(key)) = (
+                source
+                    .base_url
+                    .clone()
+                    .filter(|url| !url.trim().is_empty()),
+                source.key.clone().filter(|key| !key.trim().is_empty()),
+            ) else {
+                continue;
+            };
+            let resolver = state.gateway_model_resolver.clone();
+            let harness_kind = harness.harness_kind.clone();
+            tokio::spawn(async move {
+                resolver
+                    .probe_and_record(&harness_kind, revision, &base_url, &key)
+                    .await;
+            });
+        }
+    }
 }
 
 fn map_route_auth_error(error: RouteAuthError) -> ApiError {

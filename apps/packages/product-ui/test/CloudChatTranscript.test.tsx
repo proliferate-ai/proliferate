@@ -101,7 +101,10 @@ describe("CloudChatTranscript", () => {
     expect(screen.getByText("System instruction body")).toBeTruthy();
 
     expect(screen.getByLabelText("Assistant response loading")).toBeTruthy();
-    expect(screen.getByText("Preparing cloud session...")).toBeTruthy();
+    // ThinkingText renders the label twice (base + aria-hidden sweep copy).
+    expect(
+      screen.getByText("Preparing cloud session...", { selector: "[data-thinking-text]" }),
+    ).toBeTruthy();
     expect(screen.queryByText("Working")).toBeNull();
     expect(screen.queryByText("Streaming")).toBeNull();
 
