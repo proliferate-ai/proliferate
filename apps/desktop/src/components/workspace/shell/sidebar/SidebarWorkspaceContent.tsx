@@ -7,6 +7,7 @@ import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarEmptyState,
   type SidebarGroupState,
+  type SidebarWorkspaceItemState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { buildSidebarNewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
 import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
@@ -14,6 +15,7 @@ import type {
   SidebarIndicatorAction,
   SidebarStatusIndicator,
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { useWorkspaceMoveStore } from "@/stores/workspaces/workspace-move-store";
@@ -33,6 +35,28 @@ const MOVE_TO_CLOUD_BLOCKING_STATUS_KINDS = new Set<SidebarStatusIndicator["kind
   "waiting_plan",
   "queued_prompt",
 ]);
+
+/**
+ * The materialized workspace id to drive a sidebar row's move action against, or
+ * `null` if this row can't offer one right now (spec section 2.6, "Direction
+ * inference at the entry points" -- local/worktree rows move local->cloud with their
+ * own AnyHarness id; cloud rows move cloud->local with the `cloud:<id>` synthetic
+ * form `resolveMoveDirection` expects, mirroring the local branch's use of
+ * `item.localWorkspaceId` rather than the logical `item.id`).
+ */
+export function resolveMoveWorkspaceTargetId(item: SidebarWorkspaceItemState): string | null {
+  if (item.archived) return null;
+  if (item.statusIndicator && MOVE_TO_CLOUD_BLOCKING_STATUS_KINDS.has(item.statusIndicator.kind)) {
+    return null;
+  }
+  if (item.variant === "local" || item.variant === "worktree") {
+    return item.localWorkspaceId;
+  }
+  if (item.variant === "cloud") {
+    return item.cloudWorkspaceId ? cloudWorkspaceSyntheticId(item.cloudWorkspaceId) : null;
+  }
+  return null;
+}
 
 interface SidebarWorkspaceContentProps {
   emptyState: SidebarEmptyState;
@@ -57,6 +81,10 @@ interface SidebarWorkspaceContentProps {
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
   onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
+  /** Opens the move dialog for the given materialized workspace id -- direction
+   *  (local->cloud or cloud->local) is inferred from the id's own shape (spec section
+   *  2.6). Called with a local AnyHarness id or a `cloud:<id>` synthetic id, per
+   *  {@link resolveMoveWorkspaceTargetId}. */
   onMoveWorkspaceToCloud: (workspaceId: string) => void;
   onWorkspaceHover?: () => void;
   shortcutRevealVisible: boolean;
@@ -213,7 +241,9 @@ export function SidebarWorkspaceContent({
           </p>
         ) : (
           <>
-            {visibleItems.map((item) => (
+            {visibleItems.map((item) => {
+              const moveWorkspaceTargetId = resolveMoveWorkspaceTargetId(item);
+              return (
               <WorkspaceItem
                 key={item.id}
                 workspaceId={item.id}
@@ -257,12 +287,8 @@ export function SidebarWorkspaceContent({
                     : undefined
                 }
                 onMoveToCloud={
-                  (item.variant === "local" || item.variant === "worktree")
-                    && !item.archived
-                    && item.localWorkspaceId
-                    && !activeMoveIdByWorkspaceId[item.localWorkspaceId]
-                    && (!item.statusIndicator || !MOVE_TO_CLOUD_BLOCKING_STATUS_KINDS.has(item.statusIndicator.kind))
-                    ? () => onMoveWorkspaceToCloud(item.localWorkspaceId!)
+                  moveWorkspaceTargetId && !activeMoveIdByWorkspaceId[moveWorkspaceTargetId]
+                    ? () => onMoveWorkspaceToCloud(moveWorkspaceTargetId)
                     : undefined
                 }
                 onHover={onWorkspaceHover}
@@ -274,7 +300,8 @@ export function SidebarWorkspaceContent({
                     : undefined
                 }
               />
-            ))}
+              );
+            })}
             {toggleLabel && (
               <SidebarShowToggleRow
                 label={toggleLabel}

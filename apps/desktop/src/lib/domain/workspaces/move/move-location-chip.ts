@@ -8,9 +8,10 @@ export type WorkspaceRuntimeLocation = "local" | "cloud" | "target";
 export interface WorkspaceLocationChipView {
   location: WorkspaceRuntimeLocation;
   label: string;
-  /** Only local workspaces can open the move-to-cloud dialog in this PR (local->cloud
-   *  only, spec section 0's "local<->E2B only" v1 gate); cloud/target chips render as a
-   *  read-only badge until the mirror direction (PR D) and SSH targets (M3) land. */
+  /** Local and cloud workspaces can both open the move dialog (spec section 2.6,
+   *  "Direction inference at the entry points" -- the dialog itself resolves which
+   *  direction from the workspace id, spec section 2.3's two flows); target (SSH)
+   *  chips stay a read-only badge until SSH moves land (M3). */
   clickable: boolean;
 }
 
@@ -38,6 +39,6 @@ export function resolveWorkspaceLocationChip(
   return {
     location,
     label: LOCATION_LABELS[location],
-    clickable: location === "local",
+    clickable: location === "local" || location === "cloud",
   };
 }

@@ -14,11 +14,11 @@ describe("resolveWorkspaceLocationChip", () => {
     });
   });
 
-  it("is a read-only badge for a cloud workspace", () => {
+  it("is clickable for a cloud workspace (opens the cloud->local mirror)", () => {
     expect(resolveWorkspaceLocationChip("cloud:cloud-ws-1", true)).toEqual({
       location: "cloud",
       label: "Cloud",
-      clickable: false,
+      clickable: true,
     });
   });
 

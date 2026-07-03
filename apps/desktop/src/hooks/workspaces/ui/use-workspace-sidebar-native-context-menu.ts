@@ -13,6 +13,7 @@ export function useWorkspaceSidebarNativeContextMenu({
   canUnarchive,
   canMarkDone,
   canMoveToCloud,
+  moveToCloudLabel,
   onRename,
   onCopyWorkspaceLocation,
   onCopyBranchName,
@@ -30,6 +31,10 @@ export function useWorkspaceSidebarNativeContextMenu({
   canUnarchive: boolean;
   canMarkDone: boolean;
   canMoveToCloud: boolean;
+  /** Direction-aware label (spec section 2.6, "Direction inference at the entry
+   *  points"): "Move to cloud…" for a local workspace, "Move to this Mac…" for a
+   *  cloud-backed one. Defaults to the local-to-cloud copy for existing callers. */
+  moveToCloudLabel?: string;
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
   onCopyBranchName: () => void;
@@ -49,6 +54,7 @@ export function useWorkspaceSidebarNativeContextMenu({
       canUnarchive,
       canMarkDone,
       canMoveToCloud,
+      moveToCloudLabel,
       onRename,
       onCopyWorkspaceLocation,
       onCopyBranchName,
@@ -70,6 +76,7 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   canUnarchive,
   canMarkDone,
   canMoveToCloud,
+  moveToCloudLabel = "Move to cloud…",
   onRename,
   onCopyWorkspaceLocation,
   onCopyBranchName,
@@ -87,6 +94,7 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   canUnarchive: boolean;
   canMarkDone: boolean;
   canMoveToCloud: boolean;
+  moveToCloudLabel?: string;
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
   onCopyBranchName: () => void;
@@ -128,7 +136,7 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
     }
     items.push({
       id: "move-to-cloud",
-      label: "Move to cloud…",
+      label: moveToCloudLabel,
       onSelect: onMoveToCloud,
     });
   }

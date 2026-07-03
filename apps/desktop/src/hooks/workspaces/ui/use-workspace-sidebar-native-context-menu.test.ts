@@ -57,6 +57,30 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
     ]);
   });
 
+  it("shows a direction-aware label for a cloud-backed workspace", () => {
+    const items = buildWorkspaceSidebarNativeContextMenuItems({
+      canRename: false,
+      canCopyWorkspaceLocation: false,
+      copyWorkspaceLocationLabel: "Copy workspace path",
+      canCopyBranchName: false,
+      archived: false,
+      canArchive: false,
+      canUnarchive: false,
+      canMarkDone: false,
+      canMoveToCloud: true,
+      moveToCloudLabel: "Move to this Mac…",
+      onRename: () => {},
+      onCopyWorkspaceLocation: () => {},
+      onCopyBranchName: () => {},
+      onArchive: () => {},
+      onUnarchive: () => {},
+      onMarkDone: () => {},
+      onMoveToCloud: () => {},
+    });
+
+    expect(items).toMatchObject([{ id: "move-to-cloud", label: "Move to this Mac…" }]);
+  });
+
   it("shows unarchive for an archived workspace", () => {
     const items = buildWorkspaceSidebarNativeContextMenuItems({
       canRename: false,

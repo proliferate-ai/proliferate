@@ -83,8 +83,10 @@ interface WorkspaceItemProps {
   onArchive?: () => void;
   onUnarchive?: () => void;
   onMarkDone?: () => void;
-  /** Opens the move-to-cloud dialog for this workspace. Omit to hide the menu item
-   *  (cloud-backed workspaces, blocked workspaces, or a move already in flight). */
+  /** Opens the move dialog for this workspace (local->cloud for a local/worktree row,
+   *  cloud->local for a cloud row -- spec section 2.6, "Direction inference at the
+   *  entry points"). Omit to hide the menu item (blocked workspace, or a move already
+   *  in flight). */
   onMoveToCloud?: () => void;
   onIndicatorAction?: (action: SidebarIndicatorAction) => void;
   onHover?: () => void;
@@ -153,6 +155,7 @@ export function WorkspaceItem({
     canUnarchive: !!onUnarchive,
     canMarkDone: !!onMarkDone,
     canMoveToCloud: !!onMoveToCloud,
+    moveToCloudLabel: variant === "cloud" ? "Move to this Mac…" : "Move to cloud…",
     onRename: handleRenameCommand,
     onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
     onCopyBranchName: handleCopyBranchNameCommand,

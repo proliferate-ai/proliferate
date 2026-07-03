@@ -26,7 +26,6 @@ anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1880 existing SDK oversi
 anyharness/sdk/src/reducer/transcript.ts 1575 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
 apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 546 P3 runtime catalog extends All-Models coverage for the local+gateway runtime-resolved model plan (contract §5)
-apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 631 existing desktop oversized test file
 apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split

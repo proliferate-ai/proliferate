@@ -6,10 +6,15 @@ interface WorkspaceLocationChipProps {
   onClick: () => void;
 }
 
+const CLICKABLE_TITLE_BY_LOCATION: Partial<Record<WorkspaceLocationChipView["location"], string>> = {
+  local: "Move this workspace to the cloud",
+  cloud: "Move this workspace to this Mac",
+};
+
 /** The workspace header's location indicator (spec section 2.6's entry point (b)):
- *  clickable when the workspace is local, opening the same move-to-cloud dialog as the
- *  sidebar context-menu item; a read-only badge for cloud/target workspaces until the
- *  mirror direction lands. */
+ *  clickable for local and cloud workspaces, opening the same direction-aware move
+ *  dialog as the sidebar context-menu item (spec section 2.6, "Direction inference at
+ *  the entry points"); a read-only badge for target (SSH) workspaces until M3. */
 export function WorkspaceLocationChip({ view, onClick }: WorkspaceLocationChipProps) {
   return (
     <Button
@@ -18,7 +23,7 @@ export function WorkspaceLocationChip({ view, onClick }: WorkspaceLocationChipPr
       size="sm"
       disabled={!view.clickable}
       onClick={onClick}
-      title={view.clickable ? "Move this workspace to the cloud" : view.label}
+      title={(view.clickable && CLICKABLE_TITLE_BY_LOCATION[view.location]) || view.label}
       className="workspace-shell-icon-button shrink-0 gap-1 px-2 text-ui-sm text-muted-foreground disabled:opacity-100"
     >
       {view.label}
