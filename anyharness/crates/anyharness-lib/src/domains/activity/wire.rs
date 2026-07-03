@@ -55,7 +55,7 @@ pub struct ActivityProcessWire {
     pub started_at_ms: Option<i64>,
     #[serde(default)]
     pub ended_at_ms: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_feed_transport")]
     pub feed: Option<FeedTransportWire>,
 }
 
@@ -87,7 +87,7 @@ pub struct ActivitySubagentWire {
     pub tool_calls: Option<i64>,
     #[serde(default)]
     pub duration_seconds: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_feed_transport")]
     pub feed: Option<FeedTransportWire>,
 }
 
@@ -112,6 +112,47 @@ pub enum FeedTransportWire {
         thread_id: String,
     },
     HttpSse { url: String },
+}
+
+/// Lenient feed-transport parse. The two forks disagree on the `feed` object's
+/// discriminator key — claude-agent-acp sends `feed: { transport: <kind>, .. }`
+/// while the runtime's canonical form is `feed: { kind: <kind>, .. }` — and an
+/// unrecognized/malformed transport must degrade the FEED to `None` rather than
+/// fail the whole `process_upserted`/`subagent_upserted` deserialize (which
+/// would drop the entire roster element). Accepts either discriminator key.
+///
+/// Codex's flat top-level `feedTransport` string is a separate fork-side
+/// divergence (a different field, not `feed`) and still needs a fork change to
+/// bind — it is intentionally not resolved here.
+fn deserialize_feed_transport<'de, D>(
+    deserializer: D,
+) -> Result<Option<FeedTransportWire>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(parse_feed_transport_value))
+}
+
+fn parse_feed_transport_value(value: serde_json::Value) -> Option<FeedTransportWire> {
+    let object = value.as_object()?;
+    let tag = object
+        .get("kind")
+        .or_else(|| object.get("transport"))
+        .and_then(|value| value.as_str())?;
+    let field = |name: &str| object.get(name).and_then(|value| value.as_str());
+    match tag {
+        "tail_file" => field("path").map(|path| FeedTransportWire::TailFile {
+            path: path.to_string(),
+        }),
+        "acp_child_demux" => field("threadId").map(|thread_id| FeedTransportWire::AcpChildDemux {
+            thread_id: thread_id.to_string(),
+        }),
+        "http_sse" => field("url").map(|url| FeedTransportWire::HttpSse {
+            url: url.to_string(),
+        }),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -203,5 +244,37 @@ mod tests {
         }))
         .expect("parse agents alias");
         assert_eq!(via_alias.subagents.len(), 1);
+    }
+
+    #[test]
+    fn feed_transport_accepts_claude_transport_key_and_degrades_unknown_to_none() {
+        // claude-agent-acp uses `transport` as the discriminator, not `kind`.
+        let claude: ActivityProcessWire = serde_json::from_value(serde_json::json!({
+            "id": "proc-1",
+            "command": "npm test",
+            "status": "running",
+            "startedAtMs": 1_782_000_000_000_i64,
+            "feed": { "transport": "tail_file", "path": "/tmp/out.txt" }
+        }))
+        .expect("claude transport-key feed parses");
+        assert_eq!(
+            claude.feed,
+            Some(FeedTransportWire::TailFile {
+                path: "/tmp/out.txt".to_string()
+            })
+        );
+
+        // An unrecognized/malformed feed must degrade to None WITHOUT failing
+        // the whole roster element (the roster matters more than the feed).
+        let unknown: ActivityProcessWire = serde_json::from_value(serde_json::json!({
+            "id": "proc-1",
+            "command": "npm test",
+            "status": "running",
+            "startedAtMs": 1_782_000_000_000_i64,
+            "feed": { "feedTransport": "acp_child_demux:child-1" }
+        }))
+        .expect("unknown feed degrades; element still parses");
+        assert_eq!(unknown.status, ActivityProcessStatusWire::Running);
+        assert!(unknown.feed.is_none());
     }
 }
