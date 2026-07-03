@@ -89,19 +89,3 @@ async def revoke_desktop_worker_endpoint(
         owner_user_id=user.id,
         desktop_install_id=body.desktop_install_id,
     )
-
-
-@router.post(
-    "/workers/desktop/revoke",
-    response_model=DesktopWorkerRevokeResponse,
-)
-async def revoke_desktop_worker_endpoint(
-    body: DesktopWorkerRevokeRequest,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> DesktopWorkerRevokeResponse:
-    return await revoke_desktop_worker(
-        db,
-        owner_user_id=user.id,
-        desktop_install_id=body.desktop_install_id,
-    )
