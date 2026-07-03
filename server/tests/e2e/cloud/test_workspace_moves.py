@@ -320,7 +320,6 @@ async def test_workspace_move_round_trip_local_cloud_local(
         ]
         print(f"[E2E-DIAG] archive1 session native ids: {_archive_native_ids}", flush=True)
         sandbox_url, sandbox_token = await _sandbox_runtime_access(db_session, user_uuid)
-        await _dump_sandbox_agent_auth_diag(provider_kind, provider_sandbox_id, "pre-recall")
         for leg in legs:
             sandbox_session = await runtime_get_session(
                 sandbox_url, sandbox_token, leg.session_id
@@ -338,18 +337,12 @@ async def test_workspace_move_round_trip_local_cloud_local(
                 len(await runtime_list_events(sandbox_url, sandbox_token, leg.session_id)) > 0
             )
 
-            try:
-                recall_cloud = await runtime_prompt_and_collect(
-                    sandbox_url, sandbox_token, leg.session_id,
-                    "What is the codeword I asked you to remember? Do not edit any files. "
-                    "Reply with exactly that word and nothing else.",
-                    timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
-                )
-            except Exception:
-                await _dump_sandbox_agent_auth_diag(
-                    provider_kind, provider_sandbox_id, f"recall-fail-{leg.kind}"
-                )
-                raise
+            recall_cloud = await runtime_prompt_and_collect(
+                sandbox_url, sandbox_token, leg.session_id,
+                "What is the codeword I asked you to remember? Do not edit any files. "
+                "Reply with exactly that word and nothing else.",
+                timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
+            )
             assert turn_contains_text(recall_cloud, leg.codeword), (
                 f"Migrated {leg.kind} session did not recall the codeword in the sandbox."
             )
@@ -676,52 +669,6 @@ async def _sandbox_row(db: AsyncSession, user_id: uuid.UUID) -> CloudSandbox | N
 async def _sandbox_provider_id(db: AsyncSession, user_id: uuid.UUID) -> str | None:
     row = await _sandbox_row(db, user_id)
     return row.provider_sandbox_id if row is not None else None
-
-
-async def _dump_sandbox_agent_auth_diag(
-    provider_kind: str, provider_sandbox_id: str | None, label: str
-) -> None:
-    """TEMP DIAG: dump state.json (keys redacted), agent-auth tree, runtime log."""
-    if not provider_sandbox_id:
-        print(f"[E2E-DIAG:{label}] no provider_sandbox_id", flush=True)
-        return
-    try:
-        provider = get_sandbox_provider(provider_kind)
-        handle = await provider.connect_running_sandbox(provider_sandbox_id)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[E2E-DIAG:{label}] connect failed: {exc!r}", flush=True)
-        return
-    redact = (
-        "python3 -c \"import json,sys;"
-        "d=json.load(sys.stdin);"
-        "print('revision',d.get('revision'));"
-        "print(json.dumps([{k:(v if k!='key' else '<'+str(len(v))+'-chars>') "
-        "for k,v in s.items()} for s in d.get('selections',[])],indent=2))\""
-    )
-    cmds = {
-        "state.json": (
-            "cat /home/user/.proliferate/anyharness/agent-auth/state.json 2>/dev/null "
-            f"| {redact} 2>&1 || echo '<no state.json>'; true"
-        ),
-        "agent-auth tree": (
-            "ls -laR /home/user/.proliferate/anyharness/agent-auth 2>&1 | head -60; true"
-        ),
-        "anyharness.log": (
-            "tail -400 /home/user/anyharness.log 2>&1 | grep -iE "
-            "'route_auth|route-auth|Authentication|load_session|ACP|api_key|"
-            "SelectionMissing|CLAUDE_CONFIG|ANTHROPIC|resolve_launch|native' "
-            "| tail -60; true"
-        ),
-    }
-    for name, cmd in cmds.items():
-        try:
-            res = await provider.run_command(handle, cmd, timeout_seconds=30)
-            stdout = getattr(res, "stdout", None)
-            if stdout is None:
-                stdout = str(res)
-        except Exception as exc:  # noqa: BLE001
-            stdout = f"<run_command failed: {exc!r}>"
-        print(f"[E2E-DIAG:{label}] === {name} ===\n{stdout}", flush=True)
 
 
 async def _sandbox_runtime_access(db: AsyncSession, user_id: uuid.UUID) -> tuple[str, str]:
