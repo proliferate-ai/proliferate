@@ -12,6 +12,13 @@ use crate::domains::sessions::model::SessionEventRecord;
 
 pub const MAX_LOOP_PROMPT_BYTES: usize = 16 * 1024;
 
+/// Per-session cap on active runtime-emulated loops. Each arm mints a fresh
+/// `loop_id` and an always-on scheduler timer, so without a cap N unbounded
+/// arms accumulate N scheduler entries that each queue a prompt when the
+/// session next goes idle. Only new arms count against it — editing an
+/// existing loop by id does not.
+pub const MAX_ACTIVE_EMULATED_LOOPS: usize = 20;
+
 /// The tagged-chunk kinds the sidecars (and, on Codex, the runtime-emulated
 /// `LoopSchedulerExtension`) emit — `loop_upserted | loop_removed |
 /// loop_fired` (session-activity-architecture up-path vocabulary).
@@ -54,6 +61,8 @@ pub enum LoopIngestError {
     MissingLoopId,
     #[error("loop prompt exceeds {MAX_LOOP_PROMPT_BYTES} bytes")]
     PromptTooLarge,
+    #[error("session already holds the maximum number of active loops")]
+    TooManyActiveLoops,
     #[error(transparent)]
     Store(#[from] anyhow::Error),
 }
@@ -267,6 +276,14 @@ impl LoopService {
     ) -> Result<LoopEventBatch, LoopIngestError> {
         if spec.prompt.len() > MAX_LOOP_PROMPT_BYTES {
             return Err(LoopIngestError::PromptTooLarge);
+        }
+        // Cap active emulated loops per session. Only a NEW loop counts — an
+        // edit reuses an existing loop_id and must always be allowed through.
+        if self.store.find_one(&context.session_id, &spec.loop_id)?.is_none()
+            && self.store.list_active_emulated(&context.session_id)?.len()
+                >= MAX_ACTIVE_EMULATED_LOOPS
+        {
+            return Err(LoopIngestError::TooManyActiveLoops);
         }
         self.store
             .with_tx_anyhow(|tx| {

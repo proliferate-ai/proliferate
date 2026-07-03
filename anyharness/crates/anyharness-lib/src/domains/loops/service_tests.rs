@@ -466,6 +466,33 @@ fn arm_emulated_loop_creates_native_false_record_and_emits_upserted() {
 }
 
 #[test]
+fn arm_emulated_loop_caps_active_loops_per_session_but_allows_edits() {
+    use super::service::{LoopIngestError, MAX_ACTIVE_EMULATED_LOOPS};
+    let service = test_service();
+    for i in 0..MAX_ACTIVE_EMULATED_LOOPS {
+        // Distinct next_seq per arm (session_events.seq is unique per session).
+        service
+            .arm_emulated_loop(context(i as i64 + 1), emulated_spec(&format!("loop-{i}"), None, 1_000))
+            .expect("arm within cap");
+    }
+    assert_eq!(
+        service.active_emulated_loops("session-1").expect("list").len(),
+        MAX_ACTIVE_EMULATED_LOOPS
+    );
+
+    // One more NEW loop is rejected once the cap is hit (no event inserted).
+    let err = service
+        .arm_emulated_loop(context(1_000), emulated_spec("loop-overflow", None, 1_000))
+        .expect_err("cap exceeded");
+    assert!(matches!(err, LoopIngestError::TooManyActiveLoops));
+
+    // Editing an EXISTING loop by id is still allowed at the cap.
+    service
+        .arm_emulated_loop(context(1_001), emulated_spec("loop-0", None, 2_000))
+        .expect("edit existing at cap");
+}
+
+#[test]
 fn record_emulated_fire_reschedules_then_caps_at_max_fires() {
     let service = test_service();
     service

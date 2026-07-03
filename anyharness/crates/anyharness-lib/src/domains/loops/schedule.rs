@@ -21,12 +21,21 @@ use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 /// unsatisfiable (guards against e.g. `0 0 30 2 *` — Feb 30th).
 const CRON_SCAN_LIMIT_MINUTES: i64 = 366 * 24 * 60;
 
+/// Minimum cadence for a runtime-emulated interval loop. Native crons are
+/// inherently minute-floored by cron syntax; the emulated interval path had no
+/// floor, so a bare `"1"` (= 1s) would re-fire a full billable agent turn as
+/// fast as each turn completed, indefinitely. Floor emulated intervals at one
+/// minute to match native granularity.
+pub const MIN_EMULATED_INTERVAL_MS: i64 = 60_000;
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ScheduleParseError {
     #[error("interval expression is empty")]
     EmptyInterval,
     #[error("interval expression '{0}' is not a positive duration")]
     InvalidInterval(String),
+    #[error("interval '{0}' fires faster than the 1-minute minimum cadence")]
+    IntervalBelowFloor(String),
     #[error("cron expression must have 5 fields, got '{0}'")]
     CronFieldCount(String),
     #[error("cron field '{0}' is invalid")]
@@ -75,6 +84,23 @@ pub fn parse_interval_ms(expr: &str) -> Result<i64, ScheduleParseError> {
     magnitude
         .checked_mul(unit_ms)
         .ok_or_else(|| ScheduleParseError::InvalidInterval(expr.to_string()))
+}
+
+/// Reject a runtime-emulated schedule whose cadence is below the emulated
+/// floor. Interval schedules are validated against [`MIN_EMULATED_INTERVAL_MS`];
+/// cron schedules are already minute-floored by their syntax and pass through
+/// unchanged (an invalid cron still surfaces its own parse error).
+pub fn ensure_emulated_cadence_floor(schedule: &LoopSchedule) -> Result<(), ScheduleParseError> {
+    match schedule.kind {
+        LoopScheduleKind::Interval => {
+            let interval_ms = parse_interval_ms(&schedule.expr)?;
+            if interval_ms < MIN_EMULATED_INTERVAL_MS {
+                return Err(ScheduleParseError::IntervalBelowFloor(schedule.expr.clone()));
+            }
+            Ok(())
+        }
+        LoopScheduleKind::Cron => CronExpr::parse(&schedule.expr).map(|_| ()),
+    }
 }
 
 fn next_cron_fire_ms(expr: &str, after_ms: i64) -> Result<i64, ScheduleParseError> {
@@ -241,6 +267,22 @@ mod tests {
         assert!(parse_interval_ms("-5m").is_err());
         assert!(parse_interval_ms("abc").is_err());
         assert!(parse_interval_ms("").is_err());
+    }
+
+    #[test]
+    fn emulated_cadence_floor_rejects_sub_minute_intervals() {
+        // Bare integer = seconds: "1" is a 1s cadence — below the floor.
+        assert_eq!(
+            ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "1")),
+            Err(ScheduleParseError::IntervalBelowFloor("1".to_string()))
+        );
+        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "30s")).is_err());
+        // Exactly at / above the 1-minute floor is allowed.
+        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "60")).is_ok());
+        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Interval, "5m")).is_ok());
+        // Cron is minute-floored by syntax; a valid cron passes, invalid errors.
+        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Cron, "* * * * *")).is_ok());
+        assert!(ensure_emulated_cadence_floor(&schedule(LoopScheduleKind::Cron, "nonsense")).is_err());
     }
 
     #[test]

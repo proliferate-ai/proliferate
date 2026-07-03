@@ -221,6 +221,11 @@ impl LoopRuntime {
         prompt: String,
         request: SetSessionLoopRequest,
     ) -> Result<Loop, LoopOpError> {
+        // Floor the emulated cadence (native crons are minute-floored by
+        // syntax; the emulated interval path is not) so a bare "1" can't
+        // re-fire a billable turn every second.
+        super::schedule::ensure_emulated_cadence_floor(&request.schedule)
+            .map_err(|error| LoopOpError::InvalidSchedule(error.to_string()))?;
         let now = chrono::Utc::now().timestamp_millis();
         let next_fire_at_ms = super::schedule::next_fire_at_ms(&request.schedule, now)
             .map_err(|error| LoopOpError::InvalidSchedule(error.to_string()))?;
