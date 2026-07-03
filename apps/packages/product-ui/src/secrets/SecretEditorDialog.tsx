@@ -226,9 +226,9 @@ export function SecretEditorDialog({
         )}
 
         <div className="space-y-1.5">
-          <label htmlFor="secret-name" className={fieldLabelClass}>
+          <Label htmlFor="secret-name" className={fieldLabelClass}>
             {nameLabel}
-          </label>
+          </Label>
           <Input
             id="secret-name"
             value={nameOrPath}
@@ -257,28 +257,32 @@ export function SecretEditorDialog({
         {kind === "env" ? (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">
-              <label htmlFor="secret-value" className={fieldLabelClass}>
+              <Label htmlFor="secret-value" className={fieldLabelClass}>
                 Value
-              </label>
+              </Label>
               <div className="flex items-center gap-0.5">
                 {multiline ? null : (
-                  <button
+                  <Button
                     type="button"
+                    variant="unstyled"
+                    size="unstyled"
                     className={toggleClass}
                     aria-label={revealed ? "Hide value" : "Show value"}
                     onClick={() => setRevealed((value) => !value)}
                   >
                     {revealed ? <EyeOff size={13} /> : <Eye size={13} />}
                     {revealed ? "Hide" : "Show"}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
                   type="button"
+                  variant="unstyled"
+                  size="unstyled"
                   className={toggleClass}
                   onClick={() => setMultiline((value) => !value)}
                 >
                   {multiline ? "Single line" : "Multi-line"}
-                </button>
+                </Button>
               </div>
             </div>
             {multiline ? (

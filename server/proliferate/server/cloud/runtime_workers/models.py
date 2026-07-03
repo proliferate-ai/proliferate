@@ -69,3 +69,11 @@ class DesktopWorkerEnrollmentRequest(_CamelModel):
 class DesktopWorkerEnrollmentResponse(_CamelModel):
     enrollment_token: str
     expires_at: datetime
+
+
+class DesktopWorkerRevokeRequest(_CamelModel):
+    desktop_install_id: str = Field(min_length=1, max_length=255)
+
+
+class DesktopWorkerRevokeResponse(_CamelModel):
+    revoked: bool

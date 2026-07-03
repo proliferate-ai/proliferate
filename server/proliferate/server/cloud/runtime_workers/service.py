@@ -28,6 +28,7 @@ from proliferate.integrations.desktop_downloads import (
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentResponse,
+    DesktopWorkerRevokeResponse,
     IntegrationGatewayConfig,
     WorkerDesiredVersions,
     WorkerEnrollRequest,
@@ -124,6 +125,25 @@ async def create_desktop_enrollment(
     )
 
 
+async def revoke_desktop_worker(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    desktop_install_id: str,
+) -> DesktopWorkerRevokeResponse:
+    """Revoke the caller's active desktop worker and its gateway token.
+
+    Idempotent: revoking when no active worker exists is a successful no-op.
+    """
+    await store.revoke_active_workers_for_identity(
+        db,
+        cloud_sandbox_id=None,
+        owner_user_id=owner_user_id,
+        desktop_install_id=desktop_install_id,
+    )
+    return DesktopWorkerRevokeResponse(revoked=True)
+
+
 async def enroll_worker(
     db: AsyncSession,
     *,
@@ -140,13 +160,23 @@ async def enroll_worker(
             status_code=401,
         )
 
-    # Single active worker per identity: retire any prior worker + gateway token.
-    await store.revoke_active_workers_for_identity(
-        db,
-        cloud_sandbox_id=enrollment.cloud_sandbox_id,
-        owner_user_id=enrollment.owner_user_id,
-        desktop_install_id=enrollment.desktop_install_id,
-    )
+    # Single active worker per identity: retire any prior worker + gateway
+    # token. Desktop installs run exactly one physical worker process, so a
+    # desktop enrollment retires predecessors regardless of owner — otherwise
+    # a user switch on the same machine would leave the previous user's worker
+    # row "online" and its gateway token active indefinitely.
+    if enrollment.runtime_kind == "desktop" and enrollment.desktop_install_id is not None:
+        await store.revoke_active_workers_for_desktop_install(
+            db,
+            desktop_install_id=enrollment.desktop_install_id,
+        )
+    else:
+        await store.revoke_active_workers_for_identity(
+            db,
+            cloud_sandbox_id=enrollment.cloud_sandbox_id,
+            owner_user_id=enrollment.owner_user_id,
+            desktop_install_id=enrollment.desktop_install_id,
+        )
 
     worker_token = secrets.token_urlsafe(_TOKEN_BYTES)
     worker = await store.create_worker(

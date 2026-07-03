@@ -393,3 +393,114 @@ class TestWorkerArtifactDownload:
             response = await client.get(path)
             assert response.status_code == 404
             assert response.json()["detail"]["code"] == "cloud_worker_artifact_unknown"
+
+
+async def _enroll_worker(client: AsyncClient, auth, *, install_id: str) -> dict:
+    token = await _desktop_enrollment_token(client, auth, install_id=install_id)
+    enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+    assert enroll.status_code == 200, enroll.text
+    return enroll.json()
+
+
+async def _gateway_request(client: AsyncClient, *, authorization: str):
+    return await client.post(
+        "/v1/cloud/integration-gateway/mcp",
+        headers={"Authorization": authorization},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+    )
+
+
+class TestDesktopWorkerRevoke:
+    @pytest.mark.asyncio
+    async def test_revoke_requires_auth(self, client: AsyncClient) -> None:
+        response = await client.post(
+            "/v1/cloud/workers/desktop/revoke",
+            json={"desktopInstallId": "install-revoke-auth"},
+        )
+        assert response.status_code in {401, 403}
+
+    @pytest.mark.asyncio
+    async def test_revoke_retires_worker_and_gateway_token(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="worker-revoke")
+        enrolled = await _enroll_worker(client, auth, install_id="install-revoke-a")
+        worker_token = enrolled["workerToken"]
+        gateway_authorization = enrolled["integrationGateway"]["authorization"]
+
+        # The gateway token resolves before revocation.
+        before = await _gateway_request(client, authorization=gateway_authorization)
+        assert before.status_code == 200, before.text
+
+        revoke = await client.post(
+            "/v1/cloud/workers/desktop/revoke",
+            headers=auth.headers,
+            json={"desktopInstallId": "install-revoke-a"},
+        )
+        assert revoke.status_code == 200, revoke.text
+        assert revoke.json() == {"revoked": True}
+
+        # Worker token and gateway token are both retired.
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={},
+        )
+        assert heartbeat.status_code == 401
+        after = await _gateway_request(client, authorization=gateway_authorization)
+        assert after.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_revoke_scopes_to_caller_not_install_id(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        owner = await _authed_user(client, db_session, prefix="worker-revoke-owner")
+        other = await _authed_user(client, db_session, prefix="worker-revoke-other")
+        enrolled = await _enroll_worker(client, owner, install_id="install-revoke-b")
+        worker_token = enrolled["workerToken"]
+
+        # Another user revoking the same install id is a no-op for the
+        # owner's worker: the revoke keys on (caller user id, install id).
+        revoke = await client.post(
+            "/v1/cloud/workers/desktop/revoke",
+            headers=other.headers,
+            json={"desktopInstallId": "install-revoke-b"},
+        )
+        assert revoke.status_code == 200, revoke.text
+
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={},
+        )
+        assert heartbeat.status_code == 200, heartbeat.text
+
+    @pytest.mark.asyncio
+    async def test_double_revoke_is_idempotent(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="worker-revoke-twice")
+        await _enroll_worker(client, auth, install_id="install-revoke-c")
+
+        for _ in range(2):
+            revoke = await client.post(
+                "/v1/cloud/workers/desktop/revoke",
+                headers=auth.headers,
+                json={"desktopInstallId": "install-revoke-c"},
+            )
+            assert revoke.status_code == 200, revoke.text
+            assert revoke.json() == {"revoked": True}
+
+        # Revoking an install that never enrolled is also a successful no-op.
+        never = await client.post(
+            "/v1/cloud/workers/desktop/revoke",
+            headers=auth.headers,
+            json={"desktopInstallId": "install-never-enrolled"},
+        )
+        assert never.status_code == 200, never.text
