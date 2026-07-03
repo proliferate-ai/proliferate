@@ -60,6 +60,8 @@ export type AnyHarnessTimingCategory =
   | "session.events.list"
   | "session.resume"
   | "session.title.update"
+  | "session.goal.set"
+  | "session.goal.clear"
   | "session.stream"
   | "file.list"
   | "file.search"
