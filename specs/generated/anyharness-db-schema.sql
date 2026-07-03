@@ -487,6 +487,42 @@ CREATE TABLE terminal_command_runs (
     updated_at TEXT NOT NULL
 );
 
+-- table: workflow_runs
+CREATE TABLE workflow_runs (
+    run_id TEXT PRIMARY KEY,
+    workflow_id TEXT,
+    workflow_version_id TEXT,
+    version_n INTEGER,
+    trigger_kind TEXT,
+    target_mode TEXT,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    plan_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    step_cursor INTEGER NOT NULL DEFAULT 0,
+    session_ids_json TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- table: workflow_step_runs
+CREATE TABLE workflow_step_runs (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    step_index INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 0,
+    output_json TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    started_at TEXT,
+    ended_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, step_index)
+);
+
 -- table: workspace_access_modes
 CREATE TABLE workspace_access_modes (
     workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -718,6 +754,14 @@ CREATE INDEX idx_terminal_command_runs_workspace_activity
 -- index: idx_terminal_command_runs_workspace_created
 CREATE INDEX idx_terminal_command_runs_workspace_created
     ON terminal_command_runs(workspace_id, created_at DESC);
+
+-- index: idx_workflow_runs_status
+CREATE INDEX idx_workflow_runs_status
+    ON workflow_runs(status);
+
+-- index: idx_workflow_runs_workspace_created
+CREATE INDEX idx_workflow_runs_workspace_created
+    ON workflow_runs(workspace_id, created_at DESC);
 
 -- index: idx_workspaces_path
 CREATE INDEX idx_workspaces_path ON workspaces(path);
