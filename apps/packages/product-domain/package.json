@@ -43,6 +43,34 @@
       "types": "./dist/automations/schedule.d.ts",
       "import": "./dist/automations/schedule.js"
     },
+    "./workflows/definition": {
+      "types": "./dist/workflows/definition.d.ts",
+      "import": "./dist/workflows/definition.js"
+    },
+    "./workflows/interpolation": {
+      "types": "./dist/workflows/interpolation.d.ts",
+      "import": "./dist/workflows/interpolation.js"
+    },
+    "./workflows/validation": {
+      "types": "./dist/workflows/validation.d.ts",
+      "import": "./dist/workflows/validation.js"
+    },
+    "./workflows/presentation": {
+      "types": "./dist/workflows/presentation.d.ts",
+      "import": "./dist/workflows/presentation.js"
+    },
+    "./workflows/run-status": {
+      "types": "./dist/workflows/run-status.d.ts",
+      "import": "./dist/workflows/run-status.js"
+    },
+    "./workflows/templates": {
+      "types": "./dist/workflows/templates.d.ts",
+      "import": "./dist/workflows/templates.js"
+    },
+    "./workflows/model": {
+      "types": "./dist/workflows/model.d.ts",
+      "import": "./dist/workflows/model.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"
