@@ -84,6 +84,7 @@ export type ScenarioKey =
   | "goal-met-sticky"
   | "goal-blocked-sticky"
   | "goal-failed-budget"
+  | "goal-pending-write"
   | "goal-empty"
   | "loading-states";
 
@@ -177,6 +178,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "goal-met-sticky": { label: "Goal met" },
   "goal-blocked-sticky": { label: "Goal blocked" },
   "goal-failed-budget": { label: "Goal failed (budget)" },
+  "goal-pending-write": { label: "Goal pending write" },
   "goal-empty": { label: "Goal empty" },
   "loading-states": { label: "Loading states" },
 };
