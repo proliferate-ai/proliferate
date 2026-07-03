@@ -181,18 +181,21 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # Version pins stamped into the image and reported by /health and /meta.
-      # serverVersion is the release version (server-v tag / input). The desktop
-      # and runtime pins are read from their tracked package manifests at this
-      # commit; minDesktopVersion defaults to the pinned desktop version.
+      # serverVersion is the release version (server-v tag / input). The desktop,
+      # runtime, and worker pins are read from their tracked package manifests
+      # at this commit; minDesktopVersion defaults to the pinned desktop version.
       - name: Resolve version pins
         id: pins
         run: |
           set -euo pipefail
           desktop_version="$(jq -r '.version' apps/desktop/package.json)"
           runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
+          worker_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' anyharness/crates/proliferate-worker/Cargo.toml | head -n 1)"
+          : "${worker_version:?Failed to read the proliferate-worker crate version.}"
           {
             echo "desktop_version=${desktop_version}"
             echo "runtime_version=${runtime_version}"
+            echo "worker_version=${worker_version}"
             echo "min_desktop_version=${desktop_version}"
           } >> "$GITHUB_OUTPUT"
         working-directory: .
@@ -208,6 +211,7 @@ jobs:
             SERVER_VERSION=${{ steps.tags.outputs.version }}
             DESKTOP_VERSION=${{ steps.pins.outputs.desktop_version }}
             RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
+            WORKER_VERSION=${{ steps.pins.outputs.worker_version }}
             MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
 
   self-hosted-release-assets:

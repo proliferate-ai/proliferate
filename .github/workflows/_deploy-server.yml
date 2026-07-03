@@ -116,8 +116,8 @@ jobs:
           echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
 
       # Version pins stamped into the image and reported by /health and /meta.
-      # serverVersion comes from the root VERSION file; desktop/runtime pins from
-      # their tracked package manifests at this commit.
+      # serverVersion comes from the root VERSION file; desktop/runtime/worker
+      # pins from their tracked package manifests at this commit.
       - name: Resolve version pins
         id: pins
         run: |
@@ -125,10 +125,13 @@ jobs:
           server_version="$(cat VERSION)"
           desktop_version="$(jq -r '.version' apps/desktop/package.json)"
           runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
+          worker_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' anyharness/crates/proliferate-worker/Cargo.toml | head -n 1)"
+          : "${worker_version:?Failed to read the proliferate-worker crate version.}"
           {
             echo "server_version=${server_version}"
             echo "desktop_version=${desktop_version}"
             echo "runtime_version=${runtime_version}"
+            echo "worker_version=${worker_version}"
             echo "min_desktop_version=${desktop_version}"
           } >> "$GITHUB_OUTPUT"
 
@@ -145,6 +148,7 @@ jobs:
             SERVER_VERSION=${{ steps.pins.outputs.server_version }}
             DESKTOP_VERSION=${{ steps.pins.outputs.desktop_version }}
             RUNTIME_VERSION=${{ steps.pins.outputs.runtime_version }}
+            WORKER_VERSION=${{ steps.pins.outputs.worker_version }}
             MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
 
       - name: Render ECS task definition

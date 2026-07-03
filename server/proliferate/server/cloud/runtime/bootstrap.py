@@ -155,10 +155,18 @@ def build_worker_config(
         "worker_db_path": f"{worker_dir}/worker.sqlite3",
         "integration_gateway_home": anyharness_runtime_home(runtime_context),
         "heartbeat_interval_seconds": 30,
+        # The sandbox sidecar has no launcher that updates it (plain nohup),
+        # so it converges its own binary onto the heartbeat's desiredVersions.
+        # Desktop workers must never set this: the app bundle owns updates.
+        "self_update_enabled": True,
     }
     lines = []
     for key, value in values.items():
-        if isinstance(value, int):
+        if isinstance(value, bool):
+            # bool must precede int: Python bools are ints, but TOML needs
+            # lowercase true/false rather than repr()'s True/False.
+            lines.append(f"{key} = {'true' if value else 'false'}")
+        elif isinstance(value, int):
             lines.append(f"{key} = {value}")
         else:
             lines.append(f"{key} = {json.dumps(value)}")

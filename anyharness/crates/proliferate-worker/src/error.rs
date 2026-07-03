@@ -43,4 +43,23 @@ pub enum WorkerError {
     SetPrivatePermissions { path: PathBuf, source: io::Error },
     #[error("failed to write integration-gateway dotfile at {path}")]
     WriteIntegrationGateway { path: PathBuf, source: io::Error },
+    #[error("worker self-update is unsupported on {os}/{arch}")]
+    SelfUpdateUnsupported {
+        os: &'static str,
+        arch: &'static str,
+    },
+    #[error("worker artifact checksum file was empty or malformed")]
+    SelfUpdateChecksumMalformed,
+    #[error("worker artifact checksum mismatch (expected {expected}, got {actual})")]
+    SelfUpdateChecksumMismatch { expected: String, actual: String },
+    #[error("failed to locate the running worker binary")]
+    SelfUpdateCurrentExe(#[source] io::Error),
+    #[error("failed to stage the new worker binary at {path}")]
+    SelfUpdateStage { path: PathBuf, source: io::Error },
+    #[error("staged worker binary failed its preflight check: {detail}")]
+    SelfUpdatePreflight { detail: String },
+    #[error("failed to swap the worker binary at {path}")]
+    SelfUpdateSwap { path: PathBuf, source: io::Error },
+    #[error("failed to re-exec the swapped worker binary at {path}")]
+    SelfUpdateExec { path: PathBuf, source: io::Error },
 }

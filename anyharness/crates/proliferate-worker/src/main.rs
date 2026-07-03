@@ -8,6 +8,7 @@ mod logging;
 mod observability;
 mod process_lock;
 mod runtime;
+mod self_update;
 mod store;
 mod versions;
 
