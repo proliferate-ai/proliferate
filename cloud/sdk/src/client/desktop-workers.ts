@@ -31,18 +31,3 @@ export async function revokeDesktopWorker(
     body: { desktopInstallId },
   });
 }
-
-export interface DesktopWorkerRevokeResponse {
-  revoked: boolean;
-}
-
-export async function revokeDesktopWorker(
-  desktopInstallId: string,
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<DesktopWorkerRevokeResponse> {
-  return client.requestJson<DesktopWorkerRevokeResponse>({
-    method: "POST",
-    path: "/v1/cloud/workers/desktop/revoke",
-    body: { desktopInstallId },
-  });
-}
