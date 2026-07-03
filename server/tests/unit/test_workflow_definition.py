@@ -94,6 +94,19 @@ def test_empty_steps_rejected() -> None:
         parse_definition(definition)
 
 
+def test_empty_steps_allowed_as_draft() -> None:
+    # Saving a workflow permits a zero-step draft (built in the editor after
+    # create); running it still requires steps.
+    definition = _valid_definition()
+    definition["steps"] = []
+    canonical, _specs = parse_definition(definition, require_steps=False)
+    assert canonical["steps"] == []
+    # Omitted steps key is also tolerated for drafts.
+    del definition["steps"]
+    canonical2, _ = parse_definition(definition, require_steps=False)
+    assert canonical2["steps"] == []
+
+
 def test_arg_reference_to_unknown_arg_rejected() -> None:
     definition = _valid_definition()
     definition["steps"][0]["prompt"] = "hi {{args.nope}}"

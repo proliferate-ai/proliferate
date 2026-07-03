@@ -94,8 +94,11 @@ def _clean_name(value: str) -> str:
 
 
 def _validated_definition(raw: dict[str, object]) -> dict[str, object]:
+    # Saving a workflow permits a zero-step draft (the user builds it in the
+    # editor after create); StartRun re-parses with require_steps=True so an
+    # empty draft can be saved but not run.
     try:
-        canonical, _specs = parse_definition(raw)
+        canonical, _specs = parse_definition(raw, require_steps=False)
     except WorkflowDefinitionError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
     return canonical
@@ -120,7 +123,7 @@ def workflow_arg_specs(version: WorkflowVersionRecord) -> list[ArgSpec]:
     """Parsed arg schema of a stored (already-validated) version."""
 
     try:
-        _canonical, arg_specs = parse_definition(version.definition_json)
+        _canonical, arg_specs = parse_definition(version.definition_json, require_steps=False)
     except WorkflowDefinitionError as exc:  # pragma: no cover - stored defs are valid
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
     return arg_specs

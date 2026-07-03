@@ -368,8 +368,12 @@ _STEP_PARSERS = {
 }
 
 
-def _parse_steps(raw: object) -> list[dict[str, object]]:
-    if not isinstance(raw, list) or not raw:
+def _parse_steps(raw: object, *, require_steps: bool = True) -> list[dict[str, object]]:
+    if raw is None and not require_steps:
+        return []
+    if not isinstance(raw, list):
+        raise _err("invalid_definition", "'steps' must be a list.")
+    if not raw and require_steps:
         raise _err("invalid_definition", "'steps' must be a non-empty list.")
     if len(raw) > WORKFLOW_MAX_STEPS:
         raise _err("too_many_steps", f"A workflow may declare at most {WORKFLOW_MAX_STEPS} steps.")
@@ -421,17 +425,24 @@ def _validate_references(steps: list[dict[str, object]], arg_names: frozenset[st
 # --- public entrypoint ---------------------------------------------------------
 
 
-def parse_definition(raw: object) -> tuple[dict[str, object], list[ArgSpec]]:
+def parse_definition(
+    raw: object, *, require_steps: bool = True
+) -> tuple[dict[str, object], list[ArgSpec]]:
     """Validate a raw definition and return its canonical dict + parsed arg specs.
 
     Raises :class:`WorkflowDefinitionError` on any structural or reference problem.
+
+    ``require_steps=False`` permits a zero-step *draft* — used when saving a
+    workflow that the user will still build in the editor. Running a workflow
+    (StartRun) always parses with ``require_steps=True``, so an empty draft can
+    be saved but not run.
     """
 
     definition = _require_dict(raw, field="definition")
     _reject_unknown_keys(definition, {"args", "setup", "steps"}, field="definition")
     canonical_args, arg_specs = _parse_args(definition.get("args"))
     setup = _parse_setup(definition.get("setup"))
-    steps = _parse_steps(definition.get("steps"))
+    steps = _parse_steps(definition.get("steps"), require_steps=require_steps)
     _validate_references(steps, frozenset(spec.name for spec in arg_specs))
     canonical: dict[str, object] = {"args": canonical_args, "setup": setup, "steps": steps}
     return canonical, arg_specs
