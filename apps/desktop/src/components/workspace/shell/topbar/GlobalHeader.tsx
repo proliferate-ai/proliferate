@@ -11,6 +11,8 @@ import {
   WorkspaceActionsMenuContainer,
   type WorkspaceActionsMenuContainerProps,
 } from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
+import { WorkspaceLocationChip } from "@/components/workspace/shell/topbar/WorkspaceLocationChip";
+import type { WorkspaceLocationChipView } from "@/lib/domain/workspaces/move/move-location-chip";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
@@ -39,6 +41,8 @@ interface GlobalHeaderProps {
   runLabel?: string;
   runTitle?: string;
   workspaceActions: WorkspaceActionsMenuContainerProps;
+  locationChip?: WorkspaceLocationChipView | null;
+  onOpenMoveDialog?: () => void;
   onRun: () => void;
   onTogglePanel: () => void;
 }
@@ -52,6 +56,8 @@ export const GlobalHeader = memo(function GlobalHeader({
   runLabel = "Run",
   runTitle = "Run workspace command",
   workspaceActions,
+  locationChip = null,
+  onOpenMoveDialog,
   onRun,
   onTogglePanel,
 }: GlobalHeaderProps) {
@@ -94,6 +100,10 @@ export const GlobalHeader = memo(function GlobalHeader({
         >
           {title}
         </div>
+
+        {locationChip && onOpenMoveDialog && (
+          <WorkspaceLocationChip view={locationChip} onClick={onOpenMoveDialog} />
+        )}
 
         <WorkspaceActionsMenuContainer {...workspaceActions} />
 

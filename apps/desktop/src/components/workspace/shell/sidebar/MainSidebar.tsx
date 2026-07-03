@@ -321,6 +321,7 @@ export const MainSidebar = memo(function MainSidebar() {
               onIndicatorAction={actions.handleSidebarIndicatorAction}
               onOpenPullRequest={actions.handleOpenPullRequest}
               onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+              onMoveWorkspaceToCloud={actions.handleOpenMoveToCloud}
               onWorkspaceHover={handleWorkspaceHover}
               shortcutRevealVisible={shortcutRevealVisible}
               shortcutLabelByWorkspaceId={sidebarShortcutLabelById}

@@ -12,12 +12,14 @@ export function useWorkspaceSidebarNativeContextMenu({
   canArchive,
   canUnarchive,
   canMarkDone,
+  canMoveToCloud,
   onRename,
   onCopyWorkspaceLocation,
   onCopyBranchName,
   onArchive,
   onUnarchive,
   onMarkDone,
+  onMoveToCloud,
 }: {
   canRename: boolean;
   canCopyWorkspaceLocation: boolean;
@@ -27,12 +29,14 @@ export function useWorkspaceSidebarNativeContextMenu({
   canArchive: boolean;
   canUnarchive: boolean;
   canMarkDone: boolean;
+  canMoveToCloud: boolean;
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
   onCopyBranchName: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
   onMarkDone: () => void;
+  onMoveToCloud: () => void;
 }) {
   return useNativeContextMenu(() =>
     buildWorkspaceSidebarNativeContextMenuItems({
@@ -44,12 +48,14 @@ export function useWorkspaceSidebarNativeContextMenu({
       canArchive,
       canUnarchive,
       canMarkDone,
+      canMoveToCloud,
       onRename,
       onCopyWorkspaceLocation,
       onCopyBranchName,
       onArchive,
       onUnarchive,
       onMarkDone,
+      onMoveToCloud,
     })
   );
 }
@@ -63,12 +69,14 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   canArchive,
   canUnarchive,
   canMarkDone,
+  canMoveToCloud,
   onRename,
   onCopyWorkspaceLocation,
   onCopyBranchName,
   onArchive,
   onUnarchive,
   onMarkDone,
+  onMoveToCloud,
 }: {
   canRename: boolean;
   canCopyWorkspaceLocation: boolean;
@@ -78,12 +86,14 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   canArchive: boolean;
   canUnarchive: boolean;
   canMarkDone: boolean;
+  canMoveToCloud: boolean;
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
   onCopyBranchName: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
   onMarkDone: () => void;
+  onMoveToCloud: () => void;
 }): NativeContextMenuItem[] {
   const items: NativeContextMenuItem[] = [];
   if (canRename) {
@@ -109,6 +119,17 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       label: "Copy branch name",
       accelerator: getShortcutNativeAccelerator(SHORTCUTS.copyBranchName) ?? undefined,
       onSelect: onCopyBranchName,
+    });
+  }
+
+  if (canMoveToCloud) {
+    if (items.length > 0) {
+      items.push({ kind: "separator" });
+    }
+    items.push({
+      id: "move-to-cloud",
+      label: "Move to cloud…",
+      onSelect: onMoveToCloud,
     });
   }
 

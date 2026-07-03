@@ -15,6 +15,7 @@ import {
 } from "@/lib/infra/measurement/latency-flow";
 import { useWorkspaceRetireActions } from "@/hooks/workspaces/workflows/use-workspace-retire-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { useWorkspaceMoveStore } from "@/stores/workspaces/workspace-move-store";
 
 export function useWorkspaceSidebarActions() {
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
@@ -33,6 +34,7 @@ export function useWorkspaceSidebarActions() {
     isCreatingCloudWorkspace,
   } = useCreateCloudWorkspace();
   const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
+  const openMoveDialog = useWorkspaceMoveStore((state) => state.openMoveDialog);
   const showToast = useToastStore((state) => state.show);
   const { markDone, retryCleanup } = useWorkspaceRetireActions();
   const { openExternal } = useTauriShellActions();
@@ -40,6 +42,10 @@ export function useWorkspaceSidebarActions() {
   const handleAddRepo = useCallback(() => {
     openAddRepoFlow();
   }, [openAddRepoFlow]);
+
+  const handleOpenMoveToCloud = useCallback((workspaceId: string) => {
+    openMoveDialog(workspaceId);
+  }, [openMoveDialog]);
 
   const handleGoHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
@@ -199,6 +205,7 @@ export function useWorkspaceSidebarActions() {
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,
     handleCreateCloudWorkspace,
+    handleOpenMoveToCloud,
   };
 }
 

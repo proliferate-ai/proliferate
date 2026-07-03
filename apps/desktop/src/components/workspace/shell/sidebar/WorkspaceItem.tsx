@@ -82,6 +82,9 @@ interface WorkspaceItemProps {
   onArchive?: () => void;
   onUnarchive?: () => void;
   onMarkDone?: () => void;
+  /** Opens the move-to-cloud dialog for this workspace. Omit to hide the menu item
+   *  (cloud-backed workspaces, blocked workspaces, or a move already in flight). */
+  onMoveToCloud?: () => void;
   onIndicatorAction?: (action: SidebarIndicatorAction) => void;
   onHover?: () => void;
   /**
@@ -113,6 +116,7 @@ export function WorkspaceItem({
   onArchive,
   onUnarchive,
   onMarkDone,
+  onMoveToCloud,
   onIndicatorAction,
   onHover,
   workspaceLocationCopyLabel,
@@ -137,6 +141,7 @@ export function WorkspaceItem({
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
+  const handleMoveToCloudCommand = () => onMoveToCloud?.();
   const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
     canRename: !!onRename,
     canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
@@ -146,12 +151,14 @@ export function WorkspaceItem({
     canArchive: !!onArchive,
     canUnarchive: !!onUnarchive,
     canMarkDone: !!onMarkDone,
+    canMoveToCloud: !!onMoveToCloud,
     onRename: handleRenameCommand,
     onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
     onCopyBranchName: handleCopyBranchNameCommand,
     onArchive: handleArchiveCommand,
     onUnarchive: handleUnarchiveCommand,
     onMarkDone: handleMarkDoneCommand,
+    onMoveToCloud: handleMoveToCloudCommand,
   });
   const detail = detailIndicators.length > 0 || cloudStatusDefinition ? (
     <>

@@ -12,12 +12,14 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       canArchive: true,
       canUnarchive: false,
       canMarkDone: false,
+      canMoveToCloud: false,
       onRename: () => {},
       onCopyWorkspaceLocation: () => {},
       onCopyBranchName: () => {},
       onArchive: () => {},
       onUnarchive: () => {},
       onMarkDone: () => {},
+      onMoveToCloud: () => {},
     });
 
     expect(items).toMatchObject([
@@ -25,6 +27,33 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       { id: "copy-workspace-location", label: "Copy workspace path", accelerator: "CmdOrCtrl+Shift+C" },
       { id: "copy-branch-name", label: "Copy branch name", accelerator: "CmdOrCtrl+Alt+C" },
       { id: "archive", label: "Archive..." },
+    ]);
+  });
+
+  it("shows move to cloud for an eligible local workspace", () => {
+    const items = buildWorkspaceSidebarNativeContextMenuItems({
+      canRename: true,
+      canCopyWorkspaceLocation: false,
+      copyWorkspaceLocationLabel: "Copy workspace path",
+      canCopyBranchName: false,
+      archived: false,
+      canArchive: false,
+      canUnarchive: false,
+      canMarkDone: false,
+      canMoveToCloud: true,
+      onRename: () => {},
+      onCopyWorkspaceLocation: () => {},
+      onCopyBranchName: () => {},
+      onArchive: () => {},
+      onUnarchive: () => {},
+      onMarkDone: () => {},
+      onMoveToCloud: () => {},
+    });
+
+    expect(items).toMatchObject([
+      { id: "rename", label: "Rename" },
+      { kind: "separator" },
+      { id: "move-to-cloud", label: "Move to cloud…" },
     ]);
   });
 
@@ -38,12 +67,14 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       canArchive: false,
       canUnarchive: true,
       canMarkDone: false,
+      canMoveToCloud: false,
       onRename: () => {},
       onCopyWorkspaceLocation: () => {},
       onCopyBranchName: () => {},
       onArchive: () => {},
       onUnarchive: () => {},
       onMarkDone: () => {},
+      onMoveToCloud: () => {},
     });
 
     expect(items).toMatchObject([{ id: "unarchive", label: "Unarchive" }]);
@@ -59,12 +90,14 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       canArchive: true,
       canUnarchive: false,
       canMarkDone: true,
+      canMoveToCloud: false,
       onRename: () => {},
       onCopyWorkspaceLocation: () => {},
       onCopyBranchName: () => {},
       onArchive: () => {},
       onUnarchive: () => {},
       onMarkDone: () => {},
+      onMoveToCloud: () => {},
     });
 
     expect(items).toMatchObject([

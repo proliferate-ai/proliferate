@@ -5,6 +5,7 @@ import {
   useMemo,
 } from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
+import { MoveWorkspaceDialog } from "@/components/workspace/move/MoveWorkspaceDialog";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
@@ -33,6 +34,9 @@ import { useWorkspaceOpenInWebActions } from "@/hooks/workspaces/workflows/remot
 import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/workflows/remote-access/use-workspace-remote-access-actions";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
+import { useWorkspaceMoveDialog } from "@/hooks/workspaces/facade/use-workspace-move-dialog";
+import { resolveWorkspaceLocationChip } from "@/lib/domain/workspaces/move/move-location-chip";
+import { useWorkspaceMoveStore } from "@/stores/workspaces/workspace-move-store";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
@@ -167,8 +171,18 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     ? null
     : "Repository settings are unavailable.";
   const nativePortalOverlayOpen = useNativeOverlayOpen();
+  const moveDialog = useWorkspaceMoveDialog();
+  const openMoveDialog = useWorkspaceMoveStore((state) => state.openMoveDialog);
+  const workspaceLocationChip = useMemo(
+    () => resolveWorkspaceLocationChip(selectedWorkspaceId, isCloudWorkspaceSelected),
+    [isCloudWorkspaceSelected, selectedWorkspaceId],
+  );
+  const handleOpenMoveDialog = useCallback(() => {
+    if (selectedWorkspaceId) openMoveDialog(selectedWorkspaceId);
+  }, [openMoveDialog, selectedWorkspaceId]);
   const nativeWorkspaceOverlaysHidden = commandPaletteOpen
     || publishDialog.open
+    || moveDialog.open
     || nativePortalOverlayOpen;
   const handleTerminalActivationRequestHandled = useCallback(
     (request: NonNullable<typeof terminalActivationRequest>) => {
@@ -215,6 +229,13 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   return (
     <DebugProfiler id="workspace-shell">
       <WorkspaceShellActionsProvider value={shellActions}>
+        <MoveWorkspaceDialog
+          open={moveDialog.open}
+          workspaceId={moveDialog.workspaceId}
+          workspaceKind={moveDialog.workspaceKind}
+          repoRoot={moveDialog.repoRoot}
+          onClose={moveDialog.onClose}
+        />
         <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}>
           <WorkspaceHeaderTabsViewModelProvider
             enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
@@ -282,6 +303,8 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             runLabel={runCommand.runLabel}
                             runTitle={runCommand.runTitle}
                             workspaceActions={workspaceActionsMenuProps}
+                            locationChip={workspaceLocationChip}
+                            onOpenMoveDialog={handleOpenMoveDialog}
                             onRun={runCommand.onRun}
                             onTogglePanel={actions.toggleRightPanel}
                           />

@@ -40,6 +40,7 @@ interface SidebarWorkspaceContentProps {
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onOpenPullRequest: (url: string) => void;
   onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
+  onMoveWorkspaceToCloud: (workspaceId: string) => void;
   onWorkspaceHover?: () => void;
   shortcutRevealVisible: boolean;
   shortcutLabelByWorkspaceId: ReadonlyMap<string, string>;
@@ -84,6 +85,7 @@ export function SidebarWorkspaceContent({
   onIndicatorAction,
   onOpenPullRequest,
   onMarkWorkspaceDone,
+  onMoveWorkspaceToCloud,
   onWorkspaceHover,
   shortcutRevealVisible,
   shortcutLabelByWorkspaceId,
@@ -234,6 +236,13 @@ export function SidebarWorkspaceContent({
                 onMarkDone={
                   item.variant === "worktree" && !item.archived && item.localWorkspaceId
                     ? () => onMarkWorkspaceDone(item.localWorkspaceId!, item.id)
+                    : undefined
+                }
+                onMoveToCloud={
+                  (item.variant === "local" || item.variant === "worktree")
+                    && !item.archived
+                    && item.localWorkspaceId
+                    ? () => onMoveWorkspaceToCloud(item.localWorkspaceId!)
                     : undefined
                 }
                 onHover={onWorkspaceHover}
