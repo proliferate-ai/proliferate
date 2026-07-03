@@ -167,7 +167,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     );
 
     const result = await runWorkspaceMoveWorkflow(
-      { start: START_REQUEST, sourceWorkspaceKind: "worktree" },
+      { start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "worktree" },
       deps,
     );
 

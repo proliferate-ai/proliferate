@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findLocalMoveDestinationCandidateWorkspace,
   resolveLocalMoveDestinationPlan,
+  resolveLocalMoveDestinationState,
   type LocalWorkspaceForBranchLookup,
 } from "./move-destination";
 
@@ -64,5 +65,70 @@ describe("resolveLocalMoveDestinationPlan", () => {
     expect(
       resolveLocalMoveDestinationPlan({ workspaceId: "ws-1", runtimeStateMode: mode }),
     ).toEqual({ mode: "prepare_fresh" });
+  });
+});
+
+describe("resolveLocalMoveDestinationState", () => {
+  it("is ready with no candidate when the repo is cloned locally -- prepares a fresh worktree", () => {
+    expect(
+      resolveLocalMoveDestinationState({
+        candidate: null,
+        candidatePreflightLoading: false,
+        hasLocalRepoRoot: true,
+      }),
+    ).toEqual({ ready: true, blockerCode: "", blockerMessage: "" });
+  });
+
+  it("is ready to re-adopt a remote_owned candidate -- the round-trip case", () => {
+    expect(
+      resolveLocalMoveDestinationState({
+        candidate: { workspaceId: "ws-1", runtimeStateMode: "remote_owned" },
+        candidatePreflightLoading: false,
+        hasLocalRepoRoot: true,
+      }),
+    ).toEqual({ ready: true, blockerCode: "", blockerMessage: "" });
+  });
+
+  it("blocks (local_branch_already_checked_out) on a live normal-mode collision", () => {
+    const state = resolveLocalMoveDestinationState({
+      candidate: { workspaceId: "ws-1", runtimeStateMode: "normal" },
+      candidatePreflightLoading: false,
+      hasLocalRepoRoot: true,
+    });
+    expect(state.ready).toBe(false);
+    expect(state.blockerCode).toBe("local_branch_already_checked_out");
+  });
+
+  it.each([
+    ["frozen_for_handoff", "mid-handoff for something else"],
+    ["repair_blocked", "needs repair before it can be touched"],
+  ] as const)("blocks (local_branch_already_checked_out) on a %s candidate (%s)", (mode, _description) => {
+    const state = resolveLocalMoveDestinationState({
+      candidate: { workspaceId: "ws-1", runtimeStateMode: mode },
+      candidatePreflightLoading: false,
+      hasLocalRepoRoot: true,
+    });
+    expect(state.ready).toBe(false);
+    expect(state.blockerCode).toBe("local_branch_already_checked_out");
+  });
+
+  it("blocks (status_loading) while the candidate's preflight is still in flight", () => {
+    const state = resolveLocalMoveDestinationState({
+      candidate: { workspaceId: "ws-1", runtimeStateMode: null },
+      candidatePreflightLoading: true,
+      hasLocalRepoRoot: true,
+    });
+    expect(state.ready).toBe(false);
+    expect(state.blockerCode).toBe("status_loading");
+  });
+
+  it("blocks (local_repo_not_found) with no candidate when the repo isn't cloned locally", () => {
+    const state = resolveLocalMoveDestinationState({
+      candidate: null,
+      candidatePreflightLoading: false,
+      hasLocalRepoRoot: false,
+    });
+    expect(state.ready).toBe(false);
+    expect(state.blockerCode).toBe("local_repo_not_found");
   });
 });

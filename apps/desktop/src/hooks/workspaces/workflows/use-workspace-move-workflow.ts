@@ -34,6 +34,8 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cl
 import {
   findLocalMoveDestinationCandidateWorkspace,
   resolveLocalMoveDestinationPlan,
+  resolveLocalMoveDestinationState,
+  type LocalMoveDestinationCandidate,
   type LocalMoveDestinationPlan,
 } from "@/lib/domain/workspaces/move/move-destination";
 import {
@@ -192,40 +194,28 @@ export function useWorkspaceMoveWorkflow({
     { enabled: enabled && direction === "cloud_to_local" && destinationCandidate !== null },
   );
 
+  const destinationCandidateWithMode: LocalMoveDestinationCandidate | null = useMemo(() => {
+    if (!destinationCandidate) return null;
+    return {
+      workspaceId: destinationCandidate.workspaceId,
+      runtimeStateMode: destinationCandidatePreflightQuery.data?.runtimeState.mode ?? null,
+    };
+  }, [destinationCandidate, destinationCandidatePreflightQuery.data]);
+
   const destinationPlan: LocalMoveDestinationPlan | null = useMemo(() => {
     if (direction !== "cloud_to_local") return null;
     if (destinationCandidate && destinationCandidatePreflightQuery.isLoading) return null;
-    return resolveLocalMoveDestinationPlan(
-      destinationCandidate
-        ? {
-          workspaceId: destinationCandidate.workspaceId,
-          runtimeStateMode: destinationCandidatePreflightQuery.data?.runtimeState.mode ?? null,
-        }
-        : null,
-    );
-  }, [direction, destinationCandidate, destinationCandidatePreflightQuery.isLoading, destinationCandidatePreflightQuery.data]);
+    return resolveLocalMoveDestinationPlan(destinationCandidateWithMode);
+  }, [direction, destinationCandidate, destinationCandidatePreflightQuery.isLoading, destinationCandidateWithMode]);
 
   const destinationState: MoveDestinationState | null = useMemo(() => {
     if (direction !== "cloud_to_local") return null;
-    if (destinationCandidate && destinationCandidatePreflightQuery.isLoading) {
-      return {
-        ready: false,
-        blockerCode: "status_loading",
-        blockerMessage: "Checking whether this workspace already exists locally…",
-      };
-    }
-    if (destinationPlan?.mode === "re_adopt") {
-      return { ready: true, blockerCode: "", blockerMessage: "" };
-    }
-    if (!localRepoRoot) {
-      return {
-        ready: false,
-        blockerCode: "local_repo_not_found",
-        blockerMessage: "Clone this repository locally before moving this workspace here.",
-      };
-    }
-    return { ready: true, blockerCode: "", blockerMessage: "" };
-  }, [direction, destinationCandidate, destinationCandidatePreflightQuery.isLoading, destinationPlan, localRepoRoot]);
+    return resolveLocalMoveDestinationState({
+      candidate: destinationCandidateWithMode,
+      candidatePreflightLoading: destinationCandidatePreflightQuery.isLoading,
+      hasLocalRepoRoot: localRepoRoot !== null,
+    });
+  }, [direction, destinationCandidateWithMode, destinationCandidatePreflightQuery.isLoading, localRepoRoot]);
 
   const repoConfigId = useMemo(() => {
     if (direction === "cloud_to_local") {

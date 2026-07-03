@@ -73,6 +73,11 @@ const BLOCKER_COPY: Record<string, MoveReadinessCopy> = {
     body: "Clone this repository locally before moving this workspace here.",
     primaryActionLabel: "Got it",
   },
+  local_branch_already_checked_out: {
+    headline: "This branch is already open locally",
+    body: "This branch is already checked out in another local workspace. Move or retire that workspace first.",
+    primaryActionLabel: "Got it",
+  },
 };
 
 /** Only the safe-state primary action names the destination -- push/prepare's labels
