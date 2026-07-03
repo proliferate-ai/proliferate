@@ -308,6 +308,84 @@ async def test_start_workspace_move_reuses_own_prior_destination(
     assert response.phase == "destination_ready"
 
 
+@pytest.mark.asyncio
+async def test_start_workspace_move_blocks_when_independent_workspace_appears_after_reserve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unrelated active cloud workspace that surfaces in the window between
+    _reserve_new_move and _resolve_destination_cloud_workspace must be rejected
+    with the same collision 409 -- never silently adopted (spec section 2,
+    "Collision"). _reserve_new_move sees no collision, but by the time the saga
+    resolves the destination an independent workspace exists on the branch.
+    """
+    user = b.user()
+    repo_config = b.repo_config(repo_config_id=uuid4(), user_id=user.id)
+    environment = b.repo_environment(repo_config_id=repo_config.id, user_id=user.id)
+    reserved = b.move(user_id=user.id, repo_config_id=repo_config.id, phase="started")
+    # Not this move's own destination (reserved has an empty destination_ref) and
+    # not a prior completed destination (is_own_prior_cloud_destination is False).
+    independent = b.cloud_workspace(
+        owner_user_id=user.id,
+        repo_environment_id=environment.id,
+        anyharness_workspace_id="ah-other",
+    )
+
+    monkeypatch.setattr(
+        service.repositories_store, "get_repo_config_by_id", b.async_return(repo_config)
+    )
+    monkeypatch.setattr(
+        service.workspace_move_store, "get_move_by_idempotency_key", b.async_return(None)
+    )
+    monkeypatch.setattr(
+        service.repositories_store, "get_cloud_repo_environment", b.async_return(environment)
+    )
+
+    # None at reserve time; the independent workspace only materializes by the
+    # time the saga resolves the destination.
+    branch_lookups = 0
+
+    async def _get_active(*_args: object, **_kwargs: object) -> CloudWorkspaceValue | None:
+        nonlocal branch_lookups
+        branch_lookups += 1
+        return None if branch_lookups == 1 else independent
+
+    monkeypatch.setattr(
+        service.cloud_workspace_store, "get_active_cloud_workspace_for_branch", _get_active
+    )
+    monkeypatch.setattr(
+        service.workspace_move_store, "is_own_prior_cloud_destination", b.async_return(False)
+    )
+    monkeypatch.setattr(service.workspace_move_store, "create_move", b.async_return(reserved))
+    b.noop_commit(monkeypatch)
+    monkeypatch.setattr(
+        service.materialization_service, "materialize_repo_environment", b.async_return(None)
+    )
+    monkeypatch.setattr(
+        service.cloud_sandbox_store,
+        "load_personal_cloud_sandbox",
+        b.async_return(SimpleNamespace(id=uuid4())),
+    )
+    monkeypatch.setattr(
+        service.cloud_sandboxes_service,
+        "load_cloud_sandbox_runtime_access",
+        b.async_return(("https://runtime.invalid", "token", "key")),
+    )
+
+    async def _must_not_build(*_args: object, **_kwargs: object) -> ResolvedRemoteWorkspace:
+        raise AssertionError("must not build a worktree against an unrelated workspace")
+
+    monkeypatch.setattr(service, "create_remote_worktree_workspace", _must_not_build)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await service.start_workspace_move(
+            b.db(), user, b.start_body(repo_config_id=repo_config.id)
+        )
+    assert exc_info.value.code == "cloud_workspace_exists"
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.extra_detail == {"cloudWorkspaceId": str(independent.id)}
+    assert branch_lookups == 2
+
+
 # --- destination worktree build retry ----------------------------------------
 
 

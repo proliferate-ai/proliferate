@@ -334,9 +334,11 @@ async def _resolve_destination_cloud_workspace(
     move: WorkspaceMoveValue,
     cloud_repo_environment: RepoEnvironmentValue,
 ) -> CloudWorkspaceValue:
-    # Reuses an active workspace on this branch if one exists -- this is only
-    # reachable when the collision check in _reserve_new_move already confirmed
-    # it is this identity's own prior destination (spec section 2, "Collision").
+    # _reserve_new_move's collision check ran a transaction (and a multi-second
+    # materialize) ago, so an *unrelated* active workspace can surface here on
+    # this branch. Re-confirm adoption is sanctioned before reusing it, else
+    # fail with the same 409 rather than silently hijacking it (spec section 2,
+    # "Collision").
     active = await cloud_workspace_store.get_active_cloud_workspace_for_branch(
         db,
         owner_user_id=user.id,
@@ -344,6 +346,13 @@ async def _resolve_destination_cloud_workspace(
         branch=move.branch,
     )
     if active is not None:
+        if not await _may_adopt_active_destination(db, move=move, active=active):
+            raise CloudApiError(
+                "cloud_workspace_exists",
+                f"A cloud workspace already exists for branch '{move.branch}'.",
+                status_code=409,
+                extra_detail={"cloudWorkspaceId": str(active.id)},
+            )
         return active
 
     workspace = await cloud_workspace_store.create_cloud_workspace(
@@ -361,6 +370,23 @@ async def _resolve_destination_cloud_workspace(
             status_code=409,
         )
     return workspace
+
+
+async def _may_adopt_active_destination(
+    db: AsyncSession, *, move: WorkspaceMoveValue, active: CloudWorkspaceValue
+) -> bool:
+    # (a) a prior attempt of *this same* move already recorded this workspace as
+    # its destination, or (b) it is this identity's own prior completed
+    # destination -- the sanctioned re-adopt case _reserve_new_move green-lit.
+    if _ref_str(move.destination_ref, "cloudWorkspaceId") == str(active.id):
+        return True
+    return await workspace_move_store.is_own_prior_cloud_destination(
+        db,
+        user_id=move.user_id,
+        repo_config_id=move.repo_config_id,
+        branch=move.branch,
+        cloud_workspace_id=active.id,
+    )
 
 
 async def _build_destination_worktree(

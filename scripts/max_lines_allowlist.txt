@@ -32,6 +32,7 @@ apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 631 ex
 apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
+server/proliferate/server/cloud/workspace_moves/service.py 814 workspace_move saga plus destination-ownership guard on cloud-destination reuse
 server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
 server/tests/integration/test_agent_gateway_store.py 673 P1 auth rebuild rewrote store coverage for titled-key + agent_auth_selection model
 server/tests/integration/test_auth_flow.py 2118 existing server oversized integration test plus session-token-revocation coverage
