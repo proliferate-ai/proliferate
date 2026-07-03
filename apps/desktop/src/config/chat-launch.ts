@@ -2,7 +2,6 @@ const CHAT_LAUNCH_PROVIDER_ORDER = [
   "claude",
   "codex",
   "cursor",
-  "gemini",
   "opencode",
 ] as const;
 

@@ -1,7 +1,6 @@
 const PLAN_AGENT_KIND_LABELS: Record<string, string> = {
   claude: "Claude",
   codex: "Codex",
-  gemini: "Gemini",
 };
 
 const PLAN_DECISION_STATE_LABELS: Record<string, string> = {

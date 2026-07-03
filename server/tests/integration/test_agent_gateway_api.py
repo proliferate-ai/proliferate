@@ -1,4 +1,4 @@
-"""Integration tests for the agent gateway auth APIs (key pool, selections)."""
+"""Integration tests for the agent gateway auth APIs (key vault, selections)."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ async def _authed_user(client: AsyncClient) -> tuple[str, dict[str, str]]:
 def _assert_no_secret(response: Response) -> None:
     assert SECRET not in response.text
     for key in _iter_keys(response.json()):
-        for fragment in ("secret", "payload", "ciphertext"):
+        for fragment in ("secret", "value", "ciphertext"):
             assert fragment not in key.lower(), f"response leaks field {key}"
 
 
@@ -87,17 +87,33 @@ async def _create_key(
     client: AsyncClient,
     headers: dict[str, str],
     *,
-    provider: str = "anthropic",
-    secret: str = SECRET,
+    title: str = "Work key",
+    value: str = SECRET,
 ) -> dict[str, object]:
     response = await client.post(
-        "/v1/cloud/agent-gateway/api-keys",
+        "/v1/cloud/agent-gateway/keys",
         headers=headers,
-        json={"provider": provider, "displayName": "Work key", "secret": secret},
+        json={"title": title, "value": value},
     )
     assert response.status_code == 200, response.text
     _assert_no_secret(response)
     return response.json()
+
+
+async def _put_selections(
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    harness: str,
+    surface: str,
+    sources: list[dict[str, object]],
+) -> Response:
+    return await client.put(
+        f"/v1/cloud/agent-gateway/selections/{harness}",
+        headers=headers,
+        params={"surface": surface},
+        json={"sources": sources},
+    )
 
 
 class TestAgentApiKeys:
@@ -107,97 +123,78 @@ class TestAgentApiKeys:
         client: AsyncClient,
         db_session: AsyncSession,
     ) -> None:
-        user_id, headers = await _authed_user(client)
+        _, headers = await _authed_user(client)
 
         created = await _create_key(client, headers)
-        assert created["provider"] == "anthropic"
-        assert created["displayName"] == "Work key"
+        assert created["title"] == "Work key"
         assert created["redactedHint"] == "sk-...abc4"
         assert created["status"] == "active"
 
-        listed = await client.get("/v1/cloud/agent-gateway/api-keys", headers=headers)
+        listed = await client.get("/v1/cloud/agent-gateway/keys", headers=headers)
         assert listed.status_code == 200
         _assert_no_secret(listed)
-        keys = listed.json()["keys"]
+        keys = listed.json()
         assert [key["id"] for key in keys] == [created["id"]]
 
         revoked = await client.delete(
-            f"/v1/cloud/agent-gateway/api-keys/{created['id']}",
+            f"/v1/cloud/agent-gateway/keys/{created['id']}",
             headers=headers,
         )
         assert revoked.status_code == 200
         _assert_no_secret(revoked)
         assert revoked.json()["status"] == "revoked"
 
-        listed_after = await client.get("/v1/cloud/agent-gateway/api-keys", headers=headers)
-        assert listed_after.json()["keys"] == []
+        listed_after = await client.get("/v1/cloud/agent-gateway/keys", headers=headers)
+        assert listed_after.json() == []
 
-        # Ciphertext lives in the DB; the raw secret never does.
+        # Ciphertext lives in the DB; the raw value never does.
         row = (
             await db_session.execute(
                 select(AgentApiKey).where(AgentApiKey.id == uuid.UUID(str(created["id"])))
             )
         ).scalar_one()
-        assert row.payload_ciphertext != SECRET
-        assert SECRET not in row.payload_ciphertext
+        assert row.value_ciphertext != SECRET
+        assert SECRET not in row.value_ciphertext
 
     @pytest.mark.asyncio
-    async def test_create_rejects_unknown_provider_and_empty_secret(
-        self,
-        client: AsyncClient,
-    ) -> None:
+    async def test_create_rejects_empty_title_and_value(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
 
-        bad_provider = await client.post(
-            "/v1/cloud/agent-gateway/api-keys",
+        blank_title = await client.post(
+            "/v1/cloud/agent-gateway/keys",
             headers=headers,
-            json={"provider": "bedrock", "displayName": "Key", "secret": SECRET},
+            json={"title": "   ", "value": SECRET},
         )
-        assert bad_provider.status_code == 400
-        assert bad_provider.json()["detail"]["code"] == "invalid_agent_api_key_provider"
+        assert blank_title.status_code == 400
+        assert blank_title.json()["detail"]["code"] == "invalid_agent_api_key_title"
 
-        empty_secret = await client.post(
-            "/v1/cloud/agent-gateway/api-keys",
+        empty_value = await client.post(
+            "/v1/cloud/agent-gateway/keys",
             headers=headers,
-            json={"provider": "anthropic", "displayName": "Key", "secret": "   "},
+            json={"title": "Key", "value": "   "},
         )
-        assert empty_secret.status_code == 400
-        assert empty_secret.json()["detail"]["code"] == "invalid_agent_api_key_secret"
+        assert empty_value.status_code == 400
+        assert empty_value.json()["detail"]["code"] == "invalid_agent_api_key_value"
 
     @pytest.mark.asyncio
-    async def test_create_validation_error_never_echoes_secret(
-        self,
-        client: AsyncClient,
-    ) -> None:
+    async def test_create_validation_error_never_echoes_value(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
 
-        # A single unrelated invalid field (missing displayName) must not cause
-        # FastAPI's 422 handler to reflect the plaintext secret back to the caller.
         missing_field = await client.post(
-            "/v1/cloud/agent-gateway/api-keys",
+            "/v1/cloud/agent-gateway/keys",
             headers=headers,
-            json={"provider": "anthropic", "secret": SECRET},
+            json={"value": SECRET},
         )
         assert missing_field.status_code == 422, missing_field.text
         assert SECRET not in missing_field.text
 
-        # Same guarantee when the secret field itself is the wrong type.
         wrong_type = await client.post(
-            "/v1/cloud/agent-gateway/api-keys",
+            "/v1/cloud/agent-gateway/keys",
             headers=headers,
-            json={"provider": "anthropic", "displayName": "Key", "secret": [SECRET]},
+            json={"title": "Key", "value": [SECRET]},
         )
         assert wrong_type.status_code == 422, wrong_type.text
         assert SECRET not in wrong_type.text
-
-        # And when the whole body is a malformed shape carrying the secret.
-        malformed_body = await client.post(
-            "/v1/cloud/agent-gateway/api-keys",
-            headers=headers,
-            json=[SECRET],
-        )
-        assert malformed_body.status_code == 422, malformed_body.text
-        assert SECRET not in malformed_body.text
 
     @pytest.mark.asyncio
     async def test_revoke_foreign_key_is_404(self, client: AsyncClient) -> None:
@@ -206,95 +203,212 @@ class TestAgentApiKeys:
         created = await _create_key(client, owner_headers)
 
         response = await client.delete(
-            f"/v1/cloud/agent-gateway/api-keys/{created['id']}",
+            f"/v1/cloud/agent-gateway/keys/{created['id']}",
             headers=other_headers,
         )
         assert response.status_code == 404
         assert response.json()["detail"]["code"] == "agent_api_key_not_found"
 
     @pytest.mark.asyncio
-    async def test_requires_authentication(self, client: AsyncClient) -> None:
-        response = await client.get("/v1/cloud/agent-gateway/api-keys")
-        assert response.status_code == 401
-
-
-class TestAgentRouteSelections:
-    @pytest.mark.asyncio
-    async def test_upsert_list_clear_happy_path(self, client: AsyncClient) -> None:
+    async def test_revoke_referenced_key_is_409_with_harnesses(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
         created = await _create_key(client, headers)
 
-        upserted = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
-            json={"route": "api_key", "apiKeyId": created["id"]},
+        put = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "ANTHROPIC_API_KEY",
+                    "enabled": True,
+                }
+            ],
         )
-        assert upserted.status_code == 200, upserted.text
-        payload = upserted.json()
-        assert payload["harnessKind"] == "claude"
-        assert payload["surface"] == "cloud"
-        assert payload["slot"] == "primary"
-        assert payload["route"] == "api_key"
-        assert payload["apiKeyId"] == created["id"]
-        assert payload["revision"] == 1
+        assert put.status_code == 200, put.text
 
-        changed = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
+        blocked = await client.delete(
+            f"/v1/cloud/agent-gateway/keys/{created['id']}",
             headers=headers,
-            json={"route": "gateway"},
         )
-        assert changed.status_code == 200
-        assert changed.json()["revision"] == 2
+        assert blocked.status_code == 409, blocked.text
+        detail = blocked.json()["detail"]
+        assert detail["code"] == "agent_api_key_referenced"
+        assert detail["harnesses"] == ["claude"]
+
+        # Disabling the referencing row frees the key for revocation.
+        await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "ANTHROPIC_API_KEY",
+                    "enabled": False,
+                }
+            ],
+        )
+        freed = await client.delete(
+            f"/v1/cloud/agent-gateway/keys/{created['id']}",
+            headers=headers,
+        )
+        assert freed.status_code == 200, freed.text
+
+    @pytest.mark.asyncio
+    async def test_requires_authentication(self, client: AsyncClient) -> None:
+        response = await client.get("/v1/cloud/agent-gateway/keys")
+        assert response.status_code == 401
+
+
+class TestAgentAuthSelections:
+    @pytest.mark.asyncio
+    async def test_put_list_and_full_desired_state_replace(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        created = await _create_key(client, headers)
+
+        put = await _put_selections(
+            client,
+            headers,
+            harness="opencode",
+            surface="local",
+            sources=[
+                {"sourceKind": "gateway", "enabled": True},
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "ANTHROPIC_API_KEY",
+                    "providerHint": "anthropic",
+                    "enabled": True,
+                },
+            ],
+        )
+        assert put.status_code == 200, put.text
+        rows = put.json()
+        assert {(r["sourceKind"], r["enabled"]) for r in rows} == {
+            ("gateway", True),
+            ("api_key", True),
+        }
+        api_row = next(r for r in rows if r["sourceKind"] == "api_key")
+        assert api_row["envVarName"] == "ANTHROPIC_API_KEY"
+        assert api_row["providerHint"] == "anthropic"
+        assert api_row["keyTitle"] == "Work key"
 
         listed = await client.get(
-            "/v1/cloud/agent-gateway/route-selections",
+            "/v1/cloud/agent-gateway/selections",
             headers=headers,
+            params={"surface": "local"},
         )
         assert listed.status_code == 200
-        selections = listed.json()["selections"]
-        assert len(selections) == 1
-        assert selections[0]["route"] == "gateway"
+        assert len(listed.json()) == 2
 
-        cleared = await client.delete(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
+        # Full desired state: dropping the api_key source deletes just its row.
+        replaced = await _put_selections(
+            client,
+            headers,
+            harness="opencode",
+            surface="local",
+            sources=[{"sourceKind": "gateway", "enabled": True}],
         )
-        assert cleared.status_code == 204
-
-        empty = await client.get(
-            "/v1/cloud/agent-gateway/route-selections",
-            headers=headers,
-        )
-        assert empty.json()["selections"] == []
-
-        missing = await client.delete(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
-        )
-        assert missing.status_code == 404
-        assert missing.json()["detail"]["code"] == "agent_route_selection_not_found"
+        assert [r["sourceKind"] for r in replaced.json()] == ["gateway"]
 
     @pytest.mark.asyncio
-    async def test_cloud_native_is_400(self, client: AsyncClient) -> None:
+    async def test_single_source_harness_rejects_two_enabled(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
-        response = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
-            json={"route": "native"},
+        created = await _create_key(client, headers)
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {"sourceKind": "gateway", "enabled": True},
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "ANTHROPIC_API_KEY",
+                    "enabled": True,
+                },
+            ],
         )
         assert response.status_code == 400
-        assert response.json()["detail"]["code"] == "invalid_agent_route_selection"
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
 
     @pytest.mark.asyncio
-    async def test_api_key_route_without_key_is_400(self, client: AsyncClient) -> None:
+    async def test_invalid_env_var_name_is_400(self, client: AsyncClient) -> None:
         _, headers = await _authed_user(client)
-        response = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
-            json={"route": "api_key"},
+        created = await _create_key(client, headers)
+
+        response = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "lower_case",
+                    "enabled": True,
+                }
+            ],
         )
         assert response.status_code == 400
-        assert response.json()["detail"]["code"] == "invalid_agent_route_selection"
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
+    async def test_cursor_rejects_sources(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        response = await _put_selections(
+            client,
+            headers,
+            harness="cursor",
+            surface="local",
+            sources=[{"sourceKind": "gateway", "enabled": True}],
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
+    async def test_unknown_harness_is_400(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        # A gateway source for a non-gateway-capable harness is rejected by the
+        # validator up front (400, not a 500 on the String(64) column).
+        response = await _put_selections(
+            client,
+            headers,
+            harness="x" * 200,
+            surface="local",
+            sources=[{"sourceKind": "gateway", "enabled": True}],
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
+
+    @pytest.mark.asyncio
+    async def test_malformed_api_key_id_is_400(self, client: AsyncClient) -> None:
+        _, headers = await _authed_user(client)
+        response = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": "not-a-uuid",
+                    "envVarName": "ANTHROPIC_API_KEY",
+                    "enabled": True,
+                }
+            ],
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_agent_auth_selection"
 
     @pytest.mark.asyncio
     async def test_foreign_api_key_is_404(self, client: AsyncClient) -> None:
@@ -302,122 +416,22 @@ class TestAgentRouteSelections:
         _, other_headers = await _authed_user(client)
         created = await _create_key(client, owner_headers)
 
-        response = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=other_headers,
-            json={"route": "api_key", "apiKeyId": created["id"]},
+        response = await _put_selections(
+            client,
+            other_headers,
+            harness="claude",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "ANTHROPIC_API_KEY",
+                    "enabled": True,
+                }
+            ],
         )
         assert response.status_code == 404
         assert response.json()["detail"]["code"] == "agent_api_key_not_found"
-
-    @pytest.mark.asyncio
-    async def test_unknown_harness_kind_is_400(self, client: AsyncClient) -> None:
-        _, headers = await _authed_user(client)
-
-        unknown = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/bogus/cloud",
-            headers=headers,
-            json={"route": "gateway"},
-        )
-        assert unknown.status_code == 400
-        assert unknown.json()["detail"]["code"] == "invalid_agent_route_selection"
-
-        # An over-length harness must be rejected up front rather than tripping a
-        # String(64) truncation error (500) and persisting junk.
-        overlong = await client.put(
-            f"/v1/cloud/agent-gateway/route-selections/{'x' * 200}/cloud",
-            headers=headers,
-            json={"route": "gateway"},
-        )
-        assert overlong.status_code == 400
-        assert overlong.json()["detail"]["code"] == "invalid_agent_route_selection"
-
-    @pytest.mark.asyncio
-    async def test_opencode_slots_compose_and_clear_independently(
-        self,
-        client: AsyncClient,
-    ) -> None:
-        _, headers = await _authed_user(client)
-        created = await _create_key(client, headers)
-
-        gateway = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
-            headers=headers,
-            json={"route": "gateway", "slot": "gateway"},
-        )
-        assert gateway.status_code == 200, gateway.text
-        assert gateway.json()["slot"] == "gateway"
-
-        direct = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
-            headers=headers,
-            json={"route": "api_key", "apiKeyId": created["id"], "slot": "anthropic"},
-        )
-        assert direct.status_code == 200, direct.text
-        assert direct.json()["slot"] == "anthropic"
-
-        listed = await client.get(
-            "/v1/cloud/agent-gateway/route-selections",
-            headers=headers,
-        )
-        assert [entry["slot"] for entry in listed.json()["selections"]] == [
-            "anthropic",
-            "gateway",
-        ]
-
-        cleared = await client.delete(
-            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
-            headers=headers,
-            params={"slot": "anthropic"},
-        )
-        assert cleared.status_code == 204
-        remaining = await client.get(
-            "/v1/cloud/agent-gateway/route-selections",
-            headers=headers,
-        )
-        assert [entry["slot"] for entry in remaining.json()["selections"]] == ["gateway"]
-
-    @pytest.mark.asyncio
-    async def test_slot_validation_errors_are_typed(self, client: AsyncClient) -> None:
-        _, headers = await _authed_user(client)
-        created = await _create_key(client, headers)  # anthropic key
-
-        single_source = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-            headers=headers,
-            json={"route": "gateway", "slot": "gateway"},
-        )
-        assert single_source.status_code == 400
-        assert single_source.json()["detail"]["code"] == "invalid_agent_route_selection"
-
-        default_slot_for_opencode = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
-            headers=headers,
-            json={"route": "gateway"},
-        )
-        assert default_slot_for_opencode.status_code == 400
-        assert (
-            default_slot_for_opencode.json()["detail"]["code"] == "invalid_agent_route_selection"
-        )
-
-        provider_mismatch = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/opencode/cloud",
-            headers=headers,
-            json={"route": "api_key", "apiKeyId": created["id"], "slot": "openai"},
-        )
-        assert provider_mismatch.status_code == 400
-        assert provider_mismatch.json()["detail"]["code"] == "invalid_agent_route_selection"
-
-    @pytest.mark.asyncio
-    async def test_unknown_surface_is_400(self, client: AsyncClient) -> None:
-        _, headers = await _authed_user(client)
-        response = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/orbital",
-            headers=headers,
-            json={"route": "gateway"},
-        )
-        assert response.status_code == 400
-        assert response.json()["detail"]["code"] == "invalid_agent_route_selection"
 
 
 class TestAgentGatewayCapabilities:
@@ -431,24 +445,14 @@ class TestAgentGatewayCapabilities:
         monkeypatch.setattr(settings, "agent_gateway_litellm_public_base_url", "")
         _, headers = await _authed_user(client)
 
-        response = await client.get(
-            "/v1/cloud/agent-gateway/capabilities",
-            headers=headers,
-        )
+        response = await client.get("/v1/cloud/agent-gateway/capabilities", headers=headers)
         assert response.status_code == 200
         payload = response.json()
         assert payload["gatewayEnabled"] is False
         assert payload["publicBaseUrl"] is None
         assert payload["enrollmentStatus"] == "none"
-        # The provider registry rides along so UIs never hardcode metadata.
-        providers = {entry["id"]: entry for entry in payload["providers"]}
-        assert set(providers) == {"anthropic", "openai", "xai", "google"}
-        anthropic = providers["anthropic"]
-        assert anthropic["label"] == "Anthropic"
-        assert anthropic["envKey"] == "ANTHROPIC_API_KEY"
-        assert anthropic["keyUrl"].startswith("https://")
-        assert "opencode" in anthropic["harnesses"]
-        assert "opencode" in anthropic["recommendedFor"]
+        # The provider registry is UI-only now (contract §6): never on the wire.
+        assert "providers" not in payload
 
     @pytest.mark.asyncio
     async def test_capabilities_gateway_on_with_enrollment(
@@ -474,16 +478,12 @@ class TestAgentGatewayCapabilities:
         )
         await db_session.commit()
 
-        response = await client.get(
-            "/v1/cloud/agent-gateway/capabilities",
-            headers=headers,
-        )
+        response = await client.get("/v1/cloud/agent-gateway/capabilities", headers=headers)
         assert response.status_code == 200
         payload = response.json()
         assert payload["gatewayEnabled"] is True
         assert payload["publicBaseUrl"] == "https://llm.proliferate.ai"
         assert payload["enrollmentStatus"] == "pending"
-        assert len(payload["providers"]) == 4
 
 
 class TestAgentGatewayEnrollment:
@@ -540,50 +540,110 @@ async def _get_state(client: AsyncClient, headers: dict[str, str], surface: str)
 
 class TestAgentAuthState:
     @pytest.mark.asyncio
-    async def test_local_state_matches_contract_shape(self, client: AsyncClient) -> None:
+    async def test_empty_state_is_v2_no_harnesses(self, client: AsyncClient) -> None:
         user_id, headers = await _authed_user(client)
-
-        # No selections yet: the revision-0 legacy marker.
         empty = await _get_state(client, headers, "local")
         assert empty.status_code == 200, empty.text
-        assert empty.json() == {"revision": 0, "user_id": user_id, "selections": []}
+        assert empty.json() == {
+            "version": 2,
+            "revision": 0,
+            "user_id": user_id,
+            "harnesses": [],
+        }
+
+    @pytest.mark.asyncio
+    async def test_seeded_gateway_and_api_key_render_valid_v2(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Contract §8 e2e: a user with one gateway selection + one api_key
+        # selection yields a valid v2 document carrying the caller's own keys.
+        monkeypatch.setattr(
+            settings,
+            "agent_gateway_litellm_public_base_url",
+            "https://llm.proliferate.ai",
+        )
+        user_id, headers = await _authed_user(client)
+
+        subject = await ensure_personal_billing_subject(db_session, uuid.UUID(user_id))
+        enrollment = await store.ensure_enrollment_row(
+            db_session,
+            subject_kind="user",
+            billing_subject_id=subject.id,
+            user_id=uuid.UUID(user_id),
+        )
+        await store.mark_enrollment_synced(
+            db_session,
+            enrollment_id=enrollment.id,
+            litellm_team_id="team-1",
+            litellm_user_id=f"user-{user_id}",
+            virtual_key_id="token-1",
+            virtual_key="sk-litellm-vk",
+            sync_fingerprint="fp",
+        )
+        await db_session.commit()
 
         created = await _create_key(client, headers)
-        native = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/claude/local",
-            headers=headers,
-            json={"route": "native"},
+
+        gateway = await _put_selections(
+            client,
+            headers,
+            harness="claude",
+            surface="local",
+            sources=[{"sourceKind": "gateway", "enabled": True}],
         )
-        assert native.status_code == 200, native.text
-        keyed = await client.put(
-            "/v1/cloud/agent-gateway/route-selections/opencode/local",
-            headers=headers,
-            json={"route": "api_key", "apiKeyId": created["id"], "slot": "anthropic"},
+        assert gateway.status_code == 200, gateway.text
+        keyed = await _put_selections(
+            client,
+            headers,
+            harness="codex",
+            surface="local",
+            sources=[
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": created["id"],
+                    "envVarName": "OPENAI_API_KEY",
+                    "enabled": True,
+                }
+            ],
         )
         assert keyed.status_code == 200, keyed.text
 
         response = await _get_state(client, headers, "local")
         assert response.status_code == 200, response.text
-        # The state document is the AnyHarness contract: snake_case fields,
-        # absent (not null) optionals, and the caller's OWN decrypted key.
-        assert response.json() == {
-            "revision": 1,
-            "user_id": user_id,
-            "selections": [
-                {"harness": "claude", "route": "native", "slot": "primary"},
-                {
-                    "harness": "opencode",
-                    "route": "api_key",
-                    "slot": "anthropic",
-                    "provider": "anthropic",
-                    "key": SECRET,
-                },
-            ],
-        }
+        doc = response.json()
+        assert doc["version"] == 2
+        assert doc["user_id"] == user_id
+        assert isinstance(doc["revision"], int) and doc["revision"] > 0
+        assert doc["harnesses"] == [
+            {
+                "harness_kind": "claude",
+                "sources": [
+                    {
+                        "kind": "gateway",
+                        "base_url": "https://llm.proliferate.ai",
+                        "key": "sk-litellm-vk",
+                    }
+                ],
+            },
+            {
+                "harness_kind": "codex",
+                "sources": [
+                    {
+                        "kind": "api_key",
+                        "env_var_name": "OPENAI_API_KEY",
+                        "value": SECRET,
+                    }
+                ],
+            },
+        ]
 
+        # A different surface with no selections is still a valid empty v2 doc.
         cloud = await _get_state(client, headers, "cloud")
         assert cloud.status_code == 200
-        assert cloud.json() == {"revision": 0, "user_id": user_id, "selections": []}
+        assert cloud.json()["harnesses"] == []
 
     @pytest.mark.asyncio
     async def test_requires_authentication(self, client: AsyncClient) -> None:

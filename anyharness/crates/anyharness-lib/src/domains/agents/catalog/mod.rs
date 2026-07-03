@@ -1,4 +1,6 @@
 pub mod bundled;
+pub mod gateway_probe;
+pub mod gateway_resolver;
 pub mod loader;
 pub mod schema;
 pub mod service;

@@ -2,7 +2,7 @@ import type { GitBranchRef } from "@anyharness/sdk";
 import { GitReviewOptionsMenu } from "./GitReviewOptionsMenu";
 import { GitReviewBaseSelector } from "./GitReviewBaseSelector";
 import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
-import { FileCode, SplitPanel } from "@proliferate/ui/icons";
+import { Columns2, FolderTree } from "@proliferate/ui/icons";
 import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
@@ -85,7 +85,7 @@ export function GitPanelHeader({
           label={layout === "split" ? "Use unified diff" : "Use split diff"}
           onClick={onToggleLayout}
         >
-          <SplitPanel className="size-3.5" />
+          <Columns2 className="size-3.5" />
         </PaneIconButton>
         <PaneIconButton
           label={fileTreeOpen ? "Hide files" : "Show files"}
@@ -93,7 +93,7 @@ export function GitPanelHeader({
           active={fileTreeOpen}
           onClick={onToggleFileTree}
         >
-          <FileCode className="size-3.5" />
+          <FolderTree className="size-3.5" />
         </PaneIconButton>
       </div>
     </div>

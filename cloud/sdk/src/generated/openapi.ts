@@ -21,6 +21,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/desktop/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Desktop Auth Methods
+         * @description Advertise available desktop sign-in methods (unauthenticated).
+         *
+         *     The desktop login screen reads this to decide which sign-in surface to
+         *     show: the email/password form becomes the default when GitHub OAuth is not
+         *     configured (the standard self-hosted posture).
+         */
+        get: operations["desktop_auth_methods_auth_desktop_methods_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/desktop/password/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desktop Password Login
+         * @description Authenticate email+password and issue desktop session tokens.
+         *
+         *     Same policy as the web/mobile password routes (kill switch, rate limits,
+         *     generic failure copy, ADMIN_EMAILS floor), but the response carries the
+         *     desktop token pair the GitHub callback flow issues.
+         */
+        post: operations["desktop_password_login_auth_desktop_password_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/desktop/authorize": {
         parameters: {
             query?: never;
@@ -543,6 +591,60 @@ export interface paths {
         get: operations["health_health_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Meta */
+        get: operations["meta_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/desktop/updater/latest.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Desktop Updater Latest */
+        get: operations["desktop_updater_latest_desktop_updater_latest_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register With Password
+         * @description Create an account for an invited email, joining the instance organization.
+         */
+        post: operations["register_with_password_auth_password_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1171,7 +1273,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/api-keys": {
+    "/v1/cloud/agent-gateway/keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -1179,17 +1281,17 @@ export interface paths {
             cookie?: never;
         };
         /** List Agent Api Keys Endpoint */
-        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get"];
+        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get"];
         put?: never;
         /** Create Agent Api Key Endpoint */
-        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post"];
+        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/api-keys/{key_id}": {
+    "/v1/cloud/agent-gateway/keys/{key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1200,21 +1302,21 @@ export interface paths {
         put?: never;
         post?: never;
         /** Revoke Agent Api Key Endpoint */
-        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete"];
+        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/route-selections": {
+    "/v1/cloud/agent-gateway/selections": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Agent Route Selections Endpoint */
-        get: operations["list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get"];
+        /** List Agent Auth Selections Endpoint */
+        get: operations["list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1223,7 +1325,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/route-selections/{harness_kind}/{surface}": {
+    "/v1/cloud/agent-gateway/selections/{harness_kind}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1231,11 +1333,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Upsert Agent Route Selection Endpoint */
-        put: operations["upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put"];
+        /** Put Agent Auth Selections Endpoint */
+        put: operations["put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put"];
         post?: never;
-        /** Clear Agent Route Selection Endpoint */
-        delete: operations["clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1250,17 +1351,16 @@ export interface paths {
         };
         /**
          * Get Agent Auth State Endpoint
-         * @description Serve the caller's rendered state.json document for one surface.
+         * @description Serve the caller's rendered ``state.json`` v2 document for one surface.
          *
          *     This is the local-surface twin of the cloud materializer: the desktop
-         *     fetches ``surface=local`` and pushes the payload verbatim to its local
-         *     AnyHarness runtime (``PUT /v1/agent-auth/state``), which persists it at
-         *     ``<runtime_home>/agent-auth/state.json``.
+         *     fetches ``surface=local`` and pushes the payload to its local AnyHarness
+         *     runtime, which persists it at ``<runtime_home>/agent-auth/state.json``.
          *
          *     Trust model: the response carries the current user's OWN decrypted key
-         *     material (pool keys, gateway virtual key) — the same secrets the cloud
-         *     materializer writes into the user's own sandbox. Auth is the current
-         *     product user; nothing here crosses a user boundary.
+         *     material (vault keys, gateway virtual key) — the same secrets the cloud
+         *     materializer writes into the user's own sandbox. Nothing crosses a user
+         *     boundary.
          */
         get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get"];
         put?: never;
@@ -1299,6 +1399,31 @@ export interface paths {
         put?: never;
         /** Refresh Agent Catalog Endpoint */
         post: operations["refresh_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}/mirror": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mirror Agent Catalog Endpoint
+         * @description Store the caller's own runtime-probed catalog as a read-model snapshot.
+         *
+         *     Distinct from ``.../refresh``: the runtime already did the probing (a
+         *     harness/gateway reachability check, possibly server-side via LiteLLM) and
+         *     is pushing the result here fire-and-forget, so this endpoint never talks
+         *     to an upstream itself.
+         */
+        post: operations["mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1526,6 +1651,23 @@ export interface paths {
         put?: never;
         /** Integration Gateway Mcp Post */
         post: operations["integration_gateway_mcp_post_v1_cloud_integration_gateway_mcp_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Integration Catalog Endpoint */
+        get: operations["list_integration_catalog_endpoint_v1_cloud_integrations_catalog_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2311,42 +2453,26 @@ export interface components {
         };
         /** AgentApiKeyCreateRequest */
         AgentApiKeyCreateRequest: {
-            /** Provider */
-            provider: string;
-            /** Displayname */
-            displayName: string;
-            /** Secret */
-            secret: string;
-        };
-        /** AgentApiKeyListResponse */
-        AgentApiKeyListResponse: {
-            /** Keys */
-            keys: components["schemas"]["AgentApiKeyResponse"][];
+            /** Title */
+            title: string;
+            /** Value */
+            value: string;
         };
         /** AgentApiKeyResponse */
         AgentApiKeyResponse: {
             /** Id */
             id: string;
-            /** Provider */
-            provider: string;
-            /** Displayname */
-            displayName: string;
+            /** Title */
+            title: string;
             /** Redactedhint */
             redactedHint: string;
             /** Status */
             status: string;
-            /** Lastvalidatedat */
-            lastValidatedAt: string | null;
             /** Createdat */
             createdAt: string;
         };
-        /** AgentAuthRouteSelectionListResponse */
-        AgentAuthRouteSelectionListResponse: {
-            /** Selections */
-            selections: components["schemas"]["AgentAuthRouteSelectionResponse"][];
-        };
-        /** AgentAuthRouteSelectionResponse */
-        AgentAuthRouteSelectionResponse: {
+        /** AgentAuthSelectionResponse */
+        AgentAuthSelectionResponse: {
             /** Id */
             id: string;
             /** Harnesskind */
@@ -2356,78 +2482,92 @@ export interface components {
              * @enum {string}
              */
             surface: "local" | "cloud";
-            /** Slot */
-            slot: string;
             /**
-             * Route
+             * Sourcekind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
+            sourceKind: "gateway" | "api_key";
             /** Apikeyid */
             apiKeyId: string | null;
-            /** Revision */
-            revision: number;
+            /** Keytitle */
+            keyTitle: string | null;
+            /** Envvarname */
+            envVarName: string | null;
+            /** Providerhint */
+            providerHint: string | null;
+            /** Enabled */
+            enabled: boolean;
             /** Createdat */
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
         };
-        /** AgentAuthRouteSelectionUpsertRequest */
-        AgentAuthRouteSelectionUpsertRequest: {
+        /** AgentAuthSelectionsPutRequest */
+        AgentAuthSelectionsPutRequest: {
+            /** Sources */
+            sources: components["schemas"]["AgentAuthSourceInput"][];
+        };
+        /**
+         * AgentAuthSourceInput
+         * @description One entry of a full-desired-state PUT of a scope's selection sources.
+         */
+        AgentAuthSourceInput: {
             /**
-             * Route
+             * Sourcekind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
+            sourceKind: "gateway" | "api_key";
             /** Apikeyid */
             apiKeyId?: string | null;
+            /** Envvarname */
+            envVarName?: string | null;
+            /** Providerhint */
+            providerHint?: string | null;
             /**
-             * Slot
-             * @default primary
+             * Enabled
+             * @default true
              */
-            slot: string;
+            enabled: boolean;
+        };
+        /** AgentAuthStateHarness */
+        AgentAuthStateHarness: {
+            /** Harness Kind */
+            harness_kind: string;
+            /** Sources */
+            sources: components["schemas"]["AgentAuthStateSource"][];
         };
         /**
          * AgentAuthStateResponse
-         * @description The whole state.json document (``route_auth/state.rs::AgentAuthState``).
-         *
-         *     ``revision`` 0 with empty ``selections`` is the legacy/native marker: the
-         *     user has no selections for the surface and the runtime may fall through.
+         * @description The whole ``state.json`` v2 document (``route_auth/state.rs``).
          */
         AgentAuthStateResponse: {
+            /** Version */
+            version: number;
             /** Revision */
             revision: number;
             /** User Id */
-            user_id: string;
-            /** Selections */
-            selections: components["schemas"]["AgentAuthStateSelection"][];
+            user_id?: string | null;
+            /** Harnesses */
+            harnesses: components["schemas"]["AgentAuthStateHarness"][];
         };
         /**
-         * AgentAuthStateSelection
-         * @description One rendered selection in the AnyHarness state.json contract shape.
-         *
-         *     Field names are the on-disk contract (snake_case, matching the serde
-         *     structs in ``route_auth/state.rs``) — deliberately NOT camelCased like the
-         *     rest of this module. ``key`` is decrypted material (see module docstring).
+         * AgentAuthStateSource
+         * @description A single credential source (contract §3). Key material for the caller.
          */
-        AgentAuthStateSelection: {
-            /** Harness */
-            harness: string;
+        AgentAuthStateSource: {
             /**
-             * Route
+             * Kind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
-            /** Slot */
-            slot: string;
-            /** Provider */
-            provider?: string | null;
+            kind: "gateway" | "api_key";
             /** Base Url */
             base_url?: string | null;
             /** Key */
             key?: string | null;
-            /** Model Catalog */
-            model_catalog?: string[] | null;
+            /** Env Var Name */
+            env_var_name?: string | null;
+            /** Value */
+            value?: string | null;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
@@ -2435,7 +2575,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "claude" | "codex" | "gemini" | "cursor" | "opencode" | "grok";
+            kind: "claude" | "codex" | "cursor" | "opencode" | "grok";
             /** Displayname */
             displayName: string;
             harness: components["schemas"]["AgentCatalogHarnessPins"];
@@ -2706,8 +2846,30 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
-            /** Providers */
-            providers?: components["schemas"]["AgentGatewayProviderInfo"][];
+        };
+        /**
+         * AgentGatewayCatalogMirrorRequest
+         * @description A runtime's push of its own resolved probe result (contract §4).
+         *
+         *     Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
+         *     AnyHarness today), not the product UI, and ``probed_at`` reflects when the
+         *     runtime actually probed rather than when this request landed.
+         */
+        AgentGatewayCatalogMirrorRequest: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Modelsjson */
+            modelsJson: string;
+            /** Probedat */
+            probedAt: string;
         };
         /** AgentGatewayCatalogOverrideResponse */
         AgentGatewayCatalogOverrideResponse: {
@@ -2788,24 +2950,6 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
-        };
-        /**
-         * AgentGatewayProviderInfo
-         * @description One PROVIDER_REGISTRY entry; the UI never hardcodes provider metadata.
-         */
-        AgentGatewayProviderInfo: {
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
-            /** Envkey */
-            envKey: string;
-            /** Keyurl */
-            keyUrl: string;
-            /** Harnesses */
-            harnesses: string[];
-            /** Recommendedfor */
-            recommendedFor: string[];
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -3042,6 +3186,16 @@ export interface components {
             displayName?: string | null;
             /** Brandlabel */
             brandLabel?: string | null;
+        };
+        /**
+         * AuthMethodsResponse
+         * @description Sign-in methods this server offers the desktop app (public probe).
+         */
+        AuthMethodsResponse: {
+            /** Password Login */
+            password_login: boolean;
+            /** Github */
+            github: boolean;
         };
         /** AuthPasswordCredential */
         AuthPasswordCredential: {
@@ -3747,10 +3901,7 @@ export interface components {
              * @default ok
              */
             status: string;
-            /**
-             * Version
-             * @default 0.1.0
-             */
+            /** Version */
             version: string;
         };
         /** IntegrationAccountResponse */
@@ -3775,6 +3926,82 @@ export interface components {
             status: string;
             /** Enabled */
             enabled: boolean;
+        };
+        /** IntegrationCatalogItem */
+        IntegrationCatalogItem: {
+            /**
+             * Definitionid
+             * Format: uuid
+             */
+            definitionId: string;
+            /** Namespace */
+            namespace: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description?: string | null;
+            /** Authkind */
+            authKind: string;
+            connectSchema: components["schemas"]["IntegrationConnectSchema"];
+        };
+        /** IntegrationCatalogResponse */
+        IntegrationCatalogResponse: {
+            /** Items */
+            items: components["schemas"]["IntegrationCatalogItem"][];
+        };
+        /** IntegrationCatalogSecretField */
+        IntegrationCatalogSecretField: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Placeholder */
+            placeholder?: string | null;
+            /** Helpertext */
+            helperText?: string | null;
+            /** Prefixhint */
+            prefixHint?: string | null;
+        };
+        /** IntegrationCatalogSettingField */
+        IntegrationCatalogSettingField: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["IntegrationCatalogSettingOption"][];
+            /** Default */
+            default?: string | boolean | null;
+        };
+        /** IntegrationCatalogSettingOption */
+        IntegrationCatalogSettingOption: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /** IntegrationConnectSchema */
+        IntegrationConnectSchema: {
+            /**
+             * Secretfields
+             * @default []
+             */
+            secretFields: components["schemas"]["IntegrationCatalogSecretField"][];
+            /**
+             * Settingsfields
+             * @default []
+             */
+            settingsFields: components["schemas"]["IntegrationCatalogSettingField"][];
         };
         /**
          * IntegrationGatewayConfig
@@ -3844,6 +4071,17 @@ export interface components {
             /** Finalsurface */
             finalSurface: string;
         };
+        /** MetaResponse */
+        MetaResponse: {
+            /** Serverversion */
+            serverVersion: string;
+            /** Desktopversion */
+            desktopVersion: string;
+            /** Runtimeversion */
+            runtimeVersion: string;
+            /** Mindesktopversion */
+            minDesktopVersion: string;
+        };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
             /** Enabled */
@@ -3892,10 +4130,10 @@ export interface components {
              */
             surface: "local" | "cloud";
             /**
-             * Route
+             * Sourcekind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
+            sourceKind: "gateway" | "api_key";
         };
         /** OrgAgentPolicyViolationListResponse */
         OrgAgentPolicyViolationListResponse: {
@@ -4329,6 +4567,14 @@ export interface components {
             enabled: boolean;
             /** Setat */
             setAt?: string | null;
+            /** Accesstoken */
+            accessToken?: string | null;
+            /** Refreshtoken */
+            refreshToken?: string | null;
+            /** Expiresin */
+            expiresIn?: number | null;
+            /** Tokentype */
+            tokenType?: "bearer" | null;
         };
         /** PasswordLoginRequest */
         PasswordLoginRequest: {
@@ -4336,6 +4582,22 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** PasswordRegisterRequest */
+        PasswordRegisterRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Invitationtoken */
+            invitationToken: string;
+        };
+        /** PasswordRegisterResponse */
+        PasswordRegisterResponse: {
+            /** Email */
+            email: string;
+            /** Organizationname */
+            organizationName: string;
         };
         /** PasswordSetRequest */
         PasswordSetRequest: {
@@ -5131,6 +5393,59 @@ export interface operations {
             };
         };
     };
+    desktop_auth_methods_auth_desktop_methods_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMethodsResponse"];
+                };
+            };
+        };
+    };
+    desktop_password_login_auth_desktop_password_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_desktop_auth_code_auth_desktop_authorize_post: {
         parameters: {
             query: {
@@ -5841,7 +6156,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                proliferate_web_refresh?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -6008,6 +6325,7 @@ export interface operations {
             };
             path?: never;
             cookie?: {
+                proliferate_web_refresh?: string | null;
                 proliferate_web_csrf?: string | null;
             };
         };
@@ -6104,6 +6422,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    meta_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetaResponse"];
+                };
+            };
+        };
+    };
+    desktop_updater_latest_desktop_updater_latest_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    register_with_password_auth_password_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordRegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7530,7 +7921,7 @@ export interface operations {
             };
         };
     };
-    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get: {
+    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -7545,12 +7936,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentApiKeyListResponse"];
+                    "application/json": components["schemas"]["AgentApiKeyResponse"][];
                 };
             };
         };
     };
-    create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post: {
+    create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7583,7 +7974,7 @@ export interface operations {
             };
         };
     };
-    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete: {
+    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -7614,9 +8005,11 @@ export interface operations {
             };
         };
     };
-    list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get: {
+    list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get: {
         parameters: {
-            query?: never;
+            query?: {
+                surface?: ("local" | "cloud") | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7629,34 +8022,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentAuthRouteSelectionListResponse"];
-                };
-            };
-        };
-    };
-    upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-                surface: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentAuthRouteSelectionUpsertRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentAuthRouteSelectionResponse"];
+                    "application/json": components["schemas"]["AgentAuthSelectionResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -7670,26 +8036,31 @@ export interface operations {
             };
         };
     };
-    clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete: {
+    put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put: {
         parameters: {
-            query?: {
-                slot?: string;
+            query: {
+                surface: "local" | "cloud";
             };
             header?: never;
             path: {
                 harness_kind: string;
-                surface: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAuthSelectionsPutRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentAuthSelectionResponse"][];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -7779,6 +8150,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgentGatewayCatalogRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentGatewayCatalogMirrorRequest"];
             };
         };
         responses: {
@@ -8373,6 +8779,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_integration_catalog_endpoint_v1_cloud_integrations_catalog_get: {
+        parameters: {
+            query?: {
+                organizationId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

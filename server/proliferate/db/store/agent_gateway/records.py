@@ -12,28 +12,42 @@ from uuid import UUID
 class AgentApiKeyRecord:
     id: UUID
     user_id: UUID
-    provider: str
-    display_name: str
+    title: str
     redacted_hint: str
     status: str
-    last_validated_at: datetime | None
     created_at: datetime
     updated_at: datetime
-    revoked_at: datetime | None
 
 
 @dataclass(frozen=True)
-class AgentAuthRouteSelectionRecord:
+class AgentAuthSelectionRecord:
     id: UUID
     user_id: UUID
     harness_kind: str
     surface: str
-    route: str
+    source_kind: str
     api_key_id: UUID | None
-    revision: int
+    env_var_name: str | None
+    provider_hint: str | None
+    enabled: bool
     created_at: datetime
     updated_at: datetime
-    slot: str = "primary"
+
+
+@dataclass(frozen=True)
+class DesiredAuthSource:
+    """One entry of a full-desired-state PUT of a scope's selection sources.
+
+    ``source_kind='gateway'`` carries no key/env; ``source_kind='api_key'``
+    carries an ``api_key_id`` + ``env_var_name``. ``provider_hint`` is
+    display-only. The store diffs a list of these against the stored rows.
+    """
+
+    source_kind: str
+    api_key_id: UUID | None = None
+    env_var_name: str | None = None
+    provider_hint: str | None = None
+    enabled: bool = True
 
 
 @dataclass(frozen=True)

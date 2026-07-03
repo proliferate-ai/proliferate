@@ -1,4 +1,5 @@
 import type { AnyHarnessQueryTimingOptions } from "@anyharness/sdk-react";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import {
   GitLastTurnUndoAction,
   GitReviewDiffPolicyNotice,
@@ -90,10 +91,10 @@ export function GitPanelReviewBody({
           className="pointer-events-none absolute left-0 top-0 size-px opacity-0"
         />
         {isLoading && (
-          <div className="space-y-2 px-2 py-4">
-            <div className="h-3 w-32 animate-pulse rounded bg-sidebar-accent" />
-            <div className="h-3 w-48 animate-pulse rounded bg-sidebar-accent" />
-            <div className="h-3 w-40 animate-pulse rounded bg-sidebar-accent" />
+          <div className="space-y-2 px-2 py-4" role="status" aria-label="Loading changes">
+            <SkeletonBlock className="h-3 w-32 bg-sidebar-accent" style={shimmerDelay(0)} />
+            <SkeletonBlock className="h-3 w-48 bg-sidebar-accent" style={shimmerDelay(1)} />
+            <SkeletonBlock className="h-3 w-40 bg-sidebar-accent" style={shimmerDelay(2)} />
           </div>
         )}
         {errorMessage && (

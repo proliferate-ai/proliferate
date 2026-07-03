@@ -14,7 +14,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
-use crate::domains::agents::route_auth::RouteAuthError;
+use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -47,6 +47,9 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+    /// Catalog-driven gateway model resolver (spec §3): supplies the render
+    /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
+    gateway_model_resolver: Arc<dyn GatewayModelResolve>,
 }
 
 impl SessionRuntime {
@@ -268,6 +271,7 @@ impl SessionRuntime {
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+        gateway_model_resolver: Arc<dyn GatewayModelResolve>,
     ) -> Self {
         Self {
             session_service,
@@ -281,6 +285,7 @@ impl SessionRuntime {
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
+            gateway_model_resolver,
         }
     }
 

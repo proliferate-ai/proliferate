@@ -1,5 +1,5 @@
-import { Copy, RotateCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { Copy, RefreshCw, ShieldCheckFilled, Trash } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
@@ -75,7 +75,7 @@ export function OrganizationSsoSettingsSurface({
   const statusActionDisabled = busy || hasUnsavedChanges;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <SettingsPageHeader
         title="Single sign-on"
         description="Configure organization OIDC sign-in for managed cloud users."
@@ -87,13 +87,13 @@ export function OrganizationSsoSettingsSurface({
             disabled={busy}
             loading={loading}
           >
-            <RotateCw size={14} />
+            <RefreshCw className="size-3.5" />
             Refresh
           </Button>
         )}
       />
       {error ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-ui-sm leading-[1.45] text-destructive">
           {error}
         </div>
       ) : null}
@@ -212,7 +212,7 @@ export function OrganizationSsoSettingsSurface({
               disabled={!connection || busy}
               onClick={onCopyRedirectUri}
             >
-              <Copy size={14} />
+              <Copy className="size-3.5" />
             </Button>
           </div>
         </SettingsRow>
@@ -226,7 +226,7 @@ export function OrganizationSsoSettingsSurface({
             disabled={busy}
             onClick={() => setDeleteConfirmOpen(true)}
           >
-            <Trash2 size={14} />
+            <Trash className="size-3.5" />
             Delete
           </Button>
         ) : null}
@@ -259,7 +259,7 @@ export function OrganizationSsoSettingsSurface({
             disabled={statusActionDisabled}
             onClick={onEnable}
           >
-            <ShieldCheck size={14} />
+            <ShieldCheckFilled className="size-3.5" />
             Enable
           </Button>
         ) : null}
@@ -274,7 +274,7 @@ export function OrganizationSsoSettingsSurface({
         </Button>
       </div>
       {connection?.lastError ? (
-        <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-ui-sm leading-[1.45] text-warning">
           {connection.lastError}
         </div>
       ) : null}

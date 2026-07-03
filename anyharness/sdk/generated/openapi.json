@@ -297,6 +297,88 @@
         }
       }
     },
+    "/v1/agents/{kind}/catalog/gateway-models": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "get_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved gateway model plan (probe or seed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/catalog/refresh-gateway": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "refresh_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gateway re-probed and recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshGatewayResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No gateway selection for this harness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Gateway probe failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents/{kind}/install": {
       "post": {
         "tags": [
@@ -8425,6 +8507,34 @@
           "before_user_message"
         ]
       },
+      "GatewayModelsResponse": {
+        "type": "object",
+        "description": "Resolved gateway model plan for the local surface.",
+        "required": [
+          "models",
+          "source"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The resolved, provider-filtered model ids (probe rows or catalog seed)."
+          },
+          "probedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When a probe supplied the list (RFC3339); absent for seed."
+          },
+          "source": {
+            "type": "string",
+            "description": "`\"seed\"` (no probe yet) or `\"probe\"` (a live probe supplied the list)."
+          }
+        }
+      },
       "GetSessionLiveConfigResponse": {
         "type": "object",
         "description": "Response payload for fetching the current live session config snapshot.",
@@ -12246,6 +12356,27 @@
           "skipped",
           "failed"
         ]
+      },
+      "RefreshGatewayResponse": {
+        "type": "object",
+        "description": "Result of a manual gateway refresh.",
+        "required": [
+          "models",
+          "probedAt"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The freshly probed model ids (unfiltered — exactly what the gateway\nreturned; the resolver applies provider filtering when building plans)."
+          },
+          "probedAt": {
+            "type": "string",
+            "description": "The probe timestamp (RFC3339)."
+          }
+        }
       },
       "RenameWorkspaceFileEntryRequest": {
         "type": "object",

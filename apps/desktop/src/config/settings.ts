@@ -20,7 +20,6 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "agent-codex",
   "agent-opencode",
   "agent-grok",
-  "agent-gemini",
   "agent-api-keys",
   "agent-defaults",
   // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
@@ -60,7 +59,6 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "agent-codex",
   "agent-opencode",
   "agent-grok",
-  "agent-gemini",
   "agent-api-keys",
   "agent-defaults",
   // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.

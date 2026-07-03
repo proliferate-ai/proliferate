@@ -1,4 +1,4 @@
-"""HTTP routes for agent gateway auth: key pool, selections, catalog."""
+"""HTTP routes for agent gateway auth: key vault, selections, state, catalog."""
 
 from __future__ import annotations
 
@@ -15,15 +15,14 @@ from proliferate.server.cloud.agent_gateway import catalog as catalog_service
 from proliferate.server.cloud.agent_gateway import service
 from proliferate.server.cloud.agent_gateway.models import (
     AgentApiKeyCreateRequest,
-    AgentApiKeyListResponse,
     AgentApiKeyResponse,
     AgentAuthRoute,
-    AgentAuthRouteSelectionListResponse,
-    AgentAuthRouteSelectionResponse,
-    AgentAuthRouteSelectionUpsertRequest,
+    AgentAuthSelectionResponse,
+    AgentAuthSelectionsPutRequest,
     AgentAuthStateResponse,
     AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
+    AgentGatewayCatalogMirrorRequest,
     AgentGatewayCatalogOverrideResponse,
     AgentGatewayCatalogOverrideUpsertRequest,
     AgentGatewayCatalogRefreshRequest,
@@ -34,13 +33,13 @@ from proliferate.server.cloud.agent_gateway.models import (
     OrgAgentPolicyViolationListResponse,
     agent_auth_state_payload,
     api_key_payload,
+    auth_selection_payload,
     catalog_override_payload,
     catalog_payload,
+    desired_source,
     enrollment_payload,
     org_agent_policy_payload,
     org_agent_policy_violation_payload,
-    provider_registry_payload,
-    route_selection_payload,
 )
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
@@ -52,23 +51,21 @@ organization_router = APIRouter(
 )
 
 
-def _parse_uuid(value: str, *, code: str, message: str, status_code: int) -> UUID:
-    try:
-        return UUID(value)
-    except ValueError as error:
-        raise CloudApiError(code, message, status_code=status_code) from error
+# --------------------------------------------------------------------------- #
+# Key vault
+# --------------------------------------------------------------------------- #
 
 
-@router.get("/api-keys", response_model=AgentApiKeyListResponse)
+@router.get("/keys", response_model=list[AgentApiKeyResponse])
 async def list_agent_api_keys_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> AgentApiKeyListResponse:
+) -> list[AgentApiKeyResponse]:
     records = await service.list_api_keys(db, user_id=user.id)
-    return AgentApiKeyListResponse(keys=[api_key_payload(record) for record in records])
+    return [api_key_payload(record) for record in records]
 
 
-@router.post("/api-keys", response_model=AgentApiKeyResponse)
+@router.post("/keys", response_model=AgentApiKeyResponse)
 async def create_agent_api_key_endpoint(
     body: AgentApiKeyCreateRequest,
     db: AsyncSession = Depends(get_async_session),
@@ -78,16 +75,15 @@ async def create_agent_api_key_endpoint(
         record = await service.create_api_key(
             db,
             user_id=user.id,
-            provider=body.provider,
-            display_name=body.display_name,
-            secret=body.secret,
+            title=body.title,
+            value=body.value,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
     return api_key_payload(record)
 
 
-@router.delete("/api-keys/{key_id}", response_model=AgentApiKeyResponse)
+@router.delete("/keys/{key_id}", response_model=AgentApiKeyResponse)
 async def revoke_agent_api_key_endpoint(
     key_id: UUID,
     db: AsyncSession = Depends(get_async_session),
@@ -100,69 +96,61 @@ async def revoke_agent_api_key_endpoint(
     return api_key_payload(record)
 
 
-@router.get("/route-selections", response_model=AgentAuthRouteSelectionListResponse)
-async def list_agent_route_selections_endpoint(
+# --------------------------------------------------------------------------- #
+# Auth selections
+# --------------------------------------------------------------------------- #
+
+
+@router.get("/selections", response_model=list[AgentAuthSelectionResponse])
+async def list_agent_auth_selections_endpoint(
+    surface: AgentAuthSurface | None = Query(default=None),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> AgentAuthRouteSelectionListResponse:
-    records = await service.list_route_selections(db, user_id=user.id)
-    return AgentAuthRouteSelectionListResponse(
-        selections=[route_selection_payload(record) for record in records],
-    )
+) -> list[AgentAuthSelectionResponse]:
+    records = await service.list_auth_selections(db, user_id=user.id, surface=surface)
+    titles = await service.key_titles(db, user_id=user.id)
+    return [
+        auth_selection_payload(record, key_title=titles.get(record.api_key_id))
+        for record in records
+    ]
 
 
 @router.put(
-    "/route-selections/{harness_kind}/{surface}",
-    response_model=AgentAuthRouteSelectionResponse,
+    "/selections/{harness_kind}",
+    response_model=list[AgentAuthSelectionResponse],
 )
-async def upsert_agent_route_selection_endpoint(
+async def put_agent_auth_selections_endpoint(
     harness_kind: str,
-    surface: str,
-    body: AgentAuthRouteSelectionUpsertRequest,
+    body: AgentAuthSelectionsPutRequest,
+    surface: AgentAuthSurface = Query(...),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> AgentAuthRouteSelectionResponse:
+) -> list[AgentAuthSelectionResponse]:
     try:
-        api_key_id: UUID | None = None
-        if body.api_key_id is not None:
-            api_key_id = _parse_uuid(
-                body.api_key_id,
-                code="invalid_agent_route_selection",
-                message="apiKeyId must be a UUID.",
+        sources = [desired_source(source) for source in body.sources]
+    except ValueError:
+        raise_cloud_error(
+            CloudApiError(
+                "invalid_agent_auth_selection",
+                "apiKeyId must be a UUID.",
                 status_code=400,
             )
-        record = await service.upsert_route_selection(
-            db,
-            user_id=user.id,
-            harness_kind=harness_kind,
-            surface=surface,
-            route=body.route,
-            api_key_id=api_key_id,
-            slot=body.slot,
         )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return route_selection_payload(record)
-
-
-@router.delete("/route-selections/{harness_kind}/{surface}", status_code=204)
-async def clear_agent_route_selection_endpoint(
-    harness_kind: str,
-    surface: str,
-    slot: str = Query("primary"),
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> None:
     try:
-        await service.clear_route_selection(
+        records = await service.put_auth_selections(
             db,
             user_id=user.id,
             harness_kind=harness_kind,
             surface=surface,
-            slot=slot,
+            sources=sources,
         )
     except CloudApiError as error:
         raise_cloud_error(error)
+    titles = await service.key_titles(db, user_id=user.id)
+    return [
+        auth_selection_payload(record, key_title=titles.get(record.api_key_id))
+        for record in records
+    ]
 
 
 @router.get(
@@ -175,20 +163,24 @@ async def get_agent_auth_state_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> AgentAuthStateResponse:
-    """Serve the caller's rendered state.json document for one surface.
+    """Serve the caller's rendered ``state.json`` v2 document for one surface.
 
     This is the local-surface twin of the cloud materializer: the desktop
-    fetches ``surface=local`` and pushes the payload verbatim to its local
-    AnyHarness runtime (``PUT /v1/agent-auth/state``), which persists it at
-    ``<runtime_home>/agent-auth/state.json``.
+    fetches ``surface=local`` and pushes the payload to its local AnyHarness
+    runtime, which persists it at ``<runtime_home>/agent-auth/state.json``.
 
     Trust model: the response carries the current user's OWN decrypted key
-    material (pool keys, gateway virtual key) — the same secrets the cloud
-    materializer writes into the user's own sandbox. Auth is the current
-    product user; nothing here crosses a user boundary.
+    material (vault keys, gateway virtual key) — the same secrets the cloud
+    materializer writes into the user's own sandbox. Nothing crosses a user
+    boundary.
     """
     state = await service.get_auth_state(db, user_id=user.id, surface=surface)
-    return agent_auth_state_payload(state, user_id=str(user.id))
+    return agent_auth_state_payload(state)
+
+
+# --------------------------------------------------------------------------- #
+# Catalog
+# --------------------------------------------------------------------------- #
 
 
 @router.get("/catalog/{harness_kind}", response_model=AgentGatewayCatalogResponse)
@@ -244,6 +236,42 @@ async def refresh_agent_catalog_endpoint(
     )
 
 
+@router.post("/catalog/{harness_kind}/mirror", response_model=AgentGatewayCatalogResponse)
+async def mirror_agent_catalog_endpoint(
+    harness_kind: str,
+    body: AgentGatewayCatalogMirrorRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentGatewayCatalogResponse:
+    """Store the caller's own runtime-probed catalog as a read-model snapshot.
+
+    Distinct from ``.../refresh``: the runtime already did the probing (a
+    harness/gateway reachability check, possibly server-side via LiteLLM) and
+    is pushing the result here fire-and-forget, so this endpoint never talks
+    to an upstream itself.
+    """
+    try:
+        snapshot, override, models = await catalog_service.mirror_catalog(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
+            surface=body.surface,
+            route=body.route,
+            models_json=body.models_json,
+            probed_at=body.probed_at,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return catalog_payload(
+        harness_kind=harness_kind,
+        surface=body.surface,
+        route=body.route,
+        models=models,
+        snapshot=snapshot,
+        override=override,
+    )
+
+
 @router.put("/catalog/{harness_kind}/override", response_model=AgentGatewayCatalogOverrideResponse)
 async def upsert_agent_catalog_override_endpoint(
     harness_kind: str,
@@ -279,6 +307,11 @@ async def delete_agent_catalog_override_endpoint(
         raise_cloud_error(error)
 
 
+# --------------------------------------------------------------------------- #
+# Capabilities + enrollment
+# --------------------------------------------------------------------------- #
+
+
 @router.get("/capabilities", response_model=AgentGatewayCapabilitiesResponse)
 async def get_agent_gateway_capabilities_endpoint(
     db: AsyncSession = Depends(get_async_session),
@@ -292,7 +325,6 @@ async def get_agent_gateway_capabilities_endpoint(
         gateway_enabled=gateway_enabled,
         public_base_url=public_base_url,
         enrollment_status=enrollment_status,
-        providers=provider_registry_payload(),
     )
 
 
@@ -306,6 +338,11 @@ async def get_agent_gateway_enrollment_endpoint(
     except CloudApiError as error:
         raise_cloud_error(error)
     return enrollment_payload(record)
+
+
+# --------------------------------------------------------------------------- #
+# Org policy (flag-only)
+# --------------------------------------------------------------------------- #
 
 
 @organization_router.get("/policy", response_model=OrgAgentPolicyResponse)

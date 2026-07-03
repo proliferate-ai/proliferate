@@ -1,26 +1,28 @@
-"""Request and response models for the agent gateway auth APIs.
+"""Request and response models for the agent gateway auth APIs (P1 rebuild).
 
 Responses never carry key material — with one deliberate exception:
-``AgentAuthStateResponse`` mirrors the AnyHarness state.json contract and
-carries the caller's OWN decrypted keys, exactly as the cloud materializer
-writes them into the caller's own sandbox (same trust model, different
-delivery surface).
+``AgentAuthStateResponse`` mirrors the AnyHarness ``state.json`` v2 contract and
+carries the caller's OWN decrypted keys, exactly as the cloud materializer writes
+them into the caller's own sandbox (same trust model, different delivery
+surface). That model uses the on-disk snake_case field names verbatim (matching
+``route_auth/state.rs``), deliberately NOT camelCased like the rest of the module.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from proliferate.constants.agent_gateway import AGENT_PROVIDER_REGISTRY
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
-    AgentAuthRouteSelectionRecord,
+    AgentAuthSelectionRecord,
     AgentCatalogOverrideRecord,
     AgentCatalogSnapshotRecord,
     AgentGatewayEnrollmentRecord,
+    DesiredAuthSource,
     OrgMemberRouteSelectionRecord,
 )
 
@@ -28,6 +30,9 @@ if TYPE_CHECKING:
     from proliferate.server.cloud.agent_gateway.service import OrgAgentPolicySnapshot
 
 AgentAuthSurface = Literal["local", "cloud"]
+AgentAuthSourceKind = Literal["gateway", "api_key"]
+# Catalog snapshots retain a route dimension (native/api_key/gateway); the auth
+# selection path itself no longer speaks "route".
 AgentAuthRoute = Literal["native", "api_key", "gateway"]
 
 
@@ -35,95 +40,112 @@ class AgentGatewayBaseModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+# --------------------------------------------------------------------------- #
+# Key vault
+# --------------------------------------------------------------------------- #
+
+
 class AgentApiKeyResponse(AgentGatewayBaseModel):
     id: str
-    provider: str
-    display_name: str = Field(alias="displayName")
+    title: str
     redacted_hint: str = Field(alias="redactedHint")
     status: str
-    last_validated_at: str | None = Field(alias="lastValidatedAt")
     created_at: str = Field(alias="createdAt")
 
 
-class AgentApiKeyListResponse(AgentGatewayBaseModel):
-    keys: list[AgentApiKeyResponse]
-
-
 class AgentApiKeyCreateRequest(AgentGatewayBaseModel):
-    provider: str
-    display_name: str = Field(alias="displayName")
-    secret: str
+    title: str
+    value: str
 
 
-class AgentAuthRouteSelectionResponse(AgentGatewayBaseModel):
+# --------------------------------------------------------------------------- #
+# Auth selections
+# --------------------------------------------------------------------------- #
+
+
+class AgentAuthSelectionResponse(AgentGatewayBaseModel):
     id: str
     harness_kind: str = Field(alias="harnessKind")
     surface: AgentAuthSurface
-    slot: str
-    route: AgentAuthRoute
+    source_kind: AgentAuthSourceKind = Field(alias="sourceKind")
     api_key_id: str | None = Field(alias="apiKeyId")
-    revision: int
+    # The referenced key's title, joined for display (null for gateway rows or a
+    # vanished key). ``providerHint`` is display-only and has zero wire semantics.
+    key_title: str | None = Field(alias="keyTitle")
+    env_var_name: str | None = Field(alias="envVarName")
+    provider_hint: str | None = Field(alias="providerHint")
+    enabled: bool
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 
 
-class AgentAuthRouteSelectionListResponse(AgentGatewayBaseModel):
-    selections: list[AgentAuthRouteSelectionResponse]
+class AgentAuthSourceInput(AgentGatewayBaseModel):
+    """One entry of a full-desired-state PUT of a scope's selection sources."""
 
-
-class AgentAuthRouteSelectionUpsertRequest(AgentGatewayBaseModel):
-    route: AgentAuthRoute
+    source_kind: AgentAuthSourceKind = Field(alias="sourceKind")
     api_key_id: str | None = Field(default=None, alias="apiKeyId")
-    # Composition axis (spec §3.3): 'primary' for single-source harnesses;
-    # opencode uses per-source slots. Defaults keep pre-slot callers working.
-    slot: str = "primary"
+    env_var_name: str | None = Field(default=None, alias="envVarName")
+    provider_hint: str | None = Field(default=None, alias="providerHint")
+    enabled: bool = True
 
 
-class AgentAuthStateSelection(AgentGatewayBaseModel):
-    """One rendered selection in the AnyHarness state.json contract shape.
+class AgentAuthSelectionsPutRequest(AgentGatewayBaseModel):
+    sources: list[AgentAuthSourceInput]
 
-    Field names are the on-disk contract (snake_case, matching the serde
-    structs in ``route_auth/state.rs``) — deliberately NOT camelCased like the
-    rest of this module. ``key`` is decrypted material (see module docstring).
-    """
 
-    harness: str
-    route: AgentAuthRoute
-    slot: str
-    provider: str | None = None
+# --------------------------------------------------------------------------- #
+# state.json v2 (the AnyHarness wire contract; snake_case on the wire)
+# --------------------------------------------------------------------------- #
+
+
+class AgentAuthStateSource(BaseModel):
+    """A single credential source (contract §3). Key material for the caller."""
+
+    kind: AgentAuthSourceKind
     base_url: str | None = None
     key: str | None = None
-    model_catalog: list[str] | None = None
+    env_var_name: str | None = None
+    value: str | None = None
 
 
-class AgentAuthStateResponse(AgentGatewayBaseModel):
-    """The whole state.json document (``route_auth/state.rs::AgentAuthState``).
+class AgentAuthStateHarness(BaseModel):
+    harness_kind: str
+    sources: list[AgentAuthStateSource]
 
-    ``revision`` 0 with empty ``selections`` is the legacy/native marker: the
-    user has no selections for the surface and the runtime may fall through.
-    """
 
+class AgentAuthStateResponse(BaseModel):
+    """The whole ``state.json`` v2 document (``route_auth/state.rs``)."""
+
+    version: int
     revision: int
-    user_id: str
-    selections: list[AgentAuthStateSelection]
+    user_id: str | None = None
+    harnesses: list[AgentAuthStateHarness]
 
 
-class AgentGatewayProviderInfo(AgentGatewayBaseModel):
-    """One PROVIDER_REGISTRY entry; the UI never hardcodes provider metadata."""
-
-    id: str
-    label: str
-    env_key: str = Field(alias="envKey")
-    key_url: str = Field(alias="keyUrl")
-    harnesses: list[str]
-    recommended_for: list[str] = Field(alias="recommendedFor")
+# --------------------------------------------------------------------------- #
+# Capabilities + enrollment
+# --------------------------------------------------------------------------- #
 
 
 class AgentGatewayCapabilitiesResponse(AgentGatewayBaseModel):
     gateway_enabled: bool = Field(alias="gatewayEnabled")
     public_base_url: str | None = Field(alias="publicBaseUrl")
     enrollment_status: str = Field(alias="enrollmentStatus")
-    providers: list[AgentGatewayProviderInfo] = Field(default_factory=list)
+
+
+class AgentGatewayEnrollmentResponse(AgentGatewayBaseModel):
+    id: str
+    subject_kind: str = Field(alias="subjectKind")
+    litellm_team_id: str | None = Field(alias="litellmTeamId")
+    sync_status: str = Field(alias="syncStatus")
+    last_error_code: str | None = Field(alias="lastErrorCode")
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+
+
+# --------------------------------------------------------------------------- #
+# Catalog (P3 surface; auth-model-agnostic route dimension)
+# --------------------------------------------------------------------------- #
 
 
 class AgentGatewayCatalogResponse(AgentGatewayBaseModel):
@@ -142,10 +164,21 @@ class AgentGatewayCatalogResponse(AgentGatewayBaseModel):
 class AgentGatewayCatalogRefreshRequest(AgentGatewayBaseModel):
     surface: AgentAuthSurface
     route: AgentAuthRoute
-    # Local/native probes run on the client runtime (Desktop / AnyHarness);
-    # the client uploads the probe result here. Gateway refreshes are
-    # server-side and must omit it.
     models_json: str | None = Field(default=None, alias="modelsJson")
+
+
+class AgentGatewayCatalogMirrorRequest(AgentGatewayBaseModel):
+    """A runtime's push of its own resolved probe result (contract §4).
+
+    Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
+    AnyHarness today), not the product UI, and ``probed_at`` reflects when the
+    runtime actually probed rather than when this request landed.
+    """
+
+    surface: AgentAuthSurface
+    route: AgentAuthRoute
+    models_json: str = Field(alias="modelsJson")
+    probed_at: str = Field(alias="probedAt")
 
 
 class AgentGatewayCatalogOverrideUpsertRequest(AgentGatewayBaseModel):
@@ -158,6 +191,11 @@ class AgentGatewayCatalogOverrideResponse(AgentGatewayBaseModel):
     patch_json: str = Field(alias="patchJson")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
+
+
+# --------------------------------------------------------------------------- #
+# Org policy (flag-only)
+# --------------------------------------------------------------------------- #
 
 
 class OrgAgentPolicyResponse(AgentGatewayBaseModel):
@@ -182,21 +220,16 @@ class OrgAgentPolicyViolation(AgentGatewayBaseModel):
     display_name: str | None = Field(alias="displayName")
     harness_kind: str = Field(alias="harnessKind")
     surface: AgentAuthSurface
-    route: AgentAuthRoute
+    source_kind: AgentAuthSourceKind = Field(alias="sourceKind")
 
 
 class OrgAgentPolicyViolationListResponse(AgentGatewayBaseModel):
     violations: list[OrgAgentPolicyViolation]
 
 
-class AgentGatewayEnrollmentResponse(AgentGatewayBaseModel):
-    id: str
-    subject_kind: str = Field(alias="subjectKind")
-    litellm_team_id: str | None = Field(alias="litellmTeamId")
-    sync_status: str = Field(alias="syncStatus")
-    last_error_code: str | None = Field(alias="lastErrorCode")
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
+# --------------------------------------------------------------------------- #
+# Payload builders
+# --------------------------------------------------------------------------- #
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -206,53 +239,46 @@ def _iso(value: datetime | None) -> str | None:
 def api_key_payload(record: AgentApiKeyRecord) -> AgentApiKeyResponse:
     return AgentApiKeyResponse(
         id=str(record.id),
-        provider=record.provider,
-        display_name=record.display_name,
+        title=record.title,
         redacted_hint=record.redacted_hint,
         status=record.status,
-        last_validated_at=_iso(record.last_validated_at),
         created_at=record.created_at.isoformat(),
     )
 
 
-def route_selection_payload(
-    record: AgentAuthRouteSelectionRecord,
-) -> AgentAuthRouteSelectionResponse:
-    return AgentAuthRouteSelectionResponse(
+def auth_selection_payload(
+    record: AgentAuthSelectionRecord,
+    *,
+    key_title: str | None,
+) -> AgentAuthSelectionResponse:
+    return AgentAuthSelectionResponse(
         id=str(record.id),
         harness_kind=record.harness_kind,
         surface=record.surface,  # type: ignore[arg-type]
-        slot=record.slot,
-        route=record.route,  # type: ignore[arg-type]
+        source_kind=record.source_kind,  # type: ignore[arg-type]
         api_key_id=str(record.api_key_id) if record.api_key_id is not None else None,
-        revision=record.revision,
+        key_title=key_title,
+        env_var_name=record.env_var_name,
+        provider_hint=record.provider_hint,
+        enabled=record.enabled,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
     )
 
 
-def agent_auth_state_payload(
-    state: dict[str, object] | None,
-    *,
-    user_id: str,
-) -> AgentAuthStateResponse:
-    if state is None:
-        return AgentAuthStateResponse(revision=0, user_id=user_id, selections=[])
+def desired_source(input_source: AgentAuthSourceInput) -> DesiredAuthSource:
+    """Map a request source onto the store's frozen desired-state record."""
+    return DesiredAuthSource(
+        source_kind=input_source.source_kind,
+        api_key_id=UUID(input_source.api_key_id) if input_source.api_key_id else None,
+        env_var_name=input_source.env_var_name,
+        provider_hint=input_source.provider_hint,
+        enabled=input_source.enabled,
+    )
+
+
+def agent_auth_state_payload(state: dict[str, object]) -> AgentAuthStateResponse:
     return AgentAuthStateResponse.model_validate(state)
-
-
-def provider_registry_payload() -> list[AgentGatewayProviderInfo]:
-    return [
-        AgentGatewayProviderInfo(
-            id=entry.id,
-            label=entry.label,
-            env_key=entry.env_key,
-            key_url=entry.key_url,
-            harnesses=list(entry.harnesses),
-            recommended_for=list(entry.recommended_for),
-        )
-        for entry in AGENT_PROVIDER_REGISTRY
-    ]
 
 
 def catalog_payload(
@@ -314,7 +340,7 @@ def org_agent_policy_violation_payload(
         display_name=record.display_name,
         harness_kind=record.harness_kind,
         surface=record.surface,  # type: ignore[arg-type]
-        route=record.route,  # type: ignore[arg-type]
+        source_kind=record.source_kind,  # type: ignore[arg-type]
     )
 
 

@@ -52,7 +52,6 @@ export function normalizeCloudComposerModelLabel(label: string): string {
     .replace(/^Claude\s*·\s*/i, "")
     .replace(/^Claude\s+(?=Sonnet|Haiku|Opus)/i, "")
     .replace(/^OpenAI\s*·\s*/i, "")
-    .replace(/^Gemini\s*·\s*/i, "")
     .replace(/^Codex\s*·\s*/i, "");
 }
 
@@ -77,8 +76,6 @@ export function cloudComposerControlGroupLabel(
       return "Claude";
     case "openai":
       return "OpenAI";
-    case "gemini":
-      return "Gemini";
     default:
       return group.label;
   }

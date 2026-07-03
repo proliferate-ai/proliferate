@@ -328,7 +328,7 @@ async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/agents/gemini/login/terminal")
+                .uri("/v1/agents/grok/login/terminal")
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from("{}"))
@@ -751,8 +751,7 @@ async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary()
     let _guard = test_support::set_bearer_token_env(None);
     let repo_root = TempDirGuard::new("agent-login-terminal");
     let state = test_state(false);
-    let managed_binary =
-        install_fake_managed_registry_npm_binary(&state, AgentKind::Gemini, "gemini");
+    let managed_binary = install_fake_managed_registry_npm_binary(&state, AgentKind::Grok, "grok");
     seed_workspace(
         &state,
         "workspace-frozen-for-agent-login",
@@ -773,7 +772,7 @@ async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/v1/agents/gemini/login/terminal")
+                .uri("/v1/agents/grok/login/terminal")
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from("{}"))
                 .expect("expected request"),
@@ -786,8 +785,8 @@ async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary()
         .await
         .expect("read response body");
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
-    assert_eq!(payload["kind"], "gemini");
-    assert_eq!(payload["agentLoginTerminal"]["kind"], "gemini");
+    assert_eq!(payload["kind"], "grok");
+    assert_eq!(payload["agentLoginTerminal"]["kind"], "grok");
     assert_eq!(payload["agentLoginTerminal"]["status"], "running");
     let managed_binary_display = managed_binary.display().to_string();
     assert!(payload["agentLoginTerminal"]["commandDisplay"]

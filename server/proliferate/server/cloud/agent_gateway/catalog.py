@@ -21,6 +21,13 @@ Refresh source per route:
   virtual key and store the result as a ``probe`` snapshot.
 - ``native`` / ``api_key``: probes run on the client runtime (Desktop /
   AnyHarness), so the client uploads the probe payload as ``models_json``.
+
+Runtime mirror (P3 contract §4): a signed-in client runtime pushes its own
+resolved gateway-probe result (``POST .../mirror``) as a ``runtime-mirror``
+snapshot, separate from the user-initiated ``.../refresh`` above — this path
+never talks to LiteLLM itself, it only records what the runtime already
+learned. LOCAL surface only for now; cloud runtimes get their own channel
+later.
 """
 
 from __future__ import annotations
@@ -28,13 +35,17 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.agent_gateway import (
-    AGENT_AUTH_ROUTE_GATEWAY,
+    AGENT_AUTH_SOURCE_GATEWAY as AGENT_AUTH_ROUTE_GATEWAY,
+)
+from proliferate.constants.agent_gateway import (
+    AGENT_CATALOG_SNAPSHOT_SOURCE_RUNTIME_MIRROR,
     AGENT_HARNESS_KIND_MAX_LENGTH,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
@@ -301,6 +312,79 @@ async def refresh_catalog(
         route=route,
         snapshot_id=str(snapshot.id),
         model_count=len(parse_models_json(snapshot.models_json)),
+    )
+    return await _load_layered(
+        db,
+        user_id=user_id,
+        harness_kind=harness_kind,
+        surface=surface,
+        route=route,
+    )
+
+
+async def mirror_catalog(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    harness_kind: str,
+    surface: str,
+    route: str,
+    models_json: str,
+    probed_at: str,
+) -> tuple[
+    AgentCatalogSnapshotRecord | None,
+    AgentCatalogOverrideRecord | None,
+    list[dict[str, Any]],
+]:
+    """Store a runtime-pushed probe snapshot (contract §4) and return the layered result.
+
+    The runtime probes its own harnesses + auth (gateway included) and pushes
+    the result here as a read model; this never triggers a probe itself
+    (compare ``refresh_catalog``, which probes gateway routes server-side).
+    """
+    validate_harness_kind(harness_kind)
+    if len(models_json.encode()) > _MAX_MODELS_JSON_BYTES:
+        raise CloudApiError(
+            "invalid_agent_catalog_models",
+            "models_json exceeds the maximum payload size.",
+            status_code=400,
+        )
+    try:
+        parsed = parse_models_json(models_json)
+    except ValueError as error:
+        raise CloudApiError(
+            "invalid_agent_catalog_models",
+            str(error),
+            status_code=400,
+        ) from error
+    try:
+        probed_at_value = datetime.fromisoformat(probed_at)
+    except ValueError as error:
+        raise CloudApiError(
+            "invalid_agent_catalog_mirror",
+            "probedAt must be an ISO 8601 timestamp.",
+            status_code=400,
+        ) from error
+
+    stored_models_json = json.dumps(parsed)
+    snapshot = await agent_gateway_store.create_catalog_snapshot(
+        db,
+        harness_kind=harness_kind,
+        surface=surface,
+        route=route,
+        owner_user_id=user_id,
+        models_json=stored_models_json,
+        source=AGENT_CATALOG_SNAPSHOT_SOURCE_RUNTIME_MIRROR,
+        probed_at=probed_at_value,
+    )
+    log_cloud_event(
+        "agent_catalog_mirrored",
+        user_id=str(user_id),
+        harness_kind=harness_kind,
+        surface=surface,
+        route=route,
+        snapshot_id=str(snapshot.id),
+        model_count=len(parsed),
     )
     return await _load_layered(
         db,

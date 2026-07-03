@@ -9,13 +9,13 @@
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 949 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/api/openapi.rs 828 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response)
-anyharness/crates/anyharness-lib/src/api/router_tests.rs 1278 existing AnyHarness oversized test file (+hosting PR-status route tests)
-anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1897 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/api/openapi.rs 832 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints)
+anyharness/crates/anyharness-lib/src/api/router_tests.rs 1277 existing AnyHarness oversized test file (+hosting PR-status route tests)
+anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1895 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1520 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1510 existing AnyHarness oversized test file
-anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 704 existing AnyHarness oversized test file
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 679 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 654 catalog probe with per-harness model-source fallbacks and tests
@@ -25,13 +25,15 @@ cloud/sdk/src/types/generated.ts 759 existing generated cloud SDK type surface
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1880 existing SDK oversized test file
 anyharness/sdk/src/reducer/transcript.ts 1575 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
+apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 546 P3 runtime catalog extends All-Models coverage for the local+gateway runtime-resolved model plan (contract §5)
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 631 existing desktop oversized test file
 apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
-server/tests/integration/test_agent_gateway_store.py 607 agent gateway store coverage grew past threshold after rebase onto LiteLLM usage tests
+server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
+server/tests/integration/test_agent_gateway_store.py 673 P1 auth rebuild rewrote store coverage for titled-key + agent_auth_selection model
 server/tests/integration/test_auth_flow.py 2118 existing server oversized integration test plus session-token-revocation coverage
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test

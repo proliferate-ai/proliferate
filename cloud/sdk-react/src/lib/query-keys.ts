@@ -23,11 +23,15 @@ export function agentGatewayRootKey() {
 }
 
 export function agentApiKeysKey() {
-  return [...agentGatewayRootKey(), "api-keys"] as const;
+  return [...agentGatewayRootKey(), "keys"] as const;
 }
 
-export function agentRouteSelectionsKey() {
-  return [...agentGatewayRootKey(), "route-selections"] as const;
+export function agentAuthSelectionsRootKey() {
+  return [...agentGatewayRootKey(), "selections"] as const;
+}
+
+export function agentAuthSelectionsKey(surface: string | null = null) {
+  return [...agentAuthSelectionsRootKey(), surface ?? "all"] as const;
 }
 
 export function agentAuthStateRootKey() {

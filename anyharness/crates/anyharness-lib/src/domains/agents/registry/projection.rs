@@ -245,7 +245,6 @@ fn parse_credential_discovery(value: &str) -> anyhow::Result<CredentialDiscovery
         "none" => Ok(CredentialDiscoveryKind::None),
         "claude" => Ok(CredentialDiscoveryKind::Claude),
         "codex" => Ok(CredentialDiscoveryKind::Codex),
-        "gemini" => Ok(CredentialDiscoveryKind::Gemini),
         "opencode" => Ok(CredentialDiscoveryKind::OpenCode),
         "cursor" => Ok(CredentialDiscoveryKind::Cursor),
         "grok" => Ok(CredentialDiscoveryKind::Grok),
@@ -294,9 +293,12 @@ mod tests {
             .iter()
             .map(|slot| slot.id.as_str())
             .collect::<Vec<_>>();
+        // The route-engaged `gateway` slot (discovery "none", no credential
+        // providers) pairs the catalog's gateway auth context; it is inert for
+        // credential detection/readiness, like `opencode-zen`'s empty-provider slot.
         assert_eq!(
             slot_ids,
-            vec!["openai", "anthropic", "gemini", "opencode-zen"]
+            vec!["openai", "anthropic", "gemini", "opencode-zen", "gateway"]
         );
     }
 

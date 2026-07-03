@@ -8,7 +8,7 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  FolderOpen,
+  FolderTree,
   Search,
   WrapText,
 } from "@proliferate/ui/icons";
@@ -99,7 +99,7 @@ export function FileViewerFrame({
             active={browserOpen}
             onClick={onToggleBrowser}
           >
-            <FolderOpen className="size-4" />
+            <FolderTree className="size-4" />
           </FileViewerToolbarButton>
         </div>
       </div>

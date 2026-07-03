@@ -8,6 +8,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 
 const ROUTE_OPTIONS = [
   { value: "native", label: "Native (harness sign-in)" },
@@ -109,17 +110,17 @@ export function OrganizationAgentPolicySection({
       title="Agent policy"
       description="Allowed auth routes and harnesses for members. Conflicts are flagged only — nothing is blocked."
     >
-      <div className="space-y-4 py-3">
+      <div className="space-y-5 py-1">
         {policy.isLoading ? (
-          <div className="text-sm text-muted-foreground">Loading agent policy...</div>
+          <div className="text-ui-sm text-muted-foreground">Loading agent policy…</div>
         ) : policy.isError ? (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-ui-sm text-muted-foreground">
             Agent policy could not be loaded.
           </div>
         ) : (
           <>
             {!editable ? (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-ui-sm text-muted-foreground">
                 Editing the agent policy requires a paid plan.
               </div>
             ) : null}
@@ -140,7 +141,7 @@ export function OrganizationAgentPolicySection({
               />
             </div>
             {updatePolicy.isError ? (
-              <div className="text-sm text-destructive">
+              <div className="text-ui-sm text-destructive">
                 {updatePolicy.error instanceof Error
                   ? updatePolicy.error.message
                   : "Agent policy could not be saved."}
@@ -162,45 +163,56 @@ export function OrganizationAgentPolicySection({
         )}
       </div>
 
-      <div className="border-t border-border py-3">
-        <div className="mb-2 text-sm font-semibold text-foreground">Conflicts</div>
-        {violations.isLoading ? (
-          <div className="text-sm text-muted-foreground">Checking member selections...</div>
-        ) : violations.isError ? (
-          <div className="text-sm text-muted-foreground">
-            Conflicts could not be loaded.
-          </div>
-        ) : violationRows.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            No member selections conflict with this policy.
-          </div>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-muted-foreground">
-                <th className="py-1 pr-4 font-medium">Member</th>
-                <th className="py-1 pr-4 font-medium">Harness</th>
-                <th className="py-1 pr-4 font-medium">Surface</th>
-                <th className="py-1 font-medium">Route</th>
-              </tr>
-            </thead>
-            <tbody>
-              {violationRows.map((violation) => (
-                <tr
-                  key={`${violation.userId}-${violation.harnessKind}-${violation.surface}`}
-                  className="border-t border-border-light"
-                >
-                  <td className="py-1.5 pr-4 text-foreground">
-                    {violation.displayName ?? violation.email ?? violation.userId}
-                  </td>
-                  <td className="py-1.5 pr-4">{harnessLabel(violation.harnessKind)}</td>
-                  <td className="py-1.5 pr-4 capitalize">{violation.surface}</td>
-                  <td className="py-1.5">{routeLabel(violation.route)}</td>
+      <div className="border-t border-border pt-4">
+        <SettingsEyebrow>Conflicts</SettingsEyebrow>
+        <p className="mt-1 text-ui-sm leading-[1.45] text-muted-foreground">
+          Member selections that fall outside this policy. Flagged only — nothing is blocked.
+        </p>
+        <div className="mt-3">
+          {violations.isLoading ? (
+            <div className="text-ui-sm text-muted-foreground">Checking member selections…</div>
+          ) : violations.isError ? (
+            <div className="text-ui-sm text-muted-foreground">
+              Conflicts could not be loaded.
+            </div>
+          ) : violationRows.length === 0 ? (
+            <div className="text-ui-sm text-muted-foreground">
+              No member selections conflict with this policy.
+            </div>
+          ) : (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-border">
+                  <SettingsEyebrow as="th" className="pb-2 pr-4 text-left">Member</SettingsEyebrow>
+                  <SettingsEyebrow as="th" className="pb-2 pr-4 text-left">Harness</SettingsEyebrow>
+                  <SettingsEyebrow as="th" className="pb-2 pr-4 text-left">Surface</SettingsEyebrow>
+                  <SettingsEyebrow as="th" className="pb-2 text-left">Route</SettingsEyebrow>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {violationRows.map((violation) => (
+                  <tr
+                    key={`${violation.userId}-${violation.harnessKind}-${violation.surface}`}
+                    className="border-b border-border last:border-b-0"
+                  >
+                    <td className="py-2.5 pr-4 text-ui text-foreground">
+                      {violation.displayName ?? violation.email ?? violation.userId}
+                    </td>
+                    <td className="py-2.5 pr-4 text-ui-sm text-muted-foreground">
+                      {harnessLabel(violation.harnessKind)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-ui-sm capitalize text-muted-foreground">
+                      {violation.surface}
+                    </td>
+                    <td className="py-2.5 text-ui-sm text-muted-foreground">
+                      {routeLabel(violation.route)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </SettingsSection>
   );
@@ -220,12 +232,12 @@ function PolicyChecklist({
   onToggle: (value: string) => void;
 }) {
   return (
-    <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold text-foreground">{legend}</legend>
+    <fieldset className="space-y-2.5">
+      <SettingsEyebrow as="legend">{legend}</SettingsEyebrow>
       {options.map((option) => (
         <Label
           key={option.value}
-          className="flex items-center gap-2 text-sm text-foreground"
+          className="flex items-center gap-2 text-ui text-foreground"
         >
           <Checkbox
             checked={checked.has(option.value)}

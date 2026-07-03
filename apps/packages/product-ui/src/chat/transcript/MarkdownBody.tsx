@@ -87,7 +87,15 @@ type MdCodeProps = MdElementProps & {
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 };
 
-const LI_CLASSNAME = "pl-0.5 text-chat leading-[var(--text-chat--line-height)]";
+// Message prose reads at --prose-text-size, which the assistant/user message
+// wrappers set to --text-message (the composer size). Every other MarkdownBody
+// context — tool-row detail bodies, plan cards, work history — leaves the var
+// unset, so the fallback keeps that secondary chrome on --text-chat while
+// conversation bodies grow to match the composer.
+const PROSE_TEXT =
+  "text-[length:var(--prose-text-size,var(--text-chat))] leading-[var(--prose-text-line-height,var(--text-chat--line-height))]";
+
+const LI_CLASSNAME = `pl-0.5 ${PROSE_TEXT}`;
 
 // Markdown component overrides are the React element *types* for every
 // rendered node. They must be referentially stable across renders: a fresh
@@ -108,17 +116,17 @@ const STATIC_MARKDOWN_COMPONENTS = {
   h6: (props: MdElementProps) =>
     mdHtmlElement("h6", "mb-1.5 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground", props),
   p: (props: MdElementProps) =>
-    mdHtmlElement("p", "mb-[0.6875rem] mt-0 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
+    mdHtmlElement("p", `mb-[0.6875rem] mt-0 ${PROSE_TEXT} text-foreground`, props),
   ul: (props: MdElementProps) =>
-    mdHtmlElement("ul", "my-0 list-disc pl-[1.3125rem] text-chat leading-[var(--text-chat--line-height)] text-foreground [&>li+li]:mt-2", props),
+    mdHtmlElement("ul", `my-0 list-disc pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`, props),
   ol: (props: MdElementProps) =>
-    mdHtmlElement("ol", "my-0 list-decimal pl-[1.3125rem] text-chat leading-[var(--text-chat--line-height)] text-foreground [&>li+li]:mt-2", props),
+    mdHtmlElement("ol", `my-0 list-decimal pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`, props),
   li: (props: MdElementProps) =>
     mdHtmlElement("li", LI_CLASSNAME, props),
   blockquote: (props: MdElementProps) =>
     mdHtmlElement(
       "blockquote",
-      "my-3 border-l-2 border-border pl-4 text-chat italic leading-[var(--text-chat--line-height)] text-foreground",
+      `my-3 border-l-2 border-border pl-4 ${PROSE_TEXT} italic text-foreground`,
       props,
     ),
   hr: () => <hr className="my-3 border-border" />,
@@ -131,16 +139,16 @@ const STATIC_MARKDOWN_COMPONENTS = {
       <div className="overflow-x-auto">
         {mdHtmlElement(
           "table",
-          "w-max min-w-full border-collapse text-chat leading-[var(--text-chat--line-height)] [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.02] [&_tbody_tr:last-child_td]:border-b-0",
+          `w-max min-w-full border-collapse ${PROSE_TEXT} [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.02] [&_tbody_tr:last-child_td]:border-b-0`,
           props,
         )}
       </div>
     </div>
   ),
   th: (props: MdElementProps) =>
-    mdHtmlElement("th", "border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left text-chat font-semibold leading-[var(--text-chat--line-height)] text-foreground", props),
+    mdHtmlElement("th", `border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left ${PROSE_TEXT} font-semibold text-foreground`, props),
   td: (props: MdElementProps) =>
-    mdHtmlElement("td", "border-b border-border px-2.5 py-1.5 align-top text-chat leading-[var(--text-chat--line-height)]", props),
+    mdHtmlElement("td", `border-b border-border px-2.5 py-1.5 align-top ${PROSE_TEXT}`, props),
   pre: ({ children, dangerouslySetInnerHTML, node: _node, ...rest }: MdElementProps & { children?: ReactNode }) => {
     if (dangerouslySetInnerHTML) {
       return <pre {...rest} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;
@@ -290,7 +298,7 @@ export const MarkdownBody = memo(function MarkdownBody({
   taskListItems = "inline",
 }: MarkdownBodyProps) {
   const markdownClassName = [
-    "text-chat leading-[var(--text-chat--line-height)] text-foreground break-words",
+    `${PROSE_TEXT} text-foreground break-words`,
     "[&_li>p]:my-0",
     "[&_li>ol]:mt-2",
     "[&_li>ul]:mt-2",

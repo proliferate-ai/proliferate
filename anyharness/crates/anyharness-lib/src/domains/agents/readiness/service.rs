@@ -276,22 +276,19 @@ mod tests {
     #[test]
     fn managed_registry_npm_binary_for_names_finds_npm_bin() {
         let runtime_home = make_temp_dir("anyharness-registry-npm-binary-test");
-        let binary_path = artifact_root(
-            &runtime_home,
-            &AgentKind::Gemini,
-            &ArtifactRole::AgentProcess,
-        )
-        .join("registry_npm")
-        .join("node_modules")
-        .join(".bin")
-        .join("gemini");
+        let binary_path =
+            artifact_root(&runtime_home, &AgentKind::Grok, &ArtifactRole::AgentProcess)
+                .join("registry_npm")
+                .join("node_modules")
+                .join(".bin")
+                .join("grok");
         std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
             .expect("create registry npm bin dir");
         std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
         make_executable(&binary_path).expect("make binary executable");
 
         assert_eq!(
-            managed_registry_npm_binary_for_names(&runtime_home, &AgentKind::Gemini, &["gemini"]),
+            managed_registry_npm_binary_for_names(&runtime_home, &AgentKind::Grok, &["grok"]),
             Some(binary_path)
         );
 
