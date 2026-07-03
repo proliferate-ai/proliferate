@@ -12,9 +12,10 @@ mod sink;
 pub use actor::spawn::ActorReadyResult;
 pub use actor::turn::types::SessionTurnFinishResult;
 pub use handle::{
-    ForkSessionCommandError, ForkSessionCommandResult, LiveSessionCommandError,
-    LiveSessionExecutionSnapshot, LiveSessionHandle, PromptAcceptError, PromptAcceptance,
-    QueueMutationError, Resolution, ResolveInteractionCommandError, SetConfigOptionCommandError,
+    AgentExtMethodError, ForkSessionCommandError, ForkSessionCommandResult,
+    LiveSessionCommandError, LiveSessionExecutionSnapshot, LiveSessionHandle, PromptAcceptError,
+    PromptAcceptance, QueueMutationError, Resolution, ResolveInteractionCommandError,
+    SetConfigOptionCommandError,
 };
 pub use manager::LiveSessionManager;
 pub(crate) use manager::RevealMcpElicitationUrlError;
