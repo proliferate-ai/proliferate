@@ -205,7 +205,7 @@ export function OrganizationAgentPolicySection({
                       {violation.surface}
                     </td>
                     <td className="py-2.5 text-ui-sm text-muted-foreground">
-                      {routeLabel(violation.route)}
+                      {routeLabel(violation.sourceKind)}
                     </td>
                   </tr>
                 ))}

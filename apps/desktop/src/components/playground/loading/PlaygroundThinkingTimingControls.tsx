@@ -9,7 +9,7 @@ import { RangeSlider } from "@proliferate/ui/primitives/RangeSlider";
 // shared with the cloud/web chat surfaces) has exactly two knobs — the CSS
 // custom properties consumed by both keyframe pairs:
 //
-//   --thinking-text-duration  (product default 2.2s)
+//   --thinking-text-duration  (product default 2.4s)
 //   --thinking-text-easing    (product default linear)
 //
 // The controls below write those vars onto the preview labels, so what
@@ -26,10 +26,10 @@ interface ThinkingTiming {
   stepCount: number;
 }
 
-/** Mirrors the shipped fallbacks in desktop.css (2.2s linear); the step count
+/** Mirrors the shipped fallbacks in dom.css (2.4s linear); the step count
     only participates when the steps preset is active. */
 const PRODUCT_DEFAULT_TIMING: ThinkingTiming = {
-  durationMs: 2_200,
+  durationMs: 2_400,
   easingKind: "linear",
   stepCount: 48,
 };
