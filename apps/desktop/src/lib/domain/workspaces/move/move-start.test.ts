@@ -3,8 +3,10 @@ import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
 import { describe, expect, it } from "vitest";
 import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
+  buildCloudToLocalMoveStartRequest,
   buildLocalToCloudMoveStartRequest,
   findCollidingCloudWorkspace,
+  resolveRepoConfigIdForGitIdentity,
   resolveRepoConfigIdForRepoRoot,
 } from "./move-start";
 
@@ -115,5 +117,78 @@ describe("buildLocalToCloudMoveStartRequest", () => {
       destination: { kind: "cloud" },
       idempotencyKey: "idem-1",
     });
+  });
+});
+
+describe("buildCloudToLocalMoveStartRequest", () => {
+  it("builds a cloud source / local destination request without a re-adopt target", () => {
+    const request = buildCloudToLocalMoveStartRequest({
+      repoConfigId: "repo-config-1",
+      branch: "feature/move",
+      baseCommitSha: "abc123",
+      cloudWorkspaceId: "cloud-ws-1",
+      desktopInstallId: "install-1",
+      idempotencyKey: "idem-1",
+    });
+    expect(request).toEqual({
+      repoConfigId: "repo-config-1",
+      branch: "feature/move",
+      baseCommitSha: "abc123",
+      source: { kind: "cloud", cloudWorkspaceId: "cloud-ws-1" },
+      destination: { kind: "local", desktopInstallId: "install-1" },
+      idempotencyKey: "idem-1",
+    });
+  });
+
+  it("carries the re-adopt target's local workspace id on the destination ref", () => {
+    const request = buildCloudToLocalMoveStartRequest({
+      repoConfigId: "repo-config-1",
+      branch: "feature/move",
+      baseCommitSha: "abc123",
+      cloudWorkspaceId: "cloud-ws-1",
+      desktopInstallId: "install-1",
+      localAnyharnessWorkspaceId: "ws-original",
+      idempotencyKey: "idem-1",
+    });
+    expect(request.destination).toEqual({
+      kind: "local",
+      desktopInstallId: "install-1",
+      anyharnessWorkspaceId: "ws-original",
+    });
+  });
+
+  it("omits anyharnessWorkspaceId on the destination ref when there is nothing to re-adopt", () => {
+    const request = buildCloudToLocalMoveStartRequest({
+      repoConfigId: "repo-config-1",
+      branch: "feature/move",
+      baseCommitSha: "abc123",
+      cloudWorkspaceId: "cloud-ws-1",
+      desktopInstallId: "install-1",
+      localAnyharnessWorkspaceId: null,
+      idempotencyKey: "idem-1",
+    });
+    expect(request.destination).not.toHaveProperty("anyharnessWorkspaceId");
+  });
+});
+
+describe("resolveRepoConfigIdForGitIdentity", () => {
+  it("matches a cloud workspace's git identity the same way a local repo root would", () => {
+    const id = resolveRepoConfigIdForGitIdentity(
+      { gitOwner: "acme", gitRepoName: "widgets" },
+      [repoConfig({ id: "other", gitRepoName: "gadgets" }), repoConfig({ id: "repo-config-1" })],
+    );
+    expect(id).toBe("repo-config-1");
+  });
+
+  it("returns null with a missing owner or name", () => {
+    expect(resolveRepoConfigIdForGitIdentity({ gitOwner: null, gitRepoName: "widgets" }, [repoConfig()]))
+      .toBeNull();
+    expect(resolveRepoConfigIdForGitIdentity({ gitOwner: "acme", gitRepoName: undefined }, [repoConfig()]))
+      .toBeNull();
+  });
+
+  it("returns null when nothing matches", () => {
+    expect(resolveRepoConfigIdForGitIdentity({ gitOwner: "acme", gitRepoName: "unconfigured" }, [repoConfig()]))
+      .toBeNull();
   });
 });

@@ -159,6 +159,17 @@ describe("MoveWorkspaceDialog", () => {
     expect(screen.getByText("Switch over")).toBeTruthy();
     expect(screen.getByText("Clean up")).toBeTruthy();
   });
+
+  it("names the mirror direction ('this Mac') in the done-stage title for cloud_to_local", () => {
+    mocks.workflow = buildWorkflow({
+      direction: "cloud_to_local",
+      stage: { kind: "done" },
+    });
+
+    render(<MoveWorkspaceDialog open workspaceId="cloud:ws-1" workspaceKind={null} repoRoot={null} onClose={vi.fn()} />);
+
+    expect(screen.getByText("Moved to this Mac")).toBeTruthy();
+  });
 });
 
 interface PublishViewStateOverrides {
@@ -189,8 +200,10 @@ function buildWorkflow(overrides: {
   stage: unknown;
   publish?: ReturnType<typeof buildPublish>;
   isSubmitting?: boolean;
+  direction?: "local_to_cloud" | "cloud_to_local" | null;
 }) {
   return {
+    direction: overrides.direction ?? null,
     stage: overrides.stage,
     readiness: (overrides.stage as { readiness?: unknown }).readiness ?? { kind: "blocked", copy: { headline: "", body: "", primaryActionLabel: "" }, blockerCode: "status_loading" },
     publish: overrides.publish ?? buildPublish(),

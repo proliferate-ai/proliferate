@@ -4,6 +4,8 @@ import type {
   WorkspaceMovePhase,
   WorkspaceMoveRuntimeKind,
 } from "@proliferate/cloud-sdk";
+import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
+import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 
 // Domain vocabulary for the workspace_move stack (specs/tbd/workspace-migration-v2.md
 // section 2.2/2.3). Re-exported under desktop's own domain names so callers depend on
@@ -45,6 +47,39 @@ export type MoveRuntimeRef =
   | { kind: "ssh"; targetId: string; anyharnessWorkspaceId: string };
 
 export type MoveSourceFate = "destroy" | "mark_remote_owned";
+
+/**
+ * Which of the two v1 flows a move is (spec section 2.3): the local->cloud saga
+ * Desktop's own local AnyHarness drives end to end, or the cloud->local mirror where
+ * the server owns freeze/export against the sandbox and Desktop only handles the local
+ * destination. SSH targets (M3) aren't a third value yet -- `MoveRuntimeKind` already
+ * has room for `"ssh"` on either side, but v1 only wires local<->cloud.
+ */
+export type MoveDirection = "local_to_cloud" | "cloud_to_local";
+
+/**
+ * Direction inference at the entry points (spec section 2.6): a cloud-backed workspace
+ * offers "Move to this Mac…", a local one offers "Move to cloud…". Cheap and
+ * synchronous -- the same id-shape split `resolveWorkspaceLocationChip` and
+ * `resolveRuntimeTargetForWorkspace` already make, since a cloud workspace's id is
+ * always the `cloud:<id>` synthetic form (`cloud-ids.ts`). Returns `null` for an SSH
+ * target id (unsupported move source in v1) or no id at all.
+ */
+export function resolveMoveDirection(workspaceId: string | null): MoveDirection | null {
+  if (!workspaceId) return null;
+  if (isCloudWorkspaceId(workspaceId)) return "cloud_to_local";
+  if (parseTargetWorkspaceSyntheticId(workspaceId)) return null;
+  return "local_to_cloud";
+}
+
+/**
+ * Wire values for the v2 engine's install-time session-preservation switch (spec
+ * section 2.4/5.1, anyharness-contract's `MobilityInstallMode`). The mirror flow always
+ * sends `preserve_native_sessions` for the local install step (locked design); this
+ * type exists so `lib/access/anyharness/mobility.ts` has a name for the field instead
+ * of a bare string literal.
+ */
+export type MobilityInstallMode = "fresh_native" | "preserve_native_sessions";
 
 /**
  * Source-fate policy after cutover (locked product decision, "Source fate after

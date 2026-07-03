@@ -12,6 +12,15 @@ const START_REQUEST: StartWorkspaceMoveRequest = {
   idempotencyKey: "idem-1",
 };
 
+const MIRROR_START_REQUEST: StartWorkspaceMoveRequest = {
+  repoConfigId: "repo-1",
+  branch: "feature/move",
+  baseCommitSha: "abc123",
+  source: { kind: "cloud", cloudWorkspaceId: "cloud-ws-1" },
+  destination: { kind: "local", desktopInstallId: "install-1" },
+  idempotencyKey: "idem-1",
+};
+
 const ARCHIVE: WorkspaceMobilityArchive = {
   baseCommitSha: "abc123",
   files: [],
@@ -25,7 +34,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     const deps = depsMock(calls);
 
     const result = await runWorkspaceMoveWorkflow(
-      { start: START_REQUEST, sourceWorkspaceKind: "worktree" },
+      { start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "worktree" },
       deps,
     );
 
@@ -49,7 +58,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     const deps = depsMock(calls);
 
     await runWorkspaceMoveWorkflow(
-      { start: START_REQUEST, sourceWorkspaceKind: "local" },
+      { start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "local" },
       deps,
     );
 
@@ -60,7 +69,7 @@ describe("runWorkspaceMoveWorkflow", () => {
 
   it("reports phase transitions via onPhaseChange", async () => {
     const deps = depsMock();
-    await runWorkspaceMoveWorkflow({ start: START_REQUEST, sourceWorkspaceKind: "worktree" }, deps);
+    await runWorkspaceMoveWorkflow({ start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "worktree" }, deps);
 
     expect(deps.onPhaseChange).toHaveBeenNthCalledWith(1, "destination_ready");
     expect(deps.onPhaseChange).toHaveBeenNthCalledWith(2, "installed");
@@ -75,6 +84,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     const result = await runWorkspaceMoveWorkflow(
       {
         start: START_REQUEST,
+        direction: "local_to_cloud",
         sourceWorkspaceKind: "worktree",
         resume: { moveId: "move-1", phase: "destination_ready" },
       },
@@ -100,6 +110,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     await runWorkspaceMoveWorkflow(
       {
         start: START_REQUEST,
+        direction: "local_to_cloud",
         sourceWorkspaceKind: "worktree",
         resume: { moveId: "move-1", phase: "installed" },
       },
@@ -119,6 +130,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     const result = await runWorkspaceMoveWorkflow(
       {
         start: START_REQUEST,
+        direction: "local_to_cloud",
         sourceWorkspaceKind: "worktree",
         resume: { moveId: "move-1", phase: "cutover" },
       },
@@ -137,6 +149,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     const result = await runWorkspaceMoveWorkflow(
       {
         start: START_REQUEST,
+        direction: "local_to_cloud",
         sourceWorkspaceKind: "worktree",
         resume: { moveId: "move-1", phase: "completed" },
       },
@@ -170,6 +183,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     await expect(runWorkspaceMoveWorkflow(
       {
         start: START_REQUEST,
+        direction: "local_to_cloud",
         sourceWorkspaceKind: "worktree",
         resume: { moveId: "move-1", phase: "failed" },
       },
@@ -184,6 +198,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     await runWorkspaceMoveWorkflow(
       {
         start: START_REQUEST,
+        direction: "local_to_cloud",
         sourceWorkspaceKind: "worktree",
         resume: { moveId: "move-1", phase: "started" },
       },
@@ -201,7 +216,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     deps.exportSourceArchive.mockRejectedValueOnce(error);
 
     const result = await runWorkspaceMoveWorkflow(
-      { start: START_REQUEST, sourceWorkspaceKind: "worktree" },
+      { start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "worktree" },
       deps,
     );
 
@@ -222,7 +237,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     deps.startMove.mockRejectedValueOnce(new Error("network error"));
 
     const result = await runWorkspaceMoveWorkflow(
-      { start: START_REQUEST, sourceWorkspaceKind: "worktree" },
+      { start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "worktree" },
       deps,
     );
 
@@ -243,7 +258,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     deps.failMove.mockRejectedValueOnce(new Error("fail-move failed too"));
 
     const result = await runWorkspaceMoveWorkflow(
-      { start: START_REQUEST, sourceWorkspaceKind: "worktree" },
+      { start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "worktree" },
       deps,
     );
 
@@ -258,7 +273,7 @@ describe("runWorkspaceMoveWorkflow", () => {
     deps.destroySource.mockRejectedValueOnce(new Error("destroy-source unreachable"));
 
     await expect(runWorkspaceMoveWorkflow(
-      { start: START_REQUEST, sourceWorkspaceKind: "worktree" },
+      { start: START_REQUEST, direction: "local_to_cloud", sourceWorkspaceKind: "worktree" },
       deps,
     )).rejects.toThrow("destroy-source unreachable");
 
@@ -274,12 +289,121 @@ describe("runWorkspaceMoveWorkflow", () => {
     await expect(runWorkspaceMoveWorkflow(
       {
         start: START_REQUEST,
+        direction: "local_to_cloud",
         sourceWorkspaceKind: "worktree",
         resume: { moveId: "move-1", phase: "cutover" },
       },
       deps,
     )).rejects.toThrow("complete unreachable");
 
+    expect(deps.unfreezeSource).not.toHaveBeenCalled();
+    expect(deps.failMove).not.toHaveBeenCalled();
+  });
+});
+
+describe("runWorkspaceMoveWorkflow -- cloud_to_local mirror", () => {
+  it("skips freezeSource and client-side source cleanup, but still exports/installs/cuts over/completes", async () => {
+    const calls: string[] = [];
+    const deps = depsMock(calls);
+
+    const result = await runWorkspaceMoveWorkflow(
+      { start: MIRROR_START_REQUEST, direction: "cloud_to_local" },
+      deps,
+    );
+
+    expect(result).toEqual({ outcome: "completed", moveId: "move-1", destinationCloudWorkspaceId: null });
+    expect(calls).toEqual([
+      "startMove",
+      "exportSourceArchive",
+      "installArchive",
+      "cutover",
+      "completeMove",
+    ]);
+    expect(deps.freezeSource).not.toHaveBeenCalled();
+    expect(deps.destroySource).not.toHaveBeenCalled();
+    expect(deps.markSourceRemoteOwned).not.toHaveBeenCalled();
+    expect(deps.unfreezeSource).not.toHaveBeenCalled();
+    expect(deps.failMove).not.toHaveBeenCalled();
+  });
+
+  it("does not require sourceWorkspaceKind (the cloud source has no client-driven fate)", async () => {
+    const deps = depsMock();
+
+    const result = await runWorkspaceMoveWorkflow(
+      { start: MIRROR_START_REQUEST, direction: "cloud_to_local" },
+      deps,
+    );
+
+    expect(result.outcome).toBe("completed");
+  });
+
+  it("resumes from destination_ready without re-freezing (freeze already happened server-side in start)", async () => {
+    const calls: string[] = [];
+    const deps = depsMock(calls);
+
+    await runWorkspaceMoveWorkflow(
+      {
+        start: MIRROR_START_REQUEST,
+        direction: "cloud_to_local",
+        resume: { moveId: "move-1", phase: "destination_ready" },
+      },
+      deps,
+    );
+
+    expect(calls).toEqual(["exportSourceArchive", "installArchive", "cutover", "completeMove"]);
+    expect(deps.startMove).not.toHaveBeenCalled();
+    expect(deps.freezeSource).not.toHaveBeenCalled();
+  });
+
+  it("resumes from cutover doing only completeMove -- no destroySource/markSourceRemoteOwned", async () => {
+    const calls: string[] = [];
+    const deps = depsMock(calls);
+
+    const result = await runWorkspaceMoveWorkflow(
+      {
+        start: MIRROR_START_REQUEST,
+        direction: "cloud_to_local",
+        resume: { moveId: "move-1", phase: "cutover" },
+      },
+      deps,
+    );
+
+    expect(result).toEqual({ outcome: "completed", moveId: "move-1", destinationCloudWorkspaceId: null });
+    expect(calls).toEqual(["completeMove"]);
+  });
+
+  it("on pre-cutover failure, still unfreezes the (cloud) source and fails the move", async () => {
+    const deps = depsMock();
+    const error = Object.assign(new Error("export refused"), { code: "workspace_dirty" });
+    deps.exportSourceArchive.mockRejectedValueOnce(error);
+
+    const result = await runWorkspaceMoveWorkflow(
+      { start: MIRROR_START_REQUEST, direction: "cloud_to_local" },
+      deps,
+    );
+
+    expect(result).toEqual({
+      outcome: "failed",
+      moveId: "move-1",
+      failureCode: "workspace_dirty",
+      failureDetail: "export refused",
+    });
+    expect(deps.unfreezeSource).toHaveBeenCalledWith("move-1");
+    expect(deps.failMove).toHaveBeenCalledWith("move-1", "workspace_dirty", "export refused");
+    expect(deps.installArchive).not.toHaveBeenCalled();
+  });
+
+  it("on post-cutover failure, propagates without unfreeze/fail/client-side cleanup", async () => {
+    const deps = depsMock();
+    deps.completeMove.mockRejectedValueOnce(new Error("complete unreachable"));
+
+    await expect(runWorkspaceMoveWorkflow(
+      { start: MIRROR_START_REQUEST, direction: "cloud_to_local" },
+      deps,
+    )).rejects.toThrow("complete unreachable");
+
+    expect(deps.destroySource).not.toHaveBeenCalled();
+    expect(deps.markSourceRemoteOwned).not.toHaveBeenCalled();
     expect(deps.unfreezeSource).not.toHaveBeenCalled();
     expect(deps.failMove).not.toHaveBeenCalled();
   });

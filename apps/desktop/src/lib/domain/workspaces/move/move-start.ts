@@ -21,8 +21,24 @@ export function resolveRepoConfigIdForRepoRoot(
   repoRoot: Pick<RepoRoot, "remoteOwner" | "remoteRepoName"> | null | undefined,
   repoConfigs: readonly RepoConfigResponse[],
 ): string | null {
-  const gitOwner = repoRoot?.remoteOwner?.trim();
-  const gitRepoName = repoRoot?.remoteRepoName?.trim();
+  return resolveRepoConfigIdForGitIdentity(
+    { gitOwner: repoRoot?.remoteOwner, gitRepoName: repoRoot?.remoteRepoName },
+    repoConfigs,
+  );
+}
+
+/**
+ * Same lookup as `resolveRepoConfigIdForRepoRoot`, keyed directly off a
+ * (gitOwner, gitRepoName) pair instead of a local `RepoRoot` -- the cloud->local
+ * mirror's move source is a cloud workspace, which has no local `RepoRoot` record;
+ * its git identity comes from `CloudWorkspaceSummary.repo` instead (spec section 2.3).
+ */
+export function resolveRepoConfigIdForGitIdentity(
+  identity: { gitOwner: string | null | undefined; gitRepoName: string | null | undefined },
+  repoConfigs: readonly RepoConfigResponse[],
+): string | null {
+  const gitOwner = identity.gitOwner?.trim();
+  const gitRepoName = identity.gitRepoName?.trim();
   if (!gitOwner || !gitRepoName) {
     return null;
   }
@@ -70,6 +86,44 @@ export function buildLocalToCloudMoveStartRequest(input: {
       anyharnessWorkspaceId: input.anyharnessWorkspaceId,
     },
     destination: { kind: "cloud" },
+    idempotencyKey: input.idempotencyKey,
+  };
+}
+
+/**
+ * Builds the cloud->local mirror's `StartWorkspaceMoveRequest` (spec section 2.3's
+ * mirror flow, step 2). `cloudWorkspaceId` is the only field the server actually reads
+ * off `source` for a cloud move -- it re-resolves the live AnyHarness workspace id
+ * itself from its own `cloud_workspace` row rather than trusting the request
+ * (`service.py::_require_source_cloud_workspace`) -- so this builder doesn't ask for
+ * one. `localAnyharnessWorkspaceId` is informational only (stored verbatim into
+ * `destination_ref`, spec section 5.2): pass it when
+ * `resolveLocalMoveDestinationPlan` chose `re_adopt`, omit it for `prepare_fresh`.
+ */
+export function buildCloudToLocalMoveStartRequest(input: {
+  repoConfigId: string;
+  branch: string;
+  baseCommitSha: string;
+  cloudWorkspaceId: string;
+  desktopInstallId: string;
+  localAnyharnessWorkspaceId?: string | null;
+  idempotencyKey: string;
+}): StartWorkspaceMoveRequest {
+  return {
+    repoConfigId: input.repoConfigId,
+    branch: input.branch,
+    baseCommitSha: input.baseCommitSha,
+    source: {
+      kind: "cloud",
+      cloudWorkspaceId: input.cloudWorkspaceId,
+    },
+    destination: {
+      kind: "local",
+      desktopInstallId: input.desktopInstallId,
+      ...(input.localAnyharnessWorkspaceId
+        ? { anyharnessWorkspaceId: input.localAnyharnessWorkspaceId }
+        : {}),
+    },
     idempotencyKey: input.idempotencyKey,
   };
 }

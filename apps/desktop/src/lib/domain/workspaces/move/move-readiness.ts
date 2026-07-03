@@ -2,6 +2,7 @@ import type { GitStatusSnapshot, WorkspaceMobilityPreflightResponse } from "@any
 import type { WorkspaceMoveResponse } from "@proliferate/cloud-sdk";
 import {
   isNonTerminalMovePhase,
+  type MoveDirection,
   type MoveReadiness,
   type MoveReadinessCopy,
 } from "@/lib/domain/workspaces/move/move-model";
@@ -67,12 +68,28 @@ const BLOCKER_COPY: Record<string, MoveReadinessCopy> = {
     body: "Pull the latest changes before moving this workspace.",
     primaryActionLabel: "Open Git tools",
   },
+  local_repo_not_found: {
+    headline: "This repository isn't on this Mac yet",
+    body: "Clone this repository locally before moving this workspace here.",
+    primaryActionLabel: "Got it",
+  },
 };
 
-const SAFE_COPY: MoveReadinessCopy = {
-  headline: "Ready to move",
-  body: "This workspace is clean and published — it can move right away.",
-  primaryActionLabel: "Move to cloud",
+/** Only the safe-state primary action names the destination -- push/prepare's labels
+ *  ("Push and move", "Commit, push, and move") already read fine for either
+ *  direction, so only this one varies (locked "Same dialog, direction-aware copy"
+ *  decision, spec section 2.6). */
+const SAFE_COPY_BY_DIRECTION: Record<MoveDirection, MoveReadinessCopy> = {
+  local_to_cloud: {
+    headline: "Ready to move",
+    body: "This workspace is clean and published — it can move right away.",
+    primaryActionLabel: "Move to cloud",
+  },
+  cloud_to_local: {
+    headline: "Ready to move",
+    body: "This workspace is clean and published — it can move right away.",
+    primaryActionLabel: "Move to this Mac",
+  },
 };
 
 const PUSH_REQUIRED_COPY: MoveReadinessCopy = {
@@ -107,6 +124,10 @@ export interface MoveReadinessInput {
   /** The identity's current non-terminal move, if any (spec section 2.2's partial-unique
    *  "one non-terminal move per (user, repo, branch)" invariant, mirrored client-side). */
   activeMove: WorkspaceMoveResponse | null;
+  /** Which flow the safe-state copy should name (spec section 2.6, "Same dialog,
+   *  direction-aware copy"). Defaults to `local_to_cloud` so every pre-PR-D call site
+   *  keeps its existing "Move to cloud" copy unchanged. */
+  direction?: MoveDirection;
 }
 
 /**
@@ -161,7 +182,7 @@ export function resolveMoveReadiness(input: MoveReadinessInput): MoveReadiness {
     return { kind: "push_required", copy: PUSH_REQUIRED_COPY };
   }
 
-  return { kind: "safe", copy: SAFE_COPY };
+  return { kind: "safe", copy: SAFE_COPY_BY_DIRECTION[input.direction ?? "local_to_cloud"] };
 }
 
 function blocked(code: string, message?: string): MoveReadiness {

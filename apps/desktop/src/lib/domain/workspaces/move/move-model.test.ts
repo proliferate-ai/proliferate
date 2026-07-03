@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveHandoffMoveId,
+  resolveMoveDirection,
   resolvePostMoveNavigation,
   sourceFateForWorkspaceKind,
 } from "./move-model";
@@ -71,5 +72,23 @@ describe("sourceFateForWorkspaceKind", () => {
 
   it("only marks plain local-directory workspaces remote_owned", () => {
     expect(sourceFateForWorkspaceKind("local")).toBe("mark_remote_owned");
+  });
+});
+
+describe("resolveMoveDirection", () => {
+  it("resolves local_to_cloud for a plain local workspace id", () => {
+    expect(resolveMoveDirection("ws-1")).toBe("local_to_cloud");
+  });
+
+  it("resolves cloud_to_local for a cloud synthetic workspace id", () => {
+    expect(resolveMoveDirection("cloud:ws-1")).toBe("cloud_to_local");
+  });
+
+  it("returns null when there is no workspace id", () => {
+    expect(resolveMoveDirection(null)).toBeNull();
+  });
+
+  it("returns null for an SSH target synthetic id (unsupported move source in v1)", () => {
+    expect(resolveMoveDirection("target:target-1:ws-1")).toBeNull();
   });
 });

@@ -232,6 +232,33 @@ describe("resolveMoveReadiness", () => {
     });
     expect(readiness.kind).toBe("safe");
   });
+
+  it("defaults the safe-state primary action to 'Move to cloud' when direction is omitted", () => {
+    const readiness = resolveMoveReadiness({
+      gitStatus: gitStatus(),
+      sourcePreflight: preflight(),
+      destinationState: null,
+      activeMove: null,
+    });
+    expect(readiness.kind).toBe("safe");
+    if (readiness.kind === "safe") {
+      expect(readiness.copy.primaryActionLabel).toBe("Move to cloud");
+    }
+  });
+
+  it("names the mirror direction in the safe-state primary action", () => {
+    const readiness = resolveMoveReadiness({
+      gitStatus: gitStatus(),
+      sourcePreflight: preflight(),
+      destinationState: null,
+      activeMove: null,
+      direction: "cloud_to_local",
+    });
+    expect(readiness.kind).toBe("safe");
+    if (readiness.kind === "safe") {
+      expect(readiness.copy.primaryActionLabel).toBe("Move to this Mac");
+    }
+  });
 });
 
 function gitStatus(overrides: Partial<GitStatusSnapshot> = {}): GitStatusSnapshot {

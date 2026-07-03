@@ -34,7 +34,7 @@ export function MoveWorkspaceDialog({
     repoRoot,
     enabled: open && Boolean(workspaceId),
   });
-  const { stage, readiness, publish, error, isSubmitting } = workflow;
+  const { direction, stage, readiness, publish, error, isSubmitting } = workflow;
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
 
   const commitSummaryId = useId();
@@ -52,7 +52,11 @@ export function MoveWorkspaceDialog({
 
   const disableClose = isSubmitting || stage.kind === "progress";
 
-  let title = "Move to cloud";
+  // Same dialog, direction-aware copy (spec section 2.6). `direction` is `null` until
+  // the workflow resolves it from `workspaceId` -- defaults to the local->cloud
+  // wording, matching this dialog's original (pre-mirror) behavior.
+  const isMirror = direction === "cloud_to_local";
+  let title = isMirror ? "Move to this Mac" : "Move to cloud";
   let primaryLabel: string | null = null;
   let onPrimary: (() => void) | null = null;
   let primaryDisabled = false;
@@ -83,7 +87,7 @@ export function MoveWorkspaceDialog({
   } else if (stage.kind === "not_configured") {
     title = "Connect this repository to Proliferate Cloud";
   } else if (stage.kind === "done") {
-    title = "Moved to cloud";
+    title = isMirror ? "Moved to this Mac" : "Moved to cloud";
     primaryLabel = "Done";
     onPrimary = handleClose;
   }
