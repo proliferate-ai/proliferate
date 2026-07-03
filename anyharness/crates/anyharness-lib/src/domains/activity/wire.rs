@@ -13,6 +13,23 @@ use serde::Deserialize;
 pub const PROCESS_UPSERTED_TRANSCRIPT_EVENT: &str = "process_upserted";
 pub const SUBAGENT_UPSERTED_TRANSCRIPT_EVENT: &str = "subagent_upserted";
 
+/// The attach-time roster reconcile pull (`_anyharness/activity/list`). ACP
+/// 0.14 strips the leading `_` before dispatch; the client sends the
+/// underscored form.
+pub const ACTIVITY_LIST_EXT_METHOD: &str = "_anyharness/activity/list";
+
+/// `_anyharness/activity/list` result: the harness's current roster snapshot.
+/// For Codex this re-lists child threads on reattach; harnesses that don't
+/// implement it simply return an error and the reset-only path applies.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityListWireResult {
+    #[serde(default)]
+    pub processes: Vec<ActivityProcessWire>,
+    #[serde(default)]
+    pub agents: Vec<ActivitySubagentWire>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivityProcessWire {

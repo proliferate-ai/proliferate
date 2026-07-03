@@ -275,3 +275,67 @@ fn observer_ignores_unrelated_and_malformed_chunks() {
         .expect("load processes")
         .is_empty());
 }
+
+fn subagent_wire(id: &str, status: ActivitySubagentStatusWire) -> ActivitySubagentWire {
+    ActivitySubagentWire {
+        id: id.to_string(),
+        agent_type: None,
+        description: None,
+        model: None,
+        background: true,
+        status,
+        summary: None,
+        tokens_used: None,
+        tool_calls: None,
+        duration_seconds: None,
+        feed: None,
+    }
+}
+
+#[test]
+fn reset_running_processes_marks_running_exited_and_is_idempotent() {
+    let service = test_service();
+    service
+        .ingest_process_upserted(
+            context(1),
+            process_wire("proc-1", ActivityProcessStatusWire::Running),
+        )
+        .expect("ingest running");
+
+    // Reattach reset (Claude): running process is process-bound and died with
+    // the harness -> marked exited/stale, emitting one upsert.
+    let batch = service.reset_running_processes(context(2)).expect("reset");
+    assert_eq!(batch.envelopes.len(), 1);
+    assert_eq!(batch.envelopes[0].event.event_type(), "process_upserted");
+    let processes = service.current_processes("session-1").expect("load");
+    assert_eq!(processes.len(), 1);
+    assert!(matches!(
+        processes[0].status,
+        ProcessStatus::Exited { exit_code: None }
+    ));
+
+    // Idempotent: nothing left running -> no further events.
+    let again = service.reset_running_processes(context(3)).expect("reset2");
+    assert!(again.envelopes.is_empty());
+}
+
+#[test]
+fn reconcile_roster_upserts_listed_processes_and_agents_with_increasing_seq() {
+    let service = test_service();
+    let batch = service
+        .reconcile_roster(
+            context(5),
+            vec![process_wire("proc-1", ActivityProcessStatusWire::Running)],
+            vec![subagent_wire("agent-1", ActivitySubagentStatusWire::Running)],
+        )
+        .expect("reconcile");
+
+    assert_eq!(batch.envelopes.len(), 2);
+    // Seqs increment from the context's next_seq.
+    assert_eq!(batch.envelopes[0].seq, 5);
+    assert_eq!(batch.envelopes[1].seq, 6);
+    assert_eq!(batch.envelopes[0].event.event_type(), "process_upserted");
+    assert_eq!(batch.envelopes[1].event.event_type(), "subagent_upserted");
+    assert_eq!(service.current_processes("session-1").expect("p").len(), 1);
+    assert_eq!(service.current_agents("session-1").expect("a").len(), 1);
+}

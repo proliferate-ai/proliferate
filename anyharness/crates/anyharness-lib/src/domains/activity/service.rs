@@ -113,48 +113,7 @@ impl ActivityService {
     ) -> Result<ActivityEventBatch, ActivityIngestError> {
         self.store
             .with_tx_anyhow(|tx| {
-                let feed_id = wire
-                    .feed
-                    .clone()
-                    .map(|transport| {
-                        bind_feed(
-                            tx,
-                            &context,
-                            FeedOwnerKind::Process,
-                            &wire.id,
-                            FeedKind::TerminalBytes,
-                            transport,
-                        )
-                    })
-                    .transpose()?;
-
-                let record = ActivityProcessRecord {
-                    session_id: context.session_id.clone(),
-                    workspace_id: context.workspace_id.clone(),
-                    process_id: wire.id.clone(),
-                    command: wire.command.clone(),
-                    cwd: wire.cwd.clone(),
-                    status: match wire.status {
-                        ActivityProcessStatusWire::Running => ProcessRunStatus::Running,
-                        ActivityProcessStatusWire::Exited => ProcessRunStatus::Exited,
-                    },
-                    exit_code: wire.exit_code,
-                    pid: wire.pid,
-                    started_at: wire.started_at.clone(),
-                    ended_at: wire.ended_at.clone(),
-                    feed_id,
-                    updated_at: chrono::Utc::now().to_rfc3339(),
-                };
-                ActivityStore::upsert_process(tx, &record)?;
-
-                let envelope = envelope(
-                    &context,
-                    context.next_seq,
-                    SessionEvent::ActivityProcessUpserted(ActivityProcessUpsertedPayload {
-                        process: record.to_contract(),
-                    }),
-                );
-                ActivityStore::insert_event(tx, &event_record(&envelope)?)?;
+                let envelope = upsert_process_in_tx(tx, &context, wire, context.next_seq)?;
                 Ok(ActivityEventBatch {
                     envelopes: vec![envelope],
                 })
@@ -170,57 +129,180 @@ impl ActivityService {
     ) -> Result<ActivityEventBatch, ActivityIngestError> {
         self.store
             .with_tx_anyhow(|tx| {
-                let feed_id = wire
-                    .feed
-                    .clone()
-                    .map(|transport| {
-                        bind_feed(
-                            tx,
-                            &context,
-                            FeedOwnerKind::Subagent,
-                            &wire.id,
-                            FeedKind::Transcript,
-                            transport,
-                        )
-                    })
-                    .transpose()?;
-
-                let record = ActivitySubagentRecord {
-                    session_id: context.session_id.clone(),
-                    workspace_id: context.workspace_id.clone(),
-                    subagent_id: wire.id.clone(),
-                    agent_type: wire.agent_type.clone(),
-                    description: wire.description.clone(),
-                    model: wire.model.clone(),
-                    background: wire.background,
-                    status: match wire.status {
-                        ActivitySubagentStatusWire::Running => SubagentRunStatus::Running,
-                        ActivitySubagentStatusWire::Completed => SubagentRunStatus::Completed,
-                        ActivitySubagentStatusWire::Failed => SubagentRunStatus::Failed,
-                    },
-                    summary: wire.summary.clone(),
-                    tokens_used: wire.tokens_used,
-                    tool_calls: wire.tool_calls,
-                    duration_seconds: wire.duration_seconds,
-                    feed_id,
-                    updated_at: chrono::Utc::now().to_rfc3339(),
-                };
-                ActivityStore::upsert_subagent(tx, &record)?;
-
-                let envelope = envelope(
-                    &context,
-                    context.next_seq,
-                    SessionEvent::ActivitySubagentUpserted(ActivitySubagentUpsertedPayload {
-                        agent: record.to_contract(),
-                    }),
-                );
-                ActivityStore::insert_event(tx, &event_record(&envelope)?)?;
+                let envelope = upsert_subagent_in_tx(tx, &context, wire, context.next_seq)?;
                 Ok(ActivityEventBatch {
                     envelopes: vec![envelope],
                 })
             })
             .map_err(ActivityIngestError::Store)
     }
+
+    /// Detach/reattach reset (Claude semantics): every still-`running` process
+    /// is process-bound and died with the harness, so mark it `exited` with an
+    /// unknown exit code and emit the upsert. Idempotent — already-exited rows
+    /// commit nothing. The output-file linger is fine; the row now reads as
+    /// stale/gone, matching harness-runtime-mechanics §4.1.
+    pub fn reset_running_processes(
+        &self,
+        context: ActivityEventContext,
+    ) -> Result<ActivityEventBatch, ActivityIngestError> {
+        self.store
+            .with_tx_anyhow(|tx| {
+                let running = ActivityStore::list_running_processes_tx(tx, &context.session_id)?;
+                let mut envelopes = Vec::new();
+                let now = chrono::Utc::now().to_rfc3339();
+                for existing in running {
+                    let record = ActivityProcessRecord {
+                        status: ProcessRunStatus::Exited,
+                        exit_code: None,
+                        ended_at: existing.ended_at.clone().or_else(|| Some(now.clone())),
+                        updated_at: now.clone(),
+                        ..existing
+                    };
+                    ActivityStore::upsert_process(tx, &record)?;
+                    let envelope = envelope(
+                        &context,
+                        context.next_seq + envelopes.len() as i64,
+                        SessionEvent::ActivityProcessUpserted(ActivityProcessUpsertedPayload {
+                            process: record.to_contract(),
+                        }),
+                    );
+                    ActivityStore::insert_event(tx, &event_record(&envelope)?)?;
+                    envelopes.push(envelope);
+                }
+                Ok(ActivityEventBatch { envelopes })
+            })
+            .map_err(ActivityIngestError::Store)
+    }
+
+    /// Reconcile the roster from an authoritative `_anyharness/activity/list`
+    /// pull on attach: upsert every listed process/subagent (Codex re-lists its
+    /// child threads here). Runs in one transaction with an increasing seq so
+    /// the emitted envelopes ride the session's ordered stream.
+    pub fn reconcile_roster(
+        &self,
+        context: ActivityEventContext,
+        processes: Vec<ActivityProcessWire>,
+        agents: Vec<ActivitySubagentWire>,
+    ) -> Result<ActivityEventBatch, ActivityIngestError> {
+        self.store
+            .with_tx_anyhow(|tx| {
+                let mut envelopes = Vec::new();
+                for wire in processes {
+                    let seq = context.next_seq + envelopes.len() as i64;
+                    envelopes.push(upsert_process_in_tx(tx, &context, wire, seq)?);
+                }
+                for wire in agents {
+                    let seq = context.next_seq + envelopes.len() as i64;
+                    envelopes.push(upsert_subagent_in_tx(tx, &context, wire, seq)?);
+                }
+                Ok(ActivityEventBatch { envelopes })
+            })
+            .map_err(ActivityIngestError::Store)
+    }
+}
+
+fn upsert_process_in_tx(
+    tx: &rusqlite::Connection,
+    context: &ActivityEventContext,
+    wire: ActivityProcessWire,
+    seq: i64,
+) -> rusqlite::Result<SessionEventEnvelope> {
+    let feed_id = wire
+        .feed
+        .clone()
+        .map(|transport| {
+            bind_feed(
+                tx,
+                context,
+                FeedOwnerKind::Process,
+                &wire.id,
+                FeedKind::TerminalBytes,
+                transport,
+            )
+        })
+        .transpose()?;
+
+    let record = ActivityProcessRecord {
+        session_id: context.session_id.clone(),
+        workspace_id: context.workspace_id.clone(),
+        process_id: wire.id.clone(),
+        command: wire.command.clone(),
+        cwd: wire.cwd.clone(),
+        status: match wire.status {
+            ActivityProcessStatusWire::Running => ProcessRunStatus::Running,
+            ActivityProcessStatusWire::Exited => ProcessRunStatus::Exited,
+        },
+        exit_code: wire.exit_code,
+        pid: wire.pid,
+        started_at: wire.started_at.clone(),
+        ended_at: wire.ended_at.clone(),
+        feed_id,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    };
+    ActivityStore::upsert_process(tx, &record)?;
+    let envelope = envelope(
+        context,
+        seq,
+        SessionEvent::ActivityProcessUpserted(ActivityProcessUpsertedPayload {
+            process: record.to_contract(),
+        }),
+    );
+    ActivityStore::insert_event(tx, &event_record(&envelope)?)?;
+    Ok(envelope)
+}
+
+fn upsert_subagent_in_tx(
+    tx: &rusqlite::Connection,
+    context: &ActivityEventContext,
+    wire: ActivitySubagentWire,
+    seq: i64,
+) -> rusqlite::Result<SessionEventEnvelope> {
+    let feed_id = wire
+        .feed
+        .clone()
+        .map(|transport| {
+            bind_feed(
+                tx,
+                context,
+                FeedOwnerKind::Subagent,
+                &wire.id,
+                FeedKind::Transcript,
+                transport,
+            )
+        })
+        .transpose()?;
+
+    let record = ActivitySubagentRecord {
+        session_id: context.session_id.clone(),
+        workspace_id: context.workspace_id.clone(),
+        subagent_id: wire.id.clone(),
+        agent_type: wire.agent_type.clone(),
+        description: wire.description.clone(),
+        model: wire.model.clone(),
+        background: wire.background,
+        status: match wire.status {
+            ActivitySubagentStatusWire::Running => SubagentRunStatus::Running,
+            ActivitySubagentStatusWire::Completed => SubagentRunStatus::Completed,
+            ActivitySubagentStatusWire::Failed => SubagentRunStatus::Failed,
+        },
+        summary: wire.summary.clone(),
+        tokens_used: wire.tokens_used,
+        tool_calls: wire.tool_calls,
+        duration_seconds: wire.duration_seconds,
+        feed_id,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    };
+    ActivityStore::upsert_subagent(tx, &record)?;
+    let envelope = envelope(
+        context,
+        seq,
+        SessionEvent::ActivitySubagentUpserted(ActivitySubagentUpsertedPayload {
+            agent: record.to_contract(),
+        }),
+    );
+    ActivityStore::insert_event(tx, &event_record(&envelope)?)?;
+    Ok(envelope)
 }
 
 /// Resolves the stable opaque `feed_id` for one roster element, minting a
