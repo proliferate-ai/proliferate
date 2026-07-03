@@ -314,6 +314,4 @@ async def _stream_turn_events(
                 continue
             if line.startswith("data:"):
                 data_lines.append(line[5:].lstrip())
-    raise CloudE2ETestError(
-        f"Session stream for {session_id} ended before emitting turn_ended."
-    )
+    raise CloudE2ETestError(f"Session stream for {session_id} ended before emitting turn_ended.")

@@ -258,15 +258,9 @@ def spawn_local_runtime(label: str, *, scratch_root: Path) -> LocalRuntime:
     raise last_error
 
 
-def _spawn_local_runtime_once(
-    binary: Path, label: str, *, scratch_root: Path
-) -> LocalRuntime:
-    runtime_home = Path(
-        _mkdir(scratch_root / f"rt-{label}-{uuid4().hex[:8]}")
-    )
-    worktrees_root = Path(
-        _mkdir(scratch_root / f"wt-{label}-{uuid4().hex[:8]}")
-    )
+def _spawn_local_runtime_once(binary: Path, label: str, *, scratch_root: Path) -> LocalRuntime:
+    runtime_home = Path(_mkdir(scratch_root / f"rt-{label}-{uuid4().hex[:8]}"))
+    worktrees_root = Path(_mkdir(scratch_root / f"wt-{label}-{uuid4().hex[:8]}"))
     override_env: dict[str, str] = {}
     claude_override = _claude_override_agent_env()
     if claude_override is None:
@@ -333,8 +327,7 @@ def _wait_for_health(runtime: LocalRuntime) -> None:
     for _attempt in range(_HEALTH_ATTEMPTS):
         if runtime.process.poll() is not None:
             raise CloudE2ETestError(
-                "Local anyharness exited during startup: "
-                + _tail(runtime.stderr_path)
+                "Local anyharness exited during startup: " + _tail(runtime.stderr_path)
             )
         try:
             response = httpx.get(
