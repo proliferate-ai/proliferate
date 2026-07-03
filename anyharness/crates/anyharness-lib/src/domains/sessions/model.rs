@@ -108,6 +108,7 @@ impl SessionRecord {
                 self.action_capabilities_json.as_deref(),
             ),
             active_goal: None,
+            activity: None,
             origin: self.origin.as_ref().map(OriginContext::to_contract),
         }
     }
