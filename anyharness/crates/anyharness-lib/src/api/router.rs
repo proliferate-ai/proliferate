@@ -14,8 +14,9 @@ use super::http::{
     agent_auth, agents, auth as http_auth, catalogs, cowork, files, git, goals, health, hosting,
     mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
-    sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
-    workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
+    sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workflow_runs,
+    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees,
+    worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
@@ -424,6 +425,23 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/goal",
             put(goals::set_session_goal).delete(goals::clear_session_goal),
+        )
+        // Workflow runs (W3): the deterministic step engine's local surface.
+        .route(
+            "/workflow-runs",
+            get(workflow_runs::list_workflow_runs).post(workflow_runs::create_workflow_run),
+        )
+        .route(
+            "/workflow-runs/{run_id}",
+            get(workflow_runs::get_workflow_run),
+        )
+        .route(
+            "/workflow-runs/{run_id}/cancel",
+            post(workflow_runs::cancel_workflow_run),
+        )
+        .route(
+            "/workflow-runs/{run_id}/approval",
+            post(workflow_runs::resolve_workflow_approval),
         )
         .route(
             "/sessions/{session_id}/resume",

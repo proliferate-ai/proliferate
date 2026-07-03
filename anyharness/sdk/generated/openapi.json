@@ -3141,6 +3141,228 @@
         }
       }
     },
+    "/v1/workflow-runs": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "operationId": "list_workflow_runs",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "description": "Filter by workspace",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List workflow runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "operationId": "create_workflow_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkflowRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Run delivered (idempotent on run_id)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "operationId": "get_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow run detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/approval": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "operationId": "resolve_workflow_approval",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveWorkflowApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Approval resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No pending approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workflow-runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "operationId": "cancel_workflow_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "tags": [
@@ -8020,6 +8242,20 @@
           }
         }
       },
+      "CreateWorkflowRunRequest": {
+        "type": "object",
+        "description": "Delivery request: the fully-resolved plan JSON (opaque here — the runtime's\nworkflow domain deserializes it strictly and rejects unknown step kinds) and\nthe workspace the run executes in. Idempotent on the plan's `run_id`.",
+        "required": [
+          "plan",
+          "workspaceId"
+        ],
+        "properties": {
+          "plan": {},
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
       "CreateWorkspaceFileEntryKind": {
         "type": "string",
         "enum": [
@@ -12843,6 +13079,18 @@
           }
         }
       },
+      "ResolveWorkflowApprovalRequest": {
+        "type": "object",
+        "description": "Resolve a durable approval (`human.approval`, or an `agent.goal` step paused\nfor approval on a block).",
+        "required": [
+          "approve"
+        ],
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      },
       "ResolveWorkspaceFromPathRequest": {
         "type": "object",
         "required": [
@@ -16095,6 +16343,227 @@
             ]
           }
         }
+      },
+      "WorkflowRunListResponse": {
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunSummaryView"
+            }
+          }
+        }
+      },
+      "WorkflowRunStatus": {
+        "type": "string",
+        "description": "The anyharness-local run status vocabulary (mirrors the server ledger's\nobserved state; the server owns the desired/delivery states separately).\nNon-terminal: `running | waiting_approval`; terminal: `completed | failed |\ncancelled`.",
+        "enum": [
+          "running",
+          "waiting_approval",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "WorkflowRunSummaryView": {
+        "type": "object",
+        "description": "A run summary without step detail, for the run list.",
+        "required": [
+          "runId",
+          "workspaceId",
+          "status",
+          "stepCursor",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "stepCursor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "triggerKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workflowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunView": {
+        "type": "object",
+        "description": "The full run view: the run record plus its step runs and the session ids the\nrun has opened. This is the shape `GET /v1/workflow-runs/{id}` returns and\nthe `POST` echoes on idempotent delivery.",
+        "required": [
+          "runId",
+          "workspaceId",
+          "status",
+          "stepCursor",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "stepCursor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStepRunView"
+            }
+          },
+          "targetMode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "triggerKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "versionN": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "workflowId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workflowVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowStepRunView": {
+        "type": "object",
+        "description": "A single step's observed execution truth. `output` carries the typed,\nstep-kind-specific output the run view + downstream template late-binding\nconsume (e.g. `{turnId, sessionId}`, `{exitCode, outputTail}`, `{prUrl}`).",
+        "required": [
+          "stepIndex",
+          "kind",
+          "status",
+          "attempt"
+        ],
+        "properties": {
+          "attempt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "output": {},
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowStepStatus"
+          },
+          "stepIndex": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "WorkflowStepStatus": {
+        "type": "string",
+        "description": "Per-step observed status. `waiting` is a step parked on a durable approval\n(human.approval, or an `agent.goal` blocked step paused for approval).",
+        "enum": [
+          "pending",
+          "running",
+          "waiting",
+          "completed",
+          "failed",
+          "skipped"
+        ]
       },
       "Workspace": {
         "type": "object",

@@ -53,6 +53,8 @@ use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workflows::service::WorkflowService;
+use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::access_store::WorkspaceAccessStore;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
@@ -73,6 +75,7 @@ use crate::domains::workspaces::store::WorkspaceStore;
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
+use crate::live::workflows::{WorkflowExecDeps, WorkflowRunManager};
 use crate::persistence::Db;
 
 #[derive(Debug, thiserror::Error)]
@@ -133,6 +136,8 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
+    pub workflow_service: Arc<WorkflowService>,
+    pub workflow_manager: WorkflowRunManager,
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
@@ -326,6 +331,17 @@ impl AppState {
             plan_service.clone(),
             goal_service.clone(),
         ));
+        // Workflow run engine (W3): the durable service + the live run manager
+        // (its own actors, spawned on delivery and on startup-resume).
+        let workflow_service = Arc::new(WorkflowService::new(WorkflowStore::new(db.clone())));
+        let workflow_manager = WorkflowRunManager::new(Arc::new(WorkflowExecDeps {
+            session_runtime: session_runtime.clone(),
+            goal_runtime: goal_runtime.clone(),
+            session_service: session_service.clone(),
+            workspace_runtime: workspace_runtime.clone(),
+            workflow_service: workflow_service.clone(),
+            acp_manager: acp_manager.clone(),
+        }));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
@@ -419,6 +435,9 @@ impl AppState {
         // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
         #[cfg(not(test))]
         agent_runtime.clone().spawn_startup_pass();
+        // Crash-resume: reload non-terminal workflow runs and respawn actors.
+        #[cfg(not(test))]
+        workflow_manager.clone().spawn_startup_pass();
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -463,6 +482,8 @@ impl AppState {
             plan_runtime,
             goal_service,
             goal_runtime,
+            workflow_service,
+            workflow_manager,
             acp_manager,
             terminal_service,
             agent_login_terminal_service,
