@@ -107,27 +107,29 @@ pub fn delete_session_agent_artifacts(
     }
 
     for file in files {
-        let target = match session.agent_kind.as_str() {
+        // Every location install wrote to must be swept — for claude that is
+        // both ~/.claude AND the isolated CLAUDE_CONFIG_DIR mirror when a
+        // runtime_home is present (codex already sweeps both roots via
+        // delete_codex_artifacts and returns early above).
+        let targets = match session.agent_kind.as_str() {
             "claude" => {
                 let target_slug = sanitize_claude_path(&workspace_path.to_string_lossy());
                 let rewritten_relative_path =
                     rewrite_claude_relative_path(&file.relative_path, &target_slug);
-                resolve_home_relative_artifact_path(
+                claude_artifact_targets(
                     &home_dir,
-                    &rewritten_relative_path.to_string_lossy(),
-                    &Path::new(".claude").join("projects").join(target_slug),
+                    runtime_home,
+                    &target_slug,
+                    &rewritten_relative_path,
                 )?
             }
-            "codex" => resolve_home_relative_artifact_path(
-                &home_dir,
-                &file.relative_path,
-                &Path::new(".codex").join("sessions"),
-            )?,
             _ => continue,
         };
-        if target.exists() {
-            fs::remove_file(&target)
-                .with_context(|| format!("removing agent artifact {}", target.display()))?;
+        for target in targets {
+            if target.exists() {
+                fs::remove_file(&target)
+                    .with_context(|| format!("removing agent artifact {}", target.display()))?;
+            }
         }
     }
 
@@ -168,46 +170,64 @@ fn install_claude_artifacts(
     runtime_home: Option<&Path>,
 ) -> anyhow::Result<()> {
     let target_slug = sanitize_claude_path(&workspace_path.to_string_lossy());
-    let home_allowed_prefix = Path::new(".claude").join("projects").join(&target_slug);
-    // A route-authed Claude launch (gateway or api_key — i.e. every cloud-sandbox
-    // session) reads its transcripts from an isolated CLAUDE_CONFIG_DIR
-    // (<runtime_home>/agent-auth/claude-config), NOT ~/.claude
-    // (route_auth::render::set_claude_config_dir + sanitize_claude_ambient).
-    // Native/unrouted launches (local desktop) read ~/.claude. Write the
-    // re-slugged transcript into BOTH so `--resume` finds it regardless of how
-    // the destination's Claude is routed. Without the isolated-dir mirror,
-    // preserve_native_sessions silently starts a fresh native session at the
-    // cloud destination (the transcript is present on disk but unreachable),
-    // losing the whole conversation — the exact failure this migration mode
-    // exists to prevent.
-    let config_dir = runtime_home.map(route_auth::claude_config_dir_path);
-    let config_allowed_prefix = Path::new("projects").join(&target_slug);
     for file in files {
         let rewritten_relative_path =
             rewrite_claude_relative_path(&file.relative_path, &target_slug);
-        let home_target = resolve_home_relative_artifact_path(
-            home_dir,
-            &rewritten_relative_path.to_string_lossy(),
-            &home_allowed_prefix,
-        )?;
-        write_artifact_file(&home_target, file)?;
-
-        if let Some(config_dir) = config_dir.as_deref() {
-            // Re-root ".claude/projects/<slug>/…" as "projects/<slug>/…" under the
-            // isolated config dir: CLAUDE_CONFIG_DIR replaces the whole ~/.claude
-            // root, so the tree below it is byte-for-byte identical.
-            if let Some(under_root) = strip_claude_root_component(&rewritten_relative_path) {
-                let config_target = resolve_home_relative_artifact_path(
-                    config_dir,
-                    &under_root.to_string_lossy(),
-                    &config_allowed_prefix,
-                )?;
-                write_artifact_file(&config_target, file)?;
-            }
+        for target in
+            claude_artifact_targets(home_dir, runtime_home, &target_slug, &rewritten_relative_path)?
+        {
+            write_artifact_file(&target, file)?;
         }
     }
 
     Ok(())
+}
+
+/// Resolve every on-disk location a re-slugged Claude artifact lives at, so
+/// install writes — and delete removes — the same set (the claude twin of
+/// codex's [`codex::codex_artifact_roots`]).
+///
+/// A native/unrouted Claude launch (local desktop) reads `~/.claude`; a
+/// route-authed launch (gateway or api_key — i.e. every cloud-sandbox session)
+/// reads its transcripts from an isolated CLAUDE_CONFIG_DIR
+/// (`<runtime_home>/agent-auth/claude-config`), NOT `~/.claude`
+/// (`route_auth::render::set_claude_config_dir` + `sanitize_claude_ambient`).
+/// Both locations must carry the re-slugged transcript so `--resume` finds it
+/// regardless of how the destination's Claude is routed. Without the
+/// isolated-dir mirror, preserve_native_sessions silently starts a fresh native
+/// session at the cloud destination (the transcript is present on disk but
+/// unreachable), losing the whole conversation — the exact failure this
+/// migration mode exists to prevent; and on delete the mirror is leaked
+/// indefinitely if it is not swept alongside the `~/.claude` copy.
+fn claude_artifact_targets(
+    home_dir: &Path,
+    runtime_home: Option<&Path>,
+    target_slug: &str,
+    rewritten_relative_path: &Path,
+) -> anyhow::Result<Vec<PathBuf>> {
+    let home_allowed_prefix = Path::new(".claude").join("projects").join(target_slug);
+    let mut targets = vec![resolve_home_relative_artifact_path(
+        home_dir,
+        &rewritten_relative_path.to_string_lossy(),
+        &home_allowed_prefix,
+    )?];
+
+    if let Some(runtime_home) = runtime_home {
+        // Re-root ".claude/projects/<slug>/…" as "projects/<slug>/…" under the
+        // isolated config dir: CLAUDE_CONFIG_DIR replaces the whole ~/.claude
+        // root, so the tree below it is byte-for-byte identical.
+        if let Some(under_root) = strip_claude_root_component(rewritten_relative_path) {
+            let config_dir = route_auth::claude_config_dir_path(runtime_home);
+            let config_allowed_prefix = Path::new("projects").join(target_slug);
+            targets.push(resolve_home_relative_artifact_path(
+                &config_dir,
+                &under_root.to_string_lossy(),
+                &config_allowed_prefix,
+            )?);
+        }
+    }
+
+    Ok(targets)
 }
 
 /// Re-root a rewritten `.claude/projects/<slug>/…` artifact path as
@@ -670,6 +690,81 @@ mod tests {
         // Install only copies into the new slug; it must not touch the
         // source slug's own files.
         assert!(transcript_path.exists());
+    }
+
+    #[test]
+    fn delete_claude_artifacts_removes_home_and_config_dir_mirror() {
+        // Symmetry regression: install with a runtime_home lays the transcript
+        // down in BOTH ~/.claude/projects/<slug> and the isolated
+        // CLAUDE_CONFIG_DIR mirror
+        // (<runtime_home>/agent-auth/claude-config/projects/<slug>). Delete must
+        // sweep BOTH, or destroy-source leaks the migrated conversation under
+        // the config dir indefinitely (the claude twin of delete_codex_artifacts,
+        // which already sweeps every codex_artifact_root). $HOME is redirected so
+        // delete's dirs::home_dir() resolves to the temp home.
+        let _env = crate::app::test_support::ENV_MUTEX
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .expect("env mutex");
+        let home = TempDirGuard::new("claude-delete-home");
+        let _home_guard = crate::app::test_support::set_home_env(Some(home.path()));
+
+        let native_session_id = "native-claude-delete";
+        let workspace_path = Path::new("/tmp/mobility-delete-workspace");
+        let slug = sanitize_claude_path(&workspace_path.to_string_lossy());
+
+        // Seed the source transcript so collect finds it, then install into the
+        // same workspace path with a runtime_home to lay down both copies.
+        let project_dir = home.path().join(".claude").join("projects").join(&slug);
+        fs::create_dir_all(&project_dir).expect("create project dir");
+        fs::write(
+            project_dir.join(format!("{native_session_id}.jsonl")),
+            b"{\"line\":1}\n",
+        )
+        .expect("write transcript");
+
+        let session = claude_session(native_session_id);
+        let collected = collect_claude_artifacts(home.path(), &session, workspace_path)
+            .expect("collect claude artifacts");
+        assert_eq!(collected.len(), 1);
+
+        let runtime_home = TempDirGuard::new("claude-delete-runtime");
+        install_claude_artifacts(
+            home.path(),
+            workspace_path,
+            &collected,
+            Some(runtime_home.path()),
+        )
+        .expect("install claude artifacts into both roots");
+
+        let home_transcript = project_dir.join(format!("{native_session_id}.jsonl"));
+        let config_transcript = runtime_home
+            .path()
+            .join("agent-auth")
+            .join("claude-config")
+            .join("projects")
+            .join(&slug)
+            .join(format!("{native_session_id}.jsonl"));
+        assert!(
+            home_transcript.exists(),
+            "home copy must exist after install"
+        );
+        assert!(
+            config_transcript.exists(),
+            "config-dir mirror must exist after install"
+        );
+
+        delete_session_agent_artifacts(&session, workspace_path, Some(runtime_home.path()))
+            .expect("delete claude artifacts from both roots");
+
+        assert!(
+            !home_transcript.exists(),
+            "delete must remove the ~/.claude copy"
+        );
+        assert!(
+            !config_transcript.exists(),
+            "delete must ALSO remove the CLAUDE_CONFIG_DIR mirror (regression)"
+        );
     }
 
     #[test]
