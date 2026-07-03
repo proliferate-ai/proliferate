@@ -10,10 +10,6 @@ import { Label } from "@proliferate/ui/primitives/Label";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ChevronDown, ChevronRight, Plus, X } from "@proliferate/ui/icons";
-import {
-  AgentHarnessModelSelector,
-  type AgentHarnessModelGroup,
-} from "@/components/agents/AgentHarnessModelSelector";
 import type { EditorAgent } from "./WorkflowStepPanel";
 import { WorkflowSelect } from "./WorkflowSelect";
 
@@ -42,6 +38,7 @@ function summaryText(setup: WorkflowSetup, agents: readonly EditorAgent[], argCo
   return parts.join(" · ");
 }
 
+/** Aligned columns shared by the arg table header and every arg row. */
 function ArgRow({
   arg,
   onChange,
@@ -52,20 +49,21 @@ function ArgRow({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border/70 p-2.5">
+    <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <Input
           value={arg.name}
           placeholder="name"
-          className="flex-1 font-mono text-ui-sm"
+          aria-label="Argument name"
+          className="min-w-0 flex-1 font-mono"
           onChange={(event) => onChange({ ...arg, name: event.target.value })}
         />
         <WorkflowSelect
           ariaLabel="Argument type"
           value={arg.type}
-          className="w-28"
+          className="w-24"
           menuWidthClassName="w-32"
-          align="end"
+          align="start"
           options={ARG_TYPES.map((type) => ({ value: type, label: type }))}
           onChange={(value) => {
             const type = value as WorkflowArgType;
@@ -79,36 +77,16 @@ function ArgRow({
             onChange(next);
           }}
         />
-        <Button variant="ghost" size="icon-sm" aria-label="Remove argument" onClick={onRemove}>
-          <X className="size-4" />
-        </Button>
-      </div>
-      {arg.type === "enum" ? (
-        <Input
-          value={(arg.enum ?? []).join(", ")}
-          placeholder="value1, value2"
-          onChange={(event) =>
-            onChange({
-              ...arg,
-              enum: event.target.value
-                .split(",")
-                .map((value) => value.trim())
-                .filter((value) => value.length > 0),
-            })
-          }
-        />
-      ) : null}
-      <div className="flex items-center justify-between gap-2">
         {arg.type === "boolean" ? (
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            Default
+          <div className="flex w-28 shrink-0 items-center">
             <Switch checked={arg.default === true} onChange={(checked) => onChange({ ...arg, default: checked })} />
-          </label>
+          </div>
         ) : (
           <Input
             value={arg.default === undefined ? "" : String(arg.default)}
-            placeholder="default (optional)"
-            className="flex-1 text-ui-sm"
+            placeholder="default"
+            aria-label="Default value"
+            className="w-28 shrink-0"
             onChange={(event) => {
               const raw = event.target.value;
               const value: WorkflowArgSpec = { ...arg };
@@ -121,11 +99,34 @@ function ArgRow({
             }}
           />
         )}
-        <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          Required
-          <Switch checked={arg.required} onChange={(checked) => onChange({ ...arg, required: checked })} />
-        </label>
+        <div className="flex w-14 shrink-0 justify-center">
+          <Switch
+            aria-label="Required"
+            checked={arg.required}
+            onChange={(checked) => onChange({ ...arg, required: checked })}
+          />
+        </div>
+        <Button variant="ghost" size="icon-sm" aria-label="Remove argument" className="shrink-0" onClick={onRemove}>
+          <X className="size-4" />
+        </Button>
       </div>
+      {arg.type === "enum" ? (
+        <Input
+          value={(arg.enum ?? []).join(", ")}
+          placeholder="value1, value2"
+          aria-label="Enum values"
+          className="font-mono"
+          onChange={(event) =>
+            onChange({
+              ...arg,
+              enum: event.target.value
+                .split(",")
+                .map((value) => value.trim())
+                .filter((value) => value.length > 0),
+            })
+          }
+        />
+      ) : null}
     </div>
   );
 }
@@ -133,11 +134,8 @@ function ArgRow({
 export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsChange }: WorkflowSetupCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const modelGroups: AgentHarnessModelGroup[] = agents.map((agent) => ({
-    agentKind: agent.kind,
-    agentDisplayName: agent.displayName,
-    models: agent.models.map((model) => ({ id: model.id, label: model.label, detail: agent.displayName })),
-  }));
+  const selectedAgent = agents.find((agent) => agent.kind === setup.harness);
+  const modelOptions = selectedAgent?.models ?? [];
 
   const updateArg = (index: number, next: WorkflowArgSpec) => {
     onArgsChange(args.map((arg, i) => (i === index ? next : arg)));
@@ -151,7 +149,7 @@ export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsCh
         className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-left transition-colors hover:bg-list-hover"
       >
         <span className="flex min-w-0 flex-col">
-          <span className="text-ui-sm font-medium text-foreground">Setup</span>
+          <span className="text-sm font-medium text-foreground">Setup</span>
           <span className="truncate text-xs text-muted-foreground">{summaryText(setup, agents, args.length)}</span>
         </span>
         {expanded ? <ChevronDown className="size-4 shrink-0 text-faint" /> : <ChevronRight className="size-4 shrink-0 text-faint" />}
@@ -159,18 +157,31 @@ export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsCh
 
       {expanded ? (
         <div className="flex flex-col gap-4 border-t border-border/60 px-4 py-4">
-          <div className="flex flex-col gap-1.5">
-            <Label>Agent</Label>
-            <AgentHarnessModelSelector
-              label="Agent"
-              agentKind={setup.harness || null}
-              selectedModelId={setup.model || null}
-              modelGroups={modelGroups}
-              className="max-w-full"
-              menuClassName="w-72"
-              onSelectModel={(harness, model) => onSetupChange({ ...setup, harness, model })}
-            />
-            <p className="text-xs text-faint">Workflow runs use the agent's bypass mode.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <Label>Agent</Label>
+              <WorkflowSelect
+                ariaLabel="Agent"
+                value={setup.harness || ""}
+                placeholder="Select agent"
+                options={agents.map((agent) => ({ value: agent.kind, label: agent.displayName }))}
+                onChange={(harness) => {
+                  const next = agents.find((agent) => agent.kind === harness);
+                  onSetupChange({ ...setup, harness, model: next?.models[0]?.id ?? "" });
+                }}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <Label>Model</Label>
+              <WorkflowSelect
+                ariaLabel="Model"
+                value={setup.model || ""}
+                placeholder="Select model"
+                disabled={modelOptions.length === 0}
+                options={modelOptions.map((model) => ({ value: model.id, label: model.label }))}
+                onChange={(model) => onSetupChange({ ...setup, model })}
+              />
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -186,41 +197,45 @@ export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsCh
                 onSetupChange({ ...setup, sessionBinding: value as WorkflowSessionBinding })
               }
             />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label>Target</Label>
-            <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-faint">
-              Run location is chosen when you run (this Mac or cloud). MCP/integration access inherits the target.
-            </div>
+            <p className="text-xs text-faint">
+              Workflow runs use the agent&apos;s bypass mode. Run location (this Mac or cloud) is chosen at run time.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <Label>Arguments</Label>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onArgsChange([...args, { name: "", type: "string", required: false }])}
-              >
-                <Plus className="size-3.5" />
-                Add
-              </Button>
+              <Label className="mb-0">Arguments</Label>
+              <span className="text-xs text-faint">Prompted on each run · use {"{{args.name}}"} in steps</span>
             </div>
-            {args.length === 0 ? (
-              <p className="text-xs text-faint">
-                No arguments. Add one to prompt for input on each run and use {"{{args.name}}"} in steps.
-              </p>
-            ) : (
-              args.map((arg, index) => (
-                <ArgRow
-                  key={index}
-                  arg={arg}
-                  onChange={(next) => updateArg(index, next)}
-                  onRemove={() => onArgsChange(args.filter((_, i) => i !== index))}
-                />
-              ))
-            )}
+
+            {args.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-0.5 text-xs text-faint">
+                  <span className="min-w-0 flex-1">Name</span>
+                  <span className="w-24">Type</span>
+                  <span className="w-28">Default</span>
+                  <span className="w-14 text-center">Req</span>
+                  <span className="w-7 shrink-0" />
+                </div>
+                {args.map((arg, index) => (
+                  <ArgRow
+                    key={index}
+                    arg={arg}
+                    onChange={(next) => updateArg(index, next)}
+                    onRemove={() => onArgsChange(args.filter((_, i) => i !== index))}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => onArgsChange([...args, { name: "", type: "string", required: false }])}
+              className="flex items-center gap-1.5 self-start rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Plus className="size-3.5" />
+              Add argument
+            </button>
           </div>
         </div>
       ) : null}
