@@ -22,24 +22,42 @@ pub struct GoalWire {
     pub status: GoalWireStatus,
     #[serde(default)]
     pub native_status: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub token_budget: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub tokens_used: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub time_used_seconds: Option<i64>,
     #[serde(default)]
     pub met_reason: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub iterations: Option<i64>,
     #[serde(default = "default_native")]
     pub native: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub updated_at_ms: Option<i64>,
 }
 
 fn default_native() -> bool {
     true
+}
+
+/// Numeric wire fields tolerate fractional JSON numbers (claude-agent-acp
+/// derives `timeUsedSeconds` from evaluator millisecond durations); anything
+/// non-numeric still fails the parse loudly.
+fn opt_i64_lenient<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Number>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(number) => number
+            .as_i64()
+            .or_else(|| number.as_f64().map(|value| value.round() as i64))
+            .map(Some)
+            .ok_or_else(|| serde::de::Error::custom("goal wire number is out of range")),
+    }
 }
 
 /// The normalized status vocabulary on the wire — identical to the contract
@@ -109,6 +127,26 @@ mod tests {
         assert_eq!(wire.native_status.as_deref(), Some("budgetLimited"));
         assert_eq!(wire.met_reason, None);
         assert!(wire.native);
+    }
+
+    #[test]
+    fn goal_wire_accepts_fractional_numeric_fields() {
+        let wire: GoalWire = serde_json::from_value(serde_json::json!({
+            "objective": "SMOKE.txt exists",
+            "status": "met",
+            "nativeStatus": "met",
+            "metReason": "file created",
+            "iterations": 1,
+            "tokensUsed": 577,
+            "timeUsedSeconds": 11.817,
+            "native": true,
+            "updatedAtMs": 1_780_000_000_000_i64
+        }))
+        .expect("fractional seconds must parse");
+
+        assert_eq!(wire.status, GoalWireStatus::Met);
+        assert_eq!(wire.time_used_seconds, Some(12));
+        assert_eq!(wire.tokens_used, Some(577));
     }
 
     #[test]
