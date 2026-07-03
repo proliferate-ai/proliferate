@@ -1,54 +1,99 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "@/lib/workflows/cloud/ensure-desktop-worker";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { useOrganizationStore } from "@/stores/organizations/organization-store";
 
-// User id the desktop worker is currently enrolled for. Module-level so
-// remounts (or StrictMode double-effects) don't re-enroll for the same user,
-// but keyed by user so switching accounts in one app process rotates the
-// worker + integration-gateway identity instead of silently keeping the
-// previous user's credentials.
-let enrolledUserId: string | null = null;
+// (user, org) key the desktop worker is currently enrolled for. Module-level
+// so remounts (or StrictMode double-effects) don't re-enroll for the same
+// identity, but keyed so switching accounts or organizations in one app
+// process rotates the worker + integration-gateway identity instead of
+// silently keeping the previous identity's credentials.
+let enrolledIdentityKey: string | null = null;
 
+// Delay before retrying a failed enrollment. Long enough not to hammer an
+// unreachable control plane, short enough that integrations recover without
+// a restart.
+const ENROLLMENT_RETRY_DELAY_MS = 15_000;
+
+function identityKey(userId: string, organizationId: string | null): string {
+  return `${userId}::${organizationId ?? ""}`;
+}
+
+// Enrollment guard transitions:
+// - user change: plain re-enroll — ticket consumption rotates the worker
+//   identity server-side, no teardown needed.
+// - org change from a non-null org: the destructive part (confirm, closing
+//   running local sessions, teardownDesktopWorker) already ran in the
+//   organization switch action BEFORE the store changed; here we only
+//   re-enroll under the new org.
+// - org change from null (org-less user gaining their first org): adopt in
+//   place — a plain re-enroll rotates the worker token without disturbing
+//   running sessions.
+// - sign-out: teardown (stop the local worker + delete the gateway dotfile;
+//   the server-side revoke ran in sign-out orchestration while the session
+//   was still valid).
+//
+// The organization is the store's activeOrganizationId without requiring the
+// validated flag: the server membership-validates the organization on
+// enrollment anyway, and waiting for validation would enroll org-less first
+// and then re-enroll once the organizations query resolves on every cold
+// start. A stale selection 404s server-side and the guard re-enrolls once the
+// selection lifecycle falls back to a real membership.
 export function useDesktopWorkerEnrollment(): void {
   const authStatus = useAuthStore((state) => state.status);
   const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const activeOrganizationId = useOrganizationStore(
+    (state) => state.activeOrganizationId,
+  );
+  const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
     if (authStatus === "bootstrapping") {
       return;
     }
     if (authStatus !== "authenticated" || !authUserId) {
-      // Signed out: revoke + stop the worker and clear the guard so the next
-      // login (any user) re-enrolls with a fresh identity.
-      if (enrolledUserId !== null) {
-        enrolledUserId = null;
+      // Signed out: stop the worker and clear the guard so the next login
+      // (any user) re-enrolls with a fresh identity.
+      if (enrolledIdentityKey !== null) {
+        enrolledIdentityKey = null;
         void teardownDesktopWorker();
       }
       return;
     }
-    if (enrolledUserId === authUserId) {
+    const nextIdentityKey = identityKey(authUserId, activeOrganizationId);
+    if (enrolledIdentityKey === nextIdentityKey) {
       return;
     }
-    // Fresh login or a different user in the same app process: enrolling hands
-    // the Tauri command a new ticket, which rotates the worker identity and
-    // (server-side) revokes the predecessor worker + gateway token.
-    //
-    // Claim the guard synchronously so concurrent renders don't double-enroll,
-    // but ensureDesktopWorker swallows its own errors — if it fails silently we
-    // must clear the guard, otherwise a single transient failure wedges this
-    // user out of a worker until sign-out/in. Reset only when the guard still
-    // holds the id we set: a newer sign-out or user switch may have already
-    // claimed it, and clobbering that would strand the newer identity. This is
-    // not a retry loop — one reset per failed attempt; the next effect run
-    // (re-bootstrap, status change, or user switch) retries.
-    const enrollingUserId = authUserId;
-    enrolledUserId = enrollingUserId;
-    void ensureDesktopWorker().then((ok) => {
-      if (!ok && enrolledUserId === enrollingUserId) {
-        enrolledUserId = null;
+    // Enrolling hands the Tauri command a new ticket, which rotates the
+    // worker identity and (server-side) revokes the predecessor worker +
+    // gateway token under the new (user, org) scope. The effect-captured
+    // organization is passed through so the enrolled org always matches the
+    // guard key, even if the store changes mid-flight.
+    enrolledIdentityKey = nextIdentityKey;
+    let cancelled = false;
+    let retryTimer: number | null = null;
+    void ensureDesktopWorker(activeOrganizationId).then((enrolled) => {
+      if (enrolled || enrolledIdentityKey !== nextIdentityKey) {
+        return;
+      }
+      // Enrollment failed (e.g. a network blip right after an org switch's
+      // deliberate teardown). Leaving the guard set would make the app
+      // believe a worker exists until the next identity change or restart,
+      // so clear it and schedule a retry (timer only while still mounted).
+      enrolledIdentityKey = null;
+      if (!cancelled) {
+        retryTimer = window.setTimeout(() => {
+          setRetryNonce((nonce) => nonce + 1);
+        }, ENROLLMENT_RETRY_DELAY_MS);
       }
     });
-  }, [authStatus, authUserId]);
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
+      }
+    };
+  }, [authStatus, authUserId, activeOrganizationId, retryNonce]);
 }
