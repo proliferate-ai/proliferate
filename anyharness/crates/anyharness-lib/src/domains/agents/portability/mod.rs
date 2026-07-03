@@ -3,6 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::Context;
 
+use crate::domains::agents::route_auth;
 use crate::domains::sessions::model::SessionRecord;
 
 const CLAUDE_SANITIZED_PATH_LIMIT: usize = 200;
@@ -40,13 +41,14 @@ pub fn install_session_agent_artifacts(
     session: &SessionRecord,
     workspace_path: &Path,
     files: &[AgentArtifactFileData],
+    runtime_home: Option<&Path>,
 ) -> anyhow::Result<()> {
     let Some(home_dir) = dirs::home_dir() else {
         anyhow::bail!("unable to resolve the current user's home directory");
     };
 
     match session.agent_kind.as_str() {
-        "claude" => install_claude_artifacts(&home_dir, workspace_path, files),
+        "claude" => install_claude_artifacts(&home_dir, workspace_path, files, runtime_home),
         "codex" => install_codex_artifacts(&home_dir, files),
         _ => install_agent_artifacts(&home_dir, files, Path::new("")),
     }
@@ -163,26 +165,73 @@ fn install_claude_artifacts(
     home_dir: &Path,
     workspace_path: &Path,
     files: &[AgentArtifactFileData],
+    runtime_home: Option<&Path>,
 ) -> anyhow::Result<()> {
     let target_slug = sanitize_claude_path(&workspace_path.to_string_lossy());
-    let allowed_prefix = Path::new(".claude").join("projects").join(&target_slug);
+    let home_allowed_prefix = Path::new(".claude").join("projects").join(&target_slug);
+    // A route-authed Claude launch (gateway or api_key — i.e. every cloud-sandbox
+    // session) reads its transcripts from an isolated CLAUDE_CONFIG_DIR
+    // (<runtime_home>/agent-auth/claude-config), NOT ~/.claude
+    // (route_auth::render::set_claude_config_dir + sanitize_claude_ambient).
+    // Native/unrouted launches (local desktop) read ~/.claude. Write the
+    // re-slugged transcript into BOTH so `--resume` finds it regardless of how
+    // the destination's Claude is routed. Without the isolated-dir mirror,
+    // preserve_native_sessions silently starts a fresh native session at the
+    // cloud destination (the transcript is present on disk but unreachable),
+    // losing the whole conversation — the exact failure this migration mode
+    // exists to prevent.
+    let config_dir = runtime_home.map(route_auth::claude_config_dir_path);
+    let config_allowed_prefix = Path::new("projects").join(&target_slug);
     for file in files {
         let rewritten_relative_path =
             rewrite_claude_relative_path(&file.relative_path, &target_slug);
-        let target = resolve_home_relative_artifact_path(
+        let home_target = resolve_home_relative_artifact_path(
             home_dir,
             &rewritten_relative_path.to_string_lossy(),
-            &allowed_prefix,
+            &home_allowed_prefix,
         )?;
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("creating parent directory {}", parent.display()))?;
+        write_artifact_file(&home_target, file)?;
+
+        if let Some(config_dir) = config_dir.as_deref() {
+            // Re-root ".claude/projects/<slug>/…" as "projects/<slug>/…" under the
+            // isolated config dir: CLAUDE_CONFIG_DIR replaces the whole ~/.claude
+            // root, so the tree below it is byte-for-byte identical.
+            if let Some(under_root) = strip_claude_root_component(&rewritten_relative_path) {
+                let config_target = resolve_home_relative_artifact_path(
+                    config_dir,
+                    &under_root.to_string_lossy(),
+                    &config_allowed_prefix,
+                )?;
+                write_artifact_file(&config_target, file)?;
+            }
         }
-        fs::write(&target, &file.content)
-            .with_context(|| format!("writing agent artifact {}", target.display()))?;
-        set_file_mode(&target, safe_artifact_file_mode(file.mode))?;
     }
 
+    Ok(())
+}
+
+/// Re-root a rewritten `.claude/projects/<slug>/…` artifact path as
+/// `projects/<slug>/…` for placement under an isolated CLAUDE_CONFIG_DIR (which
+/// stands in for the `~/.claude` root). Returns `None` for any path not under
+/// `.claude/` — there is nothing to mirror.
+fn strip_claude_root_component(relative_path: &Path) -> Option<PathBuf> {
+    let mut components = relative_path.components();
+    match components.next() {
+        Some(Component::Normal(first)) if first == ".claude" => {
+            Some(components.as_path().to_path_buf())
+        }
+        _ => None,
+    }
+}
+
+fn write_artifact_file(target: &Path, file: &AgentArtifactFileData) -> anyhow::Result<()> {
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("creating parent directory {}", parent.display()))?;
+    }
+    fs::write(target, &file.content)
+        .with_context(|| format!("writing agent artifact {}", target.display()))?;
+    set_file_mode(target, safe_artifact_file_mode(file.mode))?;
     Ok(())
 }
 
@@ -561,8 +610,14 @@ mod tests {
             "the test must exercise an actual slug rewrite"
         );
 
-        install_claude_artifacts(home.path(), destination_workspace_path, &collected)
-            .expect("install claude artifacts under the destination slug");
+        let runtime_home = TempDirGuard::new("claude-slug-roundtrip-runtime");
+        install_claude_artifacts(
+            home.path(),
+            destination_workspace_path,
+            &collected,
+            Some(runtime_home.path()),
+        )
+        .expect("install claude artifacts under the destination slug");
 
         let destination_project_dir = home
             .path()
@@ -585,6 +640,31 @@ mod tests {
         assert!(
             destination_nested.exists(),
             "nested session artifacts must land under the destination slug"
+        );
+
+        // The isolated CLAUDE_CONFIG_DIR mirror must carry the same re-slugged
+        // tree (a route-authed launch resumes from here, not ~/.claude).
+        let config_project_dir = runtime_home
+            .path()
+            .join("agent-auth")
+            .join("claude-config")
+            .join("projects")
+            .join(&destination_slug);
+        let config_transcript = config_project_dir.join(format!("{native_session_id}.jsonl"));
+        assert!(
+            config_transcript.exists(),
+            "main transcript must also mirror into the isolated CLAUDE_CONFIG_DIR"
+        );
+        assert_eq!(
+            fs::read(&config_transcript).expect("read config-dir transcript"),
+            b"{\"line\":1}\n"
+        );
+        assert!(
+            config_project_dir
+                .join(native_session_id)
+                .join("extra.json")
+                .exists(),
+            "nested session artifacts must also mirror into the isolated CLAUDE_CONFIG_DIR"
         );
         assert_eq!(
             fs::read(&destination_nested).expect("read nested destination artifact"),

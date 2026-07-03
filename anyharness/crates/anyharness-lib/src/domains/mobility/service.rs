@@ -616,8 +616,13 @@ impl MobilityService {
             session.mcp_binding_summaries_json = None;
             session.mcp_binding_policy =
                 crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace;
-            install_session_agent_artifacts(&session, &workspace_path, &bundle.agent_artifacts)
-                .map_err(|error| MobilityError::Invalid(error.to_string()))?;
+            install_session_agent_artifacts(
+                &session,
+                &workspace_path,
+                &bundle.agent_artifacts,
+                Some(self.session_runtime.runtime_home()),
+            )
+            .map_err(|error| MobilityError::Invalid(error.to_string()))?;
             imported_agent_artifact_count += bundle.agent_artifacts.len();
             if install_plan.relocate.contains(&session.id) {
                 self.session_runtime

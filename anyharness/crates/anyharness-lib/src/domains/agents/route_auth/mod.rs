@@ -34,6 +34,7 @@ pub(crate) mod test_support;
 use std::path::{Path, PathBuf};
 
 pub use plan::{GatewayModelPlan, GatewayModelResolve};
+pub(crate) use materialize::claude_config_dir_path;
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use render::{render_profile, RenderedRouteAuth};
 pub use state::{apply_state_file, load_state_file, state_file_path, AgentAuthState};
