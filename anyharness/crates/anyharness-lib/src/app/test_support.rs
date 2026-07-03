@@ -97,6 +97,31 @@ pub(crate) fn set_proliferate_dev_env(value: Option<&str>) -> ProliferateDevEnvG
     ProliferateDevEnvGuard { previous }
 }
 
+/// Restores `$HOME` on drop. Used to redirect `dirs::home_dir()`-backed writes
+/// (e.g. the ambient `~/.codex` mobility-install mirror) into a temp dir so a
+/// test never touches the developer's real home. Serialize with [`ENV_MUTEX`].
+pub(crate) struct HomeEnvGuard {
+    previous: Option<OsString>,
+}
+
+impl Drop for HomeEnvGuard {
+    fn drop(&mut self) {
+        match self.previous.as_ref() {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+}
+
+pub(crate) fn set_home_env(value: Option<&std::path::Path>) -> HomeEnvGuard {
+    let previous = std::env::var_os("HOME");
+    match value {
+        Some(path) => std::env::set_var("HOME", path),
+        None => std::env::remove_var("HOME"),
+    }
+    HomeEnvGuard { previous }
+}
+
 pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {
     let repo_root_id = format!("repo-root-{workspace_id}");
     let now = "2026-03-25T00:00:00Z";

@@ -49,7 +49,7 @@ pub fn install_session_agent_artifacts(
 
     match session.agent_kind.as_str() {
         "claude" => install_claude_artifacts(&home_dir, workspace_path, files, runtime_home),
-        "codex" => install_codex_artifacts(&home_dir, files),
+        "codex" => codex::install_codex_artifacts(&home_dir, runtime_home, files),
         _ => install_agent_artifacts(&home_dir, files, Path::new("")),
     }
 }
@@ -233,10 +233,6 @@ fn write_artifact_file(target: &Path, file: &AgentArtifactFileData) -> anyhow::R
         .with_context(|| format!("writing agent artifact {}", target.display()))?;
     set_file_mode(target, safe_artifact_file_mode(file.mode))?;
     Ok(())
-}
-
-fn install_codex_artifacts(home_dir: &Path, files: &[AgentArtifactFileData]) -> anyhow::Result<()> {
-    install_agent_artifacts(home_dir, files, &Path::new(".codex").join("sessions"))
 }
 
 fn install_agent_artifacts(
@@ -732,5 +728,142 @@ mod tests {
             ".codex/sessions/2026/rollout-native-123.jsonl"
         );
         assert_eq!(artifacts[0].content, b"runtime\n");
+    }
+
+    #[test]
+    fn install_codex_artifacts_writes_to_runtime_local_and_ambient_roots() {
+        // Install must be symmetric with collect's codex_artifact_roots: a
+        // migrated rollout lands in BOTH the runtime-local codex-local home
+        // (the CODEX_HOME a native/api_key route-authed launch scans) and the
+        // ambient ~/.codex (native/unrouted destinations). Before this fix
+        // install wrote only ~/.codex, so a route-authed sandbox resume found
+        // nothing and fell back to a fresh native session.
+        let home = TempDirGuard::new("codex-install-home");
+        let runtime_home = TempDirGuard::new("codex-install-runtime");
+        let file = AgentArtifactFileData {
+            relative_path: ".codex/sessions/2026/07/rollout-native-abc.jsonl".to_string(),
+            mode: 0o600,
+            content: b"{\"event\":\"ok\"}\n".to_vec(),
+        };
+
+        codex::install_codex_artifacts(
+            home.path(),
+            Some(runtime_home.path()),
+            std::slice::from_ref(&file),
+        )
+        .expect("install codex rollout into both roots");
+
+        let ambient = home
+            .path()
+            .join(".codex")
+            .join("sessions")
+            .join("2026")
+            .join("07")
+            .join("rollout-native-abc.jsonl");
+        assert!(
+            ambient.exists(),
+            "rollout must land under the ambient ~/.codex root"
+        );
+        assert_eq!(
+            fs::read(&ambient).expect("read ambient rollout"),
+            b"{\"event\":\"ok\"}\n"
+        );
+
+        let runtime_local = runtime_home
+            .path()
+            .join("agent-auth")
+            .join("codex-local")
+            .join("sessions")
+            .join("2026")
+            .join("07")
+            .join("rollout-native-abc.jsonl");
+        assert!(
+            runtime_local.exists(),
+            "rollout must also mirror into the runtime-local codex-local root"
+        );
+        assert_eq!(
+            fs::read(&runtime_local).expect("read runtime-local rollout"),
+            b"{\"event\":\"ok\"}\n"
+        );
+    }
+
+    #[test]
+    fn install_codex_artifacts_without_runtime_home_writes_only_ambient_root() {
+        // Native-auth destinations with no runtime-local codex home get the
+        // unchanged v1 behavior: the ambient ~/.codex write, and only that.
+        let home = TempDirGuard::new("codex-install-ambient-only");
+        let file = AgentArtifactFileData {
+            relative_path: ".codex/sessions/2026/rollout-native-xyz.jsonl".to_string(),
+            mode: 0o600,
+            content: b"solo\n".to_vec(),
+        };
+
+        codex::install_codex_artifacts(home.path(), None, std::slice::from_ref(&file))
+            .expect("install codex rollout into the ambient root");
+
+        assert!(home
+            .path()
+            .join(".codex")
+            .join("sessions")
+            .join("2026")
+            .join("rollout-native-xyz.jsonl")
+            .exists());
+    }
+
+    #[test]
+    fn install_codex_artifacts_rejects_path_traversal() {
+        // The `sessions` allowed-prefix guard must reject a `..` escape for the
+        // new runtime-local destination too — nothing may be written outside
+        // either codex home.
+        let home = TempDirGuard::new("codex-install-traversal-home");
+        let runtime_home = TempDirGuard::new("codex-install-traversal-runtime");
+        let malicious = AgentArtifactFileData {
+            relative_path: ".codex/sessions/../../evil.jsonl".to_string(),
+            mode: 0o600,
+            content: b"pwned\n".to_vec(),
+        };
+
+        let result = codex::install_codex_artifacts(
+            home.path(),
+            Some(runtime_home.path()),
+            std::slice::from_ref(&malicious),
+        );
+        assert!(
+            result.is_err(),
+            "a traversal path must be rejected, not written outside sessions/"
+        );
+        assert!(!runtime_home
+            .path()
+            .join("agent-auth")
+            .join("evil.jsonl")
+            .exists());
+        assert!(!home.path().join("evil.jsonl").exists());
+    }
+
+    #[test]
+    fn validate_session_agent_artifacts_rejects_codex_path_traversal() {
+        // The pre-install validation gate still rejects a codex traversal path
+        // and still accepts a well-formed rollout path unchanged.
+        let session = codex_session("native-123");
+        let workspace = Path::new("/tmp/mobility-dest");
+
+        let malicious = AgentArtifactFileData {
+            relative_path: ".codex/sessions/../../etc/passwd".to_string(),
+            mode: 0o600,
+            content: Vec::new(),
+        };
+        assert!(
+            validate_session_agent_artifacts(&session, workspace, std::slice::from_ref(&malicious))
+                .is_err(),
+            "validation must reject a codex traversal path"
+        );
+
+        let ok = AgentArtifactFileData {
+            relative_path: ".codex/sessions/2026/rollout-native-123.jsonl".to_string(),
+            mode: 0o600,
+            content: Vec::new(),
+        };
+        validate_session_agent_artifacts(&session, workspace, std::slice::from_ref(&ok))
+            .expect("a well-formed codex rollout path must validate");
     }
 }

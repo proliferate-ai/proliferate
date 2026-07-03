@@ -1365,6 +1365,128 @@ mod tests {
         }
     }
 
+    /// Like [`install_test_archive`] but attaches real agent artifacts to each
+    /// session bundle, so the install path exercises artifact materialization.
+    fn install_test_archive_with_artifacts(
+        workspace: &WorkspaceRecord,
+        base_commit_sha: &str,
+        sessions: Vec<(SessionRecord, Vec<AgentArtifactFileData>)>,
+    ) -> WorkspaceMobilityArchiveData {
+        WorkspaceMobilityArchiveData {
+            source_workspace_id: None,
+            source_workspace_path: "/dummy/mobility-source".to_string(),
+            repo_root_path: workspace.path.clone(),
+            branch_name: Some("main".to_string()),
+            base_commit_sha: base_commit_sha.to_string(),
+            files: Vec::new(),
+            deleted_paths: Vec::new(),
+            sessions: sessions
+                .into_iter()
+                .map(
+                    |(session, agent_artifacts)| WorkspaceMobilitySessionBundleData {
+                        session,
+                        live_config_snapshot: None,
+                        pending_config_changes: Vec::new(),
+                        pending_prompts: Vec::new(),
+                        prompt_attachments: Vec::new(),
+                        events: Vec::new(),
+                        raw_notifications: Vec::new(),
+                        agent_artifacts,
+                    },
+                )
+                .collect(),
+            session_links: Vec::new(),
+            session_link_completions: Vec::new(),
+            session_link_wake_schedules: Vec::new(),
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn install_workspace_archive_mirrors_codex_rollout_into_runtime_local_and_ambient_homes()
+    {
+        // Regression guard for the Codex twin of the Claude CLAUDE_CONFIG_DIR
+        // gap (b0e0495bf): a preserved Codex rollout must be installed into
+        // BOTH codex homes the destination runtime may resolve — the
+        // runtime-local codex-local home (scanned by native + api_key
+        // route-authed cloud launches) AND the ambient ~/.codex — so a
+        // route-authed sandbox resume finds the transcript instead of starting
+        // a fresh native session.
+        let (_repo_dir, runtime_home, state, workspace, base_commit_sha) =
+            build_install_destination("codex-mirror");
+        let ambient_home = MobilityServiceTestDir::new("codex-mirror-ambient");
+
+        let codex_session = install_test_session(
+            "session-codex-mirror",
+            &workspace.id,
+            "codex",
+            Some("native-codex-mirror"),
+            "Codex session",
+        );
+        let rollout = AgentArtifactFileData {
+            relative_path: ".codex/sessions/2026/07/rollout-native-codex-mirror.jsonl".to_string(),
+            mode: 0o600,
+            content: b"{\"codex\":\"rollout\"}\n".to_vec(),
+        };
+        let archive = install_test_archive_with_artifacts(
+            &workspace,
+            &base_commit_sha,
+            vec![(codex_session, vec![rollout])],
+        );
+
+        // Redirect the ambient ~/.codex write into a temp home for the install
+        // (serialized via ENV_MUTEX, HOME restored on guard drop) so the test
+        // never pollutes the developer's real ~/.codex.
+        let summary = {
+            let _env = crate::app::test_support::ENV_MUTEX
+                .get_or_init(|| std::sync::Mutex::new(()))
+                .lock()
+                .expect("env mutex");
+            let _home = crate::app::test_support::set_home_env(Some(ambient_home.path()));
+            install_archive_blocking(
+                &state,
+                &workspace.id,
+                &archive,
+                MobilityInstallMode::PreserveNativeSessions,
+            )
+            .await
+            .expect("install codex-mirror archive")
+        };
+        assert_eq!(summary.imported_agent_artifact_count, 1);
+
+        let runtime_local = runtime_home
+            .path()
+            .join("agent-auth")
+            .join("codex-local")
+            .join("sessions")
+            .join("2026")
+            .join("07")
+            .join("rollout-native-codex-mirror.jsonl");
+        assert!(
+            runtime_local.exists(),
+            "codex rollout must mirror into the runtime-local codex-local home"
+        );
+        assert_eq!(
+            std::fs::read(&runtime_local).expect("read runtime-local rollout"),
+            b"{\"codex\":\"rollout\"}\n"
+        );
+
+        let ambient = ambient_home
+            .path()
+            .join(".codex")
+            .join("sessions")
+            .join("2026")
+            .join("07")
+            .join("rollout-native-codex-mirror.jsonl");
+        assert!(
+            ambient.exists(),
+            "codex rollout must also land under the ambient ~/.codex"
+        );
+        assert_eq!(
+            std::fs::read(&ambient).expect("read ambient rollout"),
+            b"{\"codex\":\"rollout\"}\n"
+        );
+    }
+
     #[tokio::test(flavor = "current_thread")]
     async fn install_workspace_archive_preserve_mode_keeps_native_id_for_supported_kinds_only() {
         let (_repo_dir, _runtime_home, state, workspace, base_commit_sha) =

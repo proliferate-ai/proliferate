@@ -1,10 +1,11 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::Context;
 
 use super::{
-    file_mode, find_codex_rollout_path, read_file_relative_to_home, AgentArtifactFileData,
+    file_mode, find_codex_rollout_path, read_file_relative_to_home,
+    resolve_home_relative_artifact_path, write_artifact_file, AgentArtifactFileData,
 };
 use crate::domains::sessions::model::SessionRecord;
 
@@ -52,6 +53,88 @@ pub(super) fn delete_codex_artifacts(
     }
 
     Ok(())
+}
+
+/// Install collected Codex rollouts into EVERY `CODEX_HOME` the destination
+/// runtime may resolve, mirroring collect's [`codex_artifact_roots`] (install
+/// was previously asymmetric — it only wrote `~/.codex/sessions`):
+///
+/// - `<runtime_home>/agent-auth/codex-local` — the session-layer `CODEX_HOME`
+///   (`sessions::runtime::launch_env::prepare_local_codex_home`). This is the
+///   home a native launch uses AND the home an api_key route-authed launch
+///   uses: the codex api_key route sets only `OPENAI_API_KEY` and does NOT
+///   override `CODEX_HOME` (`route_auth::render::render_api_key`), so the
+///   codex-local value from the session layer survives the
+///   workspace→session→route_auth merge (`driver::process::merge_spawn_env`).
+///   Every cloud-sandbox Codex session in the migration path is api_key-routed
+///   (the e2e seeds `route-selections/<harness>/cloud` with `route=api_key`),
+///   so this is the root a route-authed sandbox launch actually scans.
+/// - `~/.codex` — native/unrouted destinations reading the ambient home
+///   (today's behavior, still correct).
+///
+/// Without the codex-local mirror a migrated Codex rollout is written only to
+/// `~/.codex` but the route-authed launch reads `codex-local`, so `resume`
+/// finds nothing and silently starts a fresh native session — the exact loss
+/// this preserve-native install mode exists to prevent (the Codex twin of the
+/// Claude `CLAUDE_CONFIG_DIR` gap fixed in b0e0495bf).
+///
+/// The gateway codex route DOES override `CODEX_HOME` to a revision-scoped
+/// `codex-home-<rev>` (`render::render_codex_gateway` →
+/// `materialize::materialize_codex_home`), but that dir is created lazily at
+/// launch and garbage-collected per revision — it cannot be pre-seeded at
+/// install time, and collect's [`codex_artifact_roots`] does not scan it
+/// either, so gateway-codex migration is symmetrically out of scope on both
+/// the collect and install sides (a pre-existing limitation, not a regression).
+pub(super) fn install_codex_artifacts(
+    home_dir: &Path,
+    runtime_home: Option<&Path>,
+    files: &[AgentArtifactFileData],
+) -> anyhow::Result<()> {
+    for root in codex_artifact_roots(home_dir, runtime_home) {
+        install_codex_artifacts_under_home(&root.codex_home, files)?;
+    }
+    Ok(())
+}
+
+/// Write each collected rollout under one `CODEX_HOME` root. Collected rollout
+/// paths are always rooted at `.codex/…` (`read_codex_file`); re-root them as
+/// `…` directly under `codex_home` (which stands in for the `.codex` root), so
+/// `.codex/sessions/<...>` lands at `<codex_home>/sessions/<...>`. Paths not
+/// under `.codex/` are skipped (nothing collected produces them). The
+/// `sessions` allowed-prefix preserves the path-traversal guarantee of
+/// [`resolve_home_relative_artifact_path`] for the new destination — a `..`
+/// component or an escape above `sessions/` fails the install loudly.
+fn install_codex_artifacts_under_home(
+    codex_home: &Path,
+    files: &[AgentArtifactFileData],
+) -> anyhow::Result<()> {
+    let allowed_prefix = Path::new("sessions");
+    for file in files {
+        let Some(under_home) = strip_codex_root_component(Path::new(&file.relative_path)) else {
+            continue;
+        };
+        let target = resolve_home_relative_artifact_path(
+            codex_home,
+            &under_home.to_string_lossy(),
+            allowed_prefix,
+        )?;
+        write_artifact_file(&target, file)?;
+    }
+    Ok(())
+}
+
+/// Re-root a collected `.codex/sessions/…` rollout path as `sessions/…` for
+/// placement directly under a `CODEX_HOME` root (which stands in for `.codex`).
+/// Returns `None` for any path not under `.codex/` — there is nothing to
+/// install.
+fn strip_codex_root_component(relative_path: &Path) -> Option<PathBuf> {
+    let mut components = relative_path.components();
+    match components.next() {
+        Some(Component::Normal(first)) if first == ".codex" => {
+            Some(components.as_path().to_path_buf())
+        }
+        _ => None,
+    }
 }
 
 struct CodexArtifactRoot {
