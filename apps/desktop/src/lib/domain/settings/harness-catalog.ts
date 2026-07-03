@@ -1,6 +1,6 @@
 import type {
   AgentAuthRoute,
-  AgentAuthRouteSelection,
+  AgentAuthSelection,
   AgentAuthSurface,
 } from "@proliferate/cloud-sdk";
 
@@ -71,25 +71,24 @@ export function defaultRouteForSurface(surface: AgentAuthSurface): AgentAuthRout
 }
 
 // The catalog is scoped per (surface, route); resolve which route's catalog to
-// show from the persisted selections. OpenCode composes slots, so its catalog
-// follows the gateway slot when present, then any api_key slot.
+// show from the enabled selection sources. Gateway wins over an api_key source;
+// an empty (native) scope falls back to the surface default.
 export function catalogRouteForSurface(
   harnessKind: string,
   surface: AgentAuthSurface,
-  selections: readonly AgentAuthRouteSelection[],
+  selections: readonly AgentAuthSelection[],
 ): AgentAuthRoute {
-  const surfaceSelections = selections.filter(
-    (entry) => entry.harnessKind === harnessKind && entry.surface === surface,
+  const scope = selections.filter(
+    (entry) =>
+      entry.harnessKind === harnessKind
+      && entry.surface === surface
+      && entry.enabled,
   );
-  if (harnessKind === "opencode") {
-    if (surfaceSelections.some((entry) => entry.route === "gateway")) {
-      return "gateway";
-    }
-    if (surfaceSelections.some((entry) => entry.route === "api_key")) {
-      return "api_key";
-    }
+  if (scope.some((entry) => entry.sourceKind === "gateway")) {
     return "gateway";
   }
-  const primary = surfaceSelections.find((entry) => entry.slot === "primary");
-  return primary?.route ?? defaultRouteForSurface(surface);
+  if (scope.some((entry) => entry.sourceKind === "api_key")) {
+    return "api_key";
+  }
+  return defaultRouteForSurface(surface);
 }

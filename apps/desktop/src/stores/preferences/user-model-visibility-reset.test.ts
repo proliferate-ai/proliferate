@@ -64,9 +64,6 @@ describe("user model visibility reset", () => {
           "composer-2-fast": true,
           "gpt-5.5-extra-high": false,
         },
-        gemini: {
-          "auto-gemini-2.5": true,
-        },
         opencode: {
           "opencode/ring-2.6-1t-free": true,
         },

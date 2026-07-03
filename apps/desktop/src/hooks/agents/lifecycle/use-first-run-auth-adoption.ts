@@ -1,38 +1,38 @@
 import { useEffect, useRef } from "react";
 import {
   useAgentGatewayCapabilities,
-  useRouteSelections,
-  useUpsertRouteSelection,
+  useAuthSelections,
+  usePutAuthSelections,
 } from "@proliferate/cloud-sdk-react";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { planFirstRunAuthAdoption } from "@/lib/domain/agents/auth-onboarding";
 
 /**
- * First-run adoption of local native credentials into route selections
- * (spec §9). Runs once per app run, and only when the user has zero route
- * selections, so a fresh profile picks up whatever the local AnyHarness
- * credential scan detected (or falls back to the managed gateway).
+ * First-run adoption of the managed gateway into auth selections (spec §9).
+ * Runs once per app run, and only when the user has zero selections, so a fresh
+ * profile that detected no native credentials falls back to the gateway.
+ * Harnesses with detected native creds are left on the implicit native state.
  *
  * Fire-and-forget: adoption failures are logged and never surfaced — the
- * settings page stays the authoritative place to manage routes.
+ * settings page stays the authoritative place to manage auth.
  */
 export function useFirstRunAuthAdoption() {
   const { cloudActive } = useCloudAvailabilityState();
   const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
-  const selectionsQuery = useRouteSelections(cloudActive);
+  const selectionsQuery = useAuthSelections(null, cloudActive);
   const {
     agents,
     isLoading: agentsLoading,
     reconcileSnapshot,
     reconcileStatus,
   } = useAgentCatalog();
-  const upsertSelection = useUpsertRouteSelection();
+  const putSelections = usePutAuthSelections();
   const attemptedRef = useRef(false);
 
-  const selections = selectionsQuery.data?.selections;
+  const selections = selectionsQuery.data;
   const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
-  const upsertMutate = upsertSelection.mutate;
+  const putMutate = putSelections.mutate;
 
   // The runtime hydrates the bundled seed then runs an installed-only reconcile
   // at startup; agent credential/install states are only trustworthy once that
@@ -64,11 +64,11 @@ export function useFirstRunAuthAdoption() {
       gatewayEnabled,
     });
     for (const action of actions) {
-      upsertMutate(
+      putMutate(
         {
           harnessKind: action.harnessKind,
           surface: action.surface,
-          body: { route: action.route, slot: "primary" },
+          body: { sources: [{ sourceKind: "gateway", enabled: true }] },
         },
         {
           onError: (error) => {
@@ -87,6 +87,6 @@ export function useFirstRunAuthAdoption() {
     gatewayEnabled,
     readinessSettled,
     selections,
-    upsertMutate,
+    putMutate,
   ]);
 }

@@ -131,7 +131,6 @@ fn detect_local_auth(kind: &CredentialDiscoveryKind, home_dir: &Path) -> bool {
         CredentialDiscoveryKind::None => false,
         CredentialDiscoveryKind::Claude => detect_shared_local_auth(ProviderId::Claude, home_dir),
         CredentialDiscoveryKind::Codex => detect_shared_local_auth(ProviderId::Codex, home_dir),
-        CredentialDiscoveryKind::Gemini => detect_shared_local_auth(ProviderId::Gemini, home_dir),
         CredentialDiscoveryKind::OpenCode => detect_opencode_local_auth(home_dir),
         CredentialDiscoveryKind::Cursor => detect_cursor_local_auth(home_dir),
         CredentialDiscoveryKind::Grok => detect_shared_local_auth(ProviderId::Xai, home_dir),
@@ -234,22 +233,6 @@ mod tests {
     }
 
     #[test]
-    fn detects_gemini_oauth_tokens() {
-        let home = make_temp_home();
-        let gemini_dir = home.join(".gemini");
-        std::fs::create_dir_all(&gemini_dir).expect("create gemini dir");
-        std::fs::write(
-            gemini_dir.join("oauth_creds.json"),
-            r#"{"refresh_token":"refresh-token"}"#,
-        )
-        .expect("write oauth creds");
-
-        assert!(detect_shared_local_auth(ProviderId::Gemini, &home));
-
-        let _ = std::fs::remove_dir_all(&home);
-    }
-
-    #[test]
     fn detects_claude_oauth_account() {
         let home = make_temp_home();
         std::fs::write(
@@ -273,18 +256,6 @@ mod tests {
         .expect("write claude.json");
 
         assert!(!detect_shared_local_auth(ProviderId::Claude, &home));
-
-        let _ = std::fs::remove_dir_all(&home);
-    }
-
-    #[test]
-    fn ignores_missing_gemini_oauth_tokens() {
-        let home = make_temp_home();
-        let gemini_dir = home.join(".gemini");
-        std::fs::create_dir_all(&gemini_dir).expect("create gemini dir");
-        std::fs::write(gemini_dir.join("oauth_creds.json"), r#"{}"#).expect("write oauth creds");
-
-        assert!(!detect_shared_local_auth(ProviderId::Gemini, &home));
 
         let _ = std::fs::remove_dir_all(&home);
     }

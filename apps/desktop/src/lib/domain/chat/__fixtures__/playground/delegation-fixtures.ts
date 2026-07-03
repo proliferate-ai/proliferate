@@ -52,7 +52,7 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     wakeScheduled: false,
   },
   {
-    sessionLinkId: "link-gemini-pro-mcp-catalog",
+    sessionLinkId: "link-grok-mcp-catalog",
     childSessionId: "354f014b-886a-4957-b315-f99e1c07ede4",
     label: "mcp-catalog",
     statusLabel: "Failed",
@@ -60,7 +60,7 @@ const RAW_PLAYGROUND_SUBAGENT_STRIP_ROWS = [
     wakeScheduled: false,
   },
   {
-    sessionLinkId: "link-gemini-flash-sdk",
+    sessionLinkId: "link-grok-sdk",
     childSessionId: "9d817b15-eda5-43a8-9141-d7db85993c45",
     label: "sdk-surface",
     statusLabel: "Working",

@@ -1273,7 +1273,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/api-keys": {
+    "/v1/cloud/agent-gateway/keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -1281,17 +1281,17 @@ export interface paths {
             cookie?: never;
         };
         /** List Agent Api Keys Endpoint */
-        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get"];
+        get: operations["list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get"];
         put?: never;
         /** Create Agent Api Key Endpoint */
-        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post"];
+        post: operations["create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/api-keys/{key_id}": {
+    "/v1/cloud/agent-gateway/keys/{key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1302,21 +1302,21 @@ export interface paths {
         put?: never;
         post?: never;
         /** Revoke Agent Api Key Endpoint */
-        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete"];
+        delete: operations["revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/route-selections": {
+    "/v1/cloud/agent-gateway/selections": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Agent Route Selections Endpoint */
-        get: operations["list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get"];
+        /** List Agent Auth Selections Endpoint */
+        get: operations["list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1325,7 +1325,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/agent-gateway/route-selections/{harness_kind}/{surface}": {
+    "/v1/cloud/agent-gateway/selections/{harness_kind}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1333,11 +1333,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Upsert Agent Route Selection Endpoint */
-        put: operations["upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put"];
+        /** Put Agent Auth Selections Endpoint */
+        put: operations["put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put"];
         post?: never;
-        /** Clear Agent Route Selection Endpoint */
-        delete: operations["clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1352,17 +1351,16 @@ export interface paths {
         };
         /**
          * Get Agent Auth State Endpoint
-         * @description Serve the caller's rendered state.json document for one surface.
+         * @description Serve the caller's rendered ``state.json`` v2 document for one surface.
          *
          *     This is the local-surface twin of the cloud materializer: the desktop
-         *     fetches ``surface=local`` and pushes the payload verbatim to its local
-         *     AnyHarness runtime (``PUT /v1/agent-auth/state``), which persists it at
-         *     ``<runtime_home>/agent-auth/state.json``.
+         *     fetches ``surface=local`` and pushes the payload to its local AnyHarness
+         *     runtime, which persists it at ``<runtime_home>/agent-auth/state.json``.
          *
          *     Trust model: the response carries the current user's OWN decrypted key
-         *     material (pool keys, gateway virtual key) — the same secrets the cloud
-         *     materializer writes into the user's own sandbox. Auth is the current
-         *     product user; nothing here crosses a user boundary.
+         *     material (vault keys, gateway virtual key) — the same secrets the cloud
+         *     materializer writes into the user's own sandbox. Nothing crosses a user
+         *     boundary.
          */
         get: operations["get_agent_auth_state_endpoint_v1_cloud_agent_gateway_state_get"];
         put?: never;
@@ -2447,42 +2445,26 @@ export interface components {
         };
         /** AgentApiKeyCreateRequest */
         AgentApiKeyCreateRequest: {
-            /** Provider */
-            provider: string;
-            /** Displayname */
-            displayName: string;
-            /** Secret */
-            secret: string;
-        };
-        /** AgentApiKeyListResponse */
-        AgentApiKeyListResponse: {
-            /** Keys */
-            keys: components["schemas"]["AgentApiKeyResponse"][];
+            /** Title */
+            title: string;
+            /** Value */
+            value: string;
         };
         /** AgentApiKeyResponse */
         AgentApiKeyResponse: {
             /** Id */
             id: string;
-            /** Provider */
-            provider: string;
-            /** Displayname */
-            displayName: string;
+            /** Title */
+            title: string;
             /** Redactedhint */
             redactedHint: string;
             /** Status */
             status: string;
-            /** Lastvalidatedat */
-            lastValidatedAt: string | null;
             /** Createdat */
             createdAt: string;
         };
-        /** AgentAuthRouteSelectionListResponse */
-        AgentAuthRouteSelectionListResponse: {
-            /** Selections */
-            selections: components["schemas"]["AgentAuthRouteSelectionResponse"][];
-        };
-        /** AgentAuthRouteSelectionResponse */
-        AgentAuthRouteSelectionResponse: {
+        /** AgentAuthSelectionResponse */
+        AgentAuthSelectionResponse: {
             /** Id */
             id: string;
             /** Harnesskind */
@@ -2492,78 +2474,92 @@ export interface components {
              * @enum {string}
              */
             surface: "local" | "cloud";
-            /** Slot */
-            slot: string;
             /**
-             * Route
+             * Sourcekind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
+            sourceKind: "gateway" | "api_key";
             /** Apikeyid */
             apiKeyId: string | null;
-            /** Revision */
-            revision: number;
+            /** Keytitle */
+            keyTitle: string | null;
+            /** Envvarname */
+            envVarName: string | null;
+            /** Providerhint */
+            providerHint: string | null;
+            /** Enabled */
+            enabled: boolean;
             /** Createdat */
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
         };
-        /** AgentAuthRouteSelectionUpsertRequest */
-        AgentAuthRouteSelectionUpsertRequest: {
+        /** AgentAuthSelectionsPutRequest */
+        AgentAuthSelectionsPutRequest: {
+            /** Sources */
+            sources: components["schemas"]["AgentAuthSourceInput"][];
+        };
+        /**
+         * AgentAuthSourceInput
+         * @description One entry of a full-desired-state PUT of a scope's selection sources.
+         */
+        AgentAuthSourceInput: {
             /**
-             * Route
+             * Sourcekind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
+            sourceKind: "gateway" | "api_key";
             /** Apikeyid */
             apiKeyId?: string | null;
+            /** Envvarname */
+            envVarName?: string | null;
+            /** Providerhint */
+            providerHint?: string | null;
             /**
-             * Slot
-             * @default primary
+             * Enabled
+             * @default true
              */
-            slot: string;
+            enabled: boolean;
+        };
+        /** AgentAuthStateHarness */
+        AgentAuthStateHarness: {
+            /** Harness Kind */
+            harness_kind: string;
+            /** Sources */
+            sources: components["schemas"]["AgentAuthStateSource"][];
         };
         /**
          * AgentAuthStateResponse
-         * @description The whole state.json document (``route_auth/state.rs::AgentAuthState``).
-         *
-         *     ``revision`` 0 with empty ``selections`` is the legacy/native marker: the
-         *     user has no selections for the surface and the runtime may fall through.
+         * @description The whole ``state.json`` v2 document (``route_auth/state.rs``).
          */
         AgentAuthStateResponse: {
+            /** Version */
+            version: number;
             /** Revision */
             revision: number;
             /** User Id */
-            user_id: string;
-            /** Selections */
-            selections: components["schemas"]["AgentAuthStateSelection"][];
+            user_id?: string | null;
+            /** Harnesses */
+            harnesses: components["schemas"]["AgentAuthStateHarness"][];
         };
         /**
-         * AgentAuthStateSelection
-         * @description One rendered selection in the AnyHarness state.json contract shape.
-         *
-         *     Field names are the on-disk contract (snake_case, matching the serde
-         *     structs in ``route_auth/state.rs``) — deliberately NOT camelCased like the
-         *     rest of this module. ``key`` is decrypted material (see module docstring).
+         * AgentAuthStateSource
+         * @description A single credential source (contract §3). Key material for the caller.
          */
-        AgentAuthStateSelection: {
-            /** Harness */
-            harness: string;
+        AgentAuthStateSource: {
             /**
-             * Route
+             * Kind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
-            /** Slot */
-            slot: string;
-            /** Provider */
-            provider?: string | null;
+            kind: "gateway" | "api_key";
             /** Base Url */
             base_url?: string | null;
             /** Key */
             key?: string | null;
-            /** Model Catalog */
-            model_catalog?: string[] | null;
+            /** Env Var Name */
+            env_var_name?: string | null;
+            /** Value */
+            value?: string | null;
         };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
@@ -2571,7 +2567,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "claude" | "codex" | "gemini" | "cursor" | "opencode" | "grok";
+            kind: "claude" | "codex" | "cursor" | "opencode" | "grok";
             /** Displayname */
             displayName: string;
             harness: components["schemas"]["AgentCatalogHarnessPins"];
@@ -2842,8 +2838,6 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
-            /** Providers */
-            providers?: components["schemas"]["AgentGatewayProviderInfo"][];
         };
         /** AgentGatewayCatalogOverrideResponse */
         AgentGatewayCatalogOverrideResponse: {
@@ -2924,24 +2918,6 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
-        };
-        /**
-         * AgentGatewayProviderInfo
-         * @description One PROVIDER_REGISTRY entry; the UI never hardcodes provider metadata.
-         */
-        AgentGatewayProviderInfo: {
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
-            /** Envkey */
-            envKey: string;
-            /** Keyurl */
-            keyUrl: string;
-            /** Harnesses */
-            harnesses: string[];
-            /** Recommendedfor */
-            recommendedFor: string[];
         };
         /** AgentRunConfigCreateRequest */
         AgentRunConfigCreateRequest: {
@@ -4134,10 +4110,10 @@ export interface components {
              */
             surface: "local" | "cloud";
             /**
-             * Route
+             * Sourcekind
              * @enum {string}
              */
-            route: "native" | "api_key" | "gateway";
+            sourceKind: "gateway" | "api_key";
         };
         /** OrgAgentPolicyViolationListResponse */
         OrgAgentPolicyViolationListResponse: {
@@ -7925,7 +7901,7 @@ export interface operations {
             };
         };
     };
-    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_api_keys_get: {
+    list_agent_api_keys_endpoint_v1_cloud_agent_gateway_keys_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -7940,12 +7916,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentApiKeyListResponse"];
+                    "application/json": components["schemas"]["AgentApiKeyResponse"][];
                 };
             };
         };
     };
-    create_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys_post: {
+    create_agent_api_key_endpoint_v1_cloud_agent_gateway_keys_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7978,7 +7954,7 @@ export interface operations {
             };
         };
     };
-    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_api_keys__key_id__delete: {
+    revoke_agent_api_key_endpoint_v1_cloud_agent_gateway_keys__key_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -8009,9 +7985,11 @@ export interface operations {
             };
         };
     };
-    list_agent_route_selections_endpoint_v1_cloud_agent_gateway_route_selections_get: {
+    list_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections_get: {
         parameters: {
-            query?: never;
+            query?: {
+                surface?: ("local" | "cloud") | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8024,34 +8002,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentAuthRouteSelectionListResponse"];
-                };
-            };
-        };
-    };
-    upsert_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                harness_kind: string;
-                surface: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentAuthRouteSelectionUpsertRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentAuthRouteSelectionResponse"];
+                    "application/json": components["schemas"]["AgentAuthSelectionResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -8065,26 +8016,31 @@ export interface operations {
             };
         };
     };
-    clear_agent_route_selection_endpoint_v1_cloud_agent_gateway_route_selections__harness_kind___surface__delete: {
+    put_agent_auth_selections_endpoint_v1_cloud_agent_gateway_selections__harness_kind__put: {
         parameters: {
-            query?: {
-                slot?: string;
+            query: {
+                surface: "local" | "cloud";
             };
             header?: never;
             path: {
                 harness_kind: string;
-                surface: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentAuthSelectionsPutRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AgentAuthSelectionResponse"][];
+                };
             };
             /** @description Validation Error */
             422: {

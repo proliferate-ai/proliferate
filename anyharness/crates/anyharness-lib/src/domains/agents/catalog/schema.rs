@@ -109,7 +109,7 @@ pub enum AgentCatalogArtifactSource {
         #[serde(default)]
         sha256: Option<String>,
         /// ACP-mode launch args baked into the managed launcher (e.g.
-        /// `["--acp"]` for gemini).
+        /// `["agent", "stdio"]` for grok).
         #[serde(default)]
         args: Vec<String>,
     },
@@ -357,7 +357,7 @@ mod tests {
             probed_against.registry_version.as_deref(),
             Some(bundled_registry_version().as_str())
         );
-        assert_eq!(catalog.agents.len(), 6);
+        assert_eq!(catalog.agents.len(), 5);
 
         let claude = &catalog.agents[0];
         assert_eq!(claude.kind, "claude");
@@ -442,7 +442,7 @@ mod tests {
             .iter()
             .any(|variant| variant.starts_with(&format!("{}[", with_variants.id))));
 
-        let opencode = &catalog.agents[5];
+        let opencode = &catalog.agents[4];
         assert!(opencode
             .auth_contexts
             .iter()

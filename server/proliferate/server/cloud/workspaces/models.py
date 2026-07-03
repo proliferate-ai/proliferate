@@ -129,7 +129,7 @@ class WorkspaceSummary(BaseModel):
     )
     last_activity_at: str | None = Field(default=None, serialization_alias="lastActivityAt")
     allowed_agent_kinds: list[str] = Field(
-        default_factory=lambda: ["claude", "codex", "opencode", "gemini", "grok"],
+        default_factory=lambda: ["claude", "codex", "opencode", "grok"],
         serialization_alias="allowedAgentKinds",
     )
     ready_agent_kinds: list[str] = Field(

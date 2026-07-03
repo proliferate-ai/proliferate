@@ -62,7 +62,6 @@ function normalizeComposerLabel(label: string): string {
     .replace(/^Claude\s*·\s*/i, "")
     .replace(/^Claude\s+(?=Sonnet|Haiku|Opus)/i, "")
     .replace(/^OpenAI\s*·\s*/i, "")
-    .replace(/^Gemini\s*·\s*/i, "")
     .replace(/^Codex\s*·\s*/i, "");
 }
 
@@ -77,8 +76,6 @@ function composerControlIcon(control: CloudChatComposerControlView | null): Mobi
       return "openai";
     case "claude":
       return "claude";
-    case "gemini":
-      return "gemini";
     case "shieldCheck":
       return "shield";
     case "chat":

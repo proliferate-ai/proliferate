@@ -12,6 +12,7 @@
       "@proliferate/product-domain/*": ["../packages/product-domain/src/*"]
     },
     "skipLibCheck": true,
+    "resolveJsonModule": true,
 
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

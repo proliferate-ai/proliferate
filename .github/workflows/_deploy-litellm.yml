@@ -14,7 +14,8 @@
 #            LITELLM_DEPLOY_ENABLED (set "true" once the RDS + ECS service exist)
 #   secrets: LITELLM_DATABASE_URL, LITELLM_MASTER_KEY,
 #            AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY,
-#            AGENT_GATEWAY_MANAGED_OPENAI_API_KEY
+#            AGENT_GATEWAY_MANAGED_OPENAI_API_KEY,
+#            AGENT_GATEWAY_MANAGED_XAI_API_KEY
 name: Deploy LiteLLM
 
 on:
@@ -62,6 +63,7 @@ jobs:
       LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
       AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY: ${{ secrets.AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY }}
       AGENT_GATEWAY_MANAGED_OPENAI_API_KEY: ${{ secrets.AGENT_GATEWAY_MANAGED_OPENAI_API_KEY }}
+      AGENT_GATEWAY_MANAGED_XAI_API_KEY: ${{ secrets.AGENT_GATEWAY_MANAGED_XAI_API_KEY }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
       GIT_SHA: ${{ inputs.git_sha }}
     steps:
@@ -91,6 +93,7 @@ jobs:
           : "${LITELLM_MASTER_KEY:?Set the LITELLM_MASTER_KEY secret on the GitHub environment.}"
           : "${AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY:?Set the AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY secret on the GitHub environment.}"
           : "${AGENT_GATEWAY_MANAGED_OPENAI_API_KEY:?Set the AGENT_GATEWAY_MANAGED_OPENAI_API_KEY secret on the GitHub environment.}"
+          : "${AGENT_GATEWAY_MANAGED_XAI_API_KEY:?Set the AGENT_GATEWAY_MANAGED_XAI_API_KEY secret on the GitHub environment.}"
 
       - name: Configure AWS credentials
         if: ${{ steps.switch.outputs.deploy == 'true' }}
@@ -152,6 +155,8 @@ jobs:
             --type SecureString --value "$AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY" --overwrite >/dev/null
           aws ssm put-parameter --name "${parameter_prefix}/openai-api-key" \
             --type SecureString --value "$AGENT_GATEWAY_MANAGED_OPENAI_API_KEY" --overwrite >/dev/null
+          aws ssm put-parameter --name "${parameter_prefix}/xai-api-key" \
+            --type SecureString --value "$AGENT_GATEWAY_MANAGED_XAI_API_KEY" --overwrite >/dev/null
 
           jq -n \
             '[]' > env-updates.json
@@ -162,7 +167,8 @@ jobs:
               {"name":"DATABASE_URL","valueFrom":($prefix + "/database-url")},
               {"name":"LITELLM_MASTER_KEY","valueFrom":($prefix + "/master-key")},
               {"name":"ANTHROPIC_API_KEY","valueFrom":($prefix + "/anthropic-api-key")},
-              {"name":"OPENAI_API_KEY","valueFrom":($prefix + "/openai-api-key")}
+              {"name":"OPENAI_API_KEY","valueFrom":($prefix + "/openai-api-key")},
+              {"name":"XAI_API_KEY","valueFrom":($prefix + "/xai-api-key")}
             ]' > secret-updates.json
 
           jq \
@@ -174,7 +180,7 @@ jobs:
               def merge_environment($updates):
                 (.environment // []) as $current
                 | ($updates[0] | map(.name)) as $updated_names
-                | ["DATABASE_URL", "LITELLM_MASTER_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"] as $secret_names
+                | ["DATABASE_URL", "LITELLM_MASTER_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"] as $secret_names
                 | ($current | map(select(
                     .name as $name
                     | ($updated_names | index($name) | not)

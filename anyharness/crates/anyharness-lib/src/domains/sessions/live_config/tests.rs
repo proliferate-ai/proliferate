@@ -130,10 +130,10 @@ fn normalize_controls_preserves_uncurated_live_model_values() {
 fn normalize_controls_synthesizes_model_from_acp_model_state_when_no_raw_model_option_exists() {
     let controls = normalize_controls(
         &[],
-        Some("gemini-3-pro-preview"),
+        Some("grok-4.3"),
         &[
-            session_model_option("gemini-3-pro-preview", "Gemini 3 Pro"),
-            session_model_option("gemini-3-flash-preview", "Gemini 3 Flash"),
+            session_model_option("grok-4.3", "Grok 4.3"),
+            session_model_option("grok-build-0.1", "Grok Build"),
         ],
         None,
     );
@@ -146,17 +146,17 @@ fn normalize_controls_synthesizes_model_from_acp_model_state_when_no_raw_model_o
         .collect::<Vec<_>>();
 
     assert_eq!(model.raw_config_id, ACP_MODEL_COMPAT_CONFIG_ID);
-    assert_eq!(model.current_value.as_deref(), Some("gemini-3-pro-preview"));
+    assert_eq!(model.current_value.as_deref(), Some("grok-4.3"));
     assert!(model.settable);
-    assert_eq!(labels, vec!["Gemini 3 Pro", "Gemini 3 Flash"]);
+    assert_eq!(labels, vec!["Grok 4.3", "Grok Build"]);
 }
 
 #[test]
 fn normalize_controls_prefers_raw_model_option_over_acp_model_state() {
     let controls = normalize_controls(
         &[model_option(&["sonnet", "haiku"])],
-        Some("gemini-3-pro-preview"),
-        &[session_model_option("gemini-3-pro-preview", "Gemini 3 Pro")],
+        Some("grok-4.3"),
+        &[session_model_option("grok-4.3", "Grok 4.3")],
         None,
     );
 
@@ -273,7 +273,7 @@ fn build_live_config_snapshot_keeps_raw_options_exact_when_mode_is_synthesized()
     model.category = Some(acp::schema::SessionConfigOptionCategory::Model);
 
     let snapshot = build_live_config_snapshot(
-        "gemini",
+        "grok",
         &[model],
         None,
         &[],

@@ -18,7 +18,7 @@ pub(crate) fn discovery_fact_kinds(home_dir: &Path) -> Vec<String> {
 }
 
 /// `XDG_DATA_HOME` is a path override (not a credential), honored only when
-/// `home_dir` is the process home — mirroring `CODEX_HOME`/`GEMINI_CLI_HOME`.
+/// `home_dir` is the process home — mirroring `CODEX_HOME`.
 fn auth_json_path(home_dir: &Path) -> PathBuf {
     let default_data_home = home_dir.join(".local").join("share");
     resolve_process_override_path("XDG_DATA_HOME", home_dir, default_data_home)
