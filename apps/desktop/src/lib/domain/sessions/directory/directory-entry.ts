@@ -1,4 +1,5 @@
 import type {
+  Goal,
   PendingInteraction,
   SessionActionCapabilities,
   SessionExecutionSummary,
@@ -43,6 +44,8 @@ export interface SessionDirectoryEntry {
   executionSummary: SessionExecutionSummary | null;
   mcpBindingSummaries: SessionMcpBindingSummary[] | null;
   pendingConfigChanges: PendingSessionConfigChanges;
+  /** Mirrored native goal (latest non-cleared); null when no goal exists. */
+  activeGoal: Goal | null;
   status: SessionStatus | null;
   lastPromptAt: string | null;
   hasAttemptedPrompt: boolean;
@@ -66,6 +69,7 @@ export interface DirectoryEntryInput {
   executionSummary?: SessionExecutionSummary | null;
   mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
   pendingConfigChanges?: PendingSessionConfigChanges;
+  activeGoal?: Goal | null;
   status?: SessionStatus | null;
   lastPromptAt?: string | null;
   hasAttemptedPrompt?: boolean;
@@ -123,6 +127,10 @@ export function normalizeDirectoryEntryInput(
       ?? existing?.mcpBindingSummaries
       ?? null,
     pendingConfigChanges: input.pendingConfigChanges ?? existing?.pendingConfigChanges ?? {},
+    activeGoal:
+      input.activeGoal !== undefined
+        ? input.activeGoal
+        : existing?.activeGoal ?? null,
     status: input.status ?? existing?.status ?? null,
     lastPromptAt: input.lastPromptAt ?? existing?.lastPromptAt ?? null,
     hasAttemptedPrompt:
@@ -178,6 +186,7 @@ export function directoryEntryEqual(
     && a.executionSummary === b.executionSummary
     && a.mcpBindingSummaries === b.mcpBindingSummaries
     && a.pendingConfigChanges === b.pendingConfigChanges
+    && a.activeGoal === b.activeGoal
     && a.status === b.status
     && a.lastPromptAt === b.lastPromptAt
     && a.hasAttemptedPrompt === b.hasAttemptedPrompt
