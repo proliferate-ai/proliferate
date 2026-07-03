@@ -9,6 +9,7 @@ import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSectio
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
 import { useCloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
 import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
@@ -206,9 +207,9 @@ function ActionsLocalEditor({ repository }: { repository: SettingsRepositoryEntr
             className="sm:flex-col sm:items-stretch"
           >
             {isDetecting ? (
-              <div className="flex animate-pulse flex-col gap-2">
-                <div className="h-4 w-32 rounded bg-muted" />
-                <div className="h-4 w-56 rounded bg-muted" />
+              <div className="flex flex-col gap-2" role="status" aria-label="Detecting setup commands">
+                <SkeletonBlock className="h-4 w-32" style={shimmerDelay(0)} />
+                <SkeletonBlock className="h-4 w-56" style={shimmerDelay(1)} />
               </div>
             ) : (
               <div className="w-full space-y-4">
@@ -268,14 +269,14 @@ function SetupHintRows({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">{title}</p>
-      <div className="flex flex-col gap-1">
+      <p className="text-ui-sm font-medium text-muted-foreground">{title}</p>
+      <div className="flex flex-col gap-0.5">
         {hints.map((hint) => {
           const checked = isSetupHintEnabled(currentScript, hint.suggestedCommand);
           return (
             <Label
               key={hint.id}
-              className="mb-0 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-foreground/5"
+              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-foreground/5"
             >
               <Checkbox
                 checked={checked}
@@ -286,10 +287,10 @@ function SetupHintRows({
                 ))}
                 className="size-3.5 shrink-0 accent-foreground"
               />
-              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+              <span className="min-w-0 flex-1 truncate font-mono text-ui-sm text-foreground">
                 {hint.suggestedCommand}
               </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-base text-muted-foreground">
                 {hint.detectedFile}
               </span>
             </Label>

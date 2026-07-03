@@ -1,16 +1,14 @@
-import type { CSSProperties } from "react";
+import {
+  CloudChatAssistantLoadingRow,
+  CloudChatThoughtRow,
+} from "@proliferate/product-ui/chat/transcript/CloudChatTranscriptRowItems";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { PlaygroundThinkingTimingControls } from "@/components/playground/loading/PlaygroundThinkingTimingControls";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { renderChatTabIcon } from "@/components/workspace/shell/tabs/tab-rendering";
-
-/** Stagger sibling skeleton rows so the sweep reads top-down (120ms/row). */
-function shimmerDelay(row: number): CSSProperties {
-  return { "--shimmer-delay": `${row * 120}ms` } as CSSProperties;
-}
 
 export function PlaygroundLoadingStates() {
   return (
@@ -39,6 +37,35 @@ export function PlaygroundLoadingStates() {
             <SkeletonBlock className="h-3 w-5/6 bg-muted/45" style={shimmerDelay(2)} />
             <SkeletonBlock className="h-3 w-1/2 bg-muted/35" style={shimmerDelay(3)} />
           </div>
+        </div>
+      </section>
+
+      {/* The REAL shared cloud-transcript rows (product-ui): the assistant
+          loading row and a live thought row both ride the same ThinkingText
+          band sweep as the desktop transcript. */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-foreground">
+          Cloud transcript thinking rows
+        </h2>
+        <div className="flex flex-col gap-1 rounded-md border border-border p-4">
+          <CloudChatAssistantLoadingRow
+            row={{ id: "playground-loading", kind: "assistant", streaming: true }}
+          />
+          <CloudChatThoughtRow
+            row={{
+              id: "playground-thought-live",
+              kind: "thought",
+              streaming: true,
+              body: "Weighing the trade-offs between the two dock-slot owners.",
+            }}
+          />
+          <CloudChatThoughtRow
+            row={{
+              id: "playground-thought-done",
+              kind: "thought",
+              body: "Chose the compact row migration.",
+            }}
+          />
         </div>
       </section>
 

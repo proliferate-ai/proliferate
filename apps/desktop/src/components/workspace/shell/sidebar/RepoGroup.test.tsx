@@ -13,7 +13,7 @@ vi.mock("@proliferate/ui/icons", () => ({
   FolderClosedFilled: () => <span data-icon="folder-closed" />,
   FolderFilled: () => <span data-icon="folder-filled" />,
   Globe: () => <span data-icon="globe" />,
-  Plus: () => <span data-icon="plus" />,
+  SquarePlus: () => <span data-icon="plus" />,
   Settings: () => <span data-icon="settings" />,
   Trash: () => <span data-icon="trash" />,
 }));
