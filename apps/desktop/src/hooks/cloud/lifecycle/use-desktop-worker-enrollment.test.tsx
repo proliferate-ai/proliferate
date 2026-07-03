@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 
 const workflowMocks = vi.hoisted(() => ({
-  ensureDesktopWorker: vi.fn<() => Promise<void>>(),
+  ensureDesktopWorker: vi.fn<(organizationId: string | null) => Promise<boolean>>(),
   teardownDesktopWorker: vi.fn<() => Promise<void>>(),
 }));
 
@@ -57,7 +57,7 @@ describe("useDesktopWorkerEnrollment", () => {
   beforeEach(() => {
     workflowMocks.ensureDesktopWorker.mockReset();
     workflowMocks.teardownDesktopWorker.mockReset();
-    workflowMocks.ensureDesktopWorker.mockResolvedValue(undefined);
+    workflowMocks.ensureDesktopWorker.mockResolvedValue(true);
     workflowMocks.teardownDesktopWorker.mockResolvedValue(undefined);
   });
 
@@ -135,6 +135,7 @@ describe("useDesktopWorkerEnrollment", () => {
     await waitFor(() => {
       expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
     });
+    expect(workflowMocks.ensureDesktopWorker).toHaveBeenLastCalledWith("org-2");
     expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
   });
 
@@ -197,5 +198,28 @@ describe("useDesktopWorkerEnrollment", () => {
     harness.nudgeRender();
     await flushEffects();
     expect(workflowMocks.teardownDesktopWorker).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the guard and retries when enrollment fails", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker.mockResolvedValueOnce(false);
+      const harness = await loadEnrollmentHarness();
+
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+
+      // The failed attempt cleared the guard and scheduled a retry; once the
+      // delay elapses the effect re-runs and enrolls again.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

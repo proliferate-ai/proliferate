@@ -5,48 +5,41 @@ import {
   stopDesktopDispatchWorker,
 } from "@/lib/access/tauri/cloud-worker";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
-import { useOrganizationStore } from "@/stores/organizations/organization-store";
-
-// The organization the worker identity should be minted under. Read at call
-// time from the organization store (the non-React accessor, mirroring how
-// owner-context headers read it). Unlike request headers we do not require
-// the validated flag: the server membership-validates the organization on
-// enrollment anyway, and waiting for validation would enroll org-less first
-// and then re-enroll once the organizations query resolves on every cold
-// start. A stale selection 404s server-side and the (user, org) guard
-// re-enrolls once the selection lifecycle falls back to a real membership.
-export function getEnrollmentOrganizationId(): string | null {
-  return useOrganizationStore.getState().activeOrganizationId;
-}
 
 // ensureDesktopWorker and teardownDesktopWorker both mutate the single
 // physical worker process, but their callers dispatch them fire-and-forget.
 // Serialize them on a shared chain so a still-in-flight teardown from a quick
 // sign-out cannot kill the worker a subsequent sign-in just ensured (and vice
 // versa). Tasks swallow their own errors, so the chain never rejects.
-let workerLifecycleChain: Promise<void> = Promise.resolve();
+let workerLifecycleChain: Promise<unknown> = Promise.resolve();
 
-function enqueueWorkerLifecycleTask(task: () => Promise<void>): Promise<void> {
+function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
   const run = workerLifecycleChain.then(task, task);
   workerLifecycleChain = run;
   return run;
 }
 
 // Ensures a runtime dispatch worker is enrolled for this desktop install
-// under the active organization (null for org-less users).
+// under the given organization (null for org-less users). The caller passes
+// the organization it decided to enroll for — the enrollment guard's effect
+// captures it — instead of this workflow re-reading the store after an await,
+// so the enrolled org provably matches the guard's identity key even when the
+// active organization changes mid-flight.
 // Runs opportunistically on login; never blocks or throws on failure.
-export function ensureDesktopWorker(): Promise<void> {
+// Resolves false when enrollment failed so the guard can retry.
+export function ensureDesktopWorker(organizationId: string | null): Promise<boolean> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
       const desktopInstallId = await getDesktopInstallId();
       const { enrollmentToken } = await enrollDesktopWorker(
         desktopInstallId,
-        getEnrollmentOrganizationId(),
+        organizationId,
       );
       await ensureDesktopDispatchWorker({
         targetId: desktopInstallId,
         enrollmentToken,
       });
+      return true;
     } catch (error) {
       captureTelemetryException(error, {
         tags: {
@@ -54,6 +47,7 @@ export function ensureDesktopWorker(): Promise<void> {
           domain: "cloud",
         },
       });
+      return false;
     }
   });
 }
