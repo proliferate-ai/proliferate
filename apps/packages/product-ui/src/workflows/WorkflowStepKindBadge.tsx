@@ -11,26 +11,21 @@ import {
 } from "@proliferate/ui/icons";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
-interface KindVisual {
-  Icon: ComponentType<IconProps>;
-  /** Pill tint — subtle surface + colored ink, per kind. */
-  tint: string;
-}
-
 /**
- * Per-kind pill visuals (Ona parity): each step kind gets a tinted pill with a
- * matching icon from the app's icon set. Tints use design tokens only.
+ * Per-kind icons from the app icon set. The pill itself is deliberately
+ * monochrome — one quiet neutral treatment for every kind — so the icon
+ * shape, not a color, differentiates kinds on the mono-dark surface.
  */
-const KIND_VISUAL: Record<WorkflowStepKind, KindVisual> = {
-  "agent.prompt": { Icon: MessageSquare, tint: "bg-highlight text-info" },
-  "shell.run": { Icon: SquareTerminal, tint: "bg-warning text-warning-foreground" },
-  "scm.open_pr": { Icon: GitPullRequest, tint: "bg-pr-merged/15 text-pr-merged" },
-  notify: { Icon: SendIcon, tint: "bg-positive-muted text-positive" },
-  "human.approval": {
-    Icon: Pause,
-    tint: "bg-surface-elevated-secondary text-muted-foreground ring-1 ring-inset ring-border",
-  },
+const KIND_ICON: Record<WorkflowStepKind, ComponentType<IconProps>> = {
+  "agent.prompt": MessageSquare,
+  "shell.run": SquareTerminal,
+  "scm.open_pr": GitPullRequest,
+  notify: SendIcon,
+  "human.approval": Pause,
 };
+
+const PILL_TREATMENT =
+  "bg-surface-elevated-secondary text-foreground ring-1 ring-inset ring-border";
 
 export interface WorkflowStepKindBadgeProps {
   kind: WorkflowStepKind;
@@ -39,24 +34,24 @@ export interface WorkflowStepKindBadgeProps {
   className?: string;
 }
 
-/** The step-kind pill: a tinted icon + label chip (spec 3.6, Ona parity). */
+/** The step-kind pill: a quiet mono icon + label chip (spec 3.6). */
 export function WorkflowStepKindBadge({
   kind,
   iconOnly = false,
   className = "",
 }: WorkflowStepKindBadgeProps) {
   const meta = WORKFLOW_STEP_META[kind];
-  const { Icon, tint } = KIND_VISUAL[kind];
+  const Icon = KIND_ICON[kind];
   return (
     <span
       className={twMerge(
         "inline-flex select-none items-center gap-1.5 rounded-full px-2 py-0.5 text-sm font-medium leading-none",
-        tint,
+        PILL_TREATMENT,
         iconOnly ? "px-1 py-1" : "",
         className,
       )}
     >
-      <Icon className="size-3.5 shrink-0" aria-hidden />
+      <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       {iconOnly ? null : <span>{meta.label}</span>}
     </span>
   );
