@@ -11,7 +11,6 @@
 # Provider keys come from the container environment:
 #   ANTHROPIC_API_KEY  (deploy: from AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY)
 #   OPENAI_API_KEY     (deploy: from AGENT_GATEWAY_MANAGED_OPENAI_API_KEY)
-#   GEMINI_API_KEY     (optional; gemini entries 401 upstream until it is set)
 
 model_list:
   # Anthropic
@@ -70,16 +69,6 @@ model_list:
     litellm_params:
       model: anthropic/claude-haiku-4-5-20251001
       api_key: os.environ/ANTHROPIC_API_KEY
-
-  # Google (genai facade at the ROOT /v1beta path). Gemini model names MUST
-  # map to a real Google upstream: LiteLLM's genai->anthropic translation
-  # sends temperature+top_p together, which Anthropic rejects (see
-  # HARNESS-MATRIX.md). These entries return upstream auth errors until
-  # GEMINI_API_KEY is provided to the proxy environment.
-  - model_name: gemini-3.5-flash
-    litellm_params:
-      model: gemini/gemini-3.5-flash
-      api_key: os.environ/GEMINI_API_KEY
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

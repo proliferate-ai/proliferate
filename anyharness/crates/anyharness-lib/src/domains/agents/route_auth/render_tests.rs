@@ -352,50 +352,6 @@ fn grok_api_key_sets_only_xai_key() {
     assert!(!rendered.set.contains_key("HOME"));
 }
 
-// --- gemini ----------------------------------------------------------------
-
-#[test]
-fn gemini_gateway_uses_root_base_url_and_writes_settings() {
-    let home = TempHome::new("gemini-gw");
-    home.write_state_json(&gateway_state("gemini", None));
-
-    let rendered = resolve_launch_route_auth(home.path(), "gemini").expect("render");
-    // ROOT base url, NO /gemini prefix, NO trailing /v1beta (CLI appends it).
-    assert_eq!(
-        rendered.set.get("GOOGLE_GEMINI_BASE_URL").unwrap(),
-        GATEWAY_BASE_URL
-    );
-    assert_eq!(rendered.set.get("GEMINI_API_KEY").unwrap(), VK);
-    assert_eq!(
-        rendered.set.get("GEMINI_CLI_TRUST_WORKSPACE").unwrap(),
-        "true"
-    );
-    let gemini_home = rendered.set.get("HOME").expect("HOME");
-    assert!(gemini_home.contains("gemini-home-42"));
-
-    let settings: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(std::path::Path::new(gemini_home).join(".gemini/settings.json"))
-            .expect("read settings"),
-    )
-    .expect("json");
-    assert_eq!(
-        settings["security"]["auth"]["selectedType"],
-        "gemini-api-key"
-    );
-}
-
-#[test]
-fn gemini_api_key_sets_only_gemini_key() {
-    let home = TempHome::new("gemini-key");
-    home.write_state_json(&json!({
-        "revision": 1,
-        "selections": [ { "harness": "gemini", "route": "api_key", "key": "g-raw" } ]
-    }));
-    let rendered = resolve_launch_route_auth(home.path(), "gemini").expect("render");
-    assert_eq!(rendered.set.get("GEMINI_API_KEY").unwrap(), "g-raw");
-    assert!(!rendered.set.contains_key("HOME"));
-}
-
 // --- fail-closed / missing / malformed / native ----------------------------
 
 #[test]

@@ -2,8 +2,8 @@
 
 End-to-end checks against a LiteLLM agent-gateway deployment: proxy health,
 virtual-key mint, per-key model list, one chat completion, and spend-log
-visibility, followed by per-harness CLI runs (claude, codex, opencode, grok,
-gemini) that each drive the real CLI through the gateway.
+visibility, followed by per-harness CLI runs (claude, codex, opencode, grok)
+that each drive the real CLI through the gateway.
 
 ## Usage
 
@@ -28,8 +28,6 @@ AGENT_GATEWAY_LITELLM_MASTER_KEY=... \
 | `AGENT_GATEWAY_SMOKE_MODEL` | `claude-haiku-4-5` | Model exercised by the core completion check |
 | `AGENT_GATEWAY_SMOKE_HARNESS_MODEL` | `claude-haiku-4-5-20251001` | **Versioned** model id the harness CLIs pin (must be in the proxy `model_list` — CLIs send dated ids) |
 | `AGENT_GATEWAY_SMOKE_GROK_MODEL` | `grok-4-fast` | Model id the grok CLI requests (aliased in `server/litellm/config.yaml`) |
-| `AGENT_GATEWAY_SMOKE_GEMINI_MODEL` | `gemini-3.5-flash` | Model id the gemini CLI requests |
-| `GEMINI_UPSTREAM_AVAILABLE` | unset | Set to `1` when the proxy has a real Google upstream (`GEMINI_API_KEY`); otherwise `gemini.sh` SKIPs |
 
 Every minted smoke key has a $1 budget, is tagged with
 `metadata.purpose=agent-gateway-smoke`, and is deleted on exit.
@@ -47,7 +45,7 @@ Every minted smoke key has a $1 budget, is tagged with
    are async) until a row with `api_key == <minted token_id>` appears
 
 Then each per-harness runner (`claude.sh`, `codex.sh`, `opencode.sh`,
-`grok.sh`, `gemini.sh`) runs independently. Results are aggregated into a
+`grok.sh`) runs independently. Results are aggregated into a
 `harness results: claude=PASS codex=PASS ...` line; any FAIL makes `run.sh`
 exit non-zero, SKIPs do not.
 
@@ -91,11 +89,3 @@ Per-harness notes:
   `XAI_API_KEY=<vk>`. The CLI discovers models via `GET /v1/models`, so
   `grok-4-fast`/`grok-build` are aliased to Anthropic Haiku in
   `server/litellm/config.yaml` (the CLI doesn't care about the upstream).
-- **gemini** — isolated `HOME` with `~/.gemini/settings.json`
-  (`security.auth.selectedType=gemini-api-key`),
-  `GEMINI_CLI_TRUST_WORKSPACE=true`, `GOOGLE_GEMINI_BASE_URL=<proxy>` (the
-  CLI uses the ROOT `/v1beta` genai facade; the `/gemini`-prefixed path
-  500s). **SKIPs unless `GEMINI_UPSTREAM_AVAILABLE=1`**: gemini model names
-  must map to a real Google upstream — LiteLLM's genai→anthropic translation
-  sends `temperature`+`top_p` together, which Anthropic rejects, so
-  cross-provider aliasing is broken for this path.

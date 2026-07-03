@@ -29,7 +29,7 @@ async def test_single_source_harness_rejects_non_primary_slot(
     db_session: AsyncSession,
 ) -> None:
     user_id = await _create_user(db_session)
-    for harness in ("claude", "codex", "grok", "gemini"):
+    for harness in ("claude", "codex", "grok"):
         with pytest.raises(ValueError, match="single-source"):
             await store.upsert_route_selection(
                 db_session,

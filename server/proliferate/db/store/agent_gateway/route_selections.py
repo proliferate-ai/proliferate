@@ -4,9 +4,9 @@ Cross-column legality that SQL CHECKs cannot express cleanly (api_key
 ownership + active status, slot semantics) is enforced here; callers get
 typed ValueErrors.
 
-Slot semantics (spec §3.3): single-source harnesses (claude/codex/grok/
-gemini — and any harness that is not opencode) only ever use slot='primary',
-so their selection keeps radio semantics. OpenCode is additive: one row per
+Slot semantics (spec §3.3): single-source harnesses (claude/codex/grok —
+and any harness that is not opencode) only ever use slot='primary', so
+their selection keeps radio semantics. OpenCode is additive: one row per
 slot in {'gateway','openai','anthropic','xai','google'} — the gateway slot
 must carry the gateway route, provider slots must carry an api_key route
 whose key belongs to that provider.

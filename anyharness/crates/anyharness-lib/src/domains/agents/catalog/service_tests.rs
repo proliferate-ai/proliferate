@@ -409,7 +409,7 @@ fn validate_launch_checks_mode_against_the_model_matrix() {
             Some("sonnet"),
             Some("yolo"),
         )
-        .expect_err("gemini mode is not a claude mode");
+        .expect_err("yolo is not a claude mode");
     assert_eq!(
         rejected,
         SelectionUnsupported::UnsupportedMode {

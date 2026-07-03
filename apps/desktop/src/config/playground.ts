@@ -48,11 +48,11 @@ export type ScenarioKey =
   | "status-hook-blocked"
   | "status-deprecation"
   | "status-assistant-handoff"
-  | "gemini-retry-status"
-  | "gemini-blocked-warning"
-  | "gemini-no-response-warning"
-  | "gemini-mcp-approval-options"
-  | "gemini-tool-before-approval"
+  | "grok-retry-status"
+  | "grok-blocked-warning"
+  | "grok-no-response-warning"
+  | "opencode-mcp-approval-options"
+  | "opencode-tool-before-approval"
   | "tool-bash-running"
   | "tool-bash-completed"
   | "tool-bash-failed"
@@ -131,11 +131,11 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "status-hook-blocked": { label: "Hook blocked" },
   "status-deprecation": { label: "Deprecation notice" },
   "status-assistant-handoff": { label: "Prose handoff" },
-  "gemini-retry-status": { label: "Gemini retry" },
-  "gemini-blocked-warning": { label: "Gemini blocked" },
-  "gemini-no-response-warning": { label: "Gemini no response" },
-  "gemini-mcp-approval-options": { label: "Gemini MCP approval" },
-  "gemini-tool-before-approval": { label: "Gemini pre-approval tool" },
+  "grok-retry-status": { label: "Grok retry" },
+  "grok-blocked-warning": { label: "Grok blocked" },
+  "grok-no-response-warning": { label: "Grok no response" },
+  "opencode-mcp-approval-options": { label: "OpenCode MCP approval" },
+  "opencode-tool-before-approval": { label: "OpenCode pre-approval tool" },
   "tool-bash-running": { label: "Tool bash running" },
   "tool-bash-completed": { label: "Tool bash completed" },
   "tool-bash-failed": { label: "Tool bash failed" },

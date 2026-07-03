@@ -20,7 +20,7 @@
 
 <br />
 
-Run Claude Code, Codex, Gemini, and any other coding agent in parallel, in one workspace.<br />
+Run Claude Code, Codex, OpenCode, and any other coding agent in parallel, in one workspace.<br />
 Move running sessions between your machine and the cloud. Works solo or across a team.
 
 <br />
@@ -65,10 +65,6 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
       <strong>Codex</strong>
     </td>
     <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/gemini.svg" width="40" height="40" alt="Gemini" /><br />
-      <strong>Gemini CLI</strong>
-    </td>
-    <td align="center" width="120">
       <img src="./apps/desktop/public/provider-icons/opencode.png" width="40" height="40" alt="OpenCode" /><br />
       <strong>OpenCode</strong>
     </td>
@@ -84,7 +80,7 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Features
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** - Claude Code, Codex, Gemini CLI, OpenCode, Cursor, and more
+- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** - Claude Code, Codex, OpenCode, Cursor, and more
 - 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** - an isolated branch and working directory for every task
 - 🔍 **[Git & diff review](https://proliferate.com/docs/concepts/review)** - inspect and edit agent changes without leaving the app
 - 🛡️ **[Plan & code review agents](https://proliferate.com/docs/concepts/review)** - reviewer agents check plans, diffs, risks, and branch readiness before you do

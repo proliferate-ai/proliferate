@@ -1,6 +1,6 @@
 export const AUTOMATION_EXECUTION_TARGET_VALUES = ["cloud", "local"] as const;
 
-export const AUTOMATION_SUPPORTED_AGENT_KINDS = ["claude", "codex", "gemini"] as const;
+export const AUTOMATION_SUPPORTED_AGENT_KINDS = ["claude", "codex"] as const;
 
 export type AutomationSupportedAgentKind = typeof AUTOMATION_SUPPORTED_AGENT_KINDS[number];
 

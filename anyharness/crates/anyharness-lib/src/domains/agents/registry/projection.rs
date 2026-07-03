@@ -245,7 +245,6 @@ fn parse_credential_discovery(value: &str) -> anyhow::Result<CredentialDiscovery
         "none" => Ok(CredentialDiscoveryKind::None),
         "claude" => Ok(CredentialDiscoveryKind::Claude),
         "codex" => Ok(CredentialDiscoveryKind::Codex),
-        "gemini" => Ok(CredentialDiscoveryKind::Gemini),
         "opencode" => Ok(CredentialDiscoveryKind::OpenCode),
         "cursor" => Ok(CredentialDiscoveryKind::Cursor),
         "grok" => Ok(CredentialDiscoveryKind::Grok),

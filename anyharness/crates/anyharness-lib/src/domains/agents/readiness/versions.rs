@@ -38,7 +38,7 @@ mod tests {
         };
         let manifest = InstallManifest {
             schema_version: INSTALL_MANIFEST_SCHEMA_VERSION,
-            agent: "gemini".into(),
+            agent: "grok".into(),
             artifacts: vec![
                 ManifestArtifact {
                     role: "agent_process".into(),
@@ -46,7 +46,7 @@ mod tests {
                     sha256: None,
                     source: "registry_npm".into(),
                     installed_at: "2026-06-10T00:00:00Z".into(),
-                    path: "/managed/gemini".into(),
+                    path: "/managed/grok".into(),
                 },
                 ManifestArtifact {
                     role: "native_cli".into(),
@@ -54,7 +54,7 @@ mod tests {
                     sha256: None,
                     source: "managed".into(),
                     installed_at: "2026-06-10T00:00:00Z".into(),
-                    path: "/managed/gemini-cli".into(),
+                    path: "/managed/grok-cli".into(),
                 },
             ],
         };

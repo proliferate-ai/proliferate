@@ -44,7 +44,7 @@ describe("usagesForApiKey", () => {
     const selections = [
       selection(),
       selection({ id: "sel-2", harnessKind: "codex", apiKeyId: "key-2" }),
-      selection({ id: "sel-3", harnessKind: "gemini", route: "gateway", apiKeyId: null }),
+      selection({ id: "sel-3", harnessKind: "opencode", route: "gateway", apiKeyId: null }),
       selection({ id: "sel-4", harnessKind: "grok", route: "native", apiKeyId: null }),
     ];
 
