@@ -16,6 +16,7 @@ use serde_json::json;
 use tokio::sync::broadcast;
 
 use super::commands;
+use super::exec_policy::{bypass_mode_for_kind, WorkflowOwnedSessions};
 use crate::domains::goals::runtime::{GoalOpError, GoalRuntime};
 use crate::domains::sessions::runtime::{SendPromptOutcome, SessionRuntime};
 use crate::domains::sessions::service::SessionService;
@@ -47,6 +48,13 @@ pub struct WorkflowExecDeps {
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub workflow_service: Arc<WorkflowService>,
     pub acp_manager: LiveSessionManager,
+    /// The always-bypass safety net (goals-and-workflows-v1 §3.3): sessions
+    /// the executor opens are marked here so the inbound permission advisor
+    /// auto-approves for a harness that lacks a native bypass mode. Shared with
+    /// the live-session wiring's [`WorkflowAutoApproveAdvisor`].
+    ///
+    /// [`WorkflowAutoApproveAdvisor`]: super::exec_policy::WorkflowAutoApproveAdvisor
+    pub workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
 }
 
 struct CurrentSession {
@@ -87,6 +95,9 @@ impl WorkflowStepExecutorImpl {
             return;
         };
         if let Ok(Some(session)) = self.deps.session_service.get_session(session_id) {
+            // Re-arm the always-bypass safety net for the resumed session (the
+            // registry is in-memory, so a restart would otherwise drop it).
+            self.deps.workflow_owned_sessions.mark(session_id);
             *self.current.lock().unwrap() = Some(CurrentSession {
                 session_id: session_id.to_string(),
                 harness: session.agent_kind,
@@ -114,6 +125,12 @@ impl WorkflowStepExecutorImpl {
         let model = model_override
             .map(str::to_string)
             .or_else(|| self.setup.model.clone());
+        // Exec policy (goals-and-workflows-v1 §3.3 "always bypass"): open the
+        // session in the harness's native bypass-equivalent mode so agent turns
+        // and native-goal auto-continuation never stall on a permission prompt.
+        // `None` (harness with no native bypass mode) is covered by the
+        // auto-approve safety net below.
+        let mode = bypass_mode_for_kind(&effective_harness);
         let record = self
             .deps
             .session_runtime
@@ -121,7 +138,7 @@ impl WorkflowStepExecutorImpl {
                 &self.workspace_id,
                 &effective_harness,
                 model.as_deref(),
-                None,
+                mode,
                 None,
                 Vec::new(),
                 None,
@@ -130,6 +147,10 @@ impl WorkflowStepExecutorImpl {
             )
             .await
             .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?;
+        // Register the session as workflow-owned so the inbound permission
+        // advisor auto-approves for it (safety net for a harness without a
+        // native bypass mode). Done before the first prompt/turn is sent.
+        self.deps.workflow_owned_sessions.mark(&record.id);
         let _ = self
             .deps
             .workflow_service

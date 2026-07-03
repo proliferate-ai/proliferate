@@ -75,7 +75,7 @@ use crate::domains::workspaces::store::WorkspaceStore;
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
-use crate::live::workflows::{WorkflowExecDeps, WorkflowRunManager};
+use crate::live::workflows::{WorkflowExecDeps, WorkflowOwnedSessions, WorkflowRunManager};
 use crate::persistence::Db;
 
 #[derive(Debug, thiserror::Error)]
@@ -249,12 +249,16 @@ impl AppState {
             session_link_service.clone(),
             plan_service.clone(),
         ));
+        // Shared registry of workflow-owned sessions: written by the workflow
+        // executor, read by the inbound permission advisor (always-bypass net).
+        let workflow_owned_sessions = Arc::new(WorkflowOwnedSessions::new());
         let acp_manager = sessions::wire_live_sessions(&sessions::LiveSessionsWiringDeps {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
             plan_service: plan_service.clone(),
             review_service: review_service.clone(),
             goal_service: goal_service.clone(),
+            workflow_owned_sessions: workflow_owned_sessions.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -341,6 +345,7 @@ impl AppState {
             workspace_runtime: workspace_runtime.clone(),
             workflow_service: workflow_service.clone(),
             acp_manager: acp_manager.clone(),
+            workflow_owned_sessions: workflow_owned_sessions.clone(),
         }));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),

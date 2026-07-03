@@ -5,8 +5,10 @@
 
 mod actor;
 mod commands;
+mod exec_policy;
 mod executor;
 mod manager;
 
+pub use exec_policy::{WorkflowAutoApproveAdvisor, WorkflowOwnedSessions};
 pub use executor::WorkflowExecDeps;
 pub use manager::WorkflowRunManager;
