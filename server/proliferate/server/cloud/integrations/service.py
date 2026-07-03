@@ -8,8 +8,9 @@ them, and lets org admins manage which definitions their organization exposes.
 
 from __future__ import annotations
 
+import asyncio
 import re
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -35,8 +36,13 @@ from proliferate.db.store.integrations.policies import (
     upsert_policy,
 )
 from proliferate.db.store.integrations.tool_cache import delete_tool_cache
+from proliferate.integrations.integration_oauth.discovery import (
+    discover_protected_resource_metadata,
+)
+from proliferate.integrations.integration_oauth.errors import IntegrationOAuthProviderError
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.config import (
+    HeaderTemplate,
     IntegrationConfig,
     StaticUrl,
     parse_definition_config,
@@ -44,6 +50,7 @@ from proliferate.server.cloud.integrations.config import (
 )
 from proliferate.server.cloud.integrations.models import (
     AdminIntegrationDefinitionResponse,
+    AuthDetection,
     AuthenticateIntegrationResponse,
     IntegrationAccountResponse,
     IntegrationCatalogItem,
@@ -66,6 +73,16 @@ from proliferate.utils.crypto import encrypt_json
 _DEFAULT_SECRET_FIELD_ID = "api_key"
 
 _NAMESPACE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+# Bound on the create-time OAuth probe so slow/unreachable MCP URLs can never
+# block definition creation for long.
+_OAUTH_PROBE_TIMEOUT_SECONDS = 5.0
+
+# Same shape seeds.py's ``_oauth_bearer_header`` builds for seed oauth2
+# definitions: the gateway substitutes the account's access token at call time.
+_OAUTH_BEARER_HEADER = HeaderTemplate(
+    "Authorization", "Bearer {secret.accessToken}", optional=True
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -92,6 +109,7 @@ def _admin_definition_response(
     definition: IntegrationDefinitionRecord,
     *,
     policy_enabled: bool | None,
+    auth_detection: AuthDetection | None = None,
 ) -> AdminIntegrationDefinitionResponse:
     effective_enabled = (
         policy_enabled if policy_enabled is not None else definition.enabled_by_default
@@ -106,6 +124,7 @@ def _admin_definition_response(
         enabled_by_default=definition.enabled_by_default,
         policy_enabled=policy_enabled,
         effective_enabled=effective_enabled,
+        auth_detection=auth_detection,
     )
 
 
@@ -392,6 +411,31 @@ async def list_admin_integration_definitions(
     ]
 
 
+async def _probe_mcp_oauth(mcp_url: str) -> Literal["detected", "none", "unreachable"]:
+    """Probe ``mcp_url`` for an OAuth challenge, bounded and best-effort.
+
+    An OAuth-protected streamable-HTTP MCP server answers an unauthenticated
+    request with a 401 + ``WWW-Authenticate`` resource-metadata challenge
+    and/or publishes RFC 9728 protected-resource metadata;
+    ``discover_protected_resource_metadata`` already walks both paths.
+    A timeout maps to ``"unreachable"``; any other failure (including "the
+    server published no OAuth metadata") maps to ``"none"`` so the probe can
+    never block definition creation.
+    """
+    try:
+        await asyncio.wait_for(
+            discover_protected_resource_metadata(mcp_url),
+            timeout=_OAUTH_PROBE_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        return "unreachable"
+    except IntegrationOAuthProviderError:
+        return "none"
+    except Exception:  # noqa: BLE001 - detection is advisory; never fail creation
+        return "none"
+    return "detected"
+
+
 async def create_admin_integration_definition(
     db: AsyncSession,
     *,
@@ -400,6 +444,7 @@ async def create_admin_integration_definition(
     display_name: str,
     namespace: str,
     mcp_url: str,
+    auth_kind: str = "auto",
 ) -> AdminIntegrationDefinitionResponse:
     await _require_org_admin(db, user_id=actor_user_id, organization_id=organization_id)
     display_name = display_name.strip()
@@ -428,11 +473,23 @@ async def create_admin_integration_definition(
             "MCP URL must be a valid http(s) URL.",
             status_code=400,
         )
+    if auth_kind not in ("auto", "none", "oauth2"):
+        raise CloudApiError(
+            "invalid_payload",
+            "Auth kind must be one of 'auto', 'none' or 'oauth2'.",
+            status_code=400,
+        )
+
+    detection: AuthDetection = "forced"
+    if auth_kind == "auto":
+        detection = await _probe_mcp_oauth(mcp_url)
+    resolved_auth_kind = "oauth2" if auth_kind == "oauth2" or detection == "detected" else "none"
 
     config = IntegrationConfig(
         transport="http",
         url=StaticUrl(mcp_url),
         display_url=mcp_url,
+        headers=(_OAUTH_BEARER_HEADER,) if resolved_auth_kind == "oauth2" else (),
     )
     definition = await create_org_custom_definition(
         db,
@@ -440,8 +497,8 @@ async def create_admin_integration_definition(
         namespace=namespace,
         display_name=display_name,
         description=None,
-        auth_kind="none",
-        oauth_client_mode=None,
+        auth_kind=resolved_auth_kind,
+        oauth_client_mode="dcr" if resolved_auth_kind == "oauth2" else None,
         config_json=serialize_definition_config(config),
     )
     await upsert_policy(
@@ -451,7 +508,7 @@ async def create_admin_integration_definition(
         enabled=True,
         updated_by_user_id=actor_user_id,
     )
-    return _admin_definition_response(definition, policy_enabled=True)
+    return _admin_definition_response(definition, policy_enabled=True, auth_detection=detection)
 
 
 async def set_admin_integration_enabled(
