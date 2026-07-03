@@ -23,12 +23,27 @@ export interface WorkflowRunViewProps {
   run: WorkflowRunResponse;
   definition: WorkflowDefinition;
   workflowName: string | null;
+  /** Live approve/deny for local runs; cloud-run approvals are read-only in v1. */
+  approvalEnabled?: boolean;
+  approvalBusy?: boolean;
+  onApprove?: () => void;
+  onDeny?: () => void;
   onBack: () => void;
   onOpenSession: (link: WorkflowStepSessionLink) => void;
 }
 
 /** The run observability view (spec 3.6): header + typed step timeline. */
-export function WorkflowRunView({ run, definition, workflowName, onBack, onOpenSession }: WorkflowRunViewProps) {
+export function WorkflowRunView({
+  run,
+  definition,
+  workflowName,
+  approvalEnabled = false,
+  approvalBusy = false,
+  onApprove,
+  onDeny,
+  onBack,
+  onOpenSession,
+}: WorkflowRunViewProps) {
   const status = coerceRunStatus(run.status);
   const terminal = isTerminalRunStatus(status);
   const duration = formatRunDuration(run.startedAt, run.finishedAt);
@@ -108,10 +123,25 @@ export function WorkflowRunView({ run, definition, workflowName, onBack, onOpenS
             approvalControls={
               view.status === "waiting_approval" ? (
                 <div className="flex items-center gap-2">
-                  <Button size="sm" disabled title="Approvals resolve here — coming soon">
+                  <Button
+                    size="sm"
+                    loading={approvalBusy}
+                    disabled={!approvalEnabled || approvalBusy}
+                    title={
+                      approvalEnabled
+                        ? undefined
+                        : "Cloud-run approvals aren't available in the desktop yet"
+                    }
+                    onClick={onApprove}
+                  >
                     Approve
                   </Button>
-                  <Button size="sm" variant="ghost" disabled>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!approvalEnabled || approvalBusy}
+                    onClick={onDeny}
+                  >
                     Deny
                   </Button>
                 </div>

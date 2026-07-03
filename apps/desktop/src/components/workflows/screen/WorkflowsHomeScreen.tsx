@@ -6,12 +6,10 @@ import {
   type WorkflowDefinition,
   type WorkflowSetup,
 } from "@proliferate/product-domain/workflows/definition";
-import { workflowNeedsArgsForm } from "@proliferate/product-domain/workflows/presentation";
 import {
   buildWorkflowRunRow,
   freePlanWorkflowLimit,
   workflowCreateAllowed,
-  type WorkflowTargetMode,
 } from "@proliferate/product-domain/workflows/model";
 import {
   coerceRunStatus,
@@ -27,14 +25,20 @@ import { Plus } from "@proliferate/ui/icons";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useWorkflows, useWorkflowRuns } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
+import { useLaunchWorkflowRun } from "@/hooks/access/cloud/workflows/use-launch-workflow-run";
+import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import type { WorkflowResponse } from "@/hooks/access/cloud/workflows/types";
 import { WorkflowCardContainer } from "../home/WorkflowCardContainer";
 import { WorkflowRunsTable } from "../home/WorkflowRunsTable";
-import { WorkflowRunArgsModal } from "../home/WorkflowRunArgsModal";
+import {
+  WorkflowRunArgsModal,
+  type WorkflowRunSubmit,
+  type WorkflowRunTargetOption,
+} from "../home/WorkflowRunArgsModal";
 import { WorkflowTemplatesGallery } from "../home/WorkflowTemplatesGallery";
 
 type HomeTab = "workflows" | "runs";
-type ArgValue = string | number | boolean;
 
 interface DesktopCatalogAgent {
   kind: string;
@@ -127,11 +131,33 @@ export function WorkflowsHomeScreen() {
   const workflowsQuery = useWorkflows();
   const runsQuery = useWorkflowRuns(null);
   const catalogQuery = useCloudAgentCatalog();
-  const { createMutation, startRunMutation } = useWorkflowMutations();
+  const workspacesQuery = useWorkspaces();
+  const cloudTargetsQuery = useCloudRunTargetWorkspaces();
+  const { createMutation } = useWorkflowMutations();
+  const launchMutation = useLaunchWorkflowRun();
 
   const workflows = workflowsQuery.data?.workflows ?? [];
   const runs = runsQuery.data?.runs ?? [];
   const agents = catalogQuery.data?.agents as DesktopCatalogAgent[] | undefined;
+
+  const localWorkspaceOptions = useMemo<WorkflowRunTargetOption[]>(
+    () =>
+      (workspacesQuery.data?.localWorkspaces ?? []).map((workspace) => ({
+        id: workspace.id,
+        label: workspace.displayName || workspace.currentBranch || workspace.path,
+      })),
+    [workspacesQuery.data],
+  );
+  const cloudWorkspaceOptions = useMemo<WorkflowRunTargetOption[]>(
+    () =>
+      (cloudTargetsQuery.data ?? [])
+        .filter((workspace) => workspace.status === "ready")
+        .map((workspace) => ({
+          id: workspace.id,
+          label: workspace.displayName ?? workspace.repo.branch,
+        })),
+    [cloudTargetsQuery.data],
+  );
 
   const nameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -177,14 +203,16 @@ export function WorkflowsHomeScreen() {
 
   const canCreate = workflowCreateAllowed(workflows.length, freePlanWorkflowLimit());
 
-  const runNow = (
-    workflowId: string,
-    args: Record<string, ArgValue>,
-    targetMode: WorkflowTargetMode,
-  ) => {
+  const runNow = (workflowId: string, submit: WorkflowRunSubmit) => {
     setRunError(null);
-    startRunMutation.mutate(
-      { workflowId, body: { args, targetMode } },
+    launchMutation.mutate(
+      {
+        workflowId,
+        args: submit.args,
+        targetMode: submit.targetMode,
+        localWorkspaceId: submit.localWorkspaceId,
+        cloudWorkspaceId: submit.cloudWorkspaceId,
+      },
       {
         onSuccess: (run) => {
           setArgsModal(null);
@@ -195,13 +223,10 @@ export function WorkflowsHomeScreen() {
     );
   };
 
+  // Always open the modal: even an arg-less workflow needs a run target (spec 3.2).
   const handleRun = (workflow: WorkflowResponse, definition: WorkflowDefinition) => {
-    if (workflowNeedsArgsForm(definition)) {
-      setRunError(null);
-      setArgsModal({ workflow, definition });
-    } else {
-      runNow(workflow.id, {}, "local");
-    }
+    setRunError(null);
+    setArgsModal({ workflow, definition });
   };
 
   const createAndEdit = (name: string, description: string | null, definition: WorkflowDefinition) => {
@@ -290,7 +315,7 @@ export function WorkflowsHomeScreen() {
                       workflow={workflow}
                       lastRun={last ? { status: last.status, atLabel: last.atLabel } : null}
                       lastRunTone={last?.tone ?? "muted"}
-                      runBusy={startRunMutation.isPending && argsModal === null}
+                      runBusy={launchMutation.isPending && argsModal === null}
                       onOpen={(workflowId) => navigate(`/workflows/${workflowId}/edit`)}
                       onRun={handleRun}
                     />
@@ -307,10 +332,12 @@ export function WorkflowsHomeScreen() {
           open
           workflowName={argsModal.workflow.name}
           args={argsModal.definition.args}
-          busy={startRunMutation.isPending}
+          localWorkspaces={localWorkspaceOptions}
+          cloudWorkspaces={cloudWorkspaceOptions}
+          busy={launchMutation.isPending}
           error={runError}
           onClose={() => setArgsModal(null)}
-          onSubmit={({ args, targetMode }) => runNow(argsModal.workflow.id, args, targetMode)}
+          onSubmit={(submit) => runNow(argsModal.workflow.id, submit)}
         />
       ) : null}
     </MainSidebarPageShell>
