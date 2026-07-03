@@ -35,6 +35,30 @@
       "types": "./dist/activity/GoalBar.d.ts",
       "import": "./dist/activity/GoalBar.js"
     },
+    "./activity/ActivityChips": {
+      "types": "./dist/activity/ActivityChips.d.ts",
+      "import": "./dist/activity/ActivityChips.js"
+    },
+    "./activity/LoopsPanel": {
+      "types": "./dist/activity/LoopsPanel.d.ts",
+      "import": "./dist/activity/LoopsPanel.js"
+    },
+    "./activity/TerminalRosterRow": {
+      "types": "./dist/activity/TerminalRosterRow.d.ts",
+      "import": "./dist/activity/TerminalRosterRow.js"
+    },
+    "./activity/TerminalsRosterPanel": {
+      "types": "./dist/activity/TerminalsRosterPanel.d.ts",
+      "import": "./dist/activity/TerminalsRosterPanel.js"
+    },
+    "./activity/SubagentRosterRow": {
+      "types": "./dist/activity/SubagentRosterRow.d.ts",
+      "import": "./dist/activity/SubagentRosterRow.js"
+    },
+    "./activity/AgentsRosterPanel": {
+      "types": "./dist/activity/AgentsRosterPanel.d.ts",
+      "import": "./dist/activity/AgentsRosterPanel.js"
+    },
     "./account/AccountIdentityCard": {
       "types": "./dist/account/AccountIdentityCard.d.ts",
       "import": "./dist/account/AccountIdentityCard.js"

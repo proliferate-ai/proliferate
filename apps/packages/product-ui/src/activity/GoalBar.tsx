@@ -37,6 +37,13 @@ export interface GoalBarProps {
   onDismiss: () => void;
   /** Leave create mode without setting a goal. */
   onCancelCompose?: () => void;
+  /**
+   * Compact activity chips (`⟳ loops · ▸ terminals · ⑂ agents`) that stack on
+   * the same bar row (session-activity-architecture §Locked decisions #5).
+   * When there is no live goal state and the bar isn't composing, the chips
+   * alone still render the bar — activity can be live with no goal set.
+   */
+  chips?: ReactNode;
 }
 
 /**
@@ -57,24 +64,32 @@ export function GoalBar({
   onClear,
   onDismiss,
   onCancelCompose,
+  chips,
 }: GoalBarProps) {
   const [editing, setEditing] = useState(defaultEditing);
   const state = deriveGoalBarState(goal);
 
-  if (state.kind === "hidden" && !composing) {
-    return null;
-  }
-  if (!capabilities.supported) {
+  // Goal content only renders when the capability supports it AND there is
+  // live/composing goal state — activity chips can be live with no goal set
+  // at all, so the bar must not hide (or force the goal layout) in that case.
+  const goalVisible = capabilities.supported && (state.kind !== "hidden" || composing);
+
+  if (!goalVisible && !chips) {
     return null;
   }
 
   // Editing/composing swaps the fixed single-row layout for a tall,
   // auto-growing textarea (Conductor reference): the glyph aligns with the
   // textarea's first line instead of a fixed-height row.
-  const isEditingLayout = state.kind === "hidden" || (state.kind === "live" && editing);
+  const isEditingLayout = goalVisible && (state.kind === "hidden" || (state.kind === "live" && editing));
+  // Chips are suppressed while the multi-line editor is showing — its
+  // absolute-positioned commit/cancel icons already crowd that row.
+  const showChips = Boolean(chips) && !isEditingLayout;
 
-  let content: ReactNode;
-  if (state.kind === "hidden") {
+  let content: ReactNode = null;
+  if (!goalVisible) {
+    // Chips-only bar: no goal capability, or no live/composing goal state.
+  } else if (state.kind === "hidden") {
     content = (
       <GoalBarObjectiveEditor
         initialValue=""
@@ -171,8 +186,13 @@ export function GoalBar({
           isEditingLayout ? "items-start py-1.5" : "h-9 items-center",
         )}
       >
-        <GoalBarGlyph state={state} raised={isEditingLayout} />
+        {goalVisible && <GoalBarGlyph state={state} raised={isEditingLayout} />}
         {content}
+        {showChips && (
+          <span className={twMerge("flex shrink-0 items-center", goalVisible && "ml-1")}>
+            {chips}
+          </span>
+        )}
       </div>
     </div>
   );
