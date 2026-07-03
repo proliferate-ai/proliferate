@@ -11,7 +11,9 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyharness_contract::v1::{Goal, GoalArmState, SetSessionGoalRequest};
+use anyharness_contract::v1::{
+    Goal, GoalArmState, SessionEvent, SessionEventEnvelope, SetSessionGoalRequest,
+};
 use tokio::sync::broadcast;
 
 use super::model::GoalPendingOp;
@@ -99,7 +101,7 @@ impl GoalRuntime {
             "sessionId".to_string(),
             serde_json::Value::String(native_session_id),
         );
-        if let Some(objective) = objective {
+        if let Some(objective) = objective.clone() {
             params.insert("objective".to_string(), serde_json::Value::String(objective));
         }
         if let Some(status) = request.status {
@@ -141,9 +143,15 @@ impl GoalRuntime {
             );
         }
 
+        // Correlate the confirmation to THIS write by objective (when one was
+        // provided): a stale accounting goal_updated for a still-active OLD
+        // goal must not prematurely confirm an edit to a new objective and
+        // hand back the pre-edit mirror. Status/budget-only patches carry no
+        // objective and fall back to matching on event type alone.
         let confirmed = wait_for_goal_event(
             &mut events,
             &["goal_updated", "goal_met", "goal_cleared"],
+            objective.as_deref(),
         )
         .await;
         if !confirmed {
@@ -188,7 +196,7 @@ impl GoalRuntime {
             return Ok(false);
         }
 
-        let confirmed = wait_for_goal_event(&mut events, &["goal_cleared"]).await;
+        let confirmed = wait_for_goal_event(&mut events, &["goal_cleared"], None).await;
         if !confirmed {
             let _ = self.goal_service.clear_pending(session_id);
             return Err(GoalOpError::NotConfirmed);
@@ -304,18 +312,22 @@ fn map_ext_call_error(error: LiveSessionCommandError<anyhow::Error>) -> GoalOpEr
     }
 }
 
-/// Waits for the observer-ingested confirmation event on the session's
-/// broadcast channel. Returns `false` on timeout or a closed channel.
+/// Waits for the observer-ingested confirmation of this mutation on the
+/// session's broadcast channel. Returns `false` on timeout or a closed
+/// channel. When `expected_objective` is set only an envelope whose goal
+/// carries that objective confirms, so an unrelated goal event cannot resolve
+/// the wait against a stale mirror.
 async fn wait_for_goal_event(
-    events: &mut broadcast::Receiver<anyharness_contract::v1::SessionEventEnvelope>,
+    events: &mut broadcast::Receiver<SessionEventEnvelope>,
     event_types: &[&str],
+    expected_objective: Option<&str>,
 ) -> bool {
     let deadline = tokio::time::Instant::now() + GOAL_CONFIRMATION_TIMEOUT;
     loop {
         let recv = tokio::time::timeout_at(deadline, events.recv()).await;
         match recv {
             Ok(Ok(envelope)) => {
-                if event_types.contains(&envelope.event.event_type()) {
+                if goal_event_matches(&envelope, event_types, expected_objective) {
                     return true;
                 }
             }
@@ -323,6 +335,31 @@ async fn wait_for_goal_event(
             Ok(Err(broadcast::error::RecvError::Closed)) => return false,
             Err(_) => return false,
         }
+    }
+}
+
+/// The confirming envelope must be one of the accepted goal event types and,
+/// when correlating a set with a known objective, carry that objective.
+fn goal_event_matches(
+    envelope: &SessionEventEnvelope,
+    event_types: &[&str],
+    expected_objective: Option<&str>,
+) -> bool {
+    if !event_types.contains(&envelope.event.event_type()) {
+        return false;
+    }
+    match expected_objective {
+        None => true,
+        Some(objective) => goal_event_objective(&envelope.event) == Some(objective),
+    }
+}
+
+fn goal_event_objective(event: &SessionEvent) -> Option<&str> {
+    match event {
+        SessionEvent::GoalUpdated(payload) => Some(payload.goal.objective.as_str()),
+        SessionEvent::GoalMet(payload) => Some(payload.goal.objective.as_str()),
+        SessionEvent::GoalCleared(payload) => Some(payload.goal.objective.as_str()),
+        _ => None,
     }
 }
 
@@ -367,5 +404,56 @@ fn goal_event_context(ctx: &SessionObserverContext) -> GoalEventContext {
         source_agent_kind: ctx.agent_kind.clone(),
         turn_id: ctx.turn_id.clone(),
         next_seq: ctx.next_seq,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyharness_contract::v1::{Goal, GoalStatus, GoalUpdatedPayload};
+
+    const GOAL_EVENT_TYPES: &[&str] = &["goal_updated", "goal_met", "goal_cleared"];
+
+    fn goal_updated_envelope(objective: &str) -> SessionEventEnvelope {
+        SessionEventEnvelope {
+            session_id: "session-1".to_string(),
+            seq: 1,
+            timestamp: "now".to_string(),
+            turn_id: None,
+            item_id: None,
+            event: SessionEvent::GoalUpdated(GoalUpdatedPayload {
+                goal: Goal {
+                    objective: objective.to_string(),
+                    status: GoalStatus::Active,
+                    native_status: None,
+                    token_budget: None,
+                    tokens_used: None,
+                    time_used_seconds: None,
+                    met_reason: None,
+                    iterations: None,
+                    native: true,
+                    revision: 1,
+                    created_at: "now".to_string(),
+                    updated_at: "now".to_string(),
+                },
+            }),
+        }
+    }
+
+    #[test]
+    fn uncorrelated_match_accepts_any_goal_event_type() {
+        let envelope = goal_updated_envelope("old objective");
+        assert!(goal_event_matches(&envelope, GOAL_EVENT_TYPES, None));
+        assert!(!goal_event_matches(&envelope, &["goal_cleared"], None));
+    }
+
+    #[test]
+    fn objective_correlation_skips_unrelated_goal_events() {
+        let stale = goal_updated_envelope("old objective");
+        let fresh = goal_updated_envelope("new objective");
+        // A stale accounting echo for the old objective must NOT confirm an
+        // edit to a new objective; only the edit's own echo does.
+        assert!(!goal_event_matches(&stale, GOAL_EVENT_TYPES, Some("new objective")));
+        assert!(goal_event_matches(&fresh, GOAL_EVENT_TYPES, Some("new objective")));
     }
 }
