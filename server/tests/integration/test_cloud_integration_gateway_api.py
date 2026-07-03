@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.organizations import (
+    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+    ORGANIZATION_ROLE_MEMBER,
+    ORGANIZATION_STATUS_ACTIVE,
+)
+from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
@@ -24,18 +32,37 @@ def _worker_cloud_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
 
 
-async def _gateway_bearer(client: AsyncClient, db_session: AsyncSession, *, prefix: str) -> str:
+async def _authed_user(client: AsyncClient, db_session: AsyncSession, *, prefix: str):
     auth = await create_user_and_login(client, db_session, email_prefix=prefix)
     await seed_linked_github_account(db_session, user_id=auth.user_id, access_token=f"gh-{prefix}")
+    return auth
+
+
+async def _enroll_gateway_bearer(
+    client: AsyncClient,
+    auth,
+    *,
+    prefix: str,
+    organization_id: str | None = None,
+) -> str:
+    body: dict[str, str] = {"desktopInstallId": f"install-{prefix}"}
+    if organization_id is not None:
+        body["organizationId"] = organization_id
     enrollment = await client.post(
         "/v1/cloud/workers/desktop/enrollment",
         headers=auth.headers,
-        json={"desktopInstallId": f"install-{prefix}"},
+        json=body,
     )
+    assert enrollment.status_code == 200, enrollment.text
     token = enrollment.json()["enrollmentToken"]
     enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
     authorization = enroll.json()["integrationGateway"]["authorization"]
     return authorization.removeprefix("Bearer ")
+
+
+async def _gateway_bearer(client: AsyncClient, db_session: AsyncSession, *, prefix: str) -> str:
+    auth = await _authed_user(client, db_session, prefix=prefix)
+    return await _enroll_gateway_bearer(client, auth, prefix=prefix)
 
 
 async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespace: str) -> None:
@@ -59,6 +86,32 @@ async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespa
         token_expires_at=None,
     )
     await db_session.commit()
+
+
+async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> str:
+    now = datetime.now(UTC)
+    organization = Organization(
+        name="Acme",
+        logo_domain="acme.dev",
+        status=ORGANIZATION_STATUS_ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(organization)
+    await db_session.flush()
+    db_session.add(
+        OrganizationMembership(
+            organization_id=organization.id,
+            user_id=uuid.UUID(user_id),
+            role=ORGANIZATION_ROLE_MEMBER,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+    return str(organization.id)
 
 
 @pytest.mark.asyncio
@@ -275,6 +328,55 @@ async def test_call_tool_upstream_failure_returns_mcp_error_not_500(
     by_id = {r["id"]: r for r in response.json()}
     assert by_id[1]["result"]["isError"] is True
     assert by_id[2]["result"]["tools"]  # sibling still returned
+
+
+async def _tool_call(client: AsyncClient, headers: dict[str, str], *, name: str, arguments: dict):
+    response = await client.post(
+        GATEWAY_URL,
+        headers=headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["result"]
+
+
+@pytest.mark.asyncio
+async def test_org_scoped_grant_stops_serving_after_membership_removal(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    auth = await _authed_user(client, db_session, prefix="gw-membership")
+    org_id = await _create_org_with_member(db_session, user_id=auth.user_id)
+    bearer = await _enroll_gateway_bearer(
+        client, auth, prefix="gw-membership", organization_id=org_id
+    )
+    headers = {"Authorization": f"Bearer {bearer}"}
+    request_body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+
+    ok = await client.post(GATEWAY_URL, headers=headers, json=request_body)
+    assert ok.status_code == 200, ok.text
+
+    # Remove the owner from the org: the long-lived org-scoped grant must stop
+    # serving immediately, not at the next re-enrollment.
+    from sqlalchemy import select
+
+    membership = (
+        await db_session.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == uuid.UUID(org_id),
+                OrganizationMembership.user_id == uuid.UUID(auth.user_id),
+            )
+        )
+    ).scalar_one()
+    membership.status = ORGANIZATION_MEMBERSHIP_STATUS_REMOVED
+    await db_session.commit()
+
+    revoked = await client.post(GATEWAY_URL, headers=headers, json=request_body)
+    assert revoked.status_code == 401
 
 
 @pytest.mark.asyncio

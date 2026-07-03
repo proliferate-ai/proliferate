@@ -7,12 +7,13 @@ export interface DesktopWorkerEnrollmentResponse {
 
 export async function enrollDesktopWorker(
   desktopInstallId: string,
+  organizationId: string | null = null,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<DesktopWorkerEnrollmentResponse> {
   return client.requestJson<DesktopWorkerEnrollmentResponse>({
     method: "POST",
     path: "/v1/cloud/workers/desktop/enrollment",
-    body: { desktopInstallId },
+    body: { desktopInstallId, organizationId },
   });
 }
 
