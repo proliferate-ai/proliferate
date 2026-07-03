@@ -26,6 +26,9 @@ type SessionLinkTurnCompletedPayload =
 type ReviewRunUpdatedPayload =
   components["schemas"]["ReviewRunUpdatedPayload"];
 type UsageUpdatePayload = components["schemas"]["UsageUpdatePayload"];
+type GoalUpdatedPayload = components["schemas"]["GoalUpdatedPayload"];
+type GoalMetPayload = components["schemas"]["GoalMetPayload"];
+type GoalClearedPayload = components["schemas"]["GoalClearedPayload"];
 type PendingPromptAddedPayload =
   components["schemas"]["PendingPromptAddedPayload"];
 type PendingPromptUpdatedPayload =
@@ -101,6 +104,15 @@ export type ReviewRunUpdatedEvent = ReviewRunUpdatedPayload & {
 };
 export type UsageUpdateEvent = UsageUpdatePayload & {
   type: "usage_update";
+};
+export type GoalUpdatedEvent = GoalUpdatedPayload & {
+  type: "goal_updated";
+};
+export type GoalMetEvent = GoalMetPayload & {
+  type: "goal_met";
+};
+export type GoalClearedEvent = GoalClearedPayload & {
+  type: "goal_cleared";
 };
 export type PendingPromptAddedEvent = PendingPromptAddedPayload & {
   type: "pending_prompt_added";
@@ -194,6 +206,9 @@ export type SessionEvent =
   | SessionLinkTurnCompletedEvent
   | ReviewRunUpdatedEvent
   | UsageUpdateEvent
+  | GoalUpdatedEvent
+  | GoalMetEvent
+  | GoalClearedEvent
   | PendingPromptAddedEvent
   | PendingPromptUpdatedEvent
   | PendingPromptRemovedEvent

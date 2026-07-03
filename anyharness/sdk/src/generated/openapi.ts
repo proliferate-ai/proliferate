@@ -644,6 +644,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/goal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["set_session_goal"];
+        post?: never;
+        delete: operations["clear_session_goal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
         parameters: {
             query?: never;
@@ -1921,6 +1937,9 @@ export interface components {
             title?: string | null;
             wakeScheduled: boolean;
         };
+        ClearSessionGoalResponse: {
+            cleared: boolean;
+        };
         CommitRequest: {
             body?: string | null;
             summary: string;
@@ -2481,6 +2500,64 @@ export interface components {
             deletions: number;
             /** Format: int32 */
             includedFiles: number;
+        };
+        /**
+         * @description A session goal: a strict mirror of the native harness goal (Codex
+         *     `ThreadGoal`, Claude `/goal`). Mutations flow only through native
+         *     mechanisms; this record transitions only after the native notification
+         *     round-trips.
+         */
+        Goal: {
+            createdAt: string;
+            /**
+             * Format: int64
+             * @description Claude only.
+             */
+            iterations?: number | null;
+            /**
+             * @description Claude evaluator reason; always absent for codex (terminal detail is
+             *     in `native_status`).
+             */
+            metReason?: string | null;
+            native: boolean;
+            /** @description Raw harness status string, verbatim (e.g. codex `budgetLimited`). */
+            nativeStatus?: string | null;
+            objective: string;
+            /**
+             * Format: int64
+             * @description Bumped on every mirrored edit.
+             */
+            revision: number;
+            status: components["schemas"]["GoalStatus"];
+            /** Format: int64 */
+            timeUsedSeconds?: number | null;
+            /** Format: int64 */
+            tokenBudget?: number | null;
+            /** Format: int64 */
+            tokensUsed?: number | null;
+            updatedAt: string;
+        };
+        /**
+         * @description The externally settable arm states (`_anyharness/goal/set` accepts only
+         *     these; the remaining statuses are native-origin transitions).
+         * @enum {string}
+         */
+        GoalArmState: "active" | "paused";
+        GoalClearedPayload: {
+            goal: components["schemas"]["Goal"];
+        };
+        GoalMetPayload: {
+            goal: components["schemas"]["Goal"];
+        };
+        /**
+         * @description Normalized goal status across harnesses (GoalPort wire contract v1).
+         *     Non-terminal: `active | paused | blocked`; terminal: `met | failed |
+         *     cleared`. Raw harness detail rides `native_status` verbatim.
+         * @enum {string}
+         */
+        GoalStatus: "active" | "paused" | "blocked" | "met" | "failed" | "cleared";
+        GoalUpdatedPayload: {
+            goal: components["schemas"]["Goal"];
         };
         HandoffPlanRequest: {
             agentKind?: string | null;
@@ -3534,6 +3611,7 @@ export interface components {
         };
         Session: {
             actionCapabilities?: components["schemas"]["SessionActionCapabilities"];
+            activeGoal?: null | components["schemas"]["Goal"];
             agentKind: string;
             closedAt?: string | null;
             createdAt: string;
@@ -3557,6 +3635,7 @@ export interface components {
         };
         SessionActionCapabilities: {
             fork?: boolean;
+            supportsGoals?: boolean;
             targetedFork?: boolean;
         };
         /**
@@ -3617,6 +3696,15 @@ export interface components {
         }) | (components["schemas"]["UsageUpdatePayload"] & {
             /** @enum {string} */
             type: "usage_update";
+        }) | (components["schemas"]["GoalUpdatedPayload"] & {
+            /** @enum {string} */
+            type: "goal_updated";
+        }) | (components["schemas"]["GoalMetPayload"] & {
+            /** @enum {string} */
+            type: "goal_met";
+        }) | (components["schemas"]["GoalClearedPayload"] & {
+            /** @enum {string} */
+            type: "goal_cleared";
         }) | (components["schemas"]["PendingPromptAddedPayload"] & {
             /** @enum {string} */
             type: "pending_prompt_added";
@@ -3652,6 +3740,9 @@ export interface components {
             pendingInteractions?: components["schemas"]["PendingInteractionSummary"][];
             phase: components["schemas"]["SessionExecutionPhase"];
             updatedAt: string;
+        };
+        SessionGoalResponse: {
+            goal: components["schemas"]["Goal"];
         };
         SessionInfoUpdatePayload: {
             title?: string | null;
@@ -3786,6 +3877,13 @@ export interface components {
             liveConfig?: null | components["schemas"]["SessionLiveConfigSnapshot"];
             /** @description Updated session summary after accepting the change. */
             session: components["schemas"]["Session"];
+        };
+        SetSessionGoalRequest: {
+            /** @description Omitted = status/budget-only patch (codex semantics). */
+            objective?: string | null;
+            status?: null | components["schemas"]["GoalArmState"];
+            /** Format: int64 */
+            tokenBudget?: number | null;
         };
         SetupHint: {
             category: components["schemas"]["SetupHintCategory"];
@@ -5887,6 +5985,92 @@ export interface operations {
             };
             /** @description Fork failed */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    set_session_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSessionGoalRequest"];
+            };
+        };
+        responses: {
+            /** @description Goal set through the native mechanism and confirmed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionGoalResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take goal mutations */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    clear_session_goal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Goal cleared through the native mechanism */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearSessionGoalResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot take goal mutations */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

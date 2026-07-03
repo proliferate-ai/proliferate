@@ -155,6 +155,8 @@ export {
   useDeletePendingPromptMutation,
   useResumeSessionMutation,
   useUpdateSessionTitleMutation,
+  useSetSessionGoalMutation,
+  useClearSessionGoalMutation,
   useCancelSessionMutation,
   useDismissSessionMutation,
   useCloseSessionMutation,

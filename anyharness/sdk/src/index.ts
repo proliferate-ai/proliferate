@@ -228,6 +228,12 @@ export type {
   ListSessionEventsOptions,
   McpElicitationUrlRevealResponse,
   ResolveInteractionRequest,
+  Goal,
+  GoalStatus,
+  GoalArmState,
+  SetSessionGoalRequest,
+  SessionGoalResponse,
+  ClearSessionGoalResponse,
 } from "./types/sessions.js";
 
 export type {
@@ -311,6 +317,9 @@ export type {
   SessionStateUpdateEvent,
   SessionInfoUpdateEvent,
   UsageUpdateEvent,
+  GoalUpdatedEvent,
+  GoalMetEvent,
+  GoalClearedEvent,
   PendingPromptAddedEvent,
   PendingPromptUpdatedEvent,
   PendingPromptRemovedEvent,

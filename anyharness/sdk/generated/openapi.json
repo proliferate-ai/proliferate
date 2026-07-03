@@ -2032,6 +2032,116 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/goal": {
+      "put": {
+        "tags": [
+          "goals"
+        ],
+        "operationId": "set_session_goal",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionGoalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Goal set through the native mechanism and confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionGoalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take goal mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "goals"
+        ],
+        "operationId": "clear_session_goal",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goal cleared through the native mechanism",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionGoalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take goal mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
       "post": {
         "tags": [
@@ -6451,6 +6561,17 @@
           }
         }
       },
+      "ClearSessionGoalResponse": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "boolean"
+          }
+        }
+      },
       "CommitRequest": {
         "type": "object",
         "required": [
@@ -8966,6 +9087,136 @@
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          }
+        }
+      },
+      "Goal": {
+        "type": "object",
+        "description": "A session goal: a strict mirror of the native harness goal (Codex\n`ThreadGoal`, Claude `/goal`). Mutations flow only through native\nmechanisms; this record transitions only after the native notification\nround-trips.",
+        "required": [
+          "objective",
+          "status",
+          "native",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "iterations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Claude only."
+          },
+          "metReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Claude evaluator reason; always absent for codex (terminal detail is\nin `native_status`)."
+          },
+          "native": {
+            "type": "boolean"
+          },
+          "nativeStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw harness status string, verbatim (e.g. codex `budgetLimited`)."
+          },
+          "objective": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bumped on every mirrored edit."
+          },
+          "status": {
+            "$ref": "#/components/schemas/GoalStatus"
+          },
+          "timeUsedSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokenBudget": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokensUsed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "GoalArmState": {
+        "type": "string",
+        "description": "The externally settable arm states (`_anyharness/goal/set` accepts only\nthese; the remaining statuses are native-origin transitions).",
+        "enum": [
+          "active",
+          "paused"
+        ]
+      },
+      "GoalClearedPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          }
+        }
+      },
+      "GoalMetPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          }
+        }
+      },
+      "GoalStatus": {
+        "type": "string",
+        "description": "Normalized goal status across harnesses (GoalPort wire contract v1).\nNon-terminal: `active | paused | blocked`; terminal: `met | failed |\ncleared`. Raw harness detail rides `native_status` verbatim.",
+        "enum": [
+          "active",
+          "paused",
+          "blocked",
+          "met",
+          "failed",
+          "cleared"
+        ]
+      },
+      "GoalUpdatedPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
           }
         }
       },
@@ -13462,6 +13713,16 @@
           "actionCapabilities": {
             "$ref": "#/components/schemas/SessionActionCapabilities"
           },
+          "activeGoal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Goal"
+              }
+            ]
+          },
           "agentKind": {
             "type": "string"
           },
@@ -13585,6 +13846,9 @@
         "type": "object",
         "properties": {
           "fork": {
+            "type": "boolean"
+          },
+          "supportsGoals": {
             "type": "boolean"
           },
           "targetedFork": {
@@ -13958,6 +14222,69 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/GoalUpdatedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_updated"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GoalMetPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_met"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GoalClearedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_cleared"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/PendingPromptAddedPayload"
               },
               {
@@ -14152,6 +14479,17 @@
           },
           "updatedAt": {
             "type": "string"
+          }
+        }
+      },
+      "SessionGoalResponse": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
           }
         }
       },
@@ -14674,6 +15012,35 @@
           "session": {
             "$ref": "#/components/schemas/Session",
             "description": "Updated session summary after accepting the change."
+          }
+        }
+      },
+      "SetSessionGoalRequest": {
+        "type": "object",
+        "properties": {
+          "objective": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Omitted = status/budget-only patch (codex semantics)."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GoalArmState"
+              }
+            ]
+          },
+          "tokenBudget": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },
