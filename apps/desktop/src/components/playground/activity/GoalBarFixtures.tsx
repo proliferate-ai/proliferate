@@ -3,6 +3,7 @@ import { GoalBar } from "@proliferate/product-ui/activity/GoalBar";
 import type { ScenarioKey } from "@/config/playground";
 import {
   GOAL_ACTIVE_LONG,
+  GOAL_ACTIVE_MULTILINE,
   GOAL_ACTIVE_SHORT,
   GOAL_BLOCKED,
   GOAL_CAPABILITIES_NO_PAUSE,
@@ -42,6 +43,10 @@ export function renderGoalBarSlot(scenario: ScenarioKey): ReactNode | null {
     case "goal-editing":
       return (
         <PlaygroundGoalBar goal={GOAL_ACTIVE_SHORT} pausable defaultEditing />
+      );
+    case "goal-editing-multiline":
+      return (
+        <PlaygroundGoalBar goal={GOAL_ACTIVE_MULTILINE} pausable defaultEditing />
       );
     case "goal-composing":
       return (

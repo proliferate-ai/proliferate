@@ -80,6 +80,7 @@ export type ScenarioKey =
   | "goal-active-pause-disabled"
   | "goal-paused"
   | "goal-editing"
+  | "goal-editing-multiline"
   | "goal-composing"
   | "goal-met-sticky"
   | "goal-blocked-sticky"
@@ -174,6 +175,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "goal-active-pause-disabled": { label: "Goal active (claude)" },
   "goal-paused": { label: "Goal paused" },
   "goal-editing": { label: "Goal editing" },
+  "goal-editing-multiline": { label: "Goal editing (multi-line)" },
   "goal-composing": { label: "Goal composing" },
   "goal-met-sticky": { label: "Goal met" },
   "goal-blocked-sticky": { label: "Goal blocked" },
