@@ -22,9 +22,10 @@ impl GoalStore {
         self.db.with_tx_anyhow(f)
     }
 
-    /// The session's current goal mirror: the latest non-cleared record.
-    /// Terminal `met`/`failed` records stay current (the sticky result state)
-    /// until a clear or a replacing set.
+    /// The session's current goal mirror for read models: the latest goal row
+    /// unless it is cleared (a cleared head means no current goal). Terminal
+    /// `met`/`failed` records stay current (the sticky result state) until a
+    /// clear or a replacing set.
     pub fn find_current(&self, session_id: &str) -> anyhow::Result<Option<GoalRecord>> {
         self.db
             .with_conn(|conn| Self::find_current_tx(conn, session_id))
@@ -34,9 +35,25 @@ impl GoalStore {
         tx: &Connection,
         session_id: &str,
     ) -> rusqlite::Result<Option<GoalRecord>> {
+        // Key strictly off the single latest row rather than skipping cleared
+        // rows: skipping a cleared head would fall back to an older,
+        // still-uncleared terminal row and resurrect a goal the user cleared
+        // two goals ago. A cleared head is authoritative — no current goal.
+        Ok(Self::find_latest_tx(tx, session_id)?
+            .filter(|goal| goal.status != GoalStatus::Cleared))
+    }
+
+    /// The single most-recent goal row for the session, regardless of status
+    /// (the head of the goal lifecycle chain). Ingest keys its
+    /// insert-vs-update-vs-drop decision off this so a cleared head is never
+    /// skipped, and so a stale post-clear notification cannot mint a new goal.
+    pub fn find_latest_tx(
+        tx: &Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<Option<GoalRecord>> {
         tx.query_row(
             "SELECT * FROM goals
-             WHERE session_id = ?1 AND status != 'cleared'
+             WHERE session_id = ?1
              ORDER BY created_at DESC, rowid DESC
              LIMIT 1",
             [session_id],
@@ -138,12 +155,16 @@ impl GoalStore {
         pending_op: Option<GoalPendingOp>,
     ) -> anyhow::Result<()> {
         self.db.with_tx(|tx| {
+            // Mark the latest row regardless of status: a set issued after a
+            // clear must be able to stamp the cleared head so ingest can tell
+            // the set's own native echo (revive as a new goal) apart from a
+            // stale post-clear echo (drop).
             tx.execute(
                 "UPDATE goals
                  SET pending_op = ?2, updated_at = ?3
                  WHERE id IN (
                      SELECT id FROM goals
-                     WHERE session_id = ?1 AND status != 'cleared'
+                     WHERE session_id = ?1
                      ORDER BY created_at DESC, rowid DESC
                      LIMIT 1
                  )",

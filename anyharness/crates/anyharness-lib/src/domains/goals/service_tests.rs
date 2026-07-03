@@ -249,6 +249,146 @@ fn new_goal_after_terminal_creates_a_new_record() {
 }
 
 #[test]
+fn clearing_second_goal_does_not_resurrect_first_terminal_goal() {
+    let service = test_service();
+    // Goal A runs and reaches met (a terminal, never-cleared record).
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("first objective", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal A");
+    service
+        .ingest_native_event(
+            context(2),
+            GoalNativeEventKind::Met,
+            Some(wire("first objective", GoalWireStatus::Met)),
+        )
+        .expect("ingest goal A met");
+    // Goal B is set (a different objective) and then cleared.
+    service
+        .ingest_native_event(
+            context(3),
+            GoalNativeEventKind::Updated,
+            Some(wire("second objective", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal B");
+    service
+        .ingest_native_event(context(4), GoalNativeEventKind::Cleared, None)
+        .expect("clear goal B");
+
+    // Clearing B must not fall back to A: the session has no current goal.
+    assert!(service
+        .current_goal("session-1")
+        .expect("load current")
+        .is_none());
+}
+
+#[test]
+fn stale_goal_update_after_clear_does_not_resurrect() {
+    let service = test_service();
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal");
+    service
+        .ingest_native_event(context(2), GoalNativeEventKind::Cleared, None)
+        .expect("clear goal");
+
+    // A late accounting goal_updated for the just-cleared goal arrives on the
+    // notification path with no set in flight: it must be dropped, leaving the
+    // mirror cleared (no envelope, no resurrected active row).
+    let stale = service
+        .ingest_native_event(
+            context(3),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest stale update");
+    assert!(stale.envelopes.is_empty());
+    assert!(service
+        .current_goal("session-1")
+        .expect("load current")
+        .is_none());
+}
+
+#[test]
+fn set_after_clear_creates_a_new_goal() {
+    let service = test_service();
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal");
+    service
+        .ingest_native_event(context(2), GoalNativeEventKind::Cleared, None)
+        .expect("clear goal");
+
+    // A set issued after the clear stamps the cleared head with pending Set;
+    // the set's own native echo then mints a fresh goal instead of dropping.
+    service
+        .mark_pending("session-1", GoalPendingOp::Set)
+        .expect("mark pending set");
+    let batch = service
+        .ingest_native_event(
+            context(3),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest re-armed goal");
+    assert_eq!(batch.envelopes.len(), 1);
+    let goal = service
+        .current_goal("session-1")
+        .expect("load current")
+        .expect("current goal");
+    assert_eq!(goal.objective, "make CI green");
+    assert_eq!(goal.status, GoalStatus::Active);
+    assert_eq!(goal.revision, 1);
+}
+
+#[test]
+fn re_arm_same_objective_after_met_starts_fresh_record() {
+    let service = test_service();
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("DONE.txt exists", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal");
+    let mut met = wire("DONE.txt exists", GoalWireStatus::Met);
+    met.met_reason = Some("file created".to_string());
+    let first = service
+        .ingest_native_event(context(2), GoalNativeEventKind::Met, Some(met))
+        .expect("ingest met")
+        .goal
+        .expect("goal record");
+    assert_eq!(first.met_reason.as_deref(), Some("file created"));
+
+    // Re-arming the same objective is a new pursuit, not a continuation of the
+    // completed goal: a fresh record with no stale met_reason carried forward.
+    let rearmed = service
+        .ingest_native_event(
+            context(3),
+            GoalNativeEventKind::Updated,
+            Some(wire("DONE.txt exists", GoalWireStatus::Active)),
+        )
+        .expect("ingest re-arm")
+        .goal
+        .expect("goal record");
+    assert_ne!(rearmed.id, first.id);
+    assert_eq!(rearmed.revision, 1);
+    assert_eq!(rearmed.status, GoalStatus::Active);
+    assert_eq!(rearmed.met_reason, None);
+}
+
+#[test]
 fn reconcile_null_clears_non_terminal_but_preserves_met() {
     let service = test_service();
     service
