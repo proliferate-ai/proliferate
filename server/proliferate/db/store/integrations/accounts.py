@@ -161,7 +161,7 @@ def _ready_accounts_stmt(user_id: UUID, organization_id: UUID | None) -> Select:
 def _ready_account_row(row: Row, organization_id: UUID | None) -> ReadyAccountRow:
     return ReadyAccountRow(
         account=_record(row[0]),
-        definition=definitions_store._record(row[1]),
+        definition=definitions_store.record_from_row(row[1]),
         org_policy_enabled=row[2] if organization_id is not None else None,
     )
 

@@ -36,7 +36,12 @@ class IntegrationDefinitionRecord:
     updated_at: datetime
 
 
-def _record(row: CloudIntegrationDefinition) -> IntegrationDefinitionRecord:
+def record_from_row(row: CloudIntegrationDefinition) -> IntegrationDefinitionRecord:
+    """Map a definition ORM row to its record.
+
+    Public so sibling stores (e.g. the accounts store, which joins definitions)
+    can reuse the mapping instead of reaching into a private helper.
+    """
     return IntegrationDefinitionRecord(
         id=row.id,
         source=row.source,
@@ -52,6 +57,11 @@ def _record(row: CloudIntegrationDefinition) -> IntegrationDefinitionRecord:
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
+
+
+# Module-internal shorthand for the many in-module call sites below; the public
+# name is record_from_row.
+_record = record_from_row
 
 
 async def list_seed_definitions(db: AsyncSession) -> tuple[IntegrationDefinitionRecord, ...]:
