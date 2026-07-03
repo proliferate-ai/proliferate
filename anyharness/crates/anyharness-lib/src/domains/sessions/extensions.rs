@@ -48,6 +48,12 @@ pub struct SessionTurnFinishedContext {
 }
 
 #[derive(Debug, Clone)]
+pub struct SessionStartedContext {
+    pub session_id: String,
+    pub agent_kind: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct SessionClosingContext {
     pub session_id: String,
     pub closed_at: String,
@@ -65,6 +71,8 @@ pub trait SessionExtension: Send + Sync {
     ) -> anyhow::Result<SessionLaunchExtras> {
         Ok(SessionLaunchExtras::default())
     }
+
+    fn on_session_started(&self, _ctx: SessionStartedContext) {}
 
     fn on_turn_finished(&self, _ctx: SessionTurnFinishedContext) {}
 

@@ -6,6 +6,7 @@ use anyharness_contract::v1::{
     McpElicitationSubmittedField, SessionMcpBindingSummary, UserInputSubmittedAnswer,
 };
 
+use super::active_goals::ActiveGoalResolver;
 use super::links::model::SessionLinkRecord;
 use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
@@ -47,6 +48,7 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+    active_goal_resolver: Arc<dyn ActiveGoalResolver>,
 }
 
 impl SessionRuntime {
@@ -268,6 +270,7 @@ impl SessionRuntime {
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+        active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     ) -> Self {
         Self {
             session_service,
@@ -281,6 +284,7 @@ impl SessionRuntime {
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
+            active_goal_resolver,
         }
     }
 

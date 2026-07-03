@@ -375,6 +375,12 @@ async fn handle_non_replay_command(
             drop(respond_to);
             None
         }
+        SessionCommand::CallAgentExtMethod { respond_to, .. } => {
+            let _ = respond_to.send(Err(anyhow::anyhow!(
+                "replay sessions have no live agent connection"
+            )));
+            None
+        }
         SessionCommand::VerifyForkReady { respond_to } => {
             let _ = respond_to.send(Err(ForkSessionCommandError::Unsupported(
                 "replay sessions cannot be forked".to_string(),

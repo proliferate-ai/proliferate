@@ -160,6 +160,14 @@ pub(in crate::live::sessions) enum SessionCommand {
         op: Box<dyn SessionDomainOp>,
         respond_to: oneshot::Sender<Box<dyn std::any::Any + Send>>,
     },
+    /// Send an ACP extension-method request (`_`-prefixed wire name) to the
+    /// agent and return its raw JSON result. The method string is serialized
+    /// verbatim; the agent is the sole authority on acceptance.
+    CallAgentExtMethod {
+        method: String,
+        params: serde_json::Value,
+        respond_to: oneshot::Sender<anyhow::Result<serde_json::Value>>,
+    },
     VerifyForkReady {
         respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,
     },

@@ -178,6 +178,15 @@ impl ActiveCatalog {
         self.agent(kind).map(|agent| agent.auth_contexts.as_slice())
     }
 
+    /// Version-level goal support declared for the pinned harness. The live
+    /// session capability stays ACP-advertised (initialize `_meta`); this is
+    /// the catalog-declared flag for surfaces without a live handshake.
+    pub fn supports_goals(&self, kind: &str) -> bool {
+        self.agent(kind)
+            .map(|agent| agent.session.supports_goals)
+            .unwrap_or(false)
+    }
+
     /// Models available under the active contexts: `availability.anyOf`
     /// intersected with the active ids (`"baseline"` counts when active).
     pub fn models(&self, kind: &str, contexts: &ActiveAuthContexts) -> Vec<&AgentCatalogModel> {

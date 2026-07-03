@@ -21,6 +21,10 @@ use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
+use crate::domains::goals::hooks::GoalSessionHooks;
+use crate::domains::goals::runtime::GoalRuntime;
+use crate::domains::goals::service::GoalService;
+use crate::domains::goals::store::GoalStore;
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
@@ -127,6 +131,8 @@ pub struct AppState {
     pub mobility_service: Arc<MobilityService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
+    pub goal_service: Arc<GoalService>,
+    pub goal_runtime: Arc<GoalRuntime>,
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
@@ -203,6 +209,7 @@ impl AppState {
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
+        let goal_service = Arc::new(GoalService::new(GoalStore::new(db.clone())));
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
@@ -242,6 +249,7 @@ impl AppState {
             runtime_home: runtime_home.clone(),
             plan_service: plan_service.clone(),
             review_service: review_service.clone(),
+            goal_service: goal_service.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -286,6 +294,13 @@ impl AppState {
                 cowork_mcp_auth: cowork_mcp_auth.clone(),
                 subagent_service: subagent_service.clone(),
             });
+        let goal_runtime = Arc::new(GoalRuntime::new(
+            goal_service.clone(),
+            session_service.clone(),
+            acp_manager.clone(),
+            workspace_access_gate.clone(),
+        ));
+        let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -293,6 +308,7 @@ impl AppState {
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
+            goal_session_hooks,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -306,6 +322,7 @@ impl AppState {
             workspace_access_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
+            goal_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
@@ -442,6 +459,8 @@ impl AppState {
             mobility_service,
             plan_service,
             plan_runtime,
+            goal_service,
+            goal_runtime,
             acp_manager,
             terminal_service,
             agent_login_terminal_service,

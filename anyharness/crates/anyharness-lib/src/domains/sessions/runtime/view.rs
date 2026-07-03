@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use anyharness_contract::v1::{
-    Session, SessionExecutionSummary, SessionLinkSummary, SessionLiveConfigSnapshot,
+    Goal, Session, SessionExecutionSummary, SessionLinkSummary, SessionLiveConfigSnapshot,
     WorkspaceExecutionSummary,
 };
 
@@ -27,6 +27,7 @@ pub struct SessionView {
     pub live_config: Option<SessionLiveConfigSnapshot>,
     pub execution_summary: SessionExecutionSummary,
     pub pending_prompts: Vec<PendingPromptRecord>,
+    pub active_goal: Option<Goal>,
 }
 
 impl SessionView {
@@ -40,6 +41,7 @@ impl SessionView {
             .iter()
             .map(PendingPromptRecord::to_contract)
             .collect();
+        session.active_goal = self.active_goal;
         session
     }
 }
@@ -61,11 +63,13 @@ impl SessionRuntime {
             .session_service
             .store()
             .list_pending_prompts(&record.id)?;
+        let active_goal = self.active_goal_resolver.active_goal(&record.id)?;
         Ok(SessionView {
             record: record.clone(),
             live_config,
             execution_summary,
             pending_prompts,
+            active_goal,
         })
     }
 
@@ -85,6 +89,9 @@ impl SessionRuntime {
             .session_service
             .store()
             .list_pending_prompts_for_sessions(&session_ids)?;
+        let mut active_goals = self
+            .active_goal_resolver
+            .active_goals_for_sessions(&session_ids)?;
 
         let mut views = Vec::with_capacity(records.len());
         for record in records {
@@ -93,6 +100,7 @@ impl SessionRuntime {
                 live_config: live_configs.remove(&record.id),
                 execution_summary: self.session_execution_summary(record).await,
                 pending_prompts: pending_prompts.remove(&record.id).unwrap_or_default(),
+                active_goal: active_goals.remove(&record.id),
             });
         }
         Ok(views)
@@ -233,6 +241,7 @@ mod tests {
                 live_config,
                 execution_summary: execution_summary.clone(),
                 pending_prompts: pending_prompts.clone(),
+                active_goal: None,
             };
 
             assert_eq!(

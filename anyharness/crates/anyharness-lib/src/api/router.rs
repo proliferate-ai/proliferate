@@ -11,7 +11,7 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
+    agent_auth, agents, auth as http_auth, catalogs, cowork, files, git, goals, health, hosting,
     mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
     sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
     sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
@@ -420,6 +420,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/prompt-attachments/{attachment_id}",
             get(sessions_pending::get_prompt_attachment),
+        )
+        .route(
+            "/sessions/{session_id}/goal",
+            put(goals::set_session_goal).delete(goals::clear_session_goal),
         )
         .route(
             "/sessions/{session_id}/resume",

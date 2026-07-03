@@ -5,9 +5,9 @@ use utoipa::ToSchema;
 
 use super::OriginContext;
 use super::{
-    ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
-    PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
-    SessionMcpBindingSummary, UserInputQuestion,
+    ContentPart, Goal, InteractionKind, McpElicitationInteractionPayload,
+    PermissionInteractionContext, PermissionInteractionOption, PromptProvenance,
+    SessionLiveConfigSnapshot, SessionMcpBindingSummary, UserInputQuestion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -124,6 +124,8 @@ pub struct Session {
     #[serde(default)]
     pub action_capabilities: SessionActionCapabilities,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_goal: Option<Goal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
 }
 
@@ -134,6 +136,8 @@ pub struct SessionActionCapabilities {
     pub fork: bool,
     #[serde(default)]
     pub targeted_fork: bool,
+    #[serde(default)]
+    pub supports_goals: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -713,6 +717,7 @@ mod tests {
             closed_at: None,
             dismissed_at: None,
             pending_prompts: vec![],
+            active_goal: None,
             origin: None,
         };
 

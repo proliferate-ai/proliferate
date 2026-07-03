@@ -32,6 +32,18 @@ fn service_reads_the_bundled_catalog_at_boot() {
 }
 
 #[test]
+fn bundled_catalog_declares_goal_support_for_claude_and_codex_only() {
+    let sync = Arc::new(CatalogSyncService::from_bundled());
+    let catalog = AgentCatalogService::new(sync).active_catalog();
+
+    assert!(catalog.supports_goals("claude"));
+    assert!(catalog.supports_goals("codex"));
+    for kind in ["gemini", "cursor", "opencode", "grok", "unknown"] {
+        assert!(!catalog.supports_goals(kind), "kind={kind}");
+    }
+}
+
+#[test]
 fn pins_surface_catalog_harness_versions() {
     let catalog = draft_catalog();
 

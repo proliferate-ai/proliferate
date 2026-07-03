@@ -13,6 +13,7 @@ pub mod files;
 pub mod git;
 mod git_contract;
 mod git_task;
+pub mod goals;
 pub mod health;
 pub mod hosting;
 pub mod mobility;
