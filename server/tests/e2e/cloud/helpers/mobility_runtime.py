@@ -18,8 +18,8 @@ tested without a running runtime.
 
 from __future__ import annotations
 
+import asyncio
 import json
-import time
 from typing import Any
 
 import httpx
@@ -73,6 +73,11 @@ def assistant_message_texts(events: list[dict[str, Any]]) -> list[str]:
             ):
                 texts.append(part["text"])
     return texts
+
+
+def turn_transcript_text(events: list[dict[str, Any]]) -> str:
+    """Concatenated assistant text for a turn (evidence/logging helper)."""
+    return " ".join(assistant_message_texts(events)).strip()
 
 
 def turn_contains_text(events: list[dict[str, Any]], needle: str) -> bool:
@@ -240,9 +245,40 @@ async def _collect_until_turn_end(
     after_seq: int,
     timeout_seconds: float,
 ) -> list[dict[str, Any]]:
-    deadline = time.monotonic() + timeout_seconds
     events: list[dict[str, Any]] = []
     headers = {**_headers(access_token), "Accept": "text/event-stream"}
+    # ``asyncio.timeout`` is a *wall-clock* bound around the whole stream: the
+    # per-line ``deadline`` check below only fires when a new line arrives, so a
+    # fully silent SSE stream (agent stuck / gateway wedged) would otherwise block
+    # in ``aiter_lines()`` forever with ``timeout=None`` -- the hang that ran a
+    # prior E2E attempt 13 minutes past its 180s budget.
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            events = await _stream_turn_events(
+                runtime_url=runtime_url,
+                access_token=access_token,
+                session_id=session_id,
+                after_seq=after_seq,
+                headers=headers,
+                events=events,
+            )
+            return events
+    except TimeoutError as exc:
+        raise CloudE2ETestError(
+            f"Timed out waiting for turn_ended in session {session_id} "
+            f"after {timeout_seconds:.0f}s (events={len(events)})."
+        ) from exc
+
+
+async def _stream_turn_events(
+    *,
+    runtime_url: str,
+    access_token: str,
+    session_id: str,
+    after_seq: int,
+    headers: dict[str, str],
+    events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     async with (
         httpx.AsyncClient(timeout=None) as client,
         client.stream(
@@ -255,11 +291,6 @@ async def _collect_until_turn_end(
         response.raise_for_status()
         data_lines: list[str] = []
         async for line in response.aiter_lines():
-            if time.monotonic() >= deadline:
-                raise CloudE2ETestError(
-                    f"Timed out waiting for turn_ended in session {session_id} "
-                    f"after {timeout_seconds:.0f}s (events={len(events)})."
-                )
             if line == "":
                 if not data_lines:
                     continue
@@ -267,9 +298,19 @@ async def _collect_until_turn_end(
                 data_lines = []
                 if isinstance(envelope, dict):
                     events.append(envelope)
-                    event_type = envelope.get("event", {}).get("type")
+                    event = envelope.get("event")
+                    event_type = event.get("type") if isinstance(event, dict) else None
                     if event_type in {"turn_ended", "session_ended"}:
                         return events
+                    if event_type == "error":
+                        # A top-level error event puts the session in `errored`
+                        # (e.g. the agent failing "Authentication required"): no
+                        # turn_ended follows, so surface it instead of blocking on
+                        # a now-silent stream until the outer timeout.
+                        raise CloudE2ETestError(
+                            f"Session {session_id} emitted an error event: "
+                            f"{json.dumps(event)[:600]}"
+                        )
                 continue
             if line.startswith("data:"):
                 data_lines.append(line[5:].lstrip())

@@ -47,9 +47,13 @@ from proliferate.integrations.anyharness.mobility import (
 )
 from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_service
+from proliferate.server.cloud.materialization import service as materialization_service
 from tests.e2e.cloud.helpers.auth import create_user_and_login, refresh_auth_session
 from tests.e2e.cloud.helpers.config import ensure_cloud_runtime_binary_ready
-from tests.e2e.cloud.helpers.github import seed_linked_github_account
+from tests.e2e.cloud.helpers.github import (
+    seed_github_app_repo_authority,
+    seed_linked_github_account,
+)
 from tests.e2e.cloud.helpers.local_runtime import (
     cleanup_claude_project_slugs,
     clone_repo_on_new_branch,
@@ -64,6 +68,7 @@ from tests.e2e.cloud.helpers.mobility_runtime import (
     runtime_list_sessions,
     runtime_prompt_and_collect,
     turn_contains_text,
+    turn_transcript_text,
 )
 from tests.e2e.cloud.helpers.shared import AuthSession, CloudE2ETestError
 from tests.e2e.cloud.helpers.workspaces import (
@@ -117,8 +122,18 @@ async def test_workspace_move_round_trip_local_cloud_local(
     try:
         # --- Prereqs: linked GitHub, sandbox Claude auth, repo config + cloud env ---
         await seed_linked_github_account(db_session, user_id=auth.user_id, access_token=token)
+        await seed_github_app_repo_authority(
+            db_session, user_id=auth.user_id, access_token=token, git_owner=owner
+        )
         await _seed_sandbox_claude_api_key(cloud_client, auth, cloud_test_config.anthropic_api_key)
-        await _put_repo_config(cloud_client, auth, owner=owner, repo=repo)
+        # Configuring the cloud repo environment is what creates the repo_config
+        # row on this branch (the standalone ``/repos/.../config`` endpoint the
+        # earlier provisioning idiom used was removed by the Stack-1 cutover);
+        # the move's logical identity is that same repo_config.
+        await _put_repo_config(
+            cloud_client, auth, owner=owner, repo=repo,
+            base_branch=cloud_test_config.github_base_branch,
+        )
         repo_config_id = await _require_repo_config_id(
             db_session, user_uuid, owner=owner, repo=repo
         )
@@ -135,6 +150,15 @@ async def test_workspace_move_round_trip_local_cloud_local(
         )
         warmup_workspace_id = str(warmup["id"])
         provider_sandbox_id = await _sandbox_provider_id(db_session, user_uuid)
+
+        # Materialize the claude api_key agent-auth (state.json) into the now-booted
+        # sandbox. In production this rides fire-and-forget background tasks
+        # (schedule_materialize_agent_auth after the route-selection write, and the
+        # materialize_sandbox bootstrap) -- neither runs under the in-process ASGI
+        # test harness, so do it synchronously here. Without it the migrated
+        # session's Claude launches with no credentials in the sandbox and every
+        # turn fails with a "-32000 Authentication required" agent error.
+        await materialization_service.materialize_agent_auth(db_session, user_id=user_uuid)
 
         # --- Local side: clone + branch + a real Claude session that learns the codeword ---
         base_sha = clone_repo_on_new_branch(
@@ -216,9 +240,21 @@ async def test_workspace_move_round_trip_local_cloud_local(
         assert complete1["phase"] == "completed" and complete1["canonicalSide"] == "destination"
 
         # --- Use it there: the migrated session resumes natively in the sandbox ---
+        _archive_native_ids = [
+            (s.get("session", {}).get("id"), s.get("session", {}).get("nativeSessionId"))
+            for s in (archive1.get("sessions") or [])
+            if isinstance(s, dict)
+        ]
+        print(f"[E2E-DIAG] archive1 session native ids: {_archive_native_ids}", flush=True)
         sandbox_url, sandbox_token = await _sandbox_runtime_access(db_session, user_uuid)
         sandbox_session = await runtime_get_session(sandbox_url, sandbox_token, session_id)
-        assert sandbox_session["nativeSessionId"] == native_session_id
+        print(
+            f"[E2E-DIAG] sandbox session keys={sorted(sandbox_session.keys())} "
+            f"nativeSessionId={sandbox_session.get('nativeSessionId')!r} "
+            f"expected={native_session_id!r}",
+            flush=True,
+        )
+        assert sandbox_session.get("nativeSessionId") == native_session_id
         assert len(await runtime_list_events(sandbox_url, sandbox_token, session_id)) > 0
 
         recall_cloud = await runtime_prompt_and_collect(
@@ -229,6 +265,11 @@ async def test_workspace_move_round_trip_local_cloud_local(
         )
         assert turn_contains_text(recall_cloud, codeword), (
             "Migrated session did not recall the codeword in the sandbox."
+        )
+        print(
+            f"[E2E-EVIDENCE] sandbox recall (native_session_id={native_session_id}): "
+            f"{turn_transcript_text(recall_cloud)!r}",
+            flush=True,
         )
 
         # --- Move 2: cloud -> local (round trip home via re-adopt) -----------
@@ -289,12 +330,23 @@ async def test_workspace_move_round_trip_local_cloud_local(
         assert turn_contains_text(recall_local, codeword), (
             "Re-adopted session did not recall the codeword locally."
         )
+        print(
+            f"[E2E-EVIDENCE] local recall after round-trip: "
+            f"{turn_transcript_text(recall_local)!r}",
+            flush=True,
+        )
 
         # --- Ledger + cloud-source cleanup assertions ------------------------
-        for move_id in (move1_id, move2_id):
+        for label, move_id in (("local->cloud", move1_id), ("cloud->local", move2_id)):
             row = await _get_move(cloud_client, auth, move_id)
             assert row["phase"] == "completed", move_id
             assert row["canonicalSide"] == "destination", move_id
+            print(
+                f"[E2E-EVIDENCE] workspace_move {label} id={move_id} "
+                f"phase={row['phase']} canonicalSide={row['canonicalSide']} "
+                f"source={row['sourceKind']}->dest={row['destinationKind']}",
+                flush=True,
+            )
 
         archived = await cloud_workspace_store.get_cloud_workspace_for_user(
             db_session, user_uuid, uuid.UUID(destination_workspace_id)
@@ -405,14 +457,25 @@ async def _get_move(client: httpx.AsyncClient, auth: AuthSession, move_id: str) 
 
 
 async def _put_repo_config(
-    client: httpx.AsyncClient, auth: AuthSession, *, owner: str, repo: str
+    client: httpx.AsyncClient, auth: AuthSession, *, owner: str, repo: str, base_branch: str
 ) -> None:
+    # Saving the cloud repo environment upserts the underlying repo_config and
+    # the cloud RepoEnvironment the move needs (``_require_cloud_repo_environment``).
+    # This is the same call ``create_cloud_workspace`` makes; running it here just
+    # pins the repo_config before we read its id, and the later warmup re-upserts
+    # it idempotently.
     await _server_json(
         client,
         auth,
         "PUT",
-        f"/v1/cloud/repos/{owner}/{repo}/config",
-        body={"configured": True, "envVars": {}, "setupScript": "", "files": []},
+        f"/v1/cloud/repositories/{owner}/{repo}/environment",
+        body={
+            "kind": "cloud",
+            "gitProvider": "github",
+            "defaultBranch": base_branch,
+            "setupScript": "",
+            "runCommand": "",
+        },
         timeout=120.0,
     )
 

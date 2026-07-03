@@ -38,6 +38,10 @@ _LOCAL_ANYHARNESS_BINARY: Path | None = None
 _AGENT_CACHE = Path.home() / ".proliferate-local" / "anyharness" / "agents"
 _NODE_CACHE = Path.home() / ".proliferate" / "anyharness" / "node"
 _CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
+# The machine's already-built + already-authed Claude agent launcher. Pointing
+# the runtime at it (the black-box "override" agent source) is the reliable way
+# to run Claude locally -- see _claude_override_agent_env.
+_CLAUDE_CACHE_LAUNCHER = _AGENT_CACHE / "claude" / "agent_process" / "claude-launcher"
 
 _BUILD_TIMEOUT_SECONDS = 1800
 _INSTALL_AGENTS_TIMEOUT_SECONDS = 900
@@ -148,27 +152,75 @@ def _seed_runtime_home(binary: Path, runtime_home: Path) -> None:
         ) from exc
 
 
+def _claude_override_agent_env() -> dict[str, str] | None:
+    """Reliable local Claude via the black-box "override" agent source.
+
+    Pointing ``ANYHARNESS_CLAUDE_AGENT_PROGRAM`` at the machine's already-built,
+    already-authed Claude launcher (``claude-launcher`` puts the native ``claude``
+    sidecar on PATH and disables the auto-updater) lets the runtime skip the
+    managed npm-from-git reinstall entirely. That per-spawn reinstall is the
+    source of the intermittent ``AnyHarness sidecar is not available for target
+    ...`` and ``install-agents`` exit-1 flakes: it refetches the ACP package + its
+    platform sidecar over the network every spawn. With no agent seeded into the
+    runtime home, the startup installed-only reconcile has nothing to reinstall,
+    and the session spawn resolves this override (anyharness
+    ``domains/agents/readiness/overrides.rs``). Returns ``None`` when the launcher
+    cache is absent, so the managed seed path stays as a fallback.
+    """
+    if not _CLAUDE_CACHE_LAUNCHER.is_file():
+        return None
+    return {
+        "ANYHARNESS_CLAUDE_AGENT_PROGRAM": str(_CLAUDE_CACHE_LAUNCHER),
+        "ANYHARNESS_CLAUDE_AGENT_ARGS_JSON": "[]",
+        "ANYHARNESS_CLAUDE_AGENT_CWD": str(_CLAUDE_CACHE_LAUNCHER.parent),
+    }
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
 
 
+_SPAWN_ATTEMPTS = 3
+
+
 def spawn_local_runtime(label: str, *, scratch_root: Path) -> LocalRuntime:
     """Build (once), seed, and start a bearer-authed local runtime; wait health.
 
-    ``scratch_root`` is a per-run temp directory; both the runtime home and the
-    worktrees root live under it so their basenames become slug markers the
-    ``~/.claude/projects`` cleanup can match.
+    Retries a few times because the serve-time agent reconcile reinstalls the
+    Claude ACP package from git and its platform sidecar is intermittently
+    unavailable (``AnyHarness sidecar is not available for target ...`` -> the
+    process exits during startup). Each attempt gets a fresh runtime home + port,
+    so a retry is clean; a genuinely-broken toolchain still surfaces after the
+    last attempt.
     """
     binary = ensure_local_anyharness_binary()
+    last_error: Exception | None = None
+    for attempt in range(_SPAWN_ATTEMPTS):
+        try:
+            return _spawn_local_runtime_once(binary, label, scratch_root=scratch_root)
+        except CloudE2ETestError as exc:
+            last_error = exc
+            if attempt + 1 >= _SPAWN_ATTEMPTS:
+                break
+    assert last_error is not None
+    raise last_error
+
+
+def _spawn_local_runtime_once(
+    binary: Path, label: str, *, scratch_root: Path
+) -> LocalRuntime:
     runtime_home = Path(
         _mkdir(scratch_root / f"rt-{label}-{uuid4().hex[:8]}")
     )
     worktrees_root = Path(
         _mkdir(scratch_root / f"wt-{label}-{uuid4().hex[:8]}")
     )
-    _seed_runtime_home(binary, runtime_home)
+    override_env = _claude_override_agent_env()
+    if override_env is None:
+        # No prebuilt launcher cache -> fall back to seeding + managed install.
+        _seed_runtime_home(binary, runtime_home)
 
     access_token = uuid4().hex
     port = _free_port()
@@ -193,6 +245,7 @@ def spawn_local_runtime(label: str, *, scratch_root: Path) -> LocalRuntime:
             **os.environ,
             "ANYHARNESS_BEARER_TOKEN": access_token,
             "ANYHARNESS_WORKTREES_ROOT": str(worktrees_root),
+            **(override_env or {}),
         },
         stdout=subprocess.DEVNULL,
         stderr=stderr_file,
