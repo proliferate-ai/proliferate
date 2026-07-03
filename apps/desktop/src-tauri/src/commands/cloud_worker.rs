@@ -90,7 +90,11 @@ pub async fn ensure_desktop_dispatch_worker(
     let mut guard = state.process.lock().await;
     if let Some(process) = guard.as_mut() {
         match process.child.try_wait() {
-            Ok(None) if process.target_id == target_id => {
+            // A fresh enrollment token is a rotation request (e.g. a different
+            // user signed in on this machine): fall through to kill the tracked
+            // worker and re-enroll instead of keeping the predecessor's worker
+            // + gateway credentials alive under the new user.
+            Ok(None) if process.target_id == target_id && enrollment_token.is_none() => {
                 return Ok(EnsureDesktopDispatchWorkerResult {
                     target_id,
                     status: "running",
