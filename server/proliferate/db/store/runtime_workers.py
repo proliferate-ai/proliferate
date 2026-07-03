@@ -358,10 +358,8 @@ async def get_grant_by_gateway_token_hash(
     worker = await db.get(CloudRuntimeWorker, token.runtime_worker_id)
     if worker is None or worker.status == "revoked":
         return None
-    now = utcnow()
-    token.last_used_at = now
-    token.updated_at = now
-    await db.flush()
+    # Deliberately no last_used_at stamp: this is the gateway hot path and a
+    # per-request row write + flush is not worth the bookkeeping.
     return IntegrationGatewayGrant(
         runtime_worker_id=worker.id,
         runtime_kind=worker.runtime_kind,

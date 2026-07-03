@@ -5,6 +5,7 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.auth import User
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.integrations.access import ensure_provider_access
@@ -39,9 +40,13 @@ async def _account_for(
     await db_session.commit()
     definition = await definitions_store.get_seed_by_namespace(db_session, namespace)
     assert definition is not None
+    # Accounts carry a real owner FK, so seed a user row for the fixture.
+    user = User(email=f"{uuid.uuid4().hex}@access.test", hashed_password="unused")
+    db_session.add(user)
+    await db_session.flush()
     account = await accounts_store.upsert_account(
         db_session,
-        user_id=uuid.uuid4(),
+        user_id=user.id,
         definition_id=definition.id,
         auth_kind=auth_kind,
         status="ready",

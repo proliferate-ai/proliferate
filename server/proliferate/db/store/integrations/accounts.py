@@ -31,7 +31,7 @@ class IntegrationAccountRecord:
     status: str
     auth_kind: str
     credential_ciphertext: str | None
-    credential_format: str
+    credential_format: str | None
     auth_version: int
     settings_json: str
     token_expires_at: datetime | None
