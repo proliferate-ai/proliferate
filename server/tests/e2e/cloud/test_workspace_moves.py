@@ -570,28 +570,61 @@ async def _put_repo_config(
     )
 
 
-async def _seed_sandbox_claude_api_key(
-    client: httpx.AsyncClient, auth: AuthSession, anthropic_api_key: str
+async def _seed_sandbox_api_key_route(
+    client: httpx.AsyncClient,
+    auth: AuthSession,
+    *,
+    title: str,
+    secret: str,
+    harness_kind: str,
+    env_var_name: str,
 ) -> None:
-    """Give the user's cloud sandbox a Claude api-key route so the migrated
-    session can run Claude there (the authorized fallback from the spec's
-    §3 sandbox agent-auth path -- done via the product API, not raw file
-    injection). Local turns use native ~/.claude and need nothing here."""
+    """Route a harness through an api-key credential on the ``cloud`` surface,
+    via the agent-auth vault API (#907 titled-key vault + env-var selections):
+    create a titled key, then select it for the harness. Done through the
+    product API, not raw file injection.
+    """
     key = await _server_json(
         client,
         auth,
         "POST",
-        "/v1/cloud/agent-gateway/api-keys",
-        body={"provider": "anthropic", "displayName": "mig-e2e", "secret": anthropic_api_key},
+        "/v1/cloud/agent-gateway/keys",
+        body={"title": title, "value": secret},
         timeout=60.0,
     )
     await _server_json(
         client,
         auth,
         "PUT",
-        "/v1/cloud/agent-gateway/route-selections/claude/cloud",
-        body={"route": "api_key", "apiKeyId": key["id"], "slot": "primary"},
+        f"/v1/cloud/agent-gateway/selections/{harness_kind}?surface=cloud",
+        body={
+            "sources": [
+                {
+                    "sourceKind": "api_key",
+                    "apiKeyId": key["id"],
+                    "envVarName": env_var_name,
+                    "enabled": True,
+                }
+            ]
+        },
         timeout=60.0,
+    )
+
+
+async def _seed_sandbox_claude_api_key(
+    client: httpx.AsyncClient, auth: AuthSession, anthropic_api_key: str
+) -> None:
+    """Give the user's cloud sandbox a Claude api-key route so the migrated
+    session can run Claude there (the authorized fallback from the spec's
+    §3 sandbox agent-auth path). Local turns use native ~/.claude and need
+    nothing here."""
+    await _seed_sandbox_api_key_route(
+        client,
+        auth,
+        title="mig-e2e-claude",
+        secret=anthropic_api_key,
+        harness_kind="claude",
+        env_var_name="ANTHROPIC_API_KEY",
     )
 
 
@@ -608,21 +641,13 @@ async def _seed_sandbox_codex_api_key(
     So route Codex through api_key/openai, mirroring the Claude api_key seed.
     Local Codex turns use the machine's native ~/.codex login and need nothing
     here."""
-    key = await _server_json(
+    await _seed_sandbox_api_key_route(
         client,
         auth,
-        "POST",
-        "/v1/cloud/agent-gateway/api-keys",
-        body={"provider": "openai", "displayName": "mig-e2e-codex", "secret": openai_api_key},
-        timeout=60.0,
-    )
-    await _server_json(
-        client,
-        auth,
-        "PUT",
-        "/v1/cloud/agent-gateway/route-selections/codex/cloud",
-        body={"route": "api_key", "apiKeyId": key["id"], "slot": "primary"},
-        timeout=60.0,
+        title="mig-e2e-codex",
+        secret=openai_api_key,
+        harness_kind="codex",
+        env_var_name="OPENAI_API_KEY",
     )
 
 
