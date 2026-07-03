@@ -131,16 +131,22 @@ impl CloudClient {
         parse_json_response(response).await
     }
 
-    /// Fetch a pinned worker artifact (binary or its `.sha256`) via the
-    /// server's redirect endpoint. Unauthenticated by design (the CDN
-    /// artifacts are public); reqwest follows the 302 to the downloads CDN.
-    /// Uses a per-request timeout because a binary download can legitimately
-    /// outlive the client's default 30s cap on slow links.
+    /// Fetch a pinned worker artifact via the server's redirect endpoint,
+    /// capturing the CDN URL the 302 resolved to. Unauthenticated by design
+    /// (the CDN artifacts are public); reqwest follows the 302 to the downloads
+    /// CDN. Uses a per-request timeout because a binary download can
+    /// legitimately outlive the client's default 30s cap on slow links.
+    ///
+    /// The resolved URL lets a caller fetch a sibling artifact (the binary's
+    /// `.sha256`) from the *same* published directory without re-hitting the
+    /// redirect: the server resolves pinned-vs-fallback independently per
+    /// request, so a second redirect could straddle a publish and pair the
+    /// binary with a checksum from a different version.
     pub async fn download_worker_artifact(
         &self,
         target: &str,
         asset: &str,
-    ) -> Result<Vec<u8>, WorkerError> {
+    ) -> Result<DownloadedArtifact, WorkerError> {
         let response = self
             .http
             .get(format!(
@@ -155,8 +161,37 @@ impl CloudClient {
             let body = response.text().await.unwrap_or_default();
             return Err(WorkerError::Cloud { status, body });
         }
+        // Capture the post-redirect URL before the body consumes the response.
+        let resolved_url = response.url().to_string();
+        let bytes = response.bytes().await?.to_vec();
+        Ok(DownloadedArtifact { bytes, resolved_url })
+    }
+
+    /// Fetch an artifact directly from an already-resolved CDN URL (used for
+    /// the checksum, whose URL is derived from the binary's resolved location
+    /// so the pair is guaranteed to share a directory — and thus a version).
+    /// No server redirect, hence no second version-path resolution.
+    pub async fn download_from_url(&self, url: &str) -> Result<Vec<u8>, WorkerError> {
+        let response = self
+            .http
+            .get(url)
+            .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud { status, body });
+        }
         Ok(response.bytes().await?.to_vec())
     }
+}
+
+/// A downloaded worker artifact plus the CDN URL the server's redirect
+/// resolved to, so a sibling artifact can be fetched from the same directory.
+pub struct DownloadedArtifact {
+    pub bytes: Vec<u8>,
+    pub resolved_url: String,
 }
 
 const ARTIFACT_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);

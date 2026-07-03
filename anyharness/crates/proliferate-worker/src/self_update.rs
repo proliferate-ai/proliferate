@@ -7,8 +7,11 @@
 //! only the sandbox bootstrap turns on.
 //!
 //! Safety model:
-//! - the artifact and its `.sha256` both come from the server's pinned
-//!   artifact redirect; the download is rejected unless the digest matches;
+//! - the binary comes from the server's pinned artifact redirect and its
+//!   `.sha256` is fetched from the *same resolved directory* (the checksum URL
+//!   is derived from the binary's post-redirect URL, not resolved a second
+//!   time) so the pair always shares a version; the download is rejected
+//!   unless the digest matches;
 //! - the new binary is staged next to the current one, preflighted with
 //!   `--version` — which must both succeed and report the pinned version, so
 //!   the unpinned `stable` fallback artifact serving an older build aborts
@@ -49,7 +52,9 @@ use crate::{
 const ATTEMPTED_VERSION_ENV: &str = "PROLIFERATE_WORKER_SELF_UPDATE_ATTEMPTED";
 
 const BINARY_ASSET: &str = "proliferate-worker";
-const CHECKSUM_ASSET: &str = "proliferate-worker.sha256";
+/// The checksum is published next to the binary as `<binary>.sha256`, so its
+/// URL is the binary's resolved URL with this suffix appended.
+const CHECKSUM_SUFFIX: &str = ".sha256";
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct UpdatePlan {
@@ -110,17 +115,22 @@ pub async fn converge(cloud: &CloudClient, update: &UpdatePlan) -> Result<(), Wo
     let binary = cloud
         .download_worker_artifact(&target, BINARY_ASSET)
         .await?;
-    let checksum = cloud
-        .download_worker_artifact(&target, CHECKSUM_ASSET)
-        .await?;
-    verify_sha256(&binary, &String::from_utf8_lossy(&checksum))?;
+    // Derive the checksum URL from the binary's *resolved* CDN location so the
+    // two always come from the same published directory (hence the same
+    // version). Re-hitting the redirect for the checksum resolves the
+    // pinned-vs-fallback version path a second time, which can straddle a CDN
+    // publish and pair this binary with a checksum from a different version —
+    // a spurious mismatch at best, a consistent-but-unpinned pair at worst.
+    let checksum_url = checksum_url_for(&binary.resolved_url);
+    let checksum = cloud.download_from_url(&checksum_url).await?;
+    verify_sha256(&binary.bytes, &String::from_utf8_lossy(&checksum))?;
 
     // Resolve the exe path before touching the filesystem: on Linux,
     // /proc/self/exe stops resolving cleanly once the original inode is
     // replaced underneath the running process.
     let exe_path = std::env::current_exe().map_err(WorkerError::SelfUpdateCurrentExe)?;
     sweep_stale_staged(&exe_path);
-    let staged = stage_binary(&binary, &exe_path)?;
+    let staged = stage_binary(&binary.bytes, &exe_path)?;
     if let Err(error) = preflight(&staged, &update.desired_version).and_then(|()| {
         std::fs::rename(&staged, &exe_path).map_err(|source| WorkerError::SelfUpdateSwap {
             path: exe_path.clone(),
@@ -140,6 +150,14 @@ pub async fn converge(cloud: &CloudClient, update: &UpdatePlan) -> Result<(), Wo
         client.flush(Some(std::time::Duration::from_secs(2)));
     }
     Err(reexec(&exe_path, &update.desired_version))
+}
+
+/// The published `.sha256` sits next to the binary, so its URL is the binary's
+/// resolved URL with the checksum suffix appended. Deriving it (rather than
+/// re-resolving the pinned-vs-fallback path via a second redirect) guarantees
+/// the checksum and binary come from the same directory — and thus version.
+fn checksum_url_for(binary_url: &str) -> String {
+    format!("{binary_url}{CHECKSUM_SUFFIX}")
 }
 
 fn artifact_target() -> Result<String, WorkerError> {
@@ -303,7 +321,7 @@ fn reexec(_exe_path: &Path, _desired_version: &str) -> WorkerError {
 mod tests {
     use sha2::{Digest, Sha256};
 
-    use super::{plan_for_versions, verify_sha256, version_output_matches};
+    use super::{checksum_url_for, plan_for_versions, verify_sha256, version_output_matches};
     use crate::error::WorkerError;
 
     fn digest_hex(bytes: &[u8]) -> String {
@@ -360,6 +378,24 @@ mod tests {
         ));
         assert!(!version_output_matches("", "0.3.0"));
         assert!(!version_output_matches("<html>404</html>", "0.3.0"));
+    }
+
+    #[test]
+    fn checksum_url_is_derived_from_the_binary_resolved_url() {
+        // Same directory as the binary, whichever path (pinned or fallback)
+        // the server's single redirect resolved to — never a second resolve.
+        assert_eq!(
+            checksum_url_for(
+                "https://downloads.proliferate.com/worker/stable/1.2.3/linux-x86_64/proliferate-worker"
+            ),
+            "https://downloads.proliferate.com/worker/stable/1.2.3/linux-x86_64/proliferate-worker.sha256"
+        );
+        assert_eq!(
+            checksum_url_for(
+                "https://downloads.proliferate.com/worker/stable/macos-aarch64/proliferate-worker"
+            ),
+            "https://downloads.proliferate.com/worker/stable/macos-aarch64/proliferate-worker.sha256"
+        );
     }
 
     #[test]

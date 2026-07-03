@@ -204,6 +204,15 @@ async def worker_artifact_redirect_url(*, target: str, asset: str) -> str:
     Mirrors the desktop updater redirect: the server carries only the version
     pin, never the artifact itself, and falls back to the unpinned ``stable``
     path when the pinned artifact has not been published yet.
+
+    Each call resolves the pinned-vs-fallback path independently, so two calls
+    (binary then checksum) can straddle a CDN publish and disagree. A worker
+    converging its binary must therefore resolve the version path *once* — it
+    fetches the binary here, then derives its ``.sha256`` URL from that
+    redirect's resolved location (same directory, same version) instead of
+    resolving the checksum through a second redirect (see
+    ``proliferate-worker``'s ``self_update`` module). The per-asset resolution
+    below remains for the install script, which fetches a fresh pair.
     """
     if target not in _WORKER_ARTIFACT_TARGETS or asset not in _WORKER_ARTIFACT_ASSETS:
         raise CloudApiError(
