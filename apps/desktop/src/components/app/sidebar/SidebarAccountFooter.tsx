@@ -138,7 +138,7 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
-      <div aria-hidden className="h-[0.5px] bg-border" />
+      <div aria-hidden className="h-[0.5px] bg-sidebar-border" />
       <div className="flex items-center px-2 py-2">
         <PopoverButton
           align="start"
