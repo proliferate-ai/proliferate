@@ -81,14 +81,39 @@ pub struct ActivitySubagentWire {
     pub status: ActivitySubagentStatusWire,
     #[serde(default)]
     pub summary: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub tokens_used: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub tool_calls: Option<i64>,
-    #[serde(default)]
+    // claude-agent-acp derives `durationSeconds` from a millisecond duration
+    // (`duration_ms / 1000`), so it arrives as a FRACTIONAL JSON number (e.g.
+    // `3.207`). A plain `Option<i64>` deserialize rejects the float and — since
+    // it fails the whole struct — dropped every task_progress / task_notification
+    // subagent chunk, freezing the roster at `running` with no usage. Round to
+    // whole seconds here (the contract stays `i64`), mirroring the GoalWire
+    // `opt_i64_lenient` precedent.
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub duration_seconds: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_feed_transport")]
     pub feed: Option<FeedTransportWire>,
+}
+
+/// Numeric usage wire fields tolerate fractional JSON numbers (claude-agent-acp
+/// derives `durationSeconds` from a millisecond duration); anything non-numeric
+/// still fails the parse loudly. Mirrors the GoalWire `opt_i64_lenient` helper.
+fn opt_i64_lenient<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Number>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(number) => number
+            .as_i64()
+            .or_else(|| number.as_f64().map(|value| value.round() as i64))
+            .map(Some)
+            .ok_or_else(|| serde::de::Error::custom("activity wire number is out of range")),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -226,6 +251,38 @@ mod tests {
                 url: "http://127.0.0.1:9000/session/child-2/events".to_string()
             })
         );
+    }
+
+    #[test]
+    fn activity_subagent_wire_accepts_fractional_duration_seconds() {
+        // claude-agent-acp sends `durationSeconds` as `duration_ms / 1000`, i.e. a
+        // fractional number. A strict `i64` deserialize rejected it and dropped the
+        // WHOLE subagent chunk (status + usage), freezing the roster at `running`.
+        let wire: ActivitySubagentWire = serde_json::from_value(serde_json::json!({
+            "id": "agent-1",
+            "background": true,
+            "status": "completed",
+            "summary": "done",
+            "tokensUsed": 1234,
+            "toolCalls": 5,
+            "durationSeconds": 3.207
+        }))
+        .expect("fractional durationSeconds must parse, not drop the chunk");
+        assert_eq!(wire.status, ActivitySubagentStatusWire::Completed);
+        assert_eq!(wire.tokens_used, Some(1234));
+        assert_eq!(wire.tool_calls, Some(5));
+        // Rounded to whole seconds (contract stays i64).
+        assert_eq!(wire.duration_seconds, Some(3));
+
+        // Larger fraction rounds up.
+        let wire2: ActivitySubagentWire = serde_json::from_value(serde_json::json!({
+            "id": "agent-2",
+            "background": true,
+            "status": "running",
+            "durationSeconds": 7.751
+        }))
+        .expect("fractional durationSeconds must parse");
+        assert_eq!(wire2.duration_seconds, Some(8));
     }
 
     #[test]
