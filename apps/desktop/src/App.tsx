@@ -96,6 +96,14 @@ const AuthPlaygroundPage = import.meta.env.DEV
     )
   : null
 
+const WorkflowsPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/WorkflowsPlaygroundPage").then((m) => ({
+        default: m.WorkflowsPlaygroundPage,
+      })),
+    )
+  : null
+
 function isTauriDesktop(): boolean {
   return typeof window !== "undefined"
     && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>)
@@ -340,6 +348,16 @@ function AppRuntime() {
                 element={
                   <Suspense fallback={null}>
                     <AuthPlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
+            {import.meta.env.DEV && WorkflowsPlaygroundPage && (
+              <Route
+                path="/playground/workflows"
+                element={
+                  <Suspense fallback={null}>
+                    <WorkflowsPlaygroundPage />
                   </Suspense>
                 }
               />

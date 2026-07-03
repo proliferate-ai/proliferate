@@ -17,6 +17,9 @@ import {
 } from "./run-status";
 import { FREE_PLAN_MAX_WORKFLOWS_PER_USER } from "./definition";
 
+/** Run delivery lane (spec 3.2; v1 personal only). Mirrors the StartRun target. */
+export type WorkflowTargetMode = "local" | "personal_cloud";
+
 export type WorkflowTriggerKind = "manual" | "schedule" | "chat" | "agent" | "api";
 
 export function workflowTriggerLabel(kind: string): string {
