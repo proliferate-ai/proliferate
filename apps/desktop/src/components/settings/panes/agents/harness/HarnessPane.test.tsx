@@ -66,6 +66,24 @@ const state = vi.hoisted(() => ({
       | undefined,
     isLoading: false,
   },
+  launchOptions: {
+    data: undefined as
+      | {
+        agents: Array<{
+          kind: string;
+          displayName: string;
+          defaultModelId: string | null;
+          models: Array<{
+            id: string;
+            displayName: string;
+            aliases?: string[];
+            isDefault: boolean;
+          }>;
+        }>;
+      }
+      | undefined,
+    isLoading: false,
+  },
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
@@ -75,6 +93,7 @@ const refreshGatewayModelsMutate = vi.hoisted(() => vi.fn());
 const openAuthTerminal = vi.hoisted(() => vi.fn());
 const closeAuthTerminal = vi.hoisted(() => vi.fn());
 const handleTerminalExit = vi.hoisted(() => vi.fn());
+const showToast = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentGatewayCapabilities: () => state.capabilities,
@@ -97,6 +116,15 @@ vi.mock("@anyharness/sdk-react", () => ({
     mutate: refreshGatewayModelsMutate,
     isPending: false,
   }),
+  // native/api_key refreshes source their probe payload from the runtime's
+  // resolved launch catalog (the session model picker's data source) —
+  // mock stands in for that runtime read.
+  useAgentLaunchOptionsQuery: () => state.launchOptions,
+}));
+
+vi.mock("@/stores/toast/toast-store", () => ({
+  useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
+    selector({ show: showToast }),
 }));
 
 // ModalShell (Radix Dialog) has no jsdom polyfills here — stub the picker to a
@@ -177,6 +205,8 @@ afterEach(() => {
   state.loginSessions = {};
   state.gatewayModels.data = undefined;
   state.gatewayModels.isLoading = false;
+  state.launchOptions.data = undefined;
+  state.launchOptions.isLoading = false;
 });
 
 describe("HarnessPane authentication", () => {
@@ -425,7 +455,7 @@ describe("HarnessPane all models", () => {
     expect(screen.getAllByRole("switch")).toHaveLength(2);
   });
 
-  it("refreshes the catalog for the current surface and route", () => {
+  it("refreshes the catalog for a native/api_key route using the runtime's resolved models", () => {
     state.catalog.data = {
       harnessKind: "claude",
       surface: "local",
@@ -436,14 +466,56 @@ describe("HarnessPane all models", () => {
       source: null,
       overrideApplied: false,
     };
+    state.launchOptions.data = {
+      agents: [
+        {
+          kind: "claude",
+          displayName: "Claude Code",
+          defaultModelId: "sonnet",
+          models: [{ id: "sonnet", displayName: "Sonnet 4.6", isDefault: true }],
+        },
+      ],
+    };
     renderPane("claude");
 
     fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
     fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
 
     expect(refreshMutate).toHaveBeenCalledWith(
-      { harnessKind: "claude", body: { surface: "local", route: "native" } },
+      {
+        harnessKind: "claude",
+        body: {
+          surface: "local",
+          route: "native",
+          modelsJson: JSON.stringify([{ id: "sonnet", displayName: "Sonnet 4.6" }]),
+        },
+      },
       expect.anything(),
+    );
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it("shows a toast and skips the server call when the local runtime has no models for this harness", () => {
+    state.catalog.data = {
+      harnessKind: "claude",
+      surface: "local",
+      route: "native",
+      models: [],
+      snapshotId: null,
+      probedAt: null,
+      source: null,
+      overrideApplied: false,
+    };
+    // No launchOptions data mocked: stands in for a runtime that is
+    // unreachable, or one with no ready models for this harness yet.
+    renderPane("claude");
+
+    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+    fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
+
+    expect(refreshMutate).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith(
+      "Local runtime unavailable — could not read Claude models.",
     );
   });
 

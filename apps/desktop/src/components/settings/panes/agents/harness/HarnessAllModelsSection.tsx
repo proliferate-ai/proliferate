@@ -8,6 +8,7 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import {
   useAgentGatewayModelsQuery,
+  useAgentLaunchOptionsQuery,
   useRefreshAgentGatewayModelsMutation,
 } from "@anyharness/sdk-react";
 import { RefreshCw } from "@proliferate/ui/icons";
@@ -19,6 +20,7 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-avail
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   buildEnabledOverridePatchJson,
+  buildRuntimeCatalogModelsJson,
   catalogRouteForSurface,
   normalizeCatalogModels,
   normalizeGatewayModels,
@@ -49,6 +51,11 @@ export function HarnessAllModelsSection({
   // instead of the cloud catalog snapshot, which never sees the runtime's own
   // gateway probes.
   const isRuntimeGateway = surface === "local" && route === "gateway";
+  // native/api_key routes probe on the client (catalog.py's refresh_catalog
+  // contract) — the server rejects a refresh with no uploaded payload for
+  // these routes, so Refresh sources one from the local AnyHarness runtime's
+  // already-resolved launch catalog instead (see buildRuntimeCatalogModelsJson).
+  const isRuntimeProbedRoute = route !== "gateway";
 
   const catalogQuery = useAgentCatalog(
     { harnessKind, surface, route },
@@ -61,6 +68,9 @@ export function HarnessAllModelsSection({
     enabled: isRuntimeGateway,
   });
   const refreshGatewayModels = useRefreshAgentGatewayModelsMutation();
+  const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
+    enabled: isRuntimeProbedRoute,
+  });
 
   const models = useMemo(
     () =>
@@ -98,6 +108,25 @@ export function HarnessAllModelsSection({
           showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
         },
       });
+      return;
+    }
+    if (isRuntimeProbedRoute) {
+      const modelsJson = buildRuntimeCatalogModelsJson(
+        harnessKind,
+        runtimeLaunchOptionsQuery.data,
+      );
+      if (modelsJson === null) {
+        showToast(HARNESS_PANE_COPY.catalogRefreshRuntimeUnavailable(displayName));
+        return;
+      }
+      refreshCatalog.mutate(
+        { harnessKind, body: { surface, route, modelsJson } },
+        {
+          onError: (error) => {
+            showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
+          },
+        },
+      );
       return;
     }
     refreshCatalog.mutate(

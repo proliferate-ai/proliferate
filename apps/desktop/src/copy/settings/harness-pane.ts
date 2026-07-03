@@ -40,6 +40,8 @@ export const HARNESS_PANE_COPY = {
     `Could not update ${displayName} authentication.`,
   catalogRefreshError: (displayName: string) =>
     `Could not refresh the ${displayName} model catalog.`,
+  catalogRefreshRuntimeUnavailable: (displayName: string) =>
+    `Local runtime unavailable — could not read ${displayName} models.`,
   catalogOverrideError: (displayName: string) =>
     `Could not update the ${displayName} model catalog.`,
   readyToast: (displayName: string) => `${displayName} is ready.`,
