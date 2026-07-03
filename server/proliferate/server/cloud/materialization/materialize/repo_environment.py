@@ -166,6 +166,16 @@ async def _materialize_git_checkout(
             '  git clone "$remote_url" "$repo_path"',
             "  fresh_clone=1",
             "fi",
+            # The materializer writes its own metadata (.proliferate/ secret env +
+            # manifest, materialize/secret_set.py) *into* this shared checkout. Keep
+            # git blind to it via the repo-local exclude so a later re-materialize's
+            # clean-tree guard below is not tripped by our own artifacts (a workspace
+            # move re-materializes the environment -- workspace_moves/service.py). This
+            # is a repo-local, uncommitted exclude; secrets must never be tracked anyway.
+            'mkdir -p "$repo_path/.git/info"',
+            'if ! grep -qxF "/.proliferate/" "$repo_path/.git/info/exclude" 2>/dev/null; then',
+            '  printf "%s\\n" "/.proliferate/" >> "$repo_path/.git/info/exclude"',
+            "fi",
             'git -C "$repo_path" fetch --prune origin',
             'if [ "$fresh_clone" != "1" ]; then',
             '  if [ -n "$(git -C "$repo_path" status --porcelain)" ]; then',

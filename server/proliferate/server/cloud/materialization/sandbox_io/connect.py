@@ -26,6 +26,10 @@ from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
     build_runtime_launch_script,
 )
+from proliferate.server.cloud.runtime.bundle import (
+    check_binary_preinstalled,
+    stage_runtime_binary,
+)
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.liveness_health import (
     verify_runtime_auth_enforced,
@@ -185,6 +189,27 @@ async def _launch_anyharness_runtime(
         timeout_seconds=30,
     )
     assert_command_succeeded(chmod_result, "AnyHarness launcher chmod failed")
+
+    # Ensure the sandbox runs *this build's* anyharness before we launch it. The
+    # E2B template bakes a released binary; when a locally-built runtime binary is
+    # resolvable (cloud E2E sets CLOUD_RUNTIME_SOURCE_BINARY_PATH to the branch's
+    # musl build) and differs from the baked one, overwrite it so branch-only
+    # engine behavior -- e.g. mobility installMode=preserve_native_sessions -- is
+    # actually present in the sandbox. No-op in production: no local binary is
+    # resolvable there, so check_binary_preinstalled returns True and the baked
+    # template binary is kept. (Revives the previously-dead bundle staging path.)
+    if not await check_binary_preinstalled(
+        provider,
+        provider_sandbox,
+        workspace_id=sandbox_record.id,
+        runtime_context=runtime_context,
+    ):
+        await stage_runtime_binary(
+            provider,
+            provider_sandbox,
+            workspace_id=sandbox_record.id,
+            runtime_context=runtime_context,
+        )
 
     start_result = await run_sandbox_command_logged(
         provider,

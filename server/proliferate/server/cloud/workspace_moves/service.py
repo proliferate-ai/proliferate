@@ -395,7 +395,11 @@ async def _build_destination_worktree(
                 new_branch_name=branch,
                 base_branch=base_commit_sha,
                 setup_script=setup_script or None,
-                origin={"kind": "human", "entrypoint": "workspace_move"},
+                # The runtime's origin.entrypoint is a closed enum
+                # (desktop|cloud|local_runtime|cowork); a cloud-destination
+                # worktree materialized server-side is a "cloud" entrypoint. This
+                # mirrors create_cloud_workspace_for_user's origin shape.
+                origin={"kind": "human", "entrypoint": "cloud"},
             )
         except CloudRuntimeReconnectError as exc:
             last_error = exc
