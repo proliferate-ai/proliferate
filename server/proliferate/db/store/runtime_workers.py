@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -206,6 +206,32 @@ async def revoke_active_workers_for_identity(
             CloudRuntimeWorker.owner_user_id == owner_user_id,
             CloudRuntimeWorker.desktop_install_id == desktop_install_id,
         )
+    await _revoke_workers_and_gateway_tokens(db, stmt)
+
+
+async def revoke_active_workers_for_desktop_install(
+    db: AsyncSession,
+    *,
+    desktop_install_id: str,
+) -> None:
+    """Revoke every non-revoked worker (and gateway token) on a desktop install.
+
+    Deliberately ignores the owner: a desktop install runs exactly one physical
+    worker process, so a fresh enrollment — possibly by a different user on the
+    same machine — must retire all predecessors, or the previous user's worker
+    row stays "online" and its gateway token stays a live credential.
+    """
+    stmt = select(CloudRuntimeWorker).where(
+        CloudRuntimeWorker.status != "revoked",
+        CloudRuntimeWorker.desktop_install_id == desktop_install_id,
+    )
+    await _revoke_workers_and_gateway_tokens(db, stmt)
+
+
+async def _revoke_workers_and_gateway_tokens(
+    db: AsyncSession,
+    stmt: Select[tuple[CloudRuntimeWorker]],
+) -> None:
     workers = (await db.execute(stmt.with_for_update())).scalars().all()
     now = utcnow()
     for worker in workers:
@@ -332,10 +358,8 @@ async def get_grant_by_gateway_token_hash(
     worker = await db.get(CloudRuntimeWorker, token.runtime_worker_id)
     if worker is None or worker.status == "revoked":
         return None
-    now = utcnow()
-    token.last_used_at = now
-    token.updated_at = now
-    await db.flush()
+    # Deliberately no last_used_at stamp: this is the gateway hot path and a
+    # per-request row write + flush is not worth the bookkeeping.
     return IntegrationGatewayGrant(
         runtime_worker_id=worker.id,
         runtime_kind=worker.runtime_kind,

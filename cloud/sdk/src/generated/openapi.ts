@@ -1605,6 +1605,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workers/desktop/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Desktop Worker Endpoint */
+        post: operations["revoke_desktop_worker_endpoint_v1_cloud_workers_desktop_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/enroll": {
         parameters: {
             query?: never;
@@ -3776,6 +3793,16 @@ export interface components {
              * Format: date-time
              */
             expiresAt: string;
+        };
+        /** DesktopWorkerRevokeRequest */
+        DesktopWorkerRevokeRequest: {
+            /** Desktopinstallid */
+            desktopInstallId: string;
+        };
+        /** DesktopWorkerRevokeResponse */
+        DesktopWorkerRevokeResponse: {
+            /** Revoked */
+            revoked: boolean;
         };
         /** DevDesktopHandoffPollResponse */
         DevDesktopHandoffPollResponse: {
@@ -8672,6 +8699,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DesktopWorkerEnrollmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_desktop_worker_endpoint_v1_cloud_workers_desktop_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopWorkerRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopWorkerRevokeResponse"];
                 };
             };
             /** @description Validation Error */

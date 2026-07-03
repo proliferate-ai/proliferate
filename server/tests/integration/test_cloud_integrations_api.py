@@ -1,19 +1,27 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_STATUS_ACTIVE,
 )
+from proliferate.db.models.cloud.integrations import (
+    CloudIntegrationAccount,
+    CloudIntegrationDefinition,
+    CloudIntegrationOAuthFlow,
+)
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
+from proliferate.db.store.integrations.tool_cache import get_tool_cache, upsert_tool_cache
 from proliferate.integrations.integration_oauth.models import (
     AuthorizationServerMetadata,
     ProtectedResourceMetadata,
@@ -270,3 +278,87 @@ class TestRemoveAccount:
             headers=auth.headers,
         )
         assert response.status_code == 404
+
+
+class TestIntegrationForeignKeys:
+    @pytest.mark.asyncio
+    async def test_delete_definition_with_account_is_restricted(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="fk-restrict")
+        await _seed_definitions(db_session)
+        definition_id = uuid.UUID(await _definition_id(db_session, "context7"))
+        await accounts_store.upsert_account(
+            db_session,
+            user_id=uuid.UUID(auth.user_id),
+            definition_id=definition_id,
+            auth_kind="api_key",
+            status="ready",
+        )
+        await db_session.commit()
+
+        with pytest.raises(IntegrityError):
+            await db_session.execute(
+                delete(CloudIntegrationDefinition).where(
+                    CloudIntegrationDefinition.id == definition_id
+                )
+            )
+        await db_session.rollback()
+
+    @pytest.mark.asyncio
+    async def test_delete_account_cascades_tool_cache_and_flows(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="fk-cascade")
+        await _seed_definitions(db_session)
+        definition_id = uuid.UUID(await _definition_id(db_session, "context7"))
+        account = await accounts_store.upsert_account(
+            db_session,
+            user_id=uuid.UUID(auth.user_id),
+            definition_id=definition_id,
+            auth_kind="api_key",
+            status="ready",
+        )
+        await upsert_tool_cache(
+            db_session,
+            account_id=account.id,
+            auth_version=account.auth_version,
+            tools_json="[]",
+            content_hash=None,
+            status="ready",
+            fetched_at=datetime.now(UTC),
+            error_code=None,
+        )
+        db_session.add(
+            CloudIntegrationOAuthFlow(
+                account_id=account.id,
+                owner_user_id=uuid.UUID(auth.user_id),
+                definition_id=definition_id,
+                state_hash="fk-cascade-state",
+                code_verifier_ciphertext="ciphertext",
+                client_id="client",
+                redirect_uri="https://api.example.com/cb",
+                authorization_url="https://auth.example.com/authorize",
+                expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
+        await db_session.commit()
+
+        await db_session.execute(
+            delete(CloudIntegrationAccount).where(CloudIntegrationAccount.id == account.id)
+        )
+        await db_session.commit()
+
+        assert await get_tool_cache(db_session, account.id) is None
+        remaining_flows = (
+            (
+                await db_session.execute(
+                    select(CloudIntegrationOAuthFlow).where(
+                        CloudIntegrationOAuthFlow.account_id == account.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert remaining_flows == []

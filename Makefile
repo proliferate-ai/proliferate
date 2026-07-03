@@ -837,8 +837,13 @@ clippy:
 
 # --- Cloud client (Python control plane → TypeScript types) ---
 
+# Pin the deployment posture (telemetry/single-org mode) so the generated
+# schema is machine-independent: conditionally mounted routes (e.g. password
+# registration under single-org mode) must not churn with the local .env.
 cloud-openapi:
 	cd server && DEBUG=1 \
+	  TELEMETRY_MODE=local_dev \
+	  SINGLE_ORG_MODE=1 \
 	  JWT_SECRET=local-openapi-generation-secret \
 	  CLOUD_SECRET_KEY=local-openapi-generation-cloud-secret \
 	  GITHUB_OAUTH_CLIENT_ID=local-openapi-generation-github-client-id \
