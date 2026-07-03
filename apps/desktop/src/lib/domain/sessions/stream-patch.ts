@@ -2,12 +2,14 @@ import type {
   Goal,
   InteractionPayload,
   PendingInteractionPayloadSummary,
+  SessionActivity,
   SessionEventEnvelope,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
   SessionStatus,
   TranscriptState,
 } from "@anyharness/sdk";
+import { foldActivityEvent } from "./activity-fold";
 
 export interface SessionStreamPatchInput {
   slot: {
@@ -17,6 +19,7 @@ export interface SessionStreamPatchInput {
     title: string | null;
     status: SessionStatus | null;
     executionSummary?: SessionExecutionSummary | null;
+    sessionActivity?: SessionActivity | null;
   };
   nextTranscript: TranscriptState;
   envelope: SessionEventEnvelope;
@@ -32,6 +35,7 @@ export interface SessionStreamPatch {
   title?: string | null;
   status?: SessionStatus | null;
   activeGoal?: Goal | null;
+  sessionActivity?: SessionActivity | null;
 }
 
 export interface SessionStreamBatchPatchInput {
@@ -94,6 +98,15 @@ export function buildSessionStreamPatch({
 
   if (event.type === "goal_cleared") {
     patch.activeGoal = null;
+  }
+
+  // Loop mirror + roster (process/subagent) upserts fold into the session's
+  // SessionActivity aggregate. The runtime emits these only after native state
+  // round-trips, so the fold is authoritative (no optimistic state); a
+  // non-activity event leaves the aggregate untouched (undefined).
+  const nextActivity = foldActivityEvent(slot.sessionActivity ?? null, event);
+  if (nextActivity !== undefined) {
+    patch.sessionActivity = nextActivity;
   }
 
   if (
@@ -210,6 +223,10 @@ export function buildSessionStreamBatchPatch({
         eventPatch.executionSummary !== undefined
           ? eventPatch.executionSummary
           : foldedSlot.executionSummary,
+      sessionActivity:
+        eventPatch.sessionActivity !== undefined
+          ? eventPatch.sessionActivity
+          : foldedSlot.sessionActivity,
     };
   }
 
