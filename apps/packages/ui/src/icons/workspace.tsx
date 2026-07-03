@@ -134,6 +134,32 @@ export function FolderPlus({ className, ...props }: IconProps) {
   );
 }
 
+/**
+ * Two equal columns — split-view / side-by-side layout toggles (e.g. the
+ * split-diff switch). Distinct from SplitPanel, whose off-center divider
+ * means "app panel toggle".
+ */
+export function Columns2({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M12 3v18" />
+    </svg>
+  );
+}
+
+/** Folder-tree glyph for file-browser / file-tree toggles. */
+export function FolderTree({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z" />
+      <path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z" />
+      <path d="M3 5a2 2 0 0 0 2 2h3" />
+      <path d="M3 3v13a2 2 0 0 0 2 2h3" />
+    </svg>
+  );
+}
+
 export function FolderList({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
