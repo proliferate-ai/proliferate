@@ -24,6 +24,7 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { OrganizationAvatar } from "@/components/organizations/OrganizationAvatar";
 import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
@@ -36,48 +37,15 @@ import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-s
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import type {
-  OrganizationInvitationRecord,
-  OrganizationRecord,
-} from "@/lib/domain/organizations/organization-records";
+import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
+// NOTE(2026-07-02): this invite is EXPIRED (Discord API code 50270). The owner
+// must supply a valid permanent invite; do not fabricate one.
 const PROLIFERATE_DISCORD_URL = "https://discord.gg/wCEgUnEuF";
-
-function OrganizationSwitcherMark({
-  organization,
-  label,
-  className,
-}: {
-  organization?: Pick<OrganizationRecord, "logoDomain" | "logoImage"> | null;
-  label: string;
-  className: string;
-}) {
-  const initials = label.trim().slice(0, 2).toUpperCase() || "OR";
-  const baseClassName = `flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-sidebar-border bg-sidebar-accent text-sm font-[520] leading-none text-sidebar-foreground ${className}`;
-
-  if (organization?.logoImage) {
-    return (
-      <span className={baseClassName}>
-        <img src={organization.logoImage} alt="" className="size-full object-cover" />
-      </span>
-    );
-  }
-
-  if (organization?.logoDomain) {
-    const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(organization.logoDomain)}&sz=64`;
-    return (
-      <span className={baseClassName}>
-        <img src={faviconUrl} alt="" className="h-2/3 w-2/3" />
-      </span>
-    );
-  }
-
-  return <span className={baseClassName}>{initials}</span>;
-}
 
 /**
  * The single sidebar bottom-left account block, shared verbatim by the main
@@ -216,9 +184,9 @@ export function SidebarAccountFooter() {
                       variant="sidebar"
                       label={organization.name}
                       icon={(
-                        <OrganizationSwitcherMark
-                          organization={organization}
-                          label={organization.name}
+                        <OrganizationAvatar
+                          name={organization.name}
+                          logoImage={organization.logoImage}
                           className="size-5"
                         />
                       )}
