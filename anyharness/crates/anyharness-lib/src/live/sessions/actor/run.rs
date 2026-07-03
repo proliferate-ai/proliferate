@@ -1,5 +1,5 @@
 use agent_client_protocol as acp;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::live::sessions::actor::command::{Resolution, SessionCommand};
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
@@ -126,8 +126,7 @@ impl SessionActor {
                 params,
                 respond_to,
             } => {
-                let result = self.call_agent_ext_method(&method, params).await;
-                let _ = respond_to.send(result);
+                self.spawn_agent_ext_method(method, params, respond_to);
                 None
             }
             SessionCommand::InjectRuntimeEvent { event, respond_to } => {
@@ -187,16 +186,43 @@ impl SessionActor {
         }
     }
 
-    /// Sends one ACP extension-method request on the agent connection. The
-    /// wire method name is serialized verbatim (outbound ext routing does not
-    /// gate on the `_` prefix); the raw JSON result is returned untouched.
+    /// Dispatches an ACP extension-method request WITHOUT blocking the actor
+    /// loop: the request rides an owned connection clone on a detached task,
+    /// and the raw JSON result (or the bounded timeout error) is delivered on
+    /// `respond_to`.
     ///
-    /// The await is bounded: ext calls are handled inline on the actor loop,
-    /// so an agent that never answers (e.g. a goal write queued behind a turn
-    /// blocked on a pending interaction) must not wedge the actor — the
-    /// deadline exceeds every sidecar-internal confirmation window (30s).
-    pub(in crate::live::sessions::actor) async fn call_agent_ext_method(
+    /// This must not be awaited inline. `tokio::select!` runs a chosen arm's
+    /// body to completion before re-polling, so awaiting a sidecar
+    /// confirmation here would freeze every sibling arm — the streaming
+    /// prompt future, notification drain, Cancel, and (the deadlock case)
+    /// ResolveInteraction. A goal write queued behind a turn blocked on a
+    /// pending interaction could then never be answered: the permission can't
+    /// be resolved because the loop is wedged on the write, so the turn can't
+    /// end and the write can't land. Spawning keeps the select responsive so
+    /// the permission resolves, the turn ends, and the write succeeds.
+    pub(in crate::live::sessions::actor) fn spawn_agent_ext_method(
         &self,
+        method: String,
+        params: serde_json::Value,
+        respond_to: oneshot::Sender<anyhow::Result<serde_json::Value>>,
+    ) {
+        let conn = self.conn.clone();
+        tokio::spawn(async move {
+            let result = Self::call_agent_ext_method_on(&conn, &method, params).await;
+            let _ = respond_to.send(result);
+        });
+    }
+
+    /// Sends one ACP extension-method request on an owned connection clone off
+    /// the actor loop. The wire method name is serialized verbatim (outbound
+    /// ext routing does not gate on the `_` prefix); the raw JSON result is
+    /// returned untouched.
+    ///
+    /// The await is bounded so a sidecar that never answers cannot leak the
+    /// spawned task forever — the deadline exceeds every sidecar-internal
+    /// confirmation window (30s).
+    async fn call_agent_ext_method_on(
+        conn: &acp::ConnectionTo<acp::Agent>,
         method: &str,
         params: serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
@@ -206,8 +232,7 @@ impl SessionActor {
         let ext = acp::schema::ExtRequest::new(method.to_string(), params);
         let response = tokio::time::timeout(
             EXT_METHOD_TIMEOUT,
-            self.conn
-                .send_request(acp::AgentRequest::ExtMethodRequest(ext))
+            conn.send_request(acp::AgentRequest::ExtMethodRequest(ext))
                 .block_task(),
         )
         .await
