@@ -54,6 +54,15 @@ CREATE TABLE cowork_threads (
     created_at TEXT NOT NULL
 , workspace_delegation_enabled INTEGER NOT NULL DEFAULT 1);
 
+-- table: gateway_model_probe
+CREATE TABLE gateway_model_probe (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness_kind TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    models_json TEXT NOT NULL,
+    probed_at TEXT NOT NULL
+);
+
 -- table: mobility_archive_installs
 CREATE TABLE mobility_archive_installs (
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -544,6 +553,10 @@ CREATE INDEX idx_cowork_threads_session_id ON cowork_threads(session_id);
 
 -- index: idx_cowork_threads_workspace_id
 CREATE INDEX idx_cowork_threads_workspace_id ON cowork_threads(workspace_id);
+
+-- index: idx_gateway_model_probe_lookup
+CREATE INDEX idx_gateway_model_probe_lookup
+    ON gateway_model_probe(harness_kind, revision, probed_at);
 
 -- index: idx_plan_handoffs_plan
 CREATE INDEX idx_plan_handoffs_plan

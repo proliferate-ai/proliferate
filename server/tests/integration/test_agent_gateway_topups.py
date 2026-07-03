@@ -51,10 +51,12 @@ async def test_overage_org_enrollment_is_uncapped(
     topup_settings: None,
 ) -> None:
     org_id, _subject_id = await _overage_org_subject(db_session)
+    member_id = await _create_user(db_session)
 
-    enrollment = await ensure_org_enrollment(db_session, org_id)
+    enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
 
     assert enrollment.sync_status == "synced"
+    assert enrollment.user_id == member_id
     # Overage-enabled: no LiteLLM budget forwarded (uncapped).
     assert stub_litellm.minted[-1]["max_budget"] is None
 
@@ -66,6 +68,7 @@ async def test_hard_cap_org_gets_remaining_credit_as_budget(
     topup_settings: None,
 ) -> None:
     org_id = await _create_org(db_session)
+    member_id = await _create_user(db_session)
     subject = await ensure_organization_billing_subject(db_session, org_id)
     await store.create_llm_credit_grant(
         db_session,
@@ -74,7 +77,7 @@ async def test_hard_cap_org_gets_remaining_credit_as_budget(
         amount_usd=Decimal("25"),
     )
 
-    enrollment = await ensure_org_enrollment(db_session, org_id)
+    enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
 
     assert enrollment.sync_status == "synced"
     # Hard cap: the org team budget mirrors the remaining credit.
@@ -89,7 +92,8 @@ async def test_topup_charges_grants_and_reactivates(
     topup_settings: None,
 ) -> None:
     org_id, subject_id = await _overage_org_subject(db_session)
-    enrollment = await ensure_org_enrollment(db_session, org_id)
+    member_id = await _create_user(db_session)
+    enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
     assert enrollment.virtual_key_id is not None
 
     # Drive the subject below the threshold and mark it exhausted (as the
@@ -126,7 +130,11 @@ async def test_topup_charges_grants_and_reactivates(
     # Reactivation: VK unblocked, budget_status ok. Overage orgs run uncapped,
     # so the team + key budget are explicitly cleared (None) to drop any cap.
     assert stub_litellm.enabled_keys == [enrollment.virtual_key_id]
-    refreshed = await store.get_enrollment_for_organization(db_session, organization_id=org_id)
+    refreshed = await store.get_enrollment_for_organization(
+        db_session,
+        organization_id=org_id,
+        user_id=member_id,
+    )
     assert refreshed is not None
     assert refreshed.budget_status == "ok"
     assert stub_litellm.team_budgets == [(enrollment.litellm_team_id, None)]
@@ -178,9 +186,10 @@ async def test_topup_skips_non_overage_and_healthy_subjects(
     topup_settings: None,
 ) -> None:
     # Hard-cap org below zero: never topped up.
+    member_id = await _create_user(db_session)
     org_id = await _create_org(db_session)
     subject = await ensure_organization_billing_subject(db_session, org_id)
-    await ensure_org_enrollment(db_session, org_id)
+    await ensure_org_enrollment(db_session, org_id, member_id)
     await store.create_llm_credit_grant(
         db_session,
         billing_subject_id=subject.id,
@@ -191,7 +200,7 @@ async def test_topup_skips_non_overage_and_healthy_subjects(
 
     # Overage org comfortably above the threshold: not topped up either.
     healthy_org_id, healthy_subject_id = await _overage_org_subject(db_session)
-    await ensure_org_enrollment(db_session, healthy_org_id)
+    await ensure_org_enrollment(db_session, healthy_org_id, member_id)
     await store.create_llm_credit_grant(
         db_session,
         billing_subject_id=healthy_subject_id,
@@ -214,7 +223,8 @@ async def test_topup_without_stripe_customer_is_skipped(
     topup_settings: None,
 ) -> None:
     org_id, subject_id = await _overage_org_subject(db_session, stripe_customer_id=None)
-    await ensure_org_enrollment(db_session, org_id)
+    member_id = await _create_user(db_session)
+    await ensure_org_enrollment(db_session, org_id, member_id)
     # A grant puts it on the ledger; the skip is purely the missing customer.
     await store.create_llm_credit_grant(
         db_session,
@@ -324,7 +334,8 @@ async def test_importer_leaves_overage_subjects_to_the_topup_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     org_id, subject_id = await _overage_org_subject(db_session)
-    enrollment = await ensure_org_enrollment(db_session, org_id)
+    member_id = await _create_user(db_session)
+    enrollment = await ensure_org_enrollment(db_session, org_id, member_id)
     await store.create_llm_credit_grant(
         db_session,
         billing_subject_id=subject_id,

@@ -29,6 +29,13 @@ export function anyHarnessAgentReconcileStatusKey(
   return [...anyHarnessAgentsKey(runtimeUrl), "reconcile-status"] as const;
 }
 
+export function anyHarnessAgentGatewayModelsKey(
+  runtimeUrl: string | null | undefined,
+  kind: string | null | undefined,
+) {
+  return [...anyHarnessAgentsKey(runtimeUrl), "gateway-models", kind ?? null] as const;
+}
+
 export function anyHarnessReconcileAgentsMutationKey(
   runtimeUrl: string | null | undefined,
 ) {

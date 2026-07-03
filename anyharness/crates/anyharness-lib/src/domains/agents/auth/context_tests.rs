@@ -488,10 +488,6 @@ fn bundled_docs_classify_api_key_contexts() {
         classify_bundled("codex", &[env_fact("OPENAI_API_KEY")]),
         vec!["openai-api"]
     );
-    assert_eq!(
-        classify_bundled("gemini", &[env_fact("GEMINI_API_KEY")]),
-        vec!["gemini-api"]
-    );
 }
 
 #[test]
@@ -503,10 +499,6 @@ fn bundled_docs_classify_oauth_discovery_contexts() {
     assert_eq!(
         classify_bundled("codex", &[discovery_fact("codex-auth-json-oauth")]),
         vec!["openai-oauth"]
-    );
-    assert_eq!(
-        classify_bundled("gemini", &[discovery_fact("gemini-oauth-creds")]),
-        vec!["google-oauth"]
     );
     assert_eq!(
         classify_bundled("cursor", &[discovery_fact("cursor-keychain")]),
@@ -557,7 +549,7 @@ fn bundled_docs_opencode_unions_across_slots() {
 
 #[test]
 fn bundled_docs_no_facts_is_baseline() {
-    for kind in ["claude", "codex", "gemini", "cursor", "opencode"] {
+    for kind in ["claude", "codex", "cursor", "opencode"] {
         assert_eq!(classify_bundled(kind, &[]), vec![BASELINE_CONTEXT_ID]);
     }
 }

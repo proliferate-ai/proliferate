@@ -1,10 +1,18 @@
 import { type ReactNode } from "react";
 import { Cloud } from "lucide-react";
+import { GitHub } from "@proliferate/ui/icons";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { useGitHubAppUserAuthorization } from "@/hooks/settings/workflows/use-github-app-user-authorization";
 import { type CloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
+
+// Land the GitHub authorization callback on the cloud environments settings
+// surface (the same return target the add-repo flow uses).
+const USER_AUTHORIZATION_RETURN_TO =
+  "proliferate://settings/environments?source=github_app_callback";
 
 interface RepoCloudGateProps {
   editor: CloudRepoEnvironmentEditor;
@@ -92,11 +100,17 @@ export function RepoCloudGate({
     );
   }
 
+  // Not authorized: block the cloud context entirely and show a single
+  // actionable connect prompt (or a clear admin/access message) instead of
+  // half-loading the page behind a passive notice.
   if (editor.authority.data && !editor.authority.data.authorized) {
     return (
-      <CloudEnvironmentNotice
-        label="GitHub App access needed"
-        description={editor.authority.data.message ?? repoAuthorityNotice(editor.authority.data.status)}
+      <RepoCloudAuthorizationRequired
+        status={editor.authority.data.status}
+        message={editor.authority.data.message ?? null}
+        onAuthorizationReturn={() => {
+          void editor.authority.refetch();
+        }}
       />
     );
   }
@@ -132,12 +146,89 @@ export function RepoCloudGate({
   return <>{children}</>;
 }
 
+/**
+ * The not-authorized branch of the gate. User-authorization gaps get an inline
+ * "Connect GitHub App" action (the shared authorize flow); installation and
+ * repo-access gaps a non-admin can't self-serve stay explanatory messages.
+ */
+function RepoCloudAuthorizationRequired({
+  status,
+  message,
+  onAuthorizationReturn,
+}: {
+  status: string;
+  message: string | null;
+  onAuthorizationReturn: () => void;
+}) {
+  const needsUserAuthorization =
+    status === "missing_user_authorization" || status === "expired_user_authorization";
+  const { authorize, authorizing, error } = useGitHubAppUserAuthorization({
+    returnTo: USER_AUTHORIZATION_RETURN_TO,
+    onAuthorizationReturn,
+  });
+
+  if (needsUserAuthorization) {
+    const reconnect = status === "expired_user_authorization";
+    const actionLabel = authorizing
+      ? "Opening GitHub…"
+      : reconnect
+        ? "Reconnect GitHub App"
+        : "Connect GitHub App";
+    return (
+      <SettingsEmptyState
+        icon={<GitHub aria-hidden="true" />}
+        title={reconnect ? "Reconnect GitHub App" : "Connect GitHub App"}
+        description={
+          message
+          ?? (reconnect
+            ? "Your GitHub App authorization expired. Reconnect it to configure cloud environments for this repository."
+            : "Authorize the Proliferate GitHub App to configure cloud environments for this repository.")
+        }
+        action={
+          <div className="flex flex-col items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              loading={authorizing}
+              disabled={authorizing}
+              onClick={authorize}
+            >
+              {!authorizing ? (
+                <ProviderBrandIcon provider="github" className="size-[13px]" />
+              ) : null}
+              {actionLabel}
+            </Button>
+            {error ? <p className="text-ui-sm text-destructive">{error}</p> : null}
+          </div>
+        }
+      />
+    );
+  }
+
+  return (
+    <SettingsEmptyState
+      icon={<GitHub aria-hidden="true" />}
+      title={authorizationRequiredTitle(status)}
+      description={message ?? repoAuthorityNotice(status)}
+    />
+  );
+}
+
+function authorizationRequiredTitle(status: string): string {
+  switch (status) {
+    case "missing_installation":
+      return "GitHub App not installed";
+    case "repo_not_covered":
+      return "Repository not covered";
+    case "missing_user_repo_access":
+      return "No access to this repository";
+    default:
+      return "GitHub App access needed";
+  }
+}
+
 function repoAuthorityNotice(status: string): string {
   switch (status) {
-    case "missing_user_authorization":
-      return "Authorize the Proliferate GitHub App in Account settings before configuring this cloud environment.";
-    case "expired_user_authorization":
-      return "Reauthorize the Proliferate GitHub App in Account settings before configuring this cloud environment.";
     case "missing_installation":
       return "An organization admin needs to install the Proliferate GitHub App for this repository.";
     case "repo_not_covered":

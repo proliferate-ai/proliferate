@@ -10,7 +10,6 @@
 #                                      (default claude-haiku-4-5-20251001; must be
 #                                      in the proxy model_list — CLIs send dated ids)
 #   AGENT_GATEWAY_SMOKE_GROK_MODEL     model id for the grok CLI (default grok-4-fast)
-#   AGENT_GATEWAY_SMOKE_GEMINI_MODEL   model id for the gemini CLI (default gemini-3.5-flash)
 
 set -euo pipefail
 
@@ -20,7 +19,6 @@ GATEWAY_MASTER_KEY="${AGENT_GATEWAY_LITELLM_MASTER_KEY:-}"
 SMOKE_MODEL="${AGENT_GATEWAY_SMOKE_MODEL:-claude-haiku-4-5}"
 SMOKE_HARNESS_MODEL="${AGENT_GATEWAY_SMOKE_HARNESS_MODEL:-claude-haiku-4-5-20251001}"
 SMOKE_GROK_MODEL="${AGENT_GATEWAY_SMOKE_GROK_MODEL:-grok-4-fast}"
-SMOKE_GEMINI_MODEL="${AGENT_GATEWAY_SMOKE_GEMINI_MODEL:-gemini-3.5-flash}"
 SMOKE_PROMPT="Reply with exactly: GATEWAY_OK"
 SMOKE_MARKER="GATEWAY_OK"
 

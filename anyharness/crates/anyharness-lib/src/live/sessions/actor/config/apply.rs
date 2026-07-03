@@ -438,8 +438,7 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible_wi
 
 /// Wire method for the legacy `session/set_model` RPC. ACP 0.14 dropped the
 /// typed `SetSessionModelRequest`, but harnesses that predate the
-/// model-as-config-option migration (e.g. Gemini CLI, via its
-/// `unstable_setSessionModel` handler) still listen on this method. We reach it
+/// model-as-config-option migration still listen on this method. We reach it
 /// through ACP's extension-method channel: the method string is serialized
 /// verbatim, so the lack of a `_` prefix (which only gates *inbound* ext
 /// routing) is irrelevant on the outbound path.
@@ -517,7 +516,7 @@ pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
     _desired_model_id: &str,
 ) -> bool {
     // Attempt the legacy `session/set_model` only when the harness reports no live
-    // model control at all. ACP 0.14 drops the legacy models block, so Gemini-style
+    // model control at all. ACP 0.14 drops the legacy models block, so such
     // harnesses surface neither a `model` config option nor `available_models` — the
     // write cannot be gated locally, and the agent is the sole authority on validity.
     // When a live model list IS present, membership is enforced upstream; don't

@@ -276,10 +276,10 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 
 #[test]
 fn direct_model_setter_engages_only_without_live_model_control() {
-    // Harnesses that report no live model control (ACP 0.14 drops the legacy
-    // models block, so Gemini surfaces neither a model config option nor
-    // available_models) route a switch through the legacy `session/set_model`
-    // ext call; the agent is the sole authority on validity.
+    // Harnesses that report no live model control (neither a model config
+    // option nor available_models) route a switch through the legacy
+    // `session/set_model` ext call; the agent is the sole authority on
+    // validity.
     let no_model_control = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
@@ -290,7 +290,7 @@ fn direct_model_setter_engages_only_without_live_model_control() {
     };
     assert!(should_apply_model_via_direct_setter(
         &no_model_control,
-        "gemini-2.5-pro"
+        "grok-4.3"
     ));
 
     // When a live model list IS present, membership is enforced upstream — the

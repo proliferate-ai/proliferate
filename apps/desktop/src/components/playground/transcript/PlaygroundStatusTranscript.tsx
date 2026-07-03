@@ -80,40 +80,40 @@ export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNo
           <PendingInteractionMarkerView kind="question" />
         </TranscriptPreviewShell>
       );
-    case "gemini-retry-status":
+    case "grok-retry-status":
       return (
         <TranscriptPreviewShell>
           <AssistantMessage content="I started drafting the change, but the model stream was interrupted mid-sentence" />
-          <TransientStatusRow text="Retrying Gemini request..." />
+          <TransientStatusRow text="Retrying Grok request..." />
           <AssistantMessage content="Retry finished with a fresh attempt. I’ll continue from the recovered response." />
         </TranscriptPreviewShell>
       );
-    case "gemini-blocked-warning":
+    case "grok-blocked-warning":
       return (
         <TranscriptPreviewShell>
           <WarningNotice
-            title="Gemini agent execution blocked"
+            title="Grok agent execution blocked"
             body="A policy hook blocked the requested action. The warning remains in the transcript after the turn ends."
           />
         </TranscriptPreviewShell>
       );
-    case "gemini-no-response-warning":
+    case "grok-no-response-warning":
       return (
         <TranscriptPreviewShell>
           <WarningNotice
-            title="Gemini ended without a valid response"
+            title="Grok ended without a valid response"
             body="The adapter reports the invalid stream as visible transcript text instead of leaving the turn looking frozen."
           />
         </TranscriptPreviewShell>
       );
-    case "gemini-mcp-approval-options":
+    case "opencode-mcp-approval-options":
       return (
         <TranscriptPreviewShell>
-          <AssistantMessage content="Gemini needs permission before calling the GitHub MCP search tool." />
+          <AssistantMessage content="OpenCode needs permission before calling the GitHub MCP search tool." />
           <TransientStatusRow text="Waiting for exact MCP permission option selection." />
         </TranscriptPreviewShell>
       );
-    case "gemini-tool-before-approval":
+    case "opencode-tool-before-approval":
       return (
         <TranscriptPreviewShell>
           <HookPreview
