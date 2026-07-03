@@ -2560,6 +2560,7 @@ export interface components {
         };
         InstallWorkspaceMobilityArchiveRequest: {
             archive: components["schemas"]["WorkspaceMobilityArchive"];
+            installMode?: null | components["schemas"]["MobilityInstallMode"];
             operationId?: string | null;
         };
         InstallWorkspaceMobilityArchiveResponse: {
@@ -2758,6 +2759,16 @@ export interface components {
         McpElicitationUrlRevealResponse: {
             url: string;
         };
+        /**
+         * @description How an install should treat the archived sessions' native agent session
+         *     ids. `FreshNative` (the default) nulls them so the destination starts a
+         *     brand-new native session per agent, matching v1 behavior byte-for-byte.
+         *     `PreserveNativeSessions` keeps the id for supported agent kinds
+         *     (claude, codex) so the native CLI resumes the same conversation on the
+         *     other side.
+         * @enum {string}
+         */
+        MobilityInstallMode: "fresh_native" | "preserve_native_sessions";
         MobilityPendingConfigChangeRecord: {
             configId: string;
             queuedAt: string;

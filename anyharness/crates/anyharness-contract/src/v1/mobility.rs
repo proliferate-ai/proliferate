@@ -16,6 +16,19 @@ pub enum WorkspaceMobilityRuntimeMode {
     RepairBlocked,
 }
 
+/// How an install should treat the archived sessions' native agent session
+/// ids. `FreshNative` (the default) nulls them so the destination starts a
+/// brand-new native session per agent, matching v1 behavior byte-for-byte.
+/// `PreserveNativeSessions` keeps the id for supported agent kinds
+/// (claude, codex) so the native CLI resumes the same conversation on the
+/// other side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MobilityInstallMode {
+    FreshNative,
+    PreserveNativeSessions,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceMobilityRuntimeState {
@@ -95,6 +108,9 @@ pub struct ExportWorkspaceMobilityArchiveRequest {
 pub struct InstallWorkspaceMobilityArchiveRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_id: Option<String>,
+    /// Defaults to `fresh_native` (today's behavior) when omitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_mode: Option<MobilityInstallMode>,
     pub archive: WorkspaceMobilityArchive,
 }
 

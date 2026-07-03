@@ -14,7 +14,7 @@ use std::time::Instant;
 use super::access::assert_workspace_not_retired;
 use super::blocking::run_blocking;
 use super::error::ApiError;
-use super::mobility_archive_contract::from_contract_archive;
+use super::mobility_archive_contract::{from_contract_archive, from_contract_install_mode};
 use super::mobility_contract::{
     to_contract_archive, to_contract_install_summary, to_contract_preflight,
 };
@@ -216,19 +216,28 @@ pub async fn install_workspace_mobility_archive(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
         .await;
+    // Installs also serve re-adopt (round-trip coming home), so this
+    // accepts remote_owned/retired destinations in addition to normal ones
+    // instead of the generic mutation gate.
     state
         .workspace_access_gate
-        .assert_can_mutate_for_workspace(&workspace_id)
+        .assert_can_install_mobility_archive(&workspace_id)
         .map_err(map_access_error)?;
     let mobility_service = state.mobility_service.clone();
     let operation_id = req.operation_id;
+    let install_mode = from_contract_install_mode(req.install_mode);
     let archive = from_contract_archive(
         req.archive,
         &workspace_id,
         state.session_service.attachment_storage(),
     )?;
     let summary = run_blocking("mobility_install", move || {
-        mobility_service.install_workspace_archive(&workspace_id, &archive, operation_id.as_deref())
+        mobility_service.install_workspace_archive(
+            &workspace_id,
+            &archive,
+            operation_id.as_deref(),
+            install_mode,
+        )
     })
     .await?
     .map_err(map_mobility_error)?;

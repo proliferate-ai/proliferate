@@ -7,6 +7,7 @@ use super::test_support::{
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::store::RepoRootStore;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::workspaces::managed_root::managed_worktrees_root;
 use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;
@@ -80,10 +81,8 @@ fn create_mobility_destination_adopts_clean_existing_destination_path() {
         .create_workspace(&source.path().display().to_string())
         .expect("create source workspace");
     let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
-    let destination_path = runtime_home
-        .path()
-        .join("mobility")
-        .join("destinations")
+    let destination_path = managed_worktrees_root(runtime_home.path())
+        .join("mobility-destinations")
         .join(&source_workspace.repo_root.id)
         .join("destination-1");
     fs::create_dir_all(destination_path.parent().expect("destination parent"))
@@ -178,10 +177,8 @@ fn create_mobility_destination_rejects_dirty_existing_destination_path() {
         .create_workspace(&source.path().display().to_string())
         .expect("create source workspace");
     let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
-    let destination_path = runtime_home
-        .path()
-        .join("mobility")
-        .join("destinations")
+    let destination_path = managed_worktrees_root(runtime_home.path())
+        .join("mobility-destinations")
         .join(&source_workspace.repo_root.id)
         .join("destination-1");
     fs::create_dir_all(destination_path.parent().expect("destination parent"))

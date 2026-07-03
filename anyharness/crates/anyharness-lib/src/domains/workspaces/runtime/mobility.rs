@@ -1,15 +1,26 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::records::build_workspace_record;
 use super::WorkspaceRuntime;
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::model::RepoRootRecord;
+use crate::domains::workspaces::managed_root::managed_worktrees_root;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord, WorkspaceSurface};
 use crate::domains::workspaces::resolver;
 use crate::domains::workspaces::types::PreparedWorkspaceMobilityDestination;
 use crate::origin::OriginContext;
+
+/// Mobility destinations are managed worktree paths: rooting them under
+/// `managed_worktrees_root()` (instead of directly under `runtime_home`)
+/// keeps `retire_worktree_materialization`'s "inside the managed root" guard
+/// satisfied so purge can remove them.
+fn mobility_destinations_base_dir(runtime_home: &Path, repo_root_id: &str) -> PathBuf {
+    managed_worktrees_root(runtime_home)
+        .join("mobility-destinations")
+        .join(repo_root_id)
+}
 
 impl WorkspaceRuntime {
     pub fn create_mobility_destination(
@@ -34,11 +45,7 @@ impl WorkspaceRuntime {
             .get_repo_root(repo_root_id)?
             .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
 
-        let base_dir = self
-            .runtime_home
-            .join("mobility")
-            .join("destinations")
-            .join(&repo_root.id);
+        let base_dir = mobility_destinations_base_dir(&self.runtime_home, &repo_root.id);
         fs::create_dir_all(&base_dir)?;
 
         let target_path = if let Some(destination_id) = destination_id {
@@ -215,11 +222,7 @@ impl WorkspaceRuntime {
         requested_base_sha: &str,
     ) -> anyhow::Result<Option<WorkspaceRecord>> {
         let requested_head = format!("{requested_base_sha}^{{commit}}");
-        let base_dir = self
-            .runtime_home
-            .join("mobility")
-            .join("destinations")
-            .join(repo_root_id);
+        let base_dir = mobility_destinations_base_dir(&self.runtime_home, repo_root_id);
         let canonical_base_dir = fs::canonicalize(&base_dir).unwrap_or(base_dir);
         for workspace in self.store.list_active_by_repo_root_id(repo_root_id)? {
             if workspace.kind != WorkspaceKind::Worktree

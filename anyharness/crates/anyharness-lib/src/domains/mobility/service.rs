@@ -12,7 +12,7 @@ use crate::domains::agents::portability::{
 };
 use crate::domains::mobility::model::{
     DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
-    MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
+    MobilityFileData, MobilityInstallMode, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
     WorkspaceMobilityExportOptions, WorkspaceMobilityPreflightResult,
     WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
@@ -25,7 +25,7 @@ use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::model::{TerminalRecord, TerminalStatus};
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
-use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::service::WorkspaceService;
 use crate::domains::workspaces::types::PreparedWorkspaceMobilityDestination;
@@ -58,6 +58,21 @@ pub enum MobilityError {
     Invalid(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
+}
+
+/// How `validate_install_preconditions` wants each archived session id with
+/// a pre-existing local row handled during apply. A session id absent from
+/// both sets is a plain fresh import.
+#[derive(Debug, Default)]
+struct ExistingArchiveSessionPlan {
+    /// Same-runtime move: the existing row lives on a different (frozen or
+    /// remote_owned) workspace that matches the archive's own source —
+    /// update it in place instead of inserting a new row.
+    relocate: HashSet<String>,
+    /// Round-trip coming home: the existing row already lives on the
+    /// destination workspace itself (a prior-home leftover) — delete it and
+    /// import the archive's copy fresh.
+    readopt: HashSet<String>,
 }
 
 #[derive(Clone)]
@@ -525,6 +540,7 @@ impl MobilityService {
         workspace_id: &str,
         archive: &WorkspaceMobilityArchiveData,
         operation_id: Option<&str>,
+        install_mode: MobilityInstallMode,
     ) -> Result<ImportedWorkspaceArchiveSummary, MobilityError> {
         validate_archive_size(archive)?;
         let operation_id = operation_id
@@ -559,8 +575,7 @@ impl MobilityService {
             "Destination workspace must be clean before installing a mobility archive",
         )?;
 
-        let relocated_session_ids =
-            self.validate_install_preconditions(&workspace, &repo_root, archive)?;
+        let install_plan = self.validate_install_preconditions(&workspace, &repo_root, archive)?;
 
         for deleted_path in &archive.deleted_paths {
             let resolved = resolve_safe_path(&repo_root, deleted_path)
@@ -584,9 +599,18 @@ impl MobilityService {
         for bundle in &archive.sessions {
             let mut session = bundle.session.clone();
             session.workspace_id = workspace.id.clone();
-            // Native agent session state is tied to the source workspace path.
-            // Keep durable history, but let the destination start a fresh native session.
-            session.native_session_id = None;
+            // Native agent session state is tied to the source workspace path,
+            // but for supported agent kinds the destination's re-slugged/
+            // id-keyed artifact layout resumes it fine (E1c/E1d). Preserve the
+            // id only under that install mode + kind pairing; otherwise keep
+            // durable history but let the destination start a fresh native
+            // session, matching v1 behavior byte-for-byte.
+            let preserve_native =
+                matches!(install_mode, MobilityInstallMode::PreserveNativeSessions)
+                    && is_supported_agent_kind(&session.agent_kind);
+            if !preserve_native {
+                session.native_session_id = None;
+            }
             // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
             session.mcp_bindings_ciphertext = None;
             session.mcp_binding_summaries_json = None;
@@ -595,13 +619,24 @@ impl MobilityService {
             install_session_agent_artifacts(&session, &workspace_path, &bundle.agent_artifacts)
                 .map_err(|error| MobilityError::Invalid(error.to_string()))?;
             imported_agent_artifact_count += bundle.agent_artifacts.len();
-            if relocated_session_ids.contains(&session.id) {
+            if install_plan.relocate.contains(&session.id) {
                 self.session_runtime
                     .forget_live_session_for_mobility_blocking(&session.id);
                 self.session_service
-                    .relocate_session_for_mobility(&session)?;
+                    .relocate_session_for_mobility(&session, preserve_native)?;
                 relocated_session_count += 1;
             } else {
+                if install_plan.readopt.contains(&session.id) {
+                    // Re-adopt (round-trip coming home): the archive is
+                    // authoritative over this runtime's stale leftover copy
+                    // of the same session id. Forget any live handle and
+                    // delete the stale graph (events, raw notifications,
+                    // pending prompts, attachment rows+files) before
+                    // importing the archive's version fresh.
+                    self.session_runtime
+                        .forget_live_session_for_mobility_blocking(&session.id);
+                    self.session_service.delete_session(&session.id)?;
+                }
                 self.session_service.import_session_bundle(
                     &workspace.id,
                     &session,
@@ -785,9 +820,9 @@ impl MobilityService {
         workspace: &WorkspaceRecord,
         repo_root: &Path,
         archive: &WorkspaceMobilityArchiveData,
-    ) -> Result<HashSet<String>, MobilityError> {
+    ) -> Result<ExistingArchiveSessionPlan, MobilityError> {
         self.access_gate
-            .assert_can_mutate_for_workspace(&workspace.id)
+            .assert_can_install_mobility_archive(&workspace.id)
             .map_err(map_access_error)?;
         if self
             .terminal_service
@@ -797,15 +832,22 @@ impl MobilityService {
                 "destination workspace setup is still running".to_string(),
             ));
         }
-        let existing_sessions = self
-            .session_service
-            .store()
-            .list_by_workspace(&workspace.id)?;
-        if let Some(existing_session) = existing_sessions.first() {
-            return Err(MobilityError::Invalid(format!(
-                "destination workspace already contains session {}",
-                existing_session.id
-            )));
+        // A prior-home destination (this workspace's own remote_owned/retired
+        // row, coming home on a round trip) is expected to still carry its
+        // own stale sessions; the per-archive-session loop below resolves
+        // those via re-adopt instead of refusing outright.
+        let is_prior_home = self.is_prior_home_workspace(workspace)?;
+        if !is_prior_home {
+            let existing_sessions = self
+                .session_service
+                .store()
+                .list_by_workspace(&workspace.id)?;
+            if let Some(existing_session) = existing_sessions.first() {
+                return Err(MobilityError::Invalid(format!(
+                    "destination workspace already contains session {}",
+                    existing_session.id
+                )));
+            }
         }
         if let Some(terminal) = self.active_terminals_blocking(&workspace.id).first() {
             return Err(MobilityError::Invalid(format!(
@@ -822,15 +864,28 @@ impl MobilityService {
                 .map_err(|error| MobilityError::Invalid(error.to_string()))?;
         }
         validate_delegated_archive_graph(archive)?;
-        let mut relocated_session_ids = HashSet::new();
+        let mut plan = ExistingArchiveSessionPlan::default();
         for bundle in &archive.sessions {
             if let Some(existing_session) = self.session_service.get_session(&bundle.session.id)? {
-                if self.can_relocate_existing_archive_session(
+                if existing_session.workspace_id == workspace.id {
+                    // Same-row collision: this is the destination's own
+                    // leftover copy of the archived session. Only a
+                    // prior-home destination may re-adopt it; a normal
+                    // workspace with a live session of this id is a genuine
+                    // conflict.
+                    if is_prior_home {
+                        plan.readopt.insert(bundle.session.id.clone());
+                    } else {
+                        return Err(MobilityError::SessionAlreadyExists(
+                            bundle.session.id.clone(),
+                        ));
+                    }
+                } else if self.can_relocate_existing_archive_session(
                     workspace,
                     archive,
                     &existing_session,
                 )? {
-                    relocated_session_ids.insert(bundle.session.id.clone());
+                    plan.relocate.insert(bundle.session.id.clone());
                 } else {
                     return Err(MobilityError::SessionAlreadyExists(
                         bundle.session.id.clone(),
@@ -847,7 +902,7 @@ impl MobilityService {
                 &bundle.agent_artifacts,
             )?;
         }
-        Ok(relocated_session_ids)
+        Ok(plan)
     }
 
     fn can_relocate_existing_archive_session(
@@ -879,6 +934,22 @@ impl MobilityService {
         }
 
         Ok(true)
+    }
+
+    /// Whether `workspace` is this runtime's prior home for a workspace that
+    /// moved away: `remote_owned` (destroy-source cleanup not yet run) or a
+    /// retired lifecycle row with pending cleanup. Mobility install re-adopts
+    /// (round-trip coming home) a duplicate archive session id instead of
+    /// refusing it only when this holds.
+    fn is_prior_home_workspace(&self, workspace: &WorkspaceRecord) -> Result<bool, MobilityError> {
+        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
+            return Ok(true);
+        }
+        let state = self
+            .access_gate
+            .runtime_state(&workspace.id)
+            .map_err(map_access_error)?;
+        Ok(state.mode == WorkspaceAccessMode::RemoteOwned)
     }
 
     async fn validate_prepared_destination_is_empty(

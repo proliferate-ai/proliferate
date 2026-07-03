@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
-    MobilityPendingConfigChangeRecord, MobilityPendingPromptRecord, MobilityPromptAttachmentRecord,
-    MobilitySessionEventRecord, MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
+    MobilityInstallMode as ContractMobilityInstallMode, MobilityPendingConfigChangeRecord,
+    MobilityPendingPromptRecord, MobilityPromptAttachmentRecord, MobilitySessionEventRecord,
+    MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
     MobilitySessionLinkWakeScheduleRecord, MobilitySessionLiveConfigSnapshotRecord,
     MobilitySessionRawNotificationRecord, MobilitySessionRecord, WorkspaceMobilityArchive,
     WorkspaceMobilityFileEntry, WorkspaceMobilitySessionBundle,
@@ -12,8 +13,8 @@ use sha2::{Digest, Sha256};
 use super::error::ApiError;
 use crate::domains::agents::portability::AgentArtifactFileData;
 use crate::domains::mobility::model::{
-    MobilityFileData, MobilityPromptAttachmentData, WorkspaceMobilityArchiveData,
-    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
+    MobilityFileData, MobilityInstallMode, MobilityPromptAttachmentData,
+    WorkspaceMobilityArchiveData, WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
@@ -67,6 +68,19 @@ pub(super) fn from_contract_archive(
             .map(from_contract_session_link_wake_schedule)
             .collect::<Result<Vec<_>, _>>()?,
     })
+}
+
+/// Defaults to `FreshNative` (today's behavior) when the wire field is
+/// omitted, matching `InstallWorkspaceMobilityArchiveRequest::install_mode`.
+pub(super) fn from_contract_install_mode(
+    mode: Option<ContractMobilityInstallMode>,
+) -> MobilityInstallMode {
+    match mode {
+        Some(ContractMobilityInstallMode::PreserveNativeSessions) => {
+            MobilityInstallMode::PreserveNativeSessions
+        }
+        Some(ContractMobilityInstallMode::FreshNative) | None => MobilityInstallMode::FreshNative,
+    }
 }
 
 fn from_contract_file(file: WorkspaceMobilityFileEntry) -> Result<MobilityFileData, ApiError> {

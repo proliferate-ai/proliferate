@@ -35,6 +35,22 @@ pub struct WorkspaceMobilityArchiveData {
     pub session_link_wake_schedules: Vec<SubagentWakeScheduleRecord>,
 }
 
+/// How `MobilityService::install_workspace_archive` should treat the
+/// archived sessions' native agent session ids. Mirrors
+/// `anyharness_contract::v1::MobilityInstallMode`; kept as a domain-owned
+/// twin per the no-contract-types-in-domains rule (mapped at the API seam
+/// in `api/http/mobility_archive_contract.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MobilityInstallMode {
+    /// Null every session's native id so the destination starts a fresh
+    /// native session. Today's behavior; the default when unset.
+    #[default]
+    FreshNative,
+    /// Keep the native id for supported agent kinds so the native CLI
+    /// resumes the same conversation on the destination.
+    PreserveNativeSessions,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct WorkspaceMobilityExportOptions {
     pub exclude_paths: Vec<String>,

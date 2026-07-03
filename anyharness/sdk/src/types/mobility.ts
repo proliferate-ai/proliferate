@@ -14,6 +14,7 @@ export type WorkspaceMobilityPreflightResponse =
   components["schemas"]["WorkspaceMobilityPreflightResponse"];
 export type ExportWorkspaceMobilityArchiveRequest =
   components["schemas"]["ExportWorkspaceMobilityArchiveRequest"];
+export type MobilityInstallMode = components["schemas"]["MobilityInstallMode"];
 export type InstallWorkspaceMobilityArchiveRequest =
   components["schemas"]["InstallWorkspaceMobilityArchiveRequest"];
 export type InstallWorkspaceMobilityArchiveResponse =

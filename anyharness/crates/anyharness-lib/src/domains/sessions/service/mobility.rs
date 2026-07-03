@@ -51,7 +51,12 @@ impl SessionService {
         result
     }
 
-    pub fn relocate_session_for_mobility(&self, session: &SessionRecord) -> anyhow::Result<()> {
-        self.session_store.relocate_for_mobility(session)
+    pub fn relocate_session_for_mobility(
+        &self,
+        session: &SessionRecord,
+        preserve_native: bool,
+    ) -> anyhow::Result<()> {
+        self.session_store
+            .relocate_for_mobility(session, preserve_native)
     }
 }

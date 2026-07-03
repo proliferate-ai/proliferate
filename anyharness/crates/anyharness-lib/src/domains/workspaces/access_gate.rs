@@ -123,6 +123,34 @@ impl WorkspaceAccessGate {
         }
     }
 
+    /// Mobility install accepts a destination that is `normal` (a fresh
+    /// destination) or that is exactly the workspace being re-adopted on a
+    /// round trip: `remote_owned` (this runtime's prior home, destroy-source
+    /// cleanup not yet run) or a retired row with pending cleanup. Frozen
+    /// and repair-blocked workspaces still refuse installs, same as
+    /// `assert_can_mutate_for_workspace`.
+    pub fn assert_can_install_mobility_archive(
+        &self,
+        workspace_id: &str,
+    ) -> Result<(), WorkspaceAccessError> {
+        let workspace = self
+            .workspace_store
+            .find_by_id(workspace_id)
+            .map_err(WorkspaceAccessError::Unexpected)?
+            .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
+        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
+            return Ok(());
+        }
+        let state = self.runtime_state(workspace_id)?;
+        match state.mode {
+            WorkspaceAccessMode::Normal | WorkspaceAccessMode::RemoteOwned => Ok(()),
+            mode => Err(WorkspaceAccessError::MutationBlocked {
+                workspace_id: workspace_id.to_string(),
+                mode,
+            }),
+        }
+    }
+
     pub fn assert_can_mutate_for_repo_root(
         &self,
         repo_root_id: &str,

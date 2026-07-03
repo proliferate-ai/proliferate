@@ -9253,6 +9253,17 @@
           "archive": {
             "$ref": "#/components/schemas/WorkspaceMobilityArchive"
           },
+          "installMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MobilityInstallMode",
+                "description": "Defaults to `fresh_native` (today's behavior) when omitted."
+              }
+            ]
+          },
           "operationId": {
             "type": [
               "string",
@@ -10202,6 +10213,14 @@
             "type": "string"
           }
         }
+      },
+      "MobilityInstallMode": {
+        "type": "string",
+        "description": "How an install should treat the archived sessions' native agent session\nids. `FreshNative` (the default) nulls them so the destination starts a\nbrand-new native session per agent, matching v1 behavior byte-for-byte.\n`PreserveNativeSessions` keeps the id for supported agent kinds\n(claude, codex) so the native CLI resumes the same conversation on the\nother side.",
+        "enum": [
+          "fresh_native",
+          "preserve_native_sessions"
+        ]
       },
       "MobilityPendingConfigChangeRecord": {
         "type": "object",

@@ -94,6 +94,7 @@ export type {
   WorkspaceMobilitySessionCandidate,
   WorkspaceMobilityPreflightResponse,
   ExportWorkspaceMobilityArchiveRequest,
+  MobilityInstallMode,
   InstallWorkspaceMobilityArchiveRequest,
   InstallWorkspaceMobilityArchiveResponse,
   DestroyWorkspaceMobilitySourceRequest,
