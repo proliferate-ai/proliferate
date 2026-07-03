@@ -40,7 +40,7 @@ export function RepoPicker({
           variant="unstyled"
           size="unstyled"
           aria-label="Select repository"
-          className="flex h-7 w-[200px] items-center gap-2 rounded-md border border-input bg-background pl-2 pr-2 text-ui-sm transition-colors hover:bg-accent data-[state=open]:bg-accent"
+          className="flex h-8 w-[200px] items-center gap-2 rounded-md border border-input bg-background px-2 text-ui-sm transition-colors hover:bg-accent data-[state=open]:bg-accent"
         >
           <RepoChip kind={selected?.kind ?? "local"} />
           <span className="min-w-0 flex-1 truncate text-left">

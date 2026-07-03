@@ -268,14 +268,14 @@ function SetupHintRows({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">{title}</p>
-      <div className="flex flex-col gap-1">
+      <p className="text-ui-sm font-medium text-muted-foreground">{title}</p>
+      <div className="flex flex-col gap-0.5">
         {hints.map((hint) => {
           const checked = isSetupHintEnabled(currentScript, hint.suggestedCommand);
           return (
             <Label
               key={hint.id}
-              className="mb-0 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-foreground/5"
+              className="mb-0 flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-foreground/5"
             >
               <Checkbox
                 checked={checked}
@@ -286,10 +286,10 @@ function SetupHintRows({
                 ))}
                 className="size-3.5 shrink-0 accent-foreground"
               />
-              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+              <span className="min-w-0 flex-1 truncate font-mono text-ui-sm text-foreground">
                 {hint.suggestedCommand}
               </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span className="shrink-0 text-base text-muted-foreground">
                 {hint.detectedFile}
               </span>
             </Label>

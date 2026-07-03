@@ -110,7 +110,7 @@ export function CloudRepoPicker({
       {error ? (
         <div
           role="alert"
-          className="mt-2 flex items-start gap-2 rounded-lg bg-destructive-subtle px-2.5 py-2 text-xs leading-[1.45] text-destructive"
+          className="mt-2 flex items-start gap-2 rounded-lg bg-destructive-subtle px-2.5 py-2 text-ui-sm leading-[1.45] text-destructive"
         >
           <ShieldAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">{error}</span>
@@ -196,7 +196,7 @@ function CloudRepoPickerBlocker({
         </span>
         <span className="min-w-0 flex-1">
           <h3 className="text-ui font-medium leading-5 text-foreground">{blocker.title}</h3>
-          <p className="mt-0.5 text-xs leading-[1.45] text-muted-foreground">
+          <p className="mt-0.5 text-ui-sm leading-[1.45] text-muted-foreground">
             {blocker.description}
           </p>
         </span>
@@ -241,7 +241,7 @@ function EmptyRepositoryState({ query }: { query: string }) {
       <div className="text-ui-sm font-medium text-foreground">
         {trimmedQuery ? "No matching repositories" : "No repositories found"}
       </div>
-      <p className="mx-auto mt-1 max-w-xs text-xs leading-[1.45] text-muted-foreground">
+      <p className="mx-auto mt-1 max-w-xs text-ui-sm leading-[1.45] text-muted-foreground">
         {trimmedQuery
           ? "Try another owner or repository name, or paste an owner/repo value below."
           : "Paste an owner/repo value below, or connect a GitHub account with repository access."}
@@ -291,7 +291,7 @@ function RepositoryRow({
             <Check className="size-3 shrink-0 text-success" aria-hidden />
           ) : null}
         </span>
-        <span className="block truncate text-xs leading-[1.45] text-muted-foreground">
+        <span className="block truncate text-ui-sm leading-[1.45] text-muted-foreground">
           {repo.disabledReason ? (
             <span className="text-warning">{repo.disabledReason}</span>
           ) : (
