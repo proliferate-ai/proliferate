@@ -11,7 +11,12 @@ import {
   goalWireFromMirror,
 } from "@/lib/domain/sessions/goal-mirror";
 import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { goalResultDismissKey, useGoalBarStore } from "@/stores/activity/goal-bar-store";
+import {
+  goalResultDismissKey,
+  selectComposing,
+  selectDismissedResultKey,
+  useGoalBarStore,
+} from "@/stores/activity/goal-bar-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 export interface SessionGoalState {
@@ -70,9 +75,12 @@ export interface SessionGoalBarModel {
  * so the dock resolver and the bar renderer share one visibility answer.
  */
 export function useSessionGoalBarModel(): SessionGoalBarModel | null {
+  const activeSessionId = useActiveSessionId();
   const sessionGoal = useSessionGoal();
-  const composing = useGoalBarStore((state) => state.composing);
-  const dismissedResultKey = useGoalBarStore((state) => state.dismissedResultKey);
+  const composing = useGoalBarStore((state) => selectComposing(state, activeSessionId));
+  const dismissedResultKey = useGoalBarStore((state) =>
+    selectDismissedResultKey(state, activeSessionId),
+  );
   if (!sessionGoal || !sessionGoal.capabilities.supported) {
     return null;
   }
