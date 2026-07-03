@@ -28,6 +28,11 @@ from proliferate.db.store.integrations.definitions import IntegrationDefinitionR
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.access import ensure_provider_access
 
+# Cap on concurrent account probes per request: each OAuth probe can spend a
+# provider round-trip (and a short DB session) refreshing a token, so an
+# unbounded fan-out under a slow provider would pile up connections/requests.
+_PROBE_CONCURRENCY = 4
+
 
 class HealthVerdict(StrEnum):
     """Health verdicts, in rough "needs attention" order."""
@@ -92,17 +97,20 @@ async def _account_health(
 
 async def _probe_account_health(
     *,
+    semaphore: asyncio.Semaphore,
     account: IntegrationAccountRecord,
     definition: IntegrationDefinitionRecord,
 ) -> tuple[HealthVerdict, str | None]:
     """Run one account probe on its own session so probes can run concurrently.
 
-    An ``AsyncSession`` is not concurrency-safe and the OAuth probe both reads
-    (oauth client) and writes (a refreshed token bundle), so each probe gets a
-    dedicated session and commits it — a refreshed token should persist no
-    matter what the surrounding request does.
+    An ``AsyncSession`` is not concurrency-safe, so concurrent probes must not
+    share the request's session; each gets a dedicated (lazily-connecting) one.
+    The OAuth refresh itself opens and commits its own short-lived sessions
+    (see ``access._refresh_oauth_bundle``) so no connection is held across the
+    provider round-trip, and the semaphore bounds how many probes are in
+    flight at once.
     """
-    async with session_ops.open_async_session() as probe_db:
+    async with semaphore, session_ops.open_async_session() as probe_db:
         result = await _account_health(probe_db, account=account, definition=definition)
         await session_ops.commit_session(probe_db)
         return result
@@ -151,9 +159,12 @@ async def list_integration_health(
         for definition in visible
         if _effective_enabled(definition) and (account := accounts.get(definition.id)) is not None
     ]
+    probe_semaphore = asyncio.Semaphore(_PROBE_CONCURRENCY)
     probe_outcomes = await asyncio.gather(
         *(
-            _probe_account_health(account=account, definition=definition)
+            _probe_account_health(
+                semaphore=probe_semaphore, account=account, definition=definition
+            )
             for definition, account in probe_targets
         )
     )
