@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -27,6 +28,8 @@ from proliferate.db.store.integrations.accounts import IntegrationAccountRecord
 from proliferate.db.store.integrations.definitions import IntegrationDefinitionRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.access import ensure_provider_access
+
+logger = logging.getLogger(__name__)
 
 # Cap on concurrent account probes per request: each OAuth probe can spend a
 # provider round-trip (and a short DB session) refreshing a token, so an
@@ -109,11 +112,28 @@ async def _probe_account_health(
     (see ``access._refresh_oauth_bundle``) so no connection is held across the
     provider round-trip, and the semaphore bounds how many probes are in
     flight at once.
+
+    One account's probe must never sink the whole health response. Because the
+    probes fan out through ``asyncio.gather`` (which propagates the first
+    exception by default), a non-``CloudApiError`` raised here — a provider or
+    network timeout, a ``SQLAlchemyError`` from the probe session or its
+    commit — would otherwise 500 the entire endpoint. ``_account_health``
+    already maps ``CloudApiError`` to a verdict; anything else is isolated to
+    this account as a generic error so every other integration still reports.
     """
-    async with semaphore, session_ops.open_async_session() as probe_db:
-        result = await _account_health(probe_db, account=account, definition=definition)
-        await session_ops.commit_session(probe_db)
-        return result
+    try:
+        async with semaphore, session_ops.open_async_session() as probe_db:
+            result = await _account_health(probe_db, account=account, definition=definition)
+            await session_ops.commit_session(probe_db)
+            return result
+    except Exception:
+        logger.warning(
+            "integration health probe failed for account %s (definition %s)",
+            account.id,
+            definition.id,
+            exc_info=True,
+        )
+        return HealthVerdict.ERROR, "probe_failed"
 
 
 async def list_integration_health(
