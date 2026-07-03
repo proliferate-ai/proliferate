@@ -163,6 +163,8 @@ export {
   useUpdateSessionTitleMutation,
   useSetSessionGoalMutation,
   useClearSessionGoalMutation,
+  useSetSessionLoopMutation,
+  useClearSessionLoopMutation,
   useCancelSessionMutation,
   useDismissSessionMutation,
   useCloseSessionMutation,

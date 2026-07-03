@@ -27,7 +27,14 @@ pub struct SessionActivity {
 #[serde(tag = "status", rename_all = "snake_case", rename_all_fields = "camelCase")]
 pub enum TurnState {
     Running {
+        // Explicit field renames: `rename_all_fields = "camelCase"` governs the
+        // serde wire (verified by the round-trip test below) but utoipa's
+        // ToSchema derive does NOT honor it for internally-tagged enum variant
+        // fields, so without these the generated OpenAPI schema would drift to
+        // snake_case. Per-field `serde(rename)` is honored by both.
+        #[serde(rename = "turnId")]
         turn_id: String,
+        #[serde(rename = "startedAt")]
         started_at: String,
     },
     Idle,
@@ -59,7 +66,9 @@ pub struct ActivityProcess {
 pub enum ProcessStatus {
     Running,
     Exited {
-        #[serde(skip_serializing_if = "Option::is_none")]
+        // See TurnState above: explicit rename keeps the utoipa schema in
+        // camelCase agreement with the serde wire.
+        #[serde(rename = "exitCode", skip_serializing_if = "Option::is_none")]
         exit_code: Option<i32>,
     },
 }
