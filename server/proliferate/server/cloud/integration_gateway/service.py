@@ -13,7 +13,7 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.integrations import accounts as accounts_store
-from proliferate.db.store.integrations import definitions as definitions_store
+from proliferate.db.store.integrations.accounts import ReadyAccountRow
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
@@ -30,23 +30,42 @@ from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cach
 _PROTOCOL_VERSION = "2025-06-18"
 
 
+def _org_allows(grant: IntegrationGatewayGrant, row: ReadyAccountRow) -> bool:
+    """Whether the grant's org policy overlay leaves this definition enabled.
+
+    Org-scoped grants get the org overlay: an explicit policy row wins,
+    otherwise the definition's default. Org-less grants (``organization_id``
+    NULL) see seeds-with-defaults behavior — no overlay at all. That org-less
+    escape hatch is a documented v1 tradeoff (see
+    ``create_desktop_enrollment``): enrollment never forces an org, so the
+    overlay governs org-scoped workers rather than hard-blocking members who
+    enroll org-less.
+    """
+    if grant.organization_id is None:
+        return True
+    if row.org_policy_enabled is not None:
+        return row.org_policy_enabled
+    return row.definition.enabled_by_default
+
+
 async def ready_accounts_for_grant(
     db: AsyncSession,
     *,
     grant: IntegrationGatewayGrant,
 ) -> list[GatewayProviderAccount]:
-    """The owner's enabled, ready accounts whose definition is not archived."""
-    accounts = await accounts_store.list_ready_accounts_for_user(db, grant.owner_user_id)
-    definitions = await definitions_store.get_definitions_by_ids(
-        db, {account.definition_id for account in accounts}
+    """The owner's enabled, ready accounts whose definition is not archived.
+
+    For org-scoped grants, definitions disabled by the org policy overlay are
+    excluded.
+    """
+    rows = await accounts_store.list_ready_accounts_for_user(
+        db, grant.owner_user_id, organization_id=grant.organization_id
     )
-    resolved: list[GatewayProviderAccount] = []
-    for account in accounts:
-        definition = definitions.get(account.definition_id)
-        if definition is None or definition.archived_at is not None:
-            continue
-        resolved.append(GatewayProviderAccount(account=account, definition=definition))
-    return resolved
+    return [
+        GatewayProviderAccount(account=row.account, definition=row.definition)
+        for row in rows
+        if _org_allows(grant, row)
+    ]
 
 
 async def account_for_provider(
@@ -55,15 +74,22 @@ async def account_for_provider(
     grant: IntegrationGatewayGrant,
     provider: str,
 ) -> GatewayProviderAccount:
-    pair = await accounts_store.get_ready_account_for_provider(db, grant.owner_user_id, provider)
-    if pair is None:
+    row = await accounts_store.get_ready_account_for_provider(
+        db, grant.owner_user_id, provider, organization_id=grant.organization_id
+    )
+    if row is None:
         raise CloudApiError(
             "integration_provider_not_found",
             f"No connected integration provider '{provider}'.",
             status_code=404,
         )
-    account, definition = pair
-    return GatewayProviderAccount(account=account, definition=definition)
+    if not _org_allows(grant, row):
+        raise CloudApiError(
+            "integration_provider_disabled",
+            f"Integration provider '{provider}' is disabled by your organization's policy.",
+            status_code=404,
+        )
+    return GatewayProviderAccount(account=row.account, definition=row.definition)
 
 
 async def list_providers(

@@ -89,6 +89,7 @@ async def create_desktop_worker_enrollment_endpoint(
         db,
         owner_user_id=user.id,
         desktop_install_id=body.desktop_install_id,
+        organization_id=body.organization_id,
     )
 
 

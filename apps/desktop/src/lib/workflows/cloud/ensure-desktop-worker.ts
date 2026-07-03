@@ -19,15 +19,22 @@ function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-// Ensures a runtime dispatch worker is enrolled for this desktop install.
+// Ensures a runtime dispatch worker is enrolled for this desktop install
+// under the given organization (null for org-less users). The caller passes
+// the organization it decided to enroll for — the enrollment guard's effect
+// captures it — instead of this workflow re-reading the store after an await,
+// so the enrolled org provably matches the guard's identity key even when the
+// active organization changes mid-flight.
 // Runs opportunistically on login; never blocks or throws on failure.
-// Resolves true when the worker was ensured and false when it failed (the
-// enrollment guard uses this to avoid latching a silent failure forever).
-export function ensureDesktopWorker(): Promise<boolean> {
+// Resolves false when enrollment failed so the guard can retry.
+export function ensureDesktopWorker(organizationId: string | null): Promise<boolean> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
       const desktopInstallId = await getDesktopInstallId();
-      const { enrollmentToken } = await enrollDesktopWorker(desktopInstallId);
+      const { enrollmentToken } = await enrollDesktopWorker(
+        desktopInstallId,
+        organizationId,
+      );
       await ensureDesktopDispatchWorker({
         targetId: desktopInstallId,
         enrollmentToken,
@@ -64,12 +71,12 @@ export async function revokeDesktopWorkerServerSide(): Promise<void> {
   }
 }
 
-// Local teardown of the desktop worker on sign-out: stops the worker process
-// and deletes the integration-gateway dotfile so local sessions cannot keep
-// using the departed user's integrations. Server-side revocation happens
+// Local teardown of the desktop worker: stops the worker process and deletes
+// the integration-gateway dotfile so local sessions cannot keep using the
+// departed identity's integrations. Server-side revocation happens
 // separately via revokeDesktopWorkerServerSide (while the auth token is still
-// valid) and via the predecessor-retiring enrollment of the next user. Never
-// blocks or throws.
+// valid) and via the predecessor-retiring enrollment of the next identity.
+// Never blocks or throws.
 export function teardownDesktopWorker(): Promise<void> {
   return enqueueWorkerLifecycleTask(async () => {
     try {

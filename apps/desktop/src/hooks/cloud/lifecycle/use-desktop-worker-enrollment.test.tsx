@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 
 const workflowMocks = vi.hoisted(() => ({
-  ensureDesktopWorker: vi.fn<() => Promise<boolean>>(),
+  ensureDesktopWorker: vi.fn<(organizationId: string | null) => Promise<boolean>>(),
   teardownDesktopWorker: vi.fn<() => Promise<void>>(),
 }));
 
@@ -19,10 +19,11 @@ function authUser(id: string): AuthUser {
 }
 
 // The enrollment guard is module-level state, so each test loads the hook
-// (and the auth store it observes) from a fresh module registry.
+// (and the stores it observes) from a fresh module registry.
 async function loadEnrollmentHarness() {
   vi.resetModules();
   const { useAuthStore } = await import("@/stores/auth/auth-store");
+  const { useOrganizationStore } = await import("@/stores/organizations/organization-store");
   const { useDesktopWorkerEnrollment } = await import("./use-desktop-worker-enrollment");
   useAuthStore.setState({
     status: "bootstrapping",
@@ -30,13 +31,20 @@ async function loadEnrollmentHarness() {
     user: null,
     error: null,
   });
+  useOrganizationStore.setState({
+    activeOrganizationId: null,
+    activeOrganizationValidated: false,
+  });
   const rendered = renderHook(() => useDesktopWorkerEnrollment());
   return {
     ...rendered,
     signIn: (id: string) =>
       useAuthStore.setState({ status: "authenticated", user: authUser(id) }),
     signOut: () => useAuthStore.setState({ status: "anonymous", user: null }),
-    bootstrap: () => useAuthStore.setState({ status: "bootstrapping" }),
+    setOrganization: (organizationId: string | null) =>
+      useOrganizationStore.getState().setActiveOrganizationId(organizationId, {
+        validated: true,
+      }),
     nudgeRender: () => useAuthStore.setState({ error: "nudge a re-render" }),
   };
 }
@@ -95,9 +103,68 @@ describe("useDesktopWorkerEnrollment", () => {
     });
   });
 
+  it("re-enrolls when a different user signs in under the same organization", async () => {
+    const harness = await loadEnrollmentHarness();
+
+    harness.setOrganization("org-1");
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    harness.signIn("user-b");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+    });
+    expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
+  });
+
+  it("re-enrolls on an org->org change without tearing down itself", async () => {
+    // The destructive part of an org->org switch (confirm dialog, closing
+    // local sessions, teardownDesktopWorker) runs in the organization switch
+    // action before the store changes; the guard only re-enrolls.
+    const harness = await loadEnrollmentHarness();
+
+    harness.setOrganization("org-1");
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    harness.setOrganization("org-2");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+    });
+    expect(workflowMocks.ensureDesktopWorker).toHaveBeenLastCalledWith("org-2");
+    expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
+  });
+
+  it("adopts a first organization in place: plain re-enroll, no teardown", async () => {
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    // Org-less user gains their first organization: the guard key updates
+    // and the worker re-enrolls without disturbing anything.
+    harness.setOrganization("org-1");
+    await waitFor(() => {
+      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+    });
+    expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
+
+    // Same (user, org) again is a no-op.
+    harness.setOrganization("org-1");
+    await flushEffects();
+    expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
+  });
+
   it("tears down on sign-out and re-enrolls on the next login", async () => {
     const harness = await loadEnrollmentHarness();
 
+    harness.setOrganization("org-1");
     harness.signIn("user-a");
     await waitFor(() => {
       expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
@@ -133,46 +200,26 @@ describe("useDesktopWorkerEnrollment", () => {
     expect(workflowMocks.teardownDesktopWorker).toHaveBeenCalledTimes(1);
   });
 
-  it("clears the guard when enrollment fails so the next effect run retries", async () => {
-    const harness = await loadEnrollmentHarness();
-    // First enrollment fails silently (ensureDesktopWorker swallows the error
-    // and resolves false); every attempt after that succeeds.
-    workflowMocks.ensureDesktopWorker.mockResolvedValueOnce(false);
+  it("clears the guard and retries when enrollment fails", async () => {
+    vi.useFakeTimers();
+    try {
+      workflowMocks.ensureDesktopWorker.mockResolvedValueOnce(false);
+      const harness = await loadEnrollmentHarness();
 
-    harness.signIn("user-a");
-    await waitFor(() => {
+      await act(async () => {
+        harness.signIn("user-a");
+        await vi.advanceTimersByTimeAsync(0);
+      });
       expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
-    });
-    // Let the false result settle so the guard is reset back to null.
-    await flushEffects();
 
-    // A re-bootstrap (e.g. token refresh) re-runs the effect for the SAME user;
-    // because the failed attempt cleared the guard, enrollment is retried
-    // instead of being wedged until sign-out.
-    harness.bootstrap();
-    await flushEffects();
-    harness.signIn("user-a");
-    await waitFor(() => {
+      // The failed attempt cleared the guard and scheduled a retry; once the
+      // delay elapses the effect re-runs and enrolls again.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
       expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
-    });
-    expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
-  });
-
-  it("does not retry the same user after a successful enrollment", async () => {
-    const harness = await loadEnrollmentHarness();
-
-    harness.signIn("user-a");
-    await waitFor(() => {
-      expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
-    });
-    await flushEffects();
-
-    // Re-bootstrap for the same user: a successful enrollment kept the guard,
-    // so no re-enrollment fires.
-    harness.bootstrap();
-    await flushEffects();
-    harness.signIn("user-a");
-    await flushEffects();
-    expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
