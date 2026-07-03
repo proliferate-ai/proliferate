@@ -175,6 +175,45 @@ impl ActivityService {
             .map_err(ActivityIngestError::Store)
     }
 
+    /// Detach/reattach reset for the SUBAGENT roster, symmetric with
+    /// [`Self::reset_running_processes`]. A subagent left `running` when the
+    /// harness died is stale: Claude Task agents are process-bound and are NOT
+    /// resumable, so a fresh sidecar's `activity/list` returns them empty and
+    /// nothing would ever move them off `running` (a phantom live agent
+    /// forever). Mark every still-`running` subagent `failed` and re-emit.
+    /// Idempotent. For Codex the following `reconcile_roster` re-lists the
+    /// genuinely resumable children and upserts them back to `running`.
+    pub fn reset_running_subagents(
+        &self,
+        context: ActivityEventContext,
+    ) -> Result<ActivityEventBatch, ActivityIngestError> {
+        self.store
+            .with_tx_anyhow(|tx| {
+                let running = ActivityStore::list_running_subagents_tx(tx, &context.session_id)?;
+                let mut envelopes = Vec::new();
+                let now = chrono::Utc::now().to_rfc3339();
+                for existing in running {
+                    let record = ActivitySubagentRecord {
+                        status: SubagentRunStatus::Failed,
+                        updated_at: now.clone(),
+                        ..existing
+                    };
+                    ActivityStore::upsert_subagent(tx, &record)?;
+                    let envelope = envelope(
+                        &context,
+                        context.next_seq + envelopes.len() as i64,
+                        SessionEvent::ActivitySubagentUpserted(ActivitySubagentUpsertedPayload {
+                            agent: record.to_contract(),
+                        }),
+                    );
+                    ActivityStore::insert_event(tx, &event_record(&envelope)?)?;
+                    envelopes.push(envelope);
+                }
+                Ok(ActivityEventBatch { envelopes })
+            })
+            .map_err(ActivityIngestError::Store)
+    }
+
     /// Reconcile the roster from an authoritative `_anyharness/activity/list`
     /// pull on attach: upsert every listed process/subagent (Codex re-lists its
     /// child threads here). Runs in one transaction with an increasing seq so

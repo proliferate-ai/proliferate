@@ -132,6 +132,24 @@ impl ActivityStore {
         })
     }
 
+    /// Still-`running` subagents for a session — the attach reset target.
+    /// Claude Task agents are process-bound and die with the harness; codex
+    /// re-lists its resumable children right after via `activity/list`.
+    pub fn list_running_subagents_tx(
+        tx: &Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<Vec<ActivitySubagentRecord>> {
+        let mut statement = tx.prepare(
+            "SELECT * FROM activity_subagents
+             WHERE session_id = ?1 AND status = 'running'
+             ORDER BY updated_at ASC",
+        )?;
+        let rows = statement
+            .query_map([session_id], map_subagent)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     pub fn upsert_subagent(
         tx: &Connection,
         record: &ActivitySubagentRecord,

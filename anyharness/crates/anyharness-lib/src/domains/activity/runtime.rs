@@ -131,6 +131,15 @@ impl SessionDomainOp for ActivityReconcileOp {
                 .reset_running_processes(reset_ctx)
                 .map_err(|error| anyhow::anyhow!(error.to_string()))?;
             emitter.publish(reset.envelopes);
+            // Subagents need the same healing: a still-`running` subagent left
+            // behind by a dead harness is stale (Claude Task agents aren't
+            // resumable). Re-read the context — the sink counter advanced past
+            // the process resets — then reset, then re-list.
+            let subagent_reset_ctx = activity_event_context(&emitter.event_ctx());
+            let subagent_reset = activity_service
+                .reset_running_subagents(subagent_reset_ctx)
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            emitter.publish(subagent_reset.envelopes);
             // Re-read the context: the sink counter advanced past the resets.
             let reconcile_ctx = activity_event_context(&emitter.event_ctx());
             let reconciled = activity_service

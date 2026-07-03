@@ -326,6 +326,30 @@ fn reset_running_processes_marks_running_exited_and_is_idempotent() {
 }
 
 #[test]
+fn reset_running_subagents_marks_running_failed_and_is_idempotent() {
+    let service = test_service();
+    service
+        .ingest_subagent_upserted(
+            context(1),
+            subagent_wire("agent-1", ActivitySubagentStatusWire::Running),
+        )
+        .expect("ingest running subagent");
+
+    // Reattach reset: a subagent left running by a dead harness is stale and
+    // must be marked failed (else it stays a phantom running agent forever).
+    let batch = service.reset_running_subagents(context(2)).expect("reset");
+    assert_eq!(batch.envelopes.len(), 1);
+    assert_eq!(batch.envelopes[0].event.event_type(), "subagent_upserted");
+    let agents = service.current_agents("session-1").expect("load");
+    assert_eq!(agents.len(), 1);
+    assert!(matches!(agents[0].status, SubagentStatus::Failed));
+
+    // Idempotent: nothing left running -> no further events.
+    let again = service.reset_running_subagents(context(3)).expect("reset2");
+    assert!(again.envelopes.is_empty());
+}
+
+#[test]
 fn reconcile_roster_upserts_listed_processes_and_agents_with_increasing_seq() {
     let service = test_service();
     let batch = service
