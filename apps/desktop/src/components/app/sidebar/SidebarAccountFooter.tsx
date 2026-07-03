@@ -43,9 +43,7 @@ import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-sho
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
-// NOTE(2026-07-02): this invite is EXPIRED (Discord API code 50270). The owner
-// must supply a valid permanent invite; do not fabricate one.
-const PROLIFERATE_DISCORD_URL = "https://discord.gg/wCEgUnEuF";
+const PROLIFERATE_DISCORD_URL = "https://discord.gg/7b5afMTqW";
 
 /**
  * The single sidebar bottom-left account block, shared verbatim by the main
