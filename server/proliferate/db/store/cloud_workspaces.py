@@ -86,6 +86,32 @@ async def list_active_workspace_branches_for_repo_environment(
     return {value for value in rows.scalars().all() if value}
 
 
+async def get_active_cloud_workspace_for_branch(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    repo_environment_id: UUID,
+    branch: str,
+) -> CloudWorkspaceValue | None:
+    """The active (non-archived) workspace for this branch, if any.
+
+    Used by workspace_move's collision check: an active row here for a branch the
+    caller did not itself create is an *independently created* cloud workspace
+    (specs/tbd/workspace-migration-v2.md section 2, locked "Collision" decision).
+    """
+    row = (
+        await db.execute(
+            select(CloudWorkspace).where(
+                CloudWorkspace.owner_user_id == owner_user_id,
+                CloudWorkspace.repo_environment_id == repo_environment_id,
+                CloudWorkspace.git_branch == branch,
+                CloudWorkspace.archived_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    return cloud_workspace_value(row) if row is not None else None
+
+
 async def get_cloud_workspace_for_user(
     db: AsyncSession,
     user_id: UUID,

@@ -162,38 +162,3 @@ async def test_prepare_runtime_mobility_destination_accepts_current_contract_sha
 
     assert workspace.workspace_id == "workspace-123"
     assert workspace.repo_root_id == "repo-1"
-
-
-@pytest.mark.asyncio
-async def test_list_runtime_workspaces_normalizes_live_session_counts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient(
-        [
-            _response(
-                200,
-                method="GET",
-                json=[
-                    {
-                        "id": "workspace-1",
-                        "executionSummary": {"liveSessionCount": 2},
-                    },
-                    {
-                        "id": "workspace-2",
-                        "executionSummary": {"liveSessionCount": 0},
-                    },
-                ],
-            )
-        ]
-    )
-    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
-
-    summaries = await workspaces.list_runtime_workspaces(
-        "https://runtime.invalid",
-        "runtime-token",
-    )
-
-    assert [(item.workspace_id, item.live_session_count) for item in summaries] == [
-        ("workspace-1", 2),
-        ("workspace-2", 0),
-    ]

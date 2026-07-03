@@ -70,6 +70,33 @@ class RemoteTerminalCommandRun:
 
 
 @dataclass(frozen=True)
-class RemoteWorkspaceSummary:
-    workspace_id: str | None
-    live_session_count: int
+class RuntimeMobilityState:
+    """A workspace's mobility runtime mode (normal/frozen_for_handoff/remote_owned/...)."""
+
+    workspace_id: str
+    mode: str
+    handoff_op_id: str | None
+
+
+@dataclass(frozen=True)
+class RuntimeMobilityPreflight:
+    """Result of asking a runtime whether a workspace is safe to move right now."""
+
+    workspace_id: str
+    can_move: bool
+    base_commit_sha: str | None
+    branch_name: str | None
+    blocker_codes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RuntimeMobilityInstallResult:
+    """Result of installing a mobility archive into a destination workspace."""
+
+    workspace_id: str
+    source_workspace_path: str
+    base_commit_sha: str
+    imported_session_ids: tuple[str, ...]
+    applied_file_count: int
+    deleted_file_count: int
+    imported_agent_artifact_count: int

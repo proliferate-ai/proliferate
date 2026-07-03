@@ -175,6 +175,32 @@ async def load_active_move_for_identity(
     return workspace_move_value(row) if row is not None else None
 
 
+async def is_own_prior_cloud_destination(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_config_id: UUID,
+    branch: str,
+    cloud_workspace_id: UUID,
+) -> bool:
+    """True if ``cloud_workspace_id`` was this identity's own destination in a prior
+    completed local->cloud move.
+
+    Backs the locked "Collision" decision (spec section 2): an *independently
+    created* active cloud workspace for the same (repo, branch) blocks a new
+    local->cloud move with a 409; this identity's own prior destination does not.
+    """
+    stmt = select(WorkspaceMove.id).where(
+        WorkspaceMove.user_id == user_id,
+        WorkspaceMove.repo_config_id == repo_config_id,
+        WorkspaceMove.branch == branch,
+        WorkspaceMove.destination_kind == "cloud",
+        WorkspaceMove.phase == "completed",
+        WorkspaceMove.destination_ref["cloudWorkspaceId"].astext == str(cloud_workspace_id),
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None
+
+
 async def create_move(
     db: AsyncSession,
     *,

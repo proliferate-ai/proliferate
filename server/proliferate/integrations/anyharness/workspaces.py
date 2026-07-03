@@ -6,10 +6,7 @@ import httpx
 
 from proliferate.integrations.anyharness.client import auth_headers
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
-from proliferate.integrations.anyharness.models import (
-    RemoteWorkspaceSummary,
-    ResolvedRemoteWorkspace,
-)
+from proliferate.integrations.anyharness.models import ResolvedRemoteWorkspace
 
 _MOBILITY_DESTINATION_PREPARE_TIMEOUT_SECONDS = 180.0
 _MOBILITY_DESTROY_SOURCE_TIMEOUT_SECONDS = 60.0
@@ -228,39 +225,6 @@ async def create_remote_worktree_workspace(
         workspace_id_message="Cloud runtime did not return a valid worktree workspace id.",
         repo_root_message="Cloud runtime did not return a valid worktree repo root id.",
     )
-
-
-async def list_runtime_workspaces(
-    runtime_url: str,
-    access_token: str,
-) -> list[RemoteWorkspaceSummary]:
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{runtime_url}/v1/workspaces",
-                headers=auth_headers(access_token),
-            )
-            response.raise_for_status()
-            payload = response.json()
-    except httpx.HTTPError as exc:
-        raise CloudRuntimeReconnectError("Failed to load cloud runtime workspace list.") from exc
-    if not isinstance(payload, list):
-        raise CloudRuntimeReconnectError("Cloud runtime did not return a valid workspace list.")
-
-    summaries: list[RemoteWorkspaceSummary] = []
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        summary = item.get("executionSummary")
-        live_count = summary.get("liveSessionCount") if isinstance(summary, dict) else None
-        workspace_id = item.get("id")
-        summaries.append(
-            RemoteWorkspaceSummary(
-                workspace_id=workspace_id if isinstance(workspace_id, str) else None,
-                live_session_count=live_count if isinstance(live_count, int) else 0,
-            )
-        )
-    return summaries
 
 
 async def destroy_runtime_mobility_source(

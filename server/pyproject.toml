@@ -107,6 +107,7 @@ module = [
     "proliferate.server.cloud.target_config.models",
     "proliferate.server.cloud.target_git_identity.models",
     "proliferate.server.cloud.worker.models",
+    "proliferate.server.cloud.workspace_moves.models",
     "proliferate.server.cloud.workspaces.models",
     "proliferate.server.catalogs.models",
     "proliferate.server.meta",
