@@ -27,6 +27,8 @@ pub mod render;
 pub mod state;
 
 #[cfg(test)]
+mod render_codex_tests;
+#[cfg(test)]
 mod render_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
