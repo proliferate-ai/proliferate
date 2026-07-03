@@ -93,6 +93,137 @@ async def test_start_workspace_move_blocks_on_independent_collision(
 
 
 @pytest.mark.asyncio
+async def test_start_workspace_move_reserves_row_and_builds_fresh_destination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No collision: the saga reserves a row and builds a brand-new cloud_workspace."""
+    user = b.user()
+    repo_config = b.repo_config(repo_config_id=uuid4(), user_id=user.id)
+    environment = b.repo_environment(repo_config_id=repo_config.id, user_id=user.id)
+    reserved = b.move(user_id=user.id, repo_config_id=repo_config.id, phase="started")
+
+    monkeypatch.setattr(
+        service.repositories_store, "get_repo_config_by_id", b.async_return(repo_config)
+    )
+    monkeypatch.setattr(
+        service.workspace_move_store, "get_move_by_idempotency_key", b.async_return(None)
+    )
+    monkeypatch.setattr(
+        service.repositories_store, "get_cloud_repo_environment", b.async_return(environment)
+    )
+    monkeypatch.setattr(
+        service.cloud_workspace_store,
+        "get_active_cloud_workspace_for_branch",
+        b.async_return(None),
+    )
+    monkeypatch.setattr(service.workspace_move_store, "create_move", b.async_return(reserved))
+    b.noop_commit(monkeypatch)
+    monkeypatch.setattr(
+        service.materialization_service, "materialize_repo_environment", b.async_return(None)
+    )
+    monkeypatch.setattr(
+        service.cloud_sandbox_store,
+        "load_personal_cloud_sandbox",
+        b.async_return(SimpleNamespace(id=uuid4())),
+    )
+    monkeypatch.setattr(
+        service.cloud_sandboxes_service,
+        "load_cloud_sandbox_runtime_access",
+        b.async_return(("https://runtime.invalid", "token", "key")),
+    )
+
+    # anyharness_workspace_id matches what create_remote_worktree_workspace below
+    # returns, so the saga's "did the AH id change?" branch is a no-op and this
+    # test doesn't also need to fake the update_workspace_anyharness_workspace_id
+    # DB write.
+    fresh = b.cloud_workspace(
+        owner_user_id=user.id, repo_environment_id=environment.id, anyharness_workspace_id="ah-2"
+    )
+    create_calls = 0
+
+    async def _create_cloud_workspace(*_args: object, **_kwargs: object) -> CloudWorkspaceValue:
+        nonlocal create_calls
+        create_calls += 1
+        return fresh
+
+    monkeypatch.setattr(
+        service.cloud_workspace_store, "create_cloud_workspace", _create_cloud_workspace
+    )
+    monkeypatch.setattr(
+        service,
+        "resolve_runtime_workspace",
+        b.async_return(ResolvedRemoteWorkspace(workspace_id="ah-1", repo_root_id="root-1")),
+    )
+    monkeypatch.setattr(
+        service,
+        "create_remote_worktree_workspace",
+        b.async_return(ResolvedRemoteWorkspace(workspace_id="ah-2", repo_root_id="root-2")),
+    )
+    ready = b.move(
+        move_id=reserved.id,
+        user_id=user.id,
+        repo_config_id=repo_config.id,
+        phase="destination_ready",
+        destination_ref={"cloudWorkspaceId": str(fresh.id), "anyharnessWorkspaceId": "ah-2"},
+    )
+    monkeypatch.setattr(service.workspace_move_store, "advance_phase", b.async_return(ready))
+
+    response = await service.start_workspace_move(
+        b.db(), user, b.start_body(repo_config_id=repo_config.id)
+    )
+
+    assert create_calls == 1
+    assert response.id == str(reserved.id)
+    assert response.phase == "destination_ready"
+
+
+@pytest.mark.asyncio
+async def test_start_workspace_move_idempotency_replay_returns_same_move_without_rebuilding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second /workspace-moves call with the same idempotencyKey after the saga has
+    already advanced past 'started' must short-circuit to the existing row -- no
+    re-materialization, no second destination build, no duplicate cloud_workspace.
+    """
+    user = b.user()
+    repo_config = b.repo_config(repo_config_id=uuid4(), user_id=user.id)
+    already_advanced = b.move(
+        user_id=user.id,
+        repo_config_id=repo_config.id,
+        phase="destination_ready",
+        destination_ref={"cloudWorkspaceId": str(uuid4()), "anyharnessWorkspaceId": "ah-1"},
+        idempotency_key="key-1",
+    )
+
+    monkeypatch.setattr(
+        service.repositories_store, "get_repo_config_by_id", b.async_return(repo_config)
+    )
+    monkeypatch.setattr(
+        service.workspace_move_store,
+        "get_move_by_idempotency_key",
+        b.async_return(already_advanced),
+    )
+
+    async def _must_not_call(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("idempotency-key replay must not redo the destination build")
+
+    monkeypatch.setattr(service.workspace_move_store, "create_move", _must_not_call)
+    monkeypatch.setattr(
+        service.materialization_service, "materialize_repo_environment", _must_not_call
+    )
+    monkeypatch.setattr(service.cloud_workspace_store, "create_cloud_workspace", _must_not_call)
+    monkeypatch.setattr(service, "create_remote_worktree_workspace", _must_not_call)
+    monkeypatch.setattr(service.workspace_move_store, "advance_phase", _must_not_call)
+
+    response = await service.start_workspace_move(
+        b.db(), user, b.start_body(repo_config_id=repo_config.id, idempotency_key="key-1")
+    )
+
+    assert response.id == str(already_advanced.id)
+    assert response.phase == "destination_ready"
+
+
+@pytest.mark.asyncio
 async def test_start_workspace_move_reuses_own_prior_destination(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

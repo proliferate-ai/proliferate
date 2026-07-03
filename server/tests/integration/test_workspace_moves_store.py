@@ -286,6 +286,51 @@ async def test_fail_move_is_legal_pre_cutover_and_records_failure(
 
 
 @pytest.mark.asyncio
+async def test_fail_move_leaves_source_ref_destination_ref_and_canonical_side_untouched(
+    db_session: AsyncSession,
+) -> None:
+    """Failing pre-cutover must only touch phase/failure_code/failure_detail --
+    the source's identity (source_ref, canonical_side, base_commit_sha) and
+    whatever destination_ref was recorded so far are left exactly as they were,
+    so "Source untouched -- retry/cancel" (spec section 2.6) is literally true.
+    """
+    user_id = await _create_user(db_session)
+    repo_config_id = await _create_repo_config(db_session, user_id=user_id)
+    move = await _reserve_move(db_session, user_id=user_id, repo_config_id=repo_config_id)
+    assert move is not None
+    assert move.source_ref == {"desktopInstallId": "desktop-1"}
+    assert move.canonical_side == "source"
+
+    ready = await store.advance_phase(
+        db_session,
+        move.id,
+        user_id=user_id,
+        to_phase="destination_ready",
+        destination_ref={"cloudWorkspaceId": "ws-1", "anyharnessWorkspaceId": "ah-1"},
+    )
+    assert ready is not None
+
+    failed = await store.fail_move(
+        db_session,
+        move.id,
+        user_id=user_id,
+        failure_code="destination_unreachable",
+        failure_detail="sandbox failed to materialize",
+    )
+    assert failed is not None
+    assert failed.phase == "failed"
+    assert failed.failure_code == "destination_unreachable"
+
+    # Untouched: the source side of the ledger is exactly what it was at
+    # reservation time, and the destination_ref recorded so far is preserved
+    # (not cleared) for diagnostics/retry.
+    assert failed.source_ref == move.source_ref == {"desktopInstallId": "desktop-1"}
+    assert failed.destination_ref == {"cloudWorkspaceId": "ws-1", "anyharnessWorkspaceId": "ah-1"}
+    assert failed.canonical_side == "source"
+    assert failed.base_commit_sha == move.base_commit_sha
+
+
+@pytest.mark.asyncio
 async def test_get_move_does_not_leak_across_users(db_session: AsyncSession) -> None:
     owner_id = await _create_user(db_session)
     other_user_id = await _create_user(db_session)

@@ -136,7 +136,7 @@ jobs:
         run: uv pip install --system -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -q --durations=20
+        run: pytest tests/unit tests/integration tests/cloud tests/e2e/cloud/test_e2b_webhooks.py -q --durations=20
 
   docker:
     runs-on: ubuntu-latest
