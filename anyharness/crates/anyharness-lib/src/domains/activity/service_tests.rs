@@ -47,8 +47,8 @@ fn process_wire(id: &str, status: ActivityProcessStatusWire) -> ActivityProcessW
         status,
         exit_code: None,
         pid: None,
-        started_at: "2026-07-02T00:00:00Z".to_string(),
-        ended_at: None,
+        started_at_ms: Some(1_782_000_000_000),
+        ended_at_ms: None,
         feed: None,
     }
 }
@@ -82,7 +82,7 @@ fn ingest_process_upserted_transitions_running_to_exited() {
 
     let mut exited = process_wire("proc-1", ActivityProcessStatusWire::Exited);
     exited.exit_code = Some(0);
-    exited.ended_at = Some("2026-07-02T00:00:30Z".to_string());
+    exited.ended_at_ms = Some(1_782_000_030_000);
     service
         .ingest_process_upserted(context(2), exited)
         .expect("ingest exited");
@@ -190,7 +190,7 @@ fn observer_ingests_process_upserted_chunk() {
                 "id": "proc-1",
                 "command": "sleep 30 && echo OK > out.txt",
                 "status": "running",
-                "startedAt": "2026-07-02T00:00:00Z",
+                "startedAtMs": 1_782_000_000_000_i64,
                 "feed": { "kind": "tail_file", "path": "/tmp/out.txt" }
             }
         }
@@ -205,6 +205,12 @@ fn observer_ingests_process_upserted_chunk() {
     let processes = service.current_processes("session-1").expect("load processes");
     assert_eq!(processes.len(), 1);
     assert!(processes[0].feed.is_some());
+    // The fork emits `startedAtMs` (epoch-ms); the contract carries RFC3339.
+    assert!(
+        processes[0].started_at.starts_with("2026-"),
+        "startedAtMs must convert to an RFC3339 started_at, got {:?}",
+        processes[0].started_at
+    );
 }
 
 #[test]

@@ -235,8 +235,9 @@ fn upsert_process_in_tx(
         },
         exit_code: wire.exit_code,
         pid: wire.pid,
-        started_at: wire.started_at.clone(),
-        ended_at: wire.ended_at.clone(),
+        started_at: rfc3339_from_epoch_ms(wire.started_at_ms)
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
+        ended_at: rfc3339_from_epoch_ms(wire.ended_at_ms),
         feed_id,
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
@@ -336,6 +337,16 @@ fn bind_feed(
     };
     ActivityStore::upsert_feed_binding(tx, &record)?;
     Ok(feed_id)
+}
+
+/// Convert a fork-emitted epoch-ms timestamp to the contract's RFC3339
+/// string. Both harness forks emit `startedAtMs`/`endedAtMs` numbers; the
+/// contract (`ActivityProcess.started_at: String`) stays RFC3339, so the
+/// conversion happens here at ingest rather than rippling ms into the SDK.
+fn rfc3339_from_epoch_ms(ms: Option<i64>) -> Option<String> {
+    use chrono::TimeZone;
+    ms.and_then(|ms| chrono::Utc.timestamp_millis_opt(ms).single())
+        .map(|dt| dt.to_rfc3339())
 }
 
 fn transport_from_wire(wire: FeedTransportWire) -> FeedTransport {

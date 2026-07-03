@@ -42,9 +42,15 @@ pub struct ActivityProcessWire {
     pub exit_code: Option<i32>,
     #[serde(default)]
     pub pid: Option<u32>,
-    pub started_at: String,
+    /// Epoch-ms process start — both harness forks emit `startedAtMs` (claude
+    /// `startedAtMs: number`, codex `started_at_ms: Option<i64>`), NOT an
+    /// RFC3339 `startedAt` string. Optional + defaulted so a codex `None`
+    /// degrades to the ingest clock instead of failing the whole chunk;
+    /// converted to the contract's RFC3339 `started_at` on ingest.
     #[serde(default)]
-    pub ended_at: Option<String>,
+    pub started_at_ms: Option<i64>,
+    #[serde(default)]
+    pub ended_at_ms: Option<i64>,
     #[serde(default)]
     pub feed: Option<FeedTransportWire>,
 }
@@ -114,10 +120,11 @@ mod tests {
             "id": "proc-1",
             "command": "sleep 30 && echo OK > out.txt",
             "status": "running",
-            "startedAt": "2026-07-02T00:00:00Z"
+            "startedAtMs": 1_782_000_000_000_i64
         }))
         .expect("parse running process wire");
         assert_eq!(running.status, ActivityProcessStatusWire::Running);
+        assert_eq!(running.started_at_ms, Some(1_782_000_000_000));
         assert!(running.feed.is_none());
 
         let exited: ActivityProcessWire = serde_json::from_value(serde_json::json!({
@@ -126,13 +133,14 @@ mod tests {
             "status": "exited",
             "exitCode": 0,
             "pid": 4242,
-            "startedAt": "2026-07-02T00:00:00Z",
-            "endedAt": "2026-07-02T00:00:30Z",
+            "startedAtMs": 1_782_000_000_000_i64,
+            "endedAtMs": 1_782_000_030_000_i64,
             "feed": { "kind": "tail_file", "path": "/tmp/out.txt" }
         }))
         .expect("parse exited process wire");
         assert_eq!(exited.status, ActivityProcessStatusWire::Exited);
         assert_eq!(exited.exit_code, Some(0));
+        assert_eq!(exited.ended_at_ms, Some(1_782_000_030_000));
         assert_eq!(
             exited.feed,
             Some(FeedTransportWire::TailFile {

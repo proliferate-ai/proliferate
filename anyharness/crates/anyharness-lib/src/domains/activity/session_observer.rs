@@ -178,7 +178,7 @@ mod tests {
                     "id": "proc-1",
                     "command": "sleep 30",
                     "status": "running",
-                    "startedAt": "2026-07-02T00:00:00Z"
+                    "startedAtMs": 1_782_000_000_000_i64
                 }
             }
         })));
