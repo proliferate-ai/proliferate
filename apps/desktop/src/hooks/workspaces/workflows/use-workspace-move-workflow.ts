@@ -3,8 +3,6 @@ import { useGitStatusQuery } from "@anyharness/sdk-react";
 import type { WorkspaceMoveResponse } from "@proliferate/cloud-sdk";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { APP_ROUTES } from "@/config/app-routes";
 import {
   useStartWorkspaceMove,
   WORKSPACE_MOVE_CLOUD_WORKSPACE_EXISTS_ERROR_CODE,
@@ -15,9 +13,8 @@ import { useWorkspaceMobilityPreflightQuery } from "@/hooks/access/anyharness/mo
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { usePostMoveNavigation } from "@/hooks/workspaces/workflows/use-post-move-navigation";
 import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/workflows/use-workspace-publish-workflow";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { getDesktopInstallId } from "@/lib/access/tauri/desktop-install-id";
 import {
   destroyWorkspaceMobilitySource,
@@ -31,7 +28,6 @@ import {
   isMovePostCutover,
   isNonTerminalMovePhase,
   resolveHandoffMoveId,
-  resolvePostMoveNavigation,
   type MovePhase,
   type MoveReadiness,
 } from "@/lib/domain/workspaces/move/move-model";
@@ -46,7 +42,6 @@ import {
   type WorkspaceMoveWorkflowDeps,
 } from "@/lib/workflows/workspaces/run-workspace-move-workflow";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { rememberActiveWorkspaceMoveId, useWorkspaceMoveStore } from "@/stores/workspaces/workspace-move-store";
 
 export interface UseWorkspaceMoveWorkflowOptions {
@@ -90,12 +85,6 @@ export function useWorkspaceMoveWorkflow({
   enabled,
 }: UseWorkspaceMoveWorkflowOptions) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const navigate = useNavigate();
-  const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
-  const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
-  const setSelectedLogicalWorkspaceId = useSessionSelectionStore(
-    (state) => state.setSelectedLogicalWorkspaceId,
-  );
   const storedMoveId = useWorkspaceMoveStore((state) =>
     workspaceId ? state.activeMoveIdByWorkspaceId[workspaceId] ?? null : null);
 
@@ -225,29 +214,7 @@ export function useWorkspaceMoveWorkflow({
     onPhaseChange: (phase) => setRunningPhase(phase),
   }), [phaseMutations, runtimeUrl, startMoveMutation, workspaceId]);
 
-  // A successful move may have just destroyed the source workspace (worktree source
-  // fate), leaving the shell pointed at a dead id. Mirror useWorkspaceRetireActions.
-  // markDone's clear-selection idiom and the collision panel's "Open the cloud
-  // workspace" navigation: if this move's source is still the on-screen workspace, hand
-  // off to the new cloud workspace (falling back to home when its id is unknown).
-  const navigateAfterMove = useCallback((destinationCloudWorkspaceId: string | null) => {
-    if (!workspaceId) return;
-    const navigation = resolvePostMoveNavigation({
-      movedWorkspaceId: workspaceId,
-      selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
-      destinationCloudWorkspaceId,
-    });
-    if (navigation.kind === "select_cloud") {
-      selectWorkspaceFromSurface(
-        cloudWorkspaceSyntheticId(navigation.cloudWorkspaceId),
-        "workspace-move-dialog",
-      );
-    } else if (navigation.kind === "home") {
-      clearSelection();
-      setSelectedLogicalWorkspaceId(null);
-      navigate(APP_ROUTES.home);
-    }
-  }, [clearSelection, navigate, selectWorkspaceFromSurface, setSelectedLogicalWorkspaceId, workspaceId]);
+  const navigateAfterMove = usePostMoveNavigation(workspaceId);
 
   /** Runs (or resumes) the saga against a known-fresh git status snapshot -- callers
    *  that just pushed must pass the `refetch()` result, not the stale `gitStatusQuery.data`
