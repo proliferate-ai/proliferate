@@ -7,13 +7,14 @@ import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resolveCloudWorkspaceStatus } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import type { WorkspaceRuntimeLocation } from "@/lib/domain/workspaces/move/move-location-chip";
 
 type CloudWorkspaceCommandMetadata = CloudWorkspaceDetail & {
   targetId?: string | null;
 };
 
 export interface RuntimeTarget {
-  location: "local" | "cloud" | "target";
+  location: WorkspaceRuntimeLocation;
   baseUrl: string;
   authToken?: string;
   webSocketAuthTransport?: TerminalWebSocketAuthTransport;
