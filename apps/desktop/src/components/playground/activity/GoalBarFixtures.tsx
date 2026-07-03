@@ -17,7 +17,8 @@ const NOOP = () => {};
 /**
  * Every goal bar state from static fixtures: live pursuing (short/long
  * objective, pause enabled/disabled), paused, in-place editing, empty-state
- * composing, the three sticky results, and the dismissed/empty state
+ * composing, the three sticky results, the in-flight write state
+ * (`pendingWrite`, controls held inert), and the dismissed/empty state
  * (`goal-empty` renders no bar by design).
  */
 export function renderGoalBarSlot(scenario: ScenarioKey): ReactNode | null {
@@ -58,6 +59,10 @@ export function renderGoalBarSlot(scenario: ScenarioKey): ReactNode | null {
       return (
         <PlaygroundGoalBar goal={GOAL_FAILED_BUDGET} pausable />
       );
+    case "goal-pending-write":
+      return (
+        <PlaygroundGoalBar goal={GOAL_ACTIVE_SHORT} pausable pendingWrite />
+      );
     case "goal-empty":
       return null;
     default:
@@ -70,11 +75,13 @@ function PlaygroundGoalBar({
   pausable,
   composing = false,
   defaultEditing = false,
+  pendingWrite = false,
 }: {
   goal: Parameters<typeof GoalBar>[0]["goal"];
   pausable: boolean;
   composing?: boolean;
   defaultEditing?: boolean;
+  pendingWrite?: boolean;
 }) {
   return (
     <GoalBar
@@ -82,6 +89,7 @@ function PlaygroundGoalBar({
       capabilities={pausable ? GOAL_CAPABILITIES_PAUSABLE : GOAL_CAPABILITIES_NO_PAUSE}
       composing={composing}
       defaultEditing={defaultEditing}
+      pendingWrite={pendingWrite}
       onEdit={NOOP}
       onPause={NOOP}
       onResume={NOOP}
