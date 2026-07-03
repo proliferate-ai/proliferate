@@ -19,6 +19,30 @@ pub enum GoalNativeEventKind {
     Cleared,
 }
 
+/// Where a native goal payload came from — this decides how a cleared mirror
+/// treats an incoming goal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GoalIngestSource {
+    /// A tagged notification chunk observed off the live session. After an
+    /// explicit clear these can be stale in-flight echoes of the just-cleared
+    /// goal, which must not resurrect it.
+    Notification,
+    /// An authoritative native read (`_anyharness/goal/get`) on attach/resume
+    /// — reflects native truth verbatim, so it always wins.
+    Reconcile,
+}
+
+/// The transition an incoming native goal payload applies to the mirror.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GoalTransition {
+    /// Update the existing head row in place (same goal lifetime).
+    Update,
+    /// Insert a new record (a fresh goal lifetime).
+    Insert,
+    /// Ignore the payload entirely (a stale post-clear echo).
+    Drop,
+}
+
 #[derive(Debug, Clone)]
 pub struct GoalEventContext {
     pub workspace_id: String,
@@ -94,6 +118,16 @@ impl GoalService {
         kind: GoalNativeEventKind,
         wire: Option<GoalWire>,
     ) -> Result<GoalEventBatch, GoalIngestError> {
+        self.ingest_native_event_from(context, kind, wire, GoalIngestSource::Notification)
+    }
+
+    fn ingest_native_event_from(
+        &self,
+        context: GoalEventContext,
+        kind: GoalNativeEventKind,
+        wire: Option<GoalWire>,
+        source: GoalIngestSource,
+    ) -> Result<GoalEventBatch, GoalIngestError> {
         if let Some(wire) = wire.as_ref() {
             if wire.objective.len() > MAX_GOAL_OBJECTIVE_BYTES {
                 return Err(GoalIngestError::ObjectiveTooLarge);
@@ -102,7 +136,7 @@ impl GoalService {
         match kind {
             GoalNativeEventKind::Updated | GoalNativeEventKind::Met => {
                 let wire = wire.ok_or(GoalIngestError::MissingGoalPayload)?;
-                self.apply_native_goal(context, kind, wire)
+                self.apply_native_goal(context, kind, wire, source)
                     .map_err(GoalIngestError::Store)
             }
             GoalNativeEventKind::Cleared => {
@@ -127,7 +161,7 @@ impl GoalService {
                 } else {
                     GoalNativeEventKind::Updated
                 };
-                self.ingest_native_event(context, kind, Some(wire))
+                self.ingest_native_event_from(context, kind, Some(wire), GoalIngestSource::Reconcile)
             }
             None => {
                 let current = self.store.find_current(&context.session_id)?;
@@ -146,21 +180,21 @@ impl GoalService {
         context: GoalEventContext,
         kind: GoalNativeEventKind,
         wire: GoalWire,
+        source: GoalIngestSource,
     ) -> anyhow::Result<GoalEventBatch> {
         self.store.with_tx_anyhow(|tx| {
             let now = chrono::Utc::now().to_rfc3339();
             let native_state_json = Some(serde_json::to_string(&wire)?);
-            let status = wire.status.to_contract();
             let status = match kind {
                 GoalNativeEventKind::Met => GoalStatus::Met,
-                _ => status,
+                _ => wire.status.to_contract(),
             };
 
-            let current = GoalStore::find_current_tx(tx, &context.session_id)?;
-            let goal = match current {
-                // A terminal mirror is history: a fresh native goal replaces
-                // it with a new record (native set-replaces semantics).
-                Some(existing) if !existing.status.is_terminal() || existing.objective == wire.objective => {
+            let latest = GoalStore::find_latest_tx(tx, &context.session_id)?;
+            let goal = match classify_goal_transition(latest.as_ref(), &wire, status, source) {
+                GoalTransition::Drop => return Ok(GoalEventBatch::unchanged(None)),
+                GoalTransition::Update => {
+                    let existing = latest.expect("update transition implies a head row");
                     let next = GoalRecord {
                         objective: wire.objective.clone(),
                         status,
@@ -168,7 +202,7 @@ impl GoalService {
                         token_budget: wire.token_budget,
                         tokens_used: wire.tokens_used,
                         time_used_seconds: wire.time_used_seconds,
-                        met_reason: wire.met_reason.clone().or(existing.met_reason.clone()),
+                        met_reason: wire.met_reason.clone().or_else(|| existing.met_reason.clone()),
                         iterations: wire.iterations,
                         native: wire.native,
                         pending_op: None,
@@ -187,7 +221,7 @@ impl GoalService {
                     GoalStore::update_goal(tx, &next)?;
                     next
                 }
-                _ => {
+                GoalTransition::Insert => {
                     let goal = GoalRecord {
                         id: uuid::Uuid::new_v4().to_string(),
                         workspace_id: context.workspace_id.clone(),
@@ -258,6 +292,56 @@ impl GoalService {
                 envelopes: vec![envelope],
             })
         })
+    }
+}
+
+/// Decides how an incoming native goal payload transitions the mirror,
+/// keyed off the single latest row (the head of the lifecycle chain).
+fn classify_goal_transition(
+    latest: Option<&GoalRecord>,
+    wire: &GoalWire,
+    status: GoalStatus,
+    source: GoalIngestSource,
+) -> GoalTransition {
+    let Some(existing) = latest else {
+        // No prior goal for the session — the first one.
+        return GoalTransition::Insert;
+    };
+
+    if existing.status == GoalStatus::Cleared {
+        // The mirror was explicitly cleared. A native goal payload arriving
+        // now is a stale in-flight echo of the just-cleared goal (a late
+        // accounting/eval flush) and must NOT resurrect it — UNLESS it is an
+        // authoritative reconcile read, or the caller has a set in flight
+        // (`pending_op == Set`), either of which mints a genuinely new goal.
+        return match source {
+            GoalIngestSource::Reconcile => GoalTransition::Insert,
+            GoalIngestSource::Notification
+                if existing.pending_op == Some(GoalPendingOp::Set) =>
+            {
+                GoalTransition::Insert
+            }
+            GoalIngestSource::Notification => GoalTransition::Drop,
+        };
+    }
+
+    if !existing.status.is_terminal() {
+        // An ongoing goal: edits, status moves, and accounting flushes update
+        // the same record in place.
+        return GoalTransition::Update;
+    }
+
+    // A terminal (met/failed) head. A same-objective payload that is itself
+    // terminal is an idempotent echo of the same completed goal (a duplicate
+    // met, or a reconcile re-read) — update in place (a no-op via
+    // `goal_content_unchanged`). Anything else — a re-arm back to a live
+    // status, or a different objective — starts a fresh record so the new
+    // pursuit never inherits the old goal's identity, revision lineage, or
+    // stale met_reason.
+    if existing.objective == wire.objective && status.is_terminal() {
+        GoalTransition::Update
+    } else {
+        GoalTransition::Insert
     }
 }
 
