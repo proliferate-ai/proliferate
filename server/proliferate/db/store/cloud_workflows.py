@@ -279,6 +279,7 @@ async def create_run(
     args_json: dict[str, object],
     target_mode: str,
     resolved_plan_json: dict[str, object],
+    anyharness_workspace_id: str | None = None,
 ) -> WorkflowRunRecord:
     now = utcnow()
     row = WorkflowRun(
@@ -292,6 +293,10 @@ async def create_run(
         resolved_plan_json=resolved_plan_json,
         status=WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
         step_cursor=None,
+        # For cloud runs the delivery target workspace is known up front and
+        # never changes; recording it lets delivery + refresh resolve the sandbox
+        # workspace without re-reading the cloud_workspace row.
+        anyharness_workspace_id=anyharness_workspace_id,
         created_at=now,
         updated_at=now,
     )
@@ -345,8 +350,13 @@ async def update_run(
     delivered_at: datetime | None = None,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
+    clear_error: bool = False,
 ) -> WorkflowRunRecord | None:
-    """Apply a run update. Only non-None arguments are written."""
+    """Apply a run update. Only non-None arguments are written.
+
+    ``clear_error`` is the one exception to the non-None rule: it nulls a prior
+    ``delivery_failed`` marker when a re-delivery finally lands.
+    """
 
     row = await db.get(WorkflowRun, run_id)
     if row is None:
@@ -357,6 +367,9 @@ async def update_run(
         row.step_cursor = step_cursor
     if step_outputs_json is not None:
         row.step_outputs_json = step_outputs_json
+    if clear_error:
+        row.error_code = None
+        row.error_message = None
     if error_code is not None:
         row.error_code = error_code
     if error_message is not None:

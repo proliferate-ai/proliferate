@@ -46,6 +46,10 @@ class StartRunRequest(WorkflowBaseModel):
     args: dict[str, object] = Field(default_factory=dict)
     target_mode: WorkflowTargetMode = Field(alias="targetMode")
     version_id: UUID | None = Field(default=None, alias="versionId")
+    # Required for ``personal_cloud`` runs: the cloud workspace the server delivers
+    # the resolved plan into (validated for ownership). Ignored for ``local`` runs,
+    # whose workspace is picked client-side and handed to the local runtime.
+    target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
 
 
 class RunStatusRequest(WorkflowBaseModel):
