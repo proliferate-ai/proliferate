@@ -86,6 +86,7 @@ Per-harness notes:
   one-shot answer, so the runner detects the marker and kills the process
   group instead of waiting for exit.
 - **grok** — isolated `HOME`, `GROK_MODELS_BASE_URL=<proxy>/v1`,
-  `XAI_API_KEY=<vk>`. The CLI discovers models via `GET /v1/models`, so
-  `grok-4-fast`/`grok-build` are aliased to Anthropic Haiku in
-  `server/litellm/config.yaml` (the CLI doesn't care about the upstream).
+  `XAI_API_KEY=<vk>`. The CLI discovers models via `GET /v1/models`; the
+  gateway serves `grok-4-fast`/`grok-4`/`grok-code-fast-1`/`grok-build`
+  against real xAI upstreams in `server/litellm/config.yaml` (the CLI itself
+  doesn't care which upstream backs the model_name it was told to use).
