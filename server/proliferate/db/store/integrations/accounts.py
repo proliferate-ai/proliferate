@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Row, and_, delete, select
+from sqlalchemy import Row, and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -144,6 +144,17 @@ def _ready_accounts_stmt(user_id: UUID, organization_id: UUID | None) -> Select:
         CloudIntegrationAccount.enabled.is_(True),
         CloudIntegrationAccount.status == "ready",
         CloudIntegrationDefinition.archived_at.is_(None),
+        # Definition visibility mirrors the admin API: seeds are global,
+        # org_custom definitions are served only under their owning org's
+        # scope (for org-less requests this collapses to seeds only). Without
+        # this, an org-B-scoped grant would expose the user's accounts on org
+        # A's custom definitions — which org B's admins can neither see nor
+        # policy-control — and provider-name resolution could land on another
+        # org's custom definition that shares a seed namespace.
+        or_(
+            CloudIntegrationDefinition.organization_id.is_(None),
+            CloudIntegrationDefinition.organization_id == organization_id,
+        ),
     ).order_by(CloudIntegrationAccount.created_at.asc())
 
 
